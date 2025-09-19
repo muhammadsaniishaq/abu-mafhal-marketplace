@@ -1,55 +1,32 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
-import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 
-export default function DashboardPage() {
-  const [user, setUser] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
-  const router = useRouter();
+export default function VendorDashboard() {
+  const [userRole, setUserRole] = useState("");
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        setUser(firebaseUser);
-
-        // get Firestore profile
-        const docRef = doc(db, "users", firebaseUser.uid);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setProfile(docSnap.data());
-        }
-      } else {
-        router.push("/auth/sign-in"); // redirect if not logged in
+    const checkRole = async () => {
+      if (!auth.currentUser) return;
+      const docRef = doc(db, "users", auth.currentUser.uid);
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        setUserRole(snap.data().role);
       }
-    });
+    };
+    checkRole();
+  }, []);
 
-    return () => unsubscribe();
-  }, [router]);
-
-  const handleLogout = async () => {
-    await signOut(auth);
-    router.push("/auth/sign-in");
-  };
-
-  if (!user) return <p className="p-6">Loading...</p>;
+  if (userRole !== "vendor") {
+    return <p className="text-center mt-10">Access Denied. Vendors only.</p>;
+  }
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-6">
-      <h1 className="text-2xl font-bold mb-4">Dashboard</h1>
-      <p><strong>Name:</strong> {profile?.fullName || "Unknown"}</p>
-      <p><strong>Email:</strong> {user.email}</p>
-      <p><strong>Role:</strong> {profile?.role || "buyer"}</p>
-
-      <button
-        onClick={handleLogout}
-        className="mt-4 bg-red-600 text-white px-4 py-2 rounded"
-      >
-        Logout
-      </button>
-    </main>
+    <div className="p-10">
+      <h1 className="text-2xl font-bold">Vendor Dashboard</h1>
+      <p>Here you can manage your products and view sales.</p>
+    </div>
   );
 }

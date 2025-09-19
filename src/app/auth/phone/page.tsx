@@ -4,85 +4,99 @@ import { useState } from "react";
 import { auth } from "@/lib/firebase";
 import { RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
 
-export default function PhoneSignInPage() {
+// ✅ Extend the Window interface so TypeScript knows about recaptchaVerifier
+declare global {
+  interface Window {
+    recaptchaVerifier: RecaptchaVerifier;
+  }
+}
+
+export default function PhoneAuthPage() {
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [confirmationResult, setConfirmationResult] = useState<any>(null);
-  const [message, setMessage] = useState("");
 
   // Setup Recaptcha
   const setupRecaptcha = () => {
     if (!window.recaptchaVerifier) {
       window.recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
-        size: "invisible", // can also be "normal" for visible captcha
+        size: "invisible", // use "normal" if you want visible captcha
         callback: (response: any) => {
-          console.log("Recaptcha verified");
+          console.log("Recaptcha resolved:", response);
         },
       });
     }
   };
 
-  // Send OTP
-  const sendOtp = async (e: React.FormEvent) => {
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setupRecaptcha();
+    const appVerifier = window.recaptchaVerifier;
+
     try {
-      const appVerifier = window.recaptchaVerifier;
       const result = await signInWithPhoneNumber(auth, phone, appVerifier);
       setConfirmationResult(result);
-      setMessage("OTP sent! Check your phone.");
+      alert("OTP sent to your phone");
     } catch (err: any) {
-      setMessage(err.message);
+      console.error(err);
+      alert(err.message);
     }
   };
 
-  // Verify OTP
-  const verifyOtp = async (e: React.FormEvent) => {
+  const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!confirmationResult) return;
+
     try {
       await confirmationResult.confirm(otp);
-      window.location.href = "/dashboard";
+      alert("Phone number verified!");
     } catch (err: any) {
-      setMessage("Invalid OTP. Please try again.");
+      console.error(err);
+      alert("Invalid OTP");
     }
   };
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-6">
-      <h1 className="text-2xl font-semibold mb-4">Sign In with Phone</h1>
+    <main className="min-h-screen flex items-center justify-center p-6">
+      <form className="w-full max-w-sm space-y-3">
+        <h1 className="text-2xl font-semibold">Phone Authentication</h1>
 
-      {!confirmationResult ? (
-        <form onSubmit={sendOtp} className="space-y-3 w-full max-w-sm">
-          <input
-            type="tel"
-            placeholder="+2348100000000"
-            className="w-full border p-2 rounded"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            required
-          />
-          <button type="submit" className="bg-green-600 text-white w-full p-2 rounded">
+        <input
+          type="text"
+          placeholder="+234 8012345678"
+          className="w-full border p-2 rounded"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+        />
+
+        {!confirmationResult ? (
+          <button
+            onClick={handleSendOtp}
+            className="bg-blue-600 text-white w-full p-2 rounded"
+          >
             Send OTP
           </button>
-        </form>
-      ) : (
-        <form onSubmit={verifyOtp} className="space-y-3 w-full max-w-sm">
-          <input
-            type="text"
-            placeholder="Enter OTP"
-            className="w-full border p-2 rounded"
-            value={otp}
-            onChange={(e) => setOtp(e.target.value)}
-            required
-          />
-          <button type="submit" className="bg-blue-600 text-white w-full p-2 rounded">
-            Verify OTP
-          </button>
-        </form>
-      )}
+        ) : (
+          <>
+            <input
+              type="text"
+              placeholder="Enter OTP"
+              className="w-full border p-2 rounded"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+            />
+            <button
+              onClick={handleVerifyOtp}
+              className="bg-green-600 text-white w-full p-2 rounded"
+            >
+              Verify OTP
+            </button>
+          </>
+        )}
 
-      <div id="recaptcha-container"></div>
-      {message && <p className="text-sm mt-3">{message}</p>}
+        {/* 🔹 Recaptcha container */}
+        <div id="recaptcha-container"></div>
+      </form>
     </main>
   );
 }

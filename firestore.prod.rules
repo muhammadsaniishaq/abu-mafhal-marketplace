@@ -1,0 +1,95 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isAdmin() {
+      return isSignedIn() && (request.auth.token.role in ['admin', 'superadmin']);
+    }
+    function isVendor() {
+      return isSignedIn() && request.auth.token.role == 'vendor';
+    }
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // USERS
+    match /users/{uid} {
+      allow read: if isAdmin() || isOwner(uid);
+      allow write: if isOwner(uid) || isAdmin();
+    }
+
+    // VENDORS
+    match /vendors/{uid} {
+      allow read: if isAdmin() || isOwner(uid);
+      allow write: if isAdmin(); // only admins approve
+    }
+
+    // PRODUCTS
+    match /products/{id} {
+      allow read: if true;
+      allow create: if isVendor() && request.resource.data.vendorId == request.auth.uid;
+      allow update, delete: if isAdmin() || (isVendor() && resource.data.vendorId == request.auth.uid);
+    }
+
+    // ORDERS
+    match /orders/{id} {
+      allow read: if isAdmin() 
+                  || (isSignedIn() && resource.data.buyerId == request.auth.uid)
+                  || (isVendor() && resource.data.vendorId == request.auth.uid);
+      allow create: if isSignedIn();
+      allow update: if isAdmin();
+    }
+
+    // REFUNDS
+    match /refunds/{id} {
+      allow read: if isAdmin() 
+                  || isOwner(resource.data.buyerId) 
+                  || (isVendor() && resource.data.vendorId == request.auth.uid);
+      allow create: if isSignedIn();
+      allow update: if isAdmin();
+    }
+
+    // NOTIFICATIONS
+    match /notifications/{id} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin();
+    }
+
+    // AUDIT LOGS
+    match /auditLogs/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    // MEDIA FILES
+    match /media/{id} {
+      allow read: if true;
+      allow write: if isAdmin() || isVendor();
+    }
+
+    // SETTINGS
+    match /settings/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // COUPONS
+    match /coupons/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // SUBSCRIPTIONS
+    match /subscriptions/{id} {
+      allow read: if isAdmin() || isOwner(resource.data.userId) || isVendor();
+      allow write: if isAdmin();
+    }
+
+    // REPORTS
+    match /reports/{id} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

@@ -1,0 +1,87 @@
+// Firestore Security Rules
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /** ---------- USERS COLLECTION ---------- */
+    match /users/{userId} {
+      // User can read/write their own profile
+      allow read, update, delete: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null;
+
+      // Admins can read/write all users
+      allow read, write: if isAdmin();
+    }
+
+    /** ---------- PRODUCTS COLLECTION ---------- */
+    match /products/{productId} {
+      // Vendors can create & manage their own products
+      allow create: if isVendor();
+      allow update, delete: if isVendor() && request.auth.uid == resource.data.vendorId;
+
+      // Buyers can read all products
+      allow read: if true;
+
+      // Admins can manage all
+      allow write: if isAdmin();
+    }
+
+    /** ---------- ORDERS COLLECTION ---------- */
+    match /orders/{orderId} {
+      // Buyers can create orders for themselves
+      allow create: if isBuyer();
+      allow read, update: if request.auth != null && request.auth.uid == resource.data.buyerId;
+
+      // Vendors can view orders for their products
+      allow read: if isVendor() && request.auth.uid in resource.data.vendorIds;
+
+      // Admins full access
+      allow read, write: if isAdmin();
+    }
+
+    /** ---------- PAYMENTS COLLECTION ---------- */
+    match /payments/{paymentId} {
+      // Linked to buyer
+      allow create: if isBuyer();
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+
+      // Admins full control
+      allow read, write: if isAdmin();
+    }
+
+    /** ---------- REVIEWS COLLECTION ---------- */
+    match /reviews/{reviewId} {
+      // Buyers can create/edit their own reviews
+      allow create: if isBuyer();
+      allow update, delete: if isBuyer() && request.auth.uid == resource.data.userId;
+
+      // Everyone can read reviews
+      allow read: if true;
+
+      // Admins full access
+      allow write: if isAdmin();
+    }
+
+    /** ---------- NOTIFICATIONS COLLECTION ---------- */
+    match /notifications/{notifId} {
+      // User can read their own notifications
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+
+      // Admin can broadcast/create
+      allow write: if isAdmin();
+    }
+
+    /** ---------- HELPER FUNCTIONS ---------- */
+    function isAdmin() {
+      return request.auth != null && request.auth.token.role in ['admin', 'superadmin'];
+    }
+
+    function isVendor() {
+      return request.auth != null && request.auth.token.role == 'vendor';
+    }
+
+    function isBuyer() {
+      return request.auth != null && request.auth.token.role == 'buyer';
+    }
+  }
+}
