@@ -1,0 +1,102 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- Utility Functions ----------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+
+    function isVendor() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "vendor";
+    }
+
+    function isBuyer() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "buyer";
+    }
+
+    // ---------- Users ----------
+    match /users/{uid} {
+      allow read: if isSignedIn() && (uid == request.auth.uid || isAdmin());
+      allow write: if isSignedIn() && (uid == request.auth.uid || isAdmin());
+    }
+
+    // ---------- Products ----------
+    match /products/{id} {
+      allow read: if true;
+
+      allow create: if isVendor() || isAdmin();
+
+      allow update, delete: if isAdmin()
+        || (isVendor() && resource.data.vendorId == request.auth.uid);
+
+      // Validation: vendorId must never change once set
+      allow update: if request.resource.data.vendorId == resource.data.vendorId;
+    }
+
+    // ---------- Orders ----------
+    match /orders/{id} {
+      allow read, create: if isSignedIn();
+
+      // Buyer can update only their own "pending" orders
+      allow update: if isAdmin()
+        || (isBuyer()
+          && resource.data.buyerId == request.auth.uid
+          && resource.data.status == "pending")
+        || (isVendor()
+          && resource.data.vendorId == request.auth.uid);
+
+      // Validation: buyerId and vendorId must not be tampered
+      allow update: if request.resource.data.buyerId == resource.data.buyerId
+        && request.resource.data.vendorId == resource.data.vendorId;
+    }
+
+    // ---------- Notifications ----------
+    match /notifications/{id} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ---------- Disputes ----------
+    match /disputes/{id} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isAdmin()
+        || (isBuyer() && resource.data.buyerId == request.auth.uid)
+        || (isVendor() && resource.data.vendorId == request.auth.uid);
+
+      // Validation: buyerId/vendorId cannot be reassigned
+      allow update: if request.resource.data.buyerId == resource.data.buyerId
+        && request.resource.data.vendorId == resource.data.vendorId;
+    }
+
+    // ---------- Payouts ----------
+    match /payouts/{id} {
+      allow read: if isAdmin()
+        || (isVendor() && resource.data.vendorId == request.auth.uid);
+
+      allow create: if isVendor() || isAdmin();
+
+      allow update: if isAdmin();
+
+      // Validation: vendorId is fixed
+      allow update: if request.resource.data.vendorId == resource.data.vendorId;
+    }
+
+    // ---------- Audit Logs ----------
+    // Only backend Cloud Functions (with admin SDK) can write here.
+    // Frontend users can only read their own logs.
+    match /logs/{id} {
+      allow create: if false; // disallow clients
+      allow update, delete: if false;
+      allow read: if isAdmin(); // admins can read all logs
+    }
+  }
+}

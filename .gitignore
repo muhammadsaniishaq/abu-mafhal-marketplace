@@ -1,6 +1,19 @@
+# Node
 node_modules
-.next
-.env
+npm-debug.log
 .env.local
-.firebase/
-firebase-debug.log
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Next build
+.next
+.out
+
+# Logs
+logs
+*.log
+
+server/.env
+.en
+.env.local

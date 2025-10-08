@@ -1,29 +1,29 @@
-'use client';
-import { useEffect, useState } from 'react';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth, db } from '@/lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+"use client";
+
+import { useEffect, useState } from "react";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "@/lib/firebaseClient";
 
 export function useAuth() {
-  const [user, setUser] = useState<User|null>(null);
-  const [role, setRole] = useState<'superadmin'|'admin'|'vendor'|'buyer'|'guest'>('guest');
+  const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    return onAuthStateChanged(auth, async (u) => {
-      setUser(u);
-      if (u) {
-        const snap = await getDoc(doc(db, 'users', u.uid));
-        const r = (snap.data()?.role ?? 'buyer') as typeof role;
-        setRole(r);
-        document.cookie = `role=${r}; path=/;`;
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setProfile({
+          uid: user.uid,
+          email: user.email,
+          name: user.displayName,
+        });
       } else {
-        setRole('guest');
-        document.cookie = `role=guest; path=/;`;
+        setProfile(null);
       }
       setLoading(false);
     });
+
+    return () => unsubscribe();
   }, []);
 
-  return { user, role, loading };
+  return { profile, loading };
 }

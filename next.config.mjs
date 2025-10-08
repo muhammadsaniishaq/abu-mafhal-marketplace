@@ -1,6 +1,15 @@
-/** @type {import('next').NextConfig} */
+// next.config.mjs
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+
 const nextConfig = {
-  experimental: { serverActions: { bodySizeLimit: '2mb' } },
-  images: { remotePatterns: [{ protocol: 'https', hostname: '**' }] },
+  reactStrictMode: true,
+  experimental: { esmExternals: "loose" },
+  webpack: (config) => {
+    config.externals = config.externals || {};
+    config.resolve.alias["framer-motion"] = require.resolve("framer-motion");
+    return config;
+  },
 };
+
 export default nextConfig;

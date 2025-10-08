@@ -1,0 +1,21 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() { return request.auth != null; }
+    function isAdmin() {
+      return isSignedIn() && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+
+    // public product images readable; writes only by vendors/admins
+    match /products/{allPaths=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    // user avatars & KYC docs
+    match /users/{uid}/{allPaths=**} {
+      allow read: if isSignedIn() && (uid == request.auth.uid || isAdmin());
+      allow write: if isSignedIn() && (uid == request.auth.uid || isAdmin());
+    }
+  }
+}
