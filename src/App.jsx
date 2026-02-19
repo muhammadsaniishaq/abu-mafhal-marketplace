@@ -79,19 +79,15 @@ import LoyaltyRewards from './components/buyer/LoyaltyRewards';
 import Messages from './components/common/Messages';
 import ChatWindow from './components/common/ChatWindow';
 
+// ==================== COMMON COMPONENTS ====================
+import LoadingScreen from './components/common/LoadingScreen';
+
 // ==================== PROTECTED ROUTE COMPONENT ====================
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { currentUser, loading } = useAuth();
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400 text-lg font-medium">Loading Abu Mafhal Marketplace...</p>
-        </div>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   if (!currentUser) {
@@ -127,13 +123,13 @@ function App() {
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/ai-test" element={<AITest />} />
                 <Route path="/checkout" element={<CheckoutPage />} />
-                <Route 
-                  path="/notifications" 
+                <Route
+                  path="/notifications"
                   element={
                     <ProtectedRoute>
                       <Notifications />
                     </ProtectedRoute>
-                  } 
+                  }
                 />
 
                 {/* ==================== AUTH ROUTES ==================== */}
@@ -142,46 +138,46 @@ function App() {
                 <Route path="/forgot-password" element={<ForgotPassword />} />
 
                 {/* ==================== VENDOR APPLICATION ==================== */}
-                <Route 
-                  path="/vendor-application" 
+                <Route
+                  path="/vendor-application"
                   element={
                     <ProtectedRoute allowedRoles={['buyer']}>
                       <VendorApplication />
                     </ProtectedRoute>
-                  } 
+                  }
                 />
 
                 {/* ==================== CART & CHECKOUT ==================== */}
-                <Route 
-                  path="/cart" 
+                <Route
+                  path="/cart"
                   element={
                     <ProtectedRoute>
                       <Cart />
                     </ProtectedRoute>
-                  } 
+                  }
                 />
 
                 {/* ==================== MESSAGES/CHAT ==================== */}
-                <Route 
-                  path="/messages" 
+                <Route
+                  path="/messages"
                   element={
                     <ProtectedRoute>
                       <Messages />
                     </ProtectedRoute>
-                  } 
+                  }
                 />
-                <Route 
-                  path="/messages/:conversationId" 
+                <Route
+                  path="/messages/:conversationId"
                   element={
                     <ProtectedRoute>
                       <ChatWindow />
                     </ProtectedRoute>
-                  } 
+                  }
                 />
 
                 {/* ==================== ADMIN ROUTES ==================== */}
-                <Route 
-                  path="/admin" 
+                <Route
+                  path="/admin"
                   element={
                     <ProtectedRoute allowedRoles={['admin']}>
                       <AdminDashboard />
@@ -210,8 +206,8 @@ function App() {
                 </Route>
 
                 {/* ==================== VENDOR ROUTES ==================== */}
-                <Route 
-                  path="/vendor" 
+                <Route
+                  path="/vendor"
                   element={
                     <ProtectedRoute allowedRoles={['vendor']}>
                       <VendorDashboard />
@@ -231,8 +227,8 @@ function App() {
                 </Route>
 
                 {/* ==================== BUYER ROUTES ==================== */}
-                <Route 
-                  path="/buyer" 
+                <Route
+                  path="/buyer"
                   element={
                     <ProtectedRoute allowedRoles={['buyer']}>
                       <BuyerDashboard />
@@ -253,8 +249,8 @@ function App() {
                 </Route>
 
                 {/* ==================== 404 NOT FOUND ==================== */}
-                <Route 
-                  path="*" 
+                <Route
+                  path="*"
                   element={
                     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
                       <div className="text-center">
@@ -263,8 +259,8 @@ function App() {
                         <p className="text-gray-500 dark:text-gray-500 mb-8">
                           The page you're looking for doesn't exist.
                         </p>
-                        <a 
-                          href="/" 
+                        <a
+                          href="/"
                           className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors inline-flex items-center gap-2 font-medium shadow-lg"
                         >
                           <span>🏠</span>
@@ -272,7 +268,7 @@ function App() {
                         </a>
                       </div>
                     </div>
-                  } 
+                  }
                 />
               </Routes>
 

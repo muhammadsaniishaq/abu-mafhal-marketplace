@@ -1,0 +1,517 @@
+// src/services/paymentService.ts
+// ============================================
+// PAYMENT SERVICE - VITE VERSION
+// Paystack + Flutterwave Only
+// ============================================
+
+import { PaymentResult, PaymentProvider } from '../types/payment';
+import { supabase } from '../lib/supabaseClient';
+
+// ============== PAYSTACK ==============
+
+/**
+ * Initialize Paystack payment
+ */
+export async function initializePaystackPayment(
+  orderId: string,
+  email: string,
+  amountNGN: number
+): Promise<{ authorizationUrl: string; accessCode: string }> {
+  try {
+    console.log('💳 Initializing Paystack payment...', { orderId, email, amountNGN });
+
+    const apiKey = import.meta.env.VITE_PAYSTACK_SECRET_KEY;
+    
+    if (!apiKey) {
+      throw new Error('Paystack API key not configured. Add VITE_PAYSTACK_SECRET_KEY to .env');
+    }
+
+    const response = await fetch('https://api.paystack.co/transaction/initialize', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        email,
+        amount: Math.round(amountNGN * 100), // Convert to kobo
+        reference: orderId,
+        metadata: {
+          orderId,
+          email
+        },
+        callback_url: `${window.location.origin}/verify-payment?provider=paystack&reference=${orderId}`
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to initialize Paystack payment');
+    }
+
+    const data = await response.json();
+
+    if (!data.status) {
+      throw new Error(data.message || 'Failed to initialize Paystack payment');
+    }
+
+    console.log('✅ Paystack initialized successfully');
+    return {
+      authorizationUrl: data.data.authorization_url,
+      accessCode: data.data.access_code
+    };
+  } catch (error: any) {
+    console.error('❌ Paystack initialization error:', error);
+    throw new Error(error.message || 'Failed to initialize Paystack payment');
+  }
+}
+
+/**
+ * Verify Paystack payment
+ */
+export async function verifyPaystackPayment(reference: string): Promise<PaymentResult> {
+  try {
+    console.log('🔍 Verifying Paystack payment...', reference);
+
+    const apiKey = import.meta.env.VITE_PAYSTACK_SECRET_KEY;
+    
+    if (!apiKey) {
+      throw new Error('Paystack API key not configured');
+    }
+
+    const response = await fetch(
+      `https://api.paystack.co/transaction/verify/${reference}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`
+        }
+      }
+    );
+
+    const data = await response.json();
+
+    if (data.status && data.data.status === 'success') {
+      const { orderId, email } = data.data.metadata;
+      const amount = data.data.amount / 100; // Convert from kobo
+
+      console.log('✅ Paystack payment verified:', { orderId, amount });
+
+      // Update order
+      const { error: orderUpdateError } = await supabase
+        .from('orders')
+        .update({
+          paymentStatus: 'completed',
+          paymentReference: reference,
+          paidAt: new Date().toISOString(),
+          orderStatus: 'processing',
+          updatedAt: new Date().toISOString()
+        })
+        .eq('id', orderId);
+
+      if (orderUpdateError) throw orderUpdateError;
+
+      // Log transaction
+      const { error: transError } = await supabase
+        .from('transactions')
+        .insert({
+          orderId,
+          email,
+          amount,
+          currency: 'NGN',
+          paymentGateway: 'paystack',
+          reference,
+          status: 'completed',
+          timestamp: new Date().toISOString()
+        });
+
+      if (transError) throw transError;
+
+      // Log success
+      await logTransaction(orderId, 'success', 'paystack', amount, reference);
+
+      return {
+        success: true,
+        reference,
+        amount,
+        orderId,
+        message: 'Payment verified successfully'
+      };
+    } else {
+      throw new Error('Payment verification failed');
+    }
+  } catch (error: any) {
+    console.error('❌ Paystack verification error:', error);
+    await logTransaction('', 'failed', 'paystack', 0, reference, error.message);
+
+    return {
+      success: false,
+      reference,
+      amount: 0,
+      orderId: '',
+      error: error.message || 'Payment verification failed'
+    };
+  }
+}
+
+// ============== FLUTTERWAVE ==============
+
+/**
+ * Initialize Flutterwave payment
+ */
+export async function initializeFlutterwavePayment(
+  orderId: string,
+  email: string,
+  amountNGN: number,
+  customerName: string
+): Promise<{ paymentLink: string }> {
+  try {
+    console.log('💳 Initializing Flutterwave payment...', { orderId, email, amountNGN });
+
+    const apiKey = import.meta.env.VITE_FLUTTERWAVE_SECRET_KEY;
+    
+    if (!apiKey) {
+      throw new Error('Flutterwave API key not configured. Add VITE_FLUTTERWAVE_SECRET_KEY to .env');
+    }
+
+    const response = await fetch('https://api.flutterwave.com/v3/payments', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        tx_ref: orderId,
+        amount: amountNGN,
+        currency: 'NGN',
+        payment_options: 'card,account,ussd,mobilemoney',
+        customer: {
+          email,
+          name: customerName
+        },
+        customizations: {
+          title: 'Abu Mafhal Marketplace',
+          description: `Payment for order ${orderId}`,
+          logo: `${window.location.origin}/logo.png`
+        },
+        redirect_url: `${window.location.origin}/verify-payment?provider=flutterwave&reference=${orderId}`,
+        meta: {
+          orderId
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to initialize Flutterwave payment');
+    }
+
+    const data = await response.json();
+
+    if (data.status === 'success') {
+      console.log('✅ Flutterwave initialized successfully');
+      return {
+        paymentLink: data.data.link
+      };
+    } else {
+      throw new Error(data.message || 'Failed to initialize Flutterwave payment');
+    }
+  } catch (error: any) {
+    console.error('❌ Flutterwave initialization error:', error);
+    throw new Error(error.message || 'Failed to initialize Flutterwave payment');
+  }
+}
+
+/**
+ * Verify Flutterwave payment
+ */
+export async function verifyFlutterwavePayment(transactionId: string, orderId: string): Promise<PaymentResult> {
+  try {
+    console.log('🔍 Verifying Flutterwave payment...', transactionId);
+
+    const apiKey = import.meta.env.VITE_FLUTTERWAVE_SECRET_KEY;
+    
+    if (!apiKey) {
+      throw new Error('Flutterwave API key not configured');
+    }
+
+    const response = await fetch(
+      `https://api.flutterwave.com/v3/transactions/${transactionId}/verify`,
+      {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`
+        }
+      }
+    );
+
+    const data = await response.json();
+
+    if (data.status === 'success' && data.data.status === 'successful') {
+      const amount = data.data.amount;
+      const reference = data.data.id.toString();
+
+      console.log('✅ Flutterwave payment verified:', { orderId, amount });
+
+      // Update order
+      const { error: orderUpdateError } = await supabase
+        .from('orders')
+        .update({
+          paymentStatus: 'completed',
+          paymentReference: reference,
+          paidAt: new Date().toISOString(),
+          orderStatus: 'processing',
+          updatedAt: new Date().toISOString()
+        })
+        .eq('id', orderId);
+
+      if (orderUpdateError) throw orderUpdateError;
+
+      // Log transaction
+      const { error: transError } = await supabase
+        .from('transactions')
+        .insert({
+          orderId,
+          amount,
+          currency: 'NGN',
+          paymentGateway: 'flutterwave',
+          reference,
+          status: 'completed',
+          timestamp: new Date().toISOString()
+        });
+
+      if (transError) throw transError;
+
+      await logTransaction(orderId, 'success', 'flutterwave', amount, reference);
+
+      return {
+        success: true,
+        reference,
+        amount,
+        orderId,
+        message: 'Payment verified successfully'
+      };
+    } else {
+      throw new Error('Payment verification failed');
+    }
+  } catch (error: any) {
+    console.error('❌ Flutterwave verification error:', error);
+    await logTransaction(orderId, 'failed', 'flutterwave', 0, transactionId, error.message);
+
+    return {
+      success: false,
+      reference: transactionId,
+      amount: 0,
+      orderId,
+      error: error.message || 'Payment verification failed'
+    };
+  }
+}
+
+// ============== GENERIC HANDLERS ==============
+
+/**
+ * Handle payment callback from any gateway
+ */
+export async function handlePaymentCallback(searchParams: URLSearchParams): Promise<PaymentResult> {
+  try {
+    const reference = searchParams.get('reference');
+    const provider = searchParams.get('provider') || 'paystack';
+    const orderId = searchParams.get('orderId');
+
+    console.log('📝 Processing payment callback...', { provider, reference, orderId });
+
+    if (provider === 'paystack' && reference) {
+      return await verifyPaystackPayment(reference);
+    } else if (provider === 'flutterwave' && reference && orderId) {
+      return await verifyFlutterwavePayment(reference, orderId);
+    }
+
+    throw new Error('Invalid payment parameters');
+  } catch (error: any) {
+    console.error('❌ Payment callback error:', error);
+    return {
+      success: false,
+      reference: '',
+      amount: 0,
+      orderId: '',
+      error: error.message
+    };
+  }
+}
+
+// ============== UTILITIES ==============
+
+/**
+ * Log transaction for auditing
+ */
+export async function logTransaction(
+  orderId: string,
+  status: 'success' | 'failed' | 'pending',
+  gateway: PaymentProvider,
+  amount: number,
+  reference: string,
+  errorMessage?: string
+) {
+  try {
+    const { error } = await supabase
+      .from('payment_logs')
+      .insert({
+        orderId,
+        status,
+        gateway,
+        amount,
+        reference,
+        errorMessage: errorMessage || null,
+        timestamp: new Date().toISOString(),
+        metadata: {
+          userAgent: navigator.userAgent,
+          url: window.location.href
+        }
+      });
+    
+    if (error) throw error;
+    console.log('✅ Transaction logged:', { orderId, status, gateway });
+  } catch (error) {
+    console.error('Failed to log transaction:', error);
+  }
+}
+
+/**
+ * Get order details
+ */
+export async function getOrderDetails(orderId: string) {
+  try {
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('id', orderId)
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error fetching order:', error);
+    return null;
+  }
+}
+
+/**
+ * Retry payment for an order
+ */
+export async function retryPayment(orderId: string, gateway: PaymentProvider) {
+  try {
+    console.log('📝 Retrying payment...', { orderId, gateway });
+
+    const order = await getOrderDetails(orderId);
+    
+    if (!order) {
+      throw new Error('Order not found');
+    }
+
+    if (gateway === 'paystack') {
+      return await initializePaystackPayment(orderId, order.userEmail, order.total);
+    } else if (gateway === 'flutterwave') {
+      return await initializeFlutterwavePayment(orderId, order.userEmail, order.total, order.shippingAddress.fullName);
+    }
+
+    throw new Error('Unknown payment gateway');
+  } catch (error) {
+    console.error('Error retrying payment:', error);
+    throw error;
+  }
+}
+
+// ============== FORMATTING UTILITIES ==============
+
+/**
+ * Format payment date for display
+ */
+export function formatPaymentDate(date: string | Date | undefined): string {
+  if (!date) return 'N/A';
+  try {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    return dateObj.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch (error) {
+    return 'Invalid date';
+  }
+}
+
+/**
+ * Format currency for display
+ */
+export function formatCurrency(amount: number, currency: string = 'NGN'): string {
+  return `${currency} ${amount.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+}
+
+/**
+ * Get payment status badge color
+ */
+export function getPaymentStatusColor(status: string): string {
+  const colors: { [key: string]: string } = {
+    'completed': 'bg-green-100 text-green-800',
+    'success': 'bg-green-100 text-green-800',
+    'pending': 'bg-yellow-100 text-yellow-800',
+    'failed': 'bg-red-100 text-red-800',
+    'cancelled': 'bg-gray-100 text-gray-800'
+  };
+  return colors[status] || 'bg-gray-100 text-gray-800';
+}
+
+/**
+ * Get order status badge color
+ */
+export function getOrderStatusColor(status: string): string {
+  const colors: { [key: string]: string } = {
+    'pending': 'bg-yellow-100 text-yellow-800',
+    'paid': 'bg-blue-100 text-blue-800',
+    'processing': 'bg-purple-100 text-purple-800',
+    'shipped': 'bg-orange-100 text-orange-800',
+    'delivered': 'bg-green-100 text-green-800',
+    'cancelled': 'bg-red-100 text-red-800'
+  };
+  return colors[status] || 'bg-gray-100 text-gray-800';
+}
+
+/**
+ * Format payment method name
+ */
+export function formatPaymentMethod(method: string): string {
+  const names: { [key: string]: string } = {
+    'paystack': '💳 Paystack',
+    'flutterwave': '🌊 Flutterwave',
+    'usdc': '💰 USDC',
+    'coinbase': '🪙 Coinbase',
+    'bank_transfer': '🏦 Bank Transfer',
+    'wallet': '👛 Wallet'
+  };
+  return names[method] || method.toUpperCase();
+}
+
+/**
+ * Check if payment needs action
+ */
+export function needsPaymentAction(status: string): boolean {
+  return ['pending', 'failed'].includes(status);
+}
+
+/**
+ * Get payment action text
+ */
+export function getPaymentActionText(status: string): string {
+  const actions: { [key: string]: string } = {
+    'pending': 'Complete Payment',
+    'failed': 'Retry Payment',
+    'completed': 'Payment Confirmed',
+    'success': 'Payment Confirmed',
+    'cancelled': 'Payment Cancelled'
+  };
+  return actions[status] || 'View Details';
+}

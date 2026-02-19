@@ -1,9 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, addDoc, deleteDoc, doc, getDoc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
-import { useAuth } from '../../context/AuthContext';
-import { useCart } from '../../context/CartContext';
-import { Link } from 'react-router-dom';
+import { supabase } from '../../config/supabase';
 
 const BuyerWishlist = () => {
   const { currentUser } = useAuth();
@@ -19,29 +14,28 @@ const BuyerWishlist = () => {
 
   const fetchWishlist = async () => {
     try {
-      const q = query(
-        collection(db, 'wishlists'),
-        where('userId', '==', currentUser.uid)
-      );
-      const snapshot = await getDocs(q);
-      const items = [];
-      
-      for (const wishDoc of snapshot.docs) {
-        const wishData = wishDoc.data();
-        const productDoc = await getDoc(doc(db, 'products', wishData.productId));
-        
-        if (productDoc.exists()) {
-          items.push({
-            wishlistId: wishDoc.id,
-            ...wishData,
-            product: { id: productDoc.id, ...productDoc.data() }
-          });
-        }
-      }
-      
+      const { data, error } = await supabase
+        .from('wishlists')
+        .select(`
+          id,
+          product_id,
+          created_at,
+          product:products(*)
+        `)
+        .eq('user_id', currentUser?.uid || currentUser?.id);
+
+      if (error) throw error;
+
+      const items = (data || []).map(item => ({
+        wishlistId: item.id,
+        productId: item.product_id,
+        createdAt: item.created_at,
+        product: item.product
+      })).filter(item => item.product !== null);
+
       setWishlistItems(items);
     } catch (error) {
-      console.error('Error fetching wishlist:', error);
+      console.error('Error fetching wishlist from Supabase:', error);
     } finally {
       setLoading(false);
     }
@@ -49,11 +43,17 @@ const BuyerWishlist = () => {
 
   const removeFromWishlist = async (wishlistId) => {
     try {
-      await deleteDoc(doc(db, 'wishlists', wishlistId));
+      const { error } = await supabase
+        .from('wishlists')
+        .delete()
+        .eq('id', wishlistId);
+
+      if (error) throw error;
+
       setWishlistItems(wishlistItems.filter(item => item.wishlistId !== wishlistId));
       setSelectedForComparison(selectedForComparison.filter(id => id !== wishlistId));
     } catch (error) {
-      console.error('Error removing from wishlist:', error);
+      console.error('Error removing from wishlist on Supabase:', error);
       alert('Failed to remove item');
     }
   };
@@ -180,12 +180,11 @@ const BuyerWishlist = () => {
                   </div>
 
                   {item.product.stock !== undefined && (
-                    <p className={`text-xs mb-3 ${
-                      item.product.stock > 10 ? 'text-green-600' : 
-                      item.product.stock > 0 ? 'text-yellow-600' : 'text-red-600'
-                    }`}>
-                      {item.product.stock > 10 ? 'In Stock' : 
-                       item.product.stock > 0 ? `Only ${item.product.stock} left` : 'Out of Stock'}
+                    <p className={`text-xs mb-3 ${item.product.stock > 10 ? 'text-green-600' :
+                        item.product.stock > 0 ? 'text-yellow-600' : 'text-red-600'
+                      }`}>
+                      {item.product.stock > 10 ? 'In Stock' :
+                        item.product.stock > 0 ? `Only ${item.product.stock} left` : 'Out of Stock'}
                     </p>
                   )}
 
@@ -256,7 +255,7 @@ const ComparisonModal = ({ products, onClose }) => {
       <div className="bg-white dark:bg-gray-800 rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white dark:bg-gray-800 border-b p-6 flex justify-between items-center z-10">
           <h2 className="text-2xl font-bold">Compare Products</h2>
-          <button 
+          <button
             onClick={onClose}
             className="text-2xl hover:bg-gray-100 dark:hover:bg-gray-700 w-8 h-8 rounded-full"
           >

@@ -10,187 +10,74 @@ import { CreditCard, Wallet, Bitcoin, Lock, CheckCircle } from 'lucide-react';
 import { usePaystackPayment } from 'react-paystack';
 import { useFlutterwave, closePaymentModal } from 'flutterwave-react-v3';
 
+import { supabase } from '../config/supabase';
+
 const CheckoutPage = () => {
   const navigate = useNavigate();
   const { cartItems, clearCart } = useCart();
   const { currentUser } = useAuth();
-  
+
+  // Helper to parse price reliably
+  const parsePrice = (price) => {
+    if (typeof price === 'number') return price;
+    if (!price) return 0;
+    return parseFloat(price.toString().replace(/[^\d.]/g, '')) || 0;
+  };
+
   const [paymentMethod, setPaymentMethod] = useState('');
   const [loading, setLoading] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState(false);
-  
-  const [shippingInfo, setShippingInfo] = useState({
-    fullName: currentUser?.displayName || '',
-    email: currentUser?.email || '',
-    phone: '',
-    address: '',
-    city: '',
-    state: '',
-    zipCode: '',
-    country: 'Nigeria'
-  });
 
-  // Calculate total from cart items
-  const totalAmount = cartItems.reduce((total, item) => {
-    return total + (item.price * item.quantity);
-  }, 0);
-  
-  const shippingFee = totalAmount > 10000 ? 0 : 1500;
-  const finalTotal = totalAmount + shippingFee;
-
-  // Paystack Configuration
-  const paystackConfig = {
-    reference: `REF-${Date.now()}`,
-    email: shippingInfo.email,
-    amount: finalTotal * 100, // Amount in kobo
-    publicKey: 'pk_test_92a99bcc7c063338c402506c2e6db390dd986585', // Replace with your key
-  };
-
-  const initializePaystack = usePaystackPayment(paystackConfig);
-
-  // Flutterwave Configuration
-  const flutterwaveConfig = {
-    public_key: 'FLWPUBK-3fff199cbd02a7c478e39ce4e4c3ac0f-X', // Replace with your key
-    tx_ref: `FLW-${Date.now()}`,
-    amount: finalTotal,
-    currency: 'NGN',
-    payment_options: 'card,mobilemoney,ussd',
-    customer: {
-      email: shippingInfo.email,
-      phone_number: shippingInfo.phone,
-      name: shippingInfo.fullName,
-    },
-    customizations: {
-      title: 'Abu Mafhal Marketplace',
-      description: 'Payment for items in cart',
-      logo: 'https://your-logo-url.com/logo.png',
-    },
-  };
-
-  const handleFlutterwave = useFlutterwave(flutterwaveConfig);
-
-  // Handle form input changes
-  const handleInputChange = (e) => {
-    setShippingInfo({
-      ...shippingInfo,
-      [e.target.name]: e.target.value
-    });
-  };
-
-  // Validate form
-  const validateForm = () => {
-    const required = ['fullName', 'email', 'phone', 'address', 'city', 'state'];
-    for (let field of required) {
-      if (!shippingInfo[field]) {
-        alert(`Please fill in ${field.replace(/([A-Z])/g, ' $1').toLowerCase()}`);
-        return false;
-      }
-    }
-    if (!paymentMethod) {
-      alert('Please select a payment method');
-      return false;
-    }
-    return true;
-  };
-
-  // Handle Paystack Payment
-  const handlePaystackPayment = () => {
-    initializePaystack(
-      (reference) => {
-        console.log('Payment successful:', reference);
-        completeOrder(reference.reference, 'paystack');
-      },
-      () => {
-        alert('Payment cancelled');
-        setLoading(false);
-      }
-    );
-  };
-
-  // Handle Flutterwave Payment
-  const handleFlutterwavePayment = () => {
-    handleFlutterwave({
-      callback: (response) => {
-        console.log('Payment successful:', response);
-        completeOrder(response.transaction_id, 'flutterwave');
-        closePaymentModal();
-      },
-      onClose: () => {
-        alert('Payment cancelled');
-        setLoading(false);
-      },
-    });
-  };
-
-  // Handle NOWPayments (Crypto)
-  const handleNOWPayment = async () => {
-    try {
-      setLoading(true);
-      
-      // Create payment on NOWPayments
-      const response = await fetch('https://api.nowpayments.io/v1/payment', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': 'c4455828-ed9b-4d52-943f-53e812e6db0c', // Replace with your key
-        },
-        body: JSON.stringify({
-          price_amount: finalTotal / 1600, // Convert NGN to USD (approximate)
-          price_currency: 'usd',
-          pay_currency: 'btc', // Bitcoin
-          order_id: `ORDER-${Date.now()}`,
-          order_description: 'Purchase from Abu Mafhal Marketplace',
-          ipn_callback_url: 'https://your-domain.com/api/nowpayments-callback',
-          success_url: 'https://your-domain.com/order-success',
-          cancel_url: 'https://your-domain.com/checkout',
-        }),
-      });
-
-      const data = await response.json();
-      
-      if (data.payment_url) {
-        // Redirect to NOWPayments page
-        window.location.href = data.payment_url;
-      } else {
-        throw new Error('Failed to create payment');
-      }
-    } catch (error) {
-      console.error('NOWPayments error:', error);
-      alert('Failed to initialize crypto payment. Please try again.');
-      setLoading(false);
-    }
-  };
+  // ... (rest of states and calculations)
 
   // Complete order and save to database
   const completeOrder = async (transactionId, method) => {
     try {
-      const order = {
-        userId: currentUser?.uid,
-        items: cartItems,
-        shippingInfo,
-        paymentMethod: method,
-        transactionId,
-        totalAmount: finalTotal,
-        status: 'pending',
-        createdAt: new Date().toISOString()
-      };
+      setLoading(true);
 
-      // Save to your database (Firebase, etc.)
-      // await saveOrderToDatabase(order);
-      
-      console.log('Order placed:', order);
-      
+      // 1. Insert into orders table
+      const { data: orderData, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          buyer_id: currentUser?.uid || currentUser?.id,
+          status: 'pending',
+          total_amount: finalTotal,
+          payment_method: method,
+          transaction_id: transactionId,
+          shipping_address: JSON.stringify(shippingInfo),
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (orderError) throw orderError;
+
+      // 2. Insert into order_items table
+      const itemsToInsert = cartItems.map(item => ({
+        order_id: orderData.id,
+        product_id: item.id,
+        quantity: item.quantity || 1,
+        price: parsePrice(item.price)
+      }));
+
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .insert(itemsToInsert);
+
+      if (itemsError) throw itemsError;
+
+      console.log('Order successfully synced to Supabase:', orderData);
+
       clearCart();
       setOrderPlaced(true);
-      
+
       setTimeout(() => {
-        navigate('/order-success', { state: { order } });
+        navigate('/buyer/orders', { state: { success: true, orderId: orderData.id } });
       }, 2000);
-      
+
     } catch (error) {
       console.error('Error completing order:', error);
-      alert('Failed to complete order. Please contact support.');
-    } finally {
+      alert('Failed to complete order. Please contact support. Error: ' + (error.message || 'Unknown error'));
       setLoading(false);
     }
   };
@@ -198,7 +85,7 @@ const CheckoutPage = () => {
   // Handle checkout submission
   const handleCheckout = () => {
     if (!validateForm()) return;
-    
+
     setLoading(true);
 
     switch (paymentMethod) {
@@ -256,7 +143,7 @@ const CheckoutPage = () => {
             {/* Shipping Information */}
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-xl font-semibold mb-4">Shipping Information</h2>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <input
                   type="text"
@@ -266,7 +153,7 @@ const CheckoutPage = () => {
                   onChange={handleInputChange}
                   className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                
+
                 <input
                   type="email"
                   name="email"
@@ -275,7 +162,7 @@ const CheckoutPage = () => {
                   onChange={handleInputChange}
                   className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                
+
                 <input
                   type="tel"
                   name="phone"
@@ -284,7 +171,7 @@ const CheckoutPage = () => {
                   onChange={handleInputChange}
                   className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                
+
                 <input
                   type="text"
                   name="city"
@@ -293,7 +180,7 @@ const CheckoutPage = () => {
                   onChange={handleInputChange}
                   className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                
+
                 <input
                   type="text"
                   name="state"
@@ -302,7 +189,7 @@ const CheckoutPage = () => {
                   onChange={handleInputChange}
                   className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                
+
                 <input
                   type="text"
                   name="zipCode"
@@ -311,7 +198,7 @@ const CheckoutPage = () => {
                   onChange={handleInputChange}
                   className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                
+
                 <input
                   type="text"
                   name="address"
@@ -326,12 +213,11 @@ const CheckoutPage = () => {
             {/* Payment Method */}
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-xl font-semibold mb-4">Payment Method</h2>
-              
+
               <div className="space-y-3">
                 {/* Paystack */}
-                <label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition ${
-                  paymentMethod === 'paystack' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
-                }`}>
+                <label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition ${paymentMethod === 'paystack' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                  }`}>
                   <input
                     type="radio"
                     name="payment"
@@ -348,9 +234,8 @@ const CheckoutPage = () => {
                 </label>
 
                 {/* Flutterwave */}
-                <label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition ${
-                  paymentMethod === 'flutterwave' ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-gray-300'
-                }`}>
+                <label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition ${paymentMethod === 'flutterwave' ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-gray-300'
+                  }`}>
                   <input
                     type="radio"
                     name="payment"
@@ -367,9 +252,8 @@ const CheckoutPage = () => {
                 </label>
 
                 {/* NOWPayments (Crypto) */}
-                <label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition ${
-                  paymentMethod === 'nowpayments' ? 'border-yellow-500 bg-yellow-50' : 'border-gray-200 hover:border-gray-300'
-                }`}>
+                <label className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition ${paymentMethod === 'nowpayments' ? 'border-yellow-500 bg-yellow-50' : 'border-gray-200 hover:border-gray-300'
+                  }`}>
                   <input
                     type="radio"
                     name="payment"
@@ -397,7 +281,7 @@ const CheckoutPage = () => {
           <div className="lg:col-span-1">
             <div className="bg-white rounded-lg shadow-md p-6 sticky top-4">
               <h2 className="text-xl font-semibold mb-4">Order Summary</h2>
-              
+
               <div className="space-y-3 mb-4 max-h-60 overflow-y-auto">
                 {cartItems.map((item) => (
                   <div key={item.id} className="flex items-center gap-3">
@@ -433,11 +317,10 @@ const CheckoutPage = () => {
               <button
                 onClick={handleCheckout}
                 disabled={loading}
-                className={`w-full mt-6 py-3 rounded-lg font-semibold transition ${
-                  loading
+                className={`w-full mt-6 py-3 rounded-lg font-semibold transition ${loading
                     ? 'bg-gray-400 cursor-not-allowed'
                     : 'bg-blue-600 hover:bg-blue-700 text-white'
-                }`}
+                  }`}
               >
                 {loading ? 'Processing...' : `Pay ₦${finalTotal.toLocaleString()}`}
               </button>

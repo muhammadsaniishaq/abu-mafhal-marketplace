@@ -1,8 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
-import { db } from '../../config/firebase';
-import { useAuth } from '../../context/AuthContext';
-import { Link, useSearchParams } from 'react-router-dom';
+import { supabase } from '../../config/supabase';
 
 const BuyerOrders = () => {
   const { currentUser } = useAuth();
@@ -14,30 +10,41 @@ const BuyerOrders = () => {
 
   useEffect(() => {
     fetchOrders();
-    
-    // Check for success message from checkout
-    if (searchParams.get('success')) {
-      const orderId = searchParams.get('orderId');
-      if (orderId) {
-        setTimeout(() => {
-          alert('Order placed successfully! Your order ID is: ' + orderId.substring(0, 8).toUpperCase());
-        }, 500);
-      }
-    }
-  }, [currentUser, searchParams]);
+
+    // Set up real-time subscription for orders
+    const channel = supabase
+      .channel('public:orders')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'orders',
+        filter: `buyer_id=eq.${currentUser?.uid || currentUser?.id}`
+      }, (payload) => {
+        console.log('Real-time order change:', payload);
+        fetchOrders(); // Refresh data on change
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser]);
 
   const fetchOrders = async () => {
     try {
-      const q = query(
-        collection(db, 'orders'),
-        where('userId', '==', currentUser.uid),
-        orderBy('createdAt', 'desc')
-      );
-      const snapshot = await getDocs(q);
-      const ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setOrders(ordersData);
+      const { data, error } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          items:order_items(*)
+        `)
+        .eq('buyer_id', currentUser?.uid || currentUser?.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setOrders(data || []);
     } catch (error) {
-      console.error('Error fetching orders:', error);
+      console.error('Error fetching orders from Supabase:', error);
     } finally {
       setLoading(false);
     }
@@ -126,8 +133,8 @@ const BuyerOrders = () => {
             {searchQuery || filterStatus !== 'all' ? 'No orders found' : 'No orders yet'}
           </h2>
           <p className="text-gray-600 dark:text-gray-400 mb-6">
-            {searchQuery || filterStatus !== 'all' 
-              ? 'Try adjusting your filters' 
+            {searchQuery || filterStatus !== 'all'
+              ? 'Try adjusting your filters'
               : 'Start shopping to see your orders here'}
           </p>
           <Link
@@ -190,7 +197,7 @@ const BuyerOrders = () => {
                         </p>
                         {item.selectedVariation && (
                           <p className="text-sm text-gray-600 dark:text-gray-400">
-                            {Object.entries(item.selectedVariation).map(([key, value]) => 
+                            {Object.entries(item.selectedVariation).map(([key, value]) =>
                               `${key}: ${value}`
                             ).join(', ')}
                           </p>

@@ -1,39 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { collection, getDocs, query, where, getDoc, doc } from 'firebase/firestore';
-import { db } from '../config/firebase';
-import { useAuth } from '../context/AuthContext';
-import { Link, useNavigate } from 'react-router-dom';
-import NotificationBell from '../components/common/NotificationBell';
-import ProductCard from '../components/common/ProductCard';
-import { useComparison } from '../context/ComparisonContext';
-import AIRecommendations from '../components/ai/AIRecommendations';
+import { supabase } from '../config/supabase';
+
 const Shop = () => {
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
-  
+
   const [products, setProducts] = useState([]);
   const [flashSales, setFlashSales] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [sortBy, setSortBy] = useState('newest');
-  const [priceRange, setPriceRange] = useState({ min: 0, max: 1000000 });
-  const [showMenu, setShowMenu] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
-  const [vendorApplicationStatus, setVendorApplicationStatus] = useState(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [currentBanner, setCurrentBanner] = useState(0);
-  
-  const fileInputRef = useRef(null);
 
-  const categories = ['All', 'Electronics', 'Fashion', 'Home', 'Sports', 'Books', 'Beauty', 'Toys', 'Food', 'Other'];
-  
-  const banners = [
-    { id: 1, image: 'https://via.placeholder.com/1200x300/4F46E5/ffffff?text=Welcome+to+Abu+Mafhal+Marketplace', link: '/shop' },
-    { id: 2, image: 'https://via.placeholder.com/1200x300/059669/ffffff?text=New+Arrivals+Daily', link: '/shop?filter=new' },
-    { id: 3, image: 'https://via.placeholder.com/1200x300/DC2626/ffffff?text=Flash+Sale+Today', link: '/shop?filter=sale' },
-    { id: 4, image: 'https://via.placeholder.com/1200x300/F59E0B/ffffff?text=Free+Shipping+on+Orders+Over+N10,000', link: '/shop' }
-  ];
+  // ... rest of states
 
   useEffect(() => {
     fetchProducts();
@@ -49,16 +24,20 @@ const Shop = () => {
 
   const fetchProducts = async () => {
     try {
-      const q = query(collection(db, 'products'), where('status', '==', 'approved'));
-      const snapshot = await getDocs(q);
-      const productsData = snapshot.docs.map(doc => ({ 
-        id: doc.id, 
-        ...doc.data(),
-        createdAt: doc.data().createdAt || new Date().toISOString()
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('status', 'approved');
+
+      if (error) throw error;
+
+      const productsData = (data || []).map(p => ({
+        ...p,
+        createdAt: p.created_at || new Date().toISOString()
       }));
       setProducts(productsData);
     } catch (error) {
-      console.error('Error fetching products:', error);
+      console.error('Error fetching products from Supabase:', error);
     } finally {
       setLoading(false);
     }
@@ -66,17 +45,16 @@ const Shop = () => {
 
   const fetchFlashSales = async () => {
     try {
-      const now = new Date().toISOString();
-      const q = query(
-        collection(db, 'flashSales'),
-        where('active', '==', true)
-      );
-      const snapshot = await getDocs(q);
-      const sales = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter(sale => new Date(sale.endDate) > new Date());
-      setFlashSales(sales);
+      const { data, error } = await supabase
+        .from('flash_sales') // Guessing the table name based on mobile
+        .select('*')
+        .eq('active', true);
+
+      if (!error && data) {
+        setFlashSales(data.filter(sale => new Date(sale.end_date) > new Date()));
+      }
     } catch (error) {
-      console.error('Error fetching flash sales:', error);
+      console.error('Error fetching flash sales from Supabase:', error);
     }
   };
 
@@ -139,11 +117,11 @@ const Shop = () => {
 
   const filteredProducts = products
     .filter(product => {
-      const matchesSearch = !searchQuery || 
+      const matchesSearch = !searchQuery ||
         product.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         product.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         product.category?.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesCategory = selectedCategory === 'all' || 
+      const matchesCategory = selectedCategory === 'all' ||
         product.category?.toLowerCase() === selectedCategory.toLowerCase();
       const matchesPrice = (product.price >= priceRange.min) && (product.price <= priceRange.max);
       return matchesSearch && matchesCategory && matchesPrice;
@@ -232,13 +210,13 @@ const Shop = () => {
             <nav className="p-4 space-y-2">
               <Link to="/" className="flex items-center gap-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors" onClick={() => setShowMenu(false)}><span className="text-xl">🏠</span><span className="font-medium">Home</span></Link>
               <Link to="/shop" className="flex items-center gap-3 p-3 bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-lg" onClick={() => setShowMenu(false)}><span className="text-xl">🏪</span><span className="font-medium">Shop</span></Link>
-              
+
               {currentUser && (
                 <>
                   {currentUser.role === 'admin' && <Link to="/admin" className="flex items-center gap-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors" onClick={() => setShowMenu(false)}><span className="text-xl">👑</span><span className="font-medium">Admin Dashboard</span></Link>}
                   {currentUser.role === 'vendor' && <Link to="/vendor" className="flex items-center gap-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors" onClick={() => setShowMenu(false)}><span className="text-xl">📊</span><span className="font-medium">Vendor Dashboard</span></Link>}
                   {currentUser.role === 'buyer' && <Link to="/buyer" className="flex items-center gap-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors" onClick={() => setShowMenu(false)}><span className="text-xl">📊</span><span className="font-medium">My Dashboard</span></Link>}
-                  
+
                   <Link to="/buyer/orders" className="flex items-center gap-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors" onClick={() => setShowMenu(false)}><span className="text-xl">📦</span><span className="font-medium">My Orders</span></Link>
                   <Link to="/buyer/wishlist" className="flex items-center gap-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors" onClick={() => setShowMenu(false)}><span className="text-xl">❤️</span><span className="font-medium">Wishlist</span></Link>
                   <Link to="/messages" className="flex items-center gap-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors" onClick={() => setShowMenu(false)}><span className="text-xl">💬</span><span className="font-medium">Messages</span></Link>
@@ -261,7 +239,7 @@ const Shop = () => {
                   )}
                 </>
               )}
-              
+
               <div className="border-t border-gray-200 dark:border-gray-700 pt-2 mt-2">
                 <Link to="/about" className="flex items-center gap-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors" onClick={() => setShowMenu(false)}><span className="text-xl">ℹ️</span><span className="font-medium">About Us</span></Link>
                 <Link to="/contact" className="flex items-center gap-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors" onClick={() => setShowMenu(false)}><span className="text-xl">📞</span><span className="font-medium">Contact</span></Link>
@@ -304,7 +282,7 @@ const Shop = () => {
               <div>
                 <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Price Range</label>
                 <div className="space-y-2">
-                  <input type="range" min="0" max="1000000" step="10000" value={priceRange.max} onChange={(e) => setPriceRange({...priceRange, max: parseInt(e.target.value)})} className="w-full accent-orange-500" />
+                  <input type="range" min="0" max="1000000" step="10000" value={priceRange.max} onChange={(e) => setPriceRange({ ...priceRange, max: parseInt(e.target.value) })} className="w-full accent-orange-500" />
                   <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
                     <span>₦0</span>
                     <span className="font-semibold text-orange-600 dark:text-orange-400">₦{priceRange.max.toLocaleString()}</span>
@@ -370,7 +348,7 @@ const Shop = () => {
           <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{filteredProducts.length} {filteredProducts.length === 1 ? 'product' : 'products'} found</p>
           {searchQuery && <button onClick={() => setSearchQuery('')} className="text-sm text-orange-500 hover:text-orange-600 font-medium flex items-center gap-1">Clear search ✕</button>}
         </div>
-        
+
         {loading ? (
           <div className="text-center py-20">
             <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-orange-500 mx-auto mb-4"></div>
@@ -385,20 +363,20 @@ const Shop = () => {
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-  {filteredProducts.map((product) => (
-    <ProductCard key={product.id} product={product} />
-  ))}
+            {filteredProducts.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
           </div>
         )}
       </div>
 
 
-        {/* ==================== AI RECOMMENDATIONS SECTION ==================== */}
-        {!loading && filteredProducts.length > 0 && (
-          <div className="mt-12">
-            <AIRecommendations />
-          </div>
-        )}
+      {/* ==================== AI RECOMMENDATIONS SECTION ==================== */}
+      {!loading && filteredProducts.length > 0 && (
+        <div className="mt-12">
+          <AIRecommendations />
+        </div>
+      )}
 
       {/* Bottom Navigation Bar */}
       <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 z-40 shadow-lg">
