@@ -1,15 +1,5 @@
 {
-    "buildCommand": "npm run build && cd mobile && npm install && npx expo export --platform web && mv dist ../dist/mobile",
+    "buildCommand": "npm run build && cd mobile && npm install && export EXPO_PUBLIC_BASE_PATH=/mobile && npx expo export --platform web && cd .. && mkdir -p dist/mobile && cp -R mobile/dist/* dist/mobile/",
     "outputDirectory": "dist",
-    "framework": "vite",
-    "rewrites": [
-        {
-            "source": "/mobile/(.*)",
-            "destination": "/mobile/index.html"
-        },
-        {
-            "source": "/(.*)",
-            "destination": "/index.html"
-        }
-    ]
+    "framework": "vite"
 }

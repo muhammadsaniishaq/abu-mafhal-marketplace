@@ -5,6 +5,15 @@
     <link rel="icon" type="image/png" href="/logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Abu Mafhal Marketplace</title>
+    <script>
+      (function() {
+        var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        var isForcedWeb = window.location.search.indexOf('force=web') !== -1;
+        if (isMobile && !isForcedWeb && !window.location.pathname.startsWith('/mobile')) {
+          window.location.href = '/mobile';
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

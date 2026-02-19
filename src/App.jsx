@@ -106,20 +106,6 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 
 // ==================== MAIN APP COMPONENT ====================
 function App() {
-  // Device Detection Redirect
-  React.useEffect(() => {
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-      navigator.userAgent
-    );
-
-    // If mobile and not already redirecting/routed to mobile specifically
-    // Note: In our current setup, /mobile is a separate export served by Vercel
-    if (isMobile && !window.location.pathname.startsWith('/mobile')) {
-      // Small delay for smooth transition or analytics
-      window.location.href = window.location.origin + '/mobile';
-    }
-  }, []);
-
   return (
     <AuthProvider>
       <CartProvider>
