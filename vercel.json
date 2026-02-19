@@ -1,5 +1,5 @@
 {
-    "buildCommand": "npm run build && cd mobile && npm install && export EXPO_PUBLIC_BASE_PATH=/mobile && npx expo export --platform web && cd .. && mkdir -p dist/mobile && cp -R mobile/dist/* dist/mobile/",
+    "buildCommand": "npm install && npm run build && cd mobile && npm install && npx expo export --platform web && cd .. && mkdir -p dist/mobile && cp -R mobile/dist/* dist/mobile/",
     "outputDirectory": "dist",
     "framework": "vite"
 }
