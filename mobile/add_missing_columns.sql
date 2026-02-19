@@ -1,0 +1,8 @@
+-- Add missing columns to profiles table
+ALTER TABLE public.profiles 
+ADD COLUMN IF NOT EXISTS admin_notes TEXT,
+ADD COLUMN IF NOT EXISTS address TEXT,
+ADD COLUMN IF NOT EXISTS city TEXT,
+ADD COLUMN IF NOT EXISTS state TEXT,
+ADD COLUMN IF NOT EXISTS country TEXT,
+ADD COLUMN IF NOT EXISTS zip_code TEXT;
