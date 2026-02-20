@@ -1,5 +1,29 @@
 {
     "buildCommand": "npm install && npm run build && cd mobile && npm install && npx expo export --platform web && cd .. && mkdir -p dist/mobile && cp -R mobile/dist/* dist/mobile/",
     "outputDirectory": "dist",
-    "framework": "vite"
+    "framework": "vite",
+    "redirects": [
+        {
+            "source": "/",
+            "has": [
+                {
+                    "type": "header",
+                    "key": "User-Agent",
+                    "value": ".*Android|iPhone|iPad|iPod|Opera Mini|IEMobile.*"
+                }
+            ],
+            "destination": "/mobile",
+            "permanent": false
+        }
+    ],
+    "rewrites": [
+        {
+            "source": "/mobile/(.*)",
+            "destination": "/mobile/index.html"
+        },
+        {
+            "source": "/(.*)",
+            "destination": "/index.html"
+        }
+    ]
 }
