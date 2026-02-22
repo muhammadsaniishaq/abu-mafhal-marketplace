@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { AppSettingsProvider } from './src/context/AppSettingsContext';
 import { supabase } from './src/lib/supabase';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // Screens
 import { LandingPage } from './src/screens/LandingPage';
@@ -77,47 +78,49 @@ export default function App() {
     if (loading) return null; // Or a custom splash screen
 
     return (
-        <AppSettingsProvider>
-            <NavigationContainer>
-                <Stack.Navigator screenOptions={{ headerShown: false }}>
-                    {!user ? (
-                        <>
-                            <Stack.Screen name="Landing" component={LandingPage} />
-                            <Stack.Screen name="Auth" component={AuthPage} />
-                        </>
-                    ) : (
-                        <>
-                            <Stack.Screen name="Main">
-                                {props => (
-                                    <MainApp
-                                        {...props}
-                                        user={user}
-                                        onUpdateUser={setUser}
-                                        onLogout={handleLogout}
-                                        cartLines={cartLines}
-                                        onUpdateQty={handleUpdateQty}
-                                        onRemoveCart={handleRemoveCart}
-                                        onAddToCart={handleAddToCart}
-                                        onClearCart={handleClearCart}
-                                        onOpenVendorRegister={() => props.navigation.navigate('VendorRegister')}
-                                        onOpenAdmin={() => props.navigation.navigate('AdminDashboard')}
-                                        onOpenVendor={() => props.navigation.navigate('VendorDashboard')}
-                                    />
-                                )}
-                            </Stack.Screen>
-                            <Stack.Screen name="AdminDashboard" component={AdminDashboard} />
-                            <Stack.Screen name="VendorDashboard" component={VendorDashboard} />
-                            <Stack.Screen name="DriverDashboard" component={DriverDashboard} />
-                            <Stack.Screen name="ProductDetails" component={ProductDetails} />
-                            <Stack.Screen name="VendorRegister" component={VendorRegister} />
-                            <Stack.Screen name="ChatScreen" component={ChatScreen} />
-                            <Stack.Screen name="ConversationsScreen" component={ConversationsScreen} />
-                            <Stack.Screen name="TrackOrder" component={TrackOrderPage} />
-                            <Stack.Screen name="Invoice" component={InvoicePage} />
-                        </>
-                    )}
-                </Stack.Navigator>
-            </NavigationContainer>
-        </AppSettingsProvider>
+        <SafeAreaProvider>
+            <AppSettingsProvider>
+                <NavigationContainer>
+                    <Stack.Navigator screenOptions={{ headerShown: false }}>
+                        {!user ? (
+                            <>
+                                <Stack.Screen name="Landing" component={LandingPage} />
+                                <Stack.Screen name="Auth" component={AuthPage} />
+                            </>
+                        ) : (
+                            <>
+                                <Stack.Screen name="Main">
+                                    {props => (
+                                        <MainApp
+                                            {...props}
+                                            user={user}
+                                            onUpdateUser={setUser}
+                                            onLogout={handleLogout}
+                                            cartLines={cartLines}
+                                            onUpdateQty={handleUpdateQty}
+                                            onRemoveCart={handleRemoveCart}
+                                            onAddToCart={handleAddToCart}
+                                            onClearCart={handleClearCart}
+                                            onOpenVendorRegister={() => props.navigation.navigate('VendorRegister')}
+                                            onOpenAdmin={() => props.navigation.navigate('AdminDashboard')}
+                                            onOpenVendor={() => props.navigation.navigate('VendorDashboard')}
+                                        />
+                                    )}
+                                </Stack.Screen>
+                                <Stack.Screen name="AdminDashboard" component={AdminDashboard} />
+                                <Stack.Screen name="VendorDashboard" component={VendorDashboard} />
+                                <Stack.Screen name="DriverDashboard" component={DriverDashboard} />
+                                <Stack.Screen name="ProductDetails" component={ProductDetails} />
+                                <Stack.Screen name="VendorRegister" component={VendorRegister} />
+                                <Stack.Screen name="ChatScreen" component={ChatScreen} />
+                                <Stack.Screen name="ConversationsScreen" component={ConversationsScreen} />
+                                <Stack.Screen name="TrackOrder" component={TrackOrderPage} />
+                                <Stack.Screen name="Invoice" component={InvoicePage} />
+                            </>
+                        )}
+                    </Stack.Navigator>
+                </NavigationContainer>
+            </AppSettingsProvider>
+        </SafeAreaProvider>
     );
 }
