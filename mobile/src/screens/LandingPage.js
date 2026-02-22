@@ -52,7 +52,7 @@ export const LandingPage = ({ onEnterShop, cartCount, onGoToCart, onLogin, user,
                 .from('products')
                 .select('*')
                 .eq('status', 'approved')
-                .gt('discount', 0)
+                .not('compare_at_price', 'is', null)
                 .limit(4);
             if (flashData) setFlashSale(flashData);
 

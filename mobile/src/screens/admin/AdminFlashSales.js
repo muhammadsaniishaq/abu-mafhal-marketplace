@@ -56,85 +56,77 @@ export const AdminFlashSales = () => {
 
             // 2. Update Products Discount
             if (pIds.length > 0) {
-                // First, reset discounts for products NOT in this list (optional, might be heavy, skipping for now)
-
-                // Set discount for selected products
                 if (isActive) {
-                    const { error: prodError } = await supabase
-                        .from('products')
-                        .update({ discount: discount })
-                        .in('id', pIds);
-
-                    if (prodError) throw prodError;
-                    Alert.alert('Success', `Sale Updated. ${pIds.length} products set to ${discount}% OFF.`);
+                    Alert.alert('Success', `Sale Updated. ${pIds.length} products added to Flash Sale.`);
                 } else {
-                    // If disabled, maybe remove discounts?
-                    Alert.alert('Success', 'Sale Disabled. (Note: Product discounts remain unless manually changed)');
+                    Alert.alert('Success', 'Sale Disabled.');
                 }
             } else {
                 Alert.alert('Success', 'Sale Updated (No products linked)');
             }
+            Alert.alert('Success', 'Sale Updated (No products linked)');
+        }
 
             fetchSale();
 
-        } catch (e) {
-            Alert.alert('Error', e.message);
-        } finally {
-            setLoading(false);
-        }
-    };
+    } catch (e) {
+        Alert.alert('Error', e.message);
+    } finally {
+        setLoading(false);
+    }
+};
 
-    return (
-        <ScrollView style={{ flex: 1, backgroundColor: 'white' }} contentContainerStyle={{ padding: 20 }}>
-            <Text style={styles.sectionTitle}>Flash Sale Manager</Text>
+return (
+    <ScrollView style={{ flex: 1, backgroundColor: 'white' }} contentContainerStyle={{ padding: 20 }}>
+        <Text style={styles.sectionTitle}>Flash Sale Manager</Text>
 
-            <View style={{ backgroundColor: '#F8FAFC', padding: 20, borderRadius: 16, borderWidth: 1, borderColor: '#F1F5F9' }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                    <Text style={{ fontWeight: '700', fontSize: 16 }}>Enable Flash Sale</Text>
-                    <Switch
-                        value={isActive}
-                        onValueChange={setIsActive}
-                        trackColor={{ false: '#E2E8F0', true: '#EF4444' }}
-                    />
-                </View>
-
-                <Text style={localStyles.label}>End Time (ISO Format)</Text>
-                <TextInput
-                    style={localStyles.input}
-                    value={endTime}
-                    onChangeText={setEndTime}
-                    placeholder="2026-12-31T23:59:00Z"
+        <View style={{ backgroundColor: '#F8FAFC', padding: 20, borderRadius: 16, borderWidth: 1, borderColor: '#F1F5F9' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <Text style={{ fontWeight: '700', fontSize: 16 }}>Enable Flash Sale</Text>
+                <Switch
+                    value={isActive}
+                    onValueChange={setIsActive}
+                    trackColor={{ false: '#E2E8F0', true: '#EF4444' }}
                 />
-
-                <Text style={localStyles.label}>Discount Percentage (%)</Text>
-                <TextInput
-                    style={localStyles.input}
-                    value={discountPercent}
-                    onChangeText={setDiscountPercent}
-                    keyboardType="numeric"
-                    placeholder="20"
-                />
-                <Text style={{ fontSize: 10, color: '#64748B', marginBottom: 16 }}>This will be applied to all products below when updated.</Text>
-
-                <Text style={localStyles.label}>Product IDs (Comma separated)</Text>
-                <TextInput
-                    style={[localStyles.input, { height: 100, textAlignVertical: 'top' }]}
-                    value={productIds}
-                    onChangeText={setProductIds}
-                    placeholder="uuid1, uuid2, uuid3..."
-                    multiline
-                />
-
-                <TouchableOpacity
-                    onPress={handleSave}
-                    disabled={loading}
-                    style={{ backgroundColor: '#EF4444', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 10 }}
-                >
-                    {loading ? <ActivityIndicator color="white" /> : <Text style={{ color: 'white', fontWeight: '700' }}>Update & Apply Discounts</Text>}
-                </TouchableOpacity>
             </View>
-        </ScrollView>
-    );
+
+            <Text style={localStyles.label}>End Time (ISO Format)</Text>
+            <TextInput
+                style={localStyles.input}
+                value={endTime}
+                onChangeText={setEndTime}
+                placeholder="2026-12-31T23:59:00Z"
+            />
+
+            <Text style={localStyles.label}>Discount Percentage (%)</Text>
+            <TextInput
+                style={localStyles.input}
+                value={discountPercent}
+                onChangeText={setDiscountPercent}
+                keyboardType="numeric"
+                placeholder="20"
+            />
+            <Text style={{ fontSize: 10, color: '#64748B', marginBottom: 16 }}>This will be applied to all products below when updated.</Text>
+
+            <Text style={localStyles.label}>Product IDs (Comma separated)</Text>
+            <TextInput
+                style={[localStyles.input, { height: 100, textAlignVertical: 'top' }]}
+                value={productIds}
+                onChangeText={setProductIds}
+                placeholder="uuid1, uuid2, uuid3..."
+                multiline
+            />
+
+            <TouchableOpacity
+                onPress={handleSave}
+                disabled={loading}
+                style={{ backgroundColor: '#EF4444', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 10 }}
+            >
+                {loading ? <ActivityIndicator color="white" /> : <Text style={{ color: 'white', fontWeight: '700' }}>Update & Apply Discounts</Text>}
+            </TouchableOpacity>
+        </View>
+    </ScrollView>
+);
 };
 
 const localStyles = {

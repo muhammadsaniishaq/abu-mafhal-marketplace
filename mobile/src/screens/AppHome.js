@@ -39,7 +39,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
             setBanners(bannerData || []);
 
             // 2. Fetch Flash Sale (Discount > 0)
-            const { data: flashData } = await supabase.from('products').select('*').eq('status', 'approved').gt('discount', 0).limit(4);
+            const { data: flashData } = await supabase.from('products').select('*').eq('status', 'approved').not('compare_at_price', 'is', null).limit(4);
             setFlashSale(flashData || []);
 
             // 3. Fetch New Arrivals (Is New)
