@@ -28,7 +28,87 @@ const CheckoutPage = () => {
   const [loading, setLoading] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState(false);
 
-  // ... (rest of states and calculations)
+  const [shippingInfo, setShippingInfo] = useState({
+    fullName: currentUser?.user_metadata?.name || currentUser?.name || '',
+    email: currentUser?.email || '',
+    phone: currentUser?.phone || '',
+    address: '',
+    city: '',
+    state: '',
+    zipCode: ''
+  });
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setShippingInfo((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const validateForm = () => {
+    if (!shippingInfo.fullName || !shippingInfo.email || !shippingInfo.phone || !shippingInfo.address || !shippingInfo.city || !shippingInfo.state) {
+      alert('Please fill in all required shipping information');
+      return false;
+    }
+    return true;
+  };
+
+  const totalAmount = cartItems.reduce((sum, item) => sum + (parsePrice(item.price) * (item.quantity || 1)), 0);
+  const shippingFee = cartItems.length > 0 ? 2000 : 0;
+  const finalTotal = totalAmount + shippingFee;
+
+  const paystackConfig = {
+    email: shippingInfo.email,
+    amount: finalTotal * 100, // in kobo
+    publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '',
+  };
+
+  const fwConfig = {
+    public_key: import.meta.env.VITE_FLUTTERWAVE_PUBLIC_KEY || '',
+    tx_ref: Date.now().toString(),
+    amount: finalTotal,
+    currency: 'NGN',
+    payment_options: 'card,mobilemoney,ussd',
+    customer: {
+      email: shippingInfo.email,
+      phone_number: shippingInfo.phone,
+      name: shippingInfo.fullName,
+    },
+    customizations: {
+      title: 'Checkout',
+      description: 'Payment for items in cart',
+      logo: '',
+    },
+  };
+
+  const initializePaystack = usePaystackPayment(paystackConfig);
+  const handleFlutterwaveAction = useFlutterwave(fwConfig);
+
+  const handlePaystackPayment = () => {
+    initializePaystack(
+      (ref) => completeOrder(ref.reference, 'paystack'),
+      () => setLoading(false)
+    );
+  };
+
+  const handleFlutterwavePayment = () => {
+    handleFlutterwaveAction({
+      callback: (response) => {
+        closePaymentModal();
+        if (response.status === "successful") {
+          completeOrder(response.transaction_id, 'flutterwave');
+        } else {
+          console.error("Flutterwave failed:", response);
+          setLoading(false);
+        }
+      },
+      onClose: () => setLoading(false)
+    });
+  };
+
+  const handleNOWPayment = () => {
+    alert("NOWPayments integration not yet available.");
+    setLoading(false);
+  };
+
 
   // Complete order and save to database
   const completeOrder = async (transactionId, method) => {
@@ -318,8 +398,8 @@ const CheckoutPage = () => {
                 onClick={handleCheckout}
                 disabled={loading}
                 className={`w-full mt-6 py-3 rounded-lg font-semibold transition ${loading
-                    ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700 text-white'
                   }`}
               >
                 {loading ? 'Processing...' : `Pay ₦${finalTotal.toLocaleString()}`}
