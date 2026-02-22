@@ -1,0 +1,24 @@
+
+> abu-mafhal-marketplace@1.0.0 build
+> vite build
+
+[36mvite v5.4.21 [32mbuilding for production...[36m[39m
+transforming...
+(node:11608) Warning: Failed to load the ES module: C:\abu-mafhal-marketplace\web\tailwind.config.cjs. Make sure to set "type": "module" in the nearest package.json file or use the .mjs extension.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:11608) Warning: Failed to load the ES module: C:\abu-mafhal-marketplace\web\tailwind.config.cjs. Make sure to set "type": "module" in the nearest package.json file or use the .mjs extension.
+[32m✓[39m 117 modules transformed.
+[31mx[39m Build failed in 5.77s
+[31merror during build:
+[31m[vite]: Rollup failed to resolve import "@supabase/supabase-js" from "C:/abu-mafhal-marketplace/web/src/config/supabase.js".
+This is most likely unintended because it can break your application at runtime.
+If you do want to externalize this module explicitly add it to
+`build.rollupOptions.external`[31m
+    at viteWarn (file:///C:/abu-mafhal-marketplace/web/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:65855:17)
+    at onwarn (file:///C:/abu-mafhal-marketplace/web/node_modules/@vitejs/plugin-react/dist/index.js:90:7)
+    at onRollupWarning (file:///C:/abu-mafhal-marketplace/web/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:65885:5)
+    at onwarn (file:///C:/abu-mafhal-marketplace/web/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:65550:7)
+    at file:///C:/abu-mafhal-marketplace/web/node_modules/rollup/dist/es/shared/node-entry.js:20972:13
+    at Object.logger [as onLog] (file:///C:/abu-mafhal-marketplace/web/node_modules/rollup/dist/es/shared/node-entry.js:22945:9)
+    at ModuleLoader.handleInvalidResolvedId (file:///C:/abu-mafhal-marketplace/web/node_modules/rollup/dist/es/shared/node-entry.js:21689:26)
+    at file:///C:/abu-mafhal-marketplace/web/node_modules/rollup/dist/es/shared/node-entry.js:21647:26[39m
