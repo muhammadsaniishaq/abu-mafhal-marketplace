@@ -33,6 +33,14 @@
     ],
     "rewrites": [
         {
+            "source": "/_expo/(.*)",
+            "destination": "/mobile/_expo/$1"
+        },
+        {
+            "source": "/assets/(.*)",
+            "destination": "/mobile/assets/$1"
+        },
+        {
             "source": "/mobile/(.*)",
             "destination": "/mobile/index.html"
         },
