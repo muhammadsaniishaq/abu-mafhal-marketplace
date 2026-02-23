@@ -266,7 +266,7 @@ export const InvoicePage = ({ route, navigation }) => {
 
             <ScrollView contentContainerStyle={{ padding: 20 }}>
                 {/* Invoice Preview Card */}
-                <View style={{ backgroundColor: 'white', borderRadius: 24, padding: 24, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 4 }}>
+                <View style={{ backgroundColor: 'white', borderRadius: 24, padding: 24, boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', }}>
 
                     {/* Brand Header */}
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 32, paddingBottom: 24, borderBottomWidth: 1, borderColor: '#F1F5F9' }}>
@@ -318,7 +318,7 @@ export const InvoicePage = ({ route, navigation }) => {
             <View style={{ padding: 20, backgroundColor: 'white', borderTopWidth: 1, borderColor: '#F1F5F9' }}>
                 <TouchableOpacity
                     onPress={generatePdf}
-                    style={{ backgroundColor: '#0F172A', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 18, borderRadius: 16, shadowColor: "#0F172A", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 16 }}
+                    style={{ backgroundColor: '#0F172A', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 18, borderRadius: 16, boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',shadowRadius: 16 }}
                 >
                     <Ionicons name="download-outline" size={24} color="white" style={{ marginRight: 12 }} />
                     <Text style={{ fontSize: 16, fontWeight: '800', color: 'white' }}>Download PDF Invoice</Text>

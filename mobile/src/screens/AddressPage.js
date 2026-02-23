@@ -482,7 +482,7 @@ export const AddressPage = ({ navigation, onBack }) => {
             {!isAdding && !loading && (
                 <View style={{ position: 'absolute', bottom: 30, right: 20 }}>
                     <TouchableOpacity
-                        style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 10, elevation: 5 }}
+                        style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', }}
                         onPress={() => setIsAdding(true)}
                     >
                         <Ionicons name="add" size={32} color="white" />
@@ -514,10 +514,7 @@ const localStyles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'flex-start',
         justifyContent: 'space-between',
-        shadowColor: '#000',
-        shadowOpacity: 0.05,
-        shadowRadius: 5,
-        elevation: 2
+        boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',
     },
     addressTitle: {
         fontSize: 16,

@@ -24,6 +24,7 @@ export const VendorDashboard = ({ user, onLogout }) => {
     const [refreshing, setRefreshing] = useState(false);
     const [showRenewal, setShowRenewal] = useState(false);
     const [showCertificate, setShowCertificate] = useState(false);
+    const [orderFilter, setOrderFilter] = useState('All');
 
     // Products Filter State (Admin Style)
     const [search, setSearch] = useState('');
@@ -75,14 +76,15 @@ export const VendorDashboard = ({ user, onLogout }) => {
                 const productIds = productsData.map(p => p.id);
                 const { data: orderItems } = await supabase
                     .from('order_items')
-                    .select('*, order:orders(*)')
+                    .select('*, order:orders(*, user:profiles(full_name, email))')
                     .in('product_id', productIds)
                     .order('created_at', { ascending: false });
 
                 const formattedOrders = orderItems?.map(item => ({
                     id: item.order?.id,
-                    customer: item.order?.user_id || 'Customer',
+                    customerName: item.order?.user?.full_name || item.order?.user?.email || 'Customer',
                     item: productsData.find(p => p.id === item.product_id)?.name || 'Product',
+                    quantity: item.quantity,
                     amount: item.price * item.quantity,
                     status: item.order?.status || 'Pending',
                     date: new Date(item.created_at).toLocaleDateString(),
@@ -377,6 +379,91 @@ export const VendorDashboard = ({ user, onLogout }) => {
         </ScrollView>
     );
 
+    const renderOrders = () => {
+        const filteredOrders = orders.filter(o => orderFilter === 'All' || o.status?.toLowerCase() === orderFilter.toLowerCase());
+
+        return (
+            <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+                {/* Filter Chips */}
+                <View style={{ backgroundColor: 'white' }}>
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderColor: '#F1F5F9' }}
+                    >
+                        {['All', 'Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'].map(f => (
+                            <TouchableOpacity
+                                key={f}
+                                style={{
+                                    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: orderFilter === f ? '#0F172A' : '#F1F5F9', marginRight: 8
+                                }}
+                                onPress={() => setOrderFilter(f)}
+                            >
+                                <Text style={{ fontSize: 13, fontWeight: '600', color: orderFilter === f ? 'white' : '#64748B' }}>{f}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
+
+                {/* Orders List */}
+                <FlatList
+                    data={filteredOrders}
+                    keyExtractor={(item, index) => `${item.id}-${index}`}
+                    contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchDashboardData(); }} />}
+                    renderItem={({ item }) => {
+                        let statusColor = '#3B82F6';
+                        let statusBg = '#EFF6FF';
+                        const statusLower = item.status?.toLowerCase();
+                        if (statusLower === 'pending') { statusColor = '#D97706'; statusBg = '#FEF3C7'; }
+                        if (statusLower === 'delivered') { statusColor = '#10B981'; statusBg = '#DCFCE7'; }
+                        if (statusLower === 'cancelled') { statusColor = '#EF4444'; statusBg = '#FEE2E2'; }
+
+                        return (
+                            <View style={{ backgroundColor: 'white', borderRadius: 20, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.05)', elevation: 2 }}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                        <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center' }}>
+                                            <Ionicons name="receipt-outline" size={20} color="#0F172A" />
+                                        </View>
+                                        <View>
+                                            <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>Order #{item.id?.toString().slice(0, 8).toUpperCase()}</Text>
+                                            <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{item.date}</Text>
+                                        </View>
+                                    </View>
+                                    <View style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: statusBg }}>
+                                        <Text style={{ fontSize: 10, fontWeight: '800', letterSpacing: 0.5, color: statusColor }}>
+                                            {item.status?.toUpperCase() || 'UNKNOWN'}
+                                        </Text>
+                                    </View>
+                                </View>
+
+                                <View style={{ height: 1, backgroundColor: '#F1F5F9', marginVertical: 12 }} />
+
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <View style={{ flex: 1, paddingRight: 10 }}>
+                                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }} numberOfLines={1}>{item.item}</Text>
+                                        <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>Qty: {item.quantity || 1} • Customer: {item.customerName}</Text>
+                                    </View>
+                                    <View style={{ alignItems: 'flex-end' }}>
+                                        <Text style={{ fontSize: 11, color: '#94A3B8', fontWeight: '600', marginBottom: 2 }}>Earnings</Text>
+                                        <Text style={{ fontSize: 16, fontWeight: '800', color: '#10B981' }}>₦{item.amount?.toLocaleString()}</Text>
+                                    </View>
+                                </View>
+                            </View>
+                        );
+                    }}
+                    ListEmptyComponent={
+                        <View style={{ alignItems: 'center', padding: 40 }}>
+                            <Ionicons name="bag-remove-outline" size={48} color="#CBD5E1" />
+                            <Text style={{ color: '#94A3B8', marginTop: 16 }}>No orders found in this category.</Text>
+                        </View>
+                    }
+                />
+            </View>
+        );
+    };
+
     return (
         <View style={styles.container}>
             {renderHeader()}
@@ -389,20 +476,7 @@ export const VendorDashboard = ({ user, onLogout }) => {
                     <>
                         {activeTab === 'overview' && renderOverview()}
                         {activeTab === 'products' && renderProducts()}
-                        {activeTab === 'orders' && (
-                            <ScrollView contentContainerStyle={{ padding: 20 }}>
-                                <Text style={styles.sectionTitle}>All Orders</Text>
-                                {orders.map((order, i) => (
-                                    <View key={i} style={localStyles.orderRow}>
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={{ fontWeight: '700' }}>{order.item}</Text>
-                                            <Text style={{ fontSize: 12, color: '#64748B' }}>{order.status} • {order.date}</Text>
-                                        </View>
-                                        <Text style={{ fontWeight: '800' }}>₦{order.amount.toLocaleString()}</Text>
-                                    </View>
-                                ))}
-                            </ScrollView>
-                        )}
+                        {activeTab === 'orders' && renderOrders()}
                         {activeTab === 'wallet' && (
                             <View style={{ padding: 20, alignItems: 'center' }}>
                                 <View style={styles.walletCard}>
@@ -447,10 +521,10 @@ const StatCard = ({ label, value, icon, color }) => (
 );
 
 const localStyles = {
-    statCard: { width: '48%', backgroundColor: 'white', padding: 16, borderRadius: 16, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, elevation: 2 },
+    statCard: { width: '48%', backgroundColor: 'white', padding: 16, borderRadius: 16, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', },
     orderRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', padding: 12, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: '#F1F5F9' },
     iconBox: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-    actionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#0F172A', padding: 16, borderRadius: 12, marginBottom: 20, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, elevation: 4 },
+    actionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#0F172A', padding: 16, borderRadius: 12, marginBottom: 20, boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', },
     productCard: { flexDirection: 'row', backgroundColor: 'white', padding: 12, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9' },
 
     // Modal (No longer used, using AdminAddProduct)

@@ -598,7 +598,7 @@ const styles = StyleSheet.create({
     scrollContent: { padding: 20 },
 
     // Wallet
-    modernWalletCard: { backgroundColor: PRIMARY_COLOR, borderRadius: 24, overflow: 'hidden', padding: 20, marginBottom: 25, elevation: 8, shadowColor: PRIMARY_COLOR, shadowOpacity: 0.3, shadowRadius: 15 },
+    modernWalletCard: { backgroundColor: PRIMARY_COLOR, borderRadius: 24, overflow: 'hidden', padding: 20, marginBottom: 25, elevation: 8, boxShadow: '0px 4px 15px rgba(15,23,42,0.3)' },
     walletBg: { ...StyleSheet.absoluteFillObject, opacity: 0.2 },
     walletContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
     walletLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '600' },
@@ -613,7 +613,7 @@ const styles = StyleSheet.create({
     chartDay: { color: 'white', fontSize: 9, marginTop: 8, opacity: 0.7, fontWeight: 'bold' },
 
     // Order Card
-    modernCard: { backgroundColor: 'white', borderRadius: 20, padding: 16, marginBottom: 16, borderLeftWidth: 4, borderLeftColor: PRIMARY_COLOR, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 3 },
+    modernCard: { backgroundColor: 'white', borderRadius: 20, padding: 16, marginBottom: 16, borderLeftWidth: 4, borderLeftColor: PRIMARY_COLOR, boxShadow: '0px 4px 10px rgba(0,0,0,0.05)', elevation: 3 },
     cardBadgeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
     cardId: { fontSize: 13, fontWeight: '700', color: '#64748B' },
     badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
@@ -657,7 +657,7 @@ const styles = StyleSheet.create({
     cardNoteText: { fontSize: 12, color: '#64748B', fontStyle: 'italic', lineHeight: 18 },
 
     // Daily Earnings List
-    earningsListSection: { backgroundColor: 'white', borderRadius: 20, padding: 20, marginBottom: 20, shadowColor: '#000', shadowOpacity: 0.05 },
+    earningsListSection: { backgroundColor: 'white', borderRadius: 20, padding: 20, marginBottom: 20, boxShadow: '0px 4px 10px rgba(0,0,0,0.05)' },
     dailyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
     dailyDate: { fontSize: 13, fontWeight: '700', color: '#1E293B', flex: 1 },
     dailyCount: { fontSize: 12, color: '#94A3B8', marginHorizontal: 10 },
@@ -669,7 +669,7 @@ const styles = StyleSheet.create({
 
     // Profile Section
     profileSection: { gap: 20 },
-    settingsCard: { backgroundColor: 'white', borderRadius: 20, padding: 20, shadowColor: '#000', shadowOpacity: 0.05 },
+    settingsCard: { backgroundColor: 'white', borderRadius: 20, padding: 20, boxShadow: '0px 4px 10px rgba(0,0,0,0.05)' },
     sectionTitle: { fontSize: 14, fontWeight: '800', color: '#1E293B', marginBottom: 15, textTransform: 'uppercase', letterSpacing: 0.5 },
     settingsItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
     settingLabel: { fontSize: 12, color: '#94A3B8', fontWeight: '600' },

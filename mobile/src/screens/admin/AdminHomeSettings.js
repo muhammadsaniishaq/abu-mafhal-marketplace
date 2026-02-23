@@ -19,7 +19,7 @@ const SectionHeader = ({ title, count, onAdd, icon }) => (
             )}
         </View>
         {onAdd && (
-            <TouchableOpacity onPress={onAdd} style={{ backgroundColor: '#0F172A', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 24, shadowColor: "#0F172A", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 }}>
+            <TouchableOpacity onPress={onAdd} style={{ backgroundColor: '#0F172A', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 24, boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', }}>
                 <Ionicons name="add" size={18} color="white" />
                 <Text style={{ color: 'white', fontWeight: '700', fontSize: 13 }}>Add New</Text>
             </TouchableOpacity>
@@ -28,7 +28,7 @@ const SectionHeader = ({ title, count, onAdd, icon }) => (
 );
 
 const FeatureCard = ({ image, title, subtitle, isActive, onToggle, activeLabel = "Active", inactiveLabel = "Inactive", activeColor = "#10B981" }) => (
-    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', padding: 16, borderRadius: 20, marginBottom: 16, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.03, shadowRadius: 12, elevation: 2 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', padding: 16, borderRadius: 20, marginBottom: 16, borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', }}>
         <Image
             source={{ uri: image || 'https://placehold.co/100' }}
             style={{ width: 56, height: 56, borderRadius: 28, marginRight: 16, backgroundColor: '#F1F5F9' }}
@@ -58,7 +58,7 @@ const FeatureCard = ({ image, title, subtitle, isActive, onToggle, activeLabel =
 const StatsRail = ({ stats }) => (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 12, paddingBottom: 20 }}>
         {stats.map((stat, i) => (
-            <View key={i} style={{ backgroundColor: 'white', padding: 16, borderRadius: 20, minWidth: 150, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 3 }}>
+            <View key={i} style={{ backgroundColor: 'white', padding: 16, borderRadius: 20, minWidth: 150, borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                     <View style={{ padding: 10, backgroundColor: `${stat.color}15`, borderRadius: 12 }}>
                         <Ionicons name={stat.icon} size={20} color={stat.color} />
@@ -77,9 +77,9 @@ const Toast = ({ message, type = 'success', visible, onHide }) => {
     useEffect(() => {
         if (visible) {
             Animated.sequence([
-                Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
+                Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: false }),
                 Animated.delay(2500),
-                Animated.timing(fadeAnim, { toValue: 0, duration: 300, useNativeDriver: true })
+                Animated.timing(fadeAnim, { toValue: 0, duration: 300, useNativeDriver: false })
             ]).start(() => onHide && onHide());
         }
     }, [visible]);
@@ -94,7 +94,7 @@ const Toast = ({ message, type = 'success', visible, onHide }) => {
             position: 'absolute', top: 64, left: 16, right: 16,
             backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 20, padding: 16,
             flexDirection: 'row', alignItems: 'center', gap: 16,
-            shadowColor: "#000", shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10,
+            boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',
             borderLeftWidth: 6, borderLeftColor: bgColor, opacity: fadeAnim, zIndex: 1000
         }}>
             <View style={{ padding: 10, backgroundColor: `${bgColor}20`, borderRadius: 14 }}>
@@ -132,7 +132,7 @@ const SearchModal = ({ visible, onClose, title, onSearch, results, onSelect, pla
                 </View>
 
                 <View style={{ padding: 20 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', paddingHorizontal: 16, borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0', height: 64, marginBottom: 20, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', paddingHorizontal: 16, borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0', height: 64, marginBottom: 20, boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',shadowRadius: 8 }}>
                         <Ionicons name="search" size={24} color="#94A3B8" />
                         <TextInput
                             placeholder={placeholder}
@@ -150,7 +150,7 @@ const SearchModal = ({ visible, onClose, title, onSearch, results, onSelect, pla
                             <TouchableOpacity
                                 key={i}
                                 onPress={() => { onSelect(item); onClose(); }}
-                                style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', padding: 16, borderRadius: 20, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4 }}
+                                style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', padding: 16, borderRadius: 20, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',shadowRadius: 4 }}
                             >
                                 <Image source={{ uri: item.image || 'https://placehold.co/100' }} style={{ width: 56, height: 56, borderRadius: 28, marginRight: 16, backgroundColor: '#F1F5F9' }} />
                                 <View style={{ flex: 1 }}>
@@ -172,7 +172,7 @@ const SearchModal = ({ visible, onClose, title, onSearch, results, onSelect, pla
                                 <Text style={{ color: '#64748B', fontSize: 15, textAlign: 'center' }}>We couldn't find anything matching "{query}"</Text>
 
                                 {onCreate && (
-                                    <TouchableOpacity onPress={() => { onCreate(query); onClose(); }} style={{ marginTop: 32, backgroundColor: '#0F172A', paddingHorizontal: 32, paddingVertical: 16, borderRadius: 32, flexDirection: 'row', alignItems: 'center', gap: 10, shadowColor: "#0F172A", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10 }}>
+                                    <TouchableOpacity onPress={() => { onCreate(query); onClose(); }} style={{ marginTop: 32, backgroundColor: '#0F172A', paddingHorizontal: 32, paddingVertical: 16, borderRadius: 32, flexDirection: 'row', alignItems: 'center', gap: 10, boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',shadowRadius: 10 }}>
                                         <Ionicons name="add-circle" size={22} color="white" />
                                         <Text style={{ color: 'white', fontWeight: '800', fontSize: 16 }}>Create "{query}"</Text>
                                     </TouchableOpacity>
@@ -447,7 +447,7 @@ export const AdminHomeSettings = () => {
 
                 <SectionHeader title="Customer Testimonials" count={reviews.length} />
                 {reviews.map(review => (
-                    <View key={review.id} style={{ backgroundColor: 'white', padding: 20, borderRadius: 24, marginBottom: 16, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 }}>
+                    <View key={review.id} style={{ backgroundColor: 'white', padding: 20, borderRadius: 24, marginBottom: 16, borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                                 <Image source={{ uri: review.user?.avatar_url || 'https://placehold.co/50' }} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#F1F5F9' }} />
@@ -493,7 +493,7 @@ export const AdminHomeSettings = () => {
             <SectionHeader title="Service Highlights" onAdd={() => setEditingService({ title: '', icon: '', lib: 'mc', bg_color: '#3B82F6', display_order: services.length + 1 })} />
 
             {editingService && (
-                <View style={{ backgroundColor: 'white', padding: 24, borderRadius: 24, marginBottom: 24, borderWidth: 1, borderColor: '#3B82F6', shadowColor: "#3B82F6", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 8 }}>
+                <View style={{ backgroundColor: 'white', padding: 24, borderRadius: 24, marginBottom: 24, borderWidth: 1, borderColor: '#3B82F6', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', }}>
                     <Text style={{ fontWeight: '900', marginBottom: 24, fontSize: 20, color: '#0F172A' }}>{editingService.id ? 'Edit Service' : 'New Service'}</Text>
 
                     <View style={{ gap: 20 }}>
@@ -541,7 +541,7 @@ export const AdminHomeSettings = () => {
                         <TouchableOpacity onPress={() => setEditingService(null)} style={{ flex: 1, padding: 18, alignItems: 'center', backgroundColor: '#F1F5F9', borderRadius: 16 }}>
                             <Text style={{ color: '#64748B', fontWeight: '800', fontSize: 15 }}>Discard</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={handleSaveService} style={{ flex: 1, backgroundColor: '#0F172A', padding: 18, borderRadius: 16, alignItems: 'center', shadowColor: "#0F172A", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10 }}>
+                        <TouchableOpacity onPress={handleSaveService} style={{ flex: 1, backgroundColor: '#0F172A', padding: 18, borderRadius: 16, alignItems: 'center', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',shadowRadius: 10 }}>
                             <Text style={{ color: 'white', fontWeight: '800', fontSize: 15 }}>Save Changes</Text>
                         </TouchableOpacity>
                     </View>
@@ -549,7 +549,7 @@ export const AdminHomeSettings = () => {
             )}
 
             {services.map(svc => (
-                <View key={svc.id} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', padding: 16, borderRadius: 20, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 4 }}>
+                <View key={svc.id} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', padding: 16, borderRadius: 20, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',shadowRadius: 4 }}>
                     <View style={{ marginRight: 20 }}>
                         <ServiceIcon icon={svc.icon} label="" color={svc.bg_color || '#3B82F6'} lib={svc.lib} onPress={() => { }} />
                     </View>
@@ -572,7 +572,7 @@ export const AdminHomeSettings = () => {
 
     const renderSystemStatus = () => (
         <View style={{ padding: 20 }}>
-            <View style={{ backgroundColor: '#0F172A', padding: 28, borderRadius: 28, marginBottom: 24, shadowColor: "#0F172A", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 16 }}>
+            <View style={{ backgroundColor: '#0F172A', padding: 28, borderRadius: 28, marginBottom: 24, boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',shadowRadius: 16 }}>
                 <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
                     <Ionicons name="hardware-chip-outline" size={32} color="white" />
                 </View>

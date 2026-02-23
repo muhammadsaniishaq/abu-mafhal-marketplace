@@ -577,7 +577,7 @@ export const AdminUserDetails = ({ visible, user, onClose, onUpdate, navigation:
 
 const SwitchBtn = ({ value, onToggle, color }) => (
     <TouchableOpacity onPress={onToggle} style={{ width: 44, height: 24, borderRadius: 12, backgroundColor: value ? color : '#E2E8F0', padding: 2, justifyContent: 'center' }}>
-        <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: 'white', alignSelf: value ? 'flex-end' : 'flex-start', shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 }} />
+        <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: 'white', alignSelf: value ? 'flex-end' : 'flex-start', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', }} />
     </TouchableOpacity>
 );
 
@@ -603,7 +603,7 @@ const styles = StyleSheet.create({
     // Tabs
     tabContainer: { flexDirection: 'row', padding: 4, backgroundColor: '#F1F5F9', margin: 16, borderRadius: 12 },
     tabBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8 },
-    tabBtnActive: { backgroundColor: 'white', shadowColor: "#000", shadowOpacity: 0.05, shadowOffset: { width: 0, height: 2 }, shadowRadius: 4, elevation: 2 },
+    tabBtnActive: { backgroundColor: 'white', boxShadow: '0px 2px 4px rgba(0,0,0,0.05)', elevation: 2 },
     tabText: { fontSize: 12, fontWeight: '600', color: '#64748B' },
     tabTextActive: { color: '#0F172A' },
 

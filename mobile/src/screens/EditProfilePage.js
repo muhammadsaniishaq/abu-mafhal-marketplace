@@ -200,8 +200,7 @@ export const EditProfilePage = ({ user, onBack, onUpdateUser }) => {
                         <View style={{
                             width: 100, height: 100, borderRadius: 50, backgroundColor: '#E2E8F0',
                             justifyContent: 'center', alignItems: 'center', overflow: 'hidden',
-                            borderWidth: 4, borderColor: 'white', shadowColor: "#000",
-                            shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5
+                            borderWidth: 4, borderColor: 'white', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',
                         }}>
                             {avatarUrl ? (
                                 <Image source={{ uri: avatarUrl }} style={{ width: '100%', height: '100%' }} />

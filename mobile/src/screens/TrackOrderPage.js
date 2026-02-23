@@ -230,11 +230,7 @@ const localStyles = StyleSheet.create({
         padding: 20,
         borderRadius: 24,
         marginBottom: 24,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.05,
-        shadowRadius: 20,
-        elevation: 5
+        boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',
     },
     callBtn: {
         width: 44,
@@ -243,10 +239,6 @@ const localStyles = StyleSheet.create({
         backgroundColor: '#10B981',
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#10B981',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 10,
-        elevation: 5
+        boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',
     }
 });

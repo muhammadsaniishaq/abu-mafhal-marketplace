@@ -1,4 +1,5 @@
 import 'react-native-gesture-handler';
+import { LogBox } from 'react-native';
 import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -84,11 +85,22 @@ export default function App() {
             <SafeAreaProvider style={{ flex: 1 }}>
                 <AppSettingsProvider>
                     <NavigationContainer>
-                        <Stack.Navigator screenOptions={{ headerShown: false }}>
+                        <Stack.Navigator screenOptions={{ headerShown: false, detachInactiveScreens: false }}>
                             {!user ? (
                                 <>
-                                    <Stack.Screen name="Landing" component={LandingPage} />
-                                    <Stack.Screen name="Auth" component={AuthPage} />
+                                    <Stack.Screen name="Landing">
+                                        {props => (
+                                            <LandingPage
+                                                {...props}
+                                                onEnterShop={() => props.navigation.navigate('Auth')}
+                                                onLogin={() => props.navigation.navigate('Auth')}
+                                                onNavigate={(screen) => props.navigation.navigate(screen)}
+                                            />
+                                        )}
+                                    </Stack.Screen>
+                                    <Stack.Screen name="Auth">
+                                        {props => <AuthPage {...props} onBack={() => props.navigation.goBack()} />}
+                                    </Stack.Screen>
                                 </>
                             ) : (
                                 <>
@@ -110,10 +122,18 @@ export default function App() {
                                             />
                                         )}
                                     </Stack.Screen>
-                                    <Stack.Screen name="AdminDashboard" component={AdminDashboard} />
-                                    <Stack.Screen name="VendorDashboard" component={VendorDashboard} />
-                                    <Stack.Screen name="DriverDashboard" component={DriverDashboard} />
-                                    <Stack.Screen name="ProductDetails" component={ProductDetails} />
+                                    <Stack.Screen name="AdminDashboard">
+                                        {props => <AdminDashboard {...props} user={user} onLogout={handleLogout} />}
+                                    </Stack.Screen>
+                                    <Stack.Screen name="VendorDashboard">
+                                        {props => <VendorDashboard {...props} user={user} onLogout={handleLogout} />}
+                                    </Stack.Screen>
+                                    <Stack.Screen name="DriverDashboard">
+                                        {props => <DriverDashboard {...props} user={user} onLogout={handleLogout} />}
+                                    </Stack.Screen>
+                                    <Stack.Screen name="ProductDetails">
+                                        {props => <ProductDetails {...props} addToCart={handleAddToCart} />}
+                                    </Stack.Screen>
                                     <Stack.Screen name="VendorRegister" component={VendorRegister} />
                                     <Stack.Screen name="ChatScreen" component={ChatScreen} />
                                     <Stack.Screen name="ConversationsScreen" component={ConversationsScreen} />

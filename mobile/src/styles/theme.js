@@ -157,9 +157,9 @@ export const styles = StyleSheet.create({
     authLogo: { width: 64, height: 64, borderRadius: 16, marginBottom: 16 },
     authBigTitle: { fontSize: 36, fontWeight: '900', color: '#1E293B', lineHeight: 40 },
 
-    authCard: { backgroundColor: 'white', borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.05, shadowRadius: 20, elevation: 5 },
+    authCard: { backgroundColor: 'white', borderRadius: 24, padding: 24, boxShadow: '0px 10px 20px rgba(0,0,0,0.05)', elevation: 5 },
     modernInput: { backgroundColor: '#F1F5F9', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 14, color: '#0F172A', fontWeight: '600' },
-    modernBtn: { backgroundColor: '#0F172A', borderRadius: 12, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 16, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+    modernBtn: { backgroundColor: '#0F172A', borderRadius: 12, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 16, boxShadow: '0px 4px 8px rgba(15,23,42,0.3)', elevation: 4 },
     modernBtnText: { color: 'white', fontWeight: '700', fontSize: 16, marginRight: 8 },
 
     forgotPass: { color: '#64748B', fontSize: 12, fontWeight: '600', textAlign: 'right', marginTop: 4 },
@@ -168,7 +168,7 @@ export const styles = StyleSheet.create({
     orText: { marginHorizontal: 12, color: '#94A3B8', fontSize: 12, fontWeight: '600' },
 
     socialRowAuth: { flexDirection: 'row', justifyContent: 'center', gap: 20, marginBottom: 24 },
-    socialCircle: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'white', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+    socialCircle: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'white', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E8F0', boxShadow: '0px 0px 4px rgba(0,0,0,0.05)', elevation: 2 },
 
     switchRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
     switchText: { color: '#64748B', fontSize: 13 },
@@ -186,7 +186,7 @@ export const styles = StyleSheet.create({
     profileEmail: { color: '#94A3B8', fontSize: 14 },
 
     profileBody: { paddingHorizontal: 20, marginTop: -35 },
-    statsRow: { flexDirection: 'row', backgroundColor: 'white', borderRadius: 16, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 4, justifyContent: 'space-around', alignItems: 'center' },
+    statsRow: { flexDirection: 'row', backgroundColor: 'white', borderRadius: 16, padding: 16, boxShadow: '0px 4px 10px rgba(0,0,0,0.05)', elevation: 4, justifyContent: 'space-around', alignItems: 'center' },
     statItem: { alignItems: 'center' },
     statNum: { fontSize: 18, fontWeight: '800', color: '#0F172A' },
     statLabel: { fontSize: 12, color: '#64748B' },
@@ -210,7 +210,7 @@ export const styles = StyleSheet.create({
 
     // FLOATING CENTER TAB
     centerTabWrapper: { flex: 1, alignItems: 'center', justifyContent: 'center', top: -25 },
-    centerTabBtn: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center', shadowColor: '#0F172A', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.5, shadowRadius: 12, elevation: 10, borderWidth: 4, borderColor: 'white' },
+    centerTabBtn: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center', boxShadow: '0px 8px 12px rgba(15,23,42,0.5)', elevation: 10, borderWidth: 4, borderColor: 'white' },
     centerTabBtnActive: { backgroundColor: '#0F172A' },
 
     // SHOP FILTERS & ENHANCEMENTS
@@ -222,7 +222,7 @@ export const styles = StyleSheet.create({
 
     cardBadge: { position: 'absolute', top: 8, left: 8, backgroundColor: '#EF4444', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, zIndex: 10 },
     cardBadgeText: { color: 'white', fontSize: 10, fontWeight: '700' },
-    cardLikeBtn: { position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: 14, backgroundColor: 'white', alignItems: 'center', justifyContent: 'center', zIndex: 10, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
+    cardLikeBtn: { position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: 14, backgroundColor: 'white', alignItems: 'center', justifyContent: 'center', zIndex: 10, boxShadow: '0px 0px 4px rgba(0,0,0,0.1)', elevation: 2 },
     ratingRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 2 },
     ratingCount: { fontSize: 10, color: '#94A3B8', marginLeft: 4 },
 
@@ -250,11 +250,11 @@ export const styles = StyleSheet.create({
     modalBtnText: { color: 'white', fontWeight: '700', fontSize: 16 },
 
     // TOAST
-    toastContainer: { position: 'absolute', top: 60, alignSelf: 'center', backgroundColor: 'rgba(15, 23, 42, 0.95)', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 30, flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 20, shadowOffset: { width: 0, height: 8 }, elevation: 10, zIndex: 100, backdropFilter: 'blur(10px)' },
+    toastContainer: { position: 'absolute', top: 60, alignSelf: 'center', backgroundColor: 'rgba(15, 23, 42, 0.95)', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 30, flexDirection: 'row', alignItems: 'center', boxShadow: '0px 8px 20px rgba(0,0,0,0.2)', elevation: 10, zIndex: 100, backdropFilter: 'blur(10px)' },
     toastText: { color: 'white', fontWeight: 'bold', marginLeft: 12, fontSize: 13, letterSpacing: 0.5 },
 
     // PROFILE FEATURES
-    walletCard: { backgroundColor: '#1E293B', marginHorizontal: 20, marginTop: 24, borderRadius: 16, padding: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', shadowColor: '#0F172A', shadowOpacity: 0.2, shadowRadius: 10, shadowOffset: { width: 0, height: 8 }, elevation: 5 },
+    walletCard: { backgroundColor: '#1E293B', marginHorizontal: 20, marginTop: 24, borderRadius: 16, padding: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0px 8px 10px rgba(15,23,42,0.2)', elevation: 5 },
     walletLabel: { color: '#94A3B8', fontSize: 12, fontWeight: '600', marginBottom: 4 },
     walletBalance: { color: 'white', fontSize: 28, fontWeight: '800' },
     walletPoints: { color: '#FBBF24', fontSize: 12, fontWeight: '700', marginTop: 4 },
@@ -268,7 +268,7 @@ export const styles = StyleSheet.create({
     orderStatus: { fontSize: 12, fontWeight: '600', marginLeft: 'auto' },
 
     // VENDOR CTA
-    vendorCard: { marginHorizontal: 20, marginTop: 12, padding: 20, borderRadius: 16, backgroundColor: '#4F46E5', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', shadowColor: '#4F46E5', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 6 },
+    vendorCard: { marginHorizontal: 20, marginTop: 12, padding: 20, borderRadius: 16, backgroundColor: '#4F46E5', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0px 8px 12px rgba(79,70,229,0.3)', elevation: 6 },
     vendorTitle: { fontSize: 16, fontWeight: '800', color: 'white', marginBottom: 4 },
     vendorSub: { fontSize: 12, color: '#C7D2FE', maxWidth: 180 },
     vendorBtn: { backgroundColor: 'white', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
@@ -280,6 +280,6 @@ export const styles = StyleSheet.create({
     referSub: { fontSize: 12, color: '#64748B' },
 
     // INFO PAGES
-    infoCard: { backgroundColor: 'white', padding: 24, borderRadius: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
+    infoCard: { backgroundColor: 'white', padding: 24, borderRadius: 16, boxShadow: '0px 0px 10px rgba(0,0,0,0.05)', elevation: 2 },
     infoContent: { color: '#334155', fontSize: 15, lineHeight: 26 }
 });

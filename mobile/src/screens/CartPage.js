@@ -80,11 +80,7 @@ export const CartPage = ({ cart, onUpdateQty, onRemove, onBack, onClear }) => {
                 borderRadius: 16,
                 padding: 12,
                 marginBottom: 16,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.05,
-                shadowRadius: 8,
-                elevation: 2,
+                boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',
                 alignItems: 'center'
             }}>
                 <Image
@@ -151,11 +147,7 @@ export const CartPage = ({ cart, onUpdateQty, onRemove, onBack, onClear }) => {
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.03,
-                shadowRadius: 10,
-                elevation: 5,
+                boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',
                 zIndex: 10
             }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -239,11 +231,7 @@ export const CartPage = ({ cart, onUpdateQty, onRemove, onBack, onClear }) => {
                             justifyContent: 'center',
                             padding: 18,
                             borderRadius: 16,
-                            shadowColor: '#0F172A',
-                            shadowOffset: { width: 0, height: 4 },
-                            shadowOpacity: 0.3,
-                            shadowRadius: 10,
-                            elevation: 8
+                            boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',
                         }}
                     >
                         <Text style={{ color: 'white', fontSize: 16, fontWeight: '700', marginRight: 8 }}>Checkout</Text>

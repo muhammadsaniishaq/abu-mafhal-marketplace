@@ -451,10 +451,7 @@ const localStyles = StyleSheet.create({
         marginBottom: 12,
         borderWidth: 1,
         borderColor: '#F1F5F9',
-        shadowColor: '#000',
-        shadowOpacity: 0.02,
-        shadowRadius: 10,
-        elevation: 2
+        boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',
     },
     unread: {
         backgroundColor: '#F8FAFC',

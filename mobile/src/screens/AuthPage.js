@@ -70,7 +70,7 @@ export const AuthPage = ({ onBack, onLoginSuccess }) => {
                 });
 
                 Alert.alert('Success', 'Welcome back!');
-                onLoginSuccess(data.user);
+                if (onLoginSuccess) onLoginSuccess(data.user);
 
             } else {
                 // SIGNUP FLOW: Pre-Verify Email first
@@ -202,7 +202,7 @@ export const AuthPage = ({ onBack, onLoginSuccess }) => {
                 });
 
                 Alert.alert('Success', 'Account verified! Welcome to Abu Mafhal.');
-                onLoginSuccess(user);
+                if (onLoginSuccess) onLoginSuccess(user);
             }
 
         } catch (error) {

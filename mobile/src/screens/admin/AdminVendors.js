@@ -357,7 +357,7 @@ export const AdminVendors = () => {
                 onRequestClose={() => setRejectionModalVisible(false)}
             >
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-                    <View style={{ width: '85%', backgroundColor: 'white', borderRadius: 20, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 5 }}>
+                    <View style={{ width: '85%', backgroundColor: 'white', borderRadius: 20, padding: 20, boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', }}>
                         <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 12, color: '#0F172A' }}>Reject Application</Text>
                         <Text style={{ fontSize: 14, color: '#64748B', marginBottom: 16 }}>Please provide a reason for rejection. This will be sent to the vendor.</Text>
 

@@ -156,7 +156,7 @@ export const AdminAnalytics = () => {
                     </View>
 
                     {/* TOP PRODUCTS SECTION */}
-                    <View style={{ backgroundColor: 'white', borderRadius: 24, padding: 20, marginBottom: 24, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 }}>
+                    <View style={{ backgroundColor: 'white', borderRadius: 24, padding: 20, marginBottom: 24, boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
                             <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A' }}>Top Performers</Text>
                             <Ionicons name="trophy" size={20} color="#F59E0B" />

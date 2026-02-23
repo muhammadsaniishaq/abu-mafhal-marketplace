@@ -144,7 +144,7 @@ export const LandingPage = ({ onEnterShop, cartCount, onGoToCart, onLogin, user,
                                         <View>
                                             <Text style={{ color: 'white', fontWeight: '900', fontSize: 32, lineHeight: 36 }}>{item.title}</Text>
                                             <Text style={{ color: 'rgba(255,255,255,0.9)', fontWeight: '600', fontSize: 14, marginBottom: 16, marginTop: 4 }}>{item.subtitle}</Text>
-                                            <View style={{ backgroundColor: 'white', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12, alignSelf: 'flex-start', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 10 }}>
+                                            <View style={{ backgroundColor: 'white', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12, alignSelf: 'flex-start', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',shadowRadius: 10 }}>
                                                 <Text style={{ fontWeight: '800', color: '#0F172A', fontSize: 13 }}>DISCOVER NOW</Text>
                                             </View>
                                         </View>
@@ -218,7 +218,7 @@ export const LandingPage = ({ onEnterShop, cartCount, onGoToCart, onLogin, user,
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 24 }}>
                             {brands.map((brand, i) => (
                                 <TouchableOpacity key={i} style={{ alignItems: 'center' }} onPress={onEnterShop}>
-                                    <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: 'white', padding: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10 }}>
+                                    <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: 'white', padding: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',shadowRadius: 10 }}>
                                         <Image source={{ uri: brand.logo_url }} style={{ width: 48, height: 48, resizeMode: 'contain' }} />
                                     </View>
                                     <Text style={{ marginTop: 10, fontSize: 13, fontWeight: '800', color: '#1E293B' }}>{brand.name}</Text>

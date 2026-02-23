@@ -421,7 +421,7 @@ export const AdminOrders = () => {
 };
 
 const localStyles = {
-    orderCard: { backgroundColor: 'white', padding: 16, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 5 },
+    orderCard: { backgroundColor: 'white', padding: 16, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',shadowRadius: 5 },
     badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
     filterChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F1F5F9' },
     activeFilter: { backgroundColor: '#0F172A' },

@@ -264,7 +264,7 @@ export const AdminDashboard = ({ user, onLogout }) => {
                     </TouchableOpacity>
                 </View>
                 {recentReviews.length > 0 ? recentReviews.map(r => (
-                    <View key={r.id} style={{ padding: 16, backgroundColor: 'white', borderRadius: 16, marginBottom: 10, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: '#000', shadowOpacity: 0.02, shadowRadius: 5, elevation: 1 }}>
+                    <View key={r.id} style={{ padding: 16, backgroundColor: 'white', borderRadius: 16, marginBottom: 10, borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                 <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }}>

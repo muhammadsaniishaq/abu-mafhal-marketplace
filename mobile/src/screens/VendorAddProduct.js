@@ -270,11 +270,7 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
                     color: '#0F172A',
                     height: multiline ? 120 : 56,
                     textAlignVertical: multiline ? 'top' : 'center',
-                    shadowColor: '#64748B',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.05,
-                    shadowRadius: 4,
-                    elevation: 1
+                    boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',
                 }}
             />
         </View>

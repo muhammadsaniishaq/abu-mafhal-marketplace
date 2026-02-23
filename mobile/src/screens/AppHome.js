@@ -72,8 +72,12 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
             // 8. Fetch User Loyalty
             const { data: { user: currentUser } } = await supabase.auth.getUser();
             if (currentUser) {
-                const { data: lData } = await supabase.from('loyalty').select('*').eq('user_id', currentUser.id).single();
-                setLoyalty(lData);
+                try {
+                    const { data: lData, error: lError } = await supabase.from('loyalty').select('*').eq('user_id', currentUser.id).maybeSingle();
+                    if (!lError) setLoyalty(lData);
+                } catch (err) {
+                    console.log('Loyalty fetch failed:', err.message);
+                }
             }
 
             // 9. Fetch Top Customers (Featured, sorted by Spend)
@@ -348,7 +352,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 20 }}>
                             {brands.map((brand, i) => (
                                 <TouchableOpacity key={i} style={{ alignItems: 'center' }} onPress={onGoToShop}>
-                                    <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'white', padding: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0', shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 }}>
+                                    <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'white', padding: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', }}>
                                         <Image source={{ uri: brand.logo_url || 'https://placehold.co/100' }} style={{ width: 40, height: 40, resizeMode: 'contain' }} />
                                     </View>
                                     <Text style={{ marginTop: 8, fontSize: 12, fontWeight: '600', color: '#475569' }}>{brand.name}</Text>

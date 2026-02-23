@@ -564,7 +564,7 @@ export const AdminUsers = ({ navigation: propNavigation }) => {
 const styles = StyleSheet.create({
     header: { paddingBottom: 16, paddingHorizontal: 20, backgroundColor: 'white', borderBottomWidth: 1, borderColor: '#F1F5F9', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     headerTitle: { fontSize: 20, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 },
-    userCard: { backgroundColor: 'white', padding: 16, borderRadius: 20, marginBottom: 12, flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 10, elevation: 2 },
+    userCard: { backgroundColor: 'white', padding: 16, borderRadius: 20, marginBottom: 12, flexDirection: 'row', alignItems: 'center', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', },
     avatarContainer: { width: 52, height: 52, borderRadius: 26, marginRight: 16, position: 'relative' },
     avatar: { width: 52, height: 52, borderRadius: 26 },
     onlineBadge: { position: 'absolute', bottom: 2, right: 2, width: 14, height: 14, borderRadius: 7, backgroundColor: '#22C55E', borderWidth: 2, borderColor: 'white' },

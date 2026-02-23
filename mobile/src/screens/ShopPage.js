@@ -286,9 +286,9 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
     const showToast = (message, icon = 'checkmark-circle') => {
         setToast({ visible: true, message, icon });
         Animated.sequence([
-            Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
+            Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: false }),
             Animated.delay(2000),
-            Animated.timing(fadeAnim, { toValue: 0, duration: 300, useNativeDriver: true })
+            Animated.timing(fadeAnim, { toValue: 0, duration: 300, useNativeDriver: false })
         ]).start(() => setToast({ ...toast, visible: false }));
     };
 

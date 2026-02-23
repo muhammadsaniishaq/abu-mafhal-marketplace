@@ -90,7 +90,7 @@ export const AdminProducts = () => {
     });
 
     const renderItem = ({ item }) => (
-        <View style={{ flexDirection: 'row', padding: 12, backgroundColor: 'white', marginBottom: 12, borderRadius: 16, borderWidth: 1, borderColor: '#F1F5F9', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.02, shadowRadius: 5, elevation: 1 }}>
+        <View style={{ flexDirection: 'row', padding: 12, backgroundColor: 'white', marginBottom: 12, borderRadius: 16, borderWidth: 1, borderColor: '#F1F5F9', alignItems: 'center', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', }}>
             <Image
                 source={{ uri: (item.images && item.images[0]) ? item.images[0] : 'https://placehold.co/100' }}
                 style={{ width: 64, height: 64, borderRadius: 12, backgroundColor: '#F8FAFC' }}
@@ -143,7 +143,7 @@ export const AdminProducts = () => {
                     </View>
                     <TouchableOpacity
                         onPress={() => setView('add')}
-                        style={{ backgroundColor: '#0F172A', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 6, shadowColor: '#0F172A', shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 }}
+                        style={{ backgroundColor: '#0F172A', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 6, boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', }}
                     >
                         <Ionicons name="add" size={18} color="white" />
                         <Text style={{ color: 'white', fontWeight: '700' }}>Add New</Text>

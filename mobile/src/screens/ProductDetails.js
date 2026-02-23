@@ -245,7 +245,7 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
 
                     {/* FLOATING WISHLIST BUTTON */}
                     <TouchableOpacity
-                        style={{ position: 'absolute', bottom: -24, right: 30, width: 50, height: 50, borderRadius: 25, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 10, elevation: 10, zIndex: 20 }}
+                        style={{ position: 'absolute', bottom: -24, right: 30, width: 50, height: 50, borderRadius: 25, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', zIndex: 20 }}
                         onPress={() => Alert.alert('Added to Wishlist', `${product.name} saved!`)}
                     >
                         <Ionicons name="heart" size={24} color="white" />
@@ -268,7 +268,7 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                 )}
 
                 {/* Content Container - FILTERED ENTRY ANIMATION */}
-                <View style={{ padding: 24, marginTop: 0, backgroundColor: 'white', borderTopLeftRadius: 32, borderTopRightRadius: 32, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 10 }}>
+                <View style={{ padding: 24, marginTop: 0, backgroundColor: 'white', borderTopLeftRadius: 32, borderTopRightRadius: 32, boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', }}>
 
                     {/* CENTER INDICATOR */}
                     <View style={{ width: 40, height: 4, backgroundColor: '#E2E8F0', borderRadius: 2, alignSelf: 'center', marginBottom: 20 }} />
@@ -447,7 +447,7 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
             </ScrollView>
 
             {/* Bottom Sticky Action Bar */}
-            <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'white', padding: 20, paddingBottom: insets.bottom + 10, borderTopWidth: 1, borderColor: '#F1F5F9', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, elevation: 20 }}>
+            <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'white', padding: 20, paddingBottom: insets.bottom + 10, borderTopWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', }}>
                 <View style={{ flexDirection: 'row', gap: 12 }}>
 
                     {/* Chat Button */}
@@ -511,7 +511,7 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                     {/* Add to Cart Button */}
                     <TouchableOpacity
                         onPress={handleAddToCart}
-                        style={{ flex: 1, height: 54, backgroundColor: '#0F172A', borderRadius: 16, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, shadowColor: '#0F172A', shadowOpacity: 0.3, shadowOffset: { height: 4 }, shadowRadius: 12 }}
+                        style={{ flex: 1, height: 54, backgroundColor: '#0F172A', borderRadius: 16, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',shadowOffset: { height: 4 }, shadowRadius: 12 }}
                     >
                         <Ionicons name="cart" size={20} color="white" />
                         <Text style={{ color: 'white', fontSize: 16, fontWeight: '700' }}>Add - ₦{product.price ? (product.price * quantity).toLocaleString() : '0'}</Text>
