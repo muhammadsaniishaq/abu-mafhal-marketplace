@@ -17,7 +17,7 @@ export const AdminAbandonedCarts = () => {
         // Fetch active carts that haven't been recovered
         const { data, error } = await supabase
             .from('carts')
-            .select('*, user:profiles(full_name, email), cart_items(count)')
+            .select('*, profiles:user_id(full_name, email), cart_items(count)')
             .eq('recovered', false)
             .order('created_at', { ascending: false });
 
@@ -45,7 +45,7 @@ export const AdminAbandonedCarts = () => {
         <View style={{ backgroundColor: 'white', padding: 16, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9' }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
                 <View>
-                    <Text style={{ fontWeight: '700', color: '#0F172A' }}>{item.user?.full_name || item.user?.email || 'Guest'}</Text>
+                    <Text style={{ fontWeight: '700', color: '#0F172A' }}>{item.profiles?.full_name || item.profiles?.email || 'Guest'}</Text>
                     <Text style={{ fontSize: 12, color: '#64748B' }}>{new Date(item.created_at).toDateString()}</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>

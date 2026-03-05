@@ -3,7 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS public.mail (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    "to" TEXT NOT NULL,
+    to_email TEXT NOT NULL,
     subject TEXT NOT NULL,
     html TEXT NOT NULL,
     type TEXT DEFAULT 'general',

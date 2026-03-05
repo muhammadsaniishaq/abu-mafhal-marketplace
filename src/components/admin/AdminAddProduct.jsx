@@ -97,7 +97,7 @@ const AdminAddProduct = () => {
   // Handle image selection
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
-    
+
     if (files.length > 5) {
       setError('Maximum 5 images allowed');
       return;
@@ -124,7 +124,7 @@ const AdminAddProduct = () => {
       // This would integrate with an image recognition API
       // For now, we'll use a simple fallback
       const fileName = imageFile.name.toLowerCase();
-      
+
       if (fileName.includes('phone') || fileName.includes('laptop') || fileName.includes('electronic')) {
         return 'Electronics';
       } else if (fileName.includes('shirt') || fileName.includes('shoe') || fileName.includes('dress')) {
@@ -132,7 +132,7 @@ const AdminAddProduct = () => {
       } else if (fileName.includes('chair') || fileName.includes('table') || fileName.includes('bed')) {
         return 'Home';
       }
-      
+
       // Default fallback
       return null;
     } catch (error) {
@@ -146,7 +146,7 @@ const AdminAddProduct = () => {
   // Handle image change with AI category suggestion
   const handleImageChangeWithAI = async (e) => {
     const files = Array.from(e.target.files);
-    
+
     if (files.length > 5) {
       setError('Maximum 5 images allowed');
       return;
@@ -176,7 +176,7 @@ const AdminAddProduct = () => {
   const handleGenerateDescription = async () => {
     setIsGenerating(true);
     setError('');
-    
+
     try {
       if (!formData.name || !formData.category) {
         throw new Error('Please fill in product name and category first');
@@ -191,7 +191,7 @@ const AdminAddProduct = () => {
       };
 
       const description = await aiProductService.generateDescription(productData);
-      
+
       setFormData(prev => ({
         ...prev,
         description: description
@@ -208,7 +208,7 @@ const AdminAddProduct = () => {
 
       setSuccess('Description and SEO fields generated successfully! ✅');
       setTimeout(() => setSuccess(''), 3000);
-      
+
     } catch (error) {
       console.error('Description generation error:', error);
       setError(error.message || 'Failed to generate description. Please try again.');
@@ -316,6 +316,13 @@ const AdminAddProduct = () => {
     try {
       validateForm();
 
+      if (parseFloat(formData.price) > 10000000) {
+        if (!window.confirm(`Warning: The price you entered is ₦${parseFloat(formData.price).toLocaleString()}. Are you sure this is correct?`)) {
+          setLoading(false);
+          return;
+        }
+      }
+
       const imageUrls = await uploadImages();
 
       const productData = {
@@ -341,7 +348,7 @@ const AdminAddProduct = () => {
       await addDoc(collection(db, 'products'), productData);
 
       setSuccess('Product added successfully! ✅');
-      
+
       setTimeout(() => {
         navigate('/admin/products');
       }, 2000);
@@ -430,7 +437,7 @@ const AdminAddProduct = () => {
         {/* Basic Information */}
         <div className="bg-white border rounded-lg p-6">
           <h2 className="text-xl font-bold mb-4">📋 Basic Information</h2>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-2">
@@ -542,7 +549,7 @@ const AdminAddProduct = () => {
         {/* Pricing */}
         <div className="bg-white border rounded-lg p-6">
           <h2 className="text-xl font-bold mb-4">💰 Pricing</h2>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium mb-2">
@@ -605,7 +612,7 @@ const AdminAddProduct = () => {
         {/* Inventory */}
         <div className="bg-white border rounded-lg p-6">
           <h2 className="text-xl font-bold mb-4">📦 Inventory</h2>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-2">
@@ -643,12 +650,12 @@ const AdminAddProduct = () => {
         {/* Product Description with AI */}
         <div className="bg-white border rounded-lg p-6">
           <h2 className="text-xl font-bold mb-4">📝 Product Description</h2>
-          
+
           <div className="mb-4">
             <label className="block text-sm font-medium mb-2">
               Description <span className="text-red-500">*</span>
             </label>
-            
+
             <textarea
               name="description"
               value={formData.description}
@@ -658,7 +665,7 @@ const AdminAddProduct = () => {
               placeholder="Enter detailed product description..."
               required
             />
-            
+
             <button
               type="button"
               onClick={handleGenerateDescription}
@@ -677,7 +684,7 @@ const AdminAddProduct = () => {
                 </>
               )}
             </button>
-            
+
             <p className="text-xs text-gray-500 mt-2">
               💡 Fill in product name, category, and price first for best results
             </p>
@@ -699,12 +706,12 @@ const AdminAddProduct = () => {
         {/* Product Media with AI */}
         <div className="bg-white border rounded-lg p-6">
           <h2 className="text-xl font-bold mb-4">📸 Product Media</h2>
-          
+
           <div>
             <label className="block text-sm font-medium mb-2">
               Upload Images (Max 5) <span className="text-red-500">*</span>
             </label>
-            
+
             <input
               type="file"
               accept="image/*"
@@ -712,14 +719,14 @@ const AdminAddProduct = () => {
               onChange={handleImageChangeWithAI}
               className="w-full p-3 border rounded-lg"
             />
-            
+
             {isAnalyzingImage && (
               <div className="mt-2 flex items-center gap-2 text-sm text-purple-600">
                 <span className="animate-spin">🔄</span>
                 <span>AI is analyzing image to suggest category...</span>
               </div>
             )}
-            
+
             {imagePreviews.length > 0 && (
               <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-4">
                 {imagePreviews.map((preview, index) => (
@@ -745,7 +752,7 @@ const AdminAddProduct = () => {
                 ))}
               </div>
             )}
-            
+
             <p className="text-xs text-gray-500 mt-2">
               📸 First image will be the main product image. AI will suggest category based on image.
             </p>
@@ -755,12 +762,12 @@ const AdminAddProduct = () => {
         {/* Specifications */}
         <div className="bg-white border rounded-lg p-6">
           <h2 className="text-xl font-bold mb-4">🔧 Specifications</h2>
-          
+
           <div className="grid grid-cols-2 gap-4 mb-4">
             <input
               type="text"
               value={currentSpec.key}
-              onChange={(e) => setCurrentSpec({...currentSpec, key: e.target.value})}
+              onChange={(e) => setCurrentSpec({ ...currentSpec, key: e.target.value })}
               placeholder="Specification name (e.g., Screen Size)"
               className="p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
             />
@@ -768,7 +775,7 @@ const AdminAddProduct = () => {
               <input
                 type="text"
                 value={currentSpec.value}
-                onChange={(e) => setCurrentSpec({...currentSpec, value: e.target.value})}
+                onChange={(e) => setCurrentSpec({ ...currentSpec, value: e.target.value })}
                 placeholder="Value (e.g., 6.7 inches)"
                 className="flex-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
               />
@@ -805,12 +812,12 @@ const AdminAddProduct = () => {
         {/* Product Variants */}
         <div className="bg-white border rounded-lg p-6">
           <h2 className="text-xl font-bold mb-4">🎨 Product Variants</h2>
-          
+
           <div className="grid grid-cols-2 gap-4 mb-4">
             <input
               type="text"
               value={currentVariant.name}
-              onChange={(e) => setCurrentVariant({...currentVariant, name: e.target.value})}
+              onChange={(e) => setCurrentVariant({ ...currentVariant, name: e.target.value })}
               placeholder="Variant name (e.g., Color, Size)"
               className="p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
             />
@@ -818,7 +825,7 @@ const AdminAddProduct = () => {
               <input
                 type="text"
                 value={currentVariant.values}
-                onChange={(e) => setCurrentVariant({...currentVariant, values: e.target.value})}
+                onChange={(e) => setCurrentVariant({ ...currentVariant, values: e.target.value })}
                 placeholder="Values (comma-separated: Red, Blue, Green)"
                 className="flex-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
               />
@@ -855,7 +862,7 @@ const AdminAddProduct = () => {
         {/* Tags */}
         <div className="bg-white border rounded-lg p-6">
           <h2 className="text-xl font-bold mb-4">🏷️ Product Tags</h2>
-          
+
           <div className="flex gap-2 mb-4">
             <input
               type="text"
@@ -898,7 +905,7 @@ const AdminAddProduct = () => {
         {/* Shipping */}
         <div className="bg-white border rounded-lg p-6">
           <h2 className="text-xl font-bold mb-4">🚚 Shipping Information</h2>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-2">Weight (kg)</label>
@@ -955,7 +962,7 @@ const AdminAddProduct = () => {
         {/* SEO Optimization */}
         <div className="bg-white border rounded-lg p-6">
           <h2 className="text-xl font-bold mb-4">🔍 SEO Optimization</h2>
-          
+
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-2">SEO Title</label>

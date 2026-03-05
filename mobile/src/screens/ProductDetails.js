@@ -4,11 +4,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { Video, ResizeMode } from 'expo-av';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
+import * as FileSystem from 'expo-file-system';
 
 const { width } = Dimensions.get('window');
 
 export const ProductDetails = ({ route, navigation, addToCart }) => {
-    const { product } = route.params;
+    const { product } = route.params || {};
     const insets = useSafeAreaInsets();
 
     // States
@@ -16,6 +17,7 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
     const [activeImageIndex, setActiveImageIndex] = useState(0);
     const [quantity, setQuantity] = useState(1);
     const [isDescExpanded, setIsDescExpanded] = useState(false);
+    const [validVideoUri, setValidVideoUri] = useState(null);
 
     // Live Data States
     const [relatedProducts, setRelatedProducts] = useState([]);
@@ -25,7 +27,43 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
 
     const scrollX = React.useRef(new Animated.Value(0)).current;
 
-    const images = product.images && product.images.length > 0 ? product.images : [];
+    const promoDiscount = product?.promoDiscount || null;
+    const originalPrice = product?.price || 0;
+    let discountedPrice = originalPrice;
+
+    if (promoDiscount) {
+        if (promoDiscount.type === 'percent') {
+            discountedPrice = originalPrice * (1 - parseFloat(promoDiscount.value) / 100);
+        } else {
+            discountedPrice = originalPrice - parseFloat(promoDiscount.value);
+        }
+    }
+
+    // 1. Initial Return Safety Check
+    if (!product) {
+        return (
+            <View style={{ flex: 1, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' }}>
+                <ActivityIndicator size="large" color="#0F172A" />
+            </View>
+        );
+    }
+
+    const getImagesArray = (imgs) => {
+        if (!imgs) return [];
+        if (Array.isArray(imgs)) return imgs;
+        if (typeof imgs === 'string') {
+            try {
+                const parsed = JSON.parse(imgs);
+                return Array.isArray(parsed) ? parsed : [imgs];
+            } catch {
+                return [imgs];
+            }
+        }
+        return [];
+    };
+
+    const images = getImagesArray(product?.images);
+
     const variants = product.metadata?.variants || [];
 
     // FETCH VENDOR PROFILE
@@ -138,11 +176,10 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
 
                 const { data, error } = await query;
                 if (!error && data) {
-                    // Filter out any potential database mock data or bad entries
+                    // Filter out mock data but keep everything else
                     const cleanData = data.filter(item =>
                         !item.name.toLowerCase().includes('mock') &&
-                        !item.name.toLowerCase().includes('test') &&
-                        !item.name.includes('2026') // Specific removal as requested
+                        !item.name.toLowerCase().includes('test')
                     );
                     setRelatedProducts(cleanData);
                 }
@@ -192,6 +229,53 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
         if (Array.isArray(imgs) && imgs.length > 0) return imgs[0];
         return null;
     };
+
+    useEffect(() => {
+        const validateVideo = async () => {
+            let rawUri = product?.video_url || product?.metadata?.video || product?.video || product?.videoUrl || product?.video_uri;
+
+            if (!rawUri) {
+                setValidVideoUri(null);
+                return;
+            }
+
+            if (Array.isArray(rawUri) && rawUri.length > 0) rawUri = rawUri[0];
+            if (typeof rawUri === 'string' && rawUri.startsWith('[')) {
+                try {
+                    const parsed = JSON.parse(rawUri);
+                    if (Array.isArray(parsed) && parsed.length > 0) rawUri = parsed[0];
+                } catch (e) { /* ignore */ }
+            }
+
+            if (typeof rawUri !== 'string') {
+                setValidVideoUri(null);
+                return;
+            }
+
+            const isPublic = rawUri.startsWith('http://') || rawUri.startsWith('https://');
+
+            if (isPublic) {
+                setValidVideoUri(rawUri);
+                return;
+            }
+
+            // If not public HTTP, check if local file exists to prevent ENOENT crash
+            try {
+                const fileInfo = await FileSystem.getInfoAsync(rawUri);
+                if (fileInfo.exists) {
+                    setValidVideoUri(rawUri);
+                } else {
+                    console.log("ProductDetails: Local video file not found/deleted:", rawUri);
+                    setValidVideoUri(null);
+                }
+            } catch (e) {
+                console.log("ProductDetails: Error checking local video file:", e);
+                setValidVideoUri(null);
+            }
+        };
+
+        validateVideo();
+    }, [product]);
 
     return (
         <View style={{ flex: 1, backgroundColor: 'white' }}>
@@ -246,24 +330,40 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                     {/* FLOATING WISHLIST BUTTON */}
                     <TouchableOpacity
                         style={{ position: 'absolute', bottom: -24, right: 30, width: 50, height: 50, borderRadius: 25, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', zIndex: 20 }}
-                        onPress={() => Alert.alert('Added to Wishlist', `${product.name} saved!`)}
+                        onPress={() => Alert.alert('Added to Wishlist', `${product?.name || 'Product'} saved!`)}
                     >
                         <Ionicons name="heart" size={24} color="white" />
                     </TouchableOpacity>
                 </View>
 
-                {/* VIDEO PLAYER */}
-                {(product.video_url || product.metadata?.video || product.video) && (
-                    <View style={{ marginTop: 24, paddingHorizontal: 24 }}>
-                        <Text style={{ fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 12 }}>Product Video</Text>
-                        <Video
-                            style={{ width: '100%', height: 200, borderRadius: 16, backgroundColor: '#000' }}
-                            source={{ uri: product.video_url || product.metadata?.video || product.video }}
-                            useNativeControls
-                            resizeMode={ResizeMode.CONTAIN}
-                            isLooping
-                            onError={(e) => console.log('Video Error:', e)}
-                        />
+                {/* ELITE VIDEO PLAYER */}
+                {validVideoUri && (
+                    <View style={{ marginTop: 24, paddingHorizontal: 24, marginBottom: 12 }}>
+                        <Text style={{ fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 16, letterSpacing: 0.5 }}>PRODUCT SHOWCASE</Text>
+                        <View style={{
+                            borderRadius: 24,
+                            overflow: 'hidden',
+                            backgroundColor: '#000',
+                            borderWidth: 1,
+                            borderColor: '#F1F5F9',
+                            // Proper React Native Shadows
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 10 },
+                            shadowOpacity: 0.15,
+                            shadowRadius: 25,
+                            elevation: 8,
+                            height: 220
+                        }}>
+                            <Video
+                                style={{ width: '100%', height: '100%' }}
+                                source={{ uri: validVideoUri }}
+                                useNativeControls
+                                resizeMode={ResizeMode.CONTAIN}
+                                isLooping
+                                onError={(e) => console.log('Video Error:', e)}
+                            />
+                        </View>
+                        <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 10, textAlign: 'center', fontStyle: 'italic' }}>Interactive Product View</Text>
                     </View>
                 )}
 
@@ -275,21 +375,40 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
 
                     {/* Title & Price */}
                     <View style={{ marginBottom: 24 }}>
-                        <Text style={{ fontSize: 26, fontWeight: '800', color: '#0F172A', marginBottom: 8, lineHeight: 34 }}>{product.name}</Text>
+                        <Text style={{ fontSize: 26, fontWeight: '800', color: '#0F172A', marginBottom: 8, lineHeight: 34 }}>{product?.name || 'Product'}</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <Text style={{ fontSize: 28, fontWeight: '900', color: '#3B82F6' }}>
-                                ₦{product.price ? product.price.toLocaleString() : 'N/A'}
-                            </Text>
+                            <View>
+                                {promoDiscount ? (
+                                    <>
+                                        <Text style={{ fontSize: 28, fontWeight: '900', color: '#EF4444' }}>
+                                            ₦{discountedPrice.toLocaleString()}
+                                        </Text>
+                                        <Text style={{ fontSize: 16, color: '#64748B', textDecorationLine: 'line-through', marginTop: -4 }}>
+                                            ₦{originalPrice.toLocaleString()}
+                                        </Text>
+                                    </>
+                                ) : (
+                                    <Text style={{ fontSize: 28, fontWeight: '900', color: '#3B82F6' }}>
+                                        ₦{originalPrice ? originalPrice.toLocaleString() : 'N/A'}
+                                    </Text>
+                                )}
+                            </View>
 
                             {/* Rating Badge - Only show if valid */}
-                            {(product.reviews > 0 || product.rating > 0) && (
+                            {(product?.reviews > 0 || product?.rating > 0) && (
                                 <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF9C3', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 }}>
                                     <Ionicons name="star" size={16} color="#EAB308" />
-                                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#854D0E', marginLeft: 4 }}>{product.rating?.toFixed(1)}</Text>
-                                    <Text style={{ fontSize: 14, color: '#A16207', marginLeft: 4 }}>({product.reviews} reviews)</Text>
+                                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#854D0E', marginLeft: 4 }}>{product?.rating?.toFixed(1) || '0.0'}</Text>
+                                    <Text style={{ fontSize: 14, color: '#A16207', marginLeft: 4 }}>({product?.reviews || 0} reviews)</Text>
                                 </View>
                             )}
                         </View>
+                        {promoDiscount && (
+                            <View style={{ marginTop: 12, backgroundColor: '#F0FDF4', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: '#16A34A' }}>
+                                <Ionicons name="sparkles" size={14} color="#16A34A" />
+                                <Text style={{ color: '#16A34A', fontWeight: '800', fontSize: 12 }}>PROMO APPLIED: {promoDiscount.value}{promoDiscount.type === 'percent' ? '%' : '₦'} OFF</Text>
+                            </View>
+                        )}
                     </View>
 
                     {/* Divider */}
@@ -311,7 +430,7 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                                         }}
                                     >
                                         <Text style={{ color: selectedVariant === v ? 'white' : '#64748B', fontWeight: '600' }}>
-                                            {v.name} - ₦{v.price}
+                                            {v?.name || 'Option'} - ₦{v?.price || '0'}
                                         </Text>
                                     </TouchableOpacity>
                                 ))}
@@ -339,13 +458,13 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                             </View>
                             <TouchableOpacity
                                 onPress={() => navigation.navigate('ChatScreen', {
-                                    productId: product.id,
-                                    productName: product.name,
-                                    productPrice: product.price,
+                                    productId: product?.id,
+                                    productName: product?.name,
+                                    productPrice: product?.price,
                                     productImage: images[0],
-                                    vendorId: vendorProfile.id,
-                                    vendorName: vendorProfile.full_name,
-                                    vendorAvatar: vendorProfile.avatar_url
+                                    vendorId: vendorProfile?.id,
+                                    vendorName: vendorProfile?.full_name,
+                                    vendorAvatar: vendorProfile?.avatar_url
                                 })}
                                 style={{ padding: 8, backgroundColor: '#EFF6FF', borderRadius: 12 }}
                             >
@@ -358,7 +477,7 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                     <View style={{ marginBottom: 24 }}>
                         <Text style={{ fontSize: 18, fontWeight: '700', color: '#0F172A', marginBottom: 8 }}>Description</Text>
                         <Text style={{ fontSize: 15, color: '#64748B', lineHeight: 26 }} numberOfLines={isDescExpanded ? undefined : 3}>
-                            {product.description || "No description provided."}
+                            {product?.description || "No description provided."}
                         </Text>
                         <TouchableOpacity onPress={() => setIsDescExpanded(!isDescExpanded)} style={{ marginTop: 8 }}>
                             <Text style={{ color: '#3B82F6', fontWeight: '600' }}>{isDescExpanded ? 'Show Less' : 'Read More'}</Text>
@@ -371,7 +490,7 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                         <View style={{ gap: 12 }}>
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                                 <Text style={{ color: '#64748B' }}>Category</Text>
-                                <Text style={{ color: '#0F172A', fontWeight: '600' }}>{product.category || 'General'}</Text>
+                                <Text style={{ color: '#0F172A', fontWeight: '600' }}>{product?.category || 'General'}</Text>
                             </View>
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                                 <Text style={{ color: '#64748B' }}>Stock Status</Text>
@@ -380,7 +499,7 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                             {product.brand && (
                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                                     <Text style={{ color: '#64748B' }}>Brand</Text>
-                                    <Text style={{ color: '#0F172A', fontWeight: '600' }}>{product.brand}</Text>
+                                    <Text style={{ color: '#0F172A', fontWeight: '600' }}>{product?.brand || 'Generic'}</Text>
                                 </View>
                             )}
                         </View>
@@ -415,7 +534,7 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                                 showsHorizontalScrollIndicator={false}
                                 keyExtractor={item => item.id.toString()}
                                 renderItem={({ item }) => {
-                                    const imgUri = getProductImage(item.images);
+                                    const imgUri = getProductImage(item?.images);
                                     return (
                                         <TouchableOpacity
                                             onPress={() => navigation.push('ProductDetails', { product: item })} // Use push for new instance
@@ -428,8 +547,8 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                                                     <Ionicons name="image-outline" size={32} color="#94A3B8" />
                                                 </View>
                                             )}
-                                            <Text style={{ fontWeight: '600', color: '#0F172A' }} numberOfLines={1}>{item.name}</Text>
-                                            <Text style={{ color: '#3B82F6', fontWeight: '700' }}>₦{item.price ? item.price.toLocaleString() : 'N/A'}</Text>
+                                            <Text style={{ fontWeight: '600', color: '#0F172A' }} numberOfLines={1}>{item?.name || 'Product'}</Text>
+                                            <Text style={{ color: '#3B82F6', fontWeight: '700' }}>₦{item?.price ? item.price.toLocaleString() : 'N/A'}</Text>
                                         </TouchableOpacity>
                                     );
                                 }}
@@ -510,11 +629,18 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
 
                     {/* Add to Cart Button */}
                     <TouchableOpacity
-                        onPress={handleAddToCart}
-                        style={{ flex: 1, height: 54, backgroundColor: '#0F172A', borderRadius: 16, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',shadowOffset: { height: 4 }, shadowRadius: 12 }}
+                        onPress={() => {
+                            const finalProduct = { ...product, price: discountedPrice };
+                            if (addToCart) {
+                                addToCart(finalProduct, quantity);
+                                Alert.alert('Success', `Added ${quantity} x ${product.name} to cart.`);
+                                navigation.goBack();
+                            }
+                        }}
+                        style={{ flex: 1, height: 54, backgroundColor: '#0F172A', borderRadius: 16, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', shadowOffset: { height: 4 }, shadowRadius: 12 }}
                     >
                         <Ionicons name="cart" size={20} color="white" />
-                        <Text style={{ color: 'white', fontSize: 16, fontWeight: '700' }}>Add - ₦{product.price ? (product.price * quantity).toLocaleString() : '0'}</Text>
+                        <Text style={{ color: 'white', fontSize: 16, fontWeight: '700' }}>Add - ₦{discountedPrice ? (discountedPrice * quantity).toLocaleString() : '0'}</Text>
                     </TouchableOpacity>
                 </View>
             </View>

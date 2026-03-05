@@ -3,13 +3,15 @@ import { View, Text, TouchableOpacity, SafeAreaView, ScrollView, Image, Activity
 import { Ionicons } from '@expo/vector-icons';
 import { styles } from '../styles/theme';
 import { supabase } from '../lib/supabase';
+import { UserAvatar } from '../components/UserAvatar';
+import { useAppSettings } from '../context/AppSettingsContext';
 
 // Helper to format currency
 const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount).replace('NGN', '₦');
 };
 
-export const ProfilePage = ({ user, onLogout, onBack, onOpenVendorRegister, onOpenAdmin, onOpenVendor, onNavigate, onUpdateUser }) => {
+const ProfilePageInner = ({ user, onLogout, onBack, onOpenVendorRegister, onOpenAdmin, onOpenVendor, onNavigate, onUpdateUser }) => {
     const [wallet, setWallet] = useState({ balance: 0, points: 0 });
     const [orders, setOrders] = useState([]);
     const [stats, setStats] = useState({ totalOrders: 0, pending: 0, spend: 0 });
@@ -22,7 +24,7 @@ export const ProfilePage = ({ user, onLogout, onBack, onOpenVendorRegister, onOp
         { icon: 'bag-handle-outline', label: 'My Orders', screen: 'orders', badge: '2' },
         { icon: 'heart-outline', label: 'Wishlist', screen: 'wishlist' },
         { icon: 'settings-outline', label: 'Settings', screen: 'settings' },
-        { icon: 'help-circle-outline', label: 'Help & Support', screen: 'settings' },
+        { icon: 'help-circle-outline', label: 'Help & Support', screen: 'support' },
     ];
 
     useEffect(() => {
@@ -51,13 +53,18 @@ export const ProfilePage = ({ user, onLogout, onBack, onOpenVendorRegister, onOp
                 .from('wallets')
                 .select('*')
                 .eq('user_id', user.id)
-                .single();
+                .maybeSingle();
 
             if (walletData) {
+                // Sync: Prefer Profile points for display if they are higher, to handle lag
+                const displayPoints = Math.max(walletData.points || 0, userData?.mafhal_coins || 0);
                 setWallet({
                     balance: walletData.balance || 0,
-                    points: walletData.points || 0
+                    points: displayPoints
                 });
+            } else {
+                // Fallback for missing wallet row
+                setWallet({ balance: 0, points: userData?.mafhal_coins || 0 });
             }
 
             // 2. Fetch Orders
@@ -112,6 +119,7 @@ export const ProfilePage = ({ user, onLogout, onBack, onOpenVendorRegister, onOp
         }
     };
 
+
     return (
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
             <View style={styles.profileHeader}>
@@ -125,15 +133,8 @@ export const ProfilePage = ({ user, onLogout, onBack, onOpenVendorRegister, onOp
 
                 {/* PROFILE INFO - LIVE */}
                 <View style={styles.profileInfo}>
-                    <View style={styles.avatarBox}>
-                        {user?.user_metadata?.avatar_url || user?.avatar_url ? (
-                            <Image
-                                source={{ uri: user.user_metadata?.avatar_url || user.avatar_url }}
-                                style={{ width: '100%', height: '100%' }}
-                            />
-                        ) : (
-                            <Text style={styles.avatarText}>{user?.email?.[0]?.toUpperCase() || 'U'}</Text>
-                        )}
+                    <View style={[styles.avatarBox, { borderWidth: 0, backgroundColor: 'transparent' }]}>
+                        <UserAvatar user={user} size={80} border="#10B981" />
                     </View>
 
                     <Text style={styles.profileName}>
@@ -216,8 +217,11 @@ export const ProfilePage = ({ user, onLogout, onBack, onOpenVendorRegister, onOp
                         <Text style={styles.walletBalance}>{formatCurrency(wallet.balance)}</Text>
                         <Text style={styles.walletPoints}><Ionicons name="star" size={12} color="#FBBF24" /> {wallet.points} Points</Text>
                     </View>
-                    <TouchableOpacity style={styles.walletBtn}>
-                        <Text style={{ color: 'white', fontWeight: '600' }}>Top Up</Text>
+                    <TouchableOpacity
+                        style={styles.walletBtn}
+                        onPress={() => onNavigate('wallet')}
+                    >
+                        <Text style={{ color: 'white', fontWeight: '600' }}>Manage</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -286,13 +290,13 @@ export const ProfilePage = ({ user, onLogout, onBack, onOpenVendorRegister, onOp
                 )}
 
                 {/* REFERRAL CARD */}
-                <TouchableOpacity style={styles.referCard}>
+                <TouchableOpacity style={styles.referCard} onPress={() => onNavigate('referral')}>
                     <View style={styles.referIcon}>
                         <Ionicons name="gift" size={20} color="#10B981" />
                     </View>
                     <View>
                         <Text style={styles.referTitle}>Refer & Earn</Text>
-                        <Text style={styles.referSub}>Invite friends and get ₦500 bonus</Text>
+                        <Text style={styles.referSub}>Invite friends and get 500 AMC bonus</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={16} color="#CBD5E1" style={{ marginLeft: 'auto' }} />
                 </TouchableOpacity>
@@ -353,4 +357,8 @@ export const ProfilePage = ({ user, onLogout, onBack, onOpenVendorRegister, onOp
             </View>
         </ScrollView >
     );
+};
+
+export const ProfilePage = (props) => {
+    return <ProfilePageInner {...props} />;
 };

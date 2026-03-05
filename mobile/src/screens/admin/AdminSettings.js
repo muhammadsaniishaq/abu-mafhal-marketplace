@@ -12,6 +12,7 @@ export const AdminSettings = ({ navigation }) => {
     const [loading, setLoading] = useState(false);
     // Local state for edits
     const [appName, setAppName] = useState(settings?.app_name || '');
+    const [defaultShippingAddress, setDefaultShippingAddress] = useState(settings?.default_shipping_address || '');
     const [logoUrl, setLogoUrl] = useState(settings?.logo_url || null);
     const [certLogoUrl, setCertLogoUrl] = useState(settings?.cert_logo_url || null);
     const [certBadgeUrl, setCertBadgeUrl] = useState(settings?.cert_badge_url || null);
@@ -19,9 +20,17 @@ export const AdminSettings = ({ navigation }) => {
     const [primaryColor, setPrimaryColor] = useState(settings?.primary_color || '#0F172A');
     const [secondaryColor, setSecondaryColor] = useState(settings?.secondary_color || '#3B82F6');
     const [paymentMethods, setPaymentMethods] = useState(settings?.payment_methods || {});
+    const [paystackPublicKey, setPaystackPublicKey] = useState(settings?.paystack_public_key || '');
+    const [paystackSecretKey, setPaystackSecretKey] = useState(settings?.paystack_secret_key || '');
+    const [premblyAppId, setPremblyAppId] = useState(settings?.prembly_app_id || '');
+    const [premblySecretKey, setPremblySecretKey] = useState(settings?.prembly_secret_key || '');
+    const [geminiApiKey, setGeminiApiKey] = useState(settings?.gemini_api_key || '');
+    const [openaiApiKey, setOpenaiApiKey] = useState(settings?.openai_api_key || '');
     const [features, setFeatures] = useState(settings?.features || {});
+    const [vendorPlans, setVendorPlans] = useState(settings?.vendor_plans || []);
 
     // Upload states
+
     const [uploadingLogo, setUploadingLogo] = useState(false);
     const [uploadingCertLogo, setUploadingCertLogo] = useState(false);
     const [uploadingCertBadge, setUploadingCertBadge] = useState(false);
@@ -32,14 +41,21 @@ export const AdminSettings = ({ navigation }) => {
         const { error } = await updateSettings({
             app_name: appName,
             logo_url: logoUrl,
-            logo_url: logoUrl,
             cert_logo_url: certLogoUrl,
             cert_badge_url: certBadgeUrl,
             cert_signature_url: certSignatureUrl,
             primary_color: primaryColor,
             secondary_color: secondaryColor,
             payment_methods: paymentMethods,
-            features: features
+            paystack_public_key: paystackPublicKey,
+            paystack_secret_key: paystackSecretKey,
+            prembly_app_id: premblyAppId,
+            prembly_secret_key: premblySecretKey,
+            gemini_api_key: geminiApiKey,
+            openai_api_key: openaiApiKey,
+            features: features,
+            vendor_plans: vendorPlans,
+            default_shipping_address: defaultShippingAddress
         });
         setLoading(false);
         if (error) {
@@ -99,6 +115,17 @@ export const AdminSettings = ({ navigation }) => {
 
     const toggleFeature = (feature) => {
         setFeatures(prev => ({ ...prev, [feature]: !prev[feature] }));
+    };
+
+    const updateVendorPlan = (index, field, value) => {
+        const newPlans = [...vendorPlans];
+        if (field === 'price') {
+            // ensure it's a number
+            newPlans[index][field] = parseInt(value) || 0;
+        } else {
+            newPlans[index][field] = value;
+        }
+        setVendorPlans(newPlans);
     };
 
     return (
@@ -166,6 +193,17 @@ export const AdminSettings = ({ navigation }) => {
 
                 {/* Certificate Settings */}
                 <Text style={styles.sectionTitle}>Certificate Settings</Text>
+                {/* Shipping Settings */}
+                <Text style={styles.sectionTitle}>Shipping Settings</Text>
+                <View style={styles.card}>
+                    <Text style={styles.label}>Default Shipping Address</Text>
+                    <TextInput
+                        style={styles.input}
+                        value={defaultShippingAddress}
+                        onChangeText={setDefaultShippingAddress}
+                        placeholder="Enter default shipping address"
+                    />
+                </View>
                 <View style={styles.card}>
                     {/* Cert Logo */}
                     <Text style={styles.label}>Certificate Logo (Top)</Text>
@@ -239,6 +277,113 @@ export const AdminSettings = ({ navigation }) => {
                         value={paymentMethods.flutterwave !== false}
                         onToggle={() => togglePaymentMethod('flutterwave')}
                     />
+
+                    <View style={{ marginTop: 20, paddingTop: 10, borderTopWidth: 1, borderColor: '#F1F5F9' }}>
+                        <Text style={[styles.label, { color: '#3B82F6' }]}>🛡️ Paystack Public Key (Secured)</Text>
+                        <TextInput
+                            style={[styles.input, { fontFamily: 'System' }]}
+                            value={paystackPublicKey}
+                            onChangeText={setPaystackPublicKey}
+                            placeholder="pk_test_..."
+                            secureTextEntry={true}
+                        />
+                        <Text style={[styles.label, { color: '#EF4444', marginTop: 12 }]}>🔒 Paystack Secret Key (Secured)</Text>
+                        <TextInput
+                            style={[styles.input, { fontFamily: 'System' }]}
+                            value={paystackSecretKey}
+                            onChangeText={setPaystackSecretKey}
+                            placeholder="sk_test_..."
+                            secureTextEntry={true}
+                        />
+                        <Text style={{ fontSize: 12, color: '#64748B', marginTop: 4, fontStyle: 'italic' }}>
+                            Duk sanda ka sauya wannan key din, zata yi tasiri a duk fadin manhajar (Mobile & Web).
+                        </Text>
+                    </View>
+
+                    <View style={{ marginTop: 20, paddingTop: 10, borderTopWidth: 1, borderColor: '#F1F5F9' }}>
+                        <Text style={[styles.label, { color: '#059669' }]}>🛡️ Prembly App ID (Secured)</Text>
+                        <TextInput
+                            style={[styles.input, { fontFamily: 'System' }]}
+                            value={premblyAppId}
+                            onChangeText={setPremblyAppId}
+                            placeholder="Your App ID"
+                            secureTextEntry={true}
+                        />
+                        <Text style={[styles.label, { color: '#EF4444', marginTop: 12 }]}>🔒 Prembly Secret Key (Secured)</Text>
+                        <TextInput
+                            style={[styles.input, { fontFamily: 'System' }]}
+                            value={premblySecretKey}
+                            onChangeText={setPremblySecretKey}
+                            placeholder="live..."
+                            secureTextEntry={true}
+                        />
+                        <Text style={{ fontSize: 12, color: '#64748B', marginTop: 4, fontStyle: 'italic' }}>
+                            Wannan zai ba da damar tantance TIN, CAC, NIN, da BVN ta Prembly API a Vendor Register.
+                        </Text>
+                    </View>
+
+                    <View style={{ marginTop: 20, paddingTop: 10, borderTopWidth: 1, borderColor: '#F1F5F9' }}>
+                        <Text style={[styles.label, { color: '#10B981' }]}>✨ Gemini AI API Key (Secured)</Text>
+                        <TextInput
+                            style={[styles.input, { fontFamily: 'System' }]}
+                            value={geminiApiKey}
+                            onChangeText={setGeminiApiKey}
+                            placeholder="AIzaSy..."
+                            secureTextEntry={true}
+                        />
+                        <Text style={{ fontSize: 12, color: '#64748B', marginTop: 4, fontStyle: 'italic' }}>
+                            Saka API key dinka anan don ba Admin / User ikon amfani da AI Assistant (Gemini).
+                        </Text>
+                    </View>
+
+                    <View style={{ marginTop: 20, paddingTop: 10, borderTopWidth: 1, borderColor: '#F1F5F9' }}>
+                        <Text style={[styles.label, { color: '#8B5CF6' }]}>🧠 OpenAI API Key (Secured)</Text>
+                        <TextInput
+                            style={[styles.input, { fontFamily: 'System' }]}
+                            value={openaiApiKey}
+                            onChangeText={setOpenaiApiKey}
+                            placeholder="sk-..."
+                            secureTextEntry={true}
+                        />
+                        <Text style={{ fontSize: 12, color: '#64748B', marginTop: 4, fontStyle: 'italic' }}>
+                            Saka API key dinka anan idan kana so Assistant ya yi amfani da ChatGPT model.
+                        </Text>
+                    </View>
+
+                    {/* Vendor Registration Plans */}
+                    <View style={{ marginTop: 20, paddingTop: 10, borderTopWidth: 1, borderColor: '#F1F5F9' }}>
+                        <Text style={[styles.label, { color: '#0F172A', fontSize: 18, marginTop: 10 }]}>Vendor Registration Plans</Text>
+                        <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 12 }}>
+                            Manage pricing and availability for vendor subscriptions.
+                        </Text>
+                        {vendorPlans.map((plan, index) => (
+                            <View key={plan.id} style={{ marginBottom: 16, backgroundColor: '#F8FAFC', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                                    <Text style={{ fontWeight: '800', color: '#0F172A', fontSize: 16 }}>{plan.label}</Text>
+                                    <Switch
+                                        value={plan.is_active !== false}
+                                        onValueChange={(val) => updateVendorPlan(index, 'is_active', val)}
+                                        trackColor={{ false: '#CBD5E1', true: '#10B981' }}
+                                        thumbColor={'#fff'}
+                                    />
+                                </View>
+                                {plan.is_active !== false && (
+                                    <View>
+                                        <Text style={[styles.label, { fontSize: 12, marginTop: 0 }]}>Price (₦)</Text>
+                                        <TextInput
+                                            style={[styles.input, { marginBottom: 0, height: 40 }]}
+                                            value={plan.price.toString()}
+                                            onChangeText={(val) => updateVendorPlan(index, 'price', val)}
+                                            keyboardType="numeric"
+                                        />
+                                        <Text style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
+                                            Set to 0 for a continuous Free Trial plan.
+                                        </Text>
+                                    </View>
+                                )}
+                            </View>
+                        ))}
+                    </View>
                 </View>
 
                 {/* Features */}

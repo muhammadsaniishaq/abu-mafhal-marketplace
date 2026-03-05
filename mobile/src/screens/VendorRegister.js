@@ -1,25 +1,21 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, SafeAreaView, ScrollView, Alert, StyleSheet, ActivityIndicator, LayoutAnimation, Platform, UIManager } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, SafeAreaView, ScrollView, Alert, StyleSheet, ActivityIndicator, LayoutAnimation, Platform, UIManager, Modal, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { styles } from '../styles/theme';
-const VENDOR_PLANS = [
-    { id: 'free_trial', label: '1 Month Free Trial', price: 0, badge: 'TRY FREE' },
-    { id: '1_month', label: '1 Month', price: 2000 },
-    { id: '3_months', label: '3 Months', price: 5500 },
-    { id: '6_months', label: '6 Months', price: 10000 },
-    { id: '1_year', label: '1 Year', price: 18000, recommended: true },
-    { id: 'lifetime', label: 'Lifetime', price: 40000, badge: 'BEST VALUE' }
-];
 
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { UploadService } from '../services/uploadService';
-import { PaystackProvider, usePaystack } from 'react-native-paystack-webview';
+import { WebView } from 'react-native-webview';
 import { VendorCertificate } from './VendorCertificate';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-    UIManager.setLayoutAnimationEnabledExperimental(true);
+    try {
+        UIManager.setLayoutAnimationEnabledExperimental(true);
+    } catch (e) {
+        // No-op in New Architecture
+    }
 }
 
 const UploadBtn = ({ label, file, onPress, icon }) => (
@@ -64,11 +60,14 @@ import { useAppSettings } from '../context/AppSettingsContext';
 
 // ...
 
-const VendorRegisterInner = ({ user, onBack, onSubmit, mode = 'register' }) => {
+const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'register', activeVendorPlans = [] }) => {
     const { settings } = useAppSettings();
 
     // Check if registration is disabled (and we are not renewing)
     const isRegistrationDisabled = settings?.features?.enable_vendor_registration === false;
+
+    // Default to the first plan in settings or '1_year' if fallback
+    const defaultPlanId = activeVendorPlans.length > 0 ? activeVendorPlans[0].id : '1_year';
 
     // 1: Info, 2: Docs, 3: Logistics, 4: Banking, 5: Plan, 6: Confirm/Pay
     const [step, setStep] = useState(mode === 'renew' ? 5 : 1);
@@ -99,10 +98,23 @@ const VendorRegisterInner = ({ user, onBack, onSubmit, mode = 'register' }) => {
     const [isSuccess, setIsSuccess] = useState(false);
     const [editingAppId, setEditingAppId] = useState(null); // [NEW] Track ID when retrying
     const [showCertificate, setShowCertificate] = useState(false); // [NEW] Certificate Modal
-    const { popup } = usePaystack();
+
+    // [NEW] Custom Paystack Integration State
+    const [showPaystackWebView, setShowPaystackWebView] = useState(false);
+    const [currentRef, setCurrentRef] = useState(null);
+    const [checkoutUrl, setCheckoutUrl] = useState(null);
+
+    // [NEW] Bank Account Resolution State
+    const [bankCode, setBankCode] = useState('');
+    const [banks, setBanks] = useState([]);
+    const [filteredBanks, setFilteredBanks] = useState([]);
+    const [showBankDropdown, setShowBankDropdown] = useState(false);
+    const [searchBankQuery, setSearchBankQuery] = useState('');
+    const [resolvingAccount, setResolvingAccount] = useState(false);
 
     React.useEffect(() => {
         checkApplicationStatus();
+        fetchBanks();
     }, []);
 
 
@@ -124,6 +136,20 @@ const VendorRegisterInner = ({ user, onBack, onSubmit, mode = 'register' }) => {
             setCheckingStatus(false);
         }
     };
+
+    const fetchBanks = async () => {
+        try {
+            const res = await fetch('https://api.paystack.co/bank');
+            const json = await res.json();
+            if (json.status) {
+                setBanks(json.data);
+                setFilteredBanks(json.data);
+            }
+        } catch (error) {
+            console.log('Error fetching banks:', error);
+        }
+    };
+
 
     // FORM STATE
     const [formData, setFormData] = useState({
@@ -154,12 +180,21 @@ const VendorRegisterInner = ({ user, onBack, onSubmit, mode = 'register' }) => {
         facebook: '',
         instagram: '',
         // Subscription
-        selectedPlan: '1_year'
+        selectedPlan: defaultPlanId
+    });
+
+    // VERIFICATION STATE
+    const [verificationStatus, setVerificationStatus] = useState({
+        cacNumber: null, // null | 'loading' | 'verified' | 'failed'
+        tinNumber: null,
+        bvn: null,
+        nin: null
     });
 
     // FILES STATE
+    const avatarUrl = user?.avatar_url || user?.user_metadata?.avatar_url;
     const [files, setFiles] = useState({
-        logo: null,
+        logo: avatarUrl ? { uri: avatarUrl, name: 'Current Profile Picture', isAvatar: true } : null,
         video: null,
         cac: null,
         nin: null
@@ -167,6 +202,106 @@ const VendorRegisterInner = ({ user, onBack, onSubmit, mode = 'register' }) => {
 
     const updateForm = (key, value) => {
         setFormData(prev => ({ ...prev, [key]: value }));
+    };
+
+    React.useEffect(() => {
+        if (formData.accountNumber.length === 10 && bankCode) {
+            resolveAccount();
+        } else {
+            updateForm('accountName', '');
+        }
+    }, [formData.accountNumber, bankCode]);
+
+    const resolveAccount = async () => {
+        setResolvingAccount(true);
+        try {
+            const FUNCTION_URL = `${supabaseUrl}/functions/v1/resolve-bank`;
+
+            const res = await fetch(
+                `${FUNCTION_URL}?account_number=${formData.accountNumber}&bank_code=${bankCode}`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${supabaseAnonKey}`
+                    }
+                }
+            );
+
+            const json = await res.json();
+
+            if (json.status) {
+                updateForm('accountName', json.data.account_name);
+            } else {
+                updateForm('accountName', '');
+                Alert.alert('Verification Failed', json.message || 'Could not verify account. Please check your account number and bank.');
+            }
+        } catch (error) {
+            console.log('Error resolving account:', error);
+            Alert.alert('Error', 'Failed to verify account details.');
+        } finally {
+            setResolvingAccount(false);
+        }
+    };
+
+    const verifyField = async (field, type) => {
+        const value = formData[field];
+        if (!value) {
+            Alert.alert('Required', `Please enter your ${type.toUpperCase()} before verifying.`);
+            return;
+        }
+
+        setVerificationStatus(prev => ({ ...prev, [field]: 'loading' }));
+
+        try {
+            const FUNCTION_URL = `${supabaseUrl}/functions/v1/verify-prembly-identity`;
+
+            const payload = {
+                type: type,
+                value: value
+            };
+
+            // If CAC, we also pass the business name to help with cross-referencing (Prembly specific)
+            if (type === 'cac') {
+                payload.company_name = formData.businessName;
+                payload.company_type = 'RC'; // Defaulting to RC for simplicity
+            }
+
+            const res = await fetch(FUNCTION_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${supabaseAnonKey}`
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const json = await res.json();
+
+            if (json.success) {
+                setVerificationStatus(prev => ({ ...prev, [field]: 'verified' }));
+                if (type === 'cac') {
+                    // [DEPRECATED] Auto-fill removed by user request until Live mode is active
+                    Alert.alert('Verification Successful', `${type.toUpperCase()} verified successfully.`);
+                } else {
+                    Alert.alert('Verification Successful', `${type.toUpperCase()} verified successfully.`);
+                }
+            } else {
+                setVerificationStatus(prev => ({ ...prev, [field]: 'failed' }));
+                Alert.alert('Verification Failed', json.error || `Could not verify ${type.toUpperCase()}.`);
+            }
+        } catch (error) {
+            console.log(`Error verifying ${type}:`, error);
+            setVerificationStatus(prev => ({ ...prev, [field]: 'failed' }));
+            Alert.alert('Error', 'Verification service is unreachable. Please try again later.');
+        }
+    };
+
+    const handleSearchBank = (text) => {
+        setSearchBankQuery(text);
+        if (text) {
+            setFilteredBanks(banks.filter(b => b.name.toLowerCase().includes(text.toLowerCase())));
+        } else {
+            setFilteredBanks(banks);
+        }
     };
 
     const pickDocument = async (type, isImage = false) => {
@@ -204,8 +339,20 @@ const VendorRegisterInner = ({ user, onBack, onSubmit, mode = 'register' }) => {
     const validateStep = () => {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         if (step === 1) {
-            if (!formData.businessName || !formData.phone || !formData.businessAddress || !formData.cacNumber) {
-                Alert.alert('Missing Fields', 'Please fill all required business details.');
+            if (!formData.businessName || !formData.phone || !formData.businessAddress || !formData.cacNumber || !formData.nin || !formData.bvn) {
+                Alert.alert('Missing Fields', 'Please fill all required business details marked with *.');
+                return false;
+            }
+            if (verificationStatus.cacNumber !== 'verified') {
+                Alert.alert('Verification Required', 'Please click the "Verify" button to validate your CAC Registration Number.');
+                return false;
+            }
+            if (verificationStatus.nin !== 'verified') {
+                Alert.alert('Verification Required', 'Please click the "Verify" button to validate your NIN.');
+                return false;
+            }
+            if (verificationStatus.bvn !== 'verified') {
+                Alert.alert('Verification Required', 'Please click the "Verify" button to validate your BVN.');
                 return false;
             }
         }
@@ -244,7 +391,13 @@ const VendorRegisterInner = ({ user, onBack, onSubmit, mode = 'register' }) => {
         setUploading(true);
         const urls = {};
         try {
-            if (files.logo) urls.logo_url = await UploadService.uploadFile(files.logo, 'vendor-docs', 'logos');
+            if (files.logo) {
+                if (files.logo.isAvatar) {
+                    urls.logo_url = files.logo.uri; // Just use the existing avatar URL
+                } else {
+                    urls.logo_url = await UploadService.uploadFile(files.logo, 'vendor-docs', 'logos');
+                }
+            }
             if (files.video) urls.video_url = await UploadService.uploadFile(files.video, 'vendor-docs', 'videos');
             if (files.cac) urls.cac_url = await UploadService.uploadFile(files.cac, 'vendor-docs', 'docs');
             if (files.nin) urls.nin_url = await UploadService.uploadFile(files.nin, 'vendor-docs', 'docs');
@@ -261,7 +414,7 @@ const VendorRegisterInner = ({ user, onBack, onSubmit, mode = 'register' }) => {
     const handleActualSubmit = async (paymentRef = null) => {
         setLoading(true);
         try {
-            const plan = VENDOR_PLANS.find(p => p.id === formData.selectedPlan);
+            const plan = activeVendorPlans.find(p => p.id === formData.selectedPlan) || activeVendorPlans[0] || { id: 'fallback', label: 'Unavailable', price: 0 };
 
             if (mode === 'renew') {
                 // ... (renew logic remains same, unrelated to this fix) 
@@ -370,37 +523,37 @@ const VendorRegisterInner = ({ user, onBack, onSubmit, mode = 'register' }) => {
     };
 
     const handleFinalAction = () => {
-        const plan = VENDOR_PLANS.find(p => p.id === formData.selectedPlan);
+        const plan = activeVendorPlans.find(p => p.id === formData.selectedPlan) || activeVendorPlans[0] || { id: 'fallback', label: 'Unavailable', price: 0 };
 
         if (needsPayment) { // Use needsPayment here
-            if (!user?.email) {
-                Alert.alert('Email Required', 'Please ensure your email is set in your profile.');
-                return;
-            }
+            setLoading(true);
 
-            popup.checkout({
-                amount: plan.price,
-                email: user.email,
-                reference: `RV-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-                onCancel: (e) => {
-                    console.log('Paystack: Payment Cancelled by user');
-                    Alert.alert('Payment Cancelled', 'You must complete payment to join the marketplace.');
-                },
-                onSuccess: (res) => {
-                    console.log('Paystack: Success!', res);
-                    setPaymentVerified(true);
-                    setPaidPlan(plan.id); // Mark this plan as paid
-                    // Use a small timeout to let the Paystack modal close properly
-                    setTimeout(() => {
-                        const ref = res?.reference || res?.transactionRef?.reference || `REF-${Date.now()}`;
-                        handleActualSubmit(ref);
-                    }, 500);
-                },
-                onError: (err) => {
-                    console.error('Paystack: Error!', err);
-                    Alert.alert('Payment Error', err.message || 'Could not initialize payment. Please try again.');
+            setTimeout(async () => {
+                try {
+                    const fallbackEmail = user?.email || `user_${user?.id?.substring(0, 6) || Math.floor(Math.random() * 10000)}@abumafhal.com`;
+                    const ref = `RV-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+                    const { data, error } = await supabase.functions.invoke('initiate-paystack-payment', {
+                        body: {
+                            amount: plan.price,
+                            email: fallbackEmail,
+                            reference: ref
+                        }
+                    });
+
+                    if (error) throw error;
+                    if (!data?.success) throw new Error(data?.error || 'Failed to initialize payment');
+
+                    setCurrentRef(ref);
+                    setCheckoutUrl(data.authorization_url);
+                    setShowPaystackWebView(true);
+                } catch (err) {
+                    console.error('[DEBUG-PAYSTACK] Init Error:', err);
+                    Alert.alert('Payment Error', 'Could not initialize payment. Please try again.');
+                } finally {
+                    setLoading(false);
                 }
-            });
+            }, 200);
         } else {
             handleActualSubmit();
         }
@@ -423,7 +576,7 @@ const VendorRegisterInner = ({ user, onBack, onSubmit, mode = 'register' }) => {
         </View>
     );
 
-    const plan = VENDOR_PLANS.find(p => p.id === formData.selectedPlan);
+    const plan = activeVendorPlans.find(p => p.id === formData.selectedPlan) || activeVendorPlans[0] || { id: 'fallback', label: 'Unavailable', price: 0 };
 
     if (showCertificate) {
         return <VendorCertificate user={user} vendorData={existingApp} onBack={() => setShowCertificate(false)} />;
@@ -568,7 +721,7 @@ const VendorRegisterInner = ({ user, onBack, onSubmit, mode = 'register' }) => {
 
             // 1. Pre-fill form with existing data
             const oldPlanLabel = app.subscription_plan;
-            const matchedPlan = VENDOR_PLANS.find(p => p.label === oldPlanLabel);
+            const matchedPlan = activeVendorPlans.find(p => p.label === oldPlanLabel);
 
             setFormData(prev => ({
                 ...prev,
@@ -589,7 +742,7 @@ const VendorRegisterInner = ({ user, onBack, onSubmit, mode = 'register' }) => {
                 facebook: app.socials?.facebook || '',
                 instagram: app.socials?.instagram || '',
                 website: app.socials?.website || '',
-                selectedPlan: matchedPlan?.id || '1_year'
+                selectedPlan: matchedPlan?.id || defaultPlanId
             }));
 
             // 2. Preserve Payment Status if already paid
@@ -601,7 +754,7 @@ const VendorRegisterInner = ({ user, onBack, onSubmit, mode = 'register' }) => {
 
             if (status === 'paid' || isStuckApp) {
                 setPaymentVerified(true);
-                setPaidPlan(matchedPlan?.id || '1_year');
+                setPaidPlan(matchedPlan?.id || defaultPlanId);
                 setSavedPaymentRef(app.payment_reference || 'REF-FORCED-FIX');
                 if (isStuckApp) Alert.alert('Payment Verified', 'System manually verified your payment.');
             }
@@ -701,13 +854,55 @@ const VendorRegisterInner = ({ user, onBack, onSubmit, mode = 'register' }) => {
                             <TextInput style={styles.modernInput} value={formData.businessAddress} onChangeText={t => updateForm('businessAddress', t)} placeholder="Street, City, State" />
                             <View style={{ height: 16 }} />
                             <Text style={styles.label}>CAC Registration Number *</Text>
-                            <TextInput style={styles.modernInput} value={formData.cacNumber} onChangeText={t => updateForm('cacNumber', t)} placeholder="RC-123456" />
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <TextInput style={[styles.modernInput, { flex: 1, marginBottom: 0 }]} value={formData.cacNumber} onChangeText={t => { updateForm('cacNumber', t); setVerificationStatus(p => ({ ...p, cacNumber: null })); }} placeholder="RC-123456" />
+                                <TouchableOpacity
+                                    style={[styles.modernBtn, { marginLeft: 8, paddingHorizontal: 16, height: '100%', borderRadius: 12, backgroundColor: verificationStatus.cacNumber === 'verified' ? '#10B981' : '#0F172A' }]}
+                                    onPress={() => verifyField('cacNumber', 'cac')}
+                                    disabled={verificationStatus.cacNumber === 'loading' || verificationStatus.cacNumber === 'verified'}
+                                >
+                                    {verificationStatus.cacNumber === 'loading' ? <ActivityIndicator size="small" color="white" /> : <Text style={{ color: 'white', fontWeight: '700' }}>{verificationStatus.cacNumber === 'verified' ? 'Verified' : 'Verify'}</Text>}
+                                </TouchableOpacity>
+                            </View>
                             <View style={{ height: 16 }} />
+
                             <Text style={styles.label}>Tax ID (TIN)</Text>
-                            <TextInput style={styles.modernInput} value={formData.tinNumber} onChangeText={t => updateForm('tinNumber', t)} placeholder="102030..." />
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <TextInput style={[styles.modernInput, { flex: 1, marginBottom: 0 }]} value={formData.tinNumber} onChangeText={t => { updateForm('tinNumber', t); setVerificationStatus(p => ({ ...p, tinNumber: null })); }} placeholder="102030..." />
+                                <TouchableOpacity
+                                    style={[styles.modernBtn, { marginLeft: 8, paddingHorizontal: 16, height: '100%', borderRadius: 12, backgroundColor: verificationStatus.tinNumber === 'verified' ? '#10B981' : '#0F172A' }]}
+                                    onPress={() => verifyField('tinNumber', 'tin')}
+                                    disabled={verificationStatus.tinNumber === 'loading' || verificationStatus.tinNumber === 'verified'}
+                                >
+                                    {verificationStatus.tinNumber === 'loading' ? <ActivityIndicator size="small" color="white" /> : <Text style={{ color: 'white', fontWeight: '700' }}>{verificationStatus.tinNumber === 'verified' ? 'Verified' : 'Verify'}</Text>}
+                                </TouchableOpacity>
+                            </View>
                             <View style={{ height: 16 }} />
-                            <Text style={styles.label}>BVN / NIN (For Verification)</Text>
-                            <TextInput style={styles.modernInput} value={formData.bvn} onChangeText={t => updateForm('bvn', t)} placeholder="Enter 11-digit BVN" keyboardType="numeric" />
+
+                            <Text style={styles.label}>National ID (NIN) *</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <TextInput style={[styles.modernInput, { flex: 1, marginBottom: 0 }]} value={formData.nin} onChangeText={t => { updateForm('nin', t); setVerificationStatus(p => ({ ...p, nin: null })); }} placeholder="11-digit NIN" keyboardType="numeric" maxLength={11} />
+                                <TouchableOpacity
+                                    style={[styles.modernBtn, { marginLeft: 8, paddingHorizontal: 16, height: '100%', borderRadius: 12, backgroundColor: verificationStatus.nin === 'verified' ? '#10B981' : '#0F172A' }]}
+                                    onPress={() => verifyField('nin', 'nin')}
+                                    disabled={verificationStatus.nin === 'loading' || verificationStatus.nin === 'verified'}
+                                >
+                                    {verificationStatus.nin === 'loading' ? <ActivityIndicator size="small" color="white" /> : <Text style={{ color: 'white', fontWeight: '700' }}>{verificationStatus.nin === 'verified' ? 'Verified' : 'Verify'}</Text>}
+                                </TouchableOpacity>
+                            </View>
+                            <View style={{ height: 16 }} />
+
+                            <Text style={styles.label}>Bank Verification Number (BVN) *</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <TextInput style={[styles.modernInput, { flex: 1, marginBottom: 0 }]} value={formData.bvn} onChangeText={t => { updateForm('bvn', t); setVerificationStatus(p => ({ ...p, bvn: null })); }} placeholder="11-digit BVN" keyboardType="numeric" maxLength={11} />
+                                <TouchableOpacity
+                                    style={[styles.modernBtn, { marginLeft: 8, paddingHorizontal: 16, height: '100%', borderRadius: 12, backgroundColor: verificationStatus.bvn === 'verified' ? '#10B981' : '#0F172A' }]}
+                                    onPress={() => verifyField('bvn', 'bvn')}
+                                    disabled={verificationStatus.bvn === 'loading' || verificationStatus.bvn === 'verified'}
+                                >
+                                    {verificationStatus.bvn === 'loading' ? <ActivityIndicator size="small" color="white" /> : <Text style={{ color: 'white', fontWeight: '700' }}>{verificationStatus.bvn === 'verified' ? 'Verified' : 'Verify'}</Text>}
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     )}
 
@@ -715,7 +910,33 @@ const VendorRegisterInner = ({ user, onBack, onSubmit, mode = 'register' }) => {
                         <View>
                             <Text style={localStyles.stepTitle}>Documents & Media</Text>
                             <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 20 }}>Upload clear images or PDFs.</Text>
-                            <UploadBtn label="Business Logo" file={files.logo} onPress={() => pickDocument('logo', true)} icon="image" />
+
+                            <Text style={styles.label}>Business Logo</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, backgroundColor: '#F8FAFC', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                                <View style={{ width: 64, height: 64, borderRadius: 32, overflow: 'hidden', backgroundColor: '#F1F5F9', marginRight: 16, alignItems: 'center', justifyContent: 'center' }}>
+                                    {files.logo?.uri ? (
+                                        <Image source={{ uri: files.logo.uri }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
+                                    ) : (
+                                        <Ionicons name="business" size={32} color="#CBD5E1" />
+                                    )}
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    {files.logo?.isAvatar && (
+                                        <View style={{ backgroundColor: '#DCFCE7', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, marginBottom: 4 }}>
+                                            <Text style={{ fontSize: 10, color: '#16A34A', fontWeight: '700' }}>Using Your Avatar</Text>
+                                        </View>
+                                    )}
+                                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#0F172A', marginBottom: 2 }}>
+                                        {files.logo ? 'Logo Selected' : 'Upload Business Logo'}
+                                    </Text>
+                                    <TouchableOpacity onPress={() => pickDocument('logo', true)}>
+                                        <Text style={{ fontSize: 13, color: '#3B82F6', fontWeight: '600' }}>
+                                            {files.logo ? 'Change Logo' : 'Tap to Upload'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+
                             <UploadBtn label="Intro Video (Mandatory)" file={files.video} onPress={() => pickDocument('video', false)} icon="videocam" />
                             <UploadBtn label="CAC Certificate" file={files.cac} onPress={() => pickDocument('cac')} icon="document-text" />
                             <UploadBtn label="NIN Slip" file={files.nin} onPress={() => pickDocument('nin')} icon="card" />
@@ -755,21 +976,52 @@ const VendorRegisterInner = ({ user, onBack, onSubmit, mode = 'register' }) => {
                         <View>
                             <Text style={localStyles.stepTitle}>Banking & Details</Text>
                             <Text style={localStyles.sectionHeader}>Payout Account</Text>
+
                             <Text style={styles.label}>Bank Name *</Text>
-                            <TextInput style={styles.modernInput} value={formData.bankName} onChangeText={t => updateForm('bankName', t)} placeholder="e.g. GTBank" />
+                            <TouchableOpacity
+                                style={[styles.modernInput, { justifyContent: 'center' }]}
+                                onPress={() => setShowBankDropdown(true)}
+                                activeOpacity={0.7}
+                            >
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <Text style={{ color: formData.bankName ? '#0F172A' : '#94A3B8' }}>
+                                        {formData.bankName || 'Select your bank'}
+                                    </Text>
+                                    <Ionicons name="chevron-down" size={18} color="#94A3B8" />
+                                </View>
+                            </TouchableOpacity>
                             <View style={{ height: 16 }} />
+
                             <Text style={styles.label}>Account Number *</Text>
-                            <TextInput style={styles.modernInput} value={formData.accountNumber} onChangeText={t => updateForm('accountNumber', t)} keyboardType="numeric" maxLength={10} />
+                            <TextInput
+                                style={styles.modernInput}
+                                value={formData.accountNumber}
+                                onChangeText={t => updateForm('accountNumber', t)}
+                                keyboardType="numeric"
+                                maxLength={10}
+                                placeholder="10 digit account number"
+                            />
                             <View style={{ height: 16 }} />
-                            <Text style={styles.label}>Account Name *</Text>
-                            <TextInput style={styles.modernInput} value={formData.accountName} onChangeText={t => updateForm('accountName', t)} />
+
+                            <Text style={styles.label}>Account Name (Auto-fetched) *</Text>
+                            <View style={[styles.modernInput, { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', borderColor: 'transparent' }]}>
+                                {resolvingAccount ? (
+                                    <ActivityIndicator size="small" color="#3B82F6" style={{ marginRight: 10 }} />
+                                ) : null}
+                                <TextInput
+                                    style={{ flex: 1, color: '#0F172A', fontWeight: '700' }}
+                                    value={formData.accountName}
+                                    editable={false}
+                                    placeholder={formData.accountNumber.length === 10 && !resolvingAccount ? "Account name not found" : "Enter account number first"}
+                                />
+                            </View>
                         </View>
                     )}
 
                     {step === 5 && (
                         <View>
                             <Text style={localStyles.stepTitle}>Choose a Plan</Text>
-                            {VENDOR_PLANS.map((plan) => (
+                            {activeVendorPlans.map((plan) => (
                                 <TouchableOpacity
                                     key={plan.id}
                                     style={[localStyles.planCard, formData.selectedPlan === plan.id && localStyles.planActive]}
@@ -851,18 +1103,127 @@ const VendorRegisterInner = ({ user, onBack, onSubmit, mode = 'register' }) => {
                     </View>
                 </View>
             </ScrollView>
+
+            {/* Bank Selection Modal */}
+            <Modal visible={showBankDropdown} animationType="slide" transparent={true}>
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+                    <View style={{ backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '70%', padding: 20 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                            <Text style={{ fontSize: 18, fontWeight: '700', color: '#0F172A' }}>Select Bank</Text>
+                            <TouchableOpacity onPress={() => setShowBankDropdown(false)} style={{ padding: 4 }}>
+                                <Ionicons name="close" size={24} color="#0F172A" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', borderRadius: 12, paddingHorizontal: 16, marginBottom: 16 }}>
+                            <Ionicons name="search" size={20} color="#94A3B8" />
+                            <TextInput
+                                style={{ flex: 1, paddingVertical: 12, marginLeft: 8, color: '#0F172A' }}
+                                placeholder="Search bank..."
+                                value={searchBankQuery}
+                                onChangeText={handleSearchBank}
+                            />
+                        </View>
+
+                        <ScrollView showsVerticalScrollIndicator={false}>
+                            {filteredBanks.map((bank, index) => (
+                                <TouchableOpacity
+                                    key={`${bank.code}-${index}`}
+                                    style={{ paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}
+                                    onPress={() => {
+                                        updateForm('bankName', bank.name);
+                                        setBankCode(bank.code);
+                                        setShowBankDropdown(false);
+                                    }}
+                                >
+                                    <Text style={{ fontSize: 16, color: '#0F172A' }}>{bank.name}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Custom Paystack WebView Modal */}
+            <Modal visible={showPaystackWebView} animationType="slide" transparent={false}>
+                <SafeAreaView style={{ flex: 1, backgroundColor: 'white' }}>
+                    <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 16, fontWeight: '700' }}>Secure Checkout</Text>
+                        <TouchableOpacity onPress={() => {
+                            setShowPaystackWebView(false);
+                            console.log('Paystack: Payment Cancelled by user');
+                            Alert.alert('Payment Cancelled', 'You must complete payment to join the marketplace.');
+                        }}>
+                            <Ionicons name="close" size={24} color="#0F172A" />
+                        </TouchableOpacity>
+                    </View>
+                    <WebView
+                        source={{ uri: checkoutUrl }}
+                        onNavigationStateChange={async (navState) => {
+                            if (navState.url.includes('standard.paystack.co/close') || navState.url.includes('callback') || navState.url.includes('cancel')) {
+                                setShowPaystackWebView(false);
+
+                                try {
+                                    setLoading(true); // lock the form 
+                                    const { data, error } = await supabase.functions.invoke('verify-paystack-payment', {
+                                        body: {
+                                            reference: currentRef,
+                                            action: 'vendor_registration',
+                                            amount: plan.price,
+                                            user_id: user.id,
+                                            expected_plan_id: plan.id
+                                        }
+                                    });
+
+                                    if (error) throw error;
+                                    if (!data?.success) throw new Error(data?.error || 'Vendor payment verification failed');
+
+                                    setPaymentVerified(true);
+                                    setPaidPlan(plan.id); // Mark this plan as paid
+
+                                    setTimeout(() => {
+                                        handleActualSubmit(currentRef);
+                                    }, 500);
+
+                                } catch (err) {
+                                    console.error('Verification Error:', err);
+                                    Alert.alert('Processing Notice', 'Payment window closed. If you paid, it might take a moment to verify your application.');
+                                    setLoading(false);
+                                }
+                            }
+                        }}
+                        startInLoadingState={true}
+                        renderLoading={() => (
+                            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                                <ActivityIndicator size="large" color="#0F172A" />
+                            </View>
+                        )}
+                        style={{ flex: 1 }}
+                    />
+                </SafeAreaView>
+            </Modal>
         </View>
     );
 };
 
-export const VendorRegister = (props) => (
-    <PaystackProvider
-        publicKey="pk_test_92a99bcc7c063338c402506c2e6db390dd986585"
-        currency="NGN"
-        debug={true}
-    >
-        <VendorRegisterInner {...props} />
-    </PaystackProvider>
-);
+export const VendorRegister = (props) => {
+    const { settings } = useAppSettings();
+
+    if (settings?.loading) {
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
+                <ActivityIndicator size="large" color="#0F172A" />
+                <Text style={{ marginTop: 12, color: '#64748B', fontWeight: '600' }}>Initializing Gateway...</Text>
+            </View>
+        );
+    }
+
+    const vendorPlansRaw = settings?.vendor_plans || [];
+    const activeVendorPlans = vendorPlansRaw.filter(p => p.is_active !== false);
+
+    return (
+        <VendorRegisterInner {...props} activeVendorPlans={activeVendorPlans} />
+    );
+};
 
 

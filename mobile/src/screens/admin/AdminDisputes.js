@@ -20,7 +20,7 @@ export const AdminDisputes = () => {
         setLoading(true);
         const { data, error } = await supabase
             .from('disputes')
-            .select('*, user:profiles(full_name, email)')
+            .select('*, profiles:user_id(full_name, email)')
             .order('created_at', { ascending: false });
 
         if (error) console.log(error);
@@ -73,7 +73,7 @@ export const AdminDisputes = () => {
                     <Text style={{ fontSize: 10, fontWeight: '700', color: item.status === 'resolved' ? '#166534' : '#B45309', textTransform: 'uppercase' }}>{item.status}</Text>
                 </View>
             </View>
-            <Text style={{ fontSize: 12, color: '#64748B' }}>User: {item.user?.full_name || 'User'}</Text>
+            <Text style={{ fontSize: 12, color: '#64748B' }}>User: {item.profiles?.full_name || 'User'}</Text>
             <Text style={{ fontSize: 14, fontWeight: '600', color: '#334155', marginTop: 4 }}>{item.reason}</Text>
         </TouchableOpacity>
     );

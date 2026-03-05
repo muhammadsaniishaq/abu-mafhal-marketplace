@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, Text, Image, TouchableOpacity, ScrollView, Animated, ImageBackground, Dimensions, Platform, StatusBar } from 'react-native';
+import { View, Text, Image, TouchableOpacity, ScrollView, Animated, ImageBackground, Dimensions, Platform, StatusBar, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { styles } from '../styles/theme';
@@ -8,6 +8,7 @@ import { ServiceIcon } from '../components/ServiceIcon';
 import { SectionHeader } from '../components/SectionHeader';
 import { Footer } from '../components/Footer';
 import { supabase } from '../lib/supabase';
+import { CountdownTimer } from '../components/CountdownTimer';
 
 const { width } = Dimensions.get('window');
 
@@ -17,7 +18,7 @@ const TRUST_ITEMS = [
     { icon: 'headset', label: '24/7 Support', color: '#8B5CF6' },
 ];
 
-export const LandingPage = ({ onEnterShop, cartCount, onGoToCart, onLogin, user, onGoToProfile, onNavigate, addToCart }) => {
+export const LandingPage = ({ navigation, onEnterShop, cartCount, onGoToCart, onLogin, user, onGoToProfile, onNavigate, addToCart }) => {
     const { settings } = useAppSettings();
     const scrollX = useRef(new Animated.Value(0)).current;
     const slideRef = useRef(null);
@@ -25,15 +26,81 @@ export const LandingPage = ({ onEnterShop, cartCount, onGoToCart, onLogin, user,
     const [newArrivals, setNewArrivals] = useState([]);
     const [recommended, setRecommended] = useState([]);
     const [banners, setBanners] = useState([]);
+    const [promoBanners, setPromoBanners] = useState([]);
+    const [currentPromoIndex, setCurrentPromoIndex] = useState(0);
+    const [bannerIndex, setBannerIndex] = useState(0); // Added for hero auto-slide
+    const promoFlatListRef = useRef(null);
     const [flashSale, setFlashSale] = useState([]);
     const [brands, setBrands] = useState([]);
     const [categories, setCategories] = useState([]);
 
+    // Hero Banner Auto-Slide Logic
+    useEffect(() => {
+        if (banners.length > 1) {
+            const timer = setInterval(() => {
+                setBannerIndex(prev => {
+                    const nextIndex = (prev + 1) % banners.length;
+                    slideRef.current?.scrollTo({ x: nextIndex * width, animated: true });
+                    return nextIndex;
+                });
+            }, 5000);
+            return () => clearInterval(timer);
+        }
+    }, [banners.length]);
+
+    // Promo Banner Auto-Slide Logic
+    useEffect(() => {
+        if (promoBanners.length > 1) {
+            const timer = setInterval(() => {
+                setCurrentPromoIndex(prev => {
+                    const nextIndex = (prev + 1) % promoBanners.length;
+                    promoFlatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
+                    return nextIndex;
+                });
+            }, 4000);
+            return () => clearInterval(timer);
+        }
+    }, [promoBanners.length]);
+
     useEffect(() => {
         const fetchLandingProducts = async () => {
-            // Fetch Banners
-            const { data: bannerData } = await supabase.from('banners').select('*').eq('is_active', true).order('display_order');
+            // Fetch Hero Banners
+            const { data: bannerData } = await supabase
+                .from('banners')
+                .select('*')
+                .eq('is_active', true)
+                .eq('section', 'landing') // Strictly landing section
+                .order('display_order');
+
             if (bannerData) setBanners(bannerData);
+            else setBanners([]);
+
+            // Fetch Promo Banners
+            const { data: promoData } = await supabase
+                .from('banners')
+                .select('*')
+                .eq('section', 'promo')
+                .eq('is_active', true)
+                .order('created_at', { ascending: false });
+
+            if (promoData && promoData.length > 0) {
+                const validPromos = promoData.map(promo => {
+                    let linkData = { text: promo.action_link || '', locations: ['home'] };
+                    try {
+                        const parsed = JSON.parse(promo.action_link);
+                        if (parsed && typeof parsed === 'object') {
+                            linkData = { ...linkData, ...parsed };
+                        }
+                    } catch (e) {
+                        // Fallback
+                    }
+                    return { ...promo, linkData };
+                }).filter(promo => promo.linkData.locations && promo.linkData.locations.includes('landing'));
+
+                setPromoBanners(validPromos);
+            } else {
+                setPromoBanners([]);
+            }
 
             // Fetch Categories
             const { data: catData } = await supabase.from('categories').select('*').eq('is_active', true).order('display_order');
@@ -43,7 +110,8 @@ export const LandingPage = ({ onEnterShop, cartCount, onGoToCart, onLogin, user,
             const { data: brandsData, error: brandsError } = await supabase.from('brands').select('*').eq('is_active', true).order('created_at', { ascending: false });
             if (brandsError) console.log('LandingPage: Error fetching brands', brandsError);
             if (brandsData) {
-                console.log('LandingPage: Fetched Brands', brandsData.length);
+                // Log count for debugging
+                // console.log('LandingPage: Fetched Brands', brandsData.length);
                 setBrands(brandsData);
             }
 
@@ -66,7 +134,8 @@ export const LandingPage = ({ onEnterShop, cartCount, onGoToCart, onLogin, user,
 
             if (newError) console.log('LandingPage: Error fetching new arrivals', newError);
             if (newProds) {
-                console.log('LandingPage: Fetched New Arrivals', newProds.length);
+                // Log count for debugging
+                // console.log('LandingPage: Fetched New Arrivals', newProds.length);
                 setNewArrivals(newProds);
             }
 
@@ -128,30 +197,148 @@ export const LandingPage = ({ onEnterShop, cartCount, onGoToCart, onLogin, user,
                 {banners.length > 0 && (
                     <View style={{ height: 220, marginTop: 16 }}>
                         <Animated.ScrollView
+                            ref={slideRef}
                             horizontal
                             pagingEnabled
                             showsHorizontalScrollIndicator={false}
-                            onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: false })}
+                            onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], {
+                                useNativeDriver: false
+                            })}
+                            onMomentumScrollEnd={(e) => {
+                                const index = Math.round(e.nativeEvent.contentOffset.x / width);
+                                if (index !== bannerIndex) {
+                                    setBannerIndex(index);
+                                }
+                            }}
+                            scrollEventThrottle={16}
                         >
                             {banners.map((item, index) => (
                                 <TouchableOpacity key={index} activeOpacity={0.9} onPress={onEnterShop} style={{ width: width, paddingHorizontal: 16 }}>
                                     <ImageBackground
-                                        source={{ uri: item.image_url }}
-                                        style={{ width: '100%', height: '100%', borderRadius: 24, overflow: 'hidden', justifyContent: 'center', padding: 24 }}
+                                        source={{ uri: item?.image_url }}
+                                        style={{ width: '100%', height: '100%', borderRadius: 24, overflow: 'hidden' }}
                                         resizeMode="cover"
                                     >
-                                        <View style={{ backgroundColor: 'rgba(15, 23, 42, 0.4)', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
-                                        <View>
-                                            <Text style={{ color: 'white', fontWeight: '900', fontSize: 32, lineHeight: 36 }}>{item.title}</Text>
-                                            <Text style={{ color: 'rgba(255,255,255,0.9)', fontWeight: '600', fontSize: 14, marginBottom: 16, marginTop: 4 }}>{item.subtitle}</Text>
-                                            <View style={{ backgroundColor: 'white', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12, alignSelf: 'flex-start', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',shadowRadius: 10 }}>
-                                                <Text style={{ fontWeight: '800', color: '#0F172A', fontSize: 13 }}>DISCOVER NOW</Text>
-                                            </View>
-                                        </View>
+                                        {/* REMOVED TEXT OVERLAY AS REQUESTED */}
                                     </ImageBackground>
                                 </TouchableOpacity>
                             ))}
                         </Animated.ScrollView>
+                        {/* Dots Indicator */}
+                        <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 12 }}>
+                            {banners.map((_, i) => {
+                                const opacity = scrollX.interpolate({
+                                    inputRange: [(i - 1) * width, i * width, (i + 1) * width],
+                                    outputRange: [0.3, 1, 0.3],
+                                    extrapolate: 'clamp'
+                                });
+                                const dotWidth = scrollX.interpolate({
+                                    inputRange: [(i - 1) * width, i * width, (i + 1) * width],
+                                    outputRange: [6, 20, 6],
+                                    extrapolate: 'clamp'
+                                });
+                                return <Animated.View key={i} style={{ height: 6, width: dotWidth, borderRadius: 3, backgroundColor: '#0F172A', marginHorizontal: 3, opacity }} />;
+                            })}
+                        </View>
+                    </View>
+                )}
+
+                {/* DYNAMIC PROMO BANNERS CAROUSEL */}
+                {promoBanners.length > 0 && (
+                    <View style={{ marginTop: 20 }}>
+                        <FlatList
+                            ref={promoFlatListRef}
+                            data={promoBanners}
+                            horizontal
+                            pagingEnabled
+                            showsHorizontalScrollIndicator={false}
+                            snapToInterval={width}
+                            decelerationRate="fast"
+                            scrollEventThrottle={16}
+                            onMomentumScrollEnd={(e) => {
+                                const index = Math.round(e.nativeEvent.contentOffset.x / width);
+                                if (index !== currentPromoIndex) {
+                                    setCurrentPromoIndex(index);
+                                }
+                            }}
+                            keyExtractor={(item) => item.id.toString()}
+                            renderItem={({ item: promo }) => (
+                                <TouchableOpacity
+                                    activeOpacity={0.9}
+                                    onPress={() => {
+                                        if (promo.linkData?.productId) {
+                                            supabase.from('products').select('*').eq('id', promo.linkData.productId).single()
+                                                .then(({ data }) => {
+                                                    if (data) {
+                                                        const promoDiscount = promo.linkData.discountValue ? {
+                                                            type: promo.linkData.discountType || 'percent',
+                                                            value: promo.linkData.discountValue
+                                                        } : null;
+                                                        navigation.navigate('ProductDetails', { product: { ...data, promoDiscount } });
+                                                    } else {
+                                                        onEnterShop();
+                                                    }
+                                                }).catch(() => onEnterShop());
+                                        } else {
+                                            onEnterShop();
+                                        }
+                                    }}
+                                    style={{ width: width - 32, marginHorizontal: 16, borderRadius: 24, overflow: 'hidden', height: 140, backgroundColor: '#0F172A', boxShadow: '0px 8px 20px rgba(0,0,0,0.15)', shadowRadius: 15 }}
+                                >
+                                    <Image
+                                        source={{ uri: promo.image_url || 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?q=80&w=2670&auto=format&fit=crop' }}
+                                        style={{ width: '100%', height: '100%', position: 'absolute', opacity: 0.5 }}
+                                        resizeMode="cover"
+                                    />
+                                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)' }} />
+
+                                    <View style={{ padding: 20, justifyContent: 'center', height: '100%' }}>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                            <View style={{ flex: 1 }}>
+                                                <View style={{ backgroundColor: '#EF4444', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginBottom: 8 }}>
+                                                    <Text style={{ color: 'white', fontWeight: '900', fontSize: 10, letterSpacing: 1 }}>
+                                                        {promo.subtitle?.toUpperCase() || 'LIMITED OFFER'}
+                                                    </Text>
+                                                </View>
+                                                <Text style={{ fontSize: 20, fontWeight: '900', color: 'white', marginBottom: 4, lineHeight: 24, paddingRight: 10 }}>
+                                                    {promo.title || 'Special Promotion'}
+                                                </Text>
+                                            </View>
+
+                                            {promo.linkData?.timerEnd && (
+                                                <View style={{ backgroundColor: 'rgba(255,255,255,0.15)', padding: 10, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', alignItems: 'center' }}>
+                                                    <Text style={{ color: 'white', fontSize: 9, fontWeight: '800', marginBottom: 4, letterSpacing: 1 }}>ENDS IN</Text>
+                                                    <CountdownTimer targetDate={promo.linkData.timerEnd} lightMode={true} />
+                                                </View>
+                                            )}
+                                        </View>
+
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                                            <Text style={{ color: '#F8FAFC', fontWeight: '700', fontSize: 13 }}>
+                                                {promo.linkData?.text || 'Explore Offer'}
+                                            </Text>
+                                            <Ionicons name="arrow-forward" size={14} color="#F8FAFC" />
+                                        </View>
+                                    </View>
+                                </TouchableOpacity>
+                            )}
+                        />
+                        {/* Pagination Dots */}
+                        {promoBanners.length > 1 && (
+                            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 12 }}>
+                                {promoBanners.map((_, i) => (
+                                    <View
+                                        key={i}
+                                        style={{
+                                            width: currentPromoIndex === i ? 20 : 6,
+                                            height: 6,
+                                            borderRadius: 3,
+                                            backgroundColor: currentPromoIndex === i ? '#3B82F6' : '#E2E8F0',
+                                        }}
+                                    />
+                                ))}
+                            </View>
+                        )}
                     </View>
                 )}
 
@@ -168,15 +355,15 @@ export const LandingPage = ({ onEnterShop, cartCount, onGoToCart, onLogin, user,
                     <View style={[styles.catSection, { marginTop: 10 }]}>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16 }}>
                             {categories.map((cat) => (
-                                <TouchableOpacity key={cat.id} style={styles.catItem} onPress={onEnterShop}>
+                                <TouchableOpacity key={cat?.id} style={styles.catItem} onPress={onEnterShop}>
                                     <View style={[styles.catIconBox, { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#F1F5F9' }]}>
-                                        {cat.image_url ? (
+                                        {cat?.image_url ? (
                                             <Image source={{ uri: cat.image_url }} style={{ width: 32, height: 32, borderRadius: 16 }} />
                                         ) : (
                                             <Ionicons name="grid-outline" size={20} color="#64748B" />
                                         )}
                                     </View>
-                                    <Text style={[styles.catName, { fontWeight: '700' }]}>{cat.name}</Text>
+                                    <Text style={[styles.catName, { fontWeight: '700' }]}>{cat?.name || 'Category'}</Text>
                                 </TouchableOpacity>
                             ))}
                         </ScrollView>
@@ -196,14 +383,14 @@ export const LandingPage = ({ onEnterShop, cartCount, onGoToCart, onLogin, user,
 
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 16 }}>
                             {flashSale.map((item, i) => (
-                                <TouchableOpacity key={i} style={[styles.recCard, { width: 160, borderRadius: 20, padding: 0, overflow: 'hidden' }]} onPress={onEnterShop}>
-                                    <Image source={{ uri: item.images ? item.images[0] : 'https://placehold.co/200' }} style={{ width: '100%', height: 160 }} />
+                                <TouchableOpacity key={i} style={[styles.recCard, { width: 160, borderRadius: 20, padding: 0, overflow: 'hidden' }]} onPress={() => navigation.navigate('ProductDetails', { product: item })}>
+                                    <Image source={{ uri: item?.images?.[0] || 'https://placehold.co/200' }} style={{ width: '100%', height: 160 }} />
                                     <View style={{ position: 'absolute', top: 12, left: 12, backgroundColor: '#EF4444', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
-                                        <Text style={{ color: 'white', fontSize: 11, fontWeight: '900' }}>-{item.discount}%</Text>
+                                        <Text style={{ color: 'white', fontSize: 11, fontWeight: '900' }}>-{item?.discount || 0}%</Text>
                                     </View>
                                     <View style={{ padding: 12 }}>
-                                        <Text style={{ fontWeight: '700', fontSize: 14, color: '#0F172A' }} numberOfLines={1}>{item.name}</Text>
-                                        <Text style={{ fontWeight: '900', fontSize: 16, color: '#3B82F6', marginTop: 4 }}>₦{item.price ? item.price.toLocaleString() : '0'}</Text>
+                                        <Text style={{ fontWeight: '700', fontSize: 14, color: '#0F172A' }} numberOfLines={1}>{item?.name}</Text>
+                                        <Text style={{ fontWeight: '900', fontSize: 16, color: '#3B82F6', marginTop: 4 }}>₦{item?.price ? item.price.toLocaleString() : '0'}</Text>
                                     </View>
                                 </TouchableOpacity>
                             ))}
@@ -218,10 +405,10 @@ export const LandingPage = ({ onEnterShop, cartCount, onGoToCart, onLogin, user,
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 24 }}>
                             {brands.map((brand, i) => (
                                 <TouchableOpacity key={i} style={{ alignItems: 'center' }} onPress={onEnterShop}>
-                                    <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: 'white', padding: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',shadowRadius: 10 }}>
-                                        <Image source={{ uri: brand.logo_url }} style={{ width: 48, height: 48, resizeMode: 'contain' }} />
+                                    <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: 'white', padding: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', shadowRadius: 10 }}>
+                                        <Image source={{ uri: brand?.logo_url || 'https://placehold.co/100' }} style={{ width: 48, height: 48, resizeMode: 'contain' }} />
                                     </View>
-                                    <Text style={{ marginTop: 10, fontSize: 13, fontWeight: '800', color: '#1E293B' }}>{brand.name}</Text>
+                                    <Text style={{ marginTop: 10, fontSize: 13, fontWeight: '800', color: '#1E293B' }}>{brand?.name || 'Brand'}</Text>
                                 </TouchableOpacity>
                             ))}
                         </ScrollView>
@@ -234,13 +421,13 @@ export const LandingPage = ({ onEnterShop, cartCount, onGoToCart, onLogin, user,
                         <SectionHeader title="New Arrivals" action="View All" />
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16 }}>
                             {newArrivals.map((item, i) => (
-                                <TouchableOpacity key={i} style={styles.newArrivalCard} onPress={onEnterShop}>
+                                <TouchableOpacity key={i} style={styles.newArrivalCard} onPress={() => navigation.navigate('ProductDetails', { product: item })}>
                                     <Image
-                                        source={{ uri: item.images && item.images[0] ? item.images[0] : 'https://placehold.co/200' }}
+                                        source={{ uri: item?.images?.[0] || 'https://placehold.co/200' }}
                                         style={styles.newArrivalImg}
                                     />
                                     <View style={styles.newArrivalOverlay}>
-                                        <Text style={styles.newArrivalPrice}>₦{item.price ? item.price.toLocaleString() : '0'}</Text>
+                                        <Text style={styles.newArrivalPrice}>₦{item?.price ? item.price.toLocaleString() : '0'}</Text>
                                     </View>
                                 </TouchableOpacity>
                             ))}
@@ -254,14 +441,14 @@ export const LandingPage = ({ onEnterShop, cartCount, onGoToCart, onLogin, user,
                         <SectionHeader title="Recommended For You" />
                         <View style={styles.grid2Col}>
                             {recommended.map((item, i) => (
-                                <TouchableOpacity key={i} style={styles.recCard} onPress={onEnterShop}>
+                                <TouchableOpacity key={i} style={styles.recCard} onPress={() => navigation.navigate('ProductDetails', { product: item })}>
                                     <Image
-                                        source={{ uri: item.images && item.images[0] ? item.images[0] : 'https://placehold.co/200' }}
+                                        source={{ uri: item?.images?.[0] || 'https://placehold.co/200' }}
                                         style={styles.recImg}
                                     />
                                     <View style={styles.recContent}>
-                                        <Text style={styles.recName} numberOfLines={2}>{item.name}</Text>
-                                        <Text style={styles.recPrice}>₦{item.price ? item.price.toLocaleString() : '0'}</Text>
+                                        <Text style={styles.recName} numberOfLines={2}>{item?.name}</Text>
+                                        <Text style={styles.recPrice}>₦{item?.price ? item.price.toLocaleString() : '0'}</Text>
                                     </View>
                                 </TouchableOpacity>
                             ))}

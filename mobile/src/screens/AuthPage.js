@@ -8,7 +8,9 @@ import { sendOtpEmail } from '../services/simpleEmailService';
 
 import { useAppSettings } from '../context/AppSettingsContext';
 
-export const AuthPage = ({ onBack, onLoginSuccess }) => {
+export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
+    const { params } = route || {};
+    const codeFromLink = params?.code;
     const { settings } = useAppSettings();
 
     // UI State
@@ -17,8 +19,7 @@ export const AuthPage = ({ onBack, onLoginSuccess }) => {
     const [timer, setTimer] = useState(0);
 
     // Form State
-    // Form State
-    const [isLogin, setIsLogin] = useState(true);
+    const [isLogin, setIsLogin] = useState(!codeFromLink); // If code exists, default to Sign Up
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [fullName, setFullName] = useState('');
@@ -26,8 +27,35 @@ export const AuthPage = ({ onBack, onLoginSuccess }) => {
     const [showPassword, setShowPassword] = useState(false);
     const [otp, setOtp] = useState('');
     const [generatedOtp, setGeneratedOtp] = useState(null); // [NEW] Custom OTP
+    const [referralCode, setReferralCode] = useState(codeFromLink || ''); // [NEW] Referral Code state
+    const [referrerName, setReferrerName] = useState(null); // [NEW] Inviter name state
 
-    // ...
+    // [NEW] Referrer Detection Logic
+    useEffect(() => {
+        if (referralCode && referralCode.length >= 6) {
+            checkReferrer();
+        } else {
+            setReferrerName(null);
+        }
+    }, [referralCode]);
+
+    const checkReferrer = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('full_name')
+                .eq('referral_code', referralCode.toUpperCase())
+                .single();
+
+            if (data && data.full_name) {
+                setReferrerName(data.full_name);
+            } else {
+                setReferrerName(null);
+            }
+        } catch (e) {
+            setReferrerName(null);
+        }
+    };
 
     const handleAuthAction = async () => {
         if (!email || !password) {
@@ -91,18 +119,21 @@ export const AuthPage = ({ onBack, onLoginSuccess }) => {
                 Alert.alert('Verify Email', `We've sent a 6-digit code to ${email}.\n\nPlease check your Inbox and SPAM folder.`);
             }
         } catch (error) {
-            console.error("[Login/Signup Error]:", error);
+            console.log("[Login/Signup Error]:", error?.message || error);
 
-            // Handle Unconfirmed Email specific case
-            if (error.message.includes('Email not confirmed')) {
+            // Extract error message safely
+            const errorMessage = error?.message || (error?.error_description) || "Authentication failed.";
+
+            // Handle specific cases for better UX
+            if (errorMessage.includes('Email not confirmed')) {
                 Alert.alert(
                     '📧 Verification Required',
                     'You are trying to Login, but this email has not been verified yet.\n\nSince "Confirm Email" is active on the server, you MUST click the link sent to your email by Supabase to activate your account.'
                 );
-            } else if (error.message.includes('Invalid login credentials')) {
-                Alert.alert('Login Failed', 'Incorrect email or password.');
+            } else if (errorMessage.toLowerCase().includes('invalid login credentials')) {
+                Alert.alert('Login Failed', 'Incorrect email or password. Please try again.');
             } else {
-                Alert.alert('Authentication Failed', error.message);
+                Alert.alert('Authentication Failed', errorMessage);
             }
         } finally {
             setLoading(false);
@@ -179,6 +210,37 @@ export const AuthPage = ({ onBack, onLoginSuccess }) => {
                         is_verified: true, // Since we verified OTP
                         is_banned: false
                     }]);
+
+                if (profileError) throw profileError;
+
+                // [NEW] Secure Referral Logic via RPC
+                if (referralCode.trim()) {
+                    console.log("[DEBUG] Processing Referral Code via Secure RPC:", referralCode);
+
+                    // 1. Find the referrer by code first
+                    const { data: referrer, error: findError } = await supabase
+                        .from('profiles')
+                        .select('id')
+                        .eq('referral_code', referralCode.trim().toUpperCase())
+                        .single();
+
+                    if (referrer && referrer.id !== user.id) {
+                        console.log("[DEBUG] Valid Referrer Found, Calling RPC...");
+
+                        const { data: rpcRes, error: rpcError } = await supabase.rpc('process_referral_reward', {
+                            p_new_user_id: user.id,
+                            p_referrer_id: referrer.id
+                        });
+
+                        if (rpcError) {
+                            console.error("[RPC ERROR] process_referral_reward failed:", rpcError);
+                        } else {
+                            console.log("[RPC SUCCESS] Referral rewards processed:", rpcRes);
+                        }
+                    } else {
+                        console.log("[DEBUG] No valid referrer found or self-referral.");
+                    }
+                }
 
                 // ... (rest of profile setup)
                 // Create Wallet (Manually, since we removed the trigger)
@@ -259,6 +321,16 @@ export const AuthPage = ({ onBack, onLoginSuccess }) => {
 
                 <View style={styles.authCard}>
 
+                    {/* [NEW] Referral Welcome Message */}
+                    {!otpSent && !isLogin && referrerName && (
+                        <View style={{ backgroundColor: '#ECFDF5', padding: 12, borderRadius: 16, marginBottom: 20, flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: '#10B981' }}>
+                            <Ionicons name="gift" size={20} color="#10B981" />
+                            <Text style={{ color: '#065F46', fontWeight: '800', fontSize: 13 }}>
+                                {referrerName} invited you! Join and get 500 AMC.
+                            </Text>
+                        </View>
+                    )}
+
                     {!otpSent ? (
                         <>
                             {/* NORMAL AUTH FORM */}
@@ -281,6 +353,16 @@ export const AuthPage = ({ onBack, onLoginSuccess }) => {
                                             value={phone}
                                             onChangeText={setPhone}
                                             keyboardType="phone-pad"
+                                        />
+                                    </View>
+                                    <View style={styles.inputGroup}>
+                                        <Text style={styles.label}>Referral Code (Optional)</Text>
+                                        <TextInput
+                                            style={styles.modernInput}
+                                            placeholder="ABU-XXXXXX"
+                                            value={referralCode}
+                                            onChangeText={setReferralCode}
+                                            autoCapitalize="characters"
                                         />
                                     </View>
                                 </>

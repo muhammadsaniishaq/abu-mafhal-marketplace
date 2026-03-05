@@ -4,10 +4,12 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../../lib/supabase';
 import { decode } from 'base64-arraybuffer'; // Import decode
+import * as FileSystem from 'expo-file-system'; // Add Import
 
 
 import { styles } from '../../styles/theme';
 import { geminiService } from '../../services/geminiService'; // Import Gemini Service
+import { parsePrice } from '../../utils/helpers';
 
 export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => {
     const isEditing = !!initialData;
@@ -152,6 +154,38 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
         }
     };
 
+    const uploadVideo = async () => {
+        if (!video) return null;
+        if (video.startsWith('http')) return video;
+
+        try {
+            // Check if file still exists before attempting to read/upload
+            const fileInfo = await FileSystem.getInfoAsync(video);
+            if (!fileInfo.exists) {
+                console.log("AdminAddProduct: Video file no longer exists at path:", video);
+                // Non-fatal, just log and skip
+                return null;
+            }
+
+            const fileName = `video_admin_${Date.now()}.mp4`;
+            const fileBase64 = await FileSystem.readAsStringAsync(video, { encoding: 'base64' });
+            const arrayBuffer = decode(fileBase64);
+
+            const { error } = await supabase.storage.from('products').upload(fileName, arrayBuffer, {
+                contentType: 'video/mp4',
+                upsert: false
+            });
+
+            if (error) throw error;
+
+            const { data } = supabase.storage.from('products').getPublicUrl(fileName);
+            return data.publicUrl;
+        } catch (e) {
+            console.log("Admin Video Upload Error:", e);
+            return null;
+        }
+    };
+
     const handleSubmit = async () => {
         const missing = [];
         if (!formData.name) missing.push('Name');
@@ -163,6 +197,22 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
             return;
         }
 
+        // High price validation to prevent accidental 1000x multiplier
+        const p = parseFloat(formData.price.replace(/,/g, ''));
+        if (p > 10000000) { // 10 Million
+            const proceed = await new Promise(resolve => {
+                Alert.alert(
+                    'High Price Warning',
+                    `You entered ₦${p.toLocaleString()}. Is this correct?`,
+                    [
+                        { text: 'No, Edit', onPress: () => resolve(false), style: 'cancel' },
+                        { text: 'Yes, Save', onPress: () => resolve(true) }
+                    ]
+                );
+            });
+            if (!proceed) return;
+        }
+
         setLoading(true);
         try {
             // Get Current User (Vendor)
@@ -172,9 +222,7 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
             const imageUrls = await uploadImages(); // Real upload
             // const imageUrls = await uploadImageMock(); // Mock upload
 
-            // Video upload logic would go here. For now we save the URI if local or utilize a mock URL if strictly needing a remote one.
-            // In a real app, you'd upload `video` to storage similar to images.
-            const videoUrl = video;
+            const videoUrl = await uploadVideo(); // Real upload
 
             const productData = {
                 vendor_id: user.id, // Fixed: Add vendor_id
@@ -182,14 +230,14 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
                 description: formData.description,
                 category: formData.category,
                 brand: formData.brand,
-                price: parseFloat(formData.price),
-                // video: videoUrl, // Moved to metadata
-                original_price: parseFloat(formData.originalPrice) || null,
-                cost: parseFloat(formData.cost) || null,
+                price: parsePrice(formData.price),
+                original_price: parsePrice(formData.originalPrice) || null,
+                cost: parsePrice(formData.cost) || null,
                 stock_quantity: parseInt(formData.stock) || 0,
                 sku: formData.sku,
                 // barcode: formData.barcode, // Removed top-level
                 images: imageUrls,
+                video_url: videoUrl, // Standardize top-level field
                 status: formData.status,
                 is_affiliate: formData.isAffiliate,
                 affiliate_link: formData.affiliateLink,

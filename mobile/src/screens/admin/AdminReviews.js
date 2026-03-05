@@ -14,17 +14,27 @@ export const AdminReviews = () => {
     }, [filter]);
 
     const fetchReviews = async () => {
-        setLoading(true);
-        // Assuming products table exists, join if possible, else just show ID
-        const { data, error } = await supabase
-            .from('reviews')
-            .select('*, user:profiles(full_name)')
-            .eq('status', filter)
-            .order('created_at', { ascending: false });
+        try {
+            setLoading(true);
+            const { data, error } = await supabase
+                .from('reviews')
+                .select('*, user:profiles(full_name)')
+                .eq('status', filter)
+                .order('created_at', { ascending: false })
+                .limit(100);
 
-        if (error) console.log(error);
-        setReviews(data || []);
-        setLoading(false);
+            if (error) {
+                console.error("Fetch Reviews Error:", error);
+                Alert.alert('Error', 'Failed to fetch reviews.');
+            } else {
+                setReviews(data || []);
+            }
+        } catch (err) {
+            console.error("Fetch Reviews Crash:", err);
+            Alert.alert('Network Error', 'Could not connect to review server.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleAction = async (id, status) => {

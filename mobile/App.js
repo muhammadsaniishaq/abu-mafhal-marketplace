@@ -7,6 +7,7 @@ import { AppSettingsProvider } from './src/context/AppSettingsContext';
 import { supabase } from './src/lib/supabase';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Screens
 import { LandingPage } from './src/screens/LandingPage';
@@ -21,34 +22,72 @@ import { ChatScreen } from './src/screens/ChatScreen';
 import { ConversationsScreen } from './src/screens/ConversationsScreen';
 import { TrackOrderPage } from './src/screens/TrackOrderPage';
 import { InvoicePage } from './src/screens/InvoicePage';
+import { CheckoutPage } from './src/screens/CheckoutPage';
+import { AddressPage } from './src/screens/AddressPage';
 
 const Stack = createNativeStackNavigator();
+
+const linking = {
+    prefixes: ['abumafhal://', 'https://abumafhal.com', 'http://abumafhal.com'],
+    config: {
+        screens: {
+            Auth: 'join/:code',
+            Landing: '',
+            Main: 'main',
+        },
+    },
+};
 
 export default function App() {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [cartLines, setCartLines] = useState([]);
 
+    const CART_STORAGE_KEY = '@abumafhal_cart_v1';
+
     useEffect(() => {
-        supabase.auth.getSession().then(({ data: { session } }) => {
+        // Load session and cart
+        const init = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
             if (session?.user) {
-                fetchUserProfile(session.user.id);
-            } else {
-                setLoading(false);
+                await fetchUserProfile(session.user.id);
             }
-        });
+
+            try {
+                const savedCart = await AsyncStorage.getItem(CART_STORAGE_KEY);
+                if (savedCart) {
+                    setCartLines(JSON.parse(savedCart));
+                }
+            } catch (e) {
+                console.error('Error loading cart:', e);
+            }
+            setLoading(false);
+        };
+
+        init();
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
             if (session?.user) {
                 fetchUserProfile(session.user.id);
             } else {
                 setUser(null);
-                setLoading(false);
             }
         });
 
         return () => subscription.unsubscribe();
     }, []);
+
+    // Save cart whenever it changes
+    useEffect(() => {
+        const saveCart = async () => {
+            try {
+                await AsyncStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartLines));
+            } catch (e) {
+                console.error('Error saving cart:', e);
+            }
+        };
+        if (!loading) saveCart();
+    }, [cartLines, loading]);
 
     const fetchUserProfile = async (userId) => {
         const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
@@ -84,7 +123,7 @@ export default function App() {
         <GestureHandlerRootView style={{ flex: 1 }}>
             <SafeAreaProvider style={{ flex: 1 }}>
                 <AppSettingsProvider>
-                    <NavigationContainer>
+                    <NavigationContainer linking={linking}>
                         <Stack.Navigator screenOptions={{ headerShown: false, detachInactiveScreens: false }}>
                             {!user ? (
                                 <>
@@ -134,11 +173,17 @@ export default function App() {
                                     <Stack.Screen name="ProductDetails">
                                         {props => <ProductDetails {...props} addToCart={handleAddToCart} />}
                                     </Stack.Screen>
-                                    <Stack.Screen name="VendorRegister" component={VendorRegister} />
+                                    <Stack.Screen name="VendorRegister">
+                                        {props => <VendorRegister {...props} user={user} onBack={() => props.navigation.goBack()} />}
+                                    </Stack.Screen>
                                     <Stack.Screen name="ChatScreen" component={ChatScreen} />
                                     <Stack.Screen name="ConversationsScreen" component={ConversationsScreen} />
                                     <Stack.Screen name="TrackOrder" component={TrackOrderPage} />
                                     <Stack.Screen name="Invoice" component={InvoicePage} />
+                                    <Stack.Screen name="CheckoutPage">
+                                        {props => <CheckoutPage {...props} onClearCart={handleClearCart} />}
+                                    </Stack.Screen>
+                                    <Stack.Screen name="AddressPage" component={AddressPage} />
                                 </>
                             )}
                         </Stack.Navigator>

@@ -7,6 +7,13 @@ import { VendorRegister } from './VendorRegister';
 import { VendorCertificate } from './VendorCertificate';
 import { VendorAddProduct } from './VendorAddProduct'; // Dedicated Vendor Editor
 
+// New Sub-Components
+import { VendorOverview } from './VendorOverview';
+import { VendorProducts } from './VendorProducts';
+import { VendorOrders } from './VendorOrders';
+import { VendorWallet } from './VendorWallet';
+import { UserAvatar } from '../components/UserAvatar';
+
 export const VendorDashboard = ({ user, onLogout }) => {
     // Tab State
     const [activeTab, setActiveTab] = useState('overview'); // overview, products, orders, wallet
@@ -55,7 +62,13 @@ export const VendorDashboard = ({ user, onLogout }) => {
         try {
             // 1. Fetch Vendor Profile
             const { data: vendorData } = await supabase.from('vendors').select('*').eq('user_id', user.id).single();
-            if (vendorData) setVendor(vendorData);
+
+            let deliveryType = vendorData?.delivery_type || 'marketplace';
+            if (!vendorData?.delivery_type) {
+                const { data: appData } = await supabase.from('vendor_applications').select('delivery_type').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+                if (appData?.delivery_type) deliveryType = appData.delivery_type;
+            }
+            if (vendorData) setVendor({ ...vendorData, delivery_type: deliveryType });
 
             // 2. Fetch Wallet
             const { data: walletData } = await supabase.from('wallets').select('*').eq('user_id', user.id).maybeSingle();
@@ -71,29 +84,46 @@ export const VendorDashboard = ({ user, onLogout }) => {
 
             setProducts(productsData || []);
 
-            // 4. Fetch Orders (simplified)
+            // 4. Fetch Orders Securely
             if (productsData?.length > 0) {
-                const productIds = productsData.map(p => p.id);
-                const { data: orderItems } = await supabase
-                    .from('order_items')
-                    .select('*, order:orders(*, user:profiles(full_name, email))')
-                    .in('product_id', productIds)
-                    .order('created_at', { ascending: false });
+                const { data: fetchedOrders, error: orderErr } = await supabase.rpc('get_vendor_dashboard_orders', {
+                    p_vendor_id: user.id
+                });
 
-                const formattedOrders = orderItems?.map(item => ({
-                    id: item.order?.id,
-                    customerName: item.order?.user?.full_name || item.order?.user?.email || 'Customer',
-                    item: productsData.find(p => p.id === item.product_id)?.name || 'Product',
-                    quantity: item.quantity,
-                    amount: item.price * item.quantity,
-                    status: item.order?.status || 'Pending',
-                    date: new Date(item.created_at).toLocaleDateString(),
-                    raw_date: item.created_at
-                })) || [];
+                let pendingBal = 0;
+                let totalEarnings = 0;
+
+                const formattedOrders = (fetchedOrders || []).map(item => {
+                    const status = item.status || 'pending';
+                    const amount = item.amount || 0;
+
+                    if (status.toLowerCase() === 'delivered') {
+                        totalEarnings += amount;
+                    } else if (!['cancelled', 'refunded'].includes(status.toLowerCase())) {
+                        // Count non-delivered, non-cancelled orders as pending
+                        pendingBal += amount;
+                    }
+
+                    return {
+                        id: item.id,
+                        customerName: item.customerName,
+                        item: item.item,
+                        quantity: item.quantity,
+                        amount: amount,
+                        status: status,
+                        date: new Date(item.raw_date).toLocaleDateString(),
+                        raw_date: item.raw_date
+                    };
+                });
 
                 setOrders(formattedOrders);
 
-                const totalEarnings = formattedOrders.reduce((sum, o) => sum + (o.status === 'Delivered' ? o.amount : 0), 0);
+                // Merge: use pending from order calc, use balance from DB (which includes delivered earnings via trigger)
+                setWallet(prev => ({
+                    ...prev,
+                    pending_balance: pendingBal
+                }));
+
                 setStats({
                     earnings: totalEarnings,
                     orders: formattedOrders.length,
@@ -108,6 +138,28 @@ export const VendorDashboard = ({ user, onLogout }) => {
             setLoading(false);
             setRefreshing(false);
         }
+    };
+
+    const handleUpdateOrderStatus = async (orderId, newStatus) => {
+        Alert.alert('Update Order', `Mark this order as ${newStatus}?`, [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Yes', onPress: async () => {
+                    setLoading(true);
+                    const { error } = await supabase.rpc('update_vendor_order_status', {
+                        p_order_id: orderId,
+                        p_vendor_id: user.id,
+                        p_new_status: newStatus
+                    });
+                    if (!error) {
+                        fetchDashboardData();
+                    } else {
+                        Alert.alert('Error', error.message);
+                        setLoading(false);
+                    }
+                }
+            }
+        ]);
     };
 
     const handleDeleteProduct = async (id) => {
@@ -176,9 +228,11 @@ export const VendorDashboard = ({ user, onLogout }) => {
             <View style={{ paddingHorizontal: 20, marginTop: 20 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Image
-                            source={{ uri: vendor?.logo_url || user?.user_metadata?.avatar_url || 'https://ui-avatars.com/api/?name=Vendor' }}
-                            style={{ width: 60, height: 60, borderRadius: 30, borderWidth: 2, borderColor: 'white' }}
+                        <UserAvatar
+                            user={user}
+                            sourceUrl={vendor?.logo_url}
+                            size={60}
+                            border="white"
                         />
                         <View style={{ marginLeft: 16 }}>
                             <Text style={{ color: 'white', fontSize: 18, fontWeight: '800' }}>{vendor?.business_name || 'My Business'}</Text>
@@ -220,250 +274,6 @@ export const VendorDashboard = ({ user, onLogout }) => {
         </View>
     );
 
-    const renderProducts = () => {
-        // Simple Filter Logic matching Admin
-        const filteredProducts = products.filter(p => {
-            const matchesSearch = p.name?.toLowerCase().includes(search.toLowerCase());
-            const stock = p.stock_quantity || 0;
-            let matchesStock = true;
-            if (stockFilter === 'low') matchesStock = stock > 0 && stock < 10;
-            if (stockFilter === 'out') matchesStock = stock === 0;
-            return matchesSearch && matchesStock;
-        });
-
-        return (
-            <View style={{ flex: 1, padding: 20 }}>
-                {/* Search & Filters */}
-                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
-                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 12, height: 46, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                        <Ionicons name="search" size={18} color="#94A3B8" />
-                        <TextInput
-                            placeholder="Search products..."
-                            placeholderTextColor="#94A3B8"
-                            value={search}
-                            onChangeText={setSearch}
-                            style={{ flex: 1, marginLeft: 10, fontSize: 14, fontWeight: '500', color: '#0F172A', height: '100%' }}
-                        />
-                    </View>
-
-                    <TouchableOpacity
-                        onPress={() => {
-                            if (stockFilter === 'all') setStockFilter('low');
-                            else if (stockFilter === 'low') setStockFilter('out');
-                            else setStockFilter('all');
-                        }}
-                        style={{
-                            width: 46, height: 46,
-                            backgroundColor: stockFilter === 'all' ? 'white' : '#EFF6FF',
-                            borderWidth: 1,
-                            borderColor: stockFilter === 'all' ? '#E2E8F0' : '#3B82F6',
-                            borderRadius: 12,
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                        }}
-                    >
-                        <Ionicons name="filter" size={20} color={stockFilter === 'all' ? '#64748B' : '#3B82F6'} />
-                    </TouchableOpacity>
-                </View>
-
-                {stockFilter !== 'all' && (
-                    <View style={{ flexDirection: 'row', marginBottom: 12 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#EFF6FF', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: '#DBEAFE' }}>
-                            <Text style={{ color: '#3B82F6', fontSize: 12, fontWeight: '600' }}>
-                                Filter: {stockFilter === 'low' ? 'Low Stock' : 'Out of Stock'}
-                            </Text>
-                            <TouchableOpacity onPress={() => setStockFilter('all')} style={{ marginLeft: 8 }}>
-                                <Ionicons name="close-circle" size={16} color="#3B82F6" />
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                )}
-
-                <TouchableOpacity
-                    style={localStyles.actionBtn}
-                    onPress={() => { setSelectedProduct(null); setViewMode('add-product'); }}
-                >
-                    <Ionicons name="add-circle" size={24} color="white" />
-                    <Text style={{ color: 'white', fontWeight: '700', marginLeft: 8 }}>Add New Product</Text>
-                </TouchableOpacity>
-
-                <FlatList
-                    data={filteredProducts}
-                    keyExtractor={item => item.id}
-                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchDashboardData(); }} />}
-                    renderItem={({ item }) => (
-                        <View style={localStyles.productCard}>
-                            <Image
-                                source={{ uri: item.image_url || (item.images && item.images[0]) || 'https://via.placeholder.com/150' }}
-                                style={{ width: 80, height: 80, borderRadius: 8, backgroundColor: '#F1F5F9' }}
-                            />
-                            <View style={{ flex: 1, marginLeft: 16 }}>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                                    <Text style={{ fontWeight: '700', fontSize: 14, color: '#0F172A', flex: 1 }} numberOfLines={1}>{item.name}</Text>
-                                    {item.status === 'draft' && <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '700', backgroundColor: '#F1F5F9', paddingHorizontal: 6, borderRadius: 4 }}>DRAFT</Text>}
-                                </View>
-                                <Text style={{ color: '#0F172A', fontWeight: '800', marginTop: 4 }}>₦{item.price?.toLocaleString()}</Text>
-                                <View style={{ flexDirection: 'row', marginTop: 8, gap: 12 }}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                        <Ionicons name="cube-outline" size={12} color="#64748B" />
-                                        <Text style={{ fontSize: 12, color: item.stock_quantity < 5 ? '#EF4444' : '#64748B', fontWeight: '600' }}>
-                                            {item.stock_quantity || 0} Stock
-                                        </Text>
-                                    </View>
-                                    <Text style={{ fontSize: 12, color: '#64748B' }}>Sales: <Text style={{ fontWeight: '600', color: '#0F172A' }}>{item.sales || 0}</Text></Text>
-                                </View>
-                            </View>
-                            <View style={{ justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                                <TouchableOpacity onPress={() => handleEditProduct(item)} style={{ padding: 8 }}>
-                                    <Ionicons name="create-outline" size={20} color="#3B82F6" />
-                                </TouchableOpacity>
-                                <TouchableOpacity onPress={() => handleDeleteProduct(item.id)} style={{ padding: 8 }}>
-                                    <Ionicons name="trash-outline" size={20} color="#EF4444" />
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    )}
-                    ListEmptyComponent={
-                        <View style={{ alignItems: 'center', padding: 40 }}>
-                            <Text style={{ color: '#94A3B8' }}>No products found matching filters.</Text>
-                        </View>
-                    }
-                />
-            </View>
-        );
-    };
-
-    const renderOverview = () => (
-        <ScrollView
-            contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
-            showsVerticalScrollIndicator={false}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchDashboardData(); }} />}
-        >
-            {/* STATS GRID */}
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 }}>
-                <StatCard label="Total Earnings" value={`₦${stats.earnings.toLocaleString()}`} icon="cash" color="#10B981" />
-                <StatCard label="Total Orders" value={stats.orders} icon="cart" color="#3B82F6" />
-                <StatCard label="Live Products" value={stats.products} icon="cube" color="#F59E0B" />
-                <StatCard label="Avg Rating" value="4.8" icon="star" color="#8B5CF6" />
-            </View>
-
-            {/* RECENT ORDERS PREVIEW */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, marginBottom: 12 }}>
-                <Text style={styles.sectionTitle}>Recent Orders</Text>
-                <TouchableOpacity onPress={() => setActiveTab('orders')}>
-                    <Text style={{ color: '#3B82F6', fontWeight: '600', fontSize: 13 }}>View All</Text>
-                </TouchableOpacity>
-            </View>
-
-            {orders.length === 0 ? (
-                <View style={{ padding: 20, alignItems: 'center', backgroundColor: 'white', borderRadius: 12 }}>
-                    <Text style={{ color: '#94A3B8' }}>No orders yet.</Text>
-                </View>
-            ) : (
-                orders.slice(0, 5).map((order, i) => (
-                    <View key={i} style={localStyles.orderRow}>
-                        <View style={[localStyles.iconBox, { backgroundColor: order.status === 'Pending' ? '#FEF3C7' : '#DCFCE7' }]}>
-                            <Ionicons name={order.status === 'Pending' ? 'time' : 'checkmark'} size={18} color={order.status === 'Pending' ? '#D97706' : '#16A34A'} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={{ fontWeight: '700', fontSize: 14, color: '#0F172A' }} numberOfLines={1}>{order.item}</Text>
-                            <Text style={{ fontSize: 12, color: '#64748B' }}>Order #{order.id?.toString().slice(0, 5)} • {order.date}</Text>
-                        </View>
-                        <View style={{ alignItems: 'flex-end' }}>
-                            <Text style={{ fontWeight: '700', fontSize: 14 }}>₦{order.amount.toLocaleString()}</Text>
-                            <Text style={{ fontSize: 10, color: order.status === 'Pending' ? '#D97706' : '#16A34A', fontWeight: '600' }}>{order.status}</Text>
-                        </View>
-                    </View>
-                ))
-            )}
-        </ScrollView>
-    );
-
-    const renderOrders = () => {
-        const filteredOrders = orders.filter(o => orderFilter === 'All' || o.status?.toLowerCase() === orderFilter.toLowerCase());
-
-        return (
-            <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
-                {/* Filter Chips */}
-                <View style={{ backgroundColor: 'white' }}>
-                    <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderColor: '#F1F5F9' }}
-                    >
-                        {['All', 'Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'].map(f => (
-                            <TouchableOpacity
-                                key={f}
-                                style={{
-                                    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: orderFilter === f ? '#0F172A' : '#F1F5F9', marginRight: 8
-                                }}
-                                onPress={() => setOrderFilter(f)}
-                            >
-                                <Text style={{ fontSize: 13, fontWeight: '600', color: orderFilter === f ? 'white' : '#64748B' }}>{f}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </ScrollView>
-                </View>
-
-                {/* Orders List */}
-                <FlatList
-                    data={filteredOrders}
-                    keyExtractor={(item, index) => `${item.id}-${index}`}
-                    contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
-                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchDashboardData(); }} />}
-                    renderItem={({ item }) => {
-                        let statusColor = '#3B82F6';
-                        let statusBg = '#EFF6FF';
-                        const statusLower = item.status?.toLowerCase();
-                        if (statusLower === 'pending') { statusColor = '#D97706'; statusBg = '#FEF3C7'; }
-                        if (statusLower === 'delivered') { statusColor = '#10B981'; statusBg = '#DCFCE7'; }
-                        if (statusLower === 'cancelled') { statusColor = '#EF4444'; statusBg = '#FEE2E2'; }
-
-                        return (
-                            <View style={{ backgroundColor: 'white', borderRadius: 20, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.05)', elevation: 2 }}>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                        <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center' }}>
-                                            <Ionicons name="receipt-outline" size={20} color="#0F172A" />
-                                        </View>
-                                        <View>
-                                            <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>Order #{item.id?.toString().slice(0, 8).toUpperCase()}</Text>
-                                            <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{item.date}</Text>
-                                        </View>
-                                    </View>
-                                    <View style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: statusBg }}>
-                                        <Text style={{ fontSize: 10, fontWeight: '800', letterSpacing: 0.5, color: statusColor }}>
-                                            {item.status?.toUpperCase() || 'UNKNOWN'}
-                                        </Text>
-                                    </View>
-                                </View>
-
-                                <View style={{ height: 1, backgroundColor: '#F1F5F9', marginVertical: 12 }} />
-
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <View style={{ flex: 1, paddingRight: 10 }}>
-                                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }} numberOfLines={1}>{item.item}</Text>
-                                        <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>Qty: {item.quantity || 1} • Customer: {item.customerName}</Text>
-                                    </View>
-                                    <View style={{ alignItems: 'flex-end' }}>
-                                        <Text style={{ fontSize: 11, color: '#94A3B8', fontWeight: '600', marginBottom: 2 }}>Earnings</Text>
-                                        <Text style={{ fontSize: 16, fontWeight: '800', color: '#10B981' }}>₦{item.amount?.toLocaleString()}</Text>
-                                    </View>
-                                </View>
-                            </View>
-                        );
-                    }}
-                    ListEmptyComponent={
-                        <View style={{ alignItems: 'center', padding: 40 }}>
-                            <Ionicons name="bag-remove-outline" size={48} color="#CBD5E1" />
-                            <Text style={{ color: '#94A3B8', marginTop: 16 }}>No orders found in this category.</Text>
-                        </View>
-                    }
-                />
-            </View>
-        );
-    };
-
     return (
         <View style={styles.container}>
             {renderHeader()}
@@ -474,21 +284,43 @@ export const VendorDashboard = ({ user, onLogout }) => {
                     </View>
                 ) : (
                     <>
-                        {activeTab === 'overview' && renderOverview()}
-                        {activeTab === 'products' && renderProducts()}
-                        {activeTab === 'orders' && renderOrders()}
+                        {activeTab === 'overview' && <VendorOverview stats={stats} />}
+
+                        {activeTab === 'products' && (
+                            <VendorProducts
+                                products={products}
+                                search={search}
+                                setSearch={setSearch}
+                                stockFilter={stockFilter}
+                                setStockFilter={setStockFilter}
+                                handleEditProduct={handleEditProduct}
+                                handleDeleteProduct={handleDeleteProduct}
+                                setViewMode={setViewMode}
+                                refreshing={refreshing}
+                                setRefreshing={setRefreshing}
+                                fetchDashboardData={fetchDashboardData}
+                            />
+                        )}
+
+                        {activeTab === 'orders' && (
+                            <VendorOrders
+                                orders={orders}
+                                vendor={vendor}
+                                orderFilter={orderFilter}
+                                setOrderFilter={setOrderFilter}
+                                handleUpdateOrderStatus={handleUpdateOrderStatus}
+                                refreshing={refreshing}
+                                setRefreshing={setRefreshing}
+                                fetchDashboardData={fetchDashboardData}
+                            />
+                        )}
+
                         {activeTab === 'wallet' && (
-                            <View style={{ padding: 20, alignItems: 'center' }}>
-                                <View style={styles.walletCard}>
-                                    <View>
-                                        <Text style={styles.walletLabel}>Available Balance</Text>
-                                        <Text style={styles.walletBalance}>₦{wallet.balance.toLocaleString()}</Text>
-                                    </View>
-                                    <TouchableOpacity style={styles.walletBtn}>
-                                        <Text style={{ color: 'white' }}>Withdraw</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
+                            <VendorWallet
+                                user={user}
+                                wallet={wallet}
+                                fetchDashboardData={fetchDashboardData}
+                            />
                         )}
                     </>
                 )}
@@ -506,28 +338,4 @@ export const VendorDashboard = ({ user, onLogout }) => {
             </View>
         </View>
     );
-};
-
-const StatCard = ({ label, value, icon, color }) => (
-    <View style={localStyles.statCard}>
-        <View style={{ alignItems: 'flex-start', marginBottom: 12 }}>
-            <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: color + '20', alignItems: 'center', justifyContent: 'center' }}>
-                <Ionicons name={icon} size={16} color={color} />
-            </View>
-        </View>
-        <Text style={{ color: '#64748B', fontSize: 11, fontWeight: '600' }}>{label}</Text>
-        <Text style={{ color: '#0F172A', fontSize: 16, fontWeight: '800', marginTop: 4 }}>{value}</Text>
-    </View>
-);
-
-const localStyles = {
-    statCard: { width: '48%', backgroundColor: 'white', padding: 16, borderRadius: 16, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', },
-    orderRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', padding: 12, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: '#F1F5F9' },
-    iconBox: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-    actionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#0F172A', padding: 16, borderRadius: 12, marginBottom: 20, boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', },
-    productCard: { flexDirection: 'row', backgroundColor: 'white', padding: 12, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9' },
-
-    // Modal (No longer used, using AdminAddProduct)
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-    modalContent: { backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '80%' },
 };

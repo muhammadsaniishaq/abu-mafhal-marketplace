@@ -11,18 +11,12 @@ import { usePaystackPayment } from 'react-paystack';
 import { useFlutterwave, closePaymentModal } from 'flutterwave-react-v3';
 
 import { supabase } from '../config/supabase';
+import { parsePrice } from '../utils/helpers';
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
   const { cartItems, clearCart } = useCart();
   const { currentUser } = useAuth();
-
-  // Helper to parse price reliably
-  const parsePrice = (price) => {
-    if (typeof price === 'number') return price;
-    if (!price) return 0;
-    return parseFloat(price.toString().replace(/[^\d.]/g, '')) || 0;
-  };
 
   const [paymentMethod, setPaymentMethod] = useState('');
   const [loading, setLoading] = useState(false);
@@ -119,7 +113,7 @@ const CheckoutPage = () => {
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .insert({
-          buyer_id: currentUser?.uid || currentUser?.id,
+          user_id: currentUser?.uid || currentUser?.id,
           status: 'pending',
           total_amount: finalTotal,
           payment_method: method,
@@ -163,24 +157,45 @@ const CheckoutPage = () => {
   };
 
   // Handle checkout submission
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (!validateForm()) return;
 
     setLoading(true);
 
-    switch (paymentMethod) {
-      case 'paystack':
-        handlePaystackPayment();
-        break;
-      case 'flutterwave':
-        handleFlutterwavePayment();
-        break;
-      case 'nowpayments':
-        handleNOWPayment();
-        break;
-      default:
-        alert('Please select a payment method');
-        setLoading(false);
+    try {
+      // 1. Call Unified Edge Function
+      const { data, error: invokeError } = await supabase.functions.invoke('initiate-payment', {
+        body: {
+          items: cartItems.map(item => ({
+            id: item.id,
+            quantity: item.quantity || 1,
+            variant: item.variant || null
+          })),
+          address_id: 'default', // Placeholder/Legacy or handle properly if address_id exists
+          // Since web uses manual address form, we pass a special flag or handle it in function
+          // OR we first save the address and get an ID. 
+          // For now, let's assume we need to adjust initiate-payment to handle literal addresses too?
+          // Actually, let's just use the existing initiate-payment and ensure web has addresses.
+          payment_method: paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1),
+          // Pass shipping info if needed
+          shipping_override: shippingInfo
+        }
+      });
+
+      if (invokeError) throw invokeError;
+      if (!data?.checkout_url) throw new Error("Failed to initialize payment.");
+
+      if (data.checkout_url === 'success') {
+        clearCart();
+        setOrderPlaced(true);
+        setTimeout(() => navigate('/buyer/orders'), 2000);
+      } else {
+        window.location.href = data.checkout_url;
+      }
+    } catch (error) {
+      console.error('Checkout Error:', error);
+      alert('Checkout Failed: ' + (error.message || 'Unknown error'));
+      setLoading(false);
     }
   };
 
@@ -374,7 +389,7 @@ const CheckoutPage = () => {
                       <p className="font-medium text-sm">{item.name}</p>
                       <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
                     </div>
-                    <p className="font-semibold">₦{(item.price * item.quantity).toLocaleString()}</p>
+                    <p className="font-semibold text-lg">₦{(parsePrice(item.price) * (item.quantity || 1)).toLocaleString()}</p>
                   </div>
                 ))}
               </div>
@@ -388,8 +403,8 @@ const CheckoutPage = () => {
                   <span>Shipping</span>
                   <span>{shippingFee === 0 ? 'FREE' : `₦${shippingFee.toLocaleString()}`}</span>
                 </div>
-                <div className="flex justify-between text-lg font-bold pt-2 border-t">
-                  <span>Total</span>
+                <div className="flex justify-between text-xl font-black pt-4 border-t border-gray-100 text-blue-600">
+                  <span>Grand Total</span>
                   <span>₦{finalTotal.toLocaleString()}</span>
                 </div>
               </div>

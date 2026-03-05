@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { UserAvatar } from '../components/UserAvatar';
 
 export const EditProfilePage = ({ user, onBack, onUpdateUser }) => {
     const [fullName, setFullName] = useState(
@@ -28,10 +29,6 @@ export const EditProfilePage = ({ user, onBack, onUpdateUser }) => {
 
     // DEBUG VERSION of pickImage
     const pickImage = async () => {
-        // 1. Confirm Button Press
-        // console.log("Button Pressed"); 
-        // Alert.alert("Debug", "Opening Gallery..."); 
-
         try {
             // 2. Request Permission
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -42,44 +39,65 @@ export const EditProfilePage = ({ user, onBack, onUpdateUser }) => {
             }
 
             // 3. Launch Library
+            console.log("Launching Library...");
+            // Alert.alert("Debug", "Opening Gallery..."); // Uncomment if needed for extreme debugging
+
             let result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images, // Reverted to known working Enum
+                mediaTypes: ImagePicker.MediaTypeOptions.Images, // Correct Enum
                 quality: 0.5,
                 base64: true,
-                // allowsEditing: true, // KEEP DISABLED
+                allowsEditing: true,
             });
 
-            if (!result.canceled) {
-                uploadImage(result.assets[0]);
+            if (result.canceled) {
+                console.log("Picker Canceled");
+                return;
             }
+
+            if (result.assets && result.assets[0]) {
+                const asset = result.assets[0];
+                console.log("Image picked:", asset.uri);
+
+                if (!asset.base64) {
+                    Alert.alert("Error", "Image data is missing. Please try again or select a different image.");
+                    return;
+                }
+
+                uploadImage(asset);
+            } else {
+                Alert.alert("Error", "No image was selected.");
+            }
+
         } catch (error) {
-            Alert.alert('Gallery Error', error.message);
+            console.log("Picker catch error:", error);
+            Alert.alert('Gallery Error', 'Failed to open gallery: ' + error.message);
         }
     };
 
     const uploadImage = async (imageAsset) => {
         try {
             setUploading(true);
-            const fileExt = imageAsset.uri.split('.').pop();
-            const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+            const fileExt = imageAsset.uri.split('.').pop()?.toLowerCase() || 'jpg';
+            const fileName = `${user?.id || 'guest'}/${Date.now()}.${fileExt}`;
             const filePath = `${fileName}`;
+
+            console.log("Uploading to avatars bucket:", filePath);
 
             const { error: uploadError } = await supabase.storage
                 .from('avatars')
                 .upload(filePath, decode(imageAsset.base64), {
-                    contentType: imageAsset.mimeType,
+                    contentType: imageAsset.mimeType || imageAsset.type || 'image/jpeg',
+                    upsert: true
                 });
 
             if (uploadError) throw uploadError;
 
             const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
+            console.log("Public URL generated:", data.publicUrl);
             setAvatarUrl(data.publicUrl);
 
         } catch (error) {
             console.log("Upload error:", error);
-            // setAvatarUrl(imageAsset.uri); // REMOVED: Do not save local path on error!
-
-            // Show the actual error message to help debug
             Alert.alert("Upload Failed", "Error: " + (error.message || "Unknown error"));
         } finally {
             setUploading(false);
@@ -136,7 +154,7 @@ export const EditProfilePage = ({ user, onBack, onUpdateUser }) => {
                 await supabase
                     .from('users')
                     .update(updates)
-                    .eq('id', user.id);
+                    .eq('id', user?.id);
             } catch (ignore) {
                 console.warn("DB update ignored", ignore);
             }
@@ -144,20 +162,25 @@ export const EditProfilePage = ({ user, onBack, onUpdateUser }) => {
             // 3. Update 'profiles' table (Public Visibility)
             try {
                 const profileUpdates = {
-                    id: user.id,
+                    id: user?.id,
+                    email: user?.email,
                     full_name: fullName,
                     username: username,
                     avatar_url: avatarUrl,
                     updated_at: new Date(),
                     // Flatten other fields if needed or store as json
-                    role: user.role || 'user' // Preserve role
+                    role: user?.role || 'user' // Preserve role
                 };
 
                 const { error: profileError } = await supabase
                     .from('profiles')
                     .upsert(profileUpdates);
 
-                if (profileError) console.log("Profile sync error:", profileError);
+                if (profileError) {
+                    console.log("Profile sync error:", profileError);
+                } else {
+                    console.log("Profile sync success for:", user.id);
+                }
 
             } catch (e) {
                 console.log("Profile update failed:", e);
@@ -197,22 +220,12 @@ export const EditProfilePage = ({ user, onBack, onUpdateUser }) => {
             <ScrollView contentContainerStyle={{ padding: 20 }}>
                 <View style={{ alignItems: 'center', marginBottom: 30 }}>
                     <TouchableOpacity onPress={pickImage} style={{ position: 'relative' }}>
-                        <View style={{
-                            width: 100, height: 100, borderRadius: 50, backgroundColor: '#E2E8F0',
-                            justifyContent: 'center', alignItems: 'center', overflow: 'hidden',
-                            borderWidth: 4, borderColor: 'white', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',
-                        }}>
-                            {avatarUrl ? (
-                                <Image source={{ uri: avatarUrl }} style={{ width: '100%', height: '100%' }} />
-                            ) : (
-                                <Ionicons name="person" size={50} color="#94A3B8" />
-                            )}
-                            {uploading && (
-                                <View style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' }}>
-                                    <ActivityIndicator color="white" />
-                                </View>
-                            )}
-                        </View>
+                        <UserAvatar sourceUrl={avatarUrl} size={100} border="#0F172A" />
+                        {uploading && (
+                            <View style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 50, justifyContent: 'center', alignItems: 'center' }}>
+                                <ActivityIndicator color="white" />
+                            </View>
+                        )}
                         <View style={{
                             position: 'absolute', bottom: 0, right: 0, backgroundColor: '#0F172A',
                             padding: 8, borderRadius: 20, borderWidth: 2, borderColor: 'white'

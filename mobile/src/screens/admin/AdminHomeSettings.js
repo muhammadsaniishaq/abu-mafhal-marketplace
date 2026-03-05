@@ -1,8 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, TextInput, ScrollView, Image, RefreshControl, Modal, ActivityIndicator, Animated, Dimensions, Platform, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, ScrollView, Image, RefreshControl, Modal, ActivityIndicator, Animated, Platform, ImageBackground } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../../lib/supabase';
 import { ServiceIcon } from '../../components/ServiceIcon';
+import { Toast } from '../../components/Toast';
+import { decode } from 'base64-arraybuffer';
+import DateTimePicker from '@react-native-community/datetimepicker';
 // import { LinearGradient } from 'expo-linear-gradient'; // REMOVED to fix crash
 
 // --- MODERN UI COMPONENTS ---
@@ -42,7 +46,7 @@ const FeatureCard = ({ image, title, subtitle, isActive, onToggle, activeLabel =
             activeOpacity={0.7}
             style={{
                 paddingHorizontal: 14, paddingVertical: 8, borderRadius: 24,
-                backgroundColor: isActive ? `${activeColor}15` : '#F1F5F9',
+                backgroundColor: isActive ? `${activeColor} 15` : '#F1F5F9',
                 borderWidth: 1, borderColor: isActive ? activeColor : '#E2E8F0',
                 flexDirection: 'row', alignItems: 'center', gap: 6
             }}
@@ -60,7 +64,7 @@ const StatsRail = ({ stats }) => (
         {stats.map((stat, i) => (
             <View key={i} style={{ backgroundColor: 'white', padding: 16, borderRadius: 20, minWidth: 150, borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                    <View style={{ padding: 10, backgroundColor: `${stat.color}15`, borderRadius: 12 }}>
+                    <View style={{ padding: 10, backgroundColor: `${stat.color} 15`, borderRadius: 12 }}>
                         <Ionicons name={stat.icon} size={20} color={stat.color} />
                     </View>
                     <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748B', letterSpacing: 0.5 }}>{stat.label.toUpperCase()}</Text>
@@ -70,44 +74,6 @@ const StatsRail = ({ stats }) => (
         ))}
     </ScrollView>
 );
-
-const Toast = ({ message, type = 'success', visible, onHide }) => {
-    const fadeAnim = useRef(new Animated.Value(0)).current;
-
-    useEffect(() => {
-        if (visible) {
-            Animated.sequence([
-                Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: false }),
-                Animated.delay(2500),
-                Animated.timing(fadeAnim, { toValue: 0, duration: 300, useNativeDriver: false })
-            ]).start(() => onHide && onHide());
-        }
-    }, [visible]);
-
-    if (!visible) return null;
-
-    const bgColor = type === 'success' ? '#10B981' : type === 'error' ? '#EF4444' : '#3B82F6';
-    const icon = type === 'success' ? 'checkmark-circle' : type === 'error' ? 'alert-circle' : 'information-circle';
-
-    return (
-        <Animated.View style={{
-            position: 'absolute', top: 64, left: 16, right: 16,
-            backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 20, padding: 16,
-            flexDirection: 'row', alignItems: 'center', gap: 16,
-            boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',
-            borderLeftWidth: 6, borderLeftColor: bgColor, opacity: fadeAnim, zIndex: 1000
-        }}>
-            <View style={{ padding: 10, backgroundColor: `${bgColor}20`, borderRadius: 14 }}>
-                <Ionicons name={icon} size={28} color={bgColor} />
-            </View>
-            <View style={{ flex: 1 }}>
-                <Text style={{ fontWeight: '800', color: '#0F172A', fontSize: 16, marginBottom: 4 }}>{type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Notice'}</Text>
-                <Text style={{ color: '#475569', fontWeight: '500', fontSize: 14, lineHeight: 20 }}>{message}</Text>
-            </View>
-        </Animated.View>
-    );
-};
-
 const SearchModal = ({ visible, onClose, title, onSearch, results, onSelect, placeholder, creating, onCreate }) => {
     const [query, setQuery] = useState('');
     const [loading, setLoading] = useState(false);
@@ -132,7 +98,7 @@ const SearchModal = ({ visible, onClose, title, onSearch, results, onSelect, pla
                 </View>
 
                 <View style={{ padding: 20 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', paddingHorizontal: 16, borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0', height: 64, marginBottom: 20, boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',shadowRadius: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', paddingHorizontal: 16, borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0', height: 64, marginBottom: 20, boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', shadowRadius: 8 }}>
                         <Ionicons name="search" size={24} color="#94A3B8" />
                         <TextInput
                             placeholder={placeholder}
@@ -150,7 +116,7 @@ const SearchModal = ({ visible, onClose, title, onSearch, results, onSelect, pla
                             <TouchableOpacity
                                 key={i}
                                 onPress={() => { onSelect(item); onClose(); }}
-                                style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', padding: 16, borderRadius: 20, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',shadowRadius: 4 }}
+                                style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', padding: 16, borderRadius: 20, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', shadowRadius: 4 }}
                             >
                                 <Image source={{ uri: item.image || 'https://placehold.co/100' }} style={{ width: 56, height: 56, borderRadius: 28, marginRight: 16, backgroundColor: '#F1F5F9' }} />
                                 <View style={{ flex: 1 }}>
@@ -172,7 +138,7 @@ const SearchModal = ({ visible, onClose, title, onSearch, results, onSelect, pla
                                 <Text style={{ color: '#64748B', fontSize: 15, textAlign: 'center' }}>We couldn't find anything matching "{query}"</Text>
 
                                 {onCreate && (
-                                    <TouchableOpacity onPress={() => { onCreate(query); onClose(); }} style={{ marginTop: 32, backgroundColor: '#0F172A', paddingHorizontal: 32, paddingVertical: 16, borderRadius: 32, flexDirection: 'row', alignItems: 'center', gap: 10, boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',shadowRadius: 10 }}>
+                                    <TouchableOpacity onPress={() => { onCreate(query); onClose(); }} style={{ marginTop: 32, backgroundColor: '#0F172A', paddingHorizontal: 32, paddingVertical: 16, borderRadius: 32, flexDirection: 'row', alignItems: 'center', gap: 10, boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', shadowRadius: 10 }}>
                                         <Ionicons name="add-circle" size={22} color="white" />
                                         <Text style={{ color: 'white', fontWeight: '800', fontSize: 16 }}>Create "{query}"</Text>
                                     </TouchableOpacity>
@@ -192,6 +158,7 @@ export const AdminHomeSettings = () => {
     const [activeTab, setActiveTab] = useState('marketplace');
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [uploadingBanner, setUploadingBanner] = useState(false);
 
     const [vendors, setVendors] = useState([]);
     const [topCustomers, setTopCustomers] = useState([]);
@@ -203,6 +170,7 @@ export const AdminHomeSettings = () => {
     const [searchResults, setSearchResults] = useState([]);
     const [modalConfig, setModalConfig] = useState({ visible: false, type: null });
     const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
+    const [showDatePicker, setShowDatePicker] = useState(false);
 
     const [systemStatus, setSystemStatus] = useState({
         dbConnection: null,
@@ -298,10 +266,12 @@ export const AdminHomeSettings = () => {
             } else if (type === 'brand') {
                 const { data } = await supabase.from('brands').select('*').ilike('name', `%${query}%`).limit(10);
                 results = data?.map(b => ({ ...b, title: b.name, image: b.logo_url })) || [];
-
             } else if (type === 'customer') {
                 const { data } = await supabase.from('profiles').select('*').ilike('full_name', `%${query}%`).limit(10);
                 results = data?.map(c => ({ ...c, title: c.full_name || 'Unknown User', subtitle: c.email, image: c.avatar_url })) || [];
+            } else if (type === 'product') {
+                const { data } = await supabase.from('products').select('*').eq('status', 'approved').ilike('name', `%${query}%`).limit(10);
+                results = data?.map(p => ({ ...p, title: p.name, subtitle: `₦${p.price}`, image: p.images?.[0] })) || [];
             }
             setSearchResults(results);
         } catch (e) {
@@ -326,6 +296,14 @@ export const AdminHomeSettings = () => {
                 const { error: e } = await supabase.from('profiles').update({ is_featured: true }).eq('id', item.id);
                 if (!e) setTopCustomers(prev => [...prev.filter(c => c.id !== item.id), { ...item, is_featured: true }]);
                 error = e;
+            } else if (type === 'product') {
+                // Only selecting product for banner, not adding to a list
+                setPromoBanner(prev => ({
+                    ...prev,
+                    linkData: { ...Object(prev.linkData), productId: item.id, productName: item.title }
+                }));
+                showToast(`Product attached to promo`, 'success');
+                return; // Early return as we don't need the general success message
             }
 
             if (error) throw error;
@@ -436,7 +414,7 @@ export const AdminHomeSettings = () => {
                     <FeatureCard
                         key={customer.id}
                         title={customer.full_name || 'Anonymous User'}
-                        subtitle={`Total Spend: ₦${(customer.total_spend || 0).toLocaleString()}`}
+                        subtitle={`Total Spend: ₦${(customer.total_spend || 0).toLocaleString()} `}
                         image={customer.avatar_url}
                         isActive={true}
                         activeLabel="VIP Status"
@@ -541,7 +519,7 @@ export const AdminHomeSettings = () => {
                         <TouchableOpacity onPress={() => setEditingService(null)} style={{ flex: 1, padding: 18, alignItems: 'center', backgroundColor: '#F1F5F9', borderRadius: 16 }}>
                             <Text style={{ color: '#64748B', fontWeight: '800', fontSize: 15 }}>Discard</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={handleSaveService} style={{ flex: 1, backgroundColor: '#0F172A', padding: 18, borderRadius: 16, alignItems: 'center', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',shadowRadius: 10 }}>
+                        <TouchableOpacity onPress={handleSaveService} style={{ flex: 1, backgroundColor: '#0F172A', padding: 18, borderRadius: 16, alignItems: 'center', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', shadowRadius: 10 }}>
                             <Text style={{ color: 'white', fontWeight: '800', fontSize: 15 }}>Save Changes</Text>
                         </TouchableOpacity>
                     </View>
@@ -549,7 +527,7 @@ export const AdminHomeSettings = () => {
             )}
 
             {services.map(svc => (
-                <View key={svc.id} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', padding: 16, borderRadius: 20, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',shadowRadius: 4 }}>
+                <View key={svc.id} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', padding: 16, borderRadius: 20, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', shadowRadius: 4 }}>
                     <View style={{ marginRight: 20 }}>
                         <ServiceIcon icon={svc.icon} label="" color={svc.bg_color || '#3B82F6'} lib={svc.lib} onPress={() => { }} />
                     </View>
@@ -572,7 +550,7 @@ export const AdminHomeSettings = () => {
 
     const renderSystemStatus = () => (
         <View style={{ padding: 20 }}>
-            <View style={{ backgroundColor: '#0F172A', padding: 28, borderRadius: 28, marginBottom: 24, boxShadow: '0px 4px 10px rgba(0,0,0,0.1)',shadowRadius: 16 }}>
+            <View style={{ backgroundColor: '#0F172A', padding: 28, borderRadius: 28, marginBottom: 24, boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', shadowRadius: 16 }}>
                 <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
                     <Ionicons name="hardware-chip-outline" size={32} color="white" />
                 </View>
@@ -653,7 +631,7 @@ export const AdminHomeSettings = () => {
             <SearchModal
                 visible={modalConfig.visible}
                 onClose={() => setModalConfig({ visible: false, type: null })}
-                title={`Add ${modalConfig.type === 'vendor' ? 'Verified Seller' : modalConfig.type === 'brand' ? 'Featured Brand' : 'Elite Customer'}`}
+                title={`Add ${modalConfig.type === 'vendor' ? 'Verified Seller' : modalConfig.type === 'brand' ? 'Featured Brand' : modalConfig.type === 'customer' ? 'Elite Customer' : 'Linked Product'}`}
                 placeholder={`Search ${modalConfig.type}s...`}
                 onSearch={(q) => performSearch(q, modalConfig.type)}
                 results={searchResults}

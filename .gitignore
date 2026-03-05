@@ -1,19 +1,43 @@
 # Node
 node_modules
 npm-debug.log
+
+# Secret keys
+.env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+mobile/.env
 
-# Next build
+# Build outputs
 .next
 .out
+dist
+mobile/dist
 
-# Logs
+# Expo
+mobile/.expo
+mobile/web-build
+mobile/node_modules
+
+# Logs and Scripts
 logs
 *.log
+*.sql
+*.cjs
+*.mjs
+*.txt
+*.bak
+sql_output_log.txt
+probe_results*.txt
+bundle_crash.log
+bundle_error.txt
+bundle_response.txt
 
-server/.env
-.en
-.env.local
+# Temp / OS
+.temp
+.DS_Store
+Thumbs.db
+(
+({

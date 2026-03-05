@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, FlatList, Image, SafeAreaView, ActivityIn
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { styles } from '../styles/theme';
+import { UserAvatar } from '../components/UserAvatar';
 
 export const ConversationsScreen = ({ navigation }) => {
     const [loading, setLoading] = useState(true);
@@ -90,14 +91,8 @@ export const ConversationsScreen = ({ navigation }) => {
                 })}
             >
                 {/* Avatar */}
-                <View style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: '#F1F5F9', overflow: 'hidden', marginRight: 16 }}>
-                    {profile.avatar_url ? (
-                        <Image source={{ uri: profile.avatar_url }} style={{ width: '100%', height: '100%' }} />
-                    ) : (
-                        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                            <Ionicons name="person" size={24} color="#CBD5E1" />
-                        </View>
-                    )}
+                <View style={{ marginRight: 16 }}>
+                    <UserAvatar user={profile} size={50} />
                 </View>
 
                 {/* Info */}

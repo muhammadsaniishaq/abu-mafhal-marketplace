@@ -82,21 +82,30 @@ export const NotificationService = {
                 })
             });
 
-            const data = await response.json();
-
-            if (!response.ok) {
-                console.error("Resend API Error (Full):", JSON.stringify(data, null, 2));
-                const errMsg = data.message || JSON.stringify(data);
-                Alert.alert("Resend Error", errMsg);
+            // CRITICAL FIX: Always read as text first to avoid JSON parse crashes
+            // if the API returns an HTML error page (Gateway Timeout, rate limit, etc.)
+            const rawText = await response.text();
+            let data = null;
+            try {
+                data = JSON.parse(rawText);
+            } catch (parseErr) {
+                // Response was not JSON (e.g., HTML Gateway error)
+                console.error('Resend API: Non-JSON response:', rawText?.substring(0, 200));
                 return false;
             }
 
-            console.log('Email Sent:', data);
+            if (!response.ok) {
+                console.error("Resend API Error:", JSON.stringify(data));
+                // Don't Alert from a background service - just log and return false
+                return false;
+            }
+
+            console.log('Email Sent:', data?.id);
             return true;
 
         } catch (err) {
-            console.log('Email Send Error:', err);
-            Alert.alert("Network Error", "Could not connect to Resend: " + err.message);
+            console.log('Email Send Error (network):', err.message);
+            // Don't Alert from a background service - just log and return false
             return false;
         }
     }

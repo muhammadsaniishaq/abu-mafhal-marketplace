@@ -2,9 +2,21 @@ import { supabase } from '../lib/supabase';
 
 // REPLACE WITH YOUR GEMINI API KEY
 // Get one here: https://aistudio.google.com/app/apikey
-const GEMINI_API_KEY = 'AIzaSyAycSlz2nu6kHJA3Tg1bwQvjSFhkwV8GNY';
+const GEMINI_API_KEY = 'AIzaSyD9K1UENZsJf5KVuoxCf_0lUsK2q--f9nA';
 
 const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+const cleanAIJsonResponse = (text) => {
+    if (!text || typeof text !== 'string') return null;
+    try {
+        // Remove markdown code blocks
+        const cleaned = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        return JSON.parse(cleaned);
+    } catch (e) {
+        console.error("AI JSON Parse Error:", e, "Raw Text:", text);
+        return null;
+    }
+};
 
 export const geminiService = {
 
@@ -142,7 +154,8 @@ export const geminiService = {
 
             const result = await response.json();
             const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-            return text ? text.trim() : "Could not generate description.";
+            if (!text) return "Could not generate description.";
+            return text.trim();
 
         } catch (error) {
             console.error("Gemini Description Error:", error);
@@ -187,14 +200,66 @@ export const geminiService = {
 
             const result = await response.json();
             const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-
-            // Clean markdown code blocks if present
-            const jsonText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-            return JSON.parse(jsonText);
+            return cleanAIJsonResponse(text);
 
         } catch (error) {
             console.error("Gemini SEO Error:", error);
             throw error;
+        }
+    },
+
+    /**
+     * Generate catchy promo banner copy
+     * @param {object} context - { productName, subtitle, discount }
+     * @returns {Promise<object>} - { title, subtitle, buttonText, notification }
+     */
+    generatePromoCopy: async (context) => {
+        try {
+            const prompt = `Generate catchy e-commerce promo banner copy. 
+            Analyze the linked product and the provided image to create content that matches the visual style.
+            ${context.productName ? `Linked Product: ${context.productName}` : 'General Store Promotion'}
+            ${context.discount ? `Discount: ${context.discount}` : ''}
+            ${context.subtitle ? `Current Theme: ${context.subtitle}` : ''}
+
+            Return purely JSON with these keys:
+            - title: (Short, high-energy, max 25 chars. Examples: "FLASH SALE", "ELITE DEALS", "LIMITED OFFER")
+            - subtitle: (Secondary info, max 40 chars. Examples: "Up to 50% Off Everything!", "Grab Yours Before It's Gone")
+            - buttonText: (Call to action, max 15 chars. Examples: "SHOP NOW", "GET OFFER", "CLAIM NOW")
+            - notification: (Short push notification style, max 50 chars. Examples: "Don't miss out! 50% discount active now.")
+
+            Return purely JSON. NO MARKDOWN. NO EXPLANATIONS.`;
+
+            const parts = [{ text: prompt }];
+            if (context.base64Image) {
+                parts.push({
+                    inline_data: {
+                        mime_type: "image/jpeg",
+                        data: context.base64Image
+                    }
+                });
+            }
+
+            const body = {
+                contents: [{ parts }]
+            };
+
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+
+            const result = await response.json();
+            console.log("AI Promo Debug - Raw Result:", JSON.stringify(result));
+
+            const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+            console.log("AI Promo Debug - Extracted Text:", text);
+
+            return cleanAIJsonResponse(text);
+
+        } catch (error) {
+            console.error("Gemini Promo Copy Error:", error);
+            return null;
         }
     }
 };

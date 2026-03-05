@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Image, TextInput, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, Image, TextInput, ScrollView, Alert, ActivityIndicator, Modal, StyleSheet, Dimensions, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { styles } from '../../styles/theme';
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
+
+const { width } = Dimensions.get('window');
 
 export const AdminBanners = () => {
     const [banners, setBanners] = useState([]);
@@ -13,16 +15,42 @@ export const AdminBanners = () => {
 
     // Form State
     const [showForm, setShowForm] = useState(false);
-    const [form, setForm] = useState({ title: '', subtitle: '', image_url: '', action_link: '', display_order: '0', section: 'home' });
-    const [uploadProgress, setUploadProgress] = useState(0);
+    const [editingId, setEditingId] = useState(null);
+    const [form, setForm] = useState({
+        title: '',
+        subtitle: '',
+        image_url: '',
+        action_link: '',
+        display_order: '0',
+        section: 'home'
+    });
 
     const SECTIONS = ['landing', 'home', 'shop'];
+
+    useEffect(() => {
+        fetchBanners();
+    }, []);
+
+    const fetchBanners = async () => {
+        setLoading(true);
+        const { data, error } = await supabase
+            .from('banners')
+            .select('*')
+            .order('display_order', { ascending: true });
+
+        if (error) {
+            Alert.alert('Error', error.message);
+        } else {
+            setBanners(data || []);
+        }
+        setLoading(false);
+    };
 
     const pickImage = async () => {
         let result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
-            aspect: form.section === 'shop' ? [2, 1] : [16, 9], // Aspect ratio hint based on section
+            aspect: form.section === 'shop' ? [2, 1] : [16, 9],
             quality: 0.8,
             base64: true
         });
@@ -48,7 +76,6 @@ export const AdminBanners = () => {
 
             const { data: publicUrl } = supabase.storage.from('banners').getPublicUrl(fileName);
             setForm(prev => ({ ...prev, image_url: publicUrl.publicUrl }));
-            Alert.alert('Success', 'Image uploaded successfully');
         } catch (error) {
             Alert.alert('Upload Error', error.message);
         } finally {
@@ -56,23 +83,21 @@ export const AdminBanners = () => {
         }
     };
 
-    useEffect(() => {
-        fetchBanners();
-    }, []);
-
-    const fetchBanners = async () => {
-        setLoading(true);
-        const { data, error } = await supabase.from('banners').select('*').order('display_order');
-        if (error) {
-            Alert.alert('Error', error.message);
-        } else {
-            setBanners(data || []);
-        }
-        setLoading(false);
+    const handleEdit = (banner) => {
+        setEditingId(banner.id);
+        setForm({
+            title: banner.title || '',
+            subtitle: banner.subtitle || '',
+            image_url: banner.image_url || '',
+            action_link: banner.action_link || '',
+            display_order: String(banner.display_order || 0),
+            section: banner.section || 'home'
+        });
+        setShowForm(true);
     };
 
     const handleDelete = async (id) => {
-        Alert.alert('Delete Banner', 'Are you sure?', [
+        Alert.alert('Delete Banner', 'Are you sure you want to remove this banner?', [
             { text: 'Cancel', style: 'cancel' },
             {
                 text: 'Delete',
@@ -86,36 +111,49 @@ export const AdminBanners = () => {
     };
 
     const handleSave = async () => {
-        if (!form.image_url || !form.title) {
-            Alert.alert('Error', 'Image URL and Title are required');
+        if (!form.image_url) {
+            Alert.alert('Error', 'Image is required');
             return;
         }
 
         setUploading(true);
-        const { error } = await supabase.from('banners').insert([{
+        const bannerData = {
             title: form.title,
             subtitle: form.subtitle,
             image_url: form.image_url,
             action_link: form.action_link,
             display_order: parseInt(form.display_order) || 0,
-            image_url: form.image_url,
-            action_link: form.action_link,
-            display_order: parseInt(form.display_order) || 0,
             section: form.section || 'home',
             is_active: true
-        }]);
+        };
+
+        let error;
+        if (editingId) {
+            const { error: updateError } = await supabase
+                .from('banners')
+                .update(bannerData)
+                .eq('id', editingId);
+            error = updateError;
+        } else {
+            const { error: insertError } = await supabase
+                .from('banners')
+                .insert([bannerData]);
+            error = insertError;
+        }
 
         setUploading(false);
         if (error) {
             Alert.alert('Error', error.message);
         } else {
-            Alert.alert('Success', 'Banner added');
             setShowForm(false);
-            Alert.alert('Success', 'Banner added');
-            setShowForm(false);
-            setForm({ title: '', subtitle: '', image_url: '', action_link: '', display_order: '0', section: 'home' });
+            resetForm();
             fetchBanners();
         }
+    };
+
+    const resetForm = () => {
+        setForm({ title: '', subtitle: '', image_url: '', action_link: '', display_order: '0', section: 'home' });
+        setEditingId(null);
     };
 
     const toggleActive = async (banner) => {
@@ -123,130 +161,175 @@ export const AdminBanners = () => {
         if (!error) fetchBanners();
     };
 
-    return (
-        <View style={{ flex: 1, backgroundColor: 'white' }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                <Text style={styles.sectionTitle}>Home Page Banners</Text>
-                <TouchableOpacity onPress={() => setShowForm(!showForm)} style={{ backgroundColor: '#0F172A', padding: 8, borderRadius: 8 }}>
-                    <Ionicons name={showForm ? "close" : "add"} size={24} color="white" />
-                </TouchableOpacity>
+    const renderHeader = () => (
+        <View style={styles.modernHeader}>
+            <View>
+                <Text style={styles.modernTitle}>Banners</Text>
+                <Text style={styles.modernSubtitle}>Manage marketing slots</Text>
             </View>
+            <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => { resetForm(); setShowForm(true); }}
+                style={styles.addButtonModern}
+            >
+                <Ionicons name="add" size={24} color="white" />
+                <Text style={styles.addButtonText}>Create</Text>
+            </TouchableOpacity>
+        </View>
+    );
 
-            {showForm && (
-                <View style={{ backgroundColor: '#F8FAFC', padding: 16, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                    <Text style={{ fontWeight: '700', marginBottom: 12 }}>Add New Banner</Text>
-
-                    <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 4 }}>Section</Text>
-                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-                        {SECTIONS.map(sec => (
-                            <TouchableOpacity
-                                key={sec}
-                                onPress={() => setForm({ ...form, section: sec })}
-                                style={{
-                                    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
-                                    backgroundColor: form.section === sec ? '#0F172A' : '#F1F5F9',
-                                    borderWidth: 1, borderColor: form.section === sec ? '#0F172A' : '#CBD5E1'
-                                }}
-                            >
-                                <Text style={{ fontSize: 12, fontWeight: '600', color: form.section === sec ? 'white' : '#64748B', textTransform: 'capitalize' }}>{sec}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-
-                    <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 4 }}>Image</Text>
-                    <View style={{ marginBottom: 16 }}>
-                        {form.image_url ? (
-                            <View>
-                                <Image source={{ uri: form.image_url }} style={{ width: '100%', height: 150, borderRadius: 8, marginBottom: 8 }} resizeMode="cover" />
-                                <TouchableOpacity onPress={() => setForm({ ...form, image_url: '' })} style={{ alignSelf: 'flex-end' }}>
-                                    <Text style={{ color: '#EF4444', fontSize: 12, fontWeight: '700' }}>Remove Image</Text>
-                                </TouchableOpacity>
-                            </View>
-                        ) : (
-                            <TouchableOpacity onPress={pickImage} style={{ height: 120, borderWidth: 1, borderColor: '#CBD5E1', borderStyle: 'dashed', borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: 'white' }}>
-                                {uploading ? (
-                                    <ActivityIndicator color="#3B82F6" />
-                                ) : (
-                                    <>
-                                        <Ionicons name="cloud-upload-outline" size={32} color="#94A3B8" />
-                                        <Text style={{ color: '#64748B', marginTop: 4 }}>Tap to upload banner</Text>
-                                    </>
-                                )}
-                            </TouchableOpacity>
-                        )}
-                    </View>
-
-                    <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 4 }}>Image URL (Optional Override)</Text>
-                    <TextInput
-                        style={localStyles.input}
-                        placeholder="https://..."
-                        value={form.image_url}
-                        onChangeText={t => setForm({ ...form, image_url: t })}
-                    />
-
-                    <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 4 }}>Title</Text>
-                    <TextInput
-                        style={localStyles.input}
-                        placeholder="Summer Sale"
-                        value={form.title}
-                        onChangeText={t => setForm({ ...form, title: t })}
-                    />
-
-                    <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 4 }}>Subtitle</Text>
-                    <TextInput
-                        style={localStyles.input}
-                        placeholder="Up to 50% Off"
-                        value={form.subtitle}
-                        onChangeText={t => setForm({ ...form, subtitle: t })}
-                    />
-
-                    <TouchableOpacity
-                        style={{ backgroundColor: '#3B82F6', padding: 12, borderRadius: 8, alignItems: 'center', marginTop: 8 }}
-                        onPress={handleSave}
-                        disabled={uploading}
-                    >
-                        {uploading ? <ActivityIndicator color="white" /> : <Text style={{ color: 'white', fontWeight: '700' }}>Save Banner</Text>}
-                    </TouchableOpacity>
-                </View>
-            )}
+    return (
+        <View style={styles.containerWhite}>
+            {renderHeader()}
 
             {loading ? (
-                <ActivityIndicator color="#0F172A" />
+                <View style={styles.centered}>
+                    <ActivityIndicator size="large" color="#0F172A" />
+                </View>
             ) : (
-                <ScrollView showsVerticalScrollIndicator={false}>
-                    {banners.length === 0 ? <Text style={{ color: '#94A3B8' }}>No banners found.</Text> : null}
-                    {banners.map((item) => (
-                        <View key={item.id} style={{ marginBottom: 16, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#E2E8F0' }}>
-                            <Image source={{ uri: item.image_url }} style={{ width: '100%', height: 150 }} resizeMode="cover" />
-                            <View style={{ padding: 12, backgroundColor: 'white' }}>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <View>
-                                        <Text style={{ fontWeight: '700', fontSize: 16 }}>{item.title}</Text>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                            <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>{item.section || 'HOME'}</Text>
-                                            </View>
-                                            <Text style={{ color: '#64748B', fontSize: 12 }}>{item.subtitle}</Text>
-                                        </View>
-                                    </View>
-                                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                                        <TouchableOpacity onPress={() => toggleActive(item)} style={{ padding: 6, backgroundColor: item.is_active ? '#DCFCE7' : '#F1F5F9', borderRadius: 6 }}>
-                                            <Ionicons name={item.is_active ? "eye" : "eye-off"} size={18} color={item.is_active ? '#10B981' : '#94A3B8'} />
-                                        </TouchableOpacity>
-                                        <TouchableOpacity onPress={() => handleDelete(item.id)} style={{ padding: 6, backgroundColor: '#FEE2E2', borderRadius: 6 }}>
-                                            <Ionicons name="trash" size={18} color="#EF4444" />
-                                        </TouchableOpacity>
+                <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+                >
+                    {banners.length === 0 && (
+                        <View style={styles.emptyStateContainer}>
+                            <Ionicons name="images-outline" size={64} color="#CBD5E1" />
+                            <Text style={styles.emptyStateText}>No banners yet</Text>
+                            <Text style={styles.emptyStateSub}>Touch the + button to add one</Text>
+                        </View>
+                    )}
+
+                    {SECTIONS.map(section => {
+                        const sectionBanners = banners.filter(b => (b.section || 'home') === section);
+                        if (sectionBanners.length === 0) return null;
+
+                        return (
+                            <View key={section} style={{ marginBottom: 32 }}>
+                                <View style={styles.sectionHeaderModern}>
+                                    <Text style={styles.sectionTitleModern}>{section}</Text>
+                                    <View style={styles.badgeModern}>
+                                        <Text style={styles.badgeText}>{sectionBanners.length}</Text>
                                     </View>
                                 </View>
+
+                                {sectionBanners.map((item) => (
+                                    <View key={item.id} style={styles.bannerCardModern}>
+                                        <Image source={{ uri: item.image_url }} style={styles.bannerImageModern} resizeMode="cover" />
+                                        <View style={styles.bannerContentModern}>
+                                            <View style={{ flex: 1 }}>
+                                                {/* REMOVED TITLE/SUBTITLE FROM CARD AS THEY ARE NOW UNUSED */}
+                                            </View>
+                                            <View style={styles.cardActionsModern}>
+                                                <TouchableOpacity
+                                                    onPress={() => toggleActive(item)}
+                                                    style={[styles.iconButtonSmall, { backgroundColor: item.is_active ? '#DCFCE7' : '#F1F5F9' }]}
+                                                >
+                                                    <Ionicons name={item.is_active ? "eye" : "eye-off"} size={18} color={item.is_active ? '#10B981' : '#64748B'} />
+                                                </TouchableOpacity>
+                                                <TouchableOpacity
+                                                    onPress={() => handleEdit(item)}
+                                                    style={[styles.iconButtonSmall, { backgroundColor: '#DBEAFE' }]}
+                                                >
+                                                    <Ionicons name="create-outline" size={18} color="#2563EB" />
+                                                </TouchableOpacity>
+                                                <TouchableOpacity
+                                                    onPress={() => handleDelete(item.id)}
+                                                    style={[styles.iconButtonSmall, { backgroundColor: '#FEE2E2' }]}
+                                                >
+                                                    <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                                                </TouchableOpacity>
+                                            </View>
+                                        </View>
+                                    </View>
+                                ))}
                             </View>
-                        </View>
-                    ))}
+                        );
+                    })}
                 </ScrollView>
             )}
+
+            {/* MODAL FORM */}
+            <Modal
+                visible={showForm}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setShowForm(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContentModern}>
+                        <View style={styles.modalHeaderModern}>
+                            <Text style={styles.modalTitleModern}>{editingId ? 'Edit Banner' : 'New Banner'}</Text>
+                            <TouchableOpacity onPress={() => setShowForm(false)}>
+                                <Ionicons name="close" size={24} color="#0F172A" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView showsVerticalScrollIndicator={false} style={{ padding: 20 }}>
+                            <Text style={styles.labelModern}>Target Section</Text>
+                            <View style={styles.segmentContainer}>
+                                {SECTIONS.map(sec => (
+                                    <TouchableOpacity
+                                        key={sec}
+                                        onPress={() => setForm({ ...form, section: sec })}
+                                        style={[styles.segmentItem, form.section === sec && styles.segmentItemActive]}
+                                    >
+                                        <Text style={[styles.segmentText, form.section === sec && styles.segmentTextActive]}>{sec}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+
+                            <Text style={styles.labelModern}>Banner Image</Text>
+                            <TouchableOpacity onPress={pickImage} style={styles.imageUploadBoxModern}>
+                                {form.image_url ? (
+                                    <>
+                                        <Image source={{ uri: form.image_url }} style={styles.previewImageModern} />
+                                        <View style={styles.imageReplaceOverlay}>
+                                            <Ionicons name="camera" size={20} color="white" />
+                                            <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 10, marginLeft: 6 }}>CHANGE</Text>
+                                        </View>
+                                    </>
+                                ) : (
+                                    <View style={{ alignItems: 'center' }}>
+                                        {uploading ? <ActivityIndicator color="#3B82F6" /> : (
+                                            <>
+                                                <Ionicons name="image-outline" size={40} color="#CBD5E1" />
+                                                <Text style={styles.uploadTextModern}>Select Image</Text>
+                                            </>
+                                        )}
+                                    </View>
+                                )}
+                            </TouchableOpacity>
+
+                            <Text style={styles.labelModern}>Deep Link / Action (Optional)</Text>
+                            <TextInput
+                                style={styles.modernInput}
+                                placeholder="/shop/category"
+                                value={form.action_link}
+                                onChangeText={t => setForm({ ...form, action_link: t })}
+                            />
+
+                            <TouchableOpacity
+                                style={styles.saveButtonModern}
+                                onPress={handleSave}
+                                disabled={uploading}
+                            >
+                                {uploading ? <ActivityIndicator color="white" /> : (
+                                    <Text style={styles.saveButtonText}>{editingId ? 'Update Banner' : 'Create Banner'}</Text>
+                                )}
+                            </TouchableOpacity>
+
+                            <View style={{ height: 40 }} />
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 };
 
-const localStyles = {
-    input: { backgroundColor: 'white', borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, padding: 10, marginBottom: 12, fontSize: 14 }
-};
+// Integration styles added to main theme or used here if distinct
+// I'll define them properly in the component scope or use existing from styles.theme
+// Assuming styles.theme is already quite rich, I'll use inline styles for the gaps
+const localStyles = StyleSheet.create({
+    // Using existing styles where possible
+});

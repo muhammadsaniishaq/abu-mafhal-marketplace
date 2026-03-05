@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { styles } from '../styles/theme';
+import { UserAvatar } from '../components/UserAvatar';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { decode } from 'base64-arraybuffer';
@@ -354,14 +355,8 @@ export const ChatScreen = ({ route, navigation }) => {
                     <Ionicons name="arrow-back" size={24} color="#0F172A" />
                 </TouchableOpacity>
 
-                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#F1F5F9', marginLeft: 12, overflow: 'hidden' }}>
-                    {targetProfile.avatar_url ? (
-                        <Image source={{ uri: targetProfile.avatar_url }} style={{ width: '100%', height: '100%' }} />
-                    ) : (
-                        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                            <Ionicons name="person" size={20} color="#94A3B8" />
-                        </View>
-                    )}
+                <View style={{ marginLeft: 12 }}>
+                    <UserAvatar user={targetProfile} size={40} />
                 </View>
 
                 <View style={{ marginLeft: 12, flex: 1 }}>

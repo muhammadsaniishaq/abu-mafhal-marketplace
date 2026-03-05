@@ -8,12 +8,13 @@ export const CountdownTimer = ({ targetDate }) => {
 
         if (difference > 0) {
             timeLeft = {
+                days: Math.floor(difference / (1000 * 60 * 60 * 24)),
                 hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
                 minutes: Math.floor((difference / 1000 / 60) % 60),
                 seconds: Math.floor((difference / 1000) % 60),
             };
         } else {
-            timeLeft = { hours: 0, minutes: 0, seconds: 0 };
+            timeLeft = { days: 0, hours: 0, minutes: 0, seconds: 0 };
         }
         return timeLeft;
     };
@@ -34,6 +35,14 @@ export const CountdownTimer = ({ targetDate }) => {
 
     return (
         <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>
+            {timeLeft.days > 0 && (
+                <>
+                    <View style={{ backgroundColor: '#EF4444', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                        <Text style={{ color: 'white', fontWeight: '800', fontSize: 12 }}>{formatTime(timeLeft.days)}D</Text>
+                    </View>
+                    <Text style={{ fontWeight: '800', color: '#EF4444' }}>:</Text>
+                </>
+            )}
             <View style={{ backgroundColor: '#EF4444', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
                 <Text style={{ color: 'white', fontWeight: '800', fontSize: 12 }}>{formatTime(timeLeft.hours)}</Text>
             </View>

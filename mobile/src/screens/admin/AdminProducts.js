@@ -22,13 +22,23 @@ export const AdminProducts = () => {
     }, []);
 
     const fetchProducts = async () => {
-        setLoading(true);
-        const { data, error } = await supabase.from('products').select('*').neq('status', 'archived').order('created_at', { ascending: false });
-        if (error) {
-            console.error(error);
-            Alert.alert('Error', 'Failed to fetch products');
-        } else {
-            setProducts(data || []);
+        try {
+            const { data, error } = await supabase
+                .from('products')
+                .select('*')
+                .neq('status', 'archived')
+                .order('created_at', { ascending: false })
+                .limit(100);
+
+            if (error) {
+                console.error("Fetch Products Error:", error);
+                Alert.alert('Error', error.message || 'Failed to fetch products');
+            } else {
+                setProducts(data || []);
+            }
+        } catch (err) {
+            console.error("Fetch Products Crash:", err);
+            Alert.alert('Network Error', 'Could not load products.');
         }
         setLoading(false);
         setRefreshing(false);
@@ -89,48 +99,51 @@ export const AdminProducts = () => {
         return matchesSearch && matchesStock;
     });
 
-    const renderItem = ({ item }) => (
-        <View style={{ flexDirection: 'row', padding: 12, backgroundColor: 'white', marginBottom: 12, borderRadius: 16, borderWidth: 1, borderColor: '#F1F5F9', alignItems: 'center', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', }}>
-            <Image
-                source={{ uri: (item.images && item.images[0]) ? item.images[0] : 'https://placehold.co/100' }}
-                style={{ width: 64, height: 64, borderRadius: 12, backgroundColor: '#F8FAFC' }}
-            />
-            <View style={{ flex: 1, marginLeft: 14 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <Text style={{ fontWeight: '700', color: '#0F172A', fontSize: 15, flex: 1, marginRight: 8 }} numberOfLines={1}>{item.name}</Text>
-                    {item.status === 'draft' && (
-                        <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                            <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '700' }}>DRAFT</Text>
-                        </View>
-                    )}
-                </View>
-
-                <Text style={{ fontSize: 15, color: '#0F172A', fontWeight: '800', marginTop: 4 }}>₦{item.price?.toLocaleString()}</Text>
-
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 10 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <Ionicons name="cube-outline" size={12} color="#64748B" />
-                        <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '500' }}>{item.stock_quantity || 0} in stock</Text>
+    const renderItem = ({ item }) => {
+        if (!item) return null;
+        return (
+            <View style={{ flexDirection: 'row', padding: 12, backgroundColor: 'white', marginBottom: 12, borderRadius: 16, borderWidth: 1, borderColor: '#F1F5F9', alignItems: 'center', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', }}>
+                <Image
+                    source={{ uri: (item?.images && item.images[0]) ? item.images[0] : 'https://placehold.co/100' }}
+                    style={{ width: 64, height: 64, borderRadius: 12, backgroundColor: '#F8FAFC' }}
+                />
+                <View style={{ flex: 1, marginLeft: 14 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <Text style={{ fontWeight: '700', color: '#0F172A', fontSize: 15, flex: 1, marginRight: 8 }} numberOfLines={1}>{item.name}</Text>
+                        {item.status === 'draft' && (
+                            <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                                <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '700' }}>DRAFT</Text>
+                            </View>
+                        )}
                     </View>
 
-                    {(item.stock_quantity || 0) < 5 && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FEF2F2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                            <Text style={{ fontSize: 10, color: '#EF4444', fontWeight: '700' }}>Low Stock</Text>
+                    <Text style={{ fontSize: 15, color: '#0F172A', fontWeight: '800', marginTop: 4 }}>₦{item.price?.toLocaleString()}</Text>
+
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 10 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Ionicons name="cube-outline" size={12} color="#64748B" />
+                            <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '500' }}>{item.stock_quantity || 0} in stock</Text>
                         </View>
-                    )}
+
+                        {(item.stock_quantity || 0) < 5 && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FEF2F2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                <Text style={{ fontSize: 10, color: '#EF4444', fontWeight: '700' }}>Low Stock</Text>
+                            </View>
+                        )}
+                    </View>
+                </View>
+
+                <View style={{ marginLeft: 8 }}>
+                    <TouchableOpacity onPress={() => handleEdit(item)} style={{ padding: 8, backgroundColor: '#EFF6FF', borderRadius: 8, marginBottom: 8 }}>
+                        <Ionicons name="create-outline" size={18} color="#3B82F6" />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => handleDelete(item.id)} style={{ padding: 8, backgroundColor: '#FEF2F2', borderRadius: 8 }}>
+                        <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                    </TouchableOpacity>
                 </View>
             </View>
-
-            <View style={{ marginLeft: 8 }}>
-                <TouchableOpacity onPress={() => handleEdit(item)} style={{ padding: 8, backgroundColor: '#EFF6FF', borderRadius: 8, marginBottom: 8 }}>
-                    <Ionicons name="create-outline" size={18} color="#3B82F6" />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => handleDelete(item.id)} style={{ padding: 8, backgroundColor: '#FEF2F2', borderRadius: 8 }}>
-                    <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                </TouchableOpacity>
-            </View>
-        </View>
-    );
+        );
+    };
 
     return (
         <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>

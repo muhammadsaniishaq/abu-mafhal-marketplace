@@ -8,8 +8,10 @@ import { geminiService } from '../services/geminiService';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import { Alert } from 'react-native';
+import { CountdownTimer } from '../components/CountdownTimer';
 
 export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductClick }) => {
+    const promoScrollX = useRef(new Animated.Value(0)).current;
     const [products, setProducts] = useState([]);
     const [filteredProducts, setFilteredProducts] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -26,6 +28,9 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
 
     // Banners State
     const [banners, setBanners] = useState([]);
+    const [promoBanners, setPromoBanners] = useState([]);
+    const [currentPromoIndex, setCurrentPromoIndex] = useState(0);
+    const promoFlatListRef = useRef(null);
 
     // Auto-Scroll Refs
     const scrollX = useRef(new Animated.Value(0)).current;
@@ -40,18 +45,31 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
 
     useEffect(() => {
         // Auto-Slide Logic (Every 3 seconds) - Only if we have banners
-        if (banners.length === 0) return;
+        if (banners.length > 1) {
+            const interval = setInterval(() => {
+                setBannerIndex(prev => {
+                    const nextIndex = (prev + 1) % banners.length;
+                    slideRef.current?.scrollTo({ x: nextIndex * (WIDTH - 32), animated: true });
+                    return nextIndex;
+                });
+            }, 3000);
+            return () => clearInterval(interval);
+        }
+    }, [banners.length]);
 
-        const interval = setInterval(() => {
-            const nextIndex = (bannerIndex + 1) % banners.length;
-            if (slideRef.current) {
-                slideRef.current.scrollTo({ x: nextIndex * (WIDTH - 32), animated: true });
-                setBannerIndex(nextIndex);
-            }
-        }, 3000);
-
-        return () => clearInterval(interval);
-    }, [bannerIndex, banners]);
+    // Promo Banner Auto-Slide Logic
+    useEffect(() => {
+        if (promoBanners.length > 1) {
+            const timer = setInterval(() => {
+                setCurrentPromoIndex(prev => {
+                    const nextIndex = (prev + 1) % promoBanners.length;
+                    promoFlatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
+                    return nextIndex;
+                });
+            }, 4000);
+            return () => clearInterval(timer);
+        }
+    }, [promoBanners.length]);
 
     useEffect(() => {
         filterProducts();
@@ -65,6 +83,33 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
                 setBanners(bannerData);
             } else {
                 setBanners([]); // No mock data
+            }
+
+            // 1B. Fetch Promo Banners
+            const { data: promoData } = await supabase
+                .from('banners')
+                .select('*')
+                .eq('section', 'promo')
+                .eq('is_active', true)
+                .order('created_at', { ascending: false });
+
+            if (promoData && promoData.length > 0) {
+                const validPromos = promoData.map(promo => {
+                    let linkData = { text: promo.action_link || '', locations: ['home'] };
+                    try {
+                        const parsed = JSON.parse(promo.action_link);
+                        if (parsed && typeof parsed === 'object') {
+                            linkData = { ...linkData, ...parsed };
+                        }
+                    } catch (e) {
+                        // Fallback
+                    }
+                    return { ...promo, linkData };
+                }).filter(promo => promo.linkData.locations && promo.linkData.locations.includes('shop'));
+
+                setPromoBanners(validPromos);
+            } else {
+                setPromoBanners([]);
             }
 
             // 2. Fetch Products
@@ -167,53 +212,56 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
         return null;
     };
 
-    const renderProduct = ({ item }) => (
-        <TouchableOpacity style={styles.shopCard} activeOpacity={0.9} onPress={() => onProductClick(item)}>
-            <View style={styles.shopImgBox}>
-                <Image
-                    source={{ uri: getImageUrl(item.images) || 'https://placehold.co/400' }}
-                    style={{ width: '100%', height: '100%' }}
-                    resizeMode="cover"
-                    onError={(e) => console.log('Shop Image Error:', e.nativeEvent.error)}
-                />
+    const renderProduct = ({ item }) => {
+        if (!item) return null;
+        return (
+            <TouchableOpacity style={styles.shopCard} activeOpacity={0.9} onPress={() => onProductClick(item)}>
+                <View style={styles.shopImgBox}>
+                    <Image
+                        source={{ uri: getImageUrl(item?.images) || 'https://placehold.co/400' }}
+                        style={{ width: '100%', height: '100%' }}
+                        resizeMode="cover"
+                        onError={(e) => console.log('Shop Image Error:', e.nativeEvent.error)}
+                    />
 
-                {/* BADGES */}
-                {item.discount > 0 ? (
-                    <View style={styles.cardBadge}><Text style={styles.cardBadgeText}>-{item.discount}%</Text></View>
-                ) : item.isNew && (
-                    <View style={[styles.cardBadge, { backgroundColor: '#3B82F6' }]}><Text style={styles.cardBadgeText}>NEW</Text></View>
-                )}
+                    {/* BADGES */}
+                    {item.discount > 0 ? (
+                        <View style={styles.cardBadge}><Text style={styles.cardBadgeText}>-{item.discount}%</Text></View>
+                    ) : item.isNew && (
+                        <View style={[styles.cardBadge, { backgroundColor: '#3B82F6' }]}><Text style={styles.cardBadgeText}>NEW</Text></View>
+                    )}
 
-                {/* WISHLIST BTN */}
-                <TouchableOpacity style={styles.cardLikeBtn} onPress={() => handleToggleWishlist(item.id)}>
-                    <Ionicons name={wishlist.includes(item.id) ? "heart" : "heart-outline"} size={16} color={wishlist.includes(item.id) ? "#EF4444" : "#94A3B8"} />
+                    {/* WISHLIST BTN */}
+                    <TouchableOpacity style={styles.cardLikeBtn} onPress={() => handleToggleWishlist(item.id)}>
+                        <Ionicons name={wishlist.includes(item.id) ? "heart" : "heart-outline"} size={16} color={wishlist.includes(item.id) ? "#EF4444" : "#94A3B8"} />
+                    </TouchableOpacity>
+                </View>
+
+                <View style={styles.shopDetails}>
+                    {/* TITLE */}
+                    <Text style={styles.shopTitle} numberOfLines={1}>{item?.name || 'Premium Product'}</Text>
+
+                    {/* RATING ROW */}
+                    <View style={styles.ratingRow}>
+                        {Array.from({ length: 5 }).map((_, i) => (
+                            <Ionicons key={i} name={i < Math.round(item.rating) ? "star" : "star-outline"} size={10} color="#FBBF24" />
+                        ))}
+                        <Text style={styles.ratingCount}>({item.reviews})</Text>
+                    </View>
+
+                    {/* PRICE ROW */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, justifyContent: 'space-between' }}>
+                        <Text style={styles.shopPrice}>₦{item.price ? item.price.toLocaleString() : '85,000'}</Text>
+                        {item.discount > 0 && <Text style={{ fontSize: 10, color: '#94A3B8', textDecorationLine: 'line-through' }}>₦{(item.price * 1.2).toLocaleString()}</Text>}
+                    </View>
+                </View>
+
+                <TouchableOpacity style={styles.addCartBtn} onPress={() => handleAddToCart(item)}>
+                    <Ionicons name="add" size={16} color="white" />
                 </TouchableOpacity>
-            </View>
-
-            <View style={styles.shopDetails}>
-                {/* TITLE */}
-                <Text style={styles.shopTitle} numberOfLines={1}>{item.name || 'Premium Product'}</Text>
-
-                {/* RATING ROW */}
-                <View style={styles.ratingRow}>
-                    {Array.from({ length: 5 }).map((_, i) => (
-                        <Ionicons key={i} name={i < Math.round(item.rating) ? "star" : "star-outline"} size={10} color="#FBBF24" />
-                    ))}
-                    <Text style={styles.ratingCount}>({item.reviews})</Text>
-                </View>
-
-                {/* PRICE ROW */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, justifyContent: 'space-between' }}>
-                    <Text style={styles.shopPrice}>₦{item.price ? item.price.toLocaleString() : '85,000'}</Text>
-                    {item.discount > 0 && <Text style={{ fontSize: 10, color: '#94A3B8', textDecorationLine: 'line-through' }}>₦{(item.price * 1.2).toLocaleString()}</Text>}
-                </View>
-            </View>
-
-            <TouchableOpacity style={styles.addCartBtn} onPress={() => handleAddToCart(item)}>
-                <Ionicons name="add" size={16} color="white" />
             </TouchableOpacity>
-        </TouchableOpacity>
-    );
+        );
+    };
 
     const renderEmpty = () => (
         <View style={styles.emptyStateContainer}>
@@ -229,55 +277,9 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
     const onScrollMomentumEnd = (e) => {
         const contentOffsetX = e.nativeEvent.contentOffset.x;
         const index = Math.round(contentOffsetX / (WIDTH - 32));
-        setBannerIndex(index);
-    };
-
-    const renderHeader = () => {
-        if (banners.length === 0) return null; // Don't show anything if no banners
-
-        return (
-            <View style={{ marginBottom: 12 }}>
-                <Animated.ScrollView
-                    ref={slideRef}
-                    horizontal
-                    pagingEnabled
-                    showsHorizontalScrollIndicator={false}
-                    style={{ marginHorizontal: 16, marginTop: 16, height: 160, borderRadius: 12, overflow: 'hidden' }}
-                    onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: false })}
-                    onMomentumScrollEnd={onScrollMomentumEnd}
-                    scrollEventThrottle={16}
-                >
-                    {banners.map((banner, index) => (
-                        <TouchableOpacity key={banner.id} activeOpacity={0.9} style={{ width: WIDTH - 32, height: 160 }}>
-                            <ImageBackground
-                                source={{ uri: banner.image_url }}
-                                style={{ width: '100%', height: '100%' }}
-                                resizeMode="cover"
-                            >
-                                <View style={styles.shopBannerOverlay}>
-                                    {/* <View style={{ backgroundColor: '#EF4444', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, alignSelf: 'flex-start', marginBottom: 8 }}>
-                                    <Text style={{ color: 'white', fontSize: 10, fontWeight: '700' }}>Promo</Text>
-                                </View> */}
-                                    <Text style={styles.shopBannerTitle}>{banner.title}</Text>
-                                    <Text style={styles.shopBannerSub}>{banner.subtitle}</Text>
-                                </View>
-                            </ImageBackground>
-                        </TouchableOpacity>
-                    ))}
-                </Animated.ScrollView>
-                {/* Dots Indicator */}
-                <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 8 }}>
-                    {banners.map((_, i) => {
-                        const opacity = scrollX.interpolate({
-                            inputRange: [(i - 1) * (WIDTH - 32), i * (WIDTH - 32), (i + 1) * (WIDTH - 32)],
-                            outputRange: [0.3, 1, 0.3],
-                            extrapolate: 'clamp'
-                        });
-                        return <Animated.View key={i} style={{ height: 6, width: 6, borderRadius: 3, backgroundColor: '#0F172A', marginHorizontal: 3, opacity }} />;
-                    })}
-                </View>
-            </View>
-        );
+        if (index !== bannerIndex) {
+            setBannerIndex(index);
+        }
     };
 
     const [toast, setToast] = useState({ visible: false, message: '', icon: 'checkmark-circle' });
@@ -297,8 +299,11 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
     // Helper to request permissions
     useEffect(() => {
         (async () => {
-            await Audio.requestPermissionsAsync();
-            await ImagePicker.requestMediaLibraryPermissionsAsync();
+            const { status: audioStatus } = await Audio.requestPermissionsAsync();
+            const { status: cameraStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (audioStatus !== 'granted' || cameraStatus !== 'granted') {
+                console.log('Permissions denied');
+            }
         })();
         return () => {
             if (recording) {
@@ -311,12 +316,8 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
     const handleVoiceSearch = async () => {
         try {
             if (recording) {
-                // Stop recording
-                // setIsListening(false); // Let stopRecording handle state
-                // setShowVoiceModal(false);
                 await stopRecording();
             } else {
-                // Start recording
                 await startRecording();
             }
         } catch (error) {
@@ -344,7 +345,7 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
 
             // Auto-stop after 4 seconds (Simulate short command)
             setTimeout(() => {
-                if (setIsListening) stopRecording(recording);
+                stopRecording(recording); // Safe call
             }, 4000);
 
         } catch (err) {
@@ -390,7 +391,7 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
     const handleImageSearch = async () => {
         try {
             const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ['images'],
+                mediaTypes: 'images',
                 allowsEditing: true,
                 quality: 0.5,
                 base64: true
@@ -426,6 +427,161 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
         toggleWishlist(id);
     };
 
+    const renderPromoDots = () => {
+        if (promoBanners.length <= 1) return null;
+        return (
+            <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 12 }}>
+                {promoBanners.map((_, i) => {
+                    const opacity = promoScrollX.interpolate({
+                        inputRange: [(i - 1) * (WIDTH - 32), i * (WIDTH - 32), (i + 1) * (WIDTH - 32)],
+                        outputRange: [0.3, 1, 0.3],
+                        extrapolate: 'clamp'
+                    });
+                    const dotWidth = promoScrollX.interpolate({
+                        inputRange: [(i - 1) * (WIDTH - 32), i * (WIDTH - 32), (i + 1) * (WIDTH - 32)],
+                        outputRange: [6, 20, 6],
+                        extrapolate: 'clamp'
+                    });
+                    return <Animated.View key={i} style={{ height: 6, width: dotWidth, borderRadius: 3, backgroundColor: '#0F172A', marginHorizontal: 3, opacity }} />;
+                })}
+            </View>
+        );
+    };
+
+    const memoizedHeader = React.useMemo(() => (
+        <View style={{ marginBottom: 12 }}>
+            {banners.length > 0 && (
+                <>
+                    <Animated.ScrollView
+                        ref={slideRef}
+                        horizontal
+                        pagingEnabled
+                        showsHorizontalScrollIndicator={false}
+                        style={{ marginHorizontal: 16, marginTop: 16, height: 160, borderRadius: 12, overflow: 'hidden' }}
+                        onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], {
+                            useNativeDriver: false
+                        })}
+                        onMomentumScrollEnd={onScrollMomentumEnd}
+                        scrollEventThrottle={16}
+                    >
+                        {banners.map((banner, index) => (
+                            <TouchableOpacity key={banner.id} activeOpacity={0.9} style={{ width: WIDTH - 32, height: 160 }}>
+                                <ImageBackground
+                                    source={{ uri: banner.image_url }}
+                                    style={{ width: '100%', height: '100%' }}
+                                    resizeMode="cover"
+                                >
+                                    {/* REMOVED TEXT OVERLAY AS REQUESTED */}
+                                </ImageBackground>
+                            </TouchableOpacity>
+                        ))}
+                    </Animated.ScrollView>
+                    {/* Dots Indicator */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 12 }}>
+                        {banners.map((_, i) => {
+                            const opacity = scrollX.interpolate({
+                                inputRange: [(i - 1) * (WIDTH - 32), i * (WIDTH - 32), (i + 1) * (WIDTH - 32)],
+                                outputRange: [0.3, 1, 0.3],
+                                extrapolate: 'clamp'
+                            });
+                            const dotWidth = scrollX.interpolate({
+                                inputRange: [(i - 1) * (WIDTH - 32), i * (WIDTH - 32), (i + 1) * (WIDTH - 32)],
+                                outputRange: [6, 20, 6],
+                                extrapolate: 'clamp'
+                            });
+                            return <Animated.View key={i} style={{ height: 6, width: dotWidth, borderRadius: 3, backgroundColor: '#0F172A', marginHorizontal: 3, opacity }} />;
+                        })}
+                    </View>
+                </>
+            )}
+
+            {/* DYNAMIC PROMO BANNERS CAROUSEL */}
+            {promoBanners.length > 0 && (
+                <View style={{ marginTop: 20 }}>
+                    <FlatList
+                        ref={promoFlatListRef}
+                        data={promoBanners}
+                        horizontal
+                        pagingEnabled
+                        showsHorizontalScrollIndicator={false}
+                        snapToInterval={WIDTH}
+                        decelerationRate="fast"
+                        scrollEventThrottle={16}
+                        onScroll={Animated.event(
+                            [{ nativeEvent: { contentOffset: { x: promoScrollX } } }],
+                            { useNativeDriver: false }
+                        )}
+                        onMomentumScrollEnd={(e) => {
+                            const index = Math.round(e.nativeEvent.contentOffset.x / WIDTH);
+                            if (index !== currentPromoIndex) {
+                                setCurrentPromoIndex(index);
+                            }
+                        }}
+                        keyExtractor={(item) => item.id.toString()}
+                        renderItem={({ item: promo }) => (
+                            <TouchableOpacity
+                                activeOpacity={0.9}
+                                onPress={() => {
+                                    if (promo.linkData?.productId) {
+                                        supabase.from('products').select('*').eq('id', promo.linkData.productId).single()
+                                            .then(({ data }) => {
+                                                if (data) {
+                                                    const promoDiscount = promo.linkData.discountValue ? {
+                                                        type: promo.linkData.discountType || 'percent',
+                                                        value: promo.linkData.discountValue
+                                                    } : null;
+                                                    onProductClick({ ...data, promoDiscount });
+                                                }
+                                            }).catch(() => { });
+                                    }
+                                }}
+                                style={{ width: WIDTH - 32, marginHorizontal: 16, borderRadius: 24, overflow: 'hidden', height: 140, backgroundColor: '#0F172A', boxShadow: '0px 8px 20px rgba(0,0,0,0.15)', shadowRadius: 15 }}
+                            >
+                                <Image
+                                    source={{ uri: promo.image_url || 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?q=80&w=2670&auto=format&fit=crop' }}
+                                    style={{ width: '100%', height: '100%', position: 'absolute', opacity: 0.5 }}
+                                    resizeMode="cover"
+                                />
+                                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)' }} />
+
+                                <View style={{ padding: 20, justifyContent: 'center', height: '100%' }}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                        <View style={{ flex: 1 }}>
+                                            <View style={{ backgroundColor: '#EF4444', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginBottom: 8 }}>
+                                                <Text style={{ color: 'white', fontWeight: '900', fontSize: 10, letterSpacing: 1 }}>
+                                                    {promo.subtitle?.toUpperCase() || 'LIMITED OFFER'}
+                                                </Text>
+                                            </View>
+                                            <Text style={{ fontSize: 20, fontWeight: '900', color: 'white', marginBottom: 4, lineHeight: 24, paddingRight: 10 }}>
+                                                {promo.title || 'Special Promotion'}
+                                            </Text>
+                                        </View>
+
+                                        {promo.linkData?.timerEnd && (
+                                            <View style={{ backgroundColor: 'rgba(255,255,255,0.15)', padding: 10, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', alignItems: 'center' }}>
+                                                <Text style={{ color: 'white', fontSize: 9, fontWeight: '800', marginBottom: 4, letterSpacing: 1 }}>ENDS IN</Text>
+                                                <CountdownTimer targetDate={promo.linkData.timerEnd} lightMode={true} />
+                                            </View>
+                                        )}
+                                    </View>
+
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                                        <Text style={{ color: '#F8FAFC', fontWeight: '700', fontSize: 13 }}>
+                                            {promo.linkData?.text || 'Explore Offer'}
+                                        </Text>
+                                        <Ionicons name="arrow-forward" size={14} color="#F8FAFC" />
+                                    </View>
+                                </View>
+                            </TouchableOpacity>
+                        )}
+                    />
+                    {/* Pagination Dots */}
+                    {renderPromoDots()}
+                </View>
+            )}
+        </View>
+    ), [banners, promoBanners, scrollX, promoScrollX]); // Dots are animated via Interpolation, indices handled by refs or direct state but the JSX remains stable for scroll state.
+
     return (
         <View style={styles.container}>
             <SafeAreaView style={styles.safeAreaWhite}>
@@ -441,7 +597,7 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
                         />
                         {/* AI ICONS */}
                         {searchQuery.length === 0 && (
-                            <View style={{ flexDirection: 'row', gap: 8, marginRight: 4 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginRight: 4 }}>
                                 <TouchableOpacity onPress={handleVoiceSearch}>
                                     <Ionicons name="mic" size={20} color="#3B82F6" />
                                 </TouchableOpacity>
@@ -487,7 +643,7 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
                 data={filteredProducts}
                 keyExtractor={(item, i) => i.toString()}
                 renderItem={renderProduct}
-                ListHeaderComponent={renderHeader}
+                ListHeaderComponent={memoizedHeader}
                 ListEmptyComponent={renderEmpty}
                 numColumns={2}
                 columnWrapperStyle={filteredProducts.length > 0 ? { justifyContent: 'space-between', paddingHorizontal: 16 } : null}

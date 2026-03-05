@@ -33,28 +33,30 @@ export const AdminFinancials = () => {
     }, []);
 
     const fetchFinancials = async () => {
-        setLoading(true);
-        // 1. Revenue Stats
-        const { data: orders } = await supabase.from('orders').select('total_amount').neq('status', 'Cancelled');
-        const totalRev = orders?.reduce((s, o) => s + (o.total_amount || 0), 0) || 0;
+        try {
+            setLoading(true);
 
-        // 2. Payout Stats
-        const { data: payouts } = await supabase.from('payouts').select('amount, status');
-        const pending = payouts?.filter(p => p.status === 'pending').reduce((s, p) => s + (p.amount || 0), 0) || 0;
-        const completed = payouts?.filter(p => p.status === 'paid').reduce((s, p) => s + (p.amount || 0), 0) || 0;
+            // 1. Fetch Consolidated Financial Stats via RPC
+            const { data: finStats, error: rpcError } = await supabase.rpc('get_admin_financial_stats');
 
-        const commissionRate = 0.05; // 5% example
-        const commission = totalRev * commissionRate;
-        const earnings = totalRev - commission;
+            if (rpcError) {
+                console.error("RPC Fin Stats Error:", rpcError);
+                Alert.alert('Stats Error', 'Failed to calculate financial metrics. Try again later.');
+            }
 
-        setData({
-            totalRevenue: totalRev,
-            platformCommission: commission,
-            vendorEarnings: earnings,
-            pendingPayouts: pending,
-            completedPayouts: completed
-        });
-        setLoading(false);
+            setData({
+                totalRevenue: finStats?.total_revenue || 0,
+                platformCommission: finStats?.platform_commission || 0,
+                vendorEarnings: finStats?.vendor_earnings || 0,
+                pendingPayouts: finStats?.pending_payouts_total || 0,
+                completedPayouts: finStats?.completed_payouts_total || 0
+            });
+        } catch (err) {
+            console.error("Admin Financials Fetch Crash:", err);
+            Alert.alert('Network Error', 'Could not load financial data. Please check your connection.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (

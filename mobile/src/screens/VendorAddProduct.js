@@ -7,6 +7,7 @@ import { decode } from 'base64-arraybuffer'; // Import decode
 import * as FileSystem from 'expo-file-system'; // Add Import
 import { styles } from '../styles/theme';
 import { geminiService } from '../services/geminiService'; // Import Gemini Service
+import { parsePrice } from '../utils/helpers';
 
 export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) => {
     const isEditing = !!initialData;
@@ -156,6 +157,14 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
         if (video.startsWith('http')) return video;
 
         try {
+            // Check if file still exists before attempting to read/upload
+            const fileInfo = await FileSystem.getInfoAsync(video);
+            if (!fileInfo.exists) {
+                console.log("VendorAddProduct: Video file no longer exists at path:", video);
+                Alert.alert('File Missing', 'The selected video file was moved or deleted. Product will be saved without it.');
+                return null;
+            }
+
             const fileName = `video_${Date.now()}.mp4`;
             const fileBase64 = await FileSystem.readAsStringAsync(video, { encoding: 'base64' });
             const arrayBuffer = decode(fileBase64);
@@ -188,6 +197,22 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
             return;
         }
 
+        // High price validation to prevent accidental 1000x multiplier
+        const p = parseFloat(formData.price.replace(/,/g, ''));
+        if (p > 10000000) { // 10 Million
+            const proceed = await new Promise(resolve => {
+                Alert.alert(
+                    'High Price Warning',
+                    `You entered ₦${p.toLocaleString()}. Is this correct?`,
+                    [
+                        { text: 'No, Edit', onPress: () => resolve(false), style: 'cancel' },
+                        { text: 'Yes, Save', onPress: () => resolve(true) }
+                    ]
+                );
+            });
+            if (!proceed) return;
+        }
+
         setLoading(true);
         try {
             const { data: { user } } = await supabase.auth.getUser();
@@ -202,12 +227,13 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
                 description: formData.description,
                 category: formData.category,
                 brand: formData.brand,
-                price: parseFloat(formData.price),
-                original_price: parseFloat(formData.originalPrice) || null,
-                cost: parseFloat(formData.cost) || null,
+                price: parsePrice(formData.price),
+                original_price: parsePrice(formData.originalPrice) || null,
+                cost: parsePrice(formData.cost) || null,
                 stock_quantity: parseInt(formData.stock) || 0,
                 sku: formData.sku,
                 images: imageUrls,
+                video_url: videoUrl, // Standardize top-level field
                 status: formData.status,
                 is_affiliate: formData.isAffiliate,
                 affiliate_link: formData.affiliateLink,

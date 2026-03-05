@@ -97,7 +97,7 @@ export const styles = StyleSheet.create({
 
     // SHOP
     shopHeader: { paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-    shopSearch: { flex: 1, flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, marginHorizontal: 12, alignItems: 'center' },
+    shopSearch: { flex: 1, flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: 8, paddingHorizontal: 12, height: 44, marginHorizontal: 12, alignItems: 'center' },
     shopCard: { width: COLUMN_WIDTH, backgroundColor: 'white', marginBottom: 16, borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: '#F3F4F6' },
     shopImgBox: { height: 160, backgroundColor: '#F8FAFC' },
     shopDetails: { padding: 8 },
@@ -281,5 +281,91 @@ export const styles = StyleSheet.create({
 
     // INFO PAGES
     infoCard: { backgroundColor: 'white', padding: 24, borderRadius: 16, boxShadow: '0px 0px 10px rgba(0,0,0,0.05)', elevation: 2 },
-    infoContent: { color: '#334155', fontSize: 15, lineHeight: 26 }
+    infoContent: { color: '#334155', fontSize: 15, lineHeight: 26 },
+
+    // MODERN ADMIN / GLOBAL UI
+    containerWhite: { flex: 1, backgroundColor: 'white' },
+    centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    modernHeader: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    modernTitle: { fontSize: 28, fontWeight: '900', color: '#0F172A' },
+    modernSubtitle: { fontSize: 14, color: '#64748B', marginTop: 2 },
+    addButtonModern: { backgroundColor: '#0F172A', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14, gap: 6 },
+    addButtonText: { color: 'white', fontWeight: '800', fontSize: 13 },
+
+    sectionHeaderModern: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
+    sectionTitleModern: { fontSize: 18, fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: 1 },
+    badgeModern: { backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+    badgeText: { fontSize: 12, fontWeight: '800', color: '#64748B' },
+
+    bannerCardModern: { backgroundColor: 'white', borderRadius: 20, marginBottom: 20, overflow: 'hidden', borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 12px rgba(0,0,0,0.03)', elevation: 2 },
+    bannerImageModern: { width: '100%', height: 180 },
+    bannerContentModern: { padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    bannerTitleText: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
+    bannerSubText: { fontSize: 13, color: '#64748B', marginTop: 2 },
+    cardActionsModern: { flexDirection: 'row', gap: 8 },
+    iconButtonSmall: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+
+    modalContentModern: { backgroundColor: 'white', borderTopLeftRadius: 32, borderTopRightRadius: 32, height: '90%', width: '100%' },
+    modalHeaderModern: { padding: 20, borderBottomWidth: 1, borderBottomColor: '#F1F5F9', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    modalTitleModern: { fontSize: 20, fontWeight: '900', color: '#0F172A' },
+
+    labelModern: { fontSize: 13, fontWeight: '700', color: '#64748B', marginBottom: 8, marginTop: 16 },
+    segmentContainer: { flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: 14, padding: 4, marginBottom: 8 },
+    segmentItem: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10 },
+    segmentItemActive: { backgroundColor: 'white', boxShadow: '0px 2px 4px rgba(0,0,0,0.05)', elevation: 2 },
+    segmentText: { fontSize: 12, fontWeight: '700', color: '#94A3B8', textTransform: 'capitalize' },
+    segmentTextActive: { color: '#0F172A' },
+
+    imageUploadBoxModern: { height: 160, backgroundColor: '#F8FAFC', borderRadius: 20, borderWidth: 2, borderColor: '#E2E8F0', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+    previewImageModern: { width: '100%', height: '100%' },
+    imageReplaceOverlay: { position: 'absolute', bottom: 12, right: 12, backgroundColor: 'rgba(15,23,42,0.8)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
+    uploadTextModern: { fontSize: 13, fontWeight: '600', color: '#94A3B8', marginTop: 8 },
+
+    saveButtonModern: { backgroundColor: '#0F172A', paddingVertical: 18, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginTop: 32, boxShadow: '0px 8px 16px rgba(15,23,42,0.2)', elevation: 6 },
+    saveButtonText: { color: 'white', fontWeight: '800', fontSize: 16, letterSpacing: 0.5 },
+
+    // CHECKOUT SPECIFIC
+    receiptCard: { backgroundColor: 'white', borderRadius: 24, padding: 24, borderWidth: 1, borderColor: '#F1F5F9', borderStyle: 'dashed', marginBottom: 20 },
+    receiptHeader: { borderBottomWidth: 1, borderBottomColor: '#F1F5F9', paddingBottom: 16, marginBottom: 16, alignItems: 'center' },
+    receiptTitle: { fontSize: 18, fontWeight: '900', color: '#0F172A', letterSpacing: 1 },
+    receiptRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
+    receiptLabel: { fontSize: 13, color: '#64748B', fontWeight: '600' },
+    receiptValue: { fontSize: 13, fontWeight: '700', color: '#1E293B' },
+    receiptTotalRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+    receiptTotalLabel: { fontSize: 16, fontWeight: '900', color: '#0F172A' },
+    receiptTotalValue: { fontSize: 20, fontWeight: '900', color: '#3B82F6' },
+
+    paymentMethodTile: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', borderRadius: 20, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9' },
+    paymentMethodTileActive: { borderColor: '#0F172A', backgroundColor: '#F8FAFC', borderWidth: 2 },
+    paymentIconCircle: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+    paymentMethodTitle: { fontSize: 15, fontWeight: '800', color: '#0F172A' },
+    paymentMethodSub: { fontSize: 12, color: '#64748B', marginTop: 2 },
+
+    checkoutStepContainer: { backgroundColor: 'white', borderRadius: 24, padding: 20, marginBottom: 20, boxShadow: '0px 4px 12px rgba(0,0,0,0.03)', elevation: 2 },
+    checkoutStepHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
+    checkoutStepBadge: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center' },
+    checkoutStepBadgeText: { color: 'white', fontSize: 12, fontWeight: '900' },
+    checkoutStepTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A' },
+
+    successOverlay: { flex: 1, backgroundColor: 'white', alignItems: 'center', justifyContent: 'center', padding: 40 },
+    successIconBox: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#DCFCE7', alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
+    successTitle: { fontSize: 28, fontWeight: '900', color: '#0F172A', marginBottom: 12, textAlign: 'center' },
+    successSub: { fontSize: 16, color: '#64748B', textAlign: 'center', lineHeight: 24, marginBottom: 40 },
+
+    footerModern: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: 'white',
+        paddingHorizontal: 24,
+        paddingTop: 16,
+        paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderTopWidth: 1,
+        borderTopColor: '#F1F5F9',
+        boxShadow: '0px -10px 20px rgba(0,0,0,0.05)',
+        elevation: 10
+    }
 });

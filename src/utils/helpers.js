@@ -1,9 +1,20 @@
 // src/utils/helpers.js
 
+// Helper to parse price reliably
+export const parsePrice = (price) => {
+  if (typeof price === 'number') return isNaN(price) ? 0 : price;
+  if (!price) return 0;
+  // Remove everything except numbers and decimal point, handle commas
+  const clean = price.toString().replace(/,/g, '').replace(/[^\d.]/g, '');
+  const val = parseFloat(clean);
+  return isNaN(val) ? 0 : val;
+};
+
 // Format currency
 export const formatCurrency = (amount, currency = '₦') => {
   if (amount === null || amount === undefined) return `${currency}0`;
-  return `${currency}${Number(amount).toLocaleString('en-NG', {
+  const val = typeof amount === 'number' ? amount : parsePrice(amount);
+  return `${currency}${val.toLocaleString('en-NG', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2
   })}`;
@@ -12,25 +23,25 @@ export const formatCurrency = (amount, currency = '₦') => {
 // Format date
 export const formatDate = (date, options = {}) => {
   if (!date) return '';
-  
+
   const d = date instanceof Date ? date : new Date(date.seconds ? date.seconds * 1000 : date);
-  
+
   const defaultOptions = {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     ...options
   };
-  
+
   return d.toLocaleDateString('en-US', defaultOptions);
 };
 
 // Format datetime
 export const formatDateTime = (date) => {
   if (!date) return '';
-  
+
   const d = date instanceof Date ? date : new Date(date.seconds ? date.seconds * 1000 : date);
-  
+
   return d.toLocaleString('en-US', {
     year: 'numeric',
     month: 'short',
@@ -43,19 +54,19 @@ export const formatDateTime = (date) => {
 // Get relative time (e.g., "2 hours ago")
 export const getRelativeTime = (date) => {
   if (!date) return '';
-  
+
   const d = date instanceof Date ? date : new Date(date.seconds ? date.seconds * 1000 : date);
   const now = new Date();
   const diffMs = now - d;
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
-  
+
   if (diffMins < 1) return 'Just now';
   if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
   if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
   if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-  
+
   return formatDate(d);
 };
 
@@ -87,17 +98,17 @@ export const isValidNigerianPhone = (phone) => {
 // Format phone number
 export const formatPhoneNumber = (phone) => {
   if (!phone) return '';
-  
+
   // Remove all non-digits
   const cleaned = phone.replace(/\D/g, '');
-  
+
   // Format as +234 XXX XXX XXXX
   if (cleaned.startsWith('234')) {
     return `+234 ${cleaned.substring(3, 6)} ${cleaned.substring(6, 9)} ${cleaned.substring(9)}`;
   } else if (cleaned.startsWith('0')) {
     return `+234 ${cleaned.substring(1, 4)} ${cleaned.substring(4, 7)} ${cleaned.substring(7)}`;
   }
-  
+
   return phone;
 };
 
@@ -137,7 +148,7 @@ export const getStatusColor = (status) => {
     rejected: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
     draft: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
   };
-  
+
   return colors[status?.toLowerCase()] || 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300';
 };
 
@@ -177,12 +188,12 @@ export const getRandomColor = (seed = '') => {
     'bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500',
     'bg-purple-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500'
   ];
-  
+
   if (seed) {
     const hash = seed.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     return colors[hash % colors.length];
   }
-  
+
   return colors[Math.floor(Math.random() * colors.length)];
 };
 
@@ -247,7 +258,7 @@ export const sortByKey = (array, key, order = 'asc') => {
   return [...array].sort((a, b) => {
     const aVal = a[key];
     const bVal = b[key];
-    
+
     if (order === 'asc') {
       return aVal > bVal ? 1 : -1;
     } else {
@@ -294,11 +305,11 @@ export const calculatePercentage = (value, total) => {
 // Format file size
 export const formatFileSize = (bytes) => {
   if (bytes === 0) return '0 Bytes';
-  
+
   const k = 1024;
   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  
+
   return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
 };
 
@@ -307,7 +318,7 @@ export const getPaginationInfo = (currentPage, totalItems, itemsPerPage) => {
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
-  
+
   return {
     currentPage,
     totalPages,
@@ -325,16 +336,16 @@ export const validatePasswordStrength = (password) => {
   const hasLowerCase = /[a-z]/.test(password);
   const hasNumbers = /\d/.test(password);
   const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
-  
+
   let strength = 0;
   if (password.length >= minLength) strength++;
   if (password.length >= 10) strength++;
   if (hasUpperCase && hasLowerCase) strength++;
   if (hasNumbers) strength++;
   if (hasSpecialChar) strength++;
-  
+
   const labels = ['Very Weak', 'Weak', 'Fair', 'Good', 'Strong', 'Very Strong'];
-  
+
   return {
     score: strength,
     label: labels[strength],
@@ -357,7 +368,7 @@ export const escapeHtml = (text) => {
 // Get greeting based on time
 export const getTimeGreeting = () => {
   const hour = new Date().getHours();
-  
+
   if (hour < 12) return 'Good morning';
   if (hour < 17) return 'Good afternoon';
   return 'Good evening';
@@ -378,10 +389,10 @@ export const formatLoyaltyPoints = (points) => {
 // Check if user is online (last seen)
 export const isUserOnline = (lastSeen, thresholdMinutes = 5) => {
   if (!lastSeen) return false;
-  
+
   const lastSeenDate = lastSeen instanceof Date ? lastSeen : new Date(lastSeen.seconds ? lastSeen.seconds * 1000 : lastSeen);
   const now = new Date();
   const diffMinutes = (now - lastSeenDate) / 60000;
-  
+
   return diffMinutes < thresholdMinutes;
 };

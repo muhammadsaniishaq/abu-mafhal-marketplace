@@ -69,19 +69,18 @@ export const AdminAnalytics = () => {
     }, []);
 
     const fetchAnalytics = async () => {
-        setLoading(true);
         try {
-            // 1. Revenue & Orders
-            const { data: orders } = await supabase.from('orders').select('total_amount').neq('status', 'Cancelled');
-            const totalRevenue = orders?.reduce((sum, o) => sum + (o.total_amount || 0), 0) || 0;
-            const totalOrders = orders?.length || 0;
-            const avgOrder = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+            setLoading(true);
 
-            // 2. Customers
-            const { count: userCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
+            // 1. Fetch Consolidated Stats via RPC (Efficient/Server-side)
+            const { data: dashboardStats, error: rpcError } = await supabase.rpc('get_admin_dashboard_stats');
 
-            // 3. Top Products (Mock for demo as we might not have order_items fully populated with names)
-            // Just fetching products and assigning random sales for visualization
+            if (rpcError) {
+                console.error("RPC Stats Error:", rpcError);
+                Alert.alert('Stats Error', 'Failed to calculate platform metrics.');
+            }
+
+            // 2. Mock Top Products (Limited)
             const { data: products } = await supabase.from('products').select('name').limit(5);
             const topProds = products?.map((p, i) => ({
                 name: p.name,
@@ -90,15 +89,16 @@ export const AdminAnalytics = () => {
             })).sort((a, b) => b.revenue - a.revenue) || [];
 
             setStats({
-                revenue: totalRevenue,
-                orders: totalOrders,
-                avgOrderValue: avgOrder,
-                customers: userCount || 0,
+                revenue: dashboardStats?.total_revenue || 0,
+                orders: dashboardStats?.pending_orders_count || 0, // Simplified or use a specific order count RPC
+                avgOrderValue: (dashboardStats?.total_revenue || 0) / (dashboardStats?.user_count || 1), // Rough estimate
+                customers: dashboardStats?.user_count || 0,
                 topProducts: topProds
             });
 
         } catch (e) {
-            console.error(e);
+            console.error("Admin Analytics Fetch Crash:", e);
+            Alert.alert('Network Error', 'The analytics console could not be reached.');
         } finally {
             setLoading(false);
         }

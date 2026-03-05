@@ -23,7 +23,8 @@ export const AdminVendors = () => {
             const { data, error } = await supabase
                 .from('vendor_applications')
                 .select('*, profiles(email, full_name)')
-                .order('created_at', { ascending: false });
+                .order('created_at', { ascending: false })
+                .limit(50);
 
             if (error) {
                 console.error('AdminVendors Fetch Error:', error);

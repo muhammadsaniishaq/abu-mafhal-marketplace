@@ -27,6 +27,8 @@ import { AdminAbandonedCarts } from './admin/AdminAbandonedCarts';
 import { AdminInvoices } from './admin/AdminInvoices';
 import { AdminBrands } from './admin/AdminBrands';
 import { AdminHomeSettings } from './admin/AdminHomeSettings';
+import { AdminPromoBanners } from './admin/AdminPromoBanners';
+import { AdminAIAssistantModal } from '../components/AdminAIAssistantModal';
 
 // Helper Component for Stats
 const LinearStatCard = ({ label, value, icon, color1, color2 }) => (
@@ -42,6 +44,7 @@ const LinearStatCard = ({ label, value, icon, color1, color2 }) => (
 
 export const AdminDashboard = ({ user, onLogout }) => {
     const [activeTab, setActiveTab] = useState('overview');
+    const [showAI, setShowAI] = useState(false);
     const [stats, setStats] = useState({ users: 0, vendors: 0, revenue: 0 });
     const [pendingVendors, setPendingVendors] = useState([]);
     const [recentOrders, setRecentOrders] = useState([]);
@@ -58,36 +61,43 @@ export const AdminDashboard = ({ user, onLogout }) => {
         try {
             setLoading(true);
 
-            // 1. Fetch User Count
-            const { count: userCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
+            // 1. Fetch Consolidated Stats via RPC (Efficient/Server-side)
+            const { data: dashboardStats, error: rpcError } = await supabase.rpc('get_admin_dashboard_stats');
 
-            // 2. Fetch Vendor Count
-            const { count: vendorCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'vendor');
+            if (rpcError) {
+                console.error("RPC Stats Error:", rpcError);
+                // Fallback or alert
+                Alert.alert('Stats Error', 'Failed to calculate platform metrics. Try again later.');
+            }
 
-            // 3. Fetch Revenue
-            const { data: revenueData } = await supabase.from('orders').select('total_amount').neq('status', 'Cancelled');
-            const revenue = revenueData ? revenueData.reduce((sum, order) => sum + (order.total_amount || 0), 0) : 0;
+            // 2. Fetch Recent Data (Limited)
+            const [
+                { data: applications },
+                { data: orders },
+                { data: stockData },
+                { data: reviewsData }
+            ] = await Promise.all([
+                supabase.from('vendor_applications').select('*, profiles(email, full_name)').eq('status', 'pending').limit(10),
+                supabase.from('orders').select('*, user:profiles(full_name)').order('created_at', { ascending: false }).limit(5),
+                supabase.from('products').select('*').lt('stock_quantity', 10).eq('status', 'approved').limit(10),
+                supabase.from('reviews').select('*, user:profiles(full_name)').order('created_at', { ascending: false }).limit(3)
+            ]);
 
-            // 4. Fetch Pending Vendor Applications
-            const { data: applications } = await supabase.from('vendor_applications').select('*, profiles(email, full_name)').eq('status', 'pending');
             setPendingVendors(applications || []);
-
-            // 5. Fetch Recent Orders
-            const { data: orders } = await supabase.from('orders').select('*, user:profiles(full_name)').order('created_at', { ascending: false }).limit(5);
             setRecentOrders(orders || []);
-
-            // 6. Fetch Low Stock
-            const { data: stockData } = await supabase.from('products').select('*').lt('stock_quantity', 10).eq('status', 'approved');
             setLowStock(stockData || []);
-
-            // 7. Fetch Recent Reviews
-            const { data: reviewsData } = await supabase.from('reviews').select('*, user:profiles(full_name)').order('created_at', { ascending: false }).limit(3);
             setRecentReviews(reviewsData || []);
 
-            setStats({ users: userCount || 0, vendors: vendorCount || 0, revenue: revenue });
+            setStats({
+                users: dashboardStats?.user_count || 0,
+                vendors: dashboardStats?.vendor_count || 0,
+                revenue: dashboardStats?.total_revenue || 0,
+                pendingOrders: dashboardStats?.pending_orders_count || 0
+            });
 
         } catch (e) {
-            console.error("Admin Fetch Error:", e);
+            console.error("Admin Dashboard Fetch Crash:", e);
+            Alert.alert('Network Error', 'The admin console is experiencing a connection issue. Check your dashboard for service status.');
         } finally {
             setLoading(false);
         }
@@ -182,6 +192,7 @@ export const AdminDashboard = ({ user, onLogout }) => {
                     <QuickAction icon="stopwatch" label="Flash" color="#EF4444" onPress={() => setActiveTab('flash')} />
                     <QuickAction icon="document-text" label="Pages" color="#334155" onPress={() => setActiveTab('pages')} />
                     <QuickAction icon="megaphone" label="Notify" color="#F59E0B" onPress={() => setActiveTab('broadcast')} />
+                    <QuickAction icon="megaphone-outline" label="Promos" color="#14B8A6" onPress={() => setActiveTab('promos')} />
                     <QuickAction icon="wallet" label="Payouts" color="#10B981" onPress={() => setActiveTab('payouts')} />
                     <QuickAction icon="cart" label="Carts" color="#F97316" onPress={() => setActiveTab('carts')} />
                     <QuickAction icon="receipt" label="Invoice" color="#0EA5E9" onPress={() => setActiveTab('invoices')} />
@@ -210,7 +221,7 @@ export const AdminDashboard = ({ user, onLogout }) => {
                     {lowStock.length > 0 ? lowStock.map(item => (
                         <View key={item.id} style={{ width: 160, padding: 12, backgroundColor: '#FEF2F2', borderRadius: 16, borderWidth: 1, borderColor: '#FECACA' }}>
                             <View style={{ flexDirection: 'row', gap: 10, marginBottom: 8 }}>
-                                <Image source={{ uri: item.images?.[0] || 'https://placehold.co/100' }} style={{ width: 40, height: 40, borderRadius: 8, backgroundColor: 'rgba(0,0,0,0.05)' }} />
+                                <Image source={{ uri: item?.images?.[0] || 'https://placehold.co/100' }} style={{ width: 40, height: 40, borderRadius: 8, backgroundColor: 'rgba(0,0,0,0.05)' }} />
                                 <View style={{ flex: 1 }}>
                                     <Text numberOfLines={1} style={{ fontWeight: '700', color: '#991B1B', fontSize: 13 }}>{item.name}</Text>
                                     <Text style={{ fontSize: 11, color: '#EF4444', fontWeight: '600' }}>Low Stock</Text>
@@ -349,6 +360,7 @@ export const AdminDashboard = ({ user, onLogout }) => {
         if (activeTab === 'support') return <AdminSupport />;
         if (activeTab === 'settings') return <AdminSettings />;
         if (activeTab === 'home') return <AdminHomeSettings />;
+        if (activeTab === 'promos') return <AdminPromoBanners />;
         return renderOverview();
     };
 
@@ -370,7 +382,7 @@ export const AdminDashboard = ({ user, onLogout }) => {
 
                 {/* SCROLLABLE TABS */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 20 }}>
-                    {['Overview', 'Home', 'Vendors', 'Products', 'Brands', 'Analytics', 'Financials', 'Orders', 'Invoices', 'Carts', 'Disputes', 'Reviews', 'Categories', 'Banners', 'Users', 'Payouts', 'Flash', 'Referrals', 'Pages', 'Audit', 'Broadcast', 'Coupons', 'Support', 'Settings'].map((tab) => {
+                    {['Overview', 'Home', 'Promos', 'Vendors', 'Products', 'Brands', 'Analytics', 'Financials', 'Orders', 'Invoices', 'Carts', 'Disputes', 'Reviews', 'Categories', 'Banners', 'Users', 'Payouts', 'Flash', 'Referrals', 'Pages', 'Audit', 'Broadcast', 'Coupons', 'Support', 'Settings'].map((tab) => {
                         const isActive = activeTab === tab.toLowerCase();
                         return (
                             <TouchableOpacity
@@ -388,6 +400,22 @@ export const AdminDashboard = ({ user, onLogout }) => {
             <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
                 {renderContent()}
             </View>
+
+            {/* AI Assistant FAB */}
+            <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => setShowAI(true)}
+                style={{ position: 'absolute', bottom: 30, right: 20, width: 60, height: 60, borderRadius: 30, backgroundColor: '#0F172A', justifyContent: 'center', alignItems: 'center', shadowColor: '#0F172A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5, borderWidth: 2, borderColor: '#3B82F6' }}
+            >
+                <Text style={{ fontSize: 28 }}>🤖</Text>
+                <View style={{ position: 'absolute', top: 0, right: 0, width: 16, height: 16, borderRadius: 8, backgroundColor: '#10B981', borderWidth: 2, borderColor: '#0F172A' }} />
+            </TouchableOpacity>
+
+            <AdminAIAssistantModal
+                visible={showAI}
+                onClose={() => setShowAI(false)}
+                user={user}
+            />
         </View>
     );
 };

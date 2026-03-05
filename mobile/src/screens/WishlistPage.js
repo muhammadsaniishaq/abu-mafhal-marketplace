@@ -72,35 +72,38 @@ export const WishlistPage = ({ onBack, onAddToCart, onProductClick }) => {
         Alert.alert('Success', `${product.name} added to cart!`);
     };
 
-    const renderItem = ({ item }) => (
-        <TouchableOpacity
-            activeOpacity={0.9}
-            style={localStyles.itemCard}
-            onPress={() => onProductClick(item)}
-        >
-            <Image source={{ uri: item.image || (item.images && item.images[0]) }} style={localStyles.itemImage} resizeMode="cover" />
-
+    const renderItem = ({ item }) => {
+        if (!item) return null;
+        return (
             <TouchableOpacity
-                style={localStyles.removeBtn}
-                onPress={() => handleRemove(item.id)}
+                activeOpacity={0.9}
+                style={localStyles.itemCard}
+                onPress={() => onProductClick(item)}
             >
-                <Ionicons name="heart" size={18} color="#EF4444" />
-            </TouchableOpacity>
-
-            <View style={localStyles.itemInfo}>
-                <Text style={localStyles.itemTitle} numberOfLines={1}>{item.name}</Text>
-                <Text style={localStyles.itemPrice}>₦{item.price?.toLocaleString() || '0'}</Text>
+                <Image source={{ uri: item?.images?.[0] || item?.image || 'https://placehold.co/200' }} style={localStyles.itemImage} resizeMode="cover" />
 
                 <TouchableOpacity
-                    style={localStyles.addCartBtn}
-                    onPress={() => handleAddToCart(item)}
+                    style={localStyles.removeBtn}
+                    onPress={() => handleRemove(item?.id)}
                 >
-                    <Ionicons name="cart-outline" size={16} color="white" />
-                    <Text style={localStyles.addCartText}>Add to Cart</Text>
+                    <Ionicons name="heart" size={18} color="#EF4444" />
                 </TouchableOpacity>
-            </View>
-        </TouchableOpacity>
-    );
+
+                <View style={localStyles.itemInfo}>
+                    <Text style={localStyles.itemTitle} numberOfLines={1}>{item?.name || 'Product'}</Text>
+                    <Text style={localStyles.itemPrice}>₦{item?.price?.toLocaleString() || '0'}</Text>
+
+                    <TouchableOpacity
+                        style={localStyles.addCartBtn}
+                        onPress={() => handleAddToCart(item)}
+                    >
+                        <Ionicons name="cart-outline" size={16} color="white" />
+                        <Text style={localStyles.addCartText}>Add to Cart</Text>
+                    </TouchableOpacity>
+                </View>
+            </TouchableOpacity>
+        );
+    };
 
     return (
         <View style={styles.container}>

@@ -1,9 +1,11 @@
 import * as React from 'react';
 import { View, Text, Modal, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert, Image, StyleSheet, Linking, FlatList, KeyboardAvoidingView, Platform, Dimensions } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { UserAvatar } from '../../components/UserAvatar';
 
 const { width } = Dimensions.get('window');
 
@@ -83,6 +85,7 @@ export const AdminUserDetails = ({ visible, user, onClose, onUpdate, navigation:
     // Data State
     const [wallet, setWallet] = React.useState(null);
     const [orders, setOrders] = React.useState([]);
+    const [driverInfo, setDriverInfo] = React.useState(null);
     const [loadingData, setLoadingData] = React.useState(false);
 
     // UI State
@@ -138,6 +141,18 @@ export const AdminUserDetails = ({ visible, user, onClose, onUpdate, navigation:
                 .order('created_at', { ascending: false })
                 .limit(50);
             setOrders(ordersData || []);
+
+            // Fetch driver info if user is a driver
+            if (user.role === 'driver') {
+                const { data: driverData } = await supabase
+                    .from('drivers')
+                    .select('*')
+                    .eq('user_id', user.id)
+                    .single();
+                setDriverInfo(driverData || null);
+            } else {
+                setDriverInfo(null);
+            }
         } catch (e) {
             console.log("Error fetching user details:", e);
         } finally {
@@ -279,37 +294,121 @@ export const AdminUserDetails = ({ visible, user, onClose, onUpdate, navigation:
     return (
         <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
             <View style={styles.container}>
-                {/* Header */}
-                <View style={styles.header}>
-                    <TouchableOpacity onPress={onClose} style={styles.iconButton}>
-                        <Ionicons name="close" size={24} color="#1E293B" />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>User Profile</Text>
-                    <TouchableOpacity
-                        onPress={() => editMode ? handleSaveProfile() : setEditMode(true)}
-                        disabled={saving}
-                        style={[styles.editButton, editMode && { backgroundColor: '#3B82F6' }]}
-                    >
-                        {saving ? <ActivityIndicator size="small" color={editMode ? 'white' : '#3B82F6'} /> : (
-                            <Text style={[styles.editButtonText, editMode && { color: 'white' }]}>{editMode ? 'Save' : 'Edit'}</Text>
-                        )}
-                    </TouchableOpacity>
-                </View>
+                {/* ══ PREMIUM HERO HEADER ══ */}
+                {(() => {
+                    const roleColor =
+                        user.role === 'admin' ? '#F87171' :
+                            user.role === 'vendor' ? '#A78BFA' :
+                                user.role === 'driver' ? '#38BDF8' : '#60A5FA';
+                    const roleGrad =
+                        user.role === 'admin' ? ['#0A0A1A', '#2D0A0A', '#5B1212'] :
+                            user.role === 'vendor' ? ['#0A0A1A', '#1A0A2E', '#3B1278'] :
+                                user.role === 'driver' ? ['#0A0A1A', '#001E35', '#00558A'] :
+                                    ['#0A0A1A', '#001133', '#003A8C'];
+                    const roleIcon =
+                        user.role === 'admin' ? 'shield-checkmark' :
+                            user.role === 'vendor' ? 'storefront' :
+                                user.role === 'driver' ? 'bicycle' : 'person';
+                    const roleLabel = user.role
+                        ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
+                        : 'Customer';
+                    return (
+                        <LinearGradient colors={roleGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroHdr}>
+                            {/* Top bar */}
+                            <View style={styles.heroTopBar}>
+                                <TouchableOpacity onPress={onClose} style={styles.heroCircleBtn}>
+                                    <Ionicons name="close" size={19} color="rgba(255,255,255,0.8)" />
+                                </TouchableOpacity>
+                                <View style={[styles.heroRolePill, { borderColor: `${roleColor}55`, backgroundColor: `${roleColor}18` }]}>
+                                    <Ionicons name={roleIcon} size={10} color={roleColor} style={{ marginRight: 4 }} />
+                                    <Text style={[styles.heroRolePillTxt, { color: roleColor }]}>{roleLabel}</Text>
+                                </View>
+                                <TouchableOpacity
+                                    onPress={() => editMode ? handleSaveProfile() : setEditMode(true)}
+                                    disabled={saving}
+                                    style={[styles.heroCircleBtn, editMode && { backgroundColor: roleColor }]}
+                                >
+                                    {saving
+                                        ? <ActivityIndicator size="small" color="white" />
+                                        : <Ionicons name={editMode ? 'checkmark' : 'create-outline'} size={18} color="white" />
+                                    }
+                                </TouchableOpacity>
+                            </View>
 
-                {/* Profile Summary */}
-                <View style={styles.summaryContainer}>
-                    <View style={styles.avatarContainer}>
-                        <Text style={styles.avatarText}>{(user.full_name || user.email || 'U').charAt(0).toUpperCase()}</Text>
-                        <View style={[styles.roleBadgeAbsolute, { backgroundColor: user.role === 'admin' ? '#EF4444' : user.role === 'vendor' ? '#8B5CF6' : '#3B82F6' }]}>
-                            <Ionicons name={user.role === 'admin' ? 'shield' : user.role === 'vendor' ? 'storefront' : 'person'} size={12} color="white" />
-                        </View>
-                    </View>
-                    <View style={{ alignItems: 'center', marginTop: 12 }}>
-                        <Text style={styles.profileName}>{user.full_name || 'No Name'}</Text>
-                        <Text style={styles.profileEmail}>{user.email}</Text>
-                        <Text style={styles.profileId}>ID: {user.id.slice(0, 8)}...</Text>
-                    </View>
-                </View>
+                            {/* Avatar centre */}
+                            <View style={styles.heroCentre}>
+                                <View style={{ position: 'relative' }}>
+                                    <View style={[styles.heroAvatarRing, { borderColor: `${roleColor}66` }]}>
+                                        <UserAvatar user={user} size={86} />
+                                    </View>
+                                    <View style={[styles.heroRoleDot, { backgroundColor: roleColor }]}>
+                                        <Ionicons name={roleIcon} size={11} color="white" />
+                                    </View>
+                                    {user.is_verified && (
+                                        <View style={styles.heroVerifyDot}>
+                                            <Ionicons name="checkmark-circle" size={20} color="#3B82F6" />
+                                        </View>
+                                    )}
+                                </View>
+
+                                <Text style={styles.heroName}>{user.full_name || 'No Name'}</Text>
+                                <Text style={styles.heroEmail}>{user.email}</Text>
+
+                                {/* Status chips */}
+                                <View style={styles.heroChipRow}>
+                                    {user.is_banned && (
+                                        <View style={[styles.heroChip, { backgroundColor: 'rgba(239,68,68,0.2)', borderColor: '#EF444466' }]}>
+                                            <Ionicons name="ban" size={9} color="#F87171" />
+                                            <Text style={[styles.heroChipTxt, { color: '#F87171' }]}>Banned</Text>
+                                        </View>
+                                    )}
+                                    {user.is_restricted && (
+                                        <View style={[styles.heroChip, { backgroundColor: 'rgba(245,158,11,0.2)', borderColor: '#F59E0B66' }]}>
+                                            <Ionicons name="lock-closed" size={9} color="#FCD34D" />
+                                            <Text style={[styles.heroChipTxt, { color: '#FCD34D' }]}>Restricted</Text>
+                                        </View>
+                                    )}
+                                    <View style={[styles.heroChip, { backgroundColor: 'rgba(255,255,255,0.08)', borderColor: 'rgba(255,255,255,0.15)' }]}>
+                                        <Text style={[styles.heroChipTxt, { color: 'rgba(255,255,255,0.4)', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }]}>
+                                            {user.id.slice(0, 8)}…
+                                        </Text>
+                                    </View>
+                                </View>
+                            </View>
+
+                            {/* Bottom stats strip */}
+                            <View style={styles.heroStrip}>
+                                <View style={styles.heroStripItem}>
+                                    <Ionicons name="wallet-outline" size={13} color={roleColor} />
+                                    <View>
+                                        <Text style={styles.heroStripLbl}>Balance</Text>
+                                        <Text style={[styles.heroStripVal, { color: roleColor }]}>
+                                            ₦{(wallet?.balance || 0).toLocaleString()}
+                                        </Text>
+                                    </View>
+                                </View>
+                                <View style={styles.heroStripDiv} />
+                                <View style={styles.heroStripItem}>
+                                    <Ionicons name="calendar-outline" size={13} color="rgba(255,255,255,0.4)" />
+                                    <View>
+                                        <Text style={styles.heroStripLbl}>Joined</Text>
+                                        <Text style={styles.heroStripVal2}>
+                                            {user.created_at ? new Date(user.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' }) : '—'}
+                                        </Text>
+                                    </View>
+                                </View>
+                                <View style={styles.heroStripDiv} />
+                                <View style={styles.heroStripItem}>
+                                    <Ionicons name="call-outline" size={13} color="rgba(255,255,255,0.4)" />
+                                    <View>
+                                        <Text style={styles.heroStripLbl}>Phone</Text>
+                                        <Text style={styles.heroStripVal2} numberOfLines={1}>{user.phone || '—'}</Text>
+                                    </View>
+                                </View>
+                            </View>
+                        </LinearGradient>
+                    );
+                })()}
 
                 {/* Tabs */}
                 <View style={styles.tabContainer}>
@@ -399,6 +498,54 @@ export const AdminUserDetails = ({ visible, user, onClose, onUpdate, navigation:
                                         placeholder="Add notes visible only to admins..."
                                     />
                                 </View>
+
+                                {/* Driver Details Section */}
+                                {user.role === 'driver' && driverInfo && (
+                                    <View style={styles.driverSection}>
+                                        <SectionHeader title="Driver Details" icon="bicycle" color="#0EA5E9" />
+                                        <View style={styles.driverGrid}>
+                                            <View style={styles.driverCell}>
+                                                <Text style={styles.driverCellLabel}>Vehicle Type</Text>
+                                                <Text style={styles.driverCellValue}>{driverInfo.vehicle_type || '—'}</Text>
+                                            </View>
+                                            <View style={styles.driverCell}>
+                                                <Text style={styles.driverCellLabel}>Plate Number</Text>
+                                                <Text style={styles.driverCellValue}>{driverInfo.plate_number || '—'}</Text>
+                                            </View>
+                                            <View style={styles.driverCell}>
+                                                <Text style={styles.driverCellLabel}>Vehicle Color</Text>
+                                                <Text style={styles.driverCellValue}>{driverInfo.vehicle_color || '—'}</Text>
+                                            </View>
+                                            <View style={styles.driverCell}>
+                                                <Text style={styles.driverCellLabel}>Driver License</Text>
+                                                <Text style={[styles.driverCellValue, { fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', fontSize: 12 }]}>{driverInfo.driver_license || '—'}</Text>
+                                            </View>
+                                        </View>
+                                        <View style={styles.driverStatusRow}>
+                                            <Text style={styles.driverCellLabel}>Status</Text>
+                                            <View style={[styles.driverStatusBadge, { backgroundColor: driverInfo.status === 'active' ? '#DCFCE7' : '#FEF2F2' }]}>
+                                                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: driverInfo.status === 'active' ? '#16A34A' : '#EF4444', marginRight: 6 }} />
+                                                <Text style={{ fontSize: 12, fontWeight: '700', color: driverInfo.status === 'active' ? '#16A34A' : '#EF4444' }}>
+                                                    {(driverInfo.status || 'inactive').charAt(0).toUpperCase() + (driverInfo.status || 'inactive').slice(1)}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                        {driverInfo.name && (
+                                            <View style={{ marginTop: 8 }}>
+                                                <Text style={styles.driverCellLabel}>Driver Name (in system)</Text>
+                                                <Text style={styles.driverCellValue}>{driverInfo.name}</Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                )}
+
+                                {user.role === 'driver' && !driverInfo && (
+                                    <View style={[styles.driverSection, { alignItems: 'center', paddingVertical: 20 }]}>
+                                        <Ionicons name="bicycle-outline" size={32} color="#CBD5E1" />
+                                        <Text style={{ color: '#94A3B8', fontSize: 13, fontWeight: '600', marginTop: 8 }}>No driver profile found</Text>
+                                        <Text style={{ color: '#CBD5E1', fontSize: 11, marginTop: 4 }}>Driver has not set up their profile yet</Text>
+                                    </View>
+                                )}
 
                                 {/* Quick Actions */}
                                 <View style={{ marginTop: 20 }}>
@@ -584,14 +731,14 @@ const SwitchBtn = ({ value, onToggle, color }) => (
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#FFFFFF' },
 
-    // Header
+    // Header (legacy - kept for ref)
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, backgroundColor: 'white', borderBottomWidth: 1, borderColor: '#F1F5F9' },
     headerTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A' },
     iconButton: { padding: 8, borderRadius: 20, backgroundColor: '#F8FAFC' },
     editButton: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F1F5F9' },
     editButtonText: { fontSize: 14, fontWeight: '600', color: '#64748B' },
 
-    // Summary
+    // Summary (legacy)
     summaryContainer: { alignItems: 'center', paddingVertical: 24, backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderColor: '#F1F5F9' },
     avatarContainer: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
     avatarText: { fontSize: 32, fontWeight: '800', color: '#64748B' },
@@ -599,6 +746,28 @@ const styles = StyleSheet.create({
     profileName: { fontSize: 20, fontWeight: '800', color: '#0F172A', marginBottom: 4 },
     profileEmail: { fontSize: 13, color: '#64748B', fontWeight: '500' },
     profileId: { fontSize: 11, color: '#94A3B8', marginTop: 4, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' },
+
+    // ── Hero Header ──────────────────────────────────────────────────────────
+    heroHdr: { paddingTop: 18, paddingHorizontal: 18, paddingBottom: 0 },
+    heroTopBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
+    heroCircleBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' },
+    heroRolePill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
+    heroRolePillTxt: { fontSize: 11, fontWeight: '800' },
+    heroCentre: { alignItems: 'center', marginBottom: 22 },
+    heroAvatarRing: { borderRadius: 50, borderWidth: 2.5, padding: 3 },
+    heroRoleDot: { position: 'absolute', bottom: 2, right: 2, width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'rgba(0,0,0,0.4)' },
+    heroVerifyDot: { position: 'absolute', top: -2, right: -2, backgroundColor: 'white', borderRadius: 12 },
+    heroName: { fontSize: 22, fontWeight: '900', color: 'white', marginTop: 14, letterSpacing: -0.4 },
+    heroEmail: { fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 3, fontWeight: '500' },
+    heroChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 10, justifyContent: 'center' },
+    heroChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20, borderWidth: 1 },
+    heroChipTxt: { fontSize: 10, fontWeight: '700' },
+    heroStrip: { flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.3)', marginHorizontal: -18, paddingHorizontal: 18, paddingVertical: 14, marginTop: 18, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)' },
+    heroStripItem: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+    heroStripDiv: { width: 1, backgroundColor: 'rgba(255,255,255,0.12)', marginHorizontal: 4 },
+    heroStripLbl: { fontSize: 9, color: 'rgba(255,255,255,0.38)', fontWeight: '700', textTransform: 'uppercase', marginBottom: 2 },
+    heroStripVal: { fontSize: 14, fontWeight: '900' },
+    heroStripVal2: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.75)' },
 
     // Tabs
     tabContainer: { flexDirection: 'row', padding: 4, backgroundColor: '#F1F5F9', margin: 16, borderRadius: 12 },
@@ -634,6 +803,15 @@ const styles = StyleSheet.create({
     largeActionBtn: { backgroundColor: '#0F172A', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, borderRadius: 12, gap: 10 },
     largeActionBtnText: { color: 'white', fontWeight: '700', fontSize: 15 },
     btnSmall: { paddingHorizontal: 16, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+
+    // Driver
+    driverSection: { backgroundColor: '#F0F9FF', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#BAE6FD' },
+    driverGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 12 },
+    driverCell: { width: '45%', backgroundColor: 'white', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: '#E2E8F0' },
+    driverCellLabel: { fontSize: 10, color: '#64748B', fontWeight: '600', textTransform: 'uppercase', marginBottom: 4 },
+    driverCellValue: { fontSize: 14, fontWeight: '800', color: '#0F172A' },
+    driverStatusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
+    driverStatusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
 
     // Wallet
     balanceCard: { backgroundColor: '#0F172A', padding: 24, borderRadius: 20, alignItems: 'center' },
