@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 // Get one here: https://aistudio.google.com/app/apikey
 const GEMINI_API_KEY = 'AIzaSyD9K1UENZsJf5KVuoxCf_0lUsK2q--f9nA';
 
-const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
 const cleanAIJsonResponse = (text) => {
     if (!text || typeof text !== 'string') return null;
@@ -104,7 +104,7 @@ export const geminiService = {
                         { text: "Listen to this audio and extract the search intent. Return ONLY the key terms the user is looking for (e.g. 'Red Dress')." },
                         {
                             inline_data: {
-                                mime_type: "audio/mp4", // Adjust based on recording format
+                                mime_type: "audio/aac", // Better compatibility for Expo AAC recordings
                                 data: base64Audio
                             }
                         }
