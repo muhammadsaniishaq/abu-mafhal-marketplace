@@ -67,15 +67,19 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
     const fetchData = async () => {
         try {
             // 1. Fetch Hero Banners (Main carousel)
-            const { data: bData } = await supabase
+            // 1. Fetch Banners (Hero & General)
+            const { data: bAll } = await supabase
                 .from('banners')
                 .select('*')
                 .eq('is_active', true)
-                .or('section.eq.home,section.is.null,section.eq.all')
                 .order('display_order');
 
-            if (bData && bData.length > 0) {
-                setBanners(bData);
+            if (bAll) {
+                // Filter for Hero (home section or null/all)
+                const homeBanners = bAll.filter(b =>
+                    b.section === 'home' || !b.section || b.section === 'all' || b.section === ''
+                );
+                setBanners(homeBanners);
             } else {
                 setBanners([]);
             }
@@ -619,10 +623,11 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                             scrollEventThrottle={16}
                         >
                             {banners.map((item, index) => (
-                                <TouchableOpacity key={index} activeOpacity={0.9} onPress={onGoToShop} style={{ width: width, paddingHorizontal: 16 }}>
+                                <TouchableOpacity key={index} activeOpacity={0.9} onPress={onGoToShop} style={{ width: width, paddingHorizontal: 16, height: 220 }}>
                                     <ImageBackground
-                                        source={{ uri: item?.image_url }}
-                                        style={{ width: '100%', height: '100%', borderRadius: 24, overflow: 'hidden' }}
+                                        source={{ uri: item?.image_url || 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?q=80&w=2670&auto=format&fit=crop' }}
+                                        style={{ width: '100%', height: '100%' }}
+                                        imageStyle={{ borderRadius: 24 }}
                                         resizeMode="cover"
                                     />
                                 </TouchableOpacity>

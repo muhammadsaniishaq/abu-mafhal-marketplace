@@ -64,16 +64,22 @@ export const LandingPage = ({ navigation, onEnterShop, cartCount, onGoToCart, on
 
     useEffect(() => {
         const fetchLandingProducts = async () => {
-            // Fetch Hero Banners
-            const { data: bannerData } = await supabase
+            // 1. Fetch Banners (Hero & General)
+            const { data: bAll } = await supabase
                 .from('banners')
                 .select('*')
                 .eq('is_active', true)
-                .or('section.eq.landing,section.is.null,section.eq.all')
                 .order('display_order');
 
-            if (bannerData) setBanners(bannerData);
-            else setBanners([]);
+            if (bAll) {
+                // Filter for Hero (landing section or null/all)
+                const landingBanners = bAll.filter(b =>
+                    b.section === 'landing' || !b.section || b.section === 'all' || b.section === ''
+                );
+                setBanners(landingBanners);
+            } else {
+                setBanners([]);
+            }
 
             // Fetch Promo Banners
             const { data: promoData } = await supabase
@@ -217,10 +223,11 @@ export const LandingPage = ({ navigation, onEnterShop, cartCount, onGoToCart, on
                             scrollEventThrottle={16}
                         >
                             {banners.map((item, index) => (
-                                <TouchableOpacity key={index} activeOpacity={0.9} onPress={onEnterShop} style={{ width: width, paddingHorizontal: 16 }}>
+                                <TouchableOpacity key={index} activeOpacity={0.9} onPress={onEnterShop} style={{ width: width, paddingHorizontal: 16, height: 220 }}>
                                     <ImageBackground
-                                        source={{ uri: item?.image_url }}
-                                        style={{ width: '100%', height: '100%', borderRadius: 24, overflow: 'hidden' }}
+                                        source={{ uri: item?.image_url || 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?q=80&w=2670&auto=format&fit=crop' }}
+                                        style={{ width: '100%', height: '100%' }}
+                                        imageStyle={{ borderRadius: 24 }}
                                         resizeMode="cover"
                                     >
                                         {/* REMOVED TEXT OVERLAY AS REQUESTED */}

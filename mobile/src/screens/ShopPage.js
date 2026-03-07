@@ -77,17 +77,20 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
 
     const fetchData = async () => {
         try {
-            // 1. Fetch Banners (Shop Section)
-            const { data: bannerData } = await supabase
+            // 1. Fetch Banners (Shop & General)
+            const { data: bAll } = await supabase
                 .from('banners')
                 .select('*')
                 .eq('is_active', true)
-                .or('section.eq.shop,section.is.null,section.eq.all')
                 .order('display_order');
-            if (bannerData && bannerData.length > 0) {
-                setBanners(bannerData);
+
+            if (bAll) {
+                const shopBanners = bAll.filter(b =>
+                    b.section === 'shop' || !b.section || b.section === 'all' || b.section === ''
+                );
+                setBanners(shopBanners);
             } else {
-                setBanners([]); // No mock data
+                setBanners([]);
             }
 
             // 1B. Fetch Promo Banners
@@ -476,8 +479,9 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
                         {banners.map((banner, index) => (
                             <TouchableOpacity key={banner.id} activeOpacity={0.9} style={{ width: WIDTH - 32, height: 160 }}>
                                 <ImageBackground
-                                    source={{ uri: banner.image_url }}
+                                    source={{ uri: banner.image_url || 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?q=80&w=2670&auto=format&fit=crop' }}
                                     style={{ width: '100%', height: '100%' }}
+                                    imageStyle={{ borderRadius: 12 }}
                                     resizeMode="cover"
                                 >
                                     {/* REMOVED TEXT OVERLAY AS REQUESTED */}
