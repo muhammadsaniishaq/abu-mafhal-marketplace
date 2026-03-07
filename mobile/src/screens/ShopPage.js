@@ -396,7 +396,7 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
     const handleImageSearch = async () => {
         try {
             const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: 'images',
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
                 allowsEditing: true,
                 quality: 0.5,
                 base64: true
@@ -592,7 +592,7 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
             <SafeAreaView style={styles.safeAreaWhite}>
                 <View style={styles.shopHeader}>
                     <TouchableOpacity onPress={onBack}><Ionicons name="arrow-back" size={24} color="#0F172A" /></TouchableOpacity>
-                    <View style={[styles.shopSearch, { flex: 1, marginRight: 0 }]}>
+                    <View style={[styles.shopSearch, { flex: 1, marginRight: 16, paddingRight: 12 }]}>
                         <Ionicons name="search" size={18} color="#94A3B8" />
                         <TextInput
                             placeholder="Search products..."
