@@ -78,56 +78,87 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
 
     // ── Cancel Order ──────────────────────────────────────────────────────────
     const handleCancel = (order) => {
-        Alert.alert(
-            'Cancel Order',
-            `Cancel order #${order.id.slice(0, 8).toUpperCase()}?\n\nThis action cannot be undone.`,
-            [
-                { text: 'No', style: 'cancel' },
-                {
-                    text: 'Yes, Cancel', style: 'destructive', onPress: async () => {
-                        setCancelling(order.id);
-                        const { error } = await supabase.from('orders')
-                            .update({ status: 'cancelled' })
-                            .eq('id', order.id)
-                            .eq('user_id', user.id || user.sub);
-                        if (!error) {
-                            setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'cancelled' } : o));
-                            Alert.alert('Cancelled', 'Your order has been cancelled.');
-                        } else {
-                            Alert.alert('Error', 'Could not cancel. Please contact support.');
-                        }
-                        setCancelling(null);
-                    }
-                }
-            ]
-        );
+        if (Platform.OS === 'web') {
+            const confirmed = window.confirm(`Cancel order #${order.id.slice(0, 8).toUpperCase()}?\n\nThis action cannot be undone.`);
+            if (confirmed) {
+                executeCancel(order.id);
+            }
+        } else {
+            Alert.alert(
+                'Cancel Order',
+                `Cancel order #${order.id.slice(0, 8).toUpperCase()}?\n\nThis action cannot be undone.`,
+                [
+                    { text: 'No', style: 'cancel' },
+                    { text: 'Yes, Cancel', style: 'destructive', onPress: () => executeCancel(order.id) }
+                ]
+            );
+        }
+    };
+
+    const executeCancel = async (orderId) => {
+        setCancelling(orderId);
+        const { error } = await supabase.from('orders')
+            .update({ status: 'cancelled' })
+            .eq('id', orderId)
+            .eq('user_id', user.id || user.sub);
+        if (!error) {
+            setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'cancelled' } : o));
+            if (Platform.OS === 'web') {
+                window.alert('Your order has been cancelled.');
+            } else {
+                Alert.alert('Cancelled', 'Your order has been cancelled.');
+            }
+        } else {
+            if (Platform.OS === 'web') {
+                window.alert('Could not cancel. Please contact support.');
+            } else {
+                Alert.alert('Error', 'Could not cancel. Please contact support.');
+            }
+        }
+        setCancelling(null);
     };
 
     // ── Confirm Receipt ───────────────────────────────────────────────────────
     const handleConfirmReceipt = (order) => {
-        Alert.alert(
-            'Confirm Receipt',
-            `Have you received order #${order.id.slice(0, 8).toUpperCase()} in good condition?\n\nThis will complete the order and release payment to the seller.`,
-            [
-                { text: 'Not Yet', style: 'cancel' },
-                {
-                    text: 'Yes, I received it', onPress: async () => {
-                        setConfirming(order.id);
-                        try {
-                            const { error } = await supabase.rpc('confirm_order_receipt', { p_order_id: order.id });
-                            if (error) throw error;
+        if (Platform.OS === 'web') {
+            const confirmed = window.confirm(`Have you received order #${order.id.slice(0, 8).toUpperCase()} in good condition?\n\nThis will complete the order and release payment to the seller.`);
+            if (confirmed) {
+                executeConfirm(order.id);
+            }
+        } else {
+            Alert.alert(
+                'Confirm Receipt',
+                `Have you received order #${order.id.slice(0, 8).toUpperCase()} in good condition?\n\nThis will complete the order and release payment to the seller.`,
+                [
+                    { text: 'Not Yet', style: 'cancel' },
+                    { text: 'Yes, I received it', onPress: () => executeConfirm(order.id) }
+                ]
+            );
+        }
+    };
 
-                            setOrders(prev => prev.map(o => o.id === order.id ? { ...o, user_confirmed: true } : o));
-                            Alert.alert('Success', 'Order confirmed! Thank you for shopping with us.');
-                        } catch (err) {
-                            Alert.alert('Error', err.message || 'Could not confirm order.');
-                        } finally {
-                            setConfirming(null);
-                        }
-                    }
-                }
-            ]
-        );
+    const executeConfirm = async (orderId) => {
+        setConfirming(orderId);
+        try {
+            const { error } = await supabase.rpc('confirm_order_receipt', { p_order_id: orderId });
+            if (error) throw error;
+
+            setOrders(prev => prev.map(o => o.id === orderId ? { ...o, user_confirmed: true } : o));
+
+            if (Platform.OS === 'web') {
+                window.alert('Order confirmed! Thank you for shopping with us.');
+            } else {
+                Alert.alert('Success', 'Order confirmed! Thank you for shopping with us.');
+            }
+        } catch (err) {
+            if (Platform.OS === 'web') {
+                window.alert(err.message || 'Could not confirm order.');
+            } else {
+                Alert.alert('Error', err.message || 'Could not confirm order.');
+            }
+        } finally {
+            setConfirming(null);
+        }
     };
 
     // ── Submit Review ─────────────────────────────────────────────────────────
