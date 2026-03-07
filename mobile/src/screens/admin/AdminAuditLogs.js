@@ -37,12 +37,11 @@ export const AdminAuditLogs = () => {
         if (!isRefresh) setLoading(true);
         try {
             let query = supabase.from('audit_logs')
-                .select('*, user:profiles(full_name, email)')
+                .select('*')
                 .order('created_at', { ascending: false })
                 .limit(100);
 
             if (filter !== 'all') {
-                // Apply logical mapping for filters if needed
                 if (filter === 'security') query = query.ilike('action', '%login%');
                 else if (filter === 'financial') query = query.or('action.ilike.%wallet%,action.ilike.%payment%');
                 else query = query.ilike('action', `%${filter}%`);
@@ -51,10 +50,36 @@ export const AdminAuditLogs = () => {
             const { data, error } = await query;
             if (error) throw error;
 
-            setLogs(data || []);
-            calculateStats(data || []);
+            if (data && data.length > 0) {
+                const userIds = [...new Set(data.filter(l => l.user_id).map(l => l.user_id))];
+                let profileMap = {};
+
+                if (userIds.length > 0) {
+                    const { data: profileData } = await supabase
+                        .from('profiles')
+                        .select('id, full_name, email')
+                        .in('id', userIds);
+
+                    profileMap = (profileData || []).reduce((acc, p) => {
+                        acc[p.id] = p;
+                        return acc;
+                    }, {});
+                }
+
+                const logsWithProfiles = data.map(log => ({
+                    ...log,
+                    user: profileMap[log.user_id] || null
+                }));
+
+                setLogs(logsWithProfiles);
+                calculateStats(logsWithProfiles);
+            } else {
+                setLogs([]);
+                calculateStats([]);
+            }
         } catch (err) {
             console.error('Audit Fetch Error:', err);
+            setLogs([]);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -65,12 +90,15 @@ export const AdminAuditLogs = () => {
         return supabase
             .channel('audit-logs-realtime')
             .on('postgres_changes', { event: 'INSERT', table: 'audit_logs' }, async (payload) => {
-                // Fetch the user profile for the new log entry
-                const { data: userData } = await supabase
-                    .from('profiles')
-                    .select('full_name, email')
-                    .eq('id', payload.new.user_id)
-                    .single();
+                let userData = null;
+                if (payload.new.user_id) {
+                    const { data } = await supabase
+                        .from('profiles')
+                        .select('full_name, email')
+                        .eq('id', payload.new.user_id)
+                        .single();
+                    userData = data;
+                }
 
                 const newLog = { ...payload.new, user: userData };
                 setLogs(prev => [newLog, ...prev.slice(0, 99)]);
