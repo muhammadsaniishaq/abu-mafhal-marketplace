@@ -12,6 +12,10 @@ import { NewsletterCard } from '../components/NewsletterCard';
 import { HomeSkeleton } from '../components/SkeletonLoader';
 import { AutoScrollList } from '../components/AutoScrollList';
 import { UserAvatar } from '../components/UserAvatar';
+import * as ImagePicker from 'expo-image-picker';
+import { geminiService } from '../services/geminiService';
+import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system';
 
 const { width } = Dimensions.get('window');
 
@@ -50,6 +54,14 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
     const [showCheckInSuccess, setShowCheckInSuccess] = useState(false);
     const successAnim = useRef(new Animated.Value(0)).current;
 
+    // AI Search States
+    const [isListening, setIsListening] = useState(false);
+    const [showVoiceModal, setShowVoiceModal] = useState(false);
+    const [analyzingImage, setAnalyzingImage] = useState(false);
+    const [recording, setRecording] = useState(null);
+    const [toast, setToast] = useState({ visible: false, message: '', icon: 'checkmark-circle' });
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+
     const scrollX = useRef(new Animated.Value(0)).current;
 
     const fetchData = async () => {
@@ -59,7 +71,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                 .from('banners')
                 .select('*')
                 .eq('is_active', true)
-                .eq('section', 'home') // Strictly home section
+                .or('section.eq.home,section.is.null,section.eq.all')
                 .order('display_order');
 
             if (bData && bData.length > 0) {
@@ -88,7 +100,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                         // It's a plain string, fallback used
                     }
                     return { ...promo, linkData };
-                }).filter(promo => promo.linkData.locations && promo.linkData.locations.includes('home'));
+                }).filter(promo => !promo.linkData.locations || promo.linkData.locations.length === 0 || promo.linkData.locations.includes('home'));
 
                 setPromoBanners(validPromos);
             } else {
@@ -292,6 +304,132 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
         }
     };
 
+    const showToast = (message, icon = 'checkmark-circle') => {
+        setToast({ visible: true, message, icon });
+        Animated.sequence([
+            Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: false }),
+            Animated.delay(2000),
+            Animated.timing(fadeAnim, { toValue: 0, duration: 300, useNativeDriver: false })
+        ]).start(() => setToast({ ...toast, visible: false }));
+    };
+
+    // Helper to request permissions
+    useEffect(() => {
+        (async () => {
+            const { status: audioStatus } = await Audio.requestPermissionsAsync();
+            const { status: cameraStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (audioStatus !== 'granted' || cameraStatus !== 'granted') {
+                console.log('Permissions denied');
+            }
+        })();
+        return () => {
+            if (recording) {
+                recording.stopAndUnloadAsync();
+            }
+        };
+    }, []);
+
+    // AI Search Handlers
+    const handleVoiceSearch = async () => {
+        try {
+            if (recording) {
+                await stopRecording();
+            } else {
+                await startRecording();
+            }
+        } catch (error) {
+            console.log('Voice Error:', error);
+            setIsListening(false);
+            setShowVoiceModal(false);
+            showToast(error.message, 'alert-circle');
+        }
+    };
+
+    const startRecording = async () => {
+        try {
+            await Audio.setAudioModeAsync({
+                allowsRecordingIOS: true,
+                playsInSilentModeIOS: true,
+            });
+
+            const { recording } = await Audio.Recording.createAsync(
+                Audio.RecordingOptionsPresets.HIGH_QUALITY
+            );
+
+            setRecording(recording);
+            setIsListening(true);
+            setShowVoiceModal(true);
+
+            setTimeout(() => {
+                stopRecording(recording);
+            }, 4000);
+
+        } catch (err) {
+            console.error('Failed to start recording', err);
+            showToast('Could not start microphone', 'alert-circle');
+        }
+    };
+
+    const stopRecording = async (currentRec) => {
+        const rec = currentRec || recording;
+        if (!rec) return;
+
+        setRecording(null);
+        setIsListening(false);
+        setShowVoiceModal(false);
+
+        try {
+            await rec.stopAndUnloadAsync();
+            const uri = rec.getURI();
+            const base64Info = await FileSystem.readAsStringAsync(uri, {
+                encoding: 'base64'
+            });
+
+            showToast('Processing voice...', 'sync');
+            const text = await geminiService.searchByVoice(base64Info);
+
+            if (text) {
+                setSearchQuery(text);
+                showToast(`Heard: "${text}"`, 'mic');
+            } else {
+                showToast('Could not understand audio', 'help-circle');
+            }
+
+        } catch (error) {
+            console.log('Stop Recording Error:', error);
+            showToast('Processing Error', 'alert-circle');
+        }
+    };
+
+    const handleImageSearch = async () => {
+        try {
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: 'images',
+                allowsEditing: true,
+                quality: 0.5,
+                base64: true
+            });
+
+            if (!result.canceled && result.assets[0].base64) {
+                setAnalyzingImage(true);
+                showToast('Analyzing image...', 'scan');
+
+                const keywords = await geminiService.searchByImage(result.assets[0].base64);
+
+                setAnalyzingImage(false);
+                if (keywords) {
+                    setSearchQuery(keywords);
+                    showToast(`Found: ${keywords}`, 'checkmark-circle');
+                } else {
+                    showToast('Could not identify product', 'help-circle');
+                }
+            }
+        } catch (e) {
+            setAnalyzingImage(false);
+            console.log(e);
+            showToast('Gallery Error', 'alert-circle');
+        }
+    };
 
     useFocusEffect(
         React.useCallback(() => {
@@ -412,7 +550,23 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                             onChangeText={setSearchQuery}
                             onSubmitEditing={handleSearchSubmit}
                         />
-                        <TouchableOpacity style={{ backgroundColor: '#3B82F6', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 }}>
+                        {/* AI Search Icons */}
+                        {searchQuery.length === 0 && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginRight: 4 }}>
+                                <TouchableOpacity onPress={handleVoiceSearch}>
+                                    <Ionicons name="mic" size={20} color="#3B82F6" />
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={handleImageSearch}>
+                                    <Ionicons name="camera" size={20} color="#3B82F6" />
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                        {searchQuery.length > 0 && (
+                            <TouchableOpacity onPress={() => setSearchQuery('')} style={{ marginRight: 6 }}>
+                                <Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.5)" />
+                            </TouchableOpacity>
+                        )}
+                        <TouchableOpacity onPress={handleSearchSubmit} style={{ backgroundColor: '#3B82F6', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 }}>
                             <Text style={{ color: 'white', fontSize: 11, fontWeight: '800' }}>GO</Text>
                         </TouchableOpacity>
                     </TouchableOpacity>
@@ -1523,6 +1677,34 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                         </TouchableOpacity>
                     </Animated.View>
                 </View>
+            )}
+
+            {/* VOICE SEARCH OVERLAY */}
+            {showVoiceModal && (
+                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+                    <View style={{ backgroundColor: 'white', padding: 32, borderRadius: 24, alignItems: 'center' }}>
+                        <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                            <Ionicons name="mic" size={40} color="white" />
+                        </View>
+                        <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 8 }}>Listening...</Text>
+                        <Text style={{ color: '#64748B' }}>Say "Phones" or "Fashion"</Text>
+                    </View>
+                </View>
+            )}
+
+            {/* TOAST NOTIFICATION */}
+            {toast.visible && (
+                <Animated.View style={{
+                    position: 'absolute', bottom: 100, left: 20, right: 20,
+                    backgroundColor: 'white', padding: 16, borderRadius: 16,
+                    flexDirection: 'row', alignItems: 'center', gap: 12,
+                    boxShadow: '0px 8px 30px rgba(0,0,0,0.15)', elevation: 10,
+                    opacity: fadeAnim, transform: [{ translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }],
+                    zIndex: 2000
+                }}>
+                    <Ionicons name={toast.icon} size={24} color="#10B981" />
+                    <Text style={{ fontWeight: '700', color: '#0F172A', fontSize: 14 }}>{toast.message}</Text>
+                </Animated.View>
             )}
         </View>
     );

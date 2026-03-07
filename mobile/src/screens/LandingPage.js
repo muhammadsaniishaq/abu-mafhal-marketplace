@@ -69,7 +69,7 @@ export const LandingPage = ({ navigation, onEnterShop, cartCount, onGoToCart, on
                 .from('banners')
                 .select('*')
                 .eq('is_active', true)
-                .eq('section', 'landing') // Strictly landing section
+                .or('section.eq.landing,section.is.null,section.eq.all')
                 .order('display_order');
 
             if (bannerData) setBanners(bannerData);
@@ -95,7 +95,7 @@ export const LandingPage = ({ navigation, onEnterShop, cartCount, onGoToCart, on
                         // Fallback
                     }
                     return { ...promo, linkData };
-                }).filter(promo => promo.linkData.locations && promo.linkData.locations.includes('landing'));
+                }).filter(promo => !promo.linkData.locations || promo.linkData.locations.length === 0 || promo.linkData.locations.includes('landing'));
 
                 setPromoBanners(validPromos);
             } else {

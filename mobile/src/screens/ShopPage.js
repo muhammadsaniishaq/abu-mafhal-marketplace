@@ -78,7 +78,12 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
     const fetchData = async () => {
         try {
             // 1. Fetch Banners (Shop Section)
-            const { data: bannerData } = await supabase.from('banners').select('*').eq('is_active', true).eq('section', 'shop').order('display_order');
+            const { data: bannerData } = await supabase
+                .from('banners')
+                .select('*')
+                .eq('is_active', true)
+                .or('section.eq.shop,section.is.null,section.eq.all')
+                .order('display_order');
             if (bannerData && bannerData.length > 0) {
                 setBanners(bannerData);
             } else {
