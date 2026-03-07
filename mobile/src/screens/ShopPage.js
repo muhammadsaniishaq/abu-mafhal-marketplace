@@ -110,7 +110,11 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
                         // Fallback
                     }
                     return { ...promo, linkData };
-                }).filter(promo => promo.linkData.locations && promo.linkData.locations.includes('shop'));
+                }).filter(promo => {
+                    const hasLocation = promo.linkData.locations && promo.linkData.locations.includes('shop');
+                    const isNotExpired = !promo.linkData.timerEnd || new Date(promo.linkData.timerEnd) > new Date();
+                    return hasLocation && isNotExpired;
+                });
 
                 setPromoBanners(validPromos);
             } else {

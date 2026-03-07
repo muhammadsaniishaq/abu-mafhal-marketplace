@@ -95,7 +95,11 @@ export const LandingPage = ({ navigation, onEnterShop, cartCount, onGoToCart, on
                         // Fallback
                     }
                     return { ...promo, linkData };
-                }).filter(promo => !promo.linkData.locations || promo.linkData.locations.length === 0 || promo.linkData.locations.includes('landing'));
+                }).filter(promo => {
+                    const hasLocation = !promo.linkData.locations || promo.linkData.locations.length === 0 || promo.linkData.locations.includes('landing');
+                    const isNotExpired = !promo.linkData.timerEnd || new Date(promo.linkData.timerEnd) > new Date();
+                    return hasLocation && isNotExpired;
+                });
 
                 setPromoBanners(validPromos);
             } else {

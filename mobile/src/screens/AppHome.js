@@ -100,7 +100,11 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                         // It's a plain string, fallback used
                     }
                     return { ...promo, linkData };
-                }).filter(promo => !promo.linkData.locations || promo.linkData.locations.length === 0 || promo.linkData.locations.includes('home'));
+                }).filter(promo => {
+                    const hasLocation = !promo.linkData.locations || promo.linkData.locations.length === 0 || promo.linkData.locations.includes('home');
+                    const isNotExpired = !promo.linkData.timerEnd || new Date(promo.linkData.timerEnd) > new Date();
+                    return hasLocation && isNotExpired;
+                });
 
                 setPromoBanners(validPromos);
             } else {
