@@ -537,7 +537,9 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                         body: {
                             amount: plan.price,
                             email: fallbackEmail,
-                            reference: ref
+                            reference: ref,
+                            // [NEW] Pass callback_url for web redirect
+                            callback_url: Platform.OS === 'web' ? window.location.href : 'https://standard.paystack.co/close'
                         }
                     });
 
@@ -546,7 +548,17 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
 
                     setCurrentRef(ref);
                     setCheckoutUrl(data.authorization_url);
-                    setShowPaystackWebView(true);
+
+                    if (Platform.OS === 'web') {
+                        // On Web: Direct redirect to prevent WebView crash
+                        Alert.alert('Redirecting...', 'You are being redirected to Paystack to complete your registration payment.');
+                        setTimeout(() => {
+                            window.location.href = data.authorization_url;
+                        }, 1000);
+                    } else {
+                        // On Native: Use WebView Modal
+                        setShowPaystackWebView(true);
+                    }
                 } catch (err) {
                     console.error('[DEBUG-PAYSTACK] Init Error:', err);
                     Alert.alert('Payment Error', 'Could not initialize payment. Please try again.');

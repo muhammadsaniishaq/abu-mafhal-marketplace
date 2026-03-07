@@ -24,6 +24,15 @@ var getRedirectParams = function (url) {
     // return result
     return res;
 };
+var WebRedirect = function (_a) {
+    var link = _a.link;
+    React.useEffect(function () {
+        if (link && Platform.OS === 'web') {
+            window.location.href = link;
+        }
+    }, [link]);
+    return null;
+};
 var FlutterwaveCheckout = function FlutterwaveCheckout(props) {
     var link = props.link, visible = props.visible, onRedirect = props.onRedirect, onAbort = props.onAbort;
     var _a = React.useState(false), show = _a[0], setShow = _a[1];
@@ -116,7 +125,16 @@ var FlutterwaveCheckout = function FlutterwaveCheckout(props) {
                 opacity: opacity
             }
         ]} testID='flw-checkout-dialog'>
-            <WebView ref={webviewRef} source={{ uri: link || '' }} style={styles.webview} startInLoadingState={true} scalesPageToFit={true} javaScriptEnabled={true} onShouldStartLoadWithRequest={handleNavigationStateChange} renderError={function () { return <FlutterwaveCheckoutError hasLink={!!link} onTryAgain={handleReload} />; }} renderLoading={function () { return <FlutterwaveCheckoutLoader />; }} />
+            {Platform.OS === 'web' ? (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'white' }}>
+                    <Text style={{ fontSize: 18, color: '#334155', marginBottom: 16 }}>Redirecting to Secure Checkout...</Text>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                    {/* Trigger redirect on web mount */}
+                    <WebRedirect link={link} />
+                </View>
+            ) : (
+                <WebView ref={webviewRef} source={{ uri: link || '' }} style={styles.webview} startInLoadingState={true} scalesPageToFit={true} javaScriptEnabled={true} onShouldStartLoadWithRequest={handleNavigationStateChange} renderError={function () { return <FlutterwaveCheckoutError hasLink={!!link} onTryAgain={handleReload} />; }} renderLoading={function () { return <FlutterwaveCheckoutLoader />; }} />
+            )}
         </Animated.View>
     </Modal>);
 };

@@ -144,9 +144,9 @@ export const AdminInvoices = () => {
                     {selectedOrder && (
                         <View style={{ flex: 1 }}>
                             {/* PASS SETTINGS HERE */}
-                            <WebView
-                                source={{
-                                    html: generateInvoiceHTML({
+                            {Platform.OS === 'web' ? (
+                                <iframe
+                                    srcDoc={generateInvoiceHTML({
                                         id: `INV-${selectedOrder.id.slice(0, 8).toUpperCase()}`,
                                         grandTotal: selectedOrder.total_amount,
                                         status: selectedOrder.status?.toUpperCase() || 'PAID',
@@ -165,13 +165,39 @@ export const AdminInvoices = () => {
                                                 };
                                             })
                                             : [{ description: "Order Items", quantity: 1, price: selectedOrder.total_amount }]
-                                    }, settings)
-                                }}
-                                style={{ flex: 1, backgroundColor: 'transparent' }}
-                                originWhitelist={['*']}
-                                javaScriptEnabled={true}
-                                domStorageEnabled={true}
-                            />
+                                    }, settings)}
+                                    style={{ flex: 1, border: 'none', width: '100%', height: '100%' }}
+                                />
+                            ) : (
+                                <WebView
+                                    source={{
+                                        html: generateInvoiceHTML({
+                                            id: `INV-${selectedOrder.id.slice(0, 8).toUpperCase()}`,
+                                            grandTotal: selectedOrder.total_amount,
+                                            status: selectedOrder.status?.toUpperCase() || 'PAID',
+                                            issuedAt: selectedOrder.created_at,
+                                            customerName: selectedOrder.user?.full_name,
+                                            customerPhone: selectedOrder.user?.phone,
+                                            items: selectedOrder.order_items && selectedOrder.order_items.length > 0
+                                                ? selectedOrder.order_items.map(item => {
+                                                    const product = item.products || {};
+                                                    const name = product.title || product.name || 'Product';
+                                                    const brand = product.brand ? `${product.brand} ` : '';
+                                                    return {
+                                                        description: `${brand}${name}`,
+                                                        quantity: item.quantity,
+                                                        price: item.price
+                                                    };
+                                                })
+                                                : [{ description: "Order Items", quantity: 1, price: selectedOrder.total_amount }]
+                                        }, settings)
+                                    }}
+                                    style={{ flex: 1, backgroundColor: 'transparent' }}
+                                    originWhitelist={['*']}
+                                    javaScriptEnabled={true}
+                                    domStorageEnabled={true}
+                                />
+                            )}
 
                             <View style={{ backgroundColor: 'white', borderTopWidth: 1, borderColor: '#eee', padding: 20 }}>
                                 <View style={{ flexDirection: 'row', gap: 10 }}>
