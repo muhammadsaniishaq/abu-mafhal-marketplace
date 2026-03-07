@@ -3,7 +3,27 @@ import { View, Text, FlatList, ActivityIndicator, TouchableOpacity, Modal, Scrol
 import { Ionicons } from '@expo/vector-icons';
 import { styles } from '../../styles/theme';
 import { supabase } from '../../lib/supabase';
-import Papa from 'papaparse';
+
+// High-Performance Forensic CSV Utility (Zero Dependency)
+const forensicJSONtoCSV = (data) => {
+    if (!data.length) return '';
+    const headers = Object.keys(data[0]);
+    const lines = [headers.join(',')];
+
+    data.forEach(item => {
+        const row = headers.map(header => {
+            let cell = item[header] === null || item[header] === undefined ? '' : String(item[header]);
+            // Escape double quotes and wrap in quotes if contains comma or newline
+            cell = cell.replace(/"/g, '""');
+            if (cell.includes(',') || cell.includes('\n') || cell.includes('"')) {
+                cell = `"${cell}"`;
+            }
+            return cell;
+        });
+        lines.push(row.join(','));
+    });
+    return lines.join('\n');
+};
 
 // Professional Action Configuration with Significance
 const getActionConfig = (action) => {
@@ -172,10 +192,10 @@ export const AdminAuditLogs = () => {
                 Significance: (l.config.impact || 'LOW').toUpperCase()
             }));
 
-            const csvString = Papa.unparse(csvData);
+            const csvString = forensicJSONtoCSV(csvData);
             await Share.share({
                 message: csvString,
-                title: 'Audit_Logs_Export'
+                title: 'Audit_Logs_Forensics'
             });
         } catch (err) {
             console.error('Export Error:', err);
