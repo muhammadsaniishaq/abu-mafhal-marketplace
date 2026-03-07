@@ -592,7 +592,7 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
             <SafeAreaView style={styles.safeAreaWhite}>
                 <View style={styles.shopHeader}>
                     <TouchableOpacity onPress={onBack}><Ionicons name="arrow-back" size={24} color="#0F172A" /></TouchableOpacity>
-                    <View style={styles.shopSearch}>
+                    <View style={[styles.shopSearch, { flex: 1, marginRight: 0 }]}>
                         <Ionicons name="search" size={18} color="#94A3B8" />
                         <TextInput
                             placeholder="Search products..."
@@ -602,27 +602,23 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
                         />
                         {/* AI ICONS */}
                         {searchQuery.length === 0 && (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginRight: 4 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginRight: 8 }}>
                                 <TouchableOpacity onPress={handleVoiceSearch}>
-                                    <Ionicons name="mic" size={20} color="#3B82F6" />
+                                    <Ionicons name="mic" size={18} color="#3B82F6" />
                                 </TouchableOpacity>
                                 <TouchableOpacity onPress={handleImageSearch}>
-                                    <Ionicons name="camera" size={20} color="#3B82F6" />
+                                    <Ionicons name="camera" size={18} color="#3B82F6" />
                                 </TouchableOpacity>
                             </View>
                         )}
-                        {searchQuery.length > 0 && <TouchableOpacity onPress={() => setSearchQuery('')}><Ionicons name="close-circle" size={16} color="#94A3B8" /></TouchableOpacity>}
+                        {searchQuery.length > 0 && <TouchableOpacity onPress={() => setSearchQuery('')} style={{ marginRight: 8 }}><Ionicons name="close-circle" size={16} color="#94A3B8" /></TouchableOpacity>}
+
+                        {/* INTEGRATED FILTER BUTTON */}
+                        <View style={{ width: 1, height: 20, backgroundColor: '#E2E8F0', marginRight: 8 }} />
+                        <TouchableOpacity onPress={() => setSortBy(prev => prev === 'default' ? 'priceLow' : prev === 'priceLow' ? 'priceHigh' : 'default')}>
+                            <Ionicons name="filter" size={18} color={sortBy !== 'default' ? '#3B82F6' : '#94A3B8'} />
+                        </TouchableOpacity>
                     </View>
-
-                    {/* SORT BUTTON (Simplified Action) */}
-                    <TouchableOpacity onPress={() => setSortBy(prev => prev === 'default' ? 'priceLow' : prev === 'priceLow' ? 'priceHigh' : 'default')} style={{ marginLeft: 8 }}>
-                        <Ionicons name="filter" size={24} color={sortBy !== 'default' ? '#3B82F6' : '#0F172A'} />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity onPress={onGoToCart} style={{ position: 'relative', marginLeft: 16 }}>
-                        <Ionicons name="cart-outline" size={24} color="#0F172A" />
-                        {cartCount > 0 && <View style={[styles.redDot, { right: -6, top: -4 }]}><Text style={{ fontSize: 8, color: 'white', fontWeight: 'bold', textAlign: 'center', marginTop: -1 }}>{cartCount}</Text></View>}
-                    </TouchableOpacity>
                 </View>
 
                 {/* FILTER BAR */}
