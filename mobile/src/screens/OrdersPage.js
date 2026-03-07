@@ -51,7 +51,7 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
         setLoading(true);
         const { data, error } = await supabase
             .from('orders')
-            .select('*, driver:drivers(id, name), order_items(id, quantity, price, variant, product_id, product:products(id, name, images))')
+            .select('*, user_confirmed, confirmed_at, driver:drivers(id, name), order_items(id, quantity, price, variant, product_id, product:products(id, name, images))')
             .eq('user_id', user.id || user.sub)
             .order('created_at', { ascending: false });
         if (!error) setOrders(data || []);
