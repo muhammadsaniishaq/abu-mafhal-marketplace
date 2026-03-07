@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, TouchableOpacity, SafeAreaView, ScrollView, ImageBackground, Image, TextInput, RefreshControl, Dimensions, Animated, FlatList, Platform, StatusBar, Vibration, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { styles } from '../styles/theme';
 import { SectionHeader } from '../components/SectionHeader';
 import { Footer } from '../components/Footer';
@@ -66,240 +67,125 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
 
     const fetchData = async () => {
         try {
-            // 1. Fetch Hero Banners (Main carousel)
-            // 1. Fetch Banners (Hero & General)
-            const { data: bAll } = await supabase
-                .from('banners')
-                .select('*')
-                .eq('is_active', true)
-                .order('display_order');
+            const { data: { user: currentUser } } = await supabase.auth.getUser();
 
+            // Promise.allSettled allows all queries to run in parallel
+            // If one fails, others still complete.
+            const results = await Promise.allSettled([
+                // 0: All Banners
+                supabase.from('banners').select('*').eq('is_active', true).order('display_order'),
+                // 1: Promo Banners
+                supabase.from('banners').select('*').eq('section', 'promo').eq('is_active', true).order('created_at', { ascending: false }),
+                // 2: Flash Sale
+                supabase.from('products').select('*').eq('status', 'approved').not('compare_at_price', 'is', null).limit(4),
+                // 3: New Arrivals
+                supabase.from('products').select('*').eq('status', 'approved').eq('is_new', true).limit(6),
+                // 4: Recommended
+                supabase.from('products').select('*').eq('status', 'approved').limit(10),
+                // 5: Categories
+                supabase.from('categories').select('*').eq('is_active', true).order('display_order').limit(6),
+                // 6: Top Vendors
+                supabase.from('vendors').select('*').eq('vendor_status', 'active').eq('is_verified', true).order('total_sales', { ascending: false }).order('review_count', { ascending: false }).limit(8),
+                // 7: Home Services
+                supabase.from('home_services').select('*').eq('is_active', true).order('display_order'),
+                // 8: Top Customers
+                supabase.from('profiles').select('*').eq('is_featured', true).order('total_spend', { ascending: false }).limit(10),
+                // 9: Reviews
+                supabase.from('reviews').select('*, user:user_id(full_name, avatar_url)').eq('is_displayed', true).limit(10),
+                // 10: Brands
+                supabase.from('brands').select('*').eq('is_featured', true).limit(10),
+                // 11: Trending
+                supabase.from('products').select('*').eq('status', 'approved').order('total_sales', { ascending: false }).limit(8),
+                // 12: Most Rated
+                supabase.from('products').select('*').eq('status', 'approved').not('average_rating', 'is', null).order('average_rating', { ascending: false }).limit(8),
+                // 13: Deal of Day
+                supabase.from('products').select('*').eq('status', 'approved').not('compare_at_price', 'is', null).order('compare_at_price', { ascending: false }).limit(1),
+                // 14: Limited Stock
+                supabase.from('products').select('*').eq('status', 'approved').not('stock_quantity', 'is', null).lt('stock_quantity', 10).gt('stock_quantity', 0).order('stock_quantity', { ascending: true }).limit(8),
+                // 15: Price Drops
+                supabase.from('products').select('*').eq('status', 'approved').not('compare_at_price', 'is', null).order('updated_at', { ascending: false }).limit(8),
+                // 16: Spotlight Vendor
+                supabase.from('vendors').select('*').eq('vendor_status', 'active').eq('is_verified', true).order('created_at', { ascending: false }).limit(1),
+                // 17-19: User specific data (conditional)
+                currentUser ? supabase.from('loyalty').select('*').eq('user_id', currentUser.id).maybeSingle() : Promise.resolve({ data: null }),
+                currentUser ? supabase.from('orders').select('id, status, total_amount, created_at, order_items(id)').eq('user_id', currentUser.id).order('created_at', { ascending: false }).limit(2) : Promise.resolve({ data: null }),
+                currentUser ? supabase.from('cart_items').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id) : Promise.resolve({ count: 0 }),
+                currentUser ? supabase.from('daily_checkins').select('*').eq('user_id', currentUser.id).order('checkin_date', { ascending: false }).order('created_at', { ascending: false }).limit(1) : Promise.resolve({ data: null }),
+            ]);
+
+            // Helper to get data safely
+            const getVal = (idx) => (results[idx].status === 'fulfilled' ? results[idx].value : { data: null });
+
+            // 0: Banners
+            const bAll = getVal(0).data;
             if (bAll) {
-                // Filter for Hero (home section or null/all)
-                const homeBanners = bAll.filter(b =>
-                    b.section === 'home' || !b.section || b.section === 'all' || b.section === ''
-                );
+                const homeBanners = bAll.filter(b => b.section === 'home' || !b.section || b.section === 'all' || b.section === '');
                 setBanners(homeBanners);
-            } else {
-                setBanners([]);
             }
 
-            // 2. Fetch Promo Banners
-            const { data: promoData } = await supabase
-                .from('banners')
-                .select('*')
-                .eq('section', 'promo')
-                .eq('is_active', true)
-                .order('created_at', { ascending: false });
-
-            if (promoData && promoData.length > 0) {
+            // 1: Promo
+            const promoData = getVal(1).data;
+            if (promoData) {
                 const validPromos = promoData.map(promo => {
                     let linkData = { text: promo.action_link || '', locations: ['home'] };
-                    try {
-                        const parsed = JSON.parse(promo.action_link);
-                        if (parsed && typeof parsed === 'object') {
-                            linkData = { ...linkData, ...parsed };
-                        }
-                    } catch (e) {
-                        // It's a plain string, fallback used
-                    }
+                    try { const parsed = JSON.parse(promo.action_link); if (parsed && typeof parsed === 'object') linkData = { ...linkData, ...parsed }; } catch (e) { }
                     return { ...promo, linkData };
                 }).filter(promo => {
                     const hasLocation = !promo.linkData.locations || promo.linkData.locations.length === 0 || promo.linkData.locations.includes('home');
                     const isNotExpired = !promo.linkData.timerEnd || new Date(promo.linkData.timerEnd) > new Date();
                     return hasLocation && isNotExpired;
                 });
-
                 setPromoBanners(validPromos);
-            } else {
-                setPromoBanners([]);
             }
 
-            // 3. Fetch Flash Sale (Discount > 0)
-            const { data: flashData } = await supabase.from('products').select('*').eq('status', 'approved').not('compare_at_price', 'is', null).limit(4);
-            setFlashSale(flashData || []);
+            // 2-5: Basic grids
+            setFlashSale(getVal(2).data || []);
+            setNewArrivals(getVal(3).data || []);
+            setRecommended(getVal(4).data || []);
+            setCategories(getVal(5).data || []);
 
-            // 4. Fetch New Arrivals (Is New)
-            const { data: newData } = await supabase.from('products').select('*').eq('status', 'approved').eq('is_new', true).limit(6);
-            setNewArrivals(newData || []);
+            // 6: Top Vendors + Profiles (Post-process)
+            const vendorData = getVal(6).data || [];
+            if (vendorData.length > 0) {
+                const userIds = vendorData.map(v => v.user_id).filter(Boolean);
+                const { data: profileData } = await supabase.from('profiles').select('id, avatar_url, full_name').in('id', userIds);
+                setTopVendors(vendorData.map(v => ({ ...v, profiles: profileData?.find(p => p.id === v.user_id) || null })));
+            } else { setTopVendors([]); }
 
-            // 5. Fetch Recommended (Random or logic)
-            const { data: recData } = await supabase.from('products').select('*').eq('status', 'approved').limit(10);
-            setRecommended(recData || []);
+            // 7-12: Misc horizontal lists
+            setHomeServices(getVal(7).data || []);
+            setTopCustomers(getVal(8).data || []);
+            setReviews(getVal(9).data || []);
+            setBrands(getVal(10).data || []);
+            setTrending(getVal(11).data || []);
+            setMostRated(getVal(12).data || []);
 
-            // 6. Fetch Categories
-            const { data: catData } = await supabase.from('categories').select('*').eq('is_active', true).order('display_order').limit(6);
-            setCategories(catData || []);
-
-            // 7. Fetch Top Vendors (Verified, sorted by Sales & Reviews) + getting User Profile for Avatar Fallback
-            const { data: vendorData, error: vendorError } = await supabase
-                .from('vendors')
-                .select('*')
-                .eq('vendor_status', 'active')
-                .eq('is_verified', true)
-                .order('total_sales', { ascending: false })
-                .order('review_count', { ascending: false })
-                .limit(8);
-
-            let vendorsWithProfiles = vendorData || [];
-
-            if (vendorsWithProfiles.length > 0) {
-                const userIds = vendorsWithProfiles.map(v => v.user_id).filter(Boolean);
-                if (userIds.length > 0) {
-                    const { data: profileData } = await supabase
-                        .from('profiles')
-                        .select('id, avatar_url, full_name')
-                        .in('id', userIds);
-
-                    if (profileData) {
-                        vendorsWithProfiles = vendorsWithProfiles.map(v => {
-                            const profile = profileData.find(p => p.id === v.user_id);
-                            return { ...v, profiles: profile };
-                        });
-                    }
-                }
-            }
-            setTopVendors(vendorsWithProfiles);
-
-            // 8. Fetch Dynamic Services
-            const { data: svcData } = await supabase.from('home_services').select('*').eq('is_active', true).order('display_order');
-            setHomeServices(svcData || []);
-
-            // 9. Fetch User Loyalty
-            const { data: { user: currentUser } } = await supabase.auth.getUser();
-            if (currentUser) {
-                try {
-                    const { data: lData, error: lError } = await supabase.from('loyalty').select('*').eq('user_id', currentUser.id).maybeSingle();
-                    if (!lError) setLoyalty(lData);
-                } catch (err) {
-                    console.log('Loyalty fetch failed:', err.message);
-                }
-            }
-
-            // 10. Fetch Top Customers (Featured, sorted by Spend)
-            const { data: tcData } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('is_featured', true)
-                .order('total_spend', { ascending: false })
-                .limit(10);
-            setTopCustomers(tcData || []);
-
-            // 11. Fetch Displayed Reviews
-            const { data: rData } = await supabase.from('reviews').select('*, user:user_id(full_name, avatar_url)').eq('is_displayed', true).limit(10);
-            setReviews(rData || []);
-
-            // 12. Fetch Featured Brands
-            const { data: brandData } = await supabase.from('brands').select('*').eq('is_featured', true).limit(10);
-            setBrands(brandData || []);
-
-            // 13. Fetch Trending Products (most ordered)
-            const { data: trendData } = await supabase
-                .from('products').select('*').eq('status', 'approved')
-                .order('total_sales', { ascending: false }).limit(8);
-            setTrending(trendData || []);
-
-            // 14. Fetch Most Rated Products
-            const { data: ratedData } = await supabase
-                .from('products').select('*').eq('status', 'approved')
-                .not('average_rating', 'is', null)
-                .order('average_rating', { ascending: false }).limit(8);
-            setMostRated(ratedData || []);
-
-            // 15. Fetch Recent Orders for current user
-            const { data: { user: cu } } = await supabase.auth.getUser();
-            if (cu) {
-                const { data: ordData } = await supabase
-                    .from('orders').select('id, status, total_amount, created_at, order_items(id)')
-                    .eq('user_id', cu.id)
-                    .order('created_at', { ascending: false }).limit(2);
-                setRecentOrders(ordData || []);
-
-                // 16. Fetch cart count
-                const { count: cartCnt } = await supabase
-                    .from('cart_items').select('*', { count: 'exact', head: true })
-                    .eq('user_id', cu.id);
-                setCartCount(cartCnt || 0);
-            }
-
-            // 17. Fetch Deal of the Day (highest discount %)
-            const { data: dealData } = await supabase
-                .from('products').select('*').eq('status', 'approved')
-                .not('compare_at_price', 'is', null)
-                .order('compare_at_price', { ascending: false }).limit(1);
+            // 13-16: Spotlight features
+            const dealData = getVal(13).data;
             if (dealData?.[0]) setDealOfDay(dealData[0]);
+            setLimitedStock(getVal(14).data || []);
+            const pdData = getVal(15).data || [];
+            setPriceDrops(pdData.filter(p => p.price < (p.compare_at_price || Infinity)));
+            setSpotlightVendor(getVal(16).data?.[0] || null);
 
-            // 18. Fetch Limited Stock products
-            const { data: lsData } = await supabase
-                .from('products').select('*').eq('status', 'approved')
-                .not('stock_quantity', 'is', null)
-                .lt('stock_quantity', 10)
-                .gt('stock_quantity', 0)
-                .order('stock_quantity', { ascending: true }).limit(8);
-            setLimitedStock(lsData || []);
+            // 17-20: User specific
+            if (currentUser) {
+                setLoyalty(getVal(17).data);
+                setRecentOrders(getVal(18).data || []);
+                setCartCount(getVal(19).count || 0);
 
-            // 19. Fetch Price Drop products (price < compare_at_price recently updated)
-            const { data: pdData } = await supabase
-                .from('products').select('*').eq('status', 'approved')
-                .not('compare_at_price', 'is', null)
-                .order('updated_at', { ascending: false }).limit(8);
-            setPriceDrops(pdData?.filter(p => p.price < (p.compare_at_price || Infinity)) || []);
-
-            // 20. Fetch Vendor Spotlight (most recent verified vendor)
-            const { data: svData } = await supabase
-                .from('vendors').select('*').eq('vendor_status', 'active').eq('is_verified', true)
-                .order('created_at', { ascending: false }).limit(1);
-            setSpotlightVendor(svData?.[0] || null);
-
-            // 21. Fetch user check-in data
-            const { data: { user: ciUser } } = await supabase.auth.getUser();
-            if (ciUser) {
-                const { data: ci, error: ciError } = await supabase
-                    .from('daily_checkins')
-                    .select('*')
-                    .eq('user_id', ciUser.id)
-                    .order('checkin_date', { ascending: false })
-                    .order('created_at', { ascending: false })
-                    .limit(1);
-
-                if (ciError) {
-                    console.log('--- CHECK-IN FETCH ERROR ---', ciError);
-                } else {
-                    console.log('--- CHECK-IN FETCH SUCCESS ---', { rowCount: ci?.length });
-                }
-
-                // Fix: Use local date instead of UTC to avoid "next day" bugs when UTC transitions
-                const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
-                const CHECKIN_REWARDS = [3, 4, 5, 6, 7, 8, 9, 10, 10, 10]; // Synced Gamification Rewards
+                // 20: Check-in logic
+                const ci = getVal(20).data;
+                const todayStr = new Date().toLocaleDateString('en-CA');
+                const CHECKIN_REWARDS = [3, 4, 5, 6, 7, 8, 9, 10, 10, 10];
 
                 if (ci && ci.length > 0) {
-                    const rawDate = ci[0].checkin_date;
-                    // Normalize date part only to handle both date strings and timestamps
-                    const lastDate = String(rawDate).split('T')[0].split(' ')[0];
+                    const lastDate = String(ci[0].checkin_date).split('T')[0].split(' ')[0];
                     const isToday = lastDate === todayStr;
-
-                    console.log('--- CHECK-IN DEBUG ---', { todayStr, lastDate, isToday, raw: rawDate });
-
-                    // Streak logic: still valid if last check-in was today or yesterday
-                    const lastCheckinDate = new Date(lastDate);
-                    const todayDate = new Date(todayStr);
-                    const diffTime = todayDate.getTime() - lastCheckinDate.getTime();
-                    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-                    console.log('--- STREAK DEBUG ---', { diffDays, streak: ci[0].streak });
-
-                    let currentStreak = ci[0].streak || 0;
-                    if (diffDays > 1) {
-                        currentStreak = 0; // Reset streak if missed more than a day
-                    }
-
-                    setCheckInData({
-                        checkedInToday: isToday,
-                        streak: currentStreak,
-                        coins: CHECKIN_REWARDS[Math.min(currentStreak, 9)] || 3
-                    });
+                    const diffDays = Math.floor((new Date(todayStr).getTime() - new Date(lastDate).getTime()) / (1000 * 60 * 60 * 24));
+                    const currentStreak = diffDays > 1 ? 0 : (ci[0].streak || 0);
+                    setCheckInData({ checkedInToday: isToday, streak: currentStreak, coins: CHECKIN_REWARDS[Math.min(currentStreak, 9)] || 3 });
                 } else {
-                    console.log('--- CHECK-IN DEBUG --- No data found for user');
                     setCheckInData({ checkedInToday: false, streak: 0, coins: CHECKIN_REWARDS[0] });
                 }
             }
@@ -593,21 +479,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                 contentContainerStyle={{ paddingBottom: 100 }}
             >
                 {/* ── PLATFORM STATS STRIP ── */}
-                <View style={{ backgroundColor: '#0F172A', paddingBottom: 16, paddingHorizontal: 16 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-around', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 16, paddingVertical: 12 }}>
-                        {[
-                            { label: 'Products', value: '10,000+', icon: 'cube-outline' },
-                            { label: 'Sellers', value: '200+', icon: 'storefront-outline' },
-                            { label: 'Happy Customers', value: '50k+', icon: 'heart-outline' },
-                        ].map((s, i) => (
-                            <View key={i} style={{ alignItems: 'center', flex: 1, borderRightWidth: i < 2 ? 1 : 0, borderRightColor: 'rgba(255,255,255,0.1)' }}>
-                                <Ionicons name={s.icon} size={16} color="#60A5FA" />
-                                <Text style={{ color: 'white', fontWeight: '900', fontSize: 14, marginTop: 3 }}>{s.value}</Text>
-                                <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: '700' }}>{s.label}</Text>
-                            </View>
-                        ))}
-                    </View>
-                </View>
+                <PlatformStats />
 
                 {/* ── HERO CAROUSEL ── */}
                 {banners.length > 0 && (
@@ -644,27 +516,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                 )}
 
                 {/* ELITE MEMBERSHIP CARD */}
-                <View style={{ paddingHorizontal: 16, marginTop: 12 }}>
-                    <ImageBackground
-                        source={{ uri: 'https://images.unsplash.com/photo-1614850523296-d8c1af93d400?auto=format&fit=crop&w=800&q=80' }}
-                        style={{ width: '100%', height: 110, borderRadius: 20, overflow: 'hidden', padding: 18, justifyContent: 'center' }}
-                    >
-                        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.7)' }} />
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <View>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                    <Ionicons name="shield-checkmark" size={14} color="#FBBF24" />
-                                    <Text style={{ color: '#FBBF24', fontSize: 11, fontWeight: '900', letterSpacing: 1 }}>{loyalty?.tier?.toUpperCase() || 'NEW MEMBER'}</Text>
-                                </View>
-                                <Text style={{ color: 'white', fontSize: 20, fontWeight: '900' }}>{loyalty?.is_elite ? 'Elite Status' : (loyalty?.tier || 'Membership')}</Text>
-                                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 2 }}>{loyalty?.points?.toLocaleString() || 0} Elite Points</Text>
-                            </View>
-                            <TouchableOpacity style={{ backgroundColor: '#3B82F6', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10 }}>
-                                <Text style={{ color: 'white', fontWeight: '800', fontSize: 12 }}>REDEEM</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </ImageBackground>
-                </View>
+                <EliteMembershipCard user={user} checkInData={checkInData} loyalty={loyalty} />
 
                 {/* ── DAILY CHECK-IN ── PREMIUM ── */}
                 {checkInData !== null && (
@@ -1718,3 +1570,45 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
         </View>
     );
 };
+
+const PlatformStats = React.memo(() => (
+    <View style={{ backgroundColor: '#0F172A', paddingBottom: 16, paddingHorizontal: 16 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-around', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 16, paddingVertical: 12 }}>
+            {[
+                { label: 'Products', value: '10,000+', icon: 'cube-outline' },
+                { label: 'Sellers', value: '200+', icon: 'storefront-outline' },
+                { label: 'Happy Customers', value: '50k+', icon: 'heart-outline' },
+            ].map((s, i) => (
+                <View key={i} style={{ alignItems: 'center', flex: 1, borderRightWidth: i < 2 ? 1 : 0, borderRightColor: 'rgba(255,255,255,0.1)' }}>
+                    <Ionicons name={s.icon} size={16} color="#60A5FA" />
+                    <Text style={{ color: 'white', fontWeight: '900', fontSize: 14, marginTop: 3 }}>{s.value}</Text>
+                    <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: '700' }}>{s.label}</Text>
+                </View>
+            ))}
+        </View>
+    </View>
+));
+
+const EliteMembershipCard = React.memo(({ user, checkInData, loyalty }) => (
+    <View style={{ paddingHorizontal: 16, marginTop: 12 }}>
+        <ImageBackground
+            source={{ uri: 'https://images.unsplash.com/photo-1614850523296-d8c1af93d400?auto=format&fit=crop&w=800&q=80' }}
+            style={{ width: '100%', height: 110, borderRadius: 20, overflow: 'hidden', padding: 18, justifyContent: 'center' }}
+        >
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.7)' }} />
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                        <Ionicons name="shield-checkmark" size={14} color="#FBBF24" />
+                        <Text style={{ color: '#FBBF24', fontSize: 11, fontWeight: '900', letterSpacing: 1 }}>{loyalty?.tier?.toUpperCase() || 'NEW MEMBER'}</Text>
+                    </View>
+                    <Text style={{ color: 'white', fontSize: 20, fontWeight: '900' }}>{loyalty?.is_elite ? 'Elite Status' : (loyalty?.tier || 'Membership')}</Text>
+                    <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 2 }}>{loyalty?.points?.toLocaleString() || 0} Elite Points</Text>
+                </View>
+                <TouchableOpacity style={{ backgroundColor: '#3B82F6', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10 }}>
+                    <Text style={{ color: 'white', fontWeight: '800', fontSize: 12 }}>REDEEM</Text>
+                </TouchableOpacity>
+            </View>
+        </ImageBackground>
+    </View>
+));

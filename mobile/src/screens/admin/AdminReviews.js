@@ -7,21 +7,28 @@ import { styles } from '../../styles/theme';
 export const AdminReviews = () => {
     const [reviews, setReviews] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [filter, setFilter] = useState('pending'); // pending, approved, rejected
+    const [statusFilter, setStatusFilter] = useState('pending'); // pending, approved, rejected
+    const [typeFilter, setTypeFilter] = useState('all'); // all, product, driver
 
     useEffect(() => {
         fetchReviews();
-    }, [filter]);
+    }, [statusFilter, typeFilter]);
 
     const fetchReviews = async () => {
         try {
             setLoading(true);
-            const { data, error } = await supabase
+            let query = supabase
                 .from('reviews')
-                .select('*, user:profiles(full_name)')
-                .eq('status', filter)
+                .select('*, user:profiles(full_name), driver:drivers(name)')
+                .eq('status', statusFilter)
                 .order('created_at', { ascending: false })
                 .limit(100);
+
+            if (typeFilter !== 'all') {
+                query = query.eq('review_type', typeFilter);
+            }
+
+            const { data, error } = await query;
 
             if (error) {
                 console.error("Fetch Reviews Error:", error);
@@ -57,10 +64,21 @@ export const AdminReviews = () => {
 
     const renderItem = ({ item }) => (
         <View style={{ backgroundColor: 'white', padding: 16, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9' }}>
-            <View style={{ flexDirection: 'row', justifyConent: 'space-between', marginBottom: 8 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
                 <View>
-                    <Text style={{ fontWeight: '700', color: '#0F172A' }}>{item.user?.full_name || 'Anonymous'}</Text>
-                    <Text style={{ fontSize: 10, color: '#94A3B8' }}>Prod: {item.product_id?.slice(0, 8)}...</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={{ fontWeight: '700', color: '#0F172A' }}>{item.user?.full_name || 'Anonymous'}</Text>
+                        <View style={{ backgroundColor: item.review_type === 'driver' ? '#FEF2F2' : '#EFF6FF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                            <Text style={{ fontSize: 9, color: item.review_type === 'driver' ? '#DC2626' : '#2563EB', fontWeight: 'bold' }}>
+                                {item.review_type === 'driver' ? 'DRIVER' : 'PRODUCT'}
+                            </Text>
+                        </View>
+                    </View>
+                    <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>
+                        {item.review_type === 'driver'
+                            ? `Driver: ${item.driver?.name || item.driver_id?.slice(0, 8)}...`
+                            : `Prod: ${item.product_id?.slice(0, 8)}...`}
+                    </Text>
                 </View>
                 {renderStars(item.rating)}
             </View>
@@ -84,14 +102,27 @@ export const AdminReviews = () => {
         <View style={{ flex: 1, backgroundColor: 'white' }}>
             <View style={{ padding: 20 }}>
                 <Text style={styles.sectionTitle}>Reviews Moderation</Text>
+
                 <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+                    {['all', 'product', 'driver'].map(t => (
+                        <TouchableOpacity
+                            key={t}
+                            onPress={() => setTypeFilter(t)}
+                            style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: typeFilter === t ? '#2563EB' : '#EFF6FF' }}
+                        >
+                            <Text style={{ color: typeFilter === t ? 'white' : '#2563EB', fontSize: 12, fontWeight: '700', textTransform: 'capitalize' }}>{t}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
                     {['pending', 'approved', 'rejected'].map(f => (
                         <TouchableOpacity
                             key={f}
-                            onPress={() => setFilter(f)}
-                            style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: filter === f ? '#0F172A' : '#F1F5F9' }}
+                            onPress={() => setStatusFilter(f)}
+                            style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: statusFilter === f ? '#0F172A' : '#F1F5F9' }}
                         >
-                            <Text style={{ color: filter === f ? 'white' : '#64748B', fontSize: 12, fontWeight: '600', textTransform: 'capitalize' }}>{f}</Text>
+                            <Text style={{ color: statusFilter === f ? 'white' : '#64748B', fontSize: 12, fontWeight: '600', textTransform: 'capitalize' }}>{f}</Text>
                         </TouchableOpacity>
                     ))}
                 </View>

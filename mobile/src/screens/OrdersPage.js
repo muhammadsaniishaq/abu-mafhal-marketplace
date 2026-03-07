@@ -35,13 +35,14 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
     const [expandedId, setExpandedId] = useState(null);
 
     // Review modal
-    const [reviewModal, setReviewModal] = useState(null); // { order, item }
+    const [reviewModal, setReviewModal] = useState(null); // { order, item, type: 'product' | 'driver' }
     const [reviewText, setReviewText] = useState('');
     const [reviewRating, setRating] = useState(5);
     const [submitting, setSubmitting] = useState(false);
 
-    // Cancel order
+    // Cancel / Confirm order
     const [cancelling, setCancelling] = useState(null);
+    const [confirming, setConfirming] = useState(null);
 
     useEffect(() => { if (user) fetchOrders(); }, [user]);
 
@@ -50,7 +51,7 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
         setLoading(true);
         const { data, error } = await supabase
             .from('orders')
-            .select('*, order_items(id, quantity, price, variant, product_id, product:products(id, name, images))')
+            .select('*, driver:drivers(id, name), order_items(id, quantity, price, variant, product_id, product:products(id, name, images))')
             .eq('user_id', user.id || user.sub)
             .order('created_at', { ascending: false });
         if (!error) setOrders(data || []);
@@ -102,15 +103,45 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
         );
     };
 
+    // ── Confirm Receipt ───────────────────────────────────────────────────────
+    const handleConfirmReceipt = (order) => {
+        Alert.alert(
+            'Confirm Receipt',
+            `Have you received order #${order.id.slice(0, 8).toUpperCase()} in good condition?\n\nThis will complete the order and release payment to the seller.`,
+            [
+                { text: 'Not Yet', style: 'cancel' },
+                {
+                    text: 'Yes, I received it', onPress: async () => {
+                        setConfirming(order.id);
+                        try {
+                            const { error } = await supabase.rpc('confirm_order_receipt', { p_order_id: order.id });
+                            if (error) throw error;
+
+                            setOrders(prev => prev.map(o => o.id === order.id ? { ...o, user_confirmed: true } : o));
+                            Alert.alert('Success', 'Order confirmed! Thank you for shopping with us.');
+                        } catch (err) {
+                            Alert.alert('Error', err.message || 'Could not confirm order.');
+                        } finally {
+                            setConfirming(null);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     // ── Submit Review ─────────────────────────────────────────────────────────
     const submitReview = async () => {
         if (!reviewModal) return;
         setSubmitting(true);
         try {
+            const isDriver = reviewModal.type === 'driver';
             await supabase.from('reviews').insert({
                 user_id: user.id || user.sub,
-                product_id: reviewModal.item?.product_id,
+                product_id: isDriver ? null : reviewModal.item?.product_id,
+                driver_id: isDriver ? reviewModal.order?.driver_id : null,
                 order_id: reviewModal.order?.id,
+                review_type: reviewModal.type || 'product',
                 rating: reviewRating,
                 comment: reviewText.trim(),
             });
@@ -145,6 +176,8 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
         const isExpanded = expandedId === item.id;
         const isCancelled = status === 'cancelled';
         const isDelivered = status === 'delivered';
+        const isConfirmed = isDelivered && item.user_confirmed === true;
+        const needsConfirmation = isDelivered && !isConfirmed;
         const canCancel = ['pending', 'processing'].includes(status);
         const stepIndex = STEPS.indexOf(status);
         const items = item.order_items || [];
@@ -256,8 +289,8 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
                                     <View style={{ alignItems: 'flex-end' }}>
                                         <Text style={{ fontWeight: '800', color: '#0F172A' }}>₦{((oi.price || 0) * (oi.quantity || 1)).toLocaleString()}</Text>
                                         {/* Leave Review button per item */}
-                                        {isDelivered && (
-                                            <TouchableOpacity onPress={() => { setReviewModal({ order: item, item: oi }); setReviewText(''); setRating(5); }}
+                                        {isConfirmed && (
+                                            <TouchableOpacity onPress={() => { setReviewModal({ order: item, item: oi, type: 'product' }); setReviewText(''); setRating(5); }}
                                                 style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 3 }}>
                                                 <Ionicons name="star-outline" size={11} color="#F59E0B" />
                                                 <Text style={{ fontSize: 10, color: '#F59E0B', fontWeight: '700' }}>Review</Text>
@@ -338,6 +371,27 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
                                                 <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 12 }}>Cancel</Text>
                                             </>
                                         }
+                                    </TouchableOpacity>
+                                )}
+                                {needsConfirmation && (
+                                    <TouchableOpacity
+                                        onPress={() => handleConfirmReceipt(item)}
+                                        disabled={confirming === item.id}
+                                        style={[C.btn, { backgroundColor: '#16A34A', flex: 1.5 }]}>
+                                        {confirming === item.id
+                                            ? <ActivityIndicator size="small" color="white" />
+                                            : <>
+                                                <Ionicons name="checkmark-done" size={15} color="white" />
+                                                <Text style={{ color: 'white', fontWeight: '700', fontSize: 13 }}>Confirm Receipt</Text>
+                                            </>
+                                        }
+                                    </TouchableOpacity>
+                                )}
+                                {isConfirmed && item.driver_id && (
+                                    <TouchableOpacity onPress={() => { setReviewModal({ order: item, type: 'driver' }); setReviewText(''); setRating(5); }}
+                                        style={[C.btn, { backgroundColor: '#FEF3C7', flex: 1 }]}>
+                                        <Ionicons name="star" size={14} color="#D97706" />
+                                        <Text style={{ color: '#D97706', fontWeight: '700', fontSize: 12 }}>Rate Driver</Text>
                                     </TouchableOpacity>
                                 )}
                             </View>
@@ -467,8 +521,12 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
             <Modal visible={!!reviewModal} transparent animationType="slide">
                 <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.6)', justifyContent: 'flex-end' }}>
                     <View style={{ backgroundColor: 'white', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24 }}>
-                        <Text style={{ fontSize: 18, fontWeight: '900', color: '#0F172A', marginBottom: 4 }}>Leave a Review</Text>
-                        <Text style={{ color: '#64748B', fontSize: 13, marginBottom: 16 }}>{reviewModal?.item?.product?.name || 'Product'}</Text>
+                        <Text style={{ fontSize: 18, fontWeight: '900', color: '#0F172A', marginBottom: 4 }}>
+                            {reviewModal?.type === 'driver' ? 'Rate your Driver' : 'Leave a Review'}
+                        </Text>
+                        <Text style={{ color: '#64748B', fontSize: 13, marginBottom: 16 }}>
+                            {reviewModal?.type === 'driver' ? (reviewModal?.order?.driver?.name || 'Driver') : (reviewModal?.item?.product?.name || 'Product')}
+                        </Text>
 
                         {/* Star Rating */}
                         <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
