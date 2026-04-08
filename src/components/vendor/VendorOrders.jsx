@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, updateDoc, doc, getDoc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { sendOrderNotification } from '../../services/notificationService';
 import { sendLowStockAlert } from '../../services/notificationService';
@@ -14,21 +13,23 @@ const VendorOrders = () => {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
 
   useEffect(() => {
-    fetchOrders();
+    if (currentUser?.uid) {
+      fetchOrders();
+    }
   }, [currentUser]);
 
   const fetchOrders = async () => {
     try {
-      const q = query(
-        collection(db, 'vendorOrders'),
-        where('vendorId', '==', currentUser.uid)
-      );
-      const snapshot = await getDocs(q);
-      const ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      ordersData.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      setOrders(ordersData);
+      const { data, error } = await supabase
+        .from('vendor_orders')
+        .select('*')
+        .eq('vendor_id', currentUser.uid)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setOrders(data || []);
     } catch (error) {
-      console.error('Error fetching orders:', error);
+      console.error('Error fetching orders:', error.message);
     } finally {
       setLoading(false);
     }
@@ -41,61 +42,89 @@ const VendorOrders = () => {
 
     setLoading(true);
     try {
-      // Update vendor order status
-      await updateDoc(doc(db, 'vendorOrders', orderId), {
+      const now = new Date().toISOString();
+      const statusUpdate = {
         status: newStatus,
-        updatedAt: new Date().toISOString(),
-        ...(newStatus === 'shipped' && { shippedAt: new Date().toISOString() }),
-        ...(newStatus === 'delivered' && { deliveredAt: new Date().toISOString() }),
-        ...(newStatus === 'cancelled' && { cancelledAt: new Date().toISOString() })
-      });
+        updated_at: now,
+        ...(newStatus === 'shipped' && { shipped_at: now }),
+        ...(newStatus === 'delivered' && { delivered_at: now }),
+        ...(newStatus === 'cancelled' && { cancelled_at: now })
+      };
 
-      // Get order details
-      const orderDoc = await getDoc(doc(db, 'vendorOrders', orderId));
-      const orderData = orderDoc.data();
+      // Update vendor order status
+      const { error: updateError } = await supabase
+        .from('vendor_orders')
+        .update(statusUpdate)
+        .eq('id', orderId);
+
+      if (updateError) throw updateError;
+
+      // Get order details to check stock and main order
+      const { data: orderData, error: fetchError } = await supabase
+        .from('vendor_orders')
+        .select('*')
+        .eq('id', orderId)
+        .single();
+
+      if (fetchError) throw fetchError;
 
       // Update main order status if all vendor orders have same status
-      const mainOrderId = orderData.orderId;
-      const allVendorOrdersQuery = query(
-        collection(db, 'vendorOrders'),
-        where('orderId', '==', mainOrderId)
-      );
-      const allVendorOrders = await getDocs(allVendorOrdersQuery);
-      
-      const allSameStatus = allVendorOrders.docs.every(
-        doc => doc.data().status === newStatus || doc.id === orderId
-      );
+      const mainOrderId = orderData.order_id || orderData.orderId;
+      if (mainOrderId) {
+        const { data: allVendorOrders, error: allOrdersError } = await supabase
+          .from('vendor_orders')
+          .select('status')
+          .eq('order_id', mainOrderId);
 
-      if (allSameStatus && mainOrderId) {
-        await updateDoc(doc(db, 'orders', mainOrderId), {
-          status: newStatus,
-          updatedAt: new Date().toISOString()
-        });
+        if (!allOrdersError && allVendorOrders) {
+          const allSameStatus = allVendorOrders.every(
+            vOrder => vOrder.status === newStatus
+          );
+
+          if (allSameStatus) {
+            const { error: mainOrderError } = await supabase
+              .from('orders')
+              .update({
+                status: newStatus,
+                updated_at: now
+              })
+              .eq('id', mainOrderId);
+
+            if (mainOrderError) {
+              console.error('Error updating main order:', mainOrderError.message);
+            }
+          }
+        }
       }
 
       // ✅ SEND NOTIFICATION TO BUYER
       await sendOrderNotification(
         mainOrderId || orderId,
-        orderData.userId,
+        orderData.user_id || orderData.userId,
         'buyer',
         newStatus,
         { 
           total: orderData.total,
           orderNumber: orderId.substring(0, 8),
-          vendorName: currentUser.name
+          vendorName: currentUser.name || currentUser.full_name
         }
       );
 
       // ✅ CHECK STOCK LEVELS AND ALERT IF LOW
       if (newStatus === 'shipped' || newStatus === 'delivered') {
-        for (const item of orderData.items) {
+        const items = orderData.items || [];
+        for (const item of items) {
           try {
-            const productDoc = await getDoc(doc(db, 'products', item.productId));
-            if (productDoc.exists()) {
-              const product = productDoc.data();
+            const { data: product, error: productError } = await supabase
+              .from('products')
+              .select('id, name, stock')
+              .eq('id', item.productId || item.product_id)
+              .single();
+
+            if (!productError && product) {
               if (product.stock < 10) {
                 await sendLowStockAlert(
-                  item.productId,
+                  product.id,
                   currentUser.uid,
                   product.name,
                   product.stock
@@ -103,7 +132,7 @@ const VendorOrders = () => {
               }
             }
           } catch (error) {
-            console.error('Error checking stock:', error);
+            console.error('Error checking stock:', error.message);
           }
         }
       }
@@ -112,7 +141,7 @@ const VendorOrders = () => {
       setShowDetailsModal(false);
       fetchOrders();
     } catch (error) {
-      console.error('Error updating order status:', error);
+      console.error('Error updating order status:', error.message);
       alert('Failed to update order status. Please try again.');
     } finally {
       setLoading(false);
@@ -227,10 +256,10 @@ const VendorOrders = () => {
           <tbody>
             {filteredOrders.map(order => (
               <tr key={order.id} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-900">
-                <td className="py-3 px-4 font-mono text-sm">#{order.id.substring(0, 8)}</td>
+                <td className="py-3 px-4 font-mono text-sm">#{typeof order.id === 'string' ? order.id.substring(0, 8) : order.id}</td>
                 <td className="py-3 px-4">
-                  <p className="font-medium">{order.userName}</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">{order.userEmail || 'N/A'}</p>
+                  <p className="font-medium">{order.user_name || order.userName}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">{order.user_email || order.userEmail || 'N/A'}</p>
                 </td>
                 <td className="py-3 px-4">
                   <p className="font-medium">{order.items?.length || 0} items</p>
@@ -241,7 +270,7 @@ const VendorOrders = () => {
                 </td>
                 <td className="py-3 px-4 font-bold text-lg">₦{order.total?.toLocaleString()}</td>
                 <td className="py-3 px-4 text-sm">
-                  {new Date(order.createdAt).toLocaleDateString()}
+                  {new Date(order.created_at || order.createdAt).toLocaleDateString()}
                 </td>
                 <td className="py-3 px-4">
                   <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
@@ -286,7 +315,7 @@ const VendorOrders = () => {
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Order ID</p>
-                <p className="font-mono font-bold">#{selectedOrder.id.substring(0, 8)}</p>
+                <p className="font-mono font-bold">#{typeof selectedOrder.id === 'string' ? selectedOrder.id.substring(0, 8) : selectedOrder.id}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Status</p>
@@ -296,7 +325,7 @@ const VendorOrders = () => {
               </div>
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Order Date</p>
-                <p className="font-medium">{new Date(selectedOrder.createdAt).toLocaleString()}</p>
+                <p className="font-medium">{new Date(selectedOrder.created_at || selectedOrder.createdAt).toLocaleString()}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Total Amount</p>
@@ -307,14 +336,14 @@ const VendorOrders = () => {
             {/* Customer Info */}
             <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
               <h3 className="font-semibold mb-3">Customer Information</h3>
-              <p><strong>Name:</strong> {selectedOrder.userName}</p>
-              <p><strong>Email:</strong> {selectedOrder.userEmail || 'N/A'}</p>
-              {selectedOrder.shippingAddress && (
+              <p><strong>Name:</strong> {selectedOrder.user_name || selectedOrder.userName}</p>
+              <p><strong>Email:</strong> {selectedOrder.user_email || selectedOrder.userEmail || 'N/A'}</p>
+              {(selectedOrder.shipping_address || selectedOrder.shippingAddress) && (
                 <>
                   <p className="mt-2"><strong>Shipping Address:</strong></p>
-                  <p>{selectedOrder.shippingAddress.address}</p>
-                  <p>{selectedOrder.shippingAddress.city}, {selectedOrder.shippingAddress.state} {selectedOrder.shippingAddress.zipCode}</p>
-                  <p><strong>Phone:</strong> {selectedOrder.shippingAddress.phone}</p>
+                  <p>{(selectedOrder.shipping_address || selectedOrder.shippingAddress).address}</p>
+                  <p>{(selectedOrder.shipping_address || selectedOrder.shippingAddress).city}, {(selectedOrder.shipping_address || selectedOrder.shippingAddress).state} {(selectedOrder.shipping_address || selectedOrder.shippingAddress).zipCode}</p>
+                  <p><strong>Phone:</strong> {(selectedOrder.shipping_address || selectedOrder.shippingAddress).phone}</p>
                 </>
               )}
             </div>

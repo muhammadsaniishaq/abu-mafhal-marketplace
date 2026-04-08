@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, updateDoc, doc, deleteDoc, setDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth, db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 
 const AdminUsers = () => {
   const [users, setUsers] = useState([]);
@@ -28,11 +26,13 @@ const AdminUsers = () => {
 
   const fetchUsers = async () => {
     try {
-      const snapshot = await getDocs(collection(db, 'users'));
-      const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setUsers(usersData);
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*');
+      if (error) throw error;
+      setUsers(data || []);
     } catch (error) {
-      console.error('Error fetching users:', error);
+      console.error('Error fetching users:', error.message);
     } finally {
       setLoading(false);
     }
@@ -50,23 +50,35 @@ const AdminUsers = () => {
     }
 
     try {
-      // Create user in Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        newUser.email,
-        newUser.password
-      );
-
-      // Create user document in Firestore
-      await setDoc(doc(db, 'users', userCredential.user.uid), {
-        name: newUser.name,
+      // 1. Create user in Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email: newUser.email,
-        phone: newUser.phone,
-        role: newUser.role,
-        active: newUser.active,
-        createdAt: new Date().toISOString(),
-        createdBy: 'admin'
+        password: newUser.password,
+        options: {
+          data: {
+            full_name: newUser.name,
+            role: newUser.role
+          }
+        }
       });
+
+      if (authError) throw authError;
+
+      // 2. Profile creation (Supabase usually handles this via triggers, but we'll ensure it here)
+      // If no trigger exists, we manually upsert to the profiles table
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({
+          id: authData.user.id,
+          full_name: newUser.name,
+          email: newUser.email,
+          phone: newUser.phone,
+          role: newUser.role,
+          active: newUser.active,
+          created_at: new Date().toISOString()
+        });
+
+      if (profileError) throw profileError;
 
       alert('User created successfully!');
       setShowCreateModal(false);
@@ -80,12 +92,8 @@ const AdminUsers = () => {
       });
       fetchUsers();
     } catch (error) {
-      console.error('Error creating user:', error);
-      if (error.code === 'auth/email-already-in-use') {
-        alert('Email already in use');
-      } else {
-        alert('Failed to create user: ' + error.message);
-      }
+      console.error('Error creating user:', error.message);
+      alert('Failed to create user: ' + error.message);
     }
   };
 
@@ -93,10 +101,15 @@ const AdminUsers = () => {
     if (!window.confirm(`Change user role to ${newRole}?`)) return;
 
     try {
-      await updateDoc(doc(db, 'users', userId), {
-        role: newRole,
-        updatedAt: new Date().toISOString()
-      });
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          role: newRole,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+
+      if (error) throw error;
       alert('User role updated successfully');
       fetchUsers();
     } catch (error) {
@@ -106,10 +119,15 @@ const AdminUsers = () => {
 
   const handleToggleActive = async (userId, currentStatus) => {
     try {
-      await updateDoc(doc(db, 'users', userId), {
-        active: !currentStatus,
-        updatedAt: new Date().toISOString()
-      });
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          active: !currentStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+
+      if (error) throw error;
       alert(`User ${!currentStatus ? 'activated' : 'deactivated'} successfully`);
       fetchUsers();
     } catch (error) {
@@ -118,19 +136,24 @@ const AdminUsers = () => {
   };
 
   const handleDeleteUser = async (userId) => {
-    if (!window.confirm('Permanently delete this user? This action cannot be undone!')) return;
+    if (!window.confirm('Permanently delete this user profile? This action cannot be undone!')) return;
 
     try {
-      await deleteDoc(doc(db, 'users', userId));
-      alert('User deleted successfully');
+      const { error } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', userId);
+
+      if (error) throw error;
+      alert('User profile deleted successfully');
       fetchUsers();
     } catch (error) {
-      alert('Failed to delete user');
+      alert('Failed to delete user profile');
     }
   };
 
   const filteredUsers = users.filter(user => {
-    const matchesSearch = user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const matchesSearch = (user.full_name || user.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.email?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filter === 'all' || user.role === filter;
     return matchesSearch && matchesFilter;
@@ -389,12 +412,12 @@ const AdminUsers = () => {
               <button onClick={() => setShowModal(false)} className="text-2xl">×</button>
             </div>
             <div className="space-y-3">
-              <p><strong>Name:</strong> {selectedUser.name}</p>
+              <p><strong>Name:</strong> {selectedUser.full_name || selectedUser.name}</p>
               <p><strong>Email:</strong> {selectedUser.email}</p>
               <p><strong>Phone:</strong> {selectedUser.phone || 'N/A'}</p>
               <p><strong>Role:</strong> <span className="capitalize">{selectedUser.role}</span></p>
               <p><strong>Status:</strong> {selectedUser.active ? 'Active' : 'Inactive'}</p>
-              <p><strong>Joined:</strong> {selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString() : 'N/A'}</p>
+              <p><strong>Joined:</strong> {(selectedUser.created_at || selectedUser.createdAt) ? new Date(selectedUser.created_at || selectedUser.createdAt).toLocaleDateString() : 'N/A'}</p>
             </div>
           </div>
         </div>

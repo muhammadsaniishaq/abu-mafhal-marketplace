@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 
 const VendorProfile = () => {
   const { currentUser } = useAuth();
@@ -66,21 +64,40 @@ const VendorProfile = () => {
 
   const fetchProfile = async () => {
     try {
-      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-      if (userDoc.exists()) {
-        const data = userDoc.data();
+      const { data, error: fetchError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', currentUser.uid)
+        .single();
+
+      if (fetchError) throw fetchError;
+      
+      if (data) {
         setProfileData({
           ...profileData,
-          ...data,
-          socialMedia: data.socialMedia || profileData.socialMedia,
-          bankDetails: data.bankDetails || profileData.bankDetails,
-          shippingInfo: data.shippingInfo || profileData.shippingInfo,
-          operatingHours: data.operatingHours || profileData.operatingHours,
-          policies: data.policies || profileData.policies
+          name: data.full_name || data.name || '',
+          email: data.email || '',
+          phone: data.phone || '',
+          avatar: data.avatar_url || data.avatar || '',
+          businessName: data.business_name || data.businessName || '',
+          businessDescription: data.business_description || data.businessDescription || '',
+          businessAddress: data.business_address || data.businessAddress || '',
+          businessLocation: data.business_location || data.businessLocation || '',
+          businessPhone: data.business_phone || data.businessPhone || '',
+          businessEmail: data.business_email || data.businessEmail || '',
+          businessWebsite: data.business_website || data.businessWebsite || '',
+          taxId: data.tax_id || data.taxId || '',
+          businessLicense: data.business_license || data.businessLicense || '',
+          socialMedia: data.social_media || data.socialMedia || profileData.socialMedia,
+          bankDetails: data.bank_details || data.bankDetails || profileData.bankDetails,
+          shippingInfo: data.shipping_info || data.shippingInfo || profileData.shippingInfo,
+          operatingHours: data.operating_hours || data.operatingHours || profileData.operatingHours,
+          policies: data.policies || profileData.policies,
+          bannerImage: data.banner_image || data.bannerImage || ''
         });
       }
     } catch (error) {
-      console.error('Error fetching profile:', error);
+      console.error('Error fetching profile:', error.message);
     }
   };
 
@@ -117,12 +134,23 @@ const VendorProfile = () => {
     if (!file) return;
 
     try {
-      const avatarRef = ref(storage, `avatars/${currentUser.uid}/${file.name}`);
-      await uploadBytes(avatarRef, file);
-      const url = await getDownloadURL(avatarRef);
-      setProfileData({...profileData, avatar: url});
+      const timestamp = Date.now();
+      const fileName = `${currentUser.uid}/${timestamp}_${file.name}`;
+      
+      const { data, error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(fileName);
+
+      setProfileData({...profileData, avatar: publicUrl});
       setMessage({ type: 'success', text: 'Avatar uploaded!' });
     } catch (error) {
+      console.error('Avatar upload error:', error.message);
       setMessage({ type: 'error', text: 'Failed to upload avatar' });
     }
   };
@@ -143,20 +171,54 @@ const VendorProfile = () => {
       let bannerUrl = profileData.bannerImage;
       
       if (bannerImage) {
-        const bannerRef = ref(storage, `banners/${currentUser.uid}/${bannerImage.name}`);
-        await uploadBytes(bannerRef, bannerImage);
-        bannerUrl = await getDownloadURL(bannerRef);
+        const timestamp = Date.now();
+        const fileName = `${currentUser.uid}/${timestamp}_${bannerImage.name}`;
+        
+        const { data, error: uploadError } = await supabase.storage
+          .from('banners')
+          .upload(fileName, bannerImage);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('banners')
+          .getPublicUrl(fileName);
+        
+        bannerUrl = publicUrl;
       }
 
-      await updateDoc(doc(db, 'users', currentUser.uid), {
-        ...profileData,
-        bannerImage: bannerUrl,
-        updatedAt: new Date().toISOString()
-      });
+      const updatedProfile = {
+        full_name: profileData.name,
+        phone: profileData.phone,
+        avatar_url: profileData.avatar,
+        business_name: profileData.businessName,
+        business_description: profileData.businessDescription,
+        business_address: profileData.businessAddress,
+        business_location: profileData.businessLocation,
+        business_phone: profileData.businessPhone,
+        business_email: profileData.businessEmail,
+        business_website: profileData.businessWebsite,
+        tax_id: profileData.taxId,
+        business_license: profileData.businessLicense,
+        social_media: profileData.socialMedia,
+        bank_details: profileData.bankDetails,
+        shipping_info: profileData.shippingInfo,
+        operating_hours: profileData.operatingHours,
+        policies: profileData.policies,
+        banner_image: bannerUrl,
+        updated_at: new Date().toISOString()
+      };
+
+      const { error: updateError } = await supabase
+        .from('users')
+        .update(updatedProfile)
+        .eq('id', currentUser.uid);
+
+      if (updateError) throw updateError;
       
       setMessage({ type: 'success', text: 'Profile updated successfully!' });
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error updating profile:', error.message);
       setMessage({ type: 'error', text: 'Failed to update profile' });
     } finally {
       setLoading(false);

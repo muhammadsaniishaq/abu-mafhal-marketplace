@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useAuth } from '../../context/AuthContext';
 import Loader from '../common/Loader';
 
@@ -16,33 +15,35 @@ const Reviews = () => {
 
   const fetchReviews = async () => {
     try {
-      const productsQuery = query(
-        collection(db, 'products'),
-        where('vendorId', '==', currentUser.uid)
-      );
-      const productsSnapshot = await getDocs(productsQuery);
-      const productIds = productsSnapshot.docs.map(doc => doc.id);
+      const { data: productsData, error: productsError } = await supabase
+        .from('products')
+        .select('id')
+        .eq('vendor_id', currentUser.id || currentUser.uid);
 
-      const allReviews = [];
-      for (const productId of productIds) {
-        const reviewsQuery = query(
-          collection(db, 'reviews'),
-          where('productId', '==', productId)
-        );
-        const reviewsSnapshot = await getDocs(reviewsQuery);
-        reviewsSnapshot.docs.forEach(doc => {
-          allReviews.push({ id: doc.id, ...doc.data() });
-        });
-      }
+      if (productsError) throw productsError;
+      
+      const productIds = (productsData || []).map(p => p.id);
 
-      setReviews(allReviews);
+      if (productIds.length > 0) {
+        const { data: reviewsData, error: reviewsError } = await supabase
+          .from('reviews')
+          .select('*')
+          .in('product_id', productIds);
 
-      if (allReviews.length > 0) {
-        const avg = allReviews.reduce((sum, review) => sum + review.rating, 0) / allReviews.length;
-        setAverageRating(avg.toFixed(1));
+        if (reviewsError) throw reviewsError;
+        
+        const allReviews = reviewsData || [];
+        setReviews(allReviews);
+
+        if (allReviews.length > 0) {
+          const avg = allReviews.reduce((sum, review) => sum + review.rating, 0) / allReviews.length;
+          setAverageRating(avg.toFixed(1));
+        }
+      } else {
+        setReviews([]);
       }
     } catch (error) {
-      console.error('Error fetching reviews:', error);
+      console.error('Error fetching reviews:', error.message);
     } finally {
       setLoading(false);
     }
@@ -104,12 +105,12 @@ const Reviews = () => {
                   ))}
                 </div>
                 <span className="text-sm text-gray-500">
-                  {review.createdAt?.toDate().toLocaleDateString()}
+                  {new Date(review.created_at || review.createdAt).toLocaleDateString()}
                 </span>
               </div>
-              <h3 className="font-semibold mb-2">{review.productName}</h3>
+              <h3 className="font-semibold mb-2">{review.product_name || review.productName}</h3>
               <p className="text-gray-600 dark:text-gray-400">{review.comment}</p>
-              <p className="text-sm text-gray-500 mt-2">By: {review.buyerName}</p>
+              <p className="text-sm text-gray-500 mt-2">By: {review.user_name || review.buyerName}</p>
             </div>
           ))}
         </div>

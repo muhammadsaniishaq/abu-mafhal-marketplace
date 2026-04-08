@@ -7,11 +7,7 @@ import { supabase } from '../lib/supabase';
 
 // Enable LayoutAnimation on Android (Safe check for New Architecture)
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-    try {
-        UIManager.setLayoutAnimationEnabledExperimental(true);
-    } catch (e) {
-        // Silently ignore if no-op in New Architecture
-    }
+    UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
 import { parsePrice } from '../utils/helpers';

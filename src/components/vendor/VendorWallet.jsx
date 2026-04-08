@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, addDoc, orderBy, doc, getDoc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -35,43 +34,48 @@ const VendorWallet = () => {
   const fetchWalletData = async () => {
     try {
       // Fetch vendor wallet
-      const walletDoc = await getDoc(doc(db, 'vendorWallets', currentUser.uid));
-      if (walletDoc.exists()) {
-        setWallet(walletDoc.data());
+      const { data: walletData, error: walletError } = await supabase
+        .from('vendor_wallets')
+        .select('*')
+        .eq('vendor_id', currentUser.uid)
+        .single();
+
+      if (walletError && walletError.code !== 'PGRST116') throw walletError;
+      if (walletData) {
+        setWallet({
+          balance: walletData.balance || 0,
+          totalEarnings: walletData.total_earnings || walletData.totalEarnings || 0,
+          pendingPayouts: walletData.pending_payouts || walletData.pendingPayouts || 0,
+          totalPayouts: walletData.total_payouts || walletData.totalPayouts || 0
+        });
       }
 
       // Fetch transactions
-      const transactionsQuery = query(
-        collection(db, 'walletTransactions'),
-        where('vendorId', '==', currentUser.uid),
-        orderBy('createdAt', 'desc')
-      );
-      const transactionsSnapshot = await getDocs(transactionsQuery);
-      const transactionsData = transactionsSnapshot.docs.map(doc => ({ 
-        id: doc.id, 
-        ...doc.data() 
-      }));
-      setTransactions(transactionsData);
+      const { data: transactionsData, error: transactionsError } = await supabase
+        .from('wallet_transactions')
+        .select('*')
+        .eq('vendor_id', currentUser.uid)
+        .order('created_at', { ascending: false });
+
+      if (transactionsError) throw transactionsError;
+      setTransactions(transactionsData || []);
 
       // Fetch payouts
-      const payoutsQuery = query(
-        collection(db, 'vendorPayouts'),
-        where('vendorId', '==', currentUser.uid),
-        orderBy('createdAt', 'desc')
-      );
-      const payoutsSnapshot = await getDocs(payoutsQuery);
-      const payoutsData = payoutsSnapshot.docs.map(doc => ({ 
-        id: doc.id, 
-        ...doc.data() 
-      }));
-      setPayouts(payoutsData);
+      const { data: payoutsData, error: payoutsError } = await supabase
+        .from('vendor_payouts')
+        .select('*')
+        .eq('vendor_id', currentUser.uid)
+        .order('created_at', { ascending: false });
+
+      if (payoutsError) throw payoutsError;
+      setPayouts(payoutsData || []);
 
       // Calculate earnings over time
       const earningsByDate = {};
-      transactionsData
+      (transactionsData || [])
         .filter(t => t.type === 'sale')
         .forEach(transaction => {
-          const date = new Date(transaction.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          const date = new Date(transaction.created_at || transaction.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
           earningsByDate[date] = (earningsByDate[date] || 0) + transaction.amount;
         });
       
@@ -81,7 +85,7 @@ const VendorWallet = () => {
       setEarningsData(chartData);
 
     } catch (error) {
-      console.error('Error fetching wallet data:', error);
+      console.error('Error fetching wallet data:', error.message);
     } finally {
       setLoading(false);
     }
@@ -105,24 +109,32 @@ const VendorWallet = () => {
     setLoading(true);
 
     try {
-      await addDoc(collection(db, 'vendorPayouts'), {
-        vendorId: currentUser.uid,
-        vendorName: currentUser.name,
-        vendorEmail: currentUser.email,
-        amount,
-        method: payoutMethod,
-        bankDetails: payoutMethod === 'bank' ? bankDetails : null,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-        processedAt: null
-      });
+      const { error: payoutError } = await supabase
+        .from('vendor_payouts')
+        .insert({
+          vendor_id: currentUser.uid,
+          vendor_name: currentUser.name || currentUser.full_name || currentUser.email,
+          vendor_email: currentUser.email,
+          amount,
+          method: payoutMethod,
+          bank_details: payoutMethod === 'bank' ? {
+            account_name: bankDetails.accountName,
+            account_number: bankDetails.accountNumber,
+            bank_name: bankDetails.bankName,
+            account_type: bankDetails.accountType
+          } : null,
+          status: 'pending',
+          created_at: new Date().toISOString()
+        });
+
+      if (payoutError) throw payoutError;
 
       alert('Payout request submitted successfully! It will be processed within 1-3 business days.');
       setShowPayoutModal(false);
       setPayoutAmount('');
       fetchWalletData();
     } catch (error) {
-      console.error('Error requesting payout:', error);
+      console.error('Error requesting payout:', error.message);
       alert('Failed to submit payout request');
     } finally {
       setLoading(false);
@@ -230,7 +242,7 @@ const VendorWallet = () => {
               <tbody>
                 {payouts.map(payout => (
                   <tr key={payout.id} className="border-b dark:border-gray-700">
-                    <td className="py-3 px-4">{new Date(payout.createdAt).toLocaleDateString()}</td>
+                    <td className="py-3 px-4">{new Date(payout.created_at || payout.createdAt).toLocaleDateString()}</td>
                     <td className="py-3 px-4 font-semibold">₦{payout.amount?.toLocaleString()}</td>
                     <td className="py-3 px-4 capitalize">{payout.method}</td>
                     <td className="py-3 px-4">
@@ -239,7 +251,7 @@ const VendorWallet = () => {
                       </span>
                     </td>
                     <td className="py-3 px-4 text-sm">
-                      {payout.processedAt ? new Date(payout.processedAt).toLocaleDateString() : '-'}
+                      {(payout.processed_at || payout.processedAt) ? new Date(payout.processed_at || payout.processedAt).toLocaleDateString() : '-'}
                     </td>
                   </tr>
                 ))}
@@ -266,7 +278,7 @@ const VendorWallet = () => {
                   <div>
                     <p className="font-medium capitalize">{transaction.type}</p>
                     <p className="text-sm text-gray-600 dark:text-gray-400">{transaction.description}</p>
-                    <p className="text-xs text-gray-500">{new Date(transaction.createdAt).toLocaleString()}</p>
+                    <p className="text-xs text-gray-500">{new Date(transaction.created_at || transaction.createdAt).toLocaleString()}</p>
                   </div>
                 </div>
                 <p className={`text-lg font-bold ${transaction.type === 'payout' || transaction.type === 'commission' ? 'text-red-600' : 'text-green-600'}`}>

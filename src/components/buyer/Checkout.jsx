@@ -4,10 +4,12 @@ import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { usePaystackPayment } from 'react-paystack';
 import { paystackConfig } from '../../config/paystack';
-import { collection, addDoc, query, where, getDocs, updateDoc, doc, getDoc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { awardPoints, calculatePurchasePoints, getLoyaltyAccount } from '../../services/loyaltyService';
 import { markCartAsRecovered } from '../../services/cartRecoveryService';
+import { triggerOrderConfirmationEmail, triggerVendorNewOrderEmail } from '../../utils/emailTriggers';
+import { triggerOrderNotification, triggerVendorOrderNotification } from '../../utils/notificationTriggers';
+
 
 const Checkout = () => {
   const { cartItems, getCartTotal, clearCart } = useCart();
@@ -44,35 +46,41 @@ const Checkout = () => {
     }
 
     try {
-      const q = query(
-        collection(db, 'coupons'),
-        where('code', '==', couponCode.toUpperCase()),
-        where('active', '==', true)
-      );
-      const snapshot = await getDocs(q);
+      const { data: couponsData, error } = await supabase
+        .from('coupons')
+        .select('*')
+        .eq('code', couponCode.toUpperCase())
+        .eq('active', true);
+        
+      if (error) throw error;
       
-      if (snapshot.empty) {
+      if (!couponsData || couponsData.length === 0) {
         alert('Invalid coupon code');
         return;
       }
 
-      const coupon = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+      const coupon = couponsData[0];
+      const expiryDate = coupon.expiry_date || coupon.expiryDate;
+      const usageLimit = coupon.usage_limit || coupon.usageLimit || 0;
+      const usedCount = coupon.used_count || coupon.usedCount || 0;
+      const minPurchase = coupon.min_purchase || coupon.minPurchase || 0;
+      const maxDiscount = coupon.max_discount || coupon.maxDiscount || 0;
 
       // Validate expiry
-      if (new Date(coupon.expiryDate) < new Date()) {
+      if (expiryDate && new Date(expiryDate) < new Date()) {
         alert('This coupon has expired');
         return;
       }
 
       // Validate usage limit
-      if (coupon.usageLimit > 0 && coupon.usedCount >= coupon.usageLimit) {
+      if (usageLimit > 0 && usedCount >= usageLimit) {
         alert('This coupon has reached its usage limit');
         return;
       }
 
       // Validate minimum purchase
-      if (subtotal < coupon.minPurchase) {
-        alert(`Minimum purchase of ₦${coupon.minPurchase.toLocaleString()} required for this coupon`);
+      if (subtotal < minPurchase) {
+        alert(`Minimum purchase of ₦${minPurchase.toLocaleString()} required for this coupon`);
         return;
       }
 
@@ -80,8 +88,8 @@ const Checkout = () => {
       let discountAmount = 0;
       if (coupon.type === 'percentage') {
         discountAmount = (subtotal * coupon.value) / 100;
-        if (coupon.maxDiscount > 0) {
-          discountAmount = Math.min(discountAmount, coupon.maxDiscount);
+        if (maxDiscount > 0) {
+          discountAmount = Math.min(discountAmount, maxDiscount);
         }
       } else {
         discountAmount = coupon.value;
@@ -91,7 +99,7 @@ const Checkout = () => {
       setDiscount(discountAmount);
       alert(`Coupon applied! You saved ₦${discountAmount.toLocaleString()}`);
     } catch (error) {
-      console.error('Error applying coupon:', error);
+      console.error('Error applying coupon:', error.message);
       alert('Failed to apply coupon. Please try again.');
     }
   };
@@ -121,45 +129,53 @@ const Checkout = () => {
     setLoading(true);
     try {
       const orderData = {
-        userId: currentUser.uid,
-        customerName: shippingInfo.fullName,
-        customerEmail: shippingInfo.email,
-        customerPhone: shippingInfo.phone,
-        shippingAddress: {
+        user_id: currentUser.uid,
+        customer_name: shippingInfo.fullName,
+        customer_email: shippingInfo.email,
+        customer_phone: shippingInfo.phone,
+        shipping_address: {
           address: shippingInfo.address,
           city: shippingInfo.city,
           state: shippingInfo.state,
           zipCode: shippingInfo.zipCode
         },
         items: cartItems.map(item => ({
-          productId: item.id,
-          productName: item.name,
-          vendorId: item.vendorId,
-          vendorName: item.vendorName,
+          product_id: item.id,
+          product_name: item.name,
+          vendor_id: item.vendorId || item.vendor_id,
+          vendor_name: item.vendorName || item.vendor_name,
           price: item.price,
           quantity: item.quantity,
-          selectedVariation: item.selectedVariation,
+          selected_variation: item.selectedVariation || item.selected_variation,
           image: item.images?.[0]
         })),
         subtotal,
-        shippingFee,
+        shipping_fee: shippingFee,
         discount,
-        couponCode: appliedCoupon?.code || null,
+        coupon_code: appliedCoupon?.code || null,
         total,
-        paymentMethod: 'paystack',
-        paymentReference: reference.reference,
-        paymentStatus: 'paid',
+        payment_method: 'paystack',
+        payment_reference: reference.reference,
+        payment_status: 'paid',
         status: 'pending',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
 
-      const orderRef = await addDoc(collection(db, 'orders'), orderData);
+      const { data: orderResponse, error: orderError } = await supabase
+        .from('orders')
+        .insert([orderData])
+        .select()
+        .single();
+        
+      if (orderError) throw orderError;
+      
+      const orderId = orderResponse.id;
 
       // Send order confirmation email to customer
       try {
         await triggerOrderConfirmationEmail({
-          id: orderRef.id,
+          id: orderId,
           ...orderData
         });
         console.log('Order confirmation email sent');
@@ -169,42 +185,46 @@ const Checkout = () => {
 
       // Send notification to buyer
       try {
-        await triggerOrderNotification({ id: orderRef.id, userId: currentUser.uid }, 'placed');
+        await triggerOrderNotification({ id: orderId, userId: currentUser.uid }, 'placed');
       } catch (notifError) {
         console.error('Error sending buyer notification:', notifError);
       }
 
       // Update coupon usage if applied
       if (appliedCoupon) {
-        await updateDoc(doc(db, 'coupons', appliedCoupon.id), {
-          usedCount: (appliedCoupon.usedCount || 0) + 1
-        });
+        await supabase
+          .from('coupons')
+          .update({
+             used_count: (appliedCoupon.used_count || appliedCoupon.usedCount || 0) + 1
+          })
+          .eq('id', appliedCoupon.id);
       }
 
       // Create vendor orders, send emails and notifications
       const vendorOrders = {};
       cartItems.forEach(item => {
-        if (!vendorOrders[item.vendorId]) {
-          vendorOrders[item.vendorId] = [];
+        const vendorId = item.vendorId || item.vendor_id;
+        if (!vendorOrders[vendorId]) {
+          vendorOrders[vendorId] = [];
         }
-        vendorOrders[item.vendorId].push(item);
+        vendorOrders[vendorId].push(item);
       });
 
       for (const [vendorId, items] of Object.entries(vendorOrders)) {
         // Create vendor order
-        await addDoc(collection(db, 'vendorOrders'), {
-          vendorId,
-          orderId: orderRef.id,
+        await supabase.from('vendor_orders').insert({
+          vendor_id: vendorId,
+          order_id: orderId,
           items: items.map(item => ({
-            productId: item.id,
-            productName: item.name,
+            product_id: item.id,
+            product_name: item.name,
             price: item.price,
             quantity: item.quantity,
-            selectedVariation: item.selectedVariation
+            selected_variation: item.selectedVariation || item.selected_variation
           })),
           total: items.reduce((sum, item) => sum + (item.price * item.quantity), 0),
           status: 'pending',
-          createdAt: new Date().toISOString()
+          created_at: new Date().toISOString()
         });
         await markCartAsRecovered(currentUser.uid);
 
@@ -215,8 +235,8 @@ const Checkout = () => {
     await awardPoints(
       currentUser.uid,
       pointsEarned,
-      `Purchase - Order #${orderRef.id.substring(0, 8)}`,
-      { orderId: orderRef.id, amount: total }
+      `Purchase - Order #${orderId.substring(0, 8)}`,
+      { orderId: orderId, amount: total }
     );
   }
 } catch (error) {
@@ -226,14 +246,18 @@ const Checkout = () => {
 
         // Send email and notification to vendor
         try {
-          const vendorDoc = await getDoc(doc(db, 'users', vendorId));
-          if (vendorDoc.exists()) {
-            const vendorData = vendorDoc.data();
+          const { data: vendorData, error: vendorError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', vendorId)
+            .single();
+            
+          if (!vendorError && vendorData) {
             
             // Send email
             await triggerVendorNewOrderEmail(
               {
-                id: orderRef.id,
+                id: orderId,
                 customerName: shippingInfo.fullName,
                 total: items.reduce((sum, item) => sum + (item.price * item.quantity), 0),
                 items
@@ -244,7 +268,7 @@ const Checkout = () => {
             
             // Send notification
             await triggerVendorOrderNotification(vendorId, {
-              id: orderRef.id,
+              id: orderId,
               total: items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
             });
             
@@ -256,7 +280,7 @@ const Checkout = () => {
       }
 
       clearCart();
-      navigate(`/buyer/orders?success=true&orderId=${orderRef.id}`);
+      navigate(`/buyer/orders?success=true&orderId=${orderId}`);
     } catch (error) {
       console.error('Error creating order:', error);
       alert('Order creation failed. Please contact support.');

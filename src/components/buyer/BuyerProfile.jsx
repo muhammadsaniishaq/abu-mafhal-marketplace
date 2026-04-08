@@ -1,14 +1,12 @@
-// src/components/buyer/Profile.jsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { updateUser } from '../../services/firestoreService';
 import { uploadProfileImage } from '../../services/storageService';
 import { validateProfileForm } from '../../utils/validators';
 import { formatPhoneNumber } from '../../utils/helpers';
 import { NIGERIAN_STATES } from '../../utils/constants';
 
 const BuyerProfile = () => {
-  const { currentUser, getUserData } = useAuth();
+  const { currentUser, getUserData, updateProfile } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -33,9 +31,9 @@ const BuyerProfile = () => {
 
   const loadUserData = async () => {
     if (currentUser) {
-      const userData = await getUserData(currentUser.uid);
+      const userData = await getUserData(currentUser.id);
       setFormData({
-        name: userData.name || '',
+        name: userData.full_name || userData.name || '',
         email: userData.email || '',
         phone: userData.phone || '',
         address: userData.address || {
@@ -45,7 +43,7 @@ const BuyerProfile = () => {
           zipCode: ''
         }
       });
-      setPreviewUrl(userData.avatar || '');
+      setPreviewUrl(userData.avatar_url || userData.avatar || '');
     }
   };
 
@@ -97,14 +95,15 @@ const BuyerProfile = () => {
       // Upload avatar if changed
       if (avatar) {
         setUploading(true);
-        avatarUrl = await uploadProfileImage(currentUser.uid, avatar);
+        avatarUrl = await uploadProfileImage(currentUser.id, avatar);
       }
 
       // Update profile
-      await updateUser(currentUser.uid, {
-        ...formData,
-        avatar: avatarUrl,
-        updatedAt: new Date().toISOString()
+      await updateProfile(currentUser.id, {
+        full_name: formData.name,
+        phone: formData.phone,
+        address: formData.address,
+        avatar_url: avatarUrl
       });
 
       setSuccess('Profile updated successfully!');

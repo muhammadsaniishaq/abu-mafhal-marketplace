@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const AdminFinancials = () => {
@@ -26,15 +25,17 @@ const AdminFinancials = () => {
   const fetchFinancialData = async () => {
     try {
       // Fetch all orders
-      const ordersSnapshot = await getDocs(collection(db, 'orders'));
-      const orders = ordersSnapshot.docs.map(doc => doc.data());
+      const { data: ordersData, error: ordersError } = await supabase.from('orders').select('*');
+      if (ordersError) throw ordersError;
+      const orders = ordersData || [];
 
       // Fetch all payouts
-      const payoutsSnapshot = await getDocs(collection(db, 'vendorPayouts'));
-      const payouts = payoutsSnapshot.docs.map(doc => doc.data());
+      const { data: payoutsData, error: payoutsError } = await supabase.from('vendor_payouts').select('*');
+      if (payoutsError) throw payoutsError;
+      const payouts = payoutsData || [];
 
       // Calculate stats
-      const totalRevenue = orders.reduce((sum, order) => sum + (order.total || 0), 0);
+      const totalRevenue = orders.reduce((sum, order) => sum + (order.total_amount || order.total || 0), 0);
       const platformCommission = totalRevenue * COMMISSION_RATE;
       const vendorEarnings = totalRevenue - platformCommission;
       const pendingPayouts = payouts
@@ -56,8 +57,8 @@ const AdminFinancials = () => {
       // Revenue by month
       const revenueByMonth = {};
       orders.forEach(order => {
-        const month = new Date(order.createdAt).toLocaleDateString('en-US', { month: 'short' });
-        revenueByMonth[month] = (revenueByMonth[month] || 0) + order.total;
+        const month = new Date(order.created_at || order.createdAt).toLocaleDateString('en-US', { month: 'short' });
+        revenueByMonth[month] = (revenueByMonth[month] || 0) + (order.total_amount || order.total || 0);
       });
       setRevenueData(Object.entries(revenueByMonth).map(([month, revenue]) => ({ month, revenue })));
 
@@ -74,7 +75,7 @@ const AdminFinancials = () => {
       })));
 
     } catch (error) {
-      console.error('Error fetching financial data:', error);
+      console.error('Error fetching financial data:', error.message);
     } finally {
       setLoading(false);
     }

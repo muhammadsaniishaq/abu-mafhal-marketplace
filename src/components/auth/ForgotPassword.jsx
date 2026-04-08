@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { sendPasswordResetEmail } from 'firebase/auth';
-import { auth } from '../../config/firebase';
+import { useAuth } from '../../context/AuthContext';
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const { resetPassword } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -16,7 +16,7 @@ const ForgotPassword = () => {
     setLoading(true);
 
     try {
-      await sendPasswordResetEmail(auth, email);
+      await resetPassword(email);
       setMessage('Password reset email sent! Check your inbox.');
       setEmail('');
     } catch (error) {

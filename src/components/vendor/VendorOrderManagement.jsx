@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { doc, updateDoc, addDoc, collection } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 
 const VendorOrderManagement = ({ order, onUpdate }) => {
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -29,31 +28,32 @@ const VendorOrderManagement = ({ order, onUpdate }) => {
     setLoading(true);
 
     try {
-      // Update order
-      await updateDoc(doc(db, 'vendorOrders', order.id), {
+      const updatePayload = {
         status: updateData.status,
-        trackingNumber: updateData.trackingNumber,
+        tracking_number: updateData.trackingNumber,
         carrier: updateData.carrier,
-        estimatedDelivery: updateData.estimatedDelivery,
-        updatedAt: new Date().toISOString()
-      });
+        estimated_delivery: updateData.estimatedDelivery,
+        updated_at: new Date().toISOString()
+      };
+
+      // update main order
+      const { error: updateError } = await supabase
+        .from('orders')
+        .update(updatePayload)
+        .eq('id', order.order_id || order.orderId || order.id);
+
+      if (updateError) throw updateError;
 
       // Add tracking history
-      await addDoc(collection(db, 'orderTracking', order.orderId, 'history'), {
-        status: updateData.status,
-        description: updateData.notes || `Order status updated to ${updateData.status}`,
-        timestamp: new Date().toISOString(),
-        updatedBy: 'vendor'
-      });
-
-      // Also update main order
-      await updateDoc(doc(db, 'orders', order.orderId), {
-        status: updateData.status,
-        trackingNumber: updateData.trackingNumber,
-        carrier: updateData.carrier,
-        estimatedDelivery: updateData.estimatedDelivery,
-        updatedAt: new Date().toISOString()
-      });
+      await supabase
+        .from('order_tracking')
+        .insert([{
+          order_id: order.order_id || order.orderId || order.id,
+          status: updateData.status,
+          description: updateData.notes || `Order status updated to ${updateData.status}`,
+          created_at: new Date().toISOString(),
+          updated_by: 'vendor'
+        }]);
 
       alert('Order updated successfully!');
       setShowUpdateModal(false);

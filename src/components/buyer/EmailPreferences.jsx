@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useAuth } from '../../context/AuthContext';
 
 const EmailPreferences = () => {
@@ -22,12 +21,18 @@ const EmailPreferences = () => {
 
   const fetchPreferences = async () => {
     try {
-      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-      if (userDoc.exists() && userDoc.data().emailPreferences) {
-        setPreferences(userDoc.data().emailPreferences);
+      const { data, error } = await supabase
+        .from('users')
+        .select('email_preferences, emailPreferences')
+        .eq('id', currentUser.id || currentUser.uid)
+        .single();
+        
+      if (error) throw error;
+      if (data && (data.email_preferences || data.emailPreferences)) {
+        setPreferences(data.email_preferences || data.emailPreferences);
       }
     } catch (error) {
-      console.error('Error fetching preferences:', error);
+      console.error('Error fetching preferences:', error.message);
     }
   };
 
@@ -36,14 +41,19 @@ const EmailPreferences = () => {
     setLoading(true);
 
     try {
-      await updateDoc(doc(db, 'users', currentUser.uid), {
-        emailPreferences: preferences,
-        updatedAt: new Date().toISOString()
-      });
+      const { error } = await supabase
+        .from('users')
+        .update({
+          email_preferences: preferences,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', currentUser.id || currentUser.uid);
+        
+      if (error) throw error;
       setMessage('Email preferences saved successfully!');
       setTimeout(() => setMessage(''), 3000);
     } catch (error) {
-      console.error('Error saving preferences:', error);
+      console.error('Error saving preferences:', error.message);
       setMessage('Failed to save preferences');
     } finally {
       setLoading(false);

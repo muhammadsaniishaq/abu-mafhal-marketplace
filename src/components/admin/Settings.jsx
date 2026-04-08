@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 
 const Settings = () => {
   const [settings, setSettings] = useState({
@@ -21,13 +20,26 @@ const Settings = () => {
 
   const fetchSettings = async () => {
     try {
-      const docRef = doc(db, 'settings', 'app');
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        setSettings(docSnap.data());
+      const { data, error } = await supabase
+        .from('platform_settings')
+        .select('*')
+        .eq('id', 'app')
+        .maybeSingle();
+
+      if (error && error.code !== 'PGRST116') throw error;
+      if (data) {
+        setSettings({
+          siteName: data.site_name || data.siteName || 'Abu Mafhal',
+          commission: data.commission || 10,
+          currency: data.currency || 'NGN',
+          maintenanceMode: data.maintenance_mode || data.maintenanceMode || false,
+          allowRegistration: data.allow_registration || data.allowRegistration || true,
+          emailNotifications: data.email_notifications || data.emailNotifications || true,
+          smsNotifications: data.sms_notifications || data.smsNotifications || false
+        });
       }
     } catch (error) {
-      console.error('Error fetching settings:', error);
+      console.error('Error fetching settings:', error.message);
     } finally {
       setLoading(false);
     }
@@ -36,11 +48,26 @@ const Settings = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const docRef = doc(db, 'settings', 'app');
-      await updateDoc(docRef, settings);
+      const settingsData = {
+        id: 'app',
+        site_name: settings.siteName,
+        commission: settings.commission,
+        currency: settings.currency,
+        maintenance_mode: settings.maintenanceMode,
+        allow_registration: settings.allowRegistration,
+        email_notifications: settings.emailNotifications,
+        sms_notifications: settings.smsNotifications,
+        updated_at: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from('platform_settings')
+        .upsert(settingsData, { onConflict: 'id' });
+
+      if (error) throw error;
       alert('Settings updated successfully!');
     } catch (error) {
-      console.error('Error updating settings:', error);
+      console.error('Error updating settings:', error.message);
       alert('Error updating settings');
     } finally {
       setSaving(false);

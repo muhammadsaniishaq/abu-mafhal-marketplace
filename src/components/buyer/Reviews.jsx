@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, addDoc, query, where, doc, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useAuth } from '../../context/AuthContext';
 
 const Reviews = () => {
@@ -19,35 +17,44 @@ const Reviews = () => {
 
   const fetchReviews = async () => {
     try {
-      const q = query(collection(db, 'reviews'), where('userId', '==', currentUser.uid));
-      const snapshot = await getDocs(q);
-      const reviews = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setMyReviews(reviews);
+      const { data, error } = await supabase
+        .from('reviews')
+        .select('*')
+        .eq('user_id', currentUser.id || currentUser.uid);
+        
+      if (error) throw error;
+      setMyReviews(data || []);
     } catch (error) {
-      console.error('Error fetching reviews:', error);
+      console.error('Error fetching reviews:', error.message);
     }
   };
 
   const fetchPendingReviews = async () => {
     try {
-      const ordersQuery = query(
-        collection(db, 'orders'),
-        where('userId', '==', currentUser.uid),
-        where('status', '==', 'completed')
-      );
-      const ordersSnapshot = await getDocs(ordersQuery);
+      const { data: ordersData, error: ordersError } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('buyer_id', currentUser.id || currentUser.uid)
+        .eq('status', 'completed');
+        
+      if (ordersError) throw ordersError;
       
-      const reviewsQuery = query(collection(db, 'reviews'), where('userId', '==', currentUser.uid));
-      const reviewsSnapshot = await getDocs(reviewsQuery);
-      const reviewedProductIds = reviewsSnapshot.docs.map(doc => doc.data().productId);
+      const { data: reviewsData, error: reviewsError } = await supabase
+        .from('reviews')
+        .select('product_id, productId')
+        .eq('user_id', currentUser.id || currentUser.uid);
+        
+      if (reviewsError) throw reviewsError;
+      
+      const reviewedProductIds = (reviewsData || []).map(r => r.product_id || r.productId);
 
       const pending = [];
-      ordersSnapshot.docs.forEach(doc => {
-        const order = doc.data();
+      (ordersData || []).forEach(order => {
         order.items?.forEach(item => {
-          if (!reviewedProductIds.includes(item.productId)) {
+          const pId = item.product_id || item.productId;
+          if (!reviewedProductIds.includes(pId)) {
             pending.push({
-              orderId: doc.id,
+              orderId: order.id,
               ...item
             });
           }
@@ -56,7 +63,7 @@ const Reviews = () => {
       
       setPendingReviews(pending);
     } catch (error) {
-      console.error('Error fetching pending reviews:', error);
+      console.error('Error fetching pending reviews:', error.message);
     } finally {
       setLoading(false);
     }
@@ -88,10 +95,10 @@ const Reviews = () => {
               <div key={index} className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
                 <img 
                   src={item.image || 'https://via.placeholder.com/150'} 
-                  alt={item.productName}
+                  alt={item.product_name || item.productName}
                   className="w-full h-32 object-cover rounded-lg mb-3"
                 />
-                <h3 className="font-semibold mb-2">{item.productName}</h3>
+                <h3 className="font-semibold mb-2">{item.product_name || item.productName}</h3>
                 <button
                   onClick={() => openReviewModal(item)}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg"
@@ -117,12 +124,12 @@ const Reviews = () => {
               <div key={review.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
                 <div className="flex gap-4">
                   <img 
-                    src={review.productImage} 
-                    alt={review.productName}
+                    src={review.product_image || review.productImage} 
+                    alt={review.product_name || review.productName}
                     className="w-20 h-20 object-cover rounded-lg"
                   />
                   <div className="flex-1">
-                    <h3 className="font-semibold mb-1">{review.productName}</h3>
+                    <h3 className="font-semibold mb-1">{review.product_name || review.productName}</h3>
                     <div className="flex items-center gap-1 mb-2">
                       {[1,2,3,4,5].map(star => (
                         <span key={star} className={star <= review.rating ? 'text-yellow-500' : 'text-gray-300'}>
@@ -130,7 +137,7 @@ const Reviews = () => {
                         </span>
                       ))}
                       <span className="text-sm text-gray-600 ml-2">
-                        {new Date(review.createdAt).toLocaleDateString()}
+                        {new Date(review.created_at || review.createdAt).toLocaleDateString()}
                       </span>
                     </div>
                     <p className="text-gray-700 dark:text-gray-300 mb-2">{review.comment}</p>
@@ -188,10 +195,11 @@ const ReviewModal = ({ order, onClose, onSuccess }) => {
   const uploadImages = async () => {
     const urls = [];
     for (let i = 0; i < images.length; i++) {
-      const imageRef = ref(storage, `reviews/${currentUser.uid}/${Date.now()}_${images[i].name}`);
-      await uploadBytes(imageRef, images[i]);
-      const url = await getDownloadURL(imageRef);
-      urls.push(url);
+      const filePath = `reviews/${currentUser.id || currentUser.uid}/${Date.now()}_${images[i].name}`;
+      const { error } = await supabase.storage.from('reviews').upload(filePath, images[i]);
+      if (error) throw error;
+      const { data: { publicUrl } } = supabase.storage.from('reviews').getPublicUrl(filePath);
+      urls.push(publicUrl);
     }
     return urls;
   };
@@ -207,22 +215,24 @@ const ReviewModal = ({ order, onClose, onSuccess }) => {
     try {
       const imageUrls = await uploadImages();
 
-      await addDoc(collection(db, 'reviews'), {
-        userId: currentUser.uid,
-        userName: currentUser.name || 'Anonymous',
-        userAvatar: currentUser.avatar || null,
-        productId: order.productId,
-        productName: order.productName,
-        productImage: order.image,
-        vendorId: order.vendorId,
-        orderId: order.orderId,
+      const { error } = await supabase.from('reviews').insert([{
+        user_id: currentUser.id || currentUser.uid,
+        user_name: currentUser.name || currentUser.full_name || 'Anonymous',
+        user_avatar: currentUser.avatar_url || currentUser.avatar || null,
+        product_id: order.product_id || order.productId,
+        product_name: order.product_name || order.productName,
+        product_image: order.image,
+        vendor_id: order.vendor_id || order.vendorId,
+        order_id: order.orderId || order.order_id,
         rating,
         comment,
         images: imageUrls,
         helpful: 0,
         verified: true,
-        createdAt: new Date().toISOString()
-      });
+        created_at: new Date().toISOString()
+      }]);
+
+      if (error) throw error;
 
       // Update product rating
       // You'll need to calculate average rating here
@@ -231,7 +241,7 @@ const ReviewModal = ({ order, onClose, onSuccess }) => {
       onSuccess();
       onClose();
     } catch (error) {
-      console.error('Error submitting review:', error);
+      console.error('Error submitting review:', error.message);
       alert('Failed to submit review');
     } finally {
       setLoading(false);
@@ -247,8 +257,8 @@ const ReviewModal = ({ order, onClose, onSuccess }) => {
         </div>
 
         <div className="mb-6">
-          <img src={order.image} alt={order.productName} className="w-20 h-20 object-cover rounded-lg mb-2" />
-          <h3 className="font-semibold">{order.productName}</h3>
+          <img src={order.image} alt={order.product_name || order.productName} className="w-20 h-20 object-cover rounded-lg mb-2" />
+          <h3 className="font-semibold">{order.product_name || order.productName}</h3>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">

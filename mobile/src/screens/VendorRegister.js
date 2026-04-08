@@ -11,11 +11,8 @@ import { WebView } from 'react-native-webview';
 import { VendorCertificate } from './VendorCertificate';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-    try {
-        UIManager.setLayoutAnimationEnabledExperimental(true);
-    } catch (e) {
-        // No-op in New Architecture
-    }
+    // Only call if not in New Architecture / already enabled
+    UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
 const UploadBtn = ({ label, file, onPress, icon }) => (
@@ -480,7 +477,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                 // [FIXED] Check if already paid (retry) or just paid (paymentRef)
                 payment_status: (paymentRef || (paymentVerified && paidPlan === plan.id)) ? 'paid' : (plan.price === 0 ? 'free_trial' : 'pending'),
                 payment_reference: paymentRef || (paymentVerified && paidPlan === plan.id ? savedPaymentRef : ('REF-' + Date.now())),
-                status: 'pending', // IMPORTANT: Reset status to pending on retry
+                status: (settings?.vendor_auto_approve === true && (paymentRef || (paymentVerified && paidPlan === plan.id) || plan.price === 0)) ? 'approved' : 'pending',
                 rejection_reason: null // Clear previous rejection reason
             };
 
@@ -509,6 +506,30 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                 console.error('Supabase Submission Error:', error);
                 if (error.code === '23505') throw new Error('A pending application already exists.');
                 throw error;
+            }
+
+            // [NEW] If auto-approved, update user role and vendor status immediately
+            if (dbPayload.status === 'approved') {
+                const vendorData = {
+                    id: user.id,
+                    user_id: user.id,
+                    store_name: dbPayload.business_name,
+                    store_description: dbPayload.business_description,
+                    business_category: dbPayload.business_category,
+                    logo_url: dbPayload.logo_url,
+                    contact_phone: formData.phone,
+                    contact_email: user.email,
+                    address: dbPayload.business_address,
+                    is_locked: false,
+                    vendor_status: 'active',
+                    subscription_plan: dbPayload.subscription_plan,
+                    last_payment_date: new Date().toISOString()
+                };
+
+                await supabase.from('vendors').upsert([vendorData]);
+                
+                // Update profile role to vendor
+                await supabase.from('profiles').update({ role: 'vendor' }).eq('id', user.id);
             }
 
             LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);

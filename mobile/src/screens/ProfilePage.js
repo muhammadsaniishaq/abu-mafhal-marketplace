@@ -18,6 +18,7 @@ const ProfilePageInner = ({ user, onLogout, onBack, onOpenVendorRegister, onOpen
     const [loading, setLoading] = useState(true);
     const [vendorApp, setVendorApp] = useState(null);
     const [driverProfile, setDriverProfile] = useState(null);
+    const { settings } = useAppSettings();
 
     const MENU_ITEMS = [
         { icon: 'chatbubbles-outline', label: 'Messages', screen: 'ConversationsScreen', badge: 'New' },
@@ -290,16 +291,18 @@ const ProfilePageInner = ({ user, onLogout, onBack, onOpenVendorRegister, onOpen
                 )}
 
                 {/* REFERRAL CARD */}
-                <TouchableOpacity style={styles.referCard} onPress={() => onNavigate('referral')}>
-                    <View style={styles.referIcon}>
-                        <Ionicons name="gift" size={20} color="#10B981" />
-                    </View>
-                    <View>
-                        <Text style={styles.referTitle}>Refer & Earn</Text>
-                        <Text style={styles.referSub}>Invite friends and get 500 AMC bonus</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={16} color="#CBD5E1" style={{ marginLeft: 'auto' }} />
-                </TouchableOpacity>
+                {settings?.enable_affiliate !== false && (
+                    <TouchableOpacity style={styles.referCard} onPress={() => onNavigate('referral')}>
+                        <View style={styles.referIcon}>
+                            <Ionicons name="gift" size={20} color="#10B981" />
+                        </View>
+                        <View>
+                            <Text style={styles.referTitle}>Refer & Earn</Text>
+                            <Text style={styles.referSub}>Invite friends and get 500 AMC bonus</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={16} color="#CBD5E1" style={{ marginLeft: 'auto' }} />
+                    </TouchableOpacity>
+                )}
 
                 {/* RECENT ORDERS - LIVE */}
                 <Text style={styles.sectionTitle}>Recent Orders ({orders.length})</Text>

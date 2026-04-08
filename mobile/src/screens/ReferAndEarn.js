@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Share, Dimensions, Modal, Image, Animated, ImageBackground, SafeAreaView, Platform, TextInput, FlatList, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Share, Dimensions, Modal, Image, Animated, ImageBackground, SafeAreaView, Platform, TextInput, FlatList, StyleSheet, RefreshControl } from 'react-native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { supabase } from '../lib/supabase';

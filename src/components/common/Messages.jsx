@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { getUserConversations, getMessages, sendMessage, subscribeToMessages, markMessagesAsRead } from '../../services/chatService';
-import { collection, query, where, getDoc, doc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 
 const Messages = () => {
   const { currentUser } = useAuth();
@@ -51,13 +50,19 @@ const Messages = () => {
   const fetchOtherUser = async () => {
     try {
       const userId = currentUser.role === 'buyer' 
-        ? selectedConversation.vendorId 
-        : selectedConversation.buyerId;
+        ? (selectedConversation.vendor_id || selectedConversation.vendorId) 
+        : (selectedConversation.buyer_id || selectedConversation.buyerId);
       
-      const userDoc = await getDoc(doc(db, 'users', userId));
-      setOtherUser({ id: userDoc.id, ...userDoc.data() });
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+        
+      if (error) throw error;
+      setOtherUser(data);
     } catch (error) {
-      console.error('Error fetching user:', error);
+      console.error('Error fetching user:', error.message);
     }
   };
 
@@ -138,10 +143,10 @@ const Messages = () => {
                     )}
                   </div>
                   <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-1">
-                    {conv.lastMessage || 'Start a conversation'}
+                    {conv.last_message || conv.lastMessage || 'Start a conversation'}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
-                    {conv.lastMessageAt && getTimeAgo(conv.lastMessageAt.toDate?.() || conv.lastMessageAt)}
+                    {(conv.last_message_at || conv.lastMessageAt) && getTimeAgo(conv.last_message_at || conv.lastMessageAt?.toDate?.() || conv.lastMessageAt)}
                   </p>
                 </button>
               );

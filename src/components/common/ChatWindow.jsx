@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useAuth } from '../../context/AuthContext';
 import Chat from './Chat';
 
@@ -18,14 +17,20 @@ const ChatWindow = () => {
 
   const fetchConversationDetails = async () => {
     try {
-      const convoDoc = await getDoc(doc(db, 'conversations', conversationId));
-      if (convoDoc.exists()) {
-        const data = convoDoc.data();
-        const otherUserId = data.participants.find(id => id !== currentUser.uid);
-        setOtherUser(data.participantDetails[otherUserId]);
+      const { data, error } = await supabase
+        .from('conversations')
+        .select('*')
+        .eq('id', conversationId)
+        .single();
+        
+      if (error) throw error;
+      
+      if (data) {
+        const otherUserId = data.participants.find(id => id !== (currentUser.id || currentUser.uid));
+        setOtherUser(data.participant_details?.[otherUserId] || data.participantDetails?.[otherUserId]);
       }
     } catch (error) {
-      console.error('Error fetching conversation:', error);
+      console.error('Error fetching conversation:', error.message);
     } finally {
       setLoading(false);
     }

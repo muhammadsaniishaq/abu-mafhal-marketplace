@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import Loader from '../common/Loader';
 
 const OrderManagement = () => {
@@ -19,26 +18,29 @@ const OrderManagement = () => {
 
   const fetchOrders = async () => {
     try {
-      const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
-      const snapshot = await getDocs(q);
-      const ordersList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      const { data: ordersList, error } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          users!orders_buyer_id_fkey (name, email)
+        `)
+        .order('created_at', { ascending: false });
+        
+      if (error) throw error;
       
-      setOrders(ordersList);
+      setOrders(ordersList || []);
       
-      const stats = {
-        total: ordersList.length,
-        pending: ordersList.filter(o => o.status === 'pending').length,
-        completed: ordersList.filter(o => o.status === 'completed').length,
-        revenue: ordersList
+      const calcStats = {
+        total: (ordersList || []).length,
+        pending: (ordersList || []).filter(o => o.status === 'pending').length,
+        completed: (ordersList || []).filter(o => o.status === 'completed').length,
+        revenue: (ordersList || [])
           .filter(o => o.status === 'completed')
-          .reduce((sum, o) => sum + (o.total || 0), 0)
+          .reduce((sum, o) => sum + (o.total_amount || o.total || 0), 0)
       };
-      setStats(stats);
+      setStats(calcStats);
     } catch (error) {
-      console.error('Error fetching orders:', error);
+      console.error('Error fetching orders:', error.message);
     } finally {
       setLoading(false);
     }
@@ -87,19 +89,19 @@ const OrderManagement = () => {
             {orders.map((order) => (
               <tr key={order.id}>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  #{order.id.slice(0, 8)}
+                  #{String(order.id).slice(0, 8)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  {order.createdAt?.toDate().toLocaleDateString()}
+                  {new Date(order.created_at || order.createdAt).toLocaleDateString()}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  {order.buyerName}
+                  {order.users?.name || order.buyer_name || order.buyerName || 'Unknown Buyer'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  {order.vendorName}
+                  {order.vendor_name || order.vendorName || 'Multiple/Unknown'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold">
-                  ₦{order.total?.toLocaleString()}
+                  ₦{(order.total_amount || order.total || 0).toLocaleString()}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`px-2 py-1 text-xs rounded-full ${

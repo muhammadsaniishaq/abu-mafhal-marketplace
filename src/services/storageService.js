@@ -1,97 +1,69 @@
 // src/services/storageService.js
-import {
-  ref,
-  uploadBytes,
-  uploadBytesResumable,
-  getDownloadURL,
-  deleteObject,
-  listAll
-} from 'firebase/storage';
-import { storage } from '../config/firebase';
+import { supabase } from '../config/supabase';
 
 // Upload profile image
-export const uploadProfileImage = async (userId, file, onProgress) => {
+export const uploadProfileImage = async (userId, file) => {
   try {
     const fileExtension = file.name.split('.').pop();
     const fileName = `${userId}_${Date.now()}.${fileExtension}`;
-    const storageRef = ref(storage, `profiles/${userId}/${fileName}`);
+    const filePath = `profiles/${userId}/${fileName}`;
 
-    if (onProgress) {
-      const uploadTask = uploadBytesResumable(storageRef, file);
-      
-      return new Promise((resolve, reject) => {
-        uploadTask.on(
-          'state_changed',
-          (snapshot) => {
-            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-            onProgress(progress);
-          },
-          (error) => reject(error),
-          async () => {
-            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-            resolve(downloadURL);
-          }
-        );
-      });
-    } else {
-      await uploadBytes(storageRef, file);
-      return await getDownloadURL(storageRef);
-    }
+    const { error } = await supabase.storage
+      .from('profiles')
+      .upload(filePath, file);
+
+    if (error) throw error;
+
+    const { data } = supabase.storage.from('profiles').getPublicUrl(filePath);
+    return data.publicUrl;
   } catch (error) {
-    console.error('Error uploading profile image:', error);
+    console.error('Error uploading profile image:', error.message);
     throw error;
   }
 };
 
 // Upload product images
-export const uploadProductImages = async (vendorId, productId, files, onProgress) => {
+export const uploadProductImages = async (vendorId, productId, files) => {
   try {
     const uploadPromises = files.map(async (file, index) => {
       const fileExtension = file.name.split('.').pop();
       const fileName = `${productId}_${index}_${Date.now()}.${fileExtension}`;
-      const storageRef = ref(storage, `products/${vendorId}/${productId}/${fileName}`);
+      const filePath = `products/${vendorId}/${productId}/${fileName}`;
 
-      if (onProgress) {
-        const uploadTask = uploadBytesResumable(storageRef, file);
-        
-        return new Promise((resolve, reject) => {
-          uploadTask.on(
-            'state_changed',
-            (snapshot) => {
-              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-              onProgress(index, progress);
-            },
-            (error) => reject(error),
-            async () => {
-              const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-              resolve(downloadURL);
-            }
-          );
-        });
-      } else {
-        await uploadBytes(storageRef, file);
-        return await getDownloadURL(storageRef);
-      }
+      const { error } = await supabase.storage
+        .from('products')
+        .upload(filePath, file);
+
+      if (error) throw error;
+
+      const { data } = supabase.storage.from('products').getPublicUrl(filePath);
+      return data.publicUrl;
     });
 
     return await Promise.all(uploadPromises);
   } catch (error) {
-    console.error('Error uploading product images:', error);
+    console.error('Error uploading product images:', error.message);
     throw error;
   }
 };
 
-// Upload vendor documents (business registration, ID, etc.)
+// Upload vendor document
 export const uploadVendorDocument = async (vendorId, file, documentType) => {
   try {
     const fileExtension = file.name.split('.').pop();
     const fileName = `${documentType}_${Date.now()}.${fileExtension}`;
-    const storageRef = ref(storage, `vendors/${vendorId}/documents/${fileName}`);
+    const filePath = `vendors/${vendorId}/documents/${fileName}`;
 
-    await uploadBytes(storageRef, file);
-    return await getDownloadURL(storageRef);
+    const { error } = await supabase.storage
+      .from('vendors')
+      .upload(filePath, file);
+
+    if (error) throw error;
+
+    const { data } = supabase.storage.from('vendors').getPublicUrl(filePath);
+    return data.publicUrl;
   } catch (error) {
-    console.error('Error uploading vendor document:', error);
+    console.error('Error uploading vendor document:', error.message);
     throw error;
   }
 };
@@ -101,12 +73,18 @@ export const uploadChatAttachment = async (chatId, file) => {
   try {
     const fileExtension = file.name.split('.').pop();
     const fileName = `${Date.now()}.${fileExtension}`;
-    const storageRef = ref(storage, `chat/${chatId}/${fileName}`);
+    const filePath = `chat/${chatId}/${fileName}`;
 
-    await uploadBytes(storageRef, file);
-    return await getDownloadURL(storageRef);
+    const { error } = await supabase.storage
+      .from('chat')
+      .upload(filePath, file);
+
+    if (error) throw error;
+
+    const { data } = supabase.storage.from('chat').getPublicUrl(filePath);
+    return data.publicUrl;
   } catch (error) {
-    console.error('Error uploading chat attachment:', error);
+    console.error('Error uploading chat attachment:', error.message);
     throw error;
   }
 };
@@ -116,64 +94,61 @@ export const uploadDisputeEvidence = async (disputeId, file) => {
   try {
     const fileExtension = file.name.split('.').pop();
     const fileName = `evidence_${Date.now()}.${fileExtension}`;
-    const storageRef = ref(storage, `disputes/${disputeId}/${fileName}`);
+    const filePath = `disputes/${disputeId}/${fileName}`;
 
-    await uploadBytes(storageRef, file);
-    return await getDownloadURL(storageRef);
+    const { error } = await supabase.storage
+      .from('disputes')
+      .upload(filePath, file);
+
+    if (error) throw error;
+
+    const { data } = supabase.storage.from('disputes').getPublicUrl(filePath);
+    return data.publicUrl;
   } catch (error) {
-    console.error('Error uploading dispute evidence:', error);
+    console.error('Error uploading dispute evidence:', error.message);
     throw error;
   }
 };
 
 // Delete file from storage
-export const deleteFile = async (fileUrl) => {
+export const deleteFile = async (bucket, path) => {
   try {
-    const fileRef = ref(storage, fileUrl);
-    await deleteObject(fileRef);
-    return true;
-  } catch (error) {
-    console.error('Error deleting file:', error);
-    throw error;
-  }
-};
+    const { error } = await supabase.storage
+      .from(bucket)
+      .remove([path]);
 
-// Delete all product images
-export const deleteProductImages = async (vendorId, productId) => {
-  try {
-    const folderRef = ref(storage, `products/${vendorId}/${productId}`);
-    const fileList = await listAll(folderRef);
-    
-    const deletePromises = fileList.items.map(itemRef => deleteObject(itemRef));
-    await Promise.all(deletePromises);
-    
+    if (error) throw error;
     return true;
   } catch (error) {
-    console.error('Error deleting product images:', error);
+    console.error('Error deleting file:', error.message);
     throw error;
   }
 };
 
 // Get all files in a folder
-export const listFiles = async (path) => {
+export const listFiles = async (bucket, folderPath) => {
   try {
-    const folderRef = ref(storage, path);
-    const fileList = await listAll(folderRef);
+    const { data: fileList, error } = await supabase.storage
+      .from(bucket)
+      .list(folderPath);
+      
+    if (error) throw error;
     
-    const urls = await Promise.all(
-      fileList.items.map(async (itemRef) => {
-        const url = await getDownloadURL(itemRef);
-        return {
-          name: itemRef.name,
-          url: url,
-          path: itemRef.fullPath
-        };
-      })
-    );
+    const urls = fileList.map(item => {
+      const { data } = supabase.storage
+        .from(bucket)
+        .getPublicUrl(`${folderPath ? folderPath + '/' : ''}${item.name}`);
+        
+      return {
+        name: item.name,
+        url: data.publicUrl,
+        path: `${folderPath ? folderPath + '/' : ''}${item.name}`
+      };
+    });
     
     return urls;
   } catch (error) {
-    console.error('Error listing files:', error);
+    console.error('Error listing files:', error.message);
     throw error;
   }
 };

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, orderBy, onSnapshot, limit } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { markAsRead, markAllAsRead } from '../../services/notificationService';
 import { Link } from 'react-router-dom';
@@ -14,28 +13,43 @@ const NotificationCenter = ({ isOpen, onClose }) => {
   useEffect(() => {
     if (!currentUser || !isOpen) return;
 
-    const q = query(
-      collection(db, 'notifications'),
-      where('userId', '==', currentUser.uid),
-      orderBy('createdAt', 'desc'),
-      limit(50)
-    );
+    let subscription;
+    
+    const fetchNotifications = async () => {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', currentUser.id || currentUser.uid)
+        .order('created_at', { ascending: false })
+        .limit(50);
+        
+      if (!error && data) {
+        setNotifications(data);
+        setUnreadCount(data.filter(n => !n.is_read && !n.read).length);
+      }
+    };
+    
+    fetchNotifications();
+    
+    subscription = supabase
+      .channel('public:notifications')
+      .on('postgres_changes', {
+        event: '*', 
+        schema: 'public', 
+        table: 'notifications',
+        filter: `user_id=eq.${currentUser.id || currentUser.uid}`
+      }, payload => {
+        fetchNotifications();
+      })
+      .subscribe();
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const notifs = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      
-      setNotifications(notifs);
-      setUnreadCount(notifs.filter(n => !n.read).length);
-    });
-
-    return () => unsubscribe();
+    return () => {
+      if (subscription) supabase.removeChannel(subscription);
+    };
   }, [currentUser, isOpen]);
 
   const handleNotificationClick = async (notification) => {
-    if (!notification.read) {
+    if (!(notification.is_read || notification.read)) {
       await markAsRead(notification.id);
     }
     
@@ -62,7 +76,7 @@ const NotificationCenter = ({ isOpen, onClose }) => {
   };
 
   const filteredNotifications = notifications.filter(n => {
-    if (filter === 'unread') return !n.read;
+    if (filter === 'unread') return !(n.is_read || n.read);
     return true;
   });
 
@@ -135,7 +149,7 @@ const NotificationCenter = ({ isOpen, onClose }) => {
                   key={notification.id}
                   onClick={() => handleNotificationClick(notification)}
                   className={`p-4 border-b dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900 ${
-                    !notification.read ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                    !(notification.is_read || notification.read) ? 'bg-blue-50 dark:bg-blue-900/20' : ''
                   }`}
                 >
                   <div className="flex gap-3">
@@ -143,17 +157,17 @@ const NotificationCenter = ({ isOpen, onClose }) => {
                       {getNotificationIcon(notification.type)}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className={`font-medium mb-1 ${!notification.read ? 'font-bold' : ''}`}>
+                      <p className={`font-medium mb-1 ${!(notification.is_read || notification.read) ? 'font-bold' : ''}`}>
                         {notification.title}
                       </p>
                       <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
-                        {notification.body}
+                        {notification.body || notification.message}
                       </p>
                       <p className="text-xs text-gray-500 mt-1">
-                        {new Date(notification.createdAt).toLocaleString()}
+                        {new Date(notification.created_at || notification.createdAt).toLocaleString()}
                       </p>
                     </div>
-                    {!notification.read && (
+                    {!(notification.is_read || notification.read) && (
                       <div className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0 mt-2" />
                     )}
                   </div>

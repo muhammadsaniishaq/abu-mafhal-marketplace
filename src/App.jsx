@@ -107,7 +107,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 // ==================== MAIN APP COMPONENT ====================
 function App() {
   return (
-    <AuthProvider>
+    <>
       <CartProvider>
         <WishlistProvider>
           <ComparisonProvider>
@@ -191,6 +191,7 @@ function App() {
                   <Route path="vendor-approvals" element={<VendorApproval />} />
                   <Route path="products" element={<AdminProducts />} />
                   <Route path="products/add" element={<AdminAddProduct />} />
+                  <Route path="products/edit/:id" element={<AdminAddProduct />} />
                   <Route path="orders" element={<AdminOrders />} />
                   <Route path="disputes" element={<AdminDisputes />} />
                   <Route path="payments" element={<AdminPayments />} />
@@ -278,7 +279,7 @@ function App() {
           </ComparisonProvider>
         </WishlistProvider>
       </CartProvider>
-    </AuthProvider>
+    </>
   );
 }
 

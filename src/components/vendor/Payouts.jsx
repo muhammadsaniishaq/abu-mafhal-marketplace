@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useAuth } from '../../context/AuthContext';
 import Loader from '../common/Loader';
 
@@ -16,34 +15,35 @@ const Payouts = () => {
 
   const fetchPayouts = async () => {
     try {
-      const q = query(
-        collection(db, 'payouts'),
-        where('vendorId', '==', currentUser.uid)
-      );
-      const snapshot = await getDocs(q);
-      const payoutsList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      const { data: payoutsData, error: payoutsError } = await supabase
+        .from('vendor_payouts')
+        .select('*')
+        .eq('vendor_id', currentUser.id || currentUser.uid);
+
+      if (payoutsError) throw payoutsError;
+      
+      const payoutsList = payoutsData || [];
       setPayouts(payoutsList);
 
       // Calculate available balance
-      const ordersQuery = query(
-        collection(db, 'orders'),
-        where('vendorId', '==', currentUser.uid),
-        where('status', '==', 'completed')
-      );
-      const ordersSnapshot = await getDocs(ordersQuery);
+      const { data: ordersData, error: ordersError } = await supabase
+        .from('orders')
+        .select('total_amount, total')
+        .eq('vendor_id', currentUser.id || currentUser.uid)
+        .eq('status', 'completed');
+
+      if (ordersError) throw ordersError;
+      
       let totalEarnings = 0;
-      ordersSnapshot.docs.forEach(doc => {
-        totalEarnings += doc.data().total || 0;
+      (ordersData || []).forEach(order => {
+        totalEarnings += (order.total_amount || order.total || 0);
       });
 
       const totalPaidOut = payoutsList.reduce((sum, payout) => sum + (payout.amount || 0), 0);
       setBalance(totalEarnings - totalPaidOut);
 
     } catch (error) {
-      console.error('Error fetching payouts:', error);
+      console.error('Error fetching payouts:', error.message);
     } finally {
       setLoading(false);
     }
@@ -81,7 +81,7 @@ const Payouts = () => {
                 <div>
                   <p className="font-semibold">₦{payout.amount?.toLocaleString()}</p>
                   <p className="text-sm text-gray-500">
-                    {payout.createdAt?.toDate().toLocaleDateString()}
+                    {new Date(payout.created_at || payout.createdAt).toLocaleDateString()}
                   </p>
                 </div>
                 <span className={`px-3 py-1 rounded-full text-sm ${

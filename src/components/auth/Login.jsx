@@ -1,15 +1,34 @@
-// src/components/auth/Login.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../config/supabase';
+import { Mail, Lock, Eye, EyeOff, Loader2, Bell } from 'lucide-react';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [settings, setSettings] = useState(null);
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  const fetchSettings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('app_settings')
+        .select('*')
+        .single();
+      if (data) setSettings(data);
+    } catch (err) {
+      console.error('Error fetching settings:', err);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -35,90 +54,114 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 px-4 py-12">
-      <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-lg shadow-md p-8">
-        <div className="text-center mb-8">
-          <img
-            src="/logo.png"
-            alt="Abu Mafhal Logo"
-            className="mx-auto h-16 w-auto mb-4"
-          />
-          <h2 className="text-3xl font-bold text-gray-800 dark:text-white">
-            Welcome Back
-          </h2>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">
-            Sign in to Abu Mafhal Marketplace
-          </p>
+    <div className="min-h-screen relative bg-slate-50 overflow-hidden flex flex-col items-center justify-center px-6 py-12">
+      {/* MOBILE-STYLE DECORATIONS */}
+      <div className="absolute top-[-100px] left-[-60px] w-[300px] h-[300px] rounded-full bg-blue-100 opacity-60 pointer-events-none" />
+      <div className="absolute bottom-[-50px] right-[-60px] w-[250px] h-[250px] rounded-full bg-purple-100 opacity-60 pointer-events-none" />
+      <div className="absolute top-[40%] right-[-40px] w-[100px] h-[100px] rounded-full bg-amber-100 opacity-50 pointer-events-none" />
+      <div className="absolute bottom-[20%] left-[-30px] w-[80px] h-[80px] rounded-full bg-red-200 opacity-50 pointer-events-none" />
+      
+      {/* Dynamic Mobile Symbols */}
+      <div className="absolute top-[15%] left-[10%] opacity-20 rotate-12 pointer-events-none">
+          <Mail size={80} className="text-blue-400" />
+      </div>
+      <div className="absolute bottom-[10%] right-[15%] opacity-20 -rotate-12 pointer-events-none">
+          <Bell size={100} className="text-purple-400" />
+      </div>
+
+      {/* Decoration Strip */}
+      <div className="absolute top-[100px] left-[-40px] w-[120px] h-[12px] bg-slate-100 -rotate-45 pointer-events-none" />
+      <div className="absolute top-[15%] right-[40px] w-[40px] h-[40px] bg-indigo-200 rounded-lg opacity-40 rotate-[30deg] pointer-events-none" />
+
+      <div className="w-full max-w-[480px] relative z-10">
+        <div className="mb-8">
+            <div className="w-16 h-16 rounded-2xl bg-white shadow-sm border border-slate-100 flex items-center justify-center p-2 mb-4 overflow-hidden">
+                <img 
+                    src={settings?.logo_url || "/logo.png"} 
+                    alt="Abu Mafhal" 
+                    className="w-full h-full object-contain"
+                />
+            </div>
+            <h1 className="text-4xl font-black text-slate-800 leading-[1.1] tracking-tight">
+              Welcome<br/>Back
+            </h1>
         </div>
 
-        {error && (
-          <div className="mb-4 p-4 bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-700 rounded-lg">
-            <p className="text-red-700 dark:text-red-400 text-sm">{error}</p>
-          </div>
-        )}
+        <div className="bg-white rounded-3xl p-6 md:p-8 shadow-[0_10px_30px_rgba(0,0,0,0.05)] border border-slate-100">
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-sm font-medium">
+              {error}
+            </div>
+          )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Email Address
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="you@example.com"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="••••••••"
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <label className="flex items-center">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+            <div>
+              <label className="block text-sm font-semibold text-slate-500 mb-2 ml-1">
+                Email Address
+              </label>
               <input
-                type="checkbox"
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="w-full bg-slate-100 rounded-xl px-4 py-3.5 text-slate-800 font-semibold placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300 transition-all font-medium"
+                placeholder="user@example.com"
               />
-              <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">
-                Remember me
-              </span>
-            </label>
-            <Link
-              to="/forgot-password"
-              className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-500 mb-2 ml-1">
+                Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="w-full bg-slate-100 rounded-xl pl-4 pr-12 py-3.5 text-slate-800 font-semibold placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300 transition-all font-medium"
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 px-4 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-5 w-5" />
+                  ) : (
+                    <Eye className="h-5 w-5" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end">
+              <Link to="/forgot-password" size="sm" className="text-sm font-bold text-slate-900 hover:underline">
+                Forgot password?
+              </Link>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full mt-4 flex items-center justify-center bg-slate-900 hover:bg-slate-800 text-white font-bold py-4 rounded-xl transition-all shadow-[0_4px_12_rgba(15,23,42,0.3)] disabled:opacity-75 disabled:cursor-not-allowed transform active:scale-95"
             >
-              Forgot password?
-            </Link>
-          </div>
+              {loading ? (
+                <Loader2 className="animate-spin h-5 w-5 mr-3 text-white" />
+              ) : (
+                'Sign In'
+              )}
+            </button>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-          >
-            {loading ? 'Signing in...' : 'Sign In'}
-          </button>
-        </form>
-
-        <p className="mt-6 text-center text-sm text-gray-600 dark:text-gray-400">
-          Don't have an account?{' '}
-          <Link to="/register" className="text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium">
-            Create account
-          </Link>
-        </p>
+            <div className="flex items-center justify-center gap-2 mt-4 text-[13px]">
+              <span className="text-slate-500 font-medium">Don't have an account?</span>
+              <Link to="/register" className="text-slate-900 font-extrabold hover:underline">
+                Create Account
+              </Link>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );

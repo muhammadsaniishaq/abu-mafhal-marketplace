@@ -5,7 +5,11 @@ import {
     TextInput, Alert, Modal, StatusBar, Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { decode } from 'base64-arraybuffer';
+import * as FileSystem from 'expo-file-system/legacy';
 import { supabase } from '../lib/supabase';
+import { useAppSettings } from '../context/AppSettingsContext';
 
 const STATUS_CFG = {
     pending: { color: '#D97706', bg: '#FEF3C7', icon: 'time-outline', label: 'Pending' },
@@ -37,8 +41,13 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
     // Review modal
     const [reviewModal, setReviewModal] = useState(null); // { order, item, type: 'product' | 'driver' }
     const [reviewText, setReviewText] = useState('');
+    const [reviewTitle, setReviewTitle] = useState('');
     const [reviewRating, setRating] = useState(5);
+    const [reviewImages, setReviewImages] = useState([]);
+    const [uploading, setUploading] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+
+    const { settings } = useAppSettings();
 
     // Cancel / Confirm order
     const [cancelling, setCancelling] = useState(null);
@@ -144,11 +153,26 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
             if (error) throw error;
 
             setOrders(prev => prev.map(o => o.id === orderId ? { ...o, user_confirmed: true } : o));
+            const freshOrder = orders.find(o => o.id === orderId);
 
             if (Platform.OS === 'web') {
                 window.alert('Order confirmed! Thank you for shopping with us.');
             } else {
-                Alert.alert('Success', 'Order confirmed! Thank you for shopping with us.');
+                Alert.alert(
+                    'Order Confirmed',
+                    'Thank you for shopping with us! Would you like to rate the products now?',
+                    [
+                        { text: 'Maybe Later', style: 'cancel' },
+                        {
+                            text: 'Yes, Rate',
+                            onPress: () => {
+                                if (freshOrder && freshOrder.order_items && freshOrder.order_items.length > 0) {
+                                    setReviewModal({ order: freshOrder, item: freshOrder.order_items[0], type: 'product' });
+                                }
+                            }
+                        }
+                    ]
+                );
             }
         } catch (err) {
             if (Platform.OS === 'web') {
@@ -162,25 +186,94 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
     };
 
     // ── Submit Review ─────────────────────────────────────────────────────────
+    // ── Image Handling ───────────────────────────────────────────────────────
+    const pickImage = async () => {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert('Permission Denied', 'We need access to your gallery to upload photos.');
+            return;
+        }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            allowsMultipleSelection: true,
+            quality: 0.7,
+        });
+
+        if (!result.canceled) {
+            setReviewImages(prev => [...prev, ...result.assets]);
+        }
+    };
+
+    const removeImage = (index) => {
+        setReviewImages(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const uploadReviewPhotos = async (orderId) => {
+        const urls = [];
+        setUploading(true);
+        for (const asset of reviewImages) {
+            try {
+                const fileExt = asset.uri.split('.').pop();
+                const fileName = `${user.id}/${orderId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+                const filePath = `${fileName}`;
+
+                // Use Base64 for more reliable upload in React Native/Expo
+                const base64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: 'base64' });
+
+                const { data, error } = await supabase.storage
+                    .from('products')
+                    .upload(filePath, decode(base64), { contentType: `image/${fileExt}`, upsert: true });
+
+                if (error) throw error;
+                const { data: { publicUrl } } = supabase.storage.from('products').getPublicUrl(filePath);
+                urls.push(publicUrl);
+            } catch (err) {
+                console.error('Upload error:', err);
+            }
+        }
+        setUploading(false);
+        return urls;
+    };
+
+    // ── Submit Review ─────────────────────────────────────────────────────────
     const submitReview = async () => {
         if (!reviewModal) return;
         setSubmitting(true);
         try {
             const isDriver = reviewModal.type === 'driver';
-            await supabase.from('reviews').insert({
+            console.log("Submitting review for order:", reviewModal.order?.id);
+            const uploadedUrls = await uploadReviewPhotos(reviewModal.order?.id);
+            console.log("Uploaded photos:", uploadedUrls.length);
+
+            const reviewData = {
                 user_id: user.id || user.sub,
                 product_id: isDriver ? null : reviewModal.item?.product_id,
                 driver_id: isDriver ? reviewModal.order?.driver_id : null,
                 order_id: reviewModal.order?.id,
                 review_type: reviewModal.type || 'product',
                 rating: reviewRating,
+                title: reviewTitle.trim() || (isDriver ? 'Driver Review' : 'Product Review'),
                 comment: reviewText.trim(),
-            });
+                images: uploadedUrls,
+                status: 'pending' // Explicitly set status to ensure visibility
+            };
+
+            const { data, error } = await supabase.from('reviews').insert(reviewData).select();
+            if (error) {
+                console.error("Supabase Insert Error:", error);
+                throw error;
+            }
+            console.log("Review submitted successfully! Inserted ID:", data?.[0]?.id);
+
             setReviewModal(null);
             setReviewText('');
+            setReviewTitle('');
             setRating(5);
+            setReviewImages([]);
             Alert.alert('Thank you!', 'Your review has been submitted.');
         } catch (e) {
+            console.error('Review Error:', e);
             Alert.alert('Error', 'Could not submit review. Please try again.');
         }
         setSubmitting(false);
@@ -201,242 +294,24 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
     };
 
     // ── Render Card ───────────────────────────────────────────────────────────
-    const renderCard = ({ item }) => {
-        const status = item.status?.toLowerCase() || 'pending';
-        const cfg = STATUS_CFG[status] || { color: '#64748B', bg: '#F1F5F9', icon: 'help-circle-outline', label: status };
-        const isExpanded = expandedId === item.id;
-        const isCancelled = status === 'cancelled';
-        const isDelivered = status === 'delivered';
-        const isConfirmed = isDelivered && item.user_confirmed === true;
-        const needsConfirmation = isDelivered && !isConfirmed;
-        const canCancel = ['pending', 'processing'].includes(status);
-        const stepIndex = STEPS.indexOf(status);
-        const items = item.order_items || [];
-        const images = items.slice(0, 5).map(oi => getImg(oi.product?.images)).filter(Boolean);
-
-        return (
-            <View style={C.card}>
-                {/* Header row */}
-                <TouchableOpacity activeOpacity={0.85} onPress={() => setExpandedId(isExpanded ? null : item.id)}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        {/* Left: icon + ID + date */}
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                            <View style={[C.iconBox, { backgroundColor: cfg.bg }]}>
-                                <Ionicons name={cfg.icon} size={17} color={cfg.color} />
-                            </View>
-                            <View>
-                                <Text style={C.orderId}>#{item.id.slice(0, 8).toUpperCase()}</Text>
-                                <Text style={C.orderDate}>{new Date(item.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</Text>
-                            </View>
-                        </View>
-                        {/* Right: badge + amount */}
-                        <View style={{ alignItems: 'flex-end' }}>
-                            <View style={[C.statusBadge, { backgroundColor: cfg.bg }]}>
-                                <Text style={[C.statusText, { color: cfg.color }]}>{cfg.label.toUpperCase()}</Text>
-                            </View>
-                            <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A', marginTop: 4 }}>
-                                ₦{(item.total_amount || 0).toLocaleString()}
-                            </Text>
-                        </View>
-                    </View>
-
-                    {/* Product image strip */}
-                    {images.length > 0 && (
-                        <View style={{ flexDirection: 'row', gap: 7, marginTop: 12 }}>
-                            {images.map((url, i) => (
-                                <Image key={i} source={{ uri: url }} style={C.thumb} resizeMode="cover" />
-                            ))}
-                            {items.length > 5 && (
-                                <View style={[C.thumb, { backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center' }]}>
-                                    <Text style={{ color: 'white', fontWeight: '900', fontSize: 12 }}>+{items.length - 5}</Text>
-                                </View>
-                            )}
-                        </View>
-                    )}
-
-                    {/* Delivery date estimate */}
-                    {!isCancelled && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 10 }}>
-                            <Ionicons name="calendar-outline" size={13} color="#64748B" />
-                            <Text style={{ fontSize: 12, color: '#64748B' }}>
-                                {isDelivered
-                                    ? '✅ Delivered'
-                                    : `Est. delivery: ${new Date(new Date(item.created_at).getTime() + 5 * 86400000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}`
-                                }
-                            </Text>
-                        </View>
-                    )}
-
-                    {/* Progress Steps */}
-                    {!isCancelled && (
-                        <View style={{ marginTop: 12 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                {STEPS.map((step, i) => {
-                                    const done = i <= stepIndex;
-                                    return (
-                                        <React.Fragment key={step}>
-                                            <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: done ? '#0F172A' : '#E2E8F0', alignItems: 'center', justifyContent: 'center' }}>
-                                                {done ? <Ionicons name="checkmark" size={11} color="white" /> : <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: '#CBD5E1' }} />}
-                                            </View>
-                                            {i < STEPS.length - 1 && <View style={{ flex: 1, height: 2, backgroundColor: i < stepIndex ? '#0F172A' : '#E2E8F0' }} />}
-                                        </React.Fragment>
-                                    );
-                                })}
-                            </View>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 3 }}>
-                                {STEPS.map(s => <Text key={s} style={{ fontSize: 8, color: '#94A3B8', fontWeight: '700', textTransform: 'uppercase', width: 20, textAlign: 'center' }}>{s.slice(0, 4)}</Text>)}
-                            </View>
-                        </View>
-                    )}
-
-                    {isCancelled && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FEF2F2', padding: 8, borderRadius: 10, marginTop: 10 }}>
-                            <Ionicons name="close-circle" size={14} color="#DC2626" />
-                            <Text style={{ color: '#DC2626', fontSize: 12, fontWeight: '600' }}>Order Cancelled</Text>
-                        </View>
-                    )}
-                </TouchableOpacity>
-
-                {/* Expanded Content */}
-                {isExpanded && (
-                    <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 14 }}>
-
-                        {/* Items list */}
-                        <Text style={C.sectionLabel}>ITEMS ORDERED</Text>
-                        {items.length > 0 ? items.map((oi, i) => {
-                            const imgUrl = getImg(oi.product?.images);
-                            return (
-                                <View key={oi.id || i} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                                    {imgUrl
-                                        ? <Image source={{ uri: imgUrl }} style={C.itemImg} resizeMode="cover" />
-                                        : <View style={[C.itemImg, { backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }]}>
-                                            <Ionicons name="image-outline" size={18} color="#CBD5E1" />
-                                        </View>
-                                    }
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={{ fontWeight: '700', color: '#0F172A', fontSize: 13 }}>{oi.product?.name || 'Product'}</Text>
-                                        <Text style={{ color: '#64748B', fontSize: 12 }}>Qty: {oi.quantity}{oi.variant ? ` • ${oi.variant}` : ''}</Text>
-                                    </View>
-                                    <View style={{ alignItems: 'flex-end' }}>
-                                        <Text style={{ fontWeight: '800', color: '#0F172A' }}>₦{((oi.price || 0) * (oi.quantity || 1)).toLocaleString()}</Text>
-                                        {/* Leave Review button per item */}
-                                        {isConfirmed && (
-                                            <TouchableOpacity onPress={() => { setReviewModal({ order: item, item: oi, type: 'product' }); setReviewText(''); setRating(5); }}
-                                                style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                                                <Ionicons name="star-outline" size={11} color="#F59E0B" />
-                                                <Text style={{ fontSize: 10, color: '#F59E0B', fontWeight: '700' }}>Review</Text>
-                                            </TouchableOpacity>
-                                        )}
-                                    </View>
-                                </View>
-                            );
-                        }) : <Text style={{ color: '#94A3B8', fontSize: 13, marginBottom: 10 }}>No item details found.</Text>}
-
-                        {/* Delivery address */}
-                        {item.shipping_address && (
-                            <View style={{ backgroundColor: '#F0FDF4', borderRadius: 12, padding: 10, marginBottom: 12, flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                                <Ionicons name="location" size={15} color="#16A34A" />
-                                <Text style={{ flex: 1, fontSize: 12, color: '#166534' }}>
-                                    {(() => {
-                                        const a = item.shipping_address;
-                                        if (typeof a === 'object' && a) return a.address || JSON.stringify(a);
-                                        try { const p = JSON.parse(a); return p?.address || a; } catch { return a; }
-                                    })()}
-                                </Text>
-                            </View>
-                        )}
-
-                        {/* Payment summary */}
-                        <View style={{ backgroundColor: '#F8FAFC', borderRadius: 14, padding: 12, marginBottom: 14 }}>
-                            <Text style={C.sectionLabel}>PAYMENT SUMMARY</Text>
-                            {[
-                                ['Method', item.payment_method || 'N/A'],
-                                ['Shipping', `₦${(item.shipping_fee || 0).toLocaleString()}`],
-                                item.discount_applied > 0 && ['Discount', `-₦${(item.discount_applied || 0).toLocaleString()}`],
-                            ].filter(Boolean).map(([l, v]) => (
-                                <View key={l} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
-                                    <Text style={{ color: '#64748B', fontSize: 12 }}>{l}</Text>
-                                    <Text style={{ fontWeight: '700', color: '#0F172A', fontSize: 12 }}>{v}</Text>
-                                </View>
-                            ))}
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#E2E8F0' }}>
-                                <Text style={{ fontWeight: '800', color: '#0F172A' }}>Total Paid</Text>
-                                <Text style={{ fontWeight: '900', color: '#0F172A', fontSize: 16 }}>₦{(item.total_amount || 0).toLocaleString()}</Text>
-                            </View>
-                        </View>
-
-                        {/* Action Buttons */}
-                        <View style={{ gap: 10 }}>
-                            <View style={{ flexDirection: 'row', gap: 10 }}>
-                                <TouchableOpacity onPress={() => onNavigate('TrackOrder', { order: item })}
-                                    style={[C.btn, { backgroundColor: '#0F172A', flex: 2 }]}>
-                                    <Ionicons name="location-outline" size={15} color="white" />
-                                    <Text style={{ color: 'white', fontWeight: '700', fontSize: 13 }}>Track Order</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity onPress={() => shareOrder(item)}
-                                    style={[C.btn, { backgroundColor: '#F1F5F9', flex: 1 }]}>
-                                    <Ionicons name="share-outline" size={15} color="#0F172A" />
-                                    <Text style={{ color: '#0F172A', fontWeight: '700', fontSize: 13 }}>Share</Text>
-                                </TouchableOpacity>
-                            </View>
-                            <View style={{ flexDirection: 'row', gap: 10 }}>
-                                <TouchableOpacity onPress={() => onNavigate('shop')}
-                                    style={[C.btn, { backgroundColor: '#EFF6FF', flex: 1 }]}>
-                                    <Ionicons name="refresh-outline" size={14} color="#2563EB" />
-                                    <Text style={{ color: '#2563EB', fontWeight: '700', fontSize: 12 }}>Reorder</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity onPress={() => contactSupport(item)}
-                                    style={[C.btn, { backgroundColor: '#F0FDF4', flex: 1 }]}>
-                                    <Ionicons name="logo-whatsapp" size={14} color="#16A34A" />
-                                    <Text style={{ color: '#16A34A', fontWeight: '700', fontSize: 12 }}>Support</Text>
-                                </TouchableOpacity>
-                                {canCancel && (
-                                    <TouchableOpacity
-                                        onPress={() => handleCancel(item)}
-                                        disabled={cancelling === item.id}
-                                        style={[C.btn, { backgroundColor: '#FEF2F2', flex: 1 }]}>
-                                        {cancelling === item.id
-                                            ? <ActivityIndicator size="small" color="#DC2626" />
-                                            : <>
-                                                <Ionicons name="close-circle-outline" size={14} color="#DC2626" />
-                                                <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 12 }}>Cancel</Text>
-                                            </>
-                                        }
-                                    </TouchableOpacity>
-                                )}
-                                {needsConfirmation && (
-                                    <TouchableOpacity
-                                        onPress={() => handleConfirmReceipt(item)}
-                                        disabled={confirming === item.id}
-                                        style={[C.btn, { backgroundColor: '#16A34A', flex: 1.5 }]}>
-                                        {confirming === item.id
-                                            ? <ActivityIndicator size="small" color="white" />
-                                            : <>
-                                                <Ionicons name="checkmark-done" size={15} color="white" />
-                                                <Text style={{ color: 'white', fontWeight: '700', fontSize: 13 }}>Confirm Receipt</Text>
-                                            </>
-                                        }
-                                    </TouchableOpacity>
-                                )}
-                                {isConfirmed && item.driver_id && (
-                                    <TouchableOpacity onPress={() => { setReviewModal({ order: item, type: 'driver' }); setReviewText(''); setRating(5); }}
-                                        style={[C.btn, { backgroundColor: '#FEF3C7', flex: 1 }]}>
-                                        <Ionicons name="star" size={14} color="#D97706" />
-                                        <Text style={{ color: '#D97706', fontWeight: '700', fontSize: 12 }}>Rate Driver</Text>
-                                    </TouchableOpacity>
-                                )}
-                            </View>
-                        </View>
-                    </View>
-                )}
-
-                {/* Expand toggle */}
-                <TouchableOpacity onPress={() => setExpandedId(isExpanded ? null : item.id)} style={{ alignItems: 'center', marginTop: 10 }}>
-                    <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={18} color="#CBD5E1" />
-                </TouchableOpacity>
-            </View>
-        );
-    };
+    const renderCard = ({ item }) => <OrderCard
+        item={item}
+        isExpanded={expandedId === item.id}
+        onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
+        onCancel={handleCancel}
+        onConfirm={handleConfirmReceipt}
+        onNavigate={onNavigate}
+        onReview={(modal) => {
+            setReviewModal(modal);
+            setReviewText('');
+            setRating(5);
+        }}
+        cancelling={cancelling === item.id}
+        confirming={confirming === item.id}
+        shareOrder={shareOrder}
+        contactSupport={contactSupport}
+        settings={settings}
+    />;
 
     // ── List header: stats + search + filters (scrolls with list) ──────────────
     const ListHeader = () => (
@@ -569,6 +444,14 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
                         </View>
 
                         <TextInput
+                            style={{ borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 14, padding: 14, fontSize: 14, color: '#0F172A', backgroundColor: '#F8FAFC', marginBottom: 12 }}
+                            placeholder="Review Title (e.g. Great Product!)"
+                            placeholderTextColor="#94A3B8"
+                            value={reviewTitle}
+                            onChangeText={setReviewTitle}
+                        />
+
+                        <TextInput
                             style={{ borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 14, padding: 14, fontSize: 14, color: '#0F172A', minHeight: 80, backgroundColor: '#F8FAFC', marginBottom: 16 }}
                             placeholder="Write your experience..."
                             placeholderTextColor="#94A3B8"
@@ -576,6 +459,24 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
                             onChangeText={setReviewText}
                             multiline
                         />
+
+                        {/* Image Picker */}
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#64748B', marginBottom: 10 }}>Add Photos (optional)</Text>
+                        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+                            <TouchableOpacity onPress={pickImage} style={{ width: 80, height: 80, borderRadius: 14, borderStyle: 'dashed', borderWidth: 1.5, borderColor: '#CBD5E1', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC' }}>
+                                <Ionicons name="camera-outline" size={24} color="#64748B" />
+                            </TouchableOpacity>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+                                {reviewImages.map((asset, idx) => (
+                                    <View key={idx} style={{ position: 'relative' }}>
+                                        <Image source={{ uri: asset.uri }} style={{ width: 80, height: 80, borderRadius: 14 }} />
+                                        <TouchableOpacity onPress={() => removeImage(idx)} style={{ position: 'absolute', top: -5, right: -5, backgroundColor: 'white', borderRadius: 10, elevation: 3, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5 }}>
+                                            <Ionicons name="close-circle" size={20} color="#DC2626" />
+                                        </TouchableOpacity>
+                                    </View>
+                                ))}
+                            </ScrollView>
+                        </View>
 
                         <View style={{ flexDirection: 'row', gap: 10 }}>
                             <TouchableOpacity onPress={() => setReviewModal(null)}
@@ -596,6 +497,229 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
         </SafeAreaView>
     );
 };
+
+const OrderCard = React.memo(({ item, isExpanded, onToggle, onCancel, onConfirm, onNavigate, onReview, cancelling, confirming, shareOrder, contactSupport, settings }) => {
+    const status = item.status?.toLowerCase() || 'pending';
+    const cfg = STATUS_CFG[status] || { color: '#64748B', bg: '#F1F5F9', icon: 'help-circle-outline', label: status };
+    const isCancelled = status === 'cancelled';
+    const isDelivered = status === 'delivered';
+    const isConfirmed = isDelivered && item.user_confirmed === true;
+    const needsConfirmation = isDelivered && !isConfirmed;
+    const canCancel = ['pending', 'processing'].includes(status);
+    const stepIndex = STEPS.indexOf(status);
+    const items = item.order_items || [];
+    const images = items.slice(0, 5).map(oi => getImg(oi.product?.images)).filter(Boolean);
+
+    return (
+        <View style={C.card}>
+            {/* Header row */}
+            <TouchableOpacity activeOpacity={0.85} onPress={onToggle}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                        <View style={[C.iconBox, { backgroundColor: cfg.bg }]}>
+                            <Ionicons name={cfg.icon} size={17} color={cfg.color} />
+                        </View>
+                        <View>
+                            <Text style={C.orderId}>#{item.id.slice(0, 8).toUpperCase()}</Text>
+                            <Text style={C.orderDate}>{new Date(item.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</Text>
+                        </View>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                        <View style={[C.statusBadge, { backgroundColor: cfg.bg }]}>
+                            <Text style={[C.statusText, { color: cfg.color }]}>{cfg.label.toUpperCase()}</Text>
+                        </View>
+                        <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A', marginTop: 4 }}>
+                            ₦{(item.total_amount || 0).toLocaleString()}
+                        </Text>
+                    </View>
+                </View>
+
+                {images.length > 0 && (
+                    <View style={{ flexDirection: 'row', gap: 7, marginTop: 12 }}>
+                        {images.map((url, i) => (
+                            <Image key={i} source={{ uri: url }} style={C.thumb} resizeMode="cover" />
+                        ))}
+                        {items.length > 5 && (
+                            <View style={[C.thumb, { backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center' }]}>
+                                <Text style={{ color: 'white', fontWeight: '900', fontSize: 12 }}>+{items.length - 5}</Text>
+                            </View>
+                        )}
+                    </View>
+                )}
+
+                {!isCancelled && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 10 }}>
+                        <Ionicons name="calendar-outline" size={13} color="#64748B" />
+                        <Text style={{ fontSize: 12, color: '#64748B' }}>
+                            {isDelivered
+                                ? '✅ Delivered'
+                                : `Est. delivery: ${new Date(new Date(item.created_at).getTime() + 5 * 86400000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}`
+                            }
+                        </Text>
+                    </View>
+                )}
+
+                {!isCancelled && (
+                    <View style={{ marginTop: 12 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            {STEPS.map((step, i) => {
+                                const done = i <= stepIndex;
+                                return (
+                                    <React.Fragment key={step}>
+                                        <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: done ? '#0F172A' : '#E2E8F0', alignItems: 'center', justifyContent: 'center' }}>
+                                            {done ? <Ionicons name="checkmark" size={11} color="white" /> : <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: '#CBD5E1' }} />}
+                                        </View>
+                                        {i < STEPS.length - 1 && <View style={{ flex: 1, height: 2, backgroundColor: i < stepIndex ? '#0F172A' : '#E2E8F0' }} />}
+                                    </React.Fragment>
+                                );
+                            })}
+                        </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 3 }}>
+                            {STEPS.map(s => <Text key={s} style={{ fontSize: 8, color: '#94A3B8', fontWeight: '700', textTransform: 'uppercase', width: 20, textAlign: 'center' }}>{s.slice(0, 4)}</Text>)}
+                        </View>
+                    </View>
+                )}
+
+                {isCancelled && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FEF2F2', padding: 8, borderRadius: 10, marginTop: 10 }}>
+                        <Ionicons name="close-circle" size={14} color="#DC2626" />
+                        <Text style={{ color: '#DC2626', fontSize: 12, fontWeight: '600' }}>Order Cancelled</Text>
+                    </View>
+                )}
+            </TouchableOpacity>
+
+            {isExpanded && (
+                <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 14 }}>
+                    <Text style={C.sectionLabel}>ITEMS ORDERED</Text>
+                    {items.length > 0 ? items.map((oi, i) => {
+                        const imgUrl = getImg(oi.product?.images);
+                        return (
+                            <View key={oi.id || i} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                                {imgUrl
+                                    ? <Image source={{ uri: imgUrl }} style={C.itemImg} resizeMode="cover" />
+                                    : <View style={[C.itemImg, { backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }]}>
+                                        <Ionicons name="image-outline" size={18} color="#CBD5E1" />
+                                    </View>
+                                }
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ fontWeight: '700', color: '#0F172A', fontSize: 13 }}>{oi.product?.name || 'Product'}</Text>
+                                    <Text style={{ color: '#64748B', fontSize: 12 }}>Qty: {oi.quantity}{oi.variant ? ` • ${oi.variant}` : ''}</Text>
+                                </View>
+                                <View style={{ alignItems: 'flex-end' }}>
+                                    <Text style={{ fontWeight: '800', color: '#0F172A' }}>₦{((oi.price || 0) * (oi.quantity || 1)).toLocaleString()}</Text>
+                                    {isConfirmed && settings?.enable_reviews !== false && (
+                                        <TouchableOpacity onPress={() => onReview({ order: item, item: oi, type: 'product' })}
+                                            style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                                            <Ionicons name="star-outline" size={11} color="#F59E0B" />
+                                            <Text style={{ fontSize: 10, color: '#F59E0B', fontWeight: '700' }}>Review</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+                            </View>
+                        );
+                    }) : <Text style={{ color: '#94A3B8', fontSize: 13, marginBottom: 10 }}>No item details found.</Text>}
+
+                    {item.shipping_address && (
+                        <View style={{ backgroundColor: '#F0FDF4', borderRadius: 12, padding: 10, marginBottom: 12, flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                            <Ionicons name="location" size={15} color="#16A34A" />
+                            <Text style={{ flex: 1, fontSize: 12, color: '#166534' }}>
+                                {(() => {
+                                    const a = item.shipping_address;
+                                    if (typeof a === 'object' && a) return a.address || JSON.stringify(a);
+                                    try { const p = JSON.parse(a); return p?.address || a; } catch { return a; }
+                                })()}
+                            </Text>
+                        </View>
+                    )}
+
+                    <View style={{ backgroundColor: '#F8FAFC', borderRadius: 14, padding: 12, marginBottom: 14 }}>
+                        <Text style={C.sectionLabel}>PAYMENT SUMMARY</Text>
+                        {[
+                            ['Method', item.payment_method || 'N/A'],
+                            ['Shipping', `₦${(item.shipping_fee || 0).toLocaleString()}`],
+                            item.discount_applied > 0 && ['Discount', `-₦${(item.discount_applied || 0).toLocaleString()}`],
+                        ].filter(Boolean).map(([l, v]) => (
+                            <View key={l} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
+                                <Text style={{ color: '#64748B', fontSize: 12 }}>{l}</Text>
+                                <Text style={{ fontWeight: '700', color: '#0F172A', fontSize: 12 }}>{v}</Text>
+                            </View>
+                        ))}
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#E2E8F0' }}>
+                            <Text style={{ fontWeight: '800', color: '#0F172A' }}>Total Paid</Text>
+                            <Text style={{ fontWeight: '900', color: '#0F172A', fontSize: 16 }}>₦{(item.total_amount || 0).toLocaleString()}</Text>
+                        </View>
+                    </View>
+
+                    <View style={{ gap: 10 }}>
+                        <View style={{ flexDirection: 'row', gap: 10 }}>
+                            <TouchableOpacity onPress={() => onNavigate('TrackOrder', { order: item })}
+                                style={[C.btn, { backgroundColor: '#0F172A', flex: 2 }]}>
+                                <Ionicons name="location-outline" size={15} color="white" />
+                                <Text style={{ color: 'white', fontWeight: '700', fontSize: 13 }}>Track Order</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => shareOrder(item)}
+                                style={[C.btn, { backgroundColor: '#F1F5F9', flex: 1 }]}>
+                                <Ionicons name="share-outline" size={15} color="#0F172A" />
+                                <Text style={{ color: '#0F172A', fontWeight: '700', fontSize: 13 }}>Share</Text>
+                            </TouchableOpacity>
+                        </View>
+                        <View style={{ flexDirection: 'row', gap: 10 }}>
+                            <TouchableOpacity onPress={() => onNavigate('shop')}
+                                style={[C.btn, { backgroundColor: '#EFF6FF', flex: 1 }]}>
+                                <Ionicons name="refresh-outline" size={14} color="#2563EB" />
+                                <Text style={{ color: '#2563EB', fontWeight: '700', fontSize: 12 }}>Reorder</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => contactSupport(item)}
+                                style={[C.btn, { backgroundColor: '#F0FDF4', flex: 1 }]}>
+                                <Ionicons name="logo-whatsapp" size={14} color="#16A34A" />
+                                <Text style={{ color: '#16A34A', fontWeight: '700', fontSize: 12 }}>Support</Text>
+                            </TouchableOpacity>
+                            {canCancel && (
+                                <TouchableOpacity
+                                    onPress={() => onCancel(item)}
+                                    disabled={cancelling}
+                                    style={[C.btn, { backgroundColor: '#FEF2F2', flex: 1 }]}>
+                                    {cancelling
+                                        ? <ActivityIndicator size="small" color="#DC2626" />
+                                        : <>
+                                            <Ionicons name="close-circle-outline" size={14} color="#DC2626" />
+                                            <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 12 }}>Cancel</Text>
+                                        </>
+                                    }
+                                </TouchableOpacity>
+                            )}
+                            {needsConfirmation && (
+                                <TouchableOpacity
+                                    onPress={() => onConfirm(item)}
+                                    disabled={confirming}
+                                    style={[C.btn, { backgroundColor: '#16A34A', flex: 1.5 }]}>
+                                    {confirming
+                                        ? <ActivityIndicator size="small" color="white" />
+                                        : <>
+                                            <Ionicons name="checkmark-done" size={15} color="white" />
+                                            <Text style={{ color: 'white', fontWeight: '700', fontSize: 13 }}>Confirm Receipt</Text>
+                                        </>
+                                    }
+                                </TouchableOpacity>
+                            )}
+                            {isConfirmed && item.driver_id && settings?.enable_ratings !== false && (
+                                <TouchableOpacity onPress={() => onReview({ order: item, type: 'driver' })}
+                                    style={[C.btn, { backgroundColor: '#FEF3C7', flex: 1 }]}>
+                                    <Ionicons name="star" size={14} color="#D97706" />
+                                    <Text style={{ color: '#D97706', fontWeight: '700', fontSize: 12 }}>Rate Driver</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </View>
+                </View>
+            )}
+
+            <TouchableOpacity onPress={onToggle} style={{ alignItems: 'center', marginTop: 10 }}>
+                <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={18} color="#CBD5E1" />
+            </TouchableOpacity>
+        </View>
+    );
+});
 
 const C = {
     card: { backgroundColor: 'white', borderRadius: 20, padding: 16, marginBottom: 13, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 },

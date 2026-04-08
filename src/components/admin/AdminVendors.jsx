@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, query, where, updateDoc, doc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 
 const AdminVendors = () => {
   const [vendors, setVendors] = useState([]);
@@ -15,12 +14,15 @@ const AdminVendors = () => {
 
   const fetchVendors = async () => {
     try {
-      const q = query(collection(db, 'users'), where('role', '==', 'vendor'));
-      const snapshot = await getDocs(q);
-      const vendorsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setVendors(vendorsData);
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('role', 'vendor');
+      
+      if (error) throw error;
+      setVendors(data || []);
     } catch (error) {
-      console.error('Error fetching vendors:', error);
+      console.error('Error fetching vendors:', error.message);
     } finally {
       setLoading(false);
     }
@@ -30,10 +32,15 @@ const AdminVendors = () => {
     if (!window.confirm('Are you sure you want to suspend this vendor?')) return;
     
     try {
-      await updateDoc(doc(db, 'users', vendorId), {
-        suspended: true,
-        suspendedAt: new Date().toISOString()
-      });
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          suspended: true,
+          suspended_at: new Date().toISOString()
+        })
+        .eq('id', vendorId);
+
+      if (error) throw error;
       alert('Vendor suspended successfully');
       fetchVendors();
     } catch (error) {
@@ -43,10 +50,15 @@ const AdminVendors = () => {
 
   const handleActivateVendor = async (vendorId) => {
     try {
-      await updateDoc(doc(db, 'users', vendorId), {
-        suspended: false,
-        activatedAt: new Date().toISOString()
-      });
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          suspended: false,
+          activated_at: new Date().toISOString()
+        })
+        .eq('id', vendorId);
+
+      if (error) throw error;
       alert('Vendor activated successfully');
       fetchVendors();
     } catch (error) {
@@ -118,10 +130,10 @@ const AdminVendors = () => {
           <tbody>
             {filteredVendors.map(vendor => (
               <tr key={vendor.id} className="border-b dark:border-gray-700">
-                <td className="py-3 px-4 font-medium">{vendor.name}</td>
+                <td className="py-3 px-4 font-medium">{vendor.full_name || vendor.name}</td>
                 <td className="py-3 px-4">{vendor.email}</td>
                 <td className="py-3 px-4">
-                  {vendor.createdAt ? new Date(vendor.createdAt).toLocaleDateString() : 'N/A'}
+                  {(vendor.created_at || vendor.createdAt) ? new Date(vendor.created_at || vendor.createdAt).toLocaleDateString() : 'N/A'}
                 </td>
                 <td className="py-3 px-4">
                   <span className={`px-3 py-1 rounded-full text-xs ${
@@ -173,12 +185,12 @@ const AdminVendors = () => {
               <button onClick={() => setShowModal(false)} className="text-2xl">×</button>
             </div>
             <div className="space-y-3">
-              <p><strong>Name:</strong> {selectedVendor.name}</p>
+              <p><strong>Name:</strong> {selectedVendor.full_name || selectedVendor.name}</p>
               <p><strong>Email:</strong> {selectedVendor.email}</p>
               <p><strong>Phone:</strong> {selectedVendor.phone || 'N/A'}</p>
-              <p><strong>Business Name:</strong> {selectedVendor.businessName || 'N/A'}</p>
+              <p><strong>Business Name:</strong> {selectedVendor.business_name || selectedVendor.businessName || 'N/A'}</p>
               <p><strong>Status:</strong> {selectedVendor.suspended ? 'Suspended' : 'Active'}</p>
-              <p><strong>Joined:</strong> {selectedVendor.createdAt ? new Date(selectedVendor.createdAt).toLocaleDateString() : 'N/A'}</p>
+              <p><strong>Joined:</strong> {(selectedVendor.created_at || selectedVendor.createdAt) ? new Date(selectedVendor.created_at || selectedVendor.createdAt).toLocaleDateString() : 'N/A'}</p>
             </div>
           </div>
         </div>

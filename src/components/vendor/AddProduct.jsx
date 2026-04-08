@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { collection, addDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useNavigate } from 'react-router-dom';
 
 const AddProduct = () => {
@@ -67,20 +65,21 @@ const AddProduct = () => {
     try {
       const keywords = productData.keywords || productData.name;
       const prompt = `Generate a compelling and professional e-commerce product description.
+      Product Name: ${productData.name}
+      Keywords: ${keywords}
+      Category: ${productData.category || 'general product'}
+      Create a description that:
+      - Highlights key features and benefits
+      - Is SEO-friendly and persuasive
+      - 2-3 paragraphs long
+      - Professional and engaging tone
+      - Focuses on value to customer
+      Write only the description, no extra commentary:`;
 
-Product Name: ${productData.name}
-Keywords: ${keywords}
-Category: ${productData.category || 'general product'}
-
-Create a description that:
-- Highlights key features and benefits
-- Is SEO-friendly and persuasive
-- 2-3 paragraphs long
-- Professional and engaging tone
-- Focuses on value to customer
-
-Write only the description, no extra commentary:`;
-
+      // Assuming we keep the existing AI integration logic if it's external, 
+      // but if the user intended to use Supabase Edge Functions or similar, we'd change it.
+      // For now, keeping the fetch-based AI logic but cleaning it up.
+      
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -159,17 +158,10 @@ Write only the description, no extra commentary:`;
 
     try {
       const prompt = `Suggest a competitive price in Nigerian Naira (₦) for this product.
-
-Product: ${productData.name}
-Category: ${productData.category}
-Keywords: ${productData.keywords || 'N/A'}
-
-Consider:
-- Typical market prices for similar products in Nigeria
-- Product category pricing standards
-- Competitive pricing strategy
-
-Respond with ONLY a single number (the suggested price in Naira), nothing else:`;
+      Product: ${productData.name}
+      Category: ${productData.category}
+      Keywords: ${productData.keywords || 'N/A'}
+      Consider market prices in Nigeria and respond with ONLY a single number:`;
 
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -259,30 +251,49 @@ Respond with ONLY a single number (the suggested price in Naira), nothing else:`
     setVariations(variations.filter((_, i) => i !== index));
   };
 
-  const uploadImages = async () => {
+  const uploadMedia = async () => {
     const imageUrls = [];
     const totalFiles = images.length + (video ? 1 : 0);
     let uploadedCount = 0;
 
     for (let i = 0; i < images.length; i++) {
-      const image = images[i];
-      const timestamp = Date.now();
-      const imageRef = ref(storage, `products/${currentUser.uid}/${timestamp}_${image.name}`);
-      await uploadBytes(imageRef, image);
-      const url = await getDownloadURL(imageRef);
-      imageUrls.push(url);
-      uploadedCount++;
-      setUploadProgress(Math.round((uploadedCount / totalFiles) * 50));
+        const image = images[i];
+        const timestamp = Date.now();
+        const fileName = `${currentUser.uid}/${timestamp}_${image.name}`;
+        
+        const { data, error: uploadError } = await supabase.storage
+          .from('products')
+          .upload(fileName, image);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('products')
+          .getPublicUrl(fileName);
+
+        imageUrls.push(publicUrl);
+        uploadedCount++;
+        setUploadProgress(Math.round((uploadedCount / totalFiles) * 50));
     }
 
     let videoUrl = null;
     if (video) {
-      const timestamp = Date.now();
-      const videoRef = ref(storage, `products/${currentUser.uid}/videos/${timestamp}_${video.name}`);
-      await uploadBytes(videoRef, video);
-      videoUrl = await getDownloadURL(videoRef);
-      uploadedCount++;
-      setUploadProgress(Math.round((uploadedCount / totalFiles) * 50));
+        const timestamp = Date.now();
+        const fileName = `${currentUser.uid}/videos/${timestamp}_${video.name}`;
+        
+        const { data, error: uploadError } = await supabase.storage
+          .from('products')
+          .upload(fileName, video);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('products')
+          .getPublicUrl(fileName);
+
+        videoUrl = publicUrl;
+        uploadedCount++;
+        setUploadProgress(Math.round((uploadedCount / totalFiles) * 50));
     }
 
     return { imageUrls, videoUrl };
@@ -307,40 +318,54 @@ Respond with ONLY a single number (the suggested price in Naira), nothing else:`
         return;
       }
 
-      const { imageUrls, videoUrl } = await uploadImages();
+      const { imageUrls, videoUrl } = await uploadMedia();
       setUploadProgress(60);
 
+      const now = new Date().toISOString();
       const newProduct = {
-        ...productData,
+        name: productData.name,
+        description: productData.description,
+        category: productData.category,
+        brand: productData.brand || null,
+        sku: productData.sku || null,
         price: parseFloat(productData.price),
-        originalPrice: productData.originalPrice ? parseFloat(productData.originalPrice) : parseFloat(productData.price),
+        original_price: productData.originalPrice ? parseFloat(productData.originalPrice) : parseFloat(productData.price),
         stock: parseInt(productData.stock),
         discount: productData.discount ? parseInt(productData.discount) : 0,
         images: imageUrls,
         video: videoUrl,
         variations: variations,
         keywords: productData.keywords ? productData.keywords.split(',').map(k => k.trim()) : [],
-        vendorId: currentUser.uid,
-        vendorName: currentUser.name || currentUser.email,
+        weight: productData.weight ? parseFloat(productData.weight) : null,
+        dimensions: productData.dimensions || null,
+        shipping_info: productData.shippingInfo || null,
+        return_policy: productData.returnPolicy || null,
+        affiliate_link: productData.affiliateLink || null,
+        is_affiliate: !!productData.affiliateLink,
+        vendor_id: currentUser.uid,
+        vendor_name: currentUser.name || currentUser.full_name || currentUser.email,
         status: 'pending',
         views: 0,
         sales: 0,
         rating: 0,
-        reviews: 0,
-        isAffiliate: !!productData.affiliateLink,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        reviews_count: 0,
+        created_at: now,
+        updated_at: now
       };
 
       setUploadProgress(80);
-      await addDoc(collection(db, 'products'), newProduct);
-      setUploadProgress(100);
+      const { error: insertError } = await supabase
+        .from('products')
+        .insert(newProduct);
 
+      if (insertError) throw insertError;
+      
+      setUploadProgress(100);
       alert('Product added successfully! Pending admin approval.');
       navigate('/vendor/products');
 
     } catch (err) {
-      console.error('Error:', err);
+      console.error('Error adding product:', err.message);
       setError(err.message || 'Failed to add product.');
     } finally {
       setLoading(false);

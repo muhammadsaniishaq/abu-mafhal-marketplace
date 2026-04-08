@@ -247,11 +247,11 @@ export const DriverDashboard = ({ user, onLogout }) => {
                 console.log('Error Upserting Checkin:', error);
             }
 
-            // Sync with profile coins
-            const newCoins = (driverProfile?.amc_coins || 0) + rewardCoins;
+            // Sync with profile coins (using mafhal_coins column)
+            const newCoins = (driverProfile?.mafhal_coins || 0) + rewardCoins;
             await supabase.rpc('update_user_amc', { p_user_id: user.id, p_coins: newCoins });
 
-            setDriverProfile(prev => ({ ...prev, amc_coins: newCoins }));
+            setDriverProfile(prev => ({ ...prev, mafhal_coins: newCoins }));
             setCheckInData({ streak: newStreak, checkedInToday: true, checkingIn: false });
 
             setAnimatingCoins(rewardCoins);
@@ -609,7 +609,7 @@ export const DriverDashboard = ({ user, onLogout }) => {
                     <Text style={styles.driverIdText}>{user.full_name}</Text>
                     <View style={styles.amcBadge}>
                         <Ionicons name="sparkles" size={12} color={AMBER_COLOR} />
-                        <Text style={styles.amcText}>{driverProfile?.amc_coins || 0} AMC</Text>
+                        <Text style={styles.amcText}>{driverProfile?.mafhal_coins || 0} AMC</Text>
                     </View>
                 </View>
                 <View style={styles.headerRight}>

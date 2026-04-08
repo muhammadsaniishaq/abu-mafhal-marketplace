@@ -1,5 +1,4 @@
-import { collection, addDoc, query, where, getDocs, updateDoc, doc, getDoc, increment } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { supabase } from '../config/supabase';
 
 const POINTS_CONFIG = {
   purchase: 1, // 1 point per ₦100 spent
@@ -26,106 +25,131 @@ const TIER_BENEFITS = {
 
 export const initializeLoyaltyAccount = async (userId, userName) => {
   try {
-    const loyaltyRef = await addDoc(collection(db, 'loyalty'), {
-      userId,
-      userName,
-      points: POINTS_CONFIG.accountCreation,
-      lifetimePoints: POINTS_CONFIG.accountCreation,
-      tier: 'bronze',
-      createdAt: new Date().toISOString()
-    });
+    const { data, error } = await supabase
+      .from('loyalty')
+      .insert({
+        user_id: userId,
+        user_name: userName,
+        points: POINTS_CONFIG.accountCreation,
+        lifetime_points: POINTS_CONFIG.accountCreation,
+        tier: 'bronze',
+        created_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
 
     // Record transaction
-    await addDoc(collection(db, 'loyaltyTransactions'), {
-      userId,
-      points: POINTS_CONFIG.accountCreation,
-      type: 'earn',
-      reason: 'Welcome bonus',
-      createdAt: new Date().toISOString()
-    });
+    const { error: txError } = await supabase
+      .from('loyalty_transactions')
+      .insert({
+        user_id: userId,
+        points: POINTS_CONFIG.accountCreation,
+        type: 'earn',
+        reason: 'Welcome bonus',
+        created_at: new Date().toISOString()
+      });
 
-    return loyaltyRef.id;
+    if (txError) throw txError;
+
+    return data.id;
   } catch (error) {
-    console.error('Error initializing loyalty account:', error);
+    console.error('Error initializing loyalty account:', error.message);
     throw error;
   }
 };
 
 export const awardPoints = async (userId, amount, reason, metadata = {}) => {
   try {
-    const q = query(collection(db, 'loyalty'), where('userId', '==', userId));
-    const snapshot = await getDocs(q);
+    const { data: loyaltyData, error: loyaltyError } = await supabase
+      .from('loyalty')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
 
-    if (snapshot.empty) {
+    if (loyaltyError || !loyaltyData) {
       console.error('Loyalty account not found');
       return;
     }
 
-    const loyaltyDoc = snapshot.docs[0];
-    const currentData = loyaltyDoc.data();
-    const newPoints = currentData.points + amount;
-    const newLifetimePoints = currentData.lifetimePoints + amount;
+    const newPoints = loyaltyData.points + amount;
+    const newLifetimePoints = loyaltyData.lifetime_points + amount;
     const newTier = calculateTier(newLifetimePoints);
 
-    await updateDoc(doc(db, 'loyalty', loyaltyDoc.id), {
-      points: newPoints,
-      lifetimePoints: newLifetimePoints,
-      tier: newTier,
-      updatedAt: new Date().toISOString()
-    });
+    const { error: updateError } = await supabase
+      .from('loyalty')
+      .update({
+        points: newPoints,
+        lifetime_points: newLifetimePoints,
+        tier: newTier,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', loyaltyData.id);
+
+    if (updateError) throw updateError;
 
     // Record transaction
-    await addDoc(collection(db, 'loyaltyTransactions'), {
-      userId,
-      points: amount,
-      type: 'earn',
-      reason,
-      metadata,
-      createdAt: new Date().toISOString()
-    });
+    await supabase
+      .from('loyalty_transactions')
+      .insert({
+        user_id: userId,
+        points: amount,
+        type: 'earn',
+        reason,
+        metadata,
+        created_at: new Date().toISOString()
+      });
 
     return { newPoints, newTier };
   } catch (error) {
-    console.error('Error awarding points:', error);
+    console.error('Error awarding points:', error.message);
     throw error;
   }
 };
 
 export const redeemPoints = async (userId, amount, reason) => {
   try {
-    const q = query(collection(db, 'loyalty'), where('userId', '==', userId));
-    const snapshot = await getDocs(q);
+    const { data: loyaltyData, error: loyaltyError } = await supabase
+      .from('loyalty')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
 
-    if (snapshot.empty) {
+    if (loyaltyError || !loyaltyData) {
       throw new Error('Loyalty account not found');
     }
 
-    const loyaltyDoc = snapshot.docs[0];
-    const currentData = loyaltyDoc.data();
-
-    if (currentData.points < amount) {
+    if (loyaltyData.points < amount) {
       throw new Error('Insufficient points');
     }
 
-    const newPoints = currentData.points - amount;
+    const newPoints = loyaltyData.points - amount;
 
-    await updateDoc(doc(db, 'loyalty', loyaltyDoc.id), {
-      points: newPoints,
-      updatedAt: new Date().toISOString()
-    });
+    const { error: updateError } = await supabase
+      .from('loyalty')
+      .update({
+        points: newPoints,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', loyaltyData.id);
+
+    if (updateError) throw updateError;
 
     // Record transaction
-    await addDoc(collection(db, 'loyaltyTransactions'), {
-      userId,
-      points: -amount,
-      type: 'redeem',
-      reason,
-      createdAt: new Date().toISOString()
-    });
+    await supabase
+      .from('loyalty_transactions')
+      .insert({
+        user_id: userId,
+        points: -amount,
+        type: 'redeem',
+        reason,
+        created_at: new Date().toISOString()
+      });
 
     return newPoints;
   } catch (error) {
-    console.error('Error redeeming points:', error);
+    console.error('Error redeeming points:', error.message);
     throw error;
   }
 };
@@ -153,31 +177,36 @@ export const pointsToDiscount = (points) => {
 
 export const getLoyaltyAccount = async (userId) => {
   try {
-    const q = query(collection(db, 'loyalty'), where('userId', '==', userId));
-    const snapshot = await getDocs(q);
+    const { data, error } = await supabase
+      .from('loyalty')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
 
-    if (snapshot.empty) {
-      return null;
+    if (error) {
+      if (error.code === 'PGRST116') return null; // Not found
+      throw error;
     }
 
-    return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+    return data;
   } catch (error) {
-    console.error('Error getting loyalty account:', error);
+    console.error('Error getting loyalty account:', error.message);
     return null;
   }
 };
 
 export const getLoyaltyTransactions = async (userId) => {
   try {
-    const q = query(
-      collection(db, 'loyaltyTransactions'),
-      where('userId', '==', userId)
-    );
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const { data, error } = await supabase
+      .from('loyalty_transactions')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
   } catch (error) {
-    console.error('Error getting transactions:', error);
+    console.error('Error getting transactions:', error.message);
     return [];
   }
 };

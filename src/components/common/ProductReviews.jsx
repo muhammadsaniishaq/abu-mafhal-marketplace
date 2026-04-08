@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../../config/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { addReview, markReviewHelpful, reportReview, uploadReviewImages, addVendorResponse } from '../../services/reviewService';
 import { Link } from 'react-router-dom';
+import { supabase } from '../../config/supabase';
 
 const ProductReviews = ({ productId, vendorId }) => {
   const { currentUser } = useAuth();
@@ -32,16 +31,38 @@ const ProductReviews = ({ productId, vendorId }) => {
 
   const fetchReviews = async () => {
     try {
-      const q = query(
-        collection(db, 'reviews'),
-        where('productId', '==', productId),
-        where('status', '==', 'approved')
-      );
-      const snapshot = await getDocs(q);
-      const reviewsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setReviews(reviewsData);
+      // Fetch Supabase Reviews
+      const { data: supabaseData, error: supabaseError } = await supabase
+        .from('reviews')
+        .select(`
+          *,
+          users!reviews_user_id_fkey(email, name)
+        `)
+        .eq('product_id', productId)
+        .eq('status', 'approved');
+
+      if (supabaseError) {
+        console.error('Supabase fetch error:', supabaseError.message);
+      }
+
+      const allReviews = (supabaseData || []).map(r => ({
+        id: r.id,
+        productId: r.product_id,
+        userName: r.user_name || r.users?.name || r.users?.email || 'Anonymous',
+        userAvatar: r.user_avatar || null,
+        rating: r.rating,
+        title: r.title || 'Product Review',
+        comment: r.comment,
+        createdAt: r.created_at,
+        images: r.images || [],
+        helpful: r.helpful || 0,
+        verified: r.verified || true,
+        status: r.status
+      }));
+
+      setReviews(allReviews);
     } catch (error) {
-      console.error('Error fetching reviews:', error);
+      console.error('Error fetching reviews:', error.message);
     } finally {
       setLoading(false);
     }
@@ -49,28 +70,29 @@ const ProductReviews = ({ productId, vendorId }) => {
 
   const checkIfCanReview = async () => {
     try {
-      const ordersQuery = query(
-        collection(db, 'orders'),
-        where('userId', '==', currentUser.uid),
-        where('status', 'in', ['delivered', 'completed'])
-      );
-      const ordersSnapshot = await getDocs(ordersQuery);
-      
-      const hasPurchased = ordersSnapshot.docs.some(doc => {
-        const order = doc.data();
-        return order.items.some(item => item.productId === productId);
+      const { data: ordersData, error: ordersError } = await supabase
+        .from('orders')
+        .select('items')
+        .eq('buyer_id', currentUser.id || currentUser.uid)
+        .in('status', ['delivered', 'completed']);
+
+      if (ordersError) throw ordersError;
+
+      const hasPurchased = (ordersData || []).some(order => {
+        return (order.items || []).some(item => (item.product_id || item.productId) === productId);
       });
 
-      const reviewsQuery = query(
-        collection(db, 'reviews'),
-        where('productId', '==', productId),
-        where('userId', '==', currentUser.uid)
-      );
-      const reviewsSnapshot = await getDocs(reviewsQuery);
-      
-      setCanReview(hasPurchased && reviewsSnapshot.empty);
+      const { data: reviewsData, error: reviewsError } = await supabase
+        .from('reviews')
+        .select('id')
+        .eq('product_id', productId)
+        .eq('user_id', currentUser.id || currentUser.uid);
+
+      if (reviewsError) throw reviewsError;
+
+      setCanReview(hasPurchased && (reviewsData || []).length === 0);
     } catch (error) {
-      console.error('Error checking review eligibility:', error);
+      console.error('Error checking review eligibility:', error.message);
     }
   };
 

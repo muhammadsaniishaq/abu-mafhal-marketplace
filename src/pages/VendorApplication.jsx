@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import { useNavigate, Link } from 'react-router-dom';
 
 const VendorApplication = () => {
@@ -72,9 +70,11 @@ const VendorApplication = () => {
   const uploadFile = async (file, path) => {
     if (!file) return null;
     const timestamp = Date.now();
-    const fileRef = ref(storage, `vendor-applications/${currentUser.uid}/${path}/${timestamp}_${file.name}`);
-    await uploadBytes(fileRef, file);
-    return await getDownloadURL(fileRef);
+    const filePath = `${currentUser.id || currentUser.uid}/${path}/${timestamp}_${file.name}`;
+    const { error } = await supabase.storage.from('vendor-applications').upload(filePath, file);
+    if (error) throw error;
+    const { data } = supabase.storage.from('vendor-applications').getPublicUrl(filePath);
+    return data.publicUrl;
   };
 
   const handleSubmit = async (e) => {
@@ -84,8 +84,16 @@ const VendorApplication = () => {
 
     try {
       // Check if user already has a pending application
-      const existingApp = await getDoc(doc(db, 'vendorApplications', currentUser.uid));
-      if (existingApp.exists() && existingApp.data().status === 'pending') {
+      const { data: existingApp, error: checkError } = await supabase
+        .from('vendor_applications')
+        .select('status')
+        .eq('user_id', currentUser.id || currentUser.uid)
+        .eq('status', 'pending')
+        .maybeSingle();
+
+      if (checkError) throw checkError;
+
+      if (existingApp) {
         setError('You already have a pending application');
         setLoading(false);
         return;
@@ -101,18 +109,31 @@ const VendorApplication = () => {
 
       // Create vendor application
       const applicationData = {
-        ...formData,
-        userId: currentUser.uid,
-        businessImageUrl,
-        businessVideoUrl,
-        ninDocumentUrl: ninDocUrl,
-        cacDocumentUrl: cacDocUrl,
+        user_id: currentUser.id || currentUser.uid,
+        full_name: formData.fullName,
+        email: formData.email,
+        phone: formData.phone,
+        bvn_number: formData.bvnNumber,
+        business_name: formData.businessName,
+        business_address: formData.businessAddress,
+        business_location: formData.businessLocation,
+        nin_number: formData.ninNumber,
+        cac_number: formData.cacNumber,
+        business_description: formData.businessDescription,
+        business_image_url: businessImageUrl,
+        business_video_url: businessVideoUrl,
+        nin_document_url: ninDocUrl,
+        cac_document_url: cacDocUrl,
         status: 'pending', // pending, processing, approved, rejected
-        submittedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        submitted_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
 
-      await setDoc(doc(db, 'vendorApplications', currentUser.uid), applicationData);
+      const { error: insertError } = await supabase
+        .from('vendor_applications')
+        .upsert([applicationData], { onConflict: 'user_id' });
+
+      if (insertError) throw insertError;
 
       setSuccess(true);
       setTimeout(() => {

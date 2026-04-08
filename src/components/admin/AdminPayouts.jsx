@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, getDocs, updateDoc, doc, addDoc, orderBy, where } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 
 const AdminPayouts = () => {
   const [payouts, setPayouts] = useState([]);
@@ -17,70 +16,81 @@ const AdminPayouts = () => {
 
   const fetchPayouts = async () => {
     try {
-      const payoutsQuery = query(
-        collection(db, 'vendorPayouts'),
-        orderBy('createdAt', 'desc')
-      );
-      const payoutsSnapshot = await getDocs(payoutsQuery);
-      const payoutsData = payoutsSnapshot.docs.map(doc => ({ 
-        id: doc.id, 
-        ...doc.data() 
-      }));
-      setPayouts(payoutsData);
+      const { data: payoutsData, error: payoutsError } = await supabase
+        .from('vendor_payouts')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (payoutsError) throw payoutsError;
+      setPayouts(payoutsData || []);
 
       // Fetch vendor wallets
-      const walletsQuery = query(collection(db, 'vendorWallets'));
-      const walletsSnapshot = await getDocs(walletsQuery);
+      const { data: walletsDataList, error: walletsError } = await supabase
+        .from('vendor_wallets')
+        .select('*');
+
+      if (walletsError) throw walletsError;
+      
       const walletsData = {};
-      walletsSnapshot.docs.forEach(doc => {
-        walletsData[doc.id] = doc.data();
+      (walletsDataList || []).forEach(wallet => {
+        walletsData[wallet.vendor_id || wallet.id] = wallet;
       });
       setWallets(walletsData);
     } catch (error) {
-      console.error('Error fetching payouts:', error);
+      console.error('Error fetching payouts:', error.message);
     } finally {
       setLoading(false);
     }
   };
 
   const handleApprovePayout = async (payout) => {
-    if (!window.confirm(`Approve payout of ₦${payout.amount.toLocaleString()} to ${payout.vendorName}?`)) {
+    if (!window.confirm(`Approve payout of ₦${payout.amount.toLocaleString()} to ${payout.vendor_name || payout.vendorName}?`)) {
       return;
     }
 
     setProcessingId(payout.id);
 
     try {
+      const vendorId = payout.vendor_id || payout.vendorId;
+
       // Update payout status
-      await updateDoc(doc(db, 'vendorPayouts', payout.id), {
-        status: 'completed',
-        processedAt: new Date().toISOString(),
-        processedBy: 'admin'
-      });
+      await supabase
+        .from('vendor_payouts')
+        .update({
+          status: 'completed',
+          processed_at: new Date().toISOString(),
+          processed_by: 'admin'
+        })
+        .eq('id', payout.id);
 
       // Update vendor wallet
-      const wallet = wallets[payout.vendorId] || { balance: 0, pendingPayouts: 0, totalPayouts: 0 };
-      await updateDoc(doc(db, 'vendorWallets', payout.vendorId), {
-        balance: (wallet.balance || 0) - payout.amount,
-        pendingPayouts: (wallet.pendingPayouts || 0) - payout.amount,
-        totalPayouts: (wallet.totalPayouts || 0) + payout.amount,
-        updatedAt: new Date().toISOString()
-      });
+      const wallet = wallets[vendorId] || { balance: 0, pending_payouts: 0, total_payouts: 0 };
+      await supabase
+        .from('vendor_wallets')
+        .update({
+          balance: (wallet.balance || 0) - payout.amount,
+          pending_payouts: (wallet.pending_payouts || 0) - payout.amount,
+          total_payouts: (wallet.total_payouts || 0) + payout.amount,
+          updated_at: new Date().toISOString()
+        })
+        .eq('vendor_id', vendorId);
 
       // Add transaction record
-      await addDoc(collection(db, 'walletTransactions'), {
-        vendorId: payout.vendorId,
-        type: 'payout',
-        amount: payout.amount,
-        description: `Payout approved - ${payout.method}`,
-        status: 'completed',
-        createdAt: new Date().toISOString()
-      });
+      await supabase
+        .from('wallet_transactions')
+        .insert({
+          vendor_id: vendorId,
+          type: 'payout',
+          amount: payout.amount,
+          description: `Payout approved - ${payout.method}`,
+          status: 'completed',
+          created_at: new Date().toISOString()
+        });
 
       alert('Payout approved successfully!');
       fetchPayouts();
     } catch (error) {
-      console.error('Error approving payout:', error);
+      console.error('Error approving payout:', error.message);
       alert('Failed to approve payout');
     } finally {
       setProcessingId(null);
@@ -94,25 +104,33 @@ const AdminPayouts = () => {
     setProcessingId(payout.id);
 
     try {
+      const vendorId = payout.vendor_id || payout.vendorId;
+
       // Update payout status
-      await updateDoc(doc(db, 'vendorPayouts', payout.id), {
-        status: 'rejected',
-        processedAt: new Date().toISOString(),
-        processedBy: 'admin',
-        rejectionReason: reason
-      });
+      await supabase
+        .from('vendor_payouts')
+        .update({
+          status: 'rejected',
+          processed_at: new Date().toISOString(),
+          processed_by: 'admin',
+          rejection_reason: reason
+        })
+        .eq('id', payout.id);
 
       // Update vendor wallet - remove from pending
-      const wallet = wallets[payout.vendorId] || { pendingPayouts: 0 };
-      await updateDoc(doc(db, 'vendorWallets', payout.vendorId), {
-        pendingPayouts: (wallet.pendingPayouts || 0) - payout.amount,
-        updatedAt: new Date().toISOString()
-      });
+      const wallet = wallets[vendorId] || { pending_payouts: 0 };
+      await supabase
+        .from('vendor_wallets')
+        .update({
+          pending_payouts: (wallet.pending_payouts || 0) - payout.amount,
+          updated_at: new Date().toISOString()
+        })
+        .eq('vendor_id', vendorId);
 
       alert('Payout rejected');
       fetchPayouts();
     } catch (error) {
-      console.error('Error rejecting payout:', error);
+      console.error('Error rejecting payout:', error.message);
       alert('Failed to reject payout');
     } finally {
       setProcessingId(null);
@@ -218,11 +236,11 @@ const AdminPayouts = () => {
             {filteredPayouts.map(payout => (
               <tr key={payout.id} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-900">
                 <td className="py-3 px-4">
-                  {new Date(payout.createdAt).toLocaleDateString()}
+                  {new Date(payout.created_at || payout.createdAt).toLocaleDateString()}
                 </td>
                 <td className="py-3 px-4">
-                  <p className="font-medium">{payout.vendorName}</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">{payout.vendorEmail}</p>
+                  <p className="font-medium">{payout.vendor_name || payout.vendorName}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">{payout.vendor_email || payout.vendorEmail}</p>
                 </td>
                 <td className="py-3 px-4">
                   <p className="font-bold text-lg">₦{payout.amount?.toLocaleString()}</p>
@@ -293,11 +311,11 @@ const AdminPayouts = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-gray-600 dark:text-gray-400">Vendor Name</p>
-                  <p className="font-medium">{selectedPayout.vendorName}</p>
+                  <p className="font-medium">{selectedPayout.vendor_name || selectedPayout.vendorName}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600 dark:text-gray-400">Email</p>
-                  <p className="font-medium">{selectedPayout.vendorEmail}</p>
+                  <p className="font-medium">{selectedPayout.vendor_email || selectedPayout.vendorEmail}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600 dark:text-gray-400">Amount</p>
@@ -309,7 +327,7 @@ const AdminPayouts = () => {
                 </div>
                 <div>
                   <p className="text-sm text-gray-600 dark:text-gray-400">Request Date</p>
-                  <p className="font-medium">{new Date(selectedPayout.createdAt).toLocaleString()}</p>
+                  <p className="font-medium">{new Date(selectedPayout.created_at || selectedPayout.createdAt).toLocaleString()}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600 dark:text-gray-400">Status</p>
@@ -319,41 +337,41 @@ const AdminPayouts = () => {
                 </div>
               </div>
 
-              {selectedPayout.bankDetails && (
+              {(selectedPayout.bank_details || selectedPayout.bankDetails) && (
                 <div className="border-t pt-4">
                   <h3 className="font-semibold mb-3">Bank Details</h3>
                   <div className="grid grid-cols-2 gap-4 bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
                     <div>
                       <p className="text-sm text-gray-600 dark:text-gray-400">Account Name</p>
-                      <p className="font-medium">{selectedPayout.bankDetails.accountName}</p>
+                      <p className="font-medium">{(selectedPayout.bank_details || selectedPayout.bankDetails).account_name || (selectedPayout.bank_details || selectedPayout.bankDetails).accountName}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-600 dark:text-gray-400">Account Number</p>
-                      <p className="font-medium font-mono">{selectedPayout.bankDetails.accountNumber}</p>
+                      <p className="font-medium font-mono">{(selectedPayout.bank_details || selectedPayout.bankDetails).account_number || (selectedPayout.bank_details || selectedPayout.bankDetails).accountNumber}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-600 dark:text-gray-400">Bank Name</p>
-                      <p className="font-medium">{selectedPayout.bankDetails.bankName}</p>
+                      <p className="font-medium">{(selectedPayout.bank_details || selectedPayout.bankDetails).bank_name || (selectedPayout.bank_details || selectedPayout.bankDetails).bankName}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-600 dark:text-gray-400">Account Type</p>
-                      <p className="font-medium capitalize">{selectedPayout.bankDetails.accountType}</p>
+                      <p className="font-medium capitalize">{(selectedPayout.bank_details || selectedPayout.bankDetails).account_type || (selectedPayout.bank_details || selectedPayout.bankDetails).accountType}</p>
                     </div>
                   </div>
                 </div>
               )}
 
-              {selectedPayout.processedAt && (
+              {(selectedPayout.processed_at || selectedPayout.processedAt) && (
                 <div className="border-t pt-4">
                   <p className="text-sm text-gray-600 dark:text-gray-400">Processed Date</p>
-                  <p className="font-medium">{new Date(selectedPayout.processedAt).toLocaleString()}</p>
+                  <p className="font-medium">{new Date(selectedPayout.processed_at || selectedPayout.processedAt).toLocaleString()}</p>
                 </div>
               )}
 
-              {selectedPayout.rejectionReason && (
+              {(selectedPayout.rejection_reason || selectedPayout.rejectionReason) && (
                 <div className="border-t pt-4">
                   <p className="text-sm text-gray-600 dark:text-gray-400">Rejection Reason</p>
-                  <p className="font-medium text-red-600">{selectedPayout.rejectionReason}</p>
+                  <p className="font-medium text-red-600">{selectedPayout.rejection_reason || selectedPayout.rejectionReason}</p>
                 </div>
               )}
 

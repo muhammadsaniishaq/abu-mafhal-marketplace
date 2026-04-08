@@ -1,17 +1,6 @@
 // src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  updateProfile,
-  sendPasswordResetEmail,
-  GoogleAuthProvider,
-  signInWithPopup
-} from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { auth, db } from '../config/firebase';
+import { supabase } from '../config/supabase';
 
 const AuthContext = createContext({});
 
@@ -22,134 +11,137 @@ export const AuthProvider = ({ children }) => {
   const [userRole, setUserRole] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Get user role and data
-  const getUserData = async (uid) => {
+  // Get user data from Supabase profiles table
+  const getUserData = async (userId) => {
     try {
-      const userDoc = await getDoc(doc(db, 'users', uid));
-      if (userDoc.exists()) {
-        return userDoc.data();
-      }
-      return null;
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      
+      if (error) throw error;
+      return data;
     } catch (error) {
-      console.error('Error getting user data:', error);
+      console.error('Error getting user data:', error.message);
       return null;
     }
   };
 
-  // Register new user
+  // Register new user (Supabase)
   const register = async (email, password, userData) => {
     try {
-      const { user } = await createUserWithEmailAndPassword(auth, email, password);
-
-      await updateProfile(user, {
-        displayName: userData.name
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: userData.name,
+            role: userData.role || 'buyer'
+          }
+        }
       });
 
-      const userDoc = {
-        uid: user.uid,
-        email: user.email,
-        name: userData.name,
-        phone: userData.phone || '',
+      if (error) throw error;
+
+      // Upsert into profiles table
+      const profileData = {
+        id: data.user.id,
+        email: email,
+        full_name: userData.name,
         role: userData.role || 'buyer',
-        approved: userData.role === 'vendor' ? false : true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        avatar: '',
-        address: {},
-        loyaltyPoints: 0,
-        status: 'active'
+        created_at: new Date().toISOString()
       };
 
-      if (userData.role === 'vendor') {
-        userDoc.businessName = userData.businessName || '';
-        userDoc.businessDescription = '';
-        userDoc.businessAddress = '';
-        userDoc.businessPhone = '';
-        userDoc.bankDetails = {};
-        userDoc.totalSales = 0;
-        userDoc.totalProducts = 0;
-        userDoc.rating = 0;
-        userDoc.reviewCount = 0;
-      }
+      const { error: profileError } = await supabase.from('profiles').upsert([profileData]);
+      if (profileError) throw profileError;
 
-      await setDoc(doc(db, 'users', user.uid), userDoc);
-
-      return user;
+      return data.user;
     } catch (error) {
-      console.error('Registration error:', error);
+      console.error('Registration error:', error.message);
       throw error;
     }
   };
 
-  // Login
+  // Login (Supabase)
   const login = async (email, password) => {
     try {
-      const result = await signInWithEmailAndPassword(auth, email, password);
-      const userData = await getUserData(result.user.uid);
-      return { ...result.user, ...userData };
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error) throw error;
+
+      const userData = await getUserData(data.user.id);
+      return { ...data.user, ...userData };
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('Login error:', error.message);
       throw error;
     }
   };
 
-  // Google Sign In
+  // Google Sign In (Supabase)
   const loginWithGoogle = async (role = 'buyer') => {
     try {
-      const provider = new GoogleAuthProvider();
-      const { user } = await signInWithPopup(auth, provider);
-
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-
-      if (!userDoc.exists()) {
-        await setDoc(doc(db, 'users', user.uid), {
-          uid: user.uid,
-          email: user.email,
-          name: user.displayName,
-          phone: '',
-          role: role,
-          approved: role === 'vendor' ? false : true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          avatar: user.photoURL || '',
-          address: {},
-          loyaltyPoints: 0,
-          status: 'active'
-        });
-      }
-
-      return user;
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin
+        }
+      });
+      if (error) throw error;
+      return data;
     } catch (error) {
-      console.error('Google login error:', error);
+      console.error('Google login error:', error.message);
       throw error;
     }
   };
 
-  // Logout
+  // Logout (Supabase)
   const logout = async () => {
     try {
-      await signOut(auth);
+      await supabase.auth.signOut();
+      setCurrentUser(null);
+      setUserRole(null);
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error('Logout error:', error.message);
       throw error;
     }
   };
 
-  // Reset password
+  // Reset password (Supabase)
   const resetPassword = async (email) => {
     try {
-      await sendPasswordResetEmail(auth, email);
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`
+      });
+      if (error) throw error;
     } catch (error) {
-      console.error('Password reset error:', error);
+      console.error('Password reset error:', error.message);
       throw error;
     }
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        const userData = await getUserData(user.uid);
-        setCurrentUser({ ...user, ...userData });
+    // Check initial session
+    const checkInitialSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const userData = await getUserData(session.user.id);
+        setCurrentUser({ ...session.user, ...userData });
+        setUserRole(userData?.role || null);
+      }
+      setLoading(false);
+    };
+
+    checkInitialSession();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session) {
+        const userData = await getUserData(session.user.id);
+        setCurrentUser({ ...session.user, ...userData });
         setUserRole(userData?.role || null);
       } else {
         setCurrentUser(null);
@@ -158,8 +150,32 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     });
 
-    return unsubscribe;
+    return () => subscription.unsubscribe();
   }, []);
+
+  // Update user profile (Supabase)
+  const updateProfile = async (userId, updates) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+
+      if (error) throw error;
+      
+      const userData = await getUserData(userId);
+      if (userData) {
+        setCurrentUser(prev => ({ ...prev, ...userData }));
+      }
+      return true;
+    } catch (error) {
+      console.error('Update profile error:', error.message);
+      throw error;
+    }
+  };
 
   const value = {
     currentUser,
@@ -169,7 +185,8 @@ export const AuthProvider = ({ children }) => {
     loginWithGoogle,
     logout,
     resetPassword,
-    getUserData
+    getUserData,
+    updateProfile
   };
 
   return (

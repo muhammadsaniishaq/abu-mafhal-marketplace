@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, query, orderBy, onSnapshot, limit } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useChat } from '../../context/ChatContext';
 import { useAuth } from '../../context/AuthContext';
 
@@ -17,24 +15,42 @@ const Chat = ({ conversationId, otherUser }) => {
   useEffect(() => {
     if (!conversationId) return;
 
-    const q = query(
-      collection(db, 'conversations', conversationId, 'messages'),
-      orderBy('createdAt', 'asc'),
-      limit(100)
-    );
+    let subscription;
+    
+    const fetchInitialMessages = async () => {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true })
+        .limit(100);
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setMessages(msgs);
-      scrollToBottom();
-    });
+      if (!error && data) {
+        setMessages(data);
+        scrollToBottom();
+      }
+    };
+
+    fetchInitialMessages();
+
+    subscription = supabase
+      .channel(`public:messages:conversation_id=eq.${conversationId}`)
+      .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'messages',
+        filter: `conversation_id=eq.${conversationId}`
+      }, payload => {
+        setMessages(prev => [...prev, payload.new]);
+        scrollToBottom();
+      })
+      .subscribe();
 
     markAsRead(conversationId);
 
-    return () => unsubscribe();
+    return () => {
+      if (subscription) supabase.removeChannel(subscription);
+    };
   }, [conversationId]);
 
   const scrollToBottom = () => {
@@ -46,10 +62,14 @@ const Chat = ({ conversationId, otherUser }) => {
     const uploadedUrls = [];
 
     for (const file of files) {
-      const fileRef = ref(storage, `chat/${conversationId}/${Date.now()}_${file.name}`);
-      await uploadBytes(fileRef, file);
-      const url = await getDownloadURL(fileRef);
-      uploadedUrls.push({ url, type: file.type, name: file.name });
+      const filePath = `chat/${conversationId}/${Date.now()}_${file.name}`;
+      const { error } = await supabase.storage.from('chat').upload(filePath, file);
+      if (error) {
+        console.error('Error uploading file:', error.message);
+        continue;
+      }
+      const { data: { publicUrl } } = supabase.storage.from('chat').getPublicUrl(filePath);
+      uploadedUrls.push({ url: publicUrl, type: file.type, name: file.name });
     }
 
     setAttachments([...attachments, ...uploadedUrls]);
@@ -90,11 +110,11 @@ const Chat = ({ conversationId, otherUser }) => {
         {messages.map(msg => (
           <div
             key={msg.id}
-            className={`flex ${msg.senderId === currentUser.uid ? 'justify-end' : 'justify-start'}`}
+            className={`flex ${(msg.sender_id || msg.senderId) === (currentUser.id || currentUser.uid) ? 'justify-end' : 'justify-start'}`}
           >
             <div
               className={`max-w-[70%] rounded-lg p-3 ${
-                msg.senderId === currentUser.uid
+                (msg.sender_id || msg.senderId) === (currentUser.id || currentUser.uid)
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-200 dark:bg-gray-700'
               }`}
@@ -104,7 +124,7 @@ const Chat = ({ conversationId, otherUser }) => {
                 <div className="mt-2 space-y-2">
                   {msg.attachments.map((att, i) => (
                     <div key={i}>
-                      {att.type.startsWith('image/') ? (
+                      {att.type?.startsWith('image/') ? (
                         <img src={att.url} alt="Attachment" className="rounded max-w-full" />
                       ) : (
                         <a href={att.url} target="_blank" rel="noopener noreferrer" className="underline">
@@ -116,7 +136,7 @@ const Chat = ({ conversationId, otherUser }) => {
                 </div>
               )}
               <p className="text-xs opacity-70 mt-1">
-                {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {new Date(msg.created_at || msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </p>
             </div>
           </div>

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useAuth } from '../../context/AuthContext';
 import Loader from '../common/Loader';
 
@@ -15,18 +14,16 @@ const Disputes = () => {
 
   const fetchDisputes = async () => {
     try {
-      const q = query(
-        collection(db, 'disputes'),
-        where('buyerId', '==', currentUser.uid)
-      );
-      const snapshot = await getDocs(q);
-      const disputesList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setDisputes(disputesList);
+      const { data: disputesList, error } = await supabase
+        .from('disputes')
+        .select('*')
+        .eq('buyer_id', currentUser.id || currentUser.uid)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setDisputes(disputesList || []);
     } catch (error) {
-      console.error('Error fetching disputes:', error);
+      console.error('Error fetching disputes:', error.message);
     } finally {
       setLoading(false);
     }
@@ -54,13 +51,13 @@ const Disputes = () => {
               <div className="flex justify-between items-start">
                 <div>
                   <h3 className="font-semibold text-lg">
-                    Order #{dispute.orderId}
+                    Order #{dispute.order_id || dispute.orderId}
                   </h3>
                   <p className="text-gray-600 dark:text-gray-400 mt-2">
-                    {dispute.reason}
+                    {dispute.reason || dispute.subject}
                   </p>
                   <p className="text-sm text-gray-500 mt-2">
-                    Created: {dispute.createdAt?.toDate().toLocaleDateString()}
+                    Created: {new Date(dispute.created_at || dispute.createdAt).toLocaleDateString()}
                   </p>
                 </div>
                 <span className={`px-3 py-1 rounded-full text-sm ${

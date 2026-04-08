@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { collection, addDoc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useAuth } from '../../context/AuthContext';
 
 const Marketing = () => {
@@ -18,12 +17,22 @@ const Marketing = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      await addDoc(collection(db, 'coupons'), {
-        ...coupon,
-        vendorId: currentUser.uid,
-        createdAt: new Date(),
-        active: true
-      });
+      const { error } = await supabase
+        .from('coupons')
+        .insert([{
+          code: coupon.code,
+          discount_percentage: coupon.type === 'percentage' ? coupon.discount : null,
+          discount_amount: coupon.type === 'fixed' ? coupon.discount : null,
+          type: coupon.type,
+          expiry_date: coupon.expiryDate,
+          min_purchase_amount: coupon.minPurchase,
+          vendor_id: currentUser.id || currentUser.uid,
+          created_at: new Date().toISOString(),
+          is_active: true
+        }]);
+
+      if (error) throw error;
+      
       alert('Coupon created successfully!');
       setCoupon({
         code: '',
@@ -33,7 +42,7 @@ const Marketing = () => {
         minPurchase: 0
       });
     } catch (error) {
-      console.error('Error creating coupon:', error);
+      console.error('Error creating coupon:', error.message);
       alert('Error creating coupon');
     } finally {
       setLoading(false);

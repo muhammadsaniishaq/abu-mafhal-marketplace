@@ -1,38 +1,57 @@
-import { collection, addDoc, query, where, getDocs, orderBy, onSnapshot, updateDoc, doc, serverTimestamp, getDoc } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import { createNotification, NOTIFICATION_TYPES } from './notificationService';
 
 // Create or get existing conversation
 export const getOrCreateConversation = async (buyerId, vendorId, productId = null) => {
   try {
     // Check if conversation already exists
-    const q = query(
-      collection(db, 'conversations'),
-      where('buyerId', '==', buyerId),
-      where('vendorId', '==', vendorId)
-    );
+    const { data: existing, error: findError } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('buyer_id', buyerId)
+      .eq('vendor_id', vendorId)
+      .maybeSingle();
     
-    const snapshot = await getDocs(q);
-    
-    if (!snapshot.empty) {
-      return snapshot.docs[0].id;
+    if (existing) {
+      return existing.id;
     }
     
     // Create new conversation
-    const conversationRef = await addDoc(collection(db, 'conversations'), {
-      buyerId,
-      vendorId,
-      productId,
-      lastMessage: '',
-      lastMessageAt: serverTimestamp(),
-      buyerUnread: 0,
-      vendorUnread: 0,
-      createdAt: new Date().toISOString()
-    });
+    const { data: profileBuyer } = await supabase.from('profiles').select('full_name, avatar_url').eq('id', buyerId).single();
+    const { data: profileVendor } = await supabase.from('profiles').select('full_name, avatar_url').eq('id', vendorId).single();
+
+    const { data, error } = await supabase
+      .from('conversations')
+      .insert({
+        participants: [buyerId, vendorId],
+        participant_details: {
+          [buyerId]: {
+            name: profileBuyer?.full_name || 'Buyer',
+            avatar: profileBuyer?.avatar_url || ''
+          },
+          [vendorId]: {
+            name: profileVendor?.full_name || 'Vendor',
+            avatar: profileVendor?.avatar_url || ''
+          }
+        },
+        buyer_id: buyerId,
+        vendor_id: vendorId,
+        product_id: productId,
+        last_message: '',
+        last_message_at: new Date().toISOString(),
+        unread_count: {
+          [buyerId]: 0,
+          [vendorId]: 0
+        },
+        created_at: new Date().toISOString()
+      })
+      .select()
+      .single();
     
-    return conversationRef.id;
+    if (error) throw error;
+    return data.id;
   } catch (error) {
-    console.error('Error getting/creating conversation:', error);
+    console.error('Error getting/creating conversation:', error.message);
     throw error;
   }
 };
@@ -41,30 +60,44 @@ export const getOrCreateConversation = async (buyerId, vendorId, productId = nul
 export const sendMessage = async (conversationId, senderId, senderRole, message, productId = null) => {
   try {
     // Add message to messages collection
-    await addDoc(collection(db, 'messages'), {
-      conversationId,
-      senderId,
-      senderRole,
-      message,
-      productId,
-      read: false,
-      createdAt: new Date().toISOString()
-    });
+    const { error: msgError } = await supabase
+      .from('messages')
+      .insert({
+        conversation_id: conversationId,
+        sender_id: senderId,
+        sender_role: senderRole,
+        message,
+        product_id: productId,
+        read: false,
+        created_at: new Date().toISOString()
+      });
+
+    if (msgError) throw msgError;
     
     // Update conversation
-    const conversationRef = doc(db, 'conversations', conversationId);
-    const conversationDoc = await getDoc(conversationRef);
-    const conversationData = conversationDoc.data();
+    const { data: conversationData, error: fetchError } = await supabase
+      .from('conversations')
+      .select('*')
+      .eq('id', conversationId)
+      .single();
+      
+    if (fetchError) throw fetchError;
     
-    await updateDoc(conversationRef, {
-      lastMessage: message.substring(0, 100),
-      lastMessageAt: serverTimestamp(),
-      buyerUnread: senderRole === 'vendor' ? (conversationData.buyerUnread || 0) + 1 : 0,
-      vendorUnread: senderRole === 'buyer' ? (conversationData.vendorUnread || 0) + 1 : 0
-    });
+    const otherUserId = conversationData.participants.find(id => id !== senderId);
+    const newUnreadCount = { ...conversationData.unread_count };
+    newUnreadCount[otherUserId] = (newUnreadCount[otherUserId] || 0) + 1;
+    
+    await supabase
+      .from('conversations')
+      .update({
+        last_message: message.substring(0, 100),
+        last_message_at: new Date().toISOString(),
+        unread_count: newUnreadCount
+      })
+      .eq('id', conversationId);
     
     // Send notification to recipient
-    const recipientId = senderRole === 'buyer' ? conversationData.vendorId : conversationData.buyerId;
+    const recipientId = senderRole === 'buyer' ? conversationData.vendor_id : conversationData.buyer_id;
     await createNotification({
       userId: recipientId,
       title: '💬 New Message',
@@ -76,7 +109,7 @@ export const sendMessage = async (conversationId, senderId, senderRole, message,
     
     return true;
   } catch (error) {
-    console.error('Error sending message:', error);
+    console.error('Error sending message:', error.message);
     throw error;
   }
 };
@@ -84,16 +117,16 @@ export const sendMessage = async (conversationId, senderId, senderRole, message,
 // Get user's conversations
 export const getUserConversations = async (userId, role) => {
   try {
-    const q = query(
-      collection(db, 'conversations'),
-      where(role === 'buyer' ? 'buyerId' : 'vendorId', '==', userId),
-      orderBy('lastMessageAt', 'desc')
-    );
+    const { data, error } = await supabase
+      .from('conversations')
+      .select('*')
+      .contains('participants', [userId])
+      .order('last_message_at', { ascending: false });
     
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    if (error) throw error;
+    return data || [];
   } catch (error) {
-    console.error('Error getting conversations:', error);
+    console.error('Error getting conversations:', error.message);
     return [];
   }
 };
@@ -101,58 +134,74 @@ export const getUserConversations = async (userId, role) => {
 // Get messages for a conversation
 export const getMessages = async (conversationId) => {
   try {
-    const q = query(
-      collection(db, 'messages'),
-      where('conversationId', '==', conversationId),
-      orderBy('createdAt', 'asc')
-    );
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: true });
     
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    if (error) throw error;
+    return data || [];
   } catch (error) {
-    console.error('Error getting messages:', error);
+    console.error('Error getting messages:', error.message);
     return [];
   }
 };
 
 // Mark messages as read
-export const markMessagesAsRead = async (conversationId, userRole) => {
+export const markMessagesAsRead = async (conversationId, userId) => {
   try {
-    const conversationRef = doc(db, 'conversations', conversationId);
-    
-    await updateDoc(conversationRef, {
-      [userRole === 'buyer' ? 'buyerUnread' : 'vendorUnread']: 0
-    });
+    const { data: convo } = await supabase
+      .from('conversations')
+      .select('unread_count')
+      .eq('id', conversationId)
+      .single();
+
+    if (convo) {
+      const newUnreadCount = { ...convo.unread_count };
+      newUnreadCount[userId] = 0;
+
+      await supabase
+        .from('conversations')
+        .update({ unread_count: newUnreadCount })
+        .eq('id', conversationId);
+    }
     
     return true;
   } catch (error) {
-    console.error('Error marking messages as read:', error);
+    console.error('Error marking messages as read:', error.message);
     throw error;
   }
 };
 
 // Subscribe to real-time messages
 export const subscribeToMessages = (conversationId, callback) => {
-  const q = query(
-    collection(db, 'messages'),
-    where('conversationId', '==', conversationId),
-    orderBy('createdAt', 'asc')
-  );
-  
-  return onSnapshot(q, (snapshot) => {
-    const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    callback(messages);
-  });
+  const channel = supabase
+    .channel(`messages:${conversationId}`)
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'messages',
+      filter: `conversation_id=eq.${conversationId}`
+    }, async (payload) => {
+      // Re-fetch all messages to ensure order and state
+      const messages = await getMessages(conversationId);
+      callback(messages);
+    })
+    .subscribe();
+    
+  return () => {
+    supabase.removeChannel(channel);
+  };
 };
 
 // Get unread message count
 export const getUnreadCount = async (userId, role) => {
   try {
     const conversations = await getUserConversations(userId, role);
-    const unreadField = role === 'buyer' ? 'buyerUnread' : 'vendorUnread';
-    return conversations.reduce((total, conv) => total + (conv[unreadField] || 0), 0);
+    return conversations.reduce((total, conv) => total + (conv.unread_count?.[userId] || 0), 0);
   } catch (error) {
-    console.error('Error getting unread count:', error);
+    console.error('Error getting unread count:', error.message);
     return 0;
   }
 };

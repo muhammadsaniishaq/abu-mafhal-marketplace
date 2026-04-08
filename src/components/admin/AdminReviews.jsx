@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { moderateReview, deleteReview } from '../../services/reviewService';
+import Loader from '../common/Loader';
 
 const AdminReviews = () => {
   const [reviews, setReviews] = useState([]);
@@ -17,52 +17,66 @@ const AdminReviews = () => {
 
   const fetchReviews = async () => {
     try {
-      const snapshot = await getDocs(collection(db, 'reviews'));
-      const reviewsData = await Promise.all(
-        snapshot.docs.map(async (reviewDoc) => {
-          const review = { id: reviewDoc.id, ...reviewDoc.data() };
-          
-          // Fetch product details
-          const productDoc = await getDocs(
-            query(collection(db, 'products'), where('__name__', '==', review.productId))
-          );
-          if (!productDoc.empty) {
-            review.productName = productDoc.docs[0].data().name;
-          }
-          
-          return review;
-        })
-      );
-      
-      reviewsData.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      setReviews(reviewsData);
+      const { data, error } = await supabase
+        .from('reviews')
+        .select(`
+          *,
+          products(name),
+          drivers(name),
+          profiles(email, full_name, username)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const formattedReviews = (data || []).map(r => ({
+        id: r.id,
+        productId: r.product_id,
+        productName: r.review_type === 'driver' ? (r.drivers?.name || 'Driver') : (r.products?.name || 'Product'),
+        userName: r.profiles?.full_name || r.profiles?.username || r.profiles?.email || 'Anonymous',
+        userEmail: r.profiles?.email,
+        rating: r.rating,
+        title: r.title || (r.review_type === 'driver' ? 'Driver Review' : 'Product Review'),
+        comment: r.comment,
+        createdAt: r.created_at,
+        status: r.status || 'pending',
+        reported: r.reported || false,
+        reportReason: r.report_reason,
+        images: r.images || [],
+        reviewType: r.review_type,
+        verified: r.verified || false
+      }));
+
+      setReviews(formattedReviews);
     } catch (error) {
-      console.error('Error fetching reviews:', error);
+      console.error('Error fetching reviews:', error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleModerate = async (reviewId, status) => {
+  const handleModerate = async (review, status) => {
     try {
-      await moderateReview(reviewId, status, moderatorNotes);
+      await moderateReview(review.id, status, moderatorNotes);
       alert(`Review ${status} successfully!`);
       setShowDetailsModal(false);
       setModeratorNotes('');
       fetchReviews();
     } catch (error) {
+      console.error('Moderation error:', error.message);
       alert('Failed to moderate review');
     }
   };
 
-  const handleDelete = async (reviewId, productId) => {
+  const handleDelete = async (review) => {
     if (!window.confirm('Are you sure you want to delete this review permanently?')) return;
 
     try {
-      await deleteReview(reviewId, productId);
+      await deleteReview(review.id, review.productId);
       alert('Review deleted successfully!');
       fetchReviews();
     } catch (error) {
+      console.error('Delete error:', error.message);
       alert('Failed to delete review');
     }
   };
@@ -93,20 +107,14 @@ const AdminReviews = () => {
     );
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
+  if (loading) return <Loader />;
 
   return (
     <div className="p-6">
       <h1 className="text-3xl font-bold mb-6">Review Moderation</h1>
 
       {/* Stats */}
-      <div className="grid grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
         <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
           <p className="text-sm text-gray-600">Total Reviews</p>
           <p className="text-2xl font-bold">{stats.total}</p>
@@ -145,7 +153,7 @@ const AdminReviews = () => {
       {/* Reviews Table */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-x-auto">
         <table className="w-full">
-          <thead className="bg-gray-50 dark:bg-gray-900">
+          <thead className="bg-gray-50 dark:bg-gray-900 border-b dark:border-gray-700">
             <tr>
               <th className="text-left py-3 px-4">Product</th>
               <th className="text-left py-3 px-4">Reviewer</th>
@@ -180,11 +188,10 @@ const AdminReviews = () => {
                 </td>
                 <td className="py-3 px-4">
                   <div className="space-y-1">
-                    <span className={`px-2 py-1 rounded-full text-xs block w-fit ${
-                      review.status === 'approved' ? 'bg-green-100 text-green-800' :
+                    <span className={`px-2 py-1 rounded-full text-xs block w-fit ${review.status === 'approved' ? 'bg-green-100 text-green-800' :
                       review.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                      'bg-yellow-100 text-yellow-800'
-                    }`}>
+                        'bg-yellow-100 text-yellow-800'
+                      }`}>
                       {review.status}
                     </span>
                     {review.reported && (
@@ -206,7 +213,7 @@ const AdminReviews = () => {
                       Review
                     </button>
                     <button
-                      onClick={() => handleDelete(review.id, review.productId)}
+                      onClick={() => handleDelete(review)}
                       className="px-3 py-1 bg-red-600 text-white rounded text-sm"
                     >
                       Delete
@@ -231,7 +238,7 @@ const AdminReviews = () => {
           <div className="bg-white dark:bg-gray-800 rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto p-6">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold">Review Details</h2>
-              <button 
+              <button
                 onClick={() => setShowDetailsModal(false)}
                 className="text-2xl hover:bg-gray-100 dark:hover:bg-gray-700 w-8 h-8 rounded-full"
               >
@@ -240,19 +247,23 @@ const AdminReviews = () => {
             </div>
 
             <div className="space-y-4">
-              <div>
-                <p className="text-sm text-gray-600">Product</p>
-                <p className="font-semibold">{selectedReview.productName}</p>
-              </div>
-
-              <div>
-                <p className="text-sm text-gray-600">Reviewer</p>
-                <p className="font-semibold">{selectedReview.userName}</p>
-              </div>
-
-              <div>
-                <p className="text-sm text-gray-600">Rating</p>
-                {renderStars(selectedReview.rating)}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-gray-600">Product</p>
+                  <p className="font-semibold">{selectedReview.productName}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Reviewer</p>
+                  <p className="font-semibold">{selectedReview.userName}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Rating</p>
+                  {renderStars(selectedReview.rating)}
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Date</p>
+                  <p className="font-semibold">{new Date(selectedReview.createdAt).toLocaleString()}</p>
+                </div>
               </div>
 
               <div>
@@ -262,19 +273,19 @@ const AdminReviews = () => {
 
               <div>
                 <p className="text-sm text-gray-600">Review</p>
-                <p>{selectedReview.comment}</p>
+                <p className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">{selectedReview.comment}</p>
               </div>
 
               {selectedReview.images && selectedReview.images.length > 0 && (
                 <div>
                   <p className="text-sm text-gray-600 mb-2">Images</p>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     {selectedReview.images.map((img, index) => (
                       <img
                         key={index}
                         src={img}
                         alt={`Review ${index + 1}`}
-                        className="w-24 h-24 object-cover rounded cursor-pointer"
+                        className="w-24 h-24 object-cover rounded cursor-pointer border dark:border-gray-700"
                         onClick={() => window.open(img, '_blank')}
                       />
                     ))}
@@ -283,40 +294,42 @@ const AdminReviews = () => {
               )}
 
               {selectedReview.reported && (
-                <div className="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                <div className="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200">
                   <p className="text-sm font-semibold text-orange-700">Report Reason:</p>
                   <p className="text-sm">{selectedReview.reportReason}</p>
                 </div>
               )}
 
-              <div>
-                <label className="block text-sm font-medium mb-2">Moderator Notes</label>
+              <div className="border-t pt-4">
+                <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Moderator Notes</label>
                 <textarea
                   value={moderatorNotes}
                   onChange={(e) => setModeratorNotes(e.target.value)}
                   rows="3"
-                  className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
+                  className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-blue-500"
                   placeholder="Add notes about your decision..."
                 />
               </div>
 
-              {selectedReview.status !== 'approved' && (
-                <button
-                  onClick={() => handleModerate(selectedReview.id, 'approved')}
-                  className="w-full px-4 py-2 bg-green-600 text-white rounded-lg mb-2"
-                >
-                  Approve Review
-                </button>
-              )}
+              <div className="flex gap-3 pt-4 border-t">
+                {selectedReview.status !== 'approved' && (
+                  <button
+                    onClick={() => handleModerate(selectedReview, 'approved')}
+                    className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
+                  >
+                    Approve Review
+                  </button>
+                )}
 
-              {selectedReview.status !== 'rejected' && (
-                <button
-                  onClick={() => handleModerate(selectedReview.id, 'rejected')}
-                  className="w-full px-4 py-2 bg-red-600 text-white rounded-lg"
-                >
-                  Reject Review
-                </button>
-              )}
+                {selectedReview.status !== 'rejected' && (
+                  <button
+                    onClick={() => handleModerate(selectedReview, 'rejected')}
+                    className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+                  >
+                    Reject Review
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

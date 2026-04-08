@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import Loader from '../common/Loader';
 
 const AuditLogs = () => {
@@ -14,19 +13,16 @@ const AuditLogs = () => {
 
   const fetchLogs = async () => {
     try {
-      const q = query(
-        collection(db, 'auditLogs'),
-        orderBy('timestamp', 'desc'),
-        limit(100)
-      );
-      const snapshot = await getDocs(q);
-      const logsList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setLogs(logsList);
+      const { data, error } = await supabase
+        .from('audit_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (error) throw error;
+      setLogs(data || []);
     } catch (error) {
-      console.error('Error fetching logs:', error);
+      console.error('Error fetching logs:', error.message);
     } finally {
       setLoading(false);
     }
@@ -87,7 +83,7 @@ const AuditLogs = () => {
               {filteredLogs.map((log) => (
                 <tr key={log.id}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    {log.timestamp?.toDate().toLocaleString()}
+                    {new Date(log.created_at || log.timestamp).toLocaleString()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
@@ -95,7 +91,7 @@ const AuditLogs = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    {log.userName || log.userId}
+                    {log.user_name || log.userName || log.user_id || log.userId}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500">
                     {log.details}

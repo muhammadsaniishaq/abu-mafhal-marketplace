@@ -1,8 +1,7 @@
 
 // src/components/admin/UserManagement.jsx
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, updateDoc, doc, deleteDoc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { formatDate } from '../../utils/helpers';
 
 const UserManagement = () => {
@@ -17,11 +16,15 @@ const UserManagement = () => {
 
   const fetchUsers = async () => {
     try {
-      const usersSnap = await getDocs(collection(db, 'users'));
-      const usersData = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setUsers(usersData);
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setUsers(data || []);
     } catch (error) {
-      console.error('Error fetching users:', error);
+      console.error('Error fetching users:', error.message);
     } finally {
       setLoading(false);
     }
@@ -29,9 +32,20 @@ const UserManagement = () => {
 
   const handleStatusChange = async (userId, newStatus) => {
     try {
-      await updateDoc(doc(db, 'users', userId), { status: newStatus });
-      setUsers(users.map(u => u.id === userId ? {...u, status: newStatus} : u));
+      // Mapping 'active' status to 'active' boolean in profiles table
+      const isActive = newStatus === 'active';
+      const { error } = await supabase
+        .from('profiles')
+        .update({ 
+          active: isActive,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+
+      if (error) throw error;
+      setUsers(users.map(u => u.id === userId ? {...u, active: isActive} : u));
     } catch (error) {
+      console.error('Error updating status:', error.message);
       alert('Failed to update user status');
     }
   };
@@ -39,9 +53,15 @@ const UserManagement = () => {
   const handleDelete = async (userId) => {
     if (window.confirm('Are you sure you want to delete this user?')) {
       try {
-        await deleteDoc(doc(db, 'users', userId));
+        const { error } = await supabase
+          .from('profiles')
+          .delete()
+          .eq('id', userId);
+        
+        if (error) throw error;
         setUsers(users.filter(u => u.id !== userId));
       } catch (error) {
+        console.error('Error deleting user:', error.message);
         alert('Failed to delete user');
       }
     }
@@ -49,7 +69,7 @@ const UserManagement = () => {
 
   const filteredUsers = users
     .filter(u => filter === 'all' || u.role === filter)
-    .filter(u => u.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    .filter(u => (u.full_name || u.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
                  u.email?.toLowerCase().includes(searchTerm.toLowerCase()));
 
   if (loading) {
@@ -107,10 +127,10 @@ const UserManagement = () => {
                   <td className="px-6 py-4">
                     <div className="flex items-center">
                       <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">
-                        {user.name?.charAt(0).toUpperCase() || 'U'}
+                        {(user.full_name || user.name || 'U').charAt(0).toUpperCase()}
                       </div>
                       <div className="ml-4">
-                        <p className="font-semibold text-gray-800 dark:text-white">{user.name}</p>
+                        <p className="font-semibold text-gray-800 dark:text-white">{user.full_name || user.name}</p>
                         <p className="text-sm text-gray-600 dark:text-gray-400">{user.email}</p>
                       </div>
                     </div>
@@ -122,10 +142,10 @@ const UserManagement = () => {
                   </td>
                   <td className="px-6 py-4">
                     <select
-                      value={user.status}
+                      value={user.active === false ? 'suspended' : 'active'}
                       onChange={(e) => handleStatusChange(user.id, e.target.value)}
-                      className={`px-3 py-1 rounded-lg text-sm font-semibold ${
-                        user.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      className={`px-3 py-1 rounded-lg text-sm font-semibold border-none outline-none ${
+                        user.active !== false ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                       }`}
                     >
                       <option value="active">Active</option>
@@ -134,7 +154,7 @@ const UserManagement = () => {
                     </select>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
-                    {formatDate(user.createdAt)}
+                    {formatDate(user.created_at || user.createdAt)}
                   </td>
                   <td className="px-6 py-4">
                     <button

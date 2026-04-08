@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useAuth } from '../../context/AuthContext';
 import Loader from '../common/Loader';
 
@@ -21,13 +20,19 @@ const Storefront = () => {
 
   const fetchStorefront = async () => {
     try {
-      const docRef = doc(db, 'vendors', currentUser.uid);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        setStorefront(docSnap.data().storefront || storefront);
+      const { data, error } = await supabase
+        .from('vendors')
+        .select('storefront')
+        .eq('id', currentUser.id || currentUser.uid)
+        .single();
+        
+      if (error && error.code !== 'PGRST116') throw error;
+      
+      if (data && data.storefront) {
+        setStorefront(data.storefront);
       }
     } catch (error) {
-      console.error('Error fetching storefront:', error);
+      console.error('Error fetching storefront:', error.message);
     } finally {
       setLoading(false);
     }
@@ -36,11 +41,16 @@ const Storefront = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const docRef = doc(db, 'vendors', currentUser.uid);
-      await updateDoc(docRef, { storefront });
+      const { error } = await supabase
+        .from('vendors')
+        .update({ storefront })
+        .eq('id', currentUser.id || currentUser.uid);
+        
+      if (error) throw error;
+      
       alert('Storefront updated successfully!');
     } catch (error) {
-      console.error('Error updating storefront:', error);
+      console.error('Error updating storefront:', error.message);
       alert('Error updating storefront');
     } finally {
       setSaving(false);

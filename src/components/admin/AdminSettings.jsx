@@ -1,529 +1,440 @@
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../config/supabase';
+import { FiChevronRight, FiSave, FiSettings, FiCheck, FiX, FiInfo, FiUploadCloud } from 'react-icons/fi';
+
+const CATEGORIES = [
+    { id: 'branding', label: 'Brand & Display' },
+    { id: 'financial', label: 'Finance & Gateway' },
+    { id: 'shipping', label: 'Shipping & Tax' },
+    { id: 'security', label: 'Security & Auth' },
+    { id: 'vendors', label: 'Vendor Controls' },
+    { id: 'contact', label: 'Contact & Social' },
+    { id: 'features', label: 'Feature Flags' },
+    { id: 'advanced', label: 'Advanced System' },
+];
+
+const CURRENCIES = ['NGN', 'USD', 'GBP', 'EUR', 'GHS', 'KES', 'ZAR'];
+
+const NIGERIA_STATES = [
+    'Abia','Adamawa','Akwa Ibom','Anambra','Bauchi','Bayelsa','Benue','Borno',
+    'Cross River','Delta','Ebonyi','Edo','Ekiti','Enugu','FCT (Abuja)','Gombe',
+    'Imo','Jigawa','Kaduna','Kano','Katsina','Kebbi','Kogi','Kwara',
+    'Lagos','Nasarawa','Niger','Ogun','Ondo','Osun','Oyo','Plateau',
+    'Rivers','Sokoto','Taraba','Yobe','Zamfara'
+];
 
 const AdminSettings = () => {
-  const [activeTab, setActiveTab] = useState('general');
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [activeTab, setActiveTab] = useState('branding');
+    const [unsaved, setUnsaved] = useState(false);
+    const [toast, setToast] = useState('');
 
-  const [generalSettings, setGeneralSettings] = useState({
-    siteName: 'Abu Mafhal Marketplace',
-    siteEmail: 'info@abumafhal.com',
-    sitePhone: '+234 XXX XXX XXXX',
-    currency: 'NGN',
-    timezone: 'Africa/Lagos',
-    maintenanceMode: false
-  });
+    // --- Unified Settings State ---
+    const [settings, setSettings] = useState({});
 
-  const [paymentSettings, setPaymentSettings] = useState({
-    platformCommission: 10,
-    minimumPayout: 5000,
-    payoutSchedule: 'weekly',
-    taxRate: 0,
-    enableCOD: true,
-    enableCardPayment: true,
-    enableBankTransfer: true
-  });
+    useEffect(() => {
+        fetchSettings();
+    }, []);
 
-  const [shippingSettings, setShippingSettings] = useState({
-    defaultShippingFee: 1000,
-    freeShippingThreshold: 10000,
-    enableLocalPickup: true,
-    maxDeliveryDays: 7
-  });
+    const fetchSettings = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('app_settings')
+                .select('*')
+                .single();
 
-  const [paystackPublicKey, setPaystackPublicKey] = useState('');
+            if (error) throw error;
+            if (data) {
+                // Initialize arrays/objects if null
+                if (!data.shipping_fees) {
+                    const defaultFees = {};
+                    NIGERIA_STATES.forEach(s => defaultFees[s] = ['Lagos', 'FCT (Abuja)', 'Rivers', 'Kano', 'Ogun'].includes(s) ? 1500 : 3000);
+                    data.shipping_fees = defaultFees;
+                }
+                if (!data.payment_methods) data.payment_methods = {};
+                if (!data.features) data.features = {};
+                
+                setSettings(data);
+            }
+        } catch (error) {
+            console.error('Error fetching settings:', error);
+            setToast('Error loading configurations.');
+        } finally {
+            setLoading(false);
+        }
+    };
 
-  const [notificationSettings, setNotificationSettings] = useState({
-    emailNotifications: true,
-    smsNotifications: false,
-    orderNotifications: true,
-    productNotifications: true,
-    paymentNotifications: true,
-    adminEmail: 'admin@abumafhal.com'
-  });
+    const handleSave = async (e) => {
+        if(e) e.preventDefault();
+        setSaving(true);
+        try {
+            const { error } = await supabase
+                .from('app_settings')
+                .update({
+                    ...settings,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('is_singleton', true);
 
-  const [securitySettings, setSecuritySettings] = useState({
-    requireEmailVerification: true,
-    requirePhoneVerification: false,
-    enableTwoFactor: false,
-    sessionTimeout: 3600,
-    maxLoginAttempts: 5
-  });
+            if (error) throw error;
+            setUnsaved(false);
+            setToast('Configurations saved and synced globally.');
+            setTimeout(() => setToast(''), 4000);
+        } catch (error) {
+            console.error('Error saving settings:', error);
+            setToast('Error saving configurations.');
+        } finally {
+            setSaving(false);
+        }
+    };
 
-  useEffect(() => {
-    fetchSettings();
-  }, []);
+    const updateField = (key, value) => {
+        setSettings(prev => ({ ...prev, [key]: value }));
+        setUnsaved(true);
+    };
 
-  const fetchSettings = async () => {
-    try {
-      const settingsDoc = await getDoc(doc(db, 'settings', 'platform'));
-      if (settingsDoc.exists()) {
-        const data = settingsDoc.data();
-        if (data.general) setGeneralSettings(data.general);
-        if (data.payment) setPaymentSettings(data.payment);
-        if (data.shipping) setShippingSettings(data.shipping);
-        if (data.notification) setNotificationSettings(data.notification);
-        if (data.security) setSecuritySettings(data.security);
-      }
+    const updateNestedField = (parentObj, key, value) => {
+        setSettings(prev => ({
+            ...prev,
+            [parentObj]: { ...(prev[parentObj] || {}), [key]: value }
+        }));
+        setUnsaved(true);
+    };
 
-      // Also fetch from Supabase for Paystack Key
-      const { data: supabaseSettings } = await supabase
-        .from('app_settings')
-        .select('paystack_public_key')
-        .single();
-
-      if (supabaseSettings) {
-        setPaystackPublicKey(supabaseSettings.paystack_public_key || '');
-      }
-    } catch (error) {
-      console.error('Error fetching settings:', error);
-    } finally {
-      setLoading(false);
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center h-full min-h-[500px]">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+            </div>
+        );
     }
-  };
 
-  const saveSettings = async (category, settings) => {
-    setSaving(true);
-    try {
-      if (category === 'payment') {
-        // Save to Supabase specifically
-        await supabase
-          .from('app_settings')
-          .update({ paystack_public_key: paystackPublicKey })
-          .eq('is_singleton', true);
-      }
-
-      await updateDoc(doc(db, 'settings', 'platform'), {
-        [category]: settings,
-        updatedAt: new Date().toISOString()
-      });
-      alert('Settings saved successfully');
-    } catch (error) {
-      console.error('Error saving settings:', error);
-      alert('Failed to save settings. Creating new settings document...');
-      // If document doesn't exist, create it
-      try {
-        await updateDoc(doc(db, 'settings', 'platform'), {
-          [category]: settings,
-          createdAt: new Date().toISOString()
-        });
-        alert('Settings saved successfully');
-      } catch (err) {
-        alert('Failed to save settings');
-      }
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
+    // --- UI Helpers ---
+    const InputField = ({ label, field, type = 'text', placeholder, hint, prefix }) => (
+        <div className="mb-5">
+            <label className="block text-sm font-semibold text-gray-700 mb-1">{label}</label>
+            <div className="relative">
+                {prefix && <span className="absolute left-3 top-2.5 text-gray-500">{prefix}</span>}
+                <input
+                    type={type}
+                    value={settings[field] === undefined || settings[field] === null ? '' : settings[field]}
+                    onChange={(e) => updateField(field, type === 'number' ? parseFloat(e.target.value) || 0 : e.target.value)}
+                    placeholder={placeholder}
+                    className={`w-full ${prefix ? 'pl-8' : 'px-4'} py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all`}
+                />
+            </div>
+            {hint && <p className="text-xs text-gray-500 mt-1.5">{hint}</p>}
+        </div>
     );
-  }
 
-  return (
-    <div className="p-6">
-      <h1 className="text-3xl font-bold mb-6">Platform Settings</h1>
+    const Toggle = ({ label, field, hint, nestedObj }) => {
+        const value = nestedObj ? settings[nestedObj]?.[field] : settings[field];
+        // Note: Checkbox logic inverted if default is true, but we assume true means checked.
+        const checked = value !== false; // defaults to true if undefined
 
-      {/* Tabs */}
-      <div className="flex gap-2 mb-6 border-b overflow-x-auto">
-        {['general', 'payment', 'shipping', 'notifications', 'security'].map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-6 py-3 font-medium capitalize whitespace-nowrap ${activeTab === tab
-              ? 'border-b-2 border-blue-600 text-blue-600'
-              : 'text-gray-600 hover:text-gray-900'
-              }`}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
+        return (
+            <div className="flex items-start gap-3 mb-5 p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
+                <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                        if (nestedObj) updateNestedField(nestedObj, field, e.target.checked);
+                        else updateField(field, e.target.checked);
+                    }}
+                    className="w-5 h-5 text-primary-600 rounded border-gray-300 focus:ring-primary-500 mt-0.5"
+                />
+                <div>
+                    <label className="font-semibold text-gray-800 cursor-pointer">{label}</label>
+                    {hint && <p className="text-sm text-gray-500 leading-snug mt-0.5">{hint}</p>}
+                </div>
+            </div>
+        );
+    };
 
-      {/* General Settings */}
-      {activeTab === 'general' && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h2 className="text-xl font-bold mb-4">General Settings</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Site Name</label>
-              <input
-                type="text"
-                value={generalSettings.siteName}
-                onChange={(e) => setGeneralSettings({ ...generalSettings, siteName: e.target.value })}
-                className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
-              />
+    return (
+        <div className="max-w-7xl mx-auto pb-24">
+            
+            {/* Header Area */}
+            <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Platform Configurations</h1>
+                    <p className="text-gray-500 mt-1">Manage global marketplace settings. Changes sync instantly to Web and Mobile applications.</p>
+                </div>
+                
+                <button
+                    onClick={handleSave}
+                    disabled={saving || !unsaved}
+                    className={`flex items-center gap-2 px-6 py-2.5 rounded-lg font-medium shadow-sm transition-all duration-200 ${
+                        unsaved 
+                            ? 'bg-primary-600 hover:bg-primary-700 text-white shadow-primary-500/30' 
+                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    }`}
+                >
+                    {saving ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"/> : <FiSave />}
+                    {saving ? 'Deploying...' : unsaved ? 'Deploy Changes' : 'Up to Date'}
+                </button>
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Contact Email</label>
-              <input
-                type="email"
-                value={generalSettings.siteEmail}
-                onChange={(e) => setGeneralSettings({ ...generalSettings, siteEmail: e.target.value })}
-                className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
-              />
+
+            {toast && (
+                <div className="mb-6 p-4 rounded-lg bg-green-50 border border-green-200 flex items-center gap-3 text-green-800 shadow-sm animate-fade-in">
+                    <FiCheck className="text-green-600 text-lg" />
+                    <span className="font-medium">{toast}</span>
+                </div>
+            )}
+
+            <div className="flex flex-col lg:flex-row gap-8">
+                {/* Sidebar Navigation */}
+                <div className="lg:w-64 flex-shrink-0">
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden sticky top-4">
+                        {CATEGORIES.map(cat => (
+                            <button
+                                key={cat.id}
+                                onClick={() => setActiveTab(cat.id)}
+                                className={`w-full text-left px-5 py-3.5 border-l-4 transition-all flex items-center justify-between ${
+                                    activeTab === cat.id 
+                                        ? 'border-primary-600 bg-primary-50 text-primary-700 font-semibold' 
+                                        : 'border-transparent text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                }`}
+                            >
+                                {cat.label}
+                                {activeTab === cat.id && <FiChevronRight className="opacity-50" />}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Main Content Area */}
+                <div className="flex-1 min-w-0">
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 md:p-8">
+                        
+                        {/* 1. BRANDING & DISPLAY */}
+                        {activeTab === 'branding' && (
+                            <div className="animate-fade-in">
+                                <h2 className="text-xl font-bold text-gray-900 mb-6 border-b pb-2">Branding & Identity</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
+                                    <InputField label="Application Name" field="app_name" placeholder="Abu Mafhal Marketplace" />
+                                    <InputField label="Admin Panel Name" field="admin_name" hint="(Displayed in admin headers)" />
+                                    
+                                    <div className="col-span-full grid grid-cols-1 md:grid-cols-2 gap-8 mb-6 border-b border-gray-100 pb-6">
+                                        <div>
+                                            <InputField label="Primary Brand Color" field="primary_color" placeholder="#0F172A" />
+                                            <div className="h-2 w-full rounded" style={{ backgroundColor: settings.primary_color || '#0F172A' }} />
+                                        </div>
+                                        <div>
+                                            <InputField label="Secondary Brand Color" field="secondary_color" placeholder="#3B82F6" />
+                                            <div className="h-2 w-full rounded" style={{ backgroundColor: settings.secondary_color || '#3B82F6' }} />
+                                        </div>
+                                    </div>
+
+                                    <div className="col-span-full">
+                                        <h3 className="font-semibold text-gray-800 mb-4">Logo References (URLs)</h3>
+                                    </div>
+                                    <InputField label="Main Logo URL" field="logo_url" />
+                                    <InputField label="Certificate Logo URL" field="cert_logo_url" />
+                                    <InputField label="Trust Badge URL" field="cert_badge_url" />
+                                    <InputField label="Signature Image URL" field="cert_signature_url" />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 2. FINANCE & GATEWAYS */}
+                        {activeTab === 'financial' && (
+                            <div className="animate-fade-in">
+                                <h2 className="text-xl font-bold text-gray-900 mb-6 border-b pb-2">Financial Architecture</h2>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
+                                    <div className="mb-5">
+                                        <label className="block text-sm font-semibold text-gray-700 mb-1">Base Currency</label>
+                                        <select 
+                                            value={settings.currency || 'NGN'} 
+                                            onChange={(e) => updateField('currency', e.target.value)}
+                                            className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none bg-white"
+                                        >
+                                            {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                        </select>
+                                    </div>
+                                    <InputField type="number" label="Platform Commission (%)" field="commission_rate" hint="Deducted directly from vendor payouts." />
+                                    <InputField type="number" label="Minimum Cart Order Amount" field="min_order_amount" />
+                                    <InputField type="number" label="Affiliate Reward Rate (%)" field="affiliate_rate" />
+                                    
+                                    <div className="col-span-full mt-6 mb-4">
+                                        <h3 className="font-semibold text-gray-800 border-b pb-2">Allowed Payment Gateways</h3>
+                                    </div>
+                                    <Toggle label="Paystack Integration" field="paystack" nestedObj="payment_methods" />
+                                    <Toggle label="Flutterwave Integration" field="flutterwave" nestedObj="payment_methods" />
+                                    <Toggle label="Crypto Payments (Coinbase)" field="crypto" nestedObj="payment_methods" />
+                                    <Toggle label="Customer Internal Wallet" field="wallet" nestedObj="payment_methods" />
+
+                                    <div className="col-span-full mt-6 mb-4">
+                                        <h3 className="font-semibold text-gray-800 border-b pb-2 text-rose-700">Gateway API Secrets</h3>
+                                    </div>
+                                    <InputField type="password" label="Paystack Public Key" field="paystack_public_key" />
+                                    <InputField type="password" label="Paystack Secret Key" field="paystack_secret_key" />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 3. SHIPPING & TAX */}
+                        {activeTab === 'shipping' && (
+                            <div className="animate-fade-in">
+                                <h2 className="text-xl font-bold text-gray-900 mb-6 border-b pb-2">Shipping & Taxation</h2>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 mb-8">
+                                    <Toggle label="Enable Tax (VAT) Calculation" field="tax_enabled" />
+                                    {settings.tax_enabled !== false && (
+                                        <InputField type="number" label="Global Tax Rate (%)" field="tax_rate" />
+                                    )}
+                                    
+                                    <Toggle label="Override: Free Nationwide Shipping" field="free_nationwide_shipping" hint="Forces shipping calculation to 0 regardless of state." />
+                                    <InputField type="number" label="Auto-Free Shipping Cart Minimum" field="free_shipping_min" hint="Cart value to trigger free shipping automatically." />
+                                </div>
+
+                                <h3 className="font-semibold text-gray-800 mb-4 border-b pb-2">Per-State Logistics Rates</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {NIGERIA_STATES.map(state => (
+                                        <div key={state} className="flex items-center gap-2">
+                                            <label className="w-24 text-sm text-gray-600 truncate">{state}</label>
+                                            <input
+                                                type="number"
+                                                value={settings.shipping_fees?.[state] || 0}
+                                                onChange={(e) => updateNestedField('shipping_fees', state, parseFloat(e.target.value) || 0)}
+                                                className="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded focus:ring-1 focus:ring-primary-500 outline-none"
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 4. SECURITY & AUTH */}
+                        {activeTab === 'security' && (
+                            <div className="animate-fade-in">
+                                <h2 className="text-xl font-bold text-gray-900 mb-6 border-b pb-2">Security & Authorizations</h2>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
+                                    <Toggle label="Allow Guest Store Browsing" field="allow_guest_browse" hint="If disabled, users are forced to login before seeing products." />
+                                    <Toggle label="Enable Waitlist / Pre-registration" field="enable_waitlist" />
+                                    
+                                    <div className="col-span-full mt-6 mb-4">
+                                        <h3 className="font-semibold text-gray-800 border-b pb-2">Third-Party Verification Keys</h3>
+                                    </div>
+                                    <InputField type="password" label="Prembly App ID (Identity)" field="prembly_app_id" />
+                                    <InputField type="password" label="Prembly Secret Key" field="prembly_secret_key" />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 5. VENDORS */}
+                        {activeTab === 'vendors' && (
+                            <div className="animate-fade-in">
+                                <h2 className="text-xl font-bold text-gray-900 mb-6 border-b pb-2">Vendor Ecosystem</h2>
+                                
+                                <Toggle label="Auto-Approve Vendors" field="vendor_auto_approve" hint="Bypass manual review for new vendor registrations." />
+                                
+                                <h3 className="font-semibold text-gray-800 mt-6 mb-4 border-b pb-2">Vendor Subscription Plans</h3>
+                                <p className="text-sm text-gray-500 mb-4">Note: Modify plan structures directly via database migrations currently.</p>
+                                
+                                {settings.vendor_plans && settings.vendor_plans.map((plan, i) => (
+                                    <div key={i} className="bg-gray-50 p-4 rounded-lg border border-gray-100 mb-4 flex justify-between items-center">
+                                        <div>
+                                            <h4 className="font-bold text-gray-800">{plan.name}</h4>
+                                            <p className="text-sm text-gray-500">{plan.duration_months} Months • Fee: {settings.currency || '₦'} {plan.price}</p>
+                                        </div>
+                                        <div className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold">Active</div>
+                                    </div>
+                                ))}
+                                {(!settings.vendor_plans || settings.vendor_plans.length === 0) && (
+                                    <p className="text-gray-400 italic text-sm">No vendor plans mapped.</p>
+                                )}
+                            </div>
+                        )}
+
+                        {/* 6. CONTACT & SOCIAL */}
+                        {activeTab === 'contact' && (
+                            <div className="animate-fade-in">
+                                <h2 className="text-xl font-bold text-gray-900 mb-6 border-b pb-2">Contact & Social Links</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
+                                    <InputField label="Support Email" field="support_email" />
+                                    <InputField label="Support Phone Number" field="support_phone" />
+                                    <InputField label="WhatsApp Number" field="whatsapp_number" />
+                                    
+                                    <div className="col-span-full mt-4"></div>
+                                    <InputField label="Facebook Page URL" field="facebook_url" />
+                                    <InputField label="Instagram Handle (w/o @)" field="instagram_handle" />
+                                    <InputField label="Twitter/X Handle" field="twitter_handle" />
+                                    <InputField label="TikTok Handle" field="tiktok_handle" />
+
+                                    <div className="col-span-full mt-4 mb-2 border-b pb-2"><h3 className="font-semibold text-gray-800">App Download Links</h3></div>
+                                    <InputField label="Google Play Store URL" field="play_store_url" />
+                                    <InputField label="Apple App Store URL" field="app_store_url" />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 7. FEATURES */}
+                        {activeTab === 'features' && (
+                            <div className="animate-fade-in">
+                                <h2 className="text-xl font-bold text-gray-900 mb-6 border-b pb-2">Platform Features</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
+                                    {/* Commerce Features */}
+                                    <Toggle label="Enable Promotional Coupons" field="enable_coupons" />
+                                    <Toggle label="Enable Product Returns" field="enable_returns" />
+                                    <Toggle label="Enable Product Reviews Flow" field="enable_reviews" />
+                                    <Toggle label="Enable Driver Ratings Flow" field="enable_ratings" />
+                                    <Toggle label="Enable Affiliate/Referral System" field="enable_affiliate" />
+                                    <Toggle label="Enable Live Chat Support" field="enable_live_chat" />
+
+                                    {/* Order State Labels */}
+                                    <div className="col-span-full mt-6 mb-4"><h3 className="font-semibold text-gray-800 border-b pb-2">Order State Terminology</h3></div>
+                                    <InputField label="Pending State Label" field="order_label_pending" placeholder="Pending" />
+                                    <InputField label="Shipped State Label" field="order_label_shipped" placeholder="Shipped" />
+                                    <InputField label="Delivered State Label" field="order_label_delivered" placeholder="Delivered" />
+                                    <InputField label="Cancelled State Label" field="order_label_cancelled" placeholder="Cancelled" />
+                                    
+                                    <div className="col-span-full mt-2"><InputField type="number" label="Max Product Images per Upload" field="max_product_images" /></div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 8. ADVANCED */}
+                        {activeTab === 'advanced' && (
+                            <div className="animate-fade-in">
+                                <h2 className="text-xl font-bold text-gray-900 mb-6 border-b pb-2">Advanced Systems</h2>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
+                                    {/* AI Keys */}
+                                    <InputField type="password" label="Google Gemini API Key" field="gemini_api_key" hint="Used for generative AI features." />
+                                    <InputField type="password" label="OpenAI API Key" field="openai_api_key" />
+
+                                    {/* Document Links */}
+                                    <div className="col-span-full mt-4"></div>
+                                    <InputField label="Privacy Policy Document URL" field="privacy_policy_url" />
+                                    <InputField label="Terms & Conditions Document URL" field="terms_url" />
+
+                                    {/* Global Announcement */}
+                                    <div className="col-span-full mt-6 mb-4"><h3 className="font-semibold text-gray-800 border-b pb-2">Global Announcement Banner</h3></div>
+                                    <div className="col-span-full">
+                                        <Toggle label="Activate Announcement Banner" field="announcement_active" />
+                                    </div>
+                                    <div className="col-span-full w-full">
+                                        <InputField label="Announcement Banner Text" field="announcement_text" placeholder="e.g. Scheduled maintenance this weekend." />
+                                    </div>
+                                    <InputField label="Banner Background Color" field="announcement_color" placeholder="#EA580C" />
+                                    
+                                    {/* Watermark */}
+                                    <div className="col-span-full mt-6 mb-4"><h3 className="font-semibold text-gray-800 border-b pb-2">Media Processing</h3></div>
+                                    <Toggle label="Apply Text Watermark on Image Uploads" field="enable_watermark" />
+                                    <InputField label="Watermark Text Content" field="watermark_text" />
+                                </div>
+                            </div>
+                        )}
+
+                    </div>
+                </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Contact Phone</label>
-              <input
-                type="text"
-                value={generalSettings.sitePhone}
-                onChange={(e) => setGeneralSettings({ ...generalSettings, sitePhone: e.target.value })}
-                className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Currency</label>
-              <select
-                value={generalSettings.currency}
-                onChange={(e) => setGeneralSettings({ ...generalSettings, currency: e.target.value })}
-                className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
-              >
-                <option value="NGN">Nigerian Naira (₦)</option>
-                <option value="USD">US Dollar ($)</option>
-                <option value="EUR">Euro (€)</option>
-                <option value="GBP">British Pound (£)</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Timezone</label>
-              <select
-                value={generalSettings.timezone}
-                onChange={(e) => setGeneralSettings({ ...generalSettings, timezone: e.target.value })}
-                className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
-              >
-                <option value="Africa/Lagos">Africa/Lagos (WAT)</option>
-                <option value="UTC">UTC</option>
-                <option value="America/New_York">America/New York (EST)</option>
-              </select>
-            </div>
-            <div className="flex items-center gap-3 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-              <input
-                type="checkbox"
-                checked={generalSettings.maintenanceMode}
-                onChange={(e) => setGeneralSettings({ ...generalSettings, maintenanceMode: e.target.checked })}
-                className="w-5 h-5"
-              />
-              <div>
-                <label className="font-medium">Maintenance Mode</label>
-                <p className="text-sm text-gray-600">Enable to temporarily disable the site for maintenance</p>
-              </div>
-            </div>
-            <button
-              onClick={() => saveSettings('general', generalSettings)}
-              disabled={saving}
-              className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-            >
-              {saving ? 'Saving...' : 'Save General Settings'}
-            </button>
-          </div>
         </div>
-      )}
-
-      {/* Payment Settings */}
-      {activeTab === 'payment' && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h2 className="text-xl font-bold mb-4">Payment Settings</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Platform Commission (%)</label>
-              <input
-                type="number"
-                value={paymentSettings.platformCommission}
-                onChange={(e) => setPaymentSettings({ ...paymentSettings, platformCommission: parseFloat(e.target.value) })}
-                className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
-                min="0"
-                max="100"
-              />
-              <p className="text-sm text-gray-600 mt-1">Percentage taken from each sale</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Minimum Payout Amount (₦)</label>
-              <input
-                type="number"
-                value={paymentSettings.minimumPayout}
-                onChange={(e) => setPaymentSettings({ ...paymentSettings, minimumPayout: parseFloat(e.target.value) })}
-                className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Payout Schedule</label>
-              <select
-                value={paymentSettings.payoutSchedule}
-                onChange={(e) => setPaymentSettings({ ...paymentSettings, payoutSchedule: e.target.value })}
-                className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
-              >
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="biweekly">Bi-weekly</option>
-                <option value="monthly">Monthly</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Tax Rate (%)</label>
-              <input
-                type="number"
-                value={paymentSettings.taxRate}
-                onChange={(e) => setPaymentSettings({ ...paymentSettings, taxRate: parseFloat(e.target.value) })}
-                className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
-                min="0"
-                max="100"
-              />
-            </div>
-            <div className="space-y-3 border-t pt-4">
-              <p className="font-medium">Payment Methods</p>
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={paymentSettings.enableCOD}
-                  onChange={(e) => setPaymentSettings({ ...paymentSettings, enableCOD: e.target.checked })}
-                  className="w-5 h-5"
-                />
-                <label>Enable Cash on Delivery</label>
-              </div>
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={paymentSettings.enableCardPayment}
-                  onChange={(e) => setPaymentSettings({ ...paymentSettings, enableCardPayment: e.target.checked })}
-                  className="w-5 h-5"
-                />
-                <label>Enable Card Payment</label>
-              </div>
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={paymentSettings.enableBankTransfer}
-                  onChange={(e) => setPaymentSettings({ ...paymentSettings, enableBankTransfer: e.target.checked })}
-                  className="w-5 h-5"
-                />
-                <label>Enable Bank Transfer</label>
-              </div>
-
-              <div className="pt-4 border-t mt-4">
-                <label className="block text-sm font-bold text-blue-600 mb-2 flex items-center gap-2">
-                  🛡️ Paystack Public Key (Secured)
-                </label>
-                <input
-                  type="password"
-                  value={paystackPublicKey}
-                  onChange={(e) => setPaystackPublicKey(e.target.value)}
-                  placeholder="pk_test_..."
-                  className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 font-mono text-sm"
-                />
-                <p className="text-xs text-gray-500 mt-1 italic">Duk sanda ka sauya wannan key din, zaka ga canjin na aiki a Mobile App nan take.</p>
-              </div>
-            </div>
-            <button
-              onClick={() => saveSettings('payment', paymentSettings)}
-              disabled={saving}
-              className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-            >
-              {saving ? 'Saving...' : 'Save Payment Settings'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Shipping Settings */}
-      {activeTab === 'shipping' && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h2 className="text-xl font-bold mb-4">Shipping Settings</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Default Shipping Fee (₦)</label>
-              <input
-                type="number"
-                value={shippingSettings.defaultShippingFee}
-                onChange={(e) => setShippingSettings({ ...shippingSettings, defaultShippingFee: parseFloat(e.target.value) })}
-                className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Free Shipping Threshold (₦)</label>
-              <input
-                type="number"
-                value={shippingSettings.freeShippingThreshold}
-                onChange={(e) => setShippingSettings({ ...shippingSettings, freeShippingThreshold: parseFloat(e.target.value) })}
-                className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
-              />
-              <p className="text-sm text-gray-600 mt-1">Orders above this amount get free shipping</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Maximum Delivery Days</label>
-              <input
-                type="number"
-                value={shippingSettings.maxDeliveryDays}
-                onChange={(e) => setShippingSettings({ ...shippingSettings, maxDeliveryDays: parseInt(e.target.value) })}
-                className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                checked={shippingSettings.enableLocalPickup}
-                onChange={(e) => setShippingSettings({ ...shippingSettings, enableLocalPickup: e.target.checked })}
-                className="w-5 h-5"
-              />
-              <label>Enable Local Pickup Option</label>
-            </div>
-            <button
-              onClick={() => saveSettings('shipping', shippingSettings)}
-              disabled={saving}
-              className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-            >
-              {saving ? 'Saving...' : 'Save Shipping Settings'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Notification Settings */}
-      {activeTab === 'notifications' && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h2 className="text-xl font-bold mb-4">Notification Settings</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Admin Email</label>
-              <input
-                type="email"
-                value={notificationSettings.adminEmail}
-                onChange={(e) => setNotificationSettings({ ...notificationSettings, adminEmail: e.target.value })}
-                className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
-              />
-            </div>
-            <div className="space-y-3 border-t pt-4">
-              <p className="font-medium">Notification Channels</p>
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={notificationSettings.emailNotifications}
-                  onChange={(e) => setNotificationSettings({ ...notificationSettings, emailNotifications: e.target.checked })}
-                  className="w-5 h-5"
-                />
-                <label>Email Notifications</label>
-              </div>
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={notificationSettings.smsNotifications}
-                  onChange={(e) => setNotificationSettings({ ...notificationSettings, smsNotifications: e.target.checked })}
-                  className="w-5 h-5"
-                />
-                <label>SMS Notifications</label>
-              </div>
-            </div>
-            <div className="space-y-3 border-t pt-4">
-              <p className="font-medium">Notification Types</p>
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={notificationSettings.orderNotifications}
-                  onChange={(e) => setNotificationSettings({ ...notificationSettings, orderNotifications: e.target.checked })}
-                  className="w-5 h-5"
-                />
-                <label>Order Notifications</label>
-              </div>
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={notificationSettings.productNotifications}
-                  onChange={(e) => setNotificationSettings({ ...notificationSettings, productNotifications: e.target.checked })}
-                  className="w-5 h-5"
-                />
-                <label>Product Notifications</label>
-              </div>
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={notificationSettings.paymentNotifications}
-                  onChange={(e) => setNotificationSettings({ ...notificationSettings, paymentNotifications: e.target.checked })}
-                  className="w-5 h-5"
-                />
-                <label>Payment Notifications</label>
-              </div>
-            </div>
-            <button
-              onClick={() => saveSettings('notification', notificationSettings)}
-              disabled={saving}
-              className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-            >
-              {saving ? 'Saving...' : 'Save Notification Settings'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Security Settings */}
-      {activeTab === 'security' && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h2 className="text-xl font-bold mb-4">Security Settings</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Session Timeout (seconds)</label>
-              <input
-                type="number"
-                value={securitySettings.sessionTimeout}
-                onChange={(e) => setSecuritySettings({ ...securitySettings, sessionTimeout: parseInt(e.target.value) })}
-                className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Max Login Attempts</label>
-              <input
-                type="number"
-                value={securitySettings.maxLoginAttempts}
-                onChange={(e) => setSecuritySettings({ ...securitySettings, maxLoginAttempts: parseInt(e.target.value) })}
-                className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
-              />
-            </div>
-            <div className="space-y-3 border-t pt-4">
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={securitySettings.requireEmailVerification}
-                  onChange={(e) => setSecuritySettings({ ...securitySettings, requireEmailVerification: e.target.checked })}
-                  className="w-5 h-5"
-                />
-                <label>Require Email Verification</label>
-              </div>
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={securitySettings.requirePhoneVerification}
-                  onChange={(e) => setSecuritySettings({ ...securitySettings, requirePhoneVerification: e.target.checked })}
-                  className="w-5 h-5"
-                />
-                <label>Require Phone Verification</label>
-              </div>
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={securitySettings.enableTwoFactor}
-                  onChange={(e) => setSecuritySettings({ ...securitySettings, enableTwoFactor: e.target.checked })}
-                  className="w-5 h-5"
-                />
-                <label>Enable Two-Factor Authentication</label>
-              </div>
-            </div>
-            <button
-              onClick={() => saveSettings('security', securitySettings)}
-              disabled={saving}
-              className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-            >
-              {saving ? 'Saving...' : 'Save Security Settings'}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+    );
 };
 
 export default AdminSettings;

@@ -99,3 +99,50 @@ export const AppSettingsProvider = ({ children }) => {
 };
 
 export const useAppSettings = () => useContext(AppSettingsContext);
+
+// ─── useBrandTheme ────────────────────────────────────────────────────────────
+// Returns live brand colors sourced from admin settings.
+// Usage: const { primary, secondary, primaryLight, primaryBg, onPrimary } = useBrandTheme();
+export const useBrandTheme = () => {
+    const { settings } = useContext(AppSettingsContext);
+
+    const primary   = settings?.primary_color   || '#0F172A';
+    const secondary = settings?.secondary_color || '#3B82F6';
+
+    // Derive a readable foreground colour (white vs black) by checking perceived luminance
+    const hexToRgb = (hex) => {
+        const h = hex.replace('#', '');
+        return {
+            r: parseInt(h.substring(0, 2), 16),
+            g: parseInt(h.substring(2, 4), 16),
+            b: parseInt(h.substring(4, 6), 16),
+        };
+    };
+
+    const luminance = (hex) => {
+        try {
+            const { r, g, b } = hexToRgb(hex);
+            return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        } catch { return 0; }
+    };
+
+    const onPrimary   = luminance(primary)   > 0.55 ? '#0F172A' : '#FFFFFF';
+    const onSecondary = luminance(secondary) > 0.55 ? '#0F172A' : '#FFFFFF';
+
+    // Light backgrounds (for chips, badges, tinted rows)
+    const primaryBg    = primary + '15';    // 9% opacity overlay
+    const primaryLight = primary + '30';    // 19% opacity
+    const secondaryBg  = secondary + '15';
+    const secondaryLight = secondary + '30';
+
+    return {
+        primary,
+        secondary,
+        onPrimary,
+        onSecondary,
+        primaryBg,
+        primaryLight,
+        secondaryBg,
+        secondaryLight,
+    };
+};

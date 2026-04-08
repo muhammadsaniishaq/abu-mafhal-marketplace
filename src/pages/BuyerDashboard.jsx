@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { supabase } from '../config/supabase';
 
 const BuyerDashboard = () => {
   const { currentUser, logout } = useAuth();
@@ -17,12 +16,18 @@ const BuyerDashboard = () => {
   const checkVendorApplicationStatus = async () => {
     if (currentUser?.role === 'buyer') {
       try {
-        const appDoc = await getDoc(doc(db, 'vendorApplications', currentUser.uid));
-        if (appDoc.exists()) {
-          setVendorApplicationStatus(appDoc.data().status);
-        }
+        const { data, error } = await supabase
+          .from('vendor_applications')
+          .select('status')
+          .eq('user_id', currentUser.id || currentUser.uid)
+          .order('submitted_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (error) throw error;
+        if (data) setVendorApplicationStatus(data.status);
       } catch (error) {
-        console.error('Error checking vendor application:', error);
+        console.error('Error checking vendor application:', error.message);
       }
     }
   };

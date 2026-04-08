@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, addDoc, deleteDoc, doc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -19,22 +18,24 @@ const AddToWishlistButton = ({ product }) => {
 
   const checkWishlistStatus = async () => {
     try {
-      const q = query(
-        collection(db, 'wishlists'),
-        where('userId', '==', currentUser.uid),
-        where('productId', '==', product.id)
-      );
-      const snapshot = await getDocs(q);
+      const { data, error } = await supabase
+        .from('wishlists')
+        .select('id')
+        .eq('user_id', currentUser.id || currentUser.uid)
+        .eq('product_id', product.id || product.product_id)
+        .maybeSingle();
       
-      if (!snapshot.empty) {
+      if (error && error.code !== 'PGRST116') throw error;
+      
+      if (data) {
         setIsInWishlist(true);
-        setWishlistId(snapshot.docs[0].id);
+        setWishlistId(data.id);
       } else {
         setIsInWishlist(false);
         setWishlistId(null);
       }
     } catch (error) {
-      console.error('Error checking wishlist:', error);
+      console.error('Error checking wishlist:', error.message);
     }
   };
 
@@ -48,20 +49,31 @@ const AddToWishlistButton = ({ product }) => {
 
     try {
       if (isInWishlist && wishlistId) {
-        await deleteDoc(doc(db, 'wishlists', wishlistId));
+        const { error } = await supabase
+          .from('wishlists')
+          .delete()
+          .eq('id', wishlistId);
+          
+        if (error) throw error;
         setIsInWishlist(false);
         setWishlistId(null);
       } else {
-        const docRef = await addDoc(collection(db, 'wishlists'), {
-          userId: currentUser.uid,
-          productId: product.id,
-          createdAt: new Date().toISOString()
-        });
+        const { data, error } = await supabase
+          .from('wishlists')
+          .insert([{
+            user_id: currentUser.id || currentUser.uid,
+            product_id: product.id || product.product_id,
+            created_at: new Date().toISOString()
+          }])
+          .select('id')
+          .single();
+          
+        if (error) throw error;
         setIsInWishlist(true);
-        setWishlistId(docRef.id);
+        setWishlistId(data.id);
       }
     } catch (error) {
-      console.error('Error toggling wishlist:', error);
+      console.error('Error toggling wishlist:', error.message);
       alert('Failed to update wishlist');
     } finally {
       setLoading(false);

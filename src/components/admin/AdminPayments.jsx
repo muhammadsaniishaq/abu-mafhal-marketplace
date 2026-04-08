@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 
 const AdminPayments = () => {
   const [payments, setPayments] = useState([]);
@@ -14,16 +13,21 @@ const AdminPayments = () => {
 
   const fetchPayments = async () => {
     try {
-      const ordersSnapshot = await getDocs(collection(db, 'orders'));
-      const paymentsData = ordersSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        paymentStatus: doc.data().status === 'delivered' ? 'completed' : 
-                       doc.data().status === 'cancelled' ? 'refunded' : 'pending'
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const paymentsData = (data || []).map(order => ({
+        ...order,
+        paymentStatus: order.status === 'delivered' ? 'completed' : 
+                       order.status === 'cancelled' ? 'refunded' : 'pending'
       }));
       setPayments(paymentsData);
     } catch (error) {
-      console.error('Error fetching payments:', error);
+      console.error('Error fetching payments:', error.message);
     } finally {
       setLoading(false);
     }
@@ -32,7 +36,7 @@ const AdminPayments = () => {
   const filterByDate = (payment) => {
     if (dateRange === 'all') return true;
     
-    const paymentDate = new Date(payment.createdAt);
+    const paymentDate = new Date(payment.created_at);
     const now = new Date();
     
     switch (dateRange) {
@@ -159,11 +163,11 @@ const AdminPayments = () => {
               <tr key={payment.id} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-900">
                 <td className="py-3 px-4 font-mono text-sm">#{payment.id.substring(0, 8)}</td>
                 <td className="py-3 px-4">
-                  <p className="font-medium">{payment.userName}</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">{payment.userEmail}</p>
+                  <p className="font-medium">{payment.user_name || payment.userName || payment.customer_name}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">{payment.user_email || payment.userEmail}</p>
                 </td>
                 <td className="py-3 px-4 capitalize">
-                  {payment.paymentMethod || 'Card'}
+                  {payment.payment_method || payment.paymentMethod || 'Card'}
                 </td>
                 <td className="py-3 px-4 font-bold text-lg">
                   ₦{payment.total?.toLocaleString()}
@@ -172,10 +176,10 @@ const AdminPayments = () => {
                   ₦{((payment.total || 0) * 0.10).toLocaleString()}
                 </td>
                 <td className="py-3 px-4 text-sm">
-                  {new Date(payment.createdAt).toLocaleDateString()}
+                  {new Date(payment.created_at || payment.createdAt).toLocaleDateString()}
                   <br />
                   <span className="text-xs text-gray-500">
-                    {new Date(payment.createdAt).toLocaleTimeString()}
+                    {new Date(payment.created_at || payment.createdAt).toLocaleTimeString()}
                   </span>
                 </td>
                 <td className="py-3 px-4">

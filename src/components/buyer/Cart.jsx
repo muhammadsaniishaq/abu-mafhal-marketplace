@@ -4,8 +4,8 @@ import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import { saveAbandonedCart, deleteAbandonedCart } from '../../services/cartRecoveryService';
 import { getLoyaltyAccount, pointsToDiscount, redeemPoints } from '../../services/loyaltyService';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
+
 
 const Cart = () => {
   const navigate = useNavigate();
@@ -57,15 +57,15 @@ const Cart = () => {
 
   const fetchCoupons = async () => {
     try {
-      const q = query(
-        collection(db, 'coupons'),
-        where('active', '==', true)
-      );
-      const snapshot = await getDocs(q);
-      const couponsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setCoupons(couponsData);
+      const { data, error } = await supabase
+        .from('coupons')
+        .select('*')
+        .eq('active', true);
+        
+      if (error) throw error;
+      setCoupons(data || []);
     } catch (error) {
-      console.error('Error fetching coupons:', error);
+      console.error('Error fetching coupons:', error.message);
     }
   };
 
@@ -78,8 +78,8 @@ const Cart = () => {
     const coupon = coupons.find(c => 
       c.code.toUpperCase() === couponCode.toUpperCase() &&
       c.active &&
-      new Date(c.expiryDate) > new Date() &&
-      (!c.usageLimit || c.usedCount < c.usageLimit)
+      new Date(c.expiry_date || c.expiryDate) > new Date() &&
+      (!(c.usage_limit || c.usageLimit) || (c.used_count || c.usedCount || 0) < (c.usage_limit || c.usageLimit))
     );
 
     if (!coupon) {
@@ -87,13 +87,15 @@ const Cart = () => {
       return;
     }
 
-    if (coupon.minPurchase > subtotal) {
-      alert(`Minimum purchase of ₦${coupon.minPurchase.toLocaleString()} required`);
+    const minPurchase = coupon.min_purchase || coupon.minPurchase || 0;
+    if (minPurchase > subtotal) {
+      alert(`Minimum purchase of ₦${minPurchase.toLocaleString()} required`);
       return;
     }
 
     setAppliedCoupon(coupon);
     alert(`Coupon applied! You saved ₦${calculateCouponDiscount(coupon).toLocaleString()}`);
+
   };
 
   const removeCoupon = () => {
@@ -107,8 +109,9 @@ const Cart = () => {
     let discount = 0;
     if (coupon.type === 'percentage') {
       discount = (subtotal * coupon.value) / 100;
-      if (coupon.maxDiscount > 0) {
-        discount = Math.min(discount, coupon.maxDiscount);
+      const maxDiscount = coupon.max_discount || coupon.maxDiscount || 0;
+      if (maxDiscount > 0) {
+        discount = Math.min(discount, maxDiscount);
       }
     } else {
       discount = coupon.value;

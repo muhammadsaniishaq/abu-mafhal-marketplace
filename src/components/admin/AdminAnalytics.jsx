@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 
 const AdminAnalytics = () => {
   const [loading, setLoading] = useState(true);
@@ -31,51 +30,60 @@ const AdminAnalytics = () => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      // Fetch Orders
-      const ordersSnap = await getDocs(collection(db, 'orders'));
-      const orders = ordersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      
-      const totalRevenue = orders.reduce((sum, order) => sum + (order.total || 0), 0);
-      const todayOrders = orders.filter(order => new Date(order.createdAt) >= today);
-      const todayRevenue = todayOrders.reduce((sum, order) => sum + (order.total || 0), 0);
-      const pendingOrders = orders.filter(order => order.status === 'pending').length;
+      // 1. Fetch Orders (Supabase)
+      const { data: orders, error: ordersError } = await supabase
+        .from('orders')
+        .select('*');
+      if (ordersError) throw ordersError;
 
-      // Fetch Products
-      const productsSnap = await getDocs(collection(db, 'products'));
-      const products = productsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const pendingProducts = products.filter(p => p.status === 'pending').length;
+      const totalRevenue = orders.reduce((sum, order) => sum + (order.total_amount || 0), 0);
+      const todayOrders = orders.filter(order => new Date(order.created_at) >= today);
+      const todayRevenue = todayOrders.reduce((sum, order) => sum + (order.total_amount || 0), 0);
+      const pendingOrdersCount = orders.filter(order => order.status === 'pending').length;
+
+      // 2. Fetch Products (Supabase)
+      const { data: products, error: productsError } = await supabase
+        .from('products')
+        .select('*');
+      if (productsError) throw productsError;
+      const pendingProductsCount = products.filter(p => !p.is_approved).length;
 
       // Top selling products
-      const topProducts = products
-        .sort((a, b) => (b.sales || 0) - (a.sales || 0))
+      const topProductsData = products
+        .sort((a, b) => (b.sales_count || 0) - (a.sales_count || 0))
         .slice(0, 5);
 
-      // Fetch Users
-      const usersSnap = await getDocs(collection(db, 'users'));
-      const users = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // 3. Fetch Users (Profiles from Supabase)
+      const { data: users, error: usersError } = await supabase
+        .from('profiles')
+        .select('*');
+      if (usersError) throw usersError;
       const vendors = users.filter(u => u.role === 'vendor');
       
       // Recent users (last 7 days)
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
-      const recentUsers = users
-        .filter(u => u.createdAt && new Date(u.createdAt) >= weekAgo)
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      const recentUsersData = users
+        .filter(u => u.created_at && new Date(u.created_at) >= weekAgo)
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
         .slice(0, 5);
 
-      // Fetch Vendor Applications
-      const appsSnap = await getDocs(collection(db, 'vendorApplications'));
-      const applications = appsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const pendingApps = applications.filter(app => app.status === 'pending').length;
+      // 4. Fetch Vendor Applications (Supabase table: vendor_applications)
+      const { data: applications, error: appsError } = await supabase
+        .from('vendor_applications')
+        .select('*');
+      // Note: If table doesn't exist yet, we fail gracefully
+      const pendingAppsCount = appsError ? 0 : applications.filter(app => app.status === 'pending').length;
 
-      // Fetch Disputes
-      const disputesSnap = await getDocs(collection(db, 'disputes'));
-      const disputes = disputesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const activeDisputes = disputes.filter(d => d.status === 'open').length;
+      // 5. Fetch Disputes (Supabase)
+      const { data: disputes, error: disputesError } = await supabase
+        .from('disputes')
+        .select('*');
+      const activeDisputesCount = disputesError ? 0 : disputes.filter(d => d.status === 'open').length;
 
       // Recent orders
-      const recentOrders = orders
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      const recentOrdersData = orders
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
         .slice(0, 5);
 
       setStats({
@@ -84,20 +92,20 @@ const AdminAnalytics = () => {
         totalProducts: products.length,
         totalUsers: users.length,
         totalVendors: vendors.length,
-        pendingOrders,
-        pendingProducts,
-        pendingVendorApps: pendingApps,
+        pendingOrders: pendingOrdersCount,
+        pendingProducts: pendingProductsCount,
+        pendingVendorApps: pendingAppsCount,
         todayRevenue,
         todayOrders: todayOrders.length,
-        activeDisputes
+        activeDisputes: activeDisputesCount
       });
 
-      setRecentOrders(recentOrders);
-      setTopProducts(topProducts);
-      setRecentUsers(recentUsers);
+      setRecentOrders(recentOrdersData);
+      setTopProducts(topProductsData);
+      setRecentUsers(recentUsersData);
 
     } catch (error) {
-      console.error('Error fetching analytics:', error);
+      console.error('Error fetching analytics:', error.message);
     } finally {
       setLoading(false);
     }
@@ -219,13 +227,15 @@ const AdminAnalytics = () => {
                     <p className="text-sm text-gray-600 dark:text-gray-400">{order.userName}</p>
                   </div>
                   <div className="text-right">
-                    <p className="font-bold text-green-600">₦{order.total?.toLocaleString()}</p>
+                    <p className="font-bold text-green-600">₦{order.total_amount?.toLocaleString()}</p>
                     <span className={`text-xs px-2 py-1 rounded-full ${
-                      order.status === 'delivered' ? 'bg-green-100 text-green-800' :
-                      order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-blue-100 text-blue-800'
+                      typeof order.status === 'string' 
+                        ? (order.status === 'delivered' ? 'bg-green-100 text-green-800' :
+                           order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                           'bg-blue-100 text-blue-800')
+                        : 'bg-gray-100 text-gray-800'
                     }`}>
-                      {order.status}
+                      {typeof order.status === 'string' ? order.status : (order.status?.status || 'Processing')}
                     </span>
                   </div>
                 </div>
@@ -280,7 +290,7 @@ const AdminAnalytics = () => {
               <tbody>
                 {recentUsers.map(user => (
                   <tr key={user.id} className="border-b dark:border-gray-700">
-                    <td className="py-3 px-4 font-medium">{user.name}</td>
+                    <td className="py-3 px-4 font-medium">{user.full_name || user.name}</td>
                     <td className="py-3 px-4 text-sm">{user.email}</td>
                     <td className="py-3 px-4">
                       <span className={`text-xs px-2 py-1 rounded-full capitalize ${
@@ -292,7 +302,7 @@ const AdminAnalytics = () => {
                       </span>
                     </td>
                     <td className="py-3 px-4 text-sm">
-                      {new Date(user.createdAt).toLocaleDateString()}
+                      {new Date(user.created_at || user.createdAt).toLocaleDateString()}
                     </td>
                   </tr>
                 ))}

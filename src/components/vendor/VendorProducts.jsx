@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, query, where, deleteDoc, doc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { Link } from 'react-router-dom';
 
@@ -11,17 +10,23 @@ const VendorProducts = () => {
   const [filter, setFilter] = useState('all');
 
   useEffect(() => {
-    fetchProducts();
+    if (currentUser?.uid) {
+      fetchProducts();
+    }
   }, [currentUser]);
 
   const fetchProducts = async () => {
     try {
-      const q = query(collection(db, 'products'), where('vendorId', '==', currentUser.uid));
-      const snapshot = await getDocs(q);
-      const productsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setProducts(productsData);
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('vendor_id', currentUser.uid)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setProducts(data || []);
     } catch (error) {
-      console.error('Error fetching products:', error);
+      console.error('Error fetching products:', error.message);
     } finally {
       setLoading(false);
     }
@@ -30,11 +35,16 @@ const VendorProducts = () => {
   const handleDelete = async (productId) => {
     if (window.confirm('Are you sure you want to delete this product?')) {
       try {
-        await deleteDoc(doc(db, 'products', productId));
+        const { error } = await supabase
+          .from('products')
+          .delete()
+          .eq('id', productId);
+        
+        if (error) throw error;
         setProducts(products.filter(p => p.id !== productId));
         alert('Product deleted successfully');
       } catch (error) {
-        console.error('Error deleting product:', error);
+        console.error('Error deleting product:', error.message);
         alert('Failed to delete product');
       }
     }

@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { doc, updateDoc, getDoc } from 'firebase/firestore';
-import { updatePassword, updateEmail } from 'firebase/auth';
-import { db, auth } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 
 const BuyerSettings = () => {
   const { currentUser, logout } = useAuth();
@@ -41,12 +39,19 @@ const BuyerSettings = () => {
 
   const fetchUserSettings = async () => {
     try {
-      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-      if (userDoc.exists() && userDoc.data().settings) {
-        setSettings(userDoc.data().settings);
+      const { data: userData, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', currentUser.id || currentUser.uid)
+        .single();
+        
+      if (error && error.code !== 'PGRST116') throw error;
+      
+      if (userData && userData.settings) {
+        setSettings(userData.settings);
       }
     } catch (error) {
-      console.error('Error fetching settings:', error);
+      console.error('Error fetching settings:', error.message);
     }
   };
 
@@ -54,12 +59,18 @@ const BuyerSettings = () => {
     setLoading(true);
     setMessage({ type: '', text: '' });
     try {
-      await updateDoc(doc(db, 'users', currentUser.uid), {
-        settings: settings,
-        updatedAt: new Date().toISOString()
-      });
+      const { error } = await supabase
+        .from('users')
+        .update({
+          settings: settings,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', currentUser.id || currentUser.uid);
+        
+      if (error) throw error;
       setMessage({ type: 'success', text: 'Settings saved successfully!' });
     } catch (error) {
+      console.error('Error saving settings:', error.message);
       setMessage({ type: 'error', text: 'Failed to save settings' });
     } finally {
       setLoading(false);
@@ -79,7 +90,9 @@ const BuyerSettings = () => {
     
     setLoading(true);
     try {
-      await updatePassword(auth.currentUser, passwordData.newPassword);
+      const { error } = await supabase.auth.updateUser({ password: passwordData.newPassword });
+      if (error) throw error;
+      
       setMessage({ type: 'success', text: 'Password changed successfully!' });
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (error) {
@@ -92,12 +105,18 @@ const BuyerSettings = () => {
   const handleDeleteAccount = async () => {
     if (window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
       try {
-        await updateDoc(doc(db, 'users', currentUser.uid), {
-          status: 'deleted',
-          deletedAt: new Date().toISOString()
-        });
+        const { error } = await supabase
+          .from('users')
+          .update({
+            status: 'deleted',
+            deleted_at: new Date().toISOString()
+          })
+          .eq('id', currentUser.id || currentUser.uid);
+          
+        if (error) throw error;
         await logout();
       } catch (error) {
+        console.error('Error deleting account:', error.message);
         setMessage({ type: 'error', text: 'Failed to delete account' });
       }
     }

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { addDisputeMessage } from '../../services/disputeService';
 
@@ -19,16 +18,17 @@ const VendorDisputes = () => {
 
   const fetchDisputes = async () => {
     try {
-      const q = query(
-        collection(db, 'disputes'),
-        where('vendorId', '==', currentUser.uid)
-      );
-      const snapshot = await getDocs(q);
-      const disputesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      disputesData.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      setDisputes(disputesData);
+      const { data, error } = await supabase
+        .from('disputes')
+        .select('*')
+        .eq('vendor_id', currentUser.id || currentUser.uid)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      
+      setDisputes(data || []);
     } catch (error) {
-      console.error('Error fetching disputes:', error);
+      console.error('Error fetching disputes:', error.message);
     } finally {
       setLoading(false);
     }
@@ -37,12 +37,16 @@ const VendorDisputes = () => {
   const refreshSelectedDispute = async () => {
     if (!selectedDispute) return;
     try {
-      const disputeDoc = await getDoc(doc(db, 'disputes', selectedDispute.id));
-      if (disputeDoc.exists()) {
-        setSelectedDispute({ id: disputeDoc.id, ...disputeDoc.data() });
-      }
+      const { data, error } = await supabase
+        .from('disputes')
+        .select('*')
+        .eq('id', selectedDispute.id)
+        .single();
+        
+      if (error) throw error;
+      if (data) setSelectedDispute(data);
     } catch (error) {
-      console.error('Error refreshing dispute:', error);
+      console.error('Error refreshing dispute:', error.message);
     }
   };
 
@@ -141,7 +145,7 @@ const VendorDisputes = () => {
                     {dispute.subject}
                   </h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Dispute #{dispute.id.substring(0, 8)} • Order #{dispute.orderId?.substring(0, 8)}
+                    Dispute #{dispute.id.substring(0, 8)} • Order #{(dispute.order_id || dispute.orderId)?.substring(0, 8)}
                   </p>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
                     Category: <span className="capitalize">{dispute.category?.replace('_', ' ')}</span>
@@ -163,7 +167,7 @@ const VendorDisputes = () => {
 
               <div className="flex justify-between items-center">
                 <div className="text-sm text-gray-500">
-                  Filed on {new Date(dispute.createdAt).toLocaleDateString()} by {dispute.buyerName}
+                  Filed on {new Date(dispute.created_at || dispute.createdAt).toLocaleDateString()} by {dispute.buyer_name || dispute.buyerName}
                 </div>
                 <button
                   onClick={() => {
@@ -180,7 +184,7 @@ const VendorDisputes = () => {
                 <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border-l-4 border-green-500">
                   <p className="text-sm font-medium mb-1">Resolution:</p>
                   <p className="text-sm capitalize">
-                    Decided in favor of: {dispute.resolution.decision?.replace('_', ' ')}
+                    Decided in favor of: {dispute.resolution?.decision?.replace('_', ' ')}
                   </p>
                   {dispute.resolution.notes && (
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
@@ -221,8 +225,8 @@ const VendorDisputes = () => {
                 <div className="space-y-2 text-sm">
                   <p><span className="text-gray-600 dark:text-gray-400">Subject:</span> <span className="font-medium">{selectedDispute.subject}</span></p>
                   <p><span className="text-gray-600 dark:text-gray-400">Category:</span> <span className="font-medium capitalize">{selectedDispute.category?.replace('_', ' ')}</span></p>
-                  <p><span className="text-gray-600 dark:text-gray-400">Order Value:</span> <span className="font-medium">₦{selectedDispute.orderTotal?.toLocaleString()}</span></p>
-                  <p><span className="text-gray-600 dark:text-gray-400">Filed:</span> <span className="font-medium">{new Date(selectedDispute.createdAt).toLocaleString()}</span></p>
+                  <p><span className="text-gray-600 dark:text-gray-400">Order Value:</span> <span className="font-medium">₦{(selectedDispute.order_total || selectedDispute.orderTotal)?.toLocaleString()}</span></p>
+                  <p><span className="text-gray-600 dark:text-gray-400">Filed:</span> <span className="font-medium">{new Date(selectedDispute.created_at || selectedDispute.createdAt).toLocaleString()}</span></p>
                 </div>
               </div>
 
@@ -246,17 +250,17 @@ const VendorDisputes = () => {
                 <div className="border rounded-lg p-4 max-h-60 overflow-y-auto space-y-3">
                   {selectedDispute.messages && selectedDispute.messages.length > 0 ? (
                     selectedDispute.messages.map(msg => (
-                      <div key={msg.id} className={`p-3 rounded-lg ${
-                        msg.senderRole === 'admin' 
+                      <div key={msg.id || msg.timestamp} className={`p-3 rounded-lg ${
+                        (msg.sender_role || msg.senderRole) === 'admin' 
                           ? 'bg-blue-50 dark:bg-blue-900/20' 
-                          : msg.senderRole === 'vendor'
+                          : (msg.sender_role || msg.senderRole) === 'vendor'
                           ? 'bg-green-50 dark:bg-green-900/20 ml-4'
                           : 'bg-gray-50 dark:bg-gray-900 mr-4'
                       }`}>
                         <div className="flex justify-between items-start mb-1">
-                          <span className="text-xs font-medium capitalize">{msg.senderRole}</span>
+                          <span className="text-xs font-medium capitalize">{msg.sender_role || msg.senderRole}</span>
                           <span className="text-xs text-gray-500">
-                            {new Date(msg.timestamp).toLocaleString()}
+                            {new Date(msg.created_at || msg.timestamp).toLocaleString()}
                           </span>
                         </div>
                         <p className="text-sm">{msg.message}</p>
@@ -310,10 +314,10 @@ const VendorDisputes = () => {
                         {selectedDispute.resolution.decision?.replace('_', ' ')}
                       </span>
                     </p>
-                    {selectedDispute.resolution.refundAmount > 0 && (
+                    {(selectedDispute.resolution.refund_amount || selectedDispute.resolution.refundAmount) > 0 && (
                       <p className="text-sm mb-2">
                         <span className="font-medium">Refund Amount:</span> 
-                        <span className="ml-2">₦{selectedDispute.resolution.refundAmount?.toLocaleString()}</span>
+                        <span className="ml-2">₦{(selectedDispute.resolution.refund_amount || selectedDispute.resolution.refundAmount)?.toLocaleString()}</span>
                       </p>
                     )}
                     <p className="text-sm mb-2">
@@ -321,7 +325,7 @@ const VendorDisputes = () => {
                       <span className="ml-2">{selectedDispute.resolution.notes}</span>
                     </p>
                     <p className="text-xs text-gray-500 mt-3">
-                      Resolved on {new Date(selectedDispute.resolution.resolvedAt).toLocaleString()}
+                      Resolved on {new Date(selectedDispute.resolution.resolved_at || selectedDispute.resolution.resolvedAt).toLocaleString()}
                     </p>
                   </div>
                 </div>

@@ -17,8 +17,8 @@ import { InfoPage } from './InfoPage';
 import { ProductDetails } from './ProductDetails';
 import { ReferAndEarn } from './ReferAndEarn';
 import { AIAssistantModal } from '../components/AIAssistantModal';
-import { WalletPage } from './WalletPage';
 import { SupportPage } from './SupportPage';
+import { AboutPage } from './AboutPage';
 import { PAGE_CONTENT } from '../data/pageContent';
 import { supabase } from '../lib/supabase';
 
@@ -100,10 +100,11 @@ export const MainApp = ({ navigation, user, onLogout, cartLines, onUpdateQty, on
                 {(activeTab === 'referral' || activeTab === 'ReferAndEarn') && <ReferAndEarn user={user} onBack={() => setActiveTab('profile')} />}
                 {activeTab === 'wallet' && <WalletPage user={user} onBack={() => setActiveTab('profile')} />}
                 {activeTab === 'support' && <SupportPage user={user} onBack={() => setActiveTab('profile')} />}
+                {activeTab === 'about' && <AboutPage onBack={() => setActiveTab('profile')} />}
 
 
                 {/* Fallback for Footer Pages */}
-                {!['home', 'shop', 'cart', 'wishlist', 'profile', 'orders', 'settings', 'editProfile', 'changePassword', 'address', 'paymentMethods', 'notifications', 'productDetails', 'wallet', 'referral', 'ReferAndEarn', 'support'].includes(activeTab) && (
+                {!['home', 'shop', 'cart', 'wishlist', 'profile', 'orders', 'settings', 'editProfile', 'changePassword', 'address', 'paymentMethods', 'notifications', 'productDetails', 'wallet', 'referral', 'ReferAndEarn', 'support', 'about'].includes(activeTab) && (
                     <InfoPage
                         title={activeTab}
                         content={PAGE_CONTENT[activeTab] || `Content for ${activeTab} is coming soon.`}

@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { captureRef } from 'react-native-view-shot';
 
@@ -33,10 +33,10 @@ export const VendorCertificate = ({ user, vendorData, onBack }) => {
             if (Platform.OS === 'android' && FileSystem.StorageAccessFramework) {
                 const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
                 if (permissions.granted) {
-                    const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+                    const base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
                     await FileSystem.StorageAccessFramework.createFileAsync(permissions.directoryUri, 'vendor_certificate.png', 'image/png')
                         .then(async (uri) => {
-                            await FileSystem.writeAsStringAsync(uri, base64, { encoding: FileSystem.EncodingType.Base64 });
+                            await FileSystem.writeAsStringAsync(uri, base64, { encoding: 'base64' });
                             Alert.alert('Success', 'Certificate saved successfully!');
                         })
                         .catch(e => {

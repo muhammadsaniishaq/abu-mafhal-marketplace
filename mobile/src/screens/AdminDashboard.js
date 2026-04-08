@@ -50,6 +50,7 @@ export const AdminDashboard = ({ user, onLogout }) => {
     const [recentOrders, setRecentOrders] = useState([]);
     const [lowStock, setLowStock] = useState([]);
     const [recentReviews, setRecentReviews] = useState([]);
+    const [recentAudit, setRecentAudit] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -75,18 +76,21 @@ export const AdminDashboard = ({ user, onLogout }) => {
                 { data: applications },
                 { data: orders },
                 { data: stockData },
-                { data: reviewsData }
+                { data: reviewsData },
+                { data: auditData }
             ] = await Promise.all([
                 supabase.from('vendor_applications').select('*, profiles(email, full_name)').eq('status', 'pending').limit(10),
-                supabase.from('orders').select('*, user:profiles(full_name)').order('created_at', { ascending: false }).limit(5),
+                supabase.from('orders').select('*, profiles(full_name)').order('created_at', { ascending: false }).limit(5),
                 supabase.from('products').select('*').lt('stock_quantity', 10).eq('status', 'approved').limit(10),
-                supabase.from('reviews').select('*, user:profiles(full_name)').order('created_at', { ascending: false }).limit(3)
+                supabase.from('reviews').select('*, profiles(full_name)').order('created_at', { ascending: false }).limit(3),
+                supabase.from('audit_logs').select('*, profiles:user_id(full_name)').order('created_at', { ascending: false }).limit(3)
             ]);
 
             setPendingVendors(applications || []);
             setRecentOrders(orders || []);
             setLowStock(stockData || []);
             setRecentReviews(reviewsData || []);
+            setRecentAudit(auditData || []);
 
             setStats({
                 users: dashboardStats?.user_count || 0,
@@ -255,7 +259,7 @@ export const AdminDashboard = ({ user, onLogout }) => {
                             </View>
                             <View>
                                 <Text style={{ fontWeight: '700', color: '#0F172A' }}>#{order.id.slice(0, 6).toUpperCase()}</Text>
-                                <Text style={{ fontSize: 12, color: '#64748B' }}>{order.user?.full_name || 'Guest'}</Text>
+                                <Text style={{ fontSize: 12, color: '#64748B' }}>{order.profiles?.full_name || 'Guest'}</Text>
                             </View>
                         </View>
                         <View style={{ alignItems: 'flex-end' }}>
@@ -275,19 +279,20 @@ export const AdminDashboard = ({ user, onLogout }) => {
                     </TouchableOpacity>
                 </View>
                 {recentReviews.length > 0 ? recentReviews.map(r => (
-                    <View key={r.id} style={{ padding: 16, backgroundColor: 'white', borderRadius: 16, marginBottom: 10, borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', }}>
+                    <View key={r.id} style={{ padding: 16, backgroundColor: 'white', borderRadius: 16, marginBottom: 10, borderWidth: 1, borderColor: '#F1F5F9' }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                 <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B' }}>{r.user?.full_name?.[0] || '?'}</Text>
+                                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B' }}>{r.profiles?.full_name?.[0] || '?'}</Text>
                                 </View>
-                                <Text style={{ fontWeight: '700', fontSize: 13, color: '#0F172A' }}>{r.user?.full_name || 'Anonymous'}</Text>
+                                <Text style={{ fontWeight: '700', fontSize: 13, color: '#0F172A' }}>{r.profiles?.full_name || 'Anonymous'}</Text>
                             </View>
                             <View style={{ flexDirection: 'row', backgroundColor: '#FFFBEB', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
                                 <Ionicons name="star" color="#F59E0B" size={12} />
                                 <Text style={{ fontSize: 11, fontWeight: '700', color: '#B45309', marginLeft: 4 }}>{r.rating}.0</Text>
                             </View>
                         </View>
+                        {r.title ? <Text style={{ fontWeight: '700', fontSize: 13, color: '#1E293B', marginBottom: 2 }}>{r.title}</Text> : null}
                         <Text numberOfLines={2} style={{ fontSize: 13, color: '#475569', lineHeight: 18 }}>{r.comment}</Text>
                     </View>
                 )) : (
@@ -295,6 +300,35 @@ export const AdminDashboard = ({ user, onLogout }) => {
                         <Text style={{ color: '#94A3B8' }}>No recent reviews</Text>
                     </View>
                 )}
+            </View>
+
+            {/* LIVE PULSE / AUDIT LOGS */}
+            <View style={{ marginBottom: 24 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' }} />
+                        <Text style={styles.sectionTitle}>Ecosystem Pulse</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => setActiveTab('audit')}>
+                        <Text style={{ color: '#3B82F6', fontWeight: '600' }}>Live Feed</Text>
+                    </TouchableOpacity>
+                </View>
+                <View style={{ backgroundColor: '#0F172A', borderRadius: 24, padding: 20 }}>
+                    {recentAudit.length > 0 ? recentAudit.map((log, i) => (
+                        <View key={log.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: i === recentAudit.length - 1 ? 0 : 16 }}>
+                            <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' }}>
+                                <Ionicons name={log.action.includes('order') ? 'cart' : log.action.includes('vendor') ? 'storefront' : 'shield-checkmark'} size={16} color="#38BDF8" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ color: 'white', fontWeight: '800', fontSize: 13 }}>{log.action.replace(/_/g, ' ').toUpperCase()}</Text>
+                                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>{log.profiles?.full_name || 'System'} • {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={12} color="rgba(255,255,255,0.2)" />
+                        </View>
+                    )) : (
+                        <Text style={{ color: 'rgba(255,255,255,0.4)', textAlign: 'center', fontSize: 12 }}>No recent activity pulses detected.</Text>
+                    )}
+                </View>
             </View>
 
             {/* VENDOR REQUESTS */}

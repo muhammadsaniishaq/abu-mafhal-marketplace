@@ -42,6 +42,7 @@ export default function App() {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [cartLines, setCartLines] = useState([]);
+    const [lastHeartbeat, setLastHeartbeat] = useState(0);
 
     const CART_STORAGE_KEY = '@abumafhal_cart_v1';
 
@@ -65,6 +66,7 @@ export default function App() {
         };
 
         init();
+        logVisit(); // Initial visit log
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
             if (session?.user) {
@@ -76,6 +78,37 @@ export default function App() {
 
         return () => subscription.unsubscribe();
     }, []);
+
+    // Heartbeat logic to update last_seen and trigger "user_visit" audit
+    useEffect(() => {
+        if (!user) return;
+
+        const heartbeat = async () => {
+            const now = Date.now();
+            // Update last_seen if it's been more than 15 minutes since last heartbeat in this session
+            if (now - lastHeartbeat > 900000) {
+                try {
+                    await supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', user.id);
+                    setLastHeartbeat(now);
+                } catch (e) {
+                    console.error('Heartbeat failed:', e);
+                }
+            }
+        };
+
+        const interval = setInterval(heartbeat, 300000); // Check every 5 mins
+        heartbeat(); // Run immediately on login/mount
+
+        return () => clearInterval(interval);
+    }, [user, lastHeartbeat]);
+
+    const logVisit = async () => {
+        try {
+            await supabase.rpc('log_visit', { p_platform: 'mobile_app' });
+        } catch (e) {
+            console.error('Visit log failed:', e);
+        }
+    };
 
     // Save cart whenever it changes
     useEffect(() => {

@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useNavigate, useParams } from 'react-router-dom';
 
 const EditProduct = () => {
@@ -38,35 +36,43 @@ const EditProduct = () => {
   const categories = ['Electronics', 'Fashion', 'Home', 'Sports', 'Books', 'Beauty', 'Toys', 'Food', 'Other'];
 
   useEffect(() => {
-    fetchProduct();
+    if (id) {
+        fetchProduct();
+    }
   }, [id]);
 
   const fetchProduct = async () => {
     try {
-      const productDoc = await getDoc(doc(db, 'products', id));
-      if (productDoc.exists()) {
-        const data = productDoc.data();
+      const { data, error: fetchError } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      if (data) {
         setProductData({
           name: data.name || '',
           description: data.description || '',
           category: data.category || '',
           price: data.price?.toString() || '',
-          originalPrice: data.originalPrice?.toString() || '',
+          originalPrice: (data.original_price || data.originalPrice)?.toString() || '',
           stock: data.stock?.toString() || '',
           sku: data.sku || '',
           brand: data.brand || '',
-          weight: data.weight || '',
+          weight: data.weight?.toString() || '',
           dimensions: data.dimensions || '',
           discount: data.discount?.toString() || '',
           keywords: data.keywords?.join(', ') || '',
-          shippingInfo: data.shippingInfo || '',
-          returnPolicy: data.returnPolicy || '',
-          affiliateLink: data.affiliateLink || ''
+          shippingInfo: (data.shipping_info || data.shippingInfo) || '',
+          returnPolicy: (data.return_policy || data.returnPolicy) || '',
+          affiliateLink: (data.affiliate_link || data.affiliateLink) || ''
         });
         setExistingImages(data.images || []);
       }
     } catch (error) {
-      console.error('Error fetching product:', error);
+      console.error('Error fetching product:', error.message);
       setError('Failed to load product');
     } finally {
       setFetchLoading(false);
@@ -104,10 +110,19 @@ const EditProduct = () => {
     for (let i = 0; i < newImages.length; i++) {
       const image = newImages[i];
       const timestamp = Date.now();
-      const imageRef = ref(storage, `products/${currentUser.uid}/${timestamp}_${image.name}`);
-      await uploadBytes(imageRef, image);
-      const url = await getDownloadURL(imageRef);
-      imageUrls.push(url);
+      const fileName = `${currentUser.uid}/${timestamp}_${image.name}`;
+      
+      const { data, error: uploadError } = await supabase.storage
+        .from('products')
+        .upload(fileName, image);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('products')
+        .getPublicUrl(fileName);
+
+      imageUrls.push(publicUrl);
     }
     return imageUrls;
   };
@@ -122,21 +137,37 @@ const EditProduct = () => {
       const allImageUrls = [...existingImages, ...newImageUrls];
 
       const updatedProduct = {
-        ...productData,
+        name: productData.name,
+        description: productData.description,
+        category: productData.category,
+        brand: productData.brand || null,
+        sku: productData.sku || null,
         price: parseFloat(productData.price),
-        originalPrice: productData.originalPrice ? parseFloat(productData.originalPrice) : parseFloat(productData.price),
+        original_price: productData.originalPrice ? parseFloat(productData.originalPrice) : parseFloat(productData.price),
         stock: parseInt(productData.stock),
         discount: productData.discount ? parseInt(productData.discount) : 0,
         images: allImageUrls,
         keywords: productData.keywords ? productData.keywords.split(',').map(k => k.trim()) : [],
-        updatedAt: new Date().toISOString()
+        weight: productData.weight ? parseFloat(productData.weight) : null,
+        dimensions: productData.dimensions || null,
+        shipping_info: productData.shippingInfo || null,
+        return_policy: productData.returnPolicy || null,
+        affiliate_link: productData.affiliateLink || null,
+        is_affiliate: !!productData.affiliateLink,
+        updated_at: new Date().toISOString()
       };
 
-      await updateDoc(doc(db, 'products', id), updatedProduct);
+      const { error: updateError } = await supabase
+        .from('products')
+        .update(updatedProduct)
+        .eq('id', id);
+
+      if (updateError) throw updateError;
+
       alert('Product updated successfully!');
       navigate('/vendor/products');
     } catch (err) {
-      console.error('Error:', err);
+      console.error('Error updating product:', err.message);
       setError(err.message || 'Failed to update product');
     } finally {
       setLoading(false);

@@ -23,6 +23,7 @@ export const SettingsPage = ({ onBack, onLogout, onNavigate }) => {
                 <SettingItem label="Change Password" icon="lock-closed-outline" onPress={() => onNavigate('changePassword')} />
                 <SettingItem label="Shipping Address" icon="location-outline" onPress={() => onNavigate('address')} />
                 <SettingItem label="Payment Methods" icon="card-outline" onPress={() => onNavigate('paymentMethods')} />
+                <SettingItem label="About the Founder" icon="information-circle-outline" onPress={() => onNavigate('about')} />
 
                 <Text style={[styles.sectionTitle, { marginLeft: 0 }]}>Preferences</Text>
                 <View style={[styles.menuItem, { justifyContent: 'space-between' }]}>

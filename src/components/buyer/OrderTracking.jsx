@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { doc, getDoc, collection, query, where, orderBy, getDocs } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useParams, Link } from 'react-router-dom';
 
 const OrderTracking = () => {
@@ -23,22 +22,35 @@ const OrderTracking = () => {
 
   const fetchOrderDetails = async () => {
     try {
-      const orderDoc = await getDoc(doc(db, 'orders', orderId));
-      if (orderDoc.exists()) {
-        const orderData = { id: orderDoc.id, ...orderDoc.data() };
+      const { data: orderData, error: orderError } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          users!orders_buyer_id_fkey (name, email)
+        `)
+        .eq('id', orderId)
+        .single();
+        
+      if (orderError) throw orderError;
+      
+      if (orderData) {
         setOrder(orderData);
 
         // Fetch tracking history
-        const historyQuery = query(
-          collection(db, 'orderTracking', orderId, 'history'),
-          orderBy('timestamp', 'desc')
-        );
-        const historySnapshot = await getDocs(historyQuery);
-        const history = historySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setTrackingHistory(history);
+        const { data: historyData, error: historyError } = await supabase
+          .from('order_tracking_history')
+          .select('*')
+          .eq('order_id', orderId)
+          .order('timestamp', { ascending: false });
+          
+        if (historyError && historyError.code !== '42P01') {
+           // Ignore table not found if it's not strictly migrated yet
+           console.error('Error fetching history:', historyError.message);
+        }
+        setTrackingHistory(historyData || []);
       }
     } catch (error) {
-      console.error('Error fetching order:', error);
+      console.error('Error fetching order:', error.message);
     } finally {
       setLoading(false);
     }
@@ -95,10 +107,10 @@ const OrderTracking = () => {
           <div className="flex justify-between items-start mb-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-                Order #{order.id.substring(0, 8).toUpperCase()}
+                Order #{String(order.id).substring(0, 8).toUpperCase()}
               </h1>
               <p className="text-gray-600 dark:text-gray-400">
-                Placed on {new Date(order.createdAt).toLocaleDateString()}
+                Placed on {new Date(order.created_at || order.createdAt).toLocaleDateString()}
               </p>
             </div>
             <span className={`px-4 py-2 rounded-full text-sm font-medium ${
@@ -112,10 +124,10 @@ const OrderTracking = () => {
           </div>
 
           {/* Tracking Number */}
-          {order.trackingNumber && (
+          {(order.tracking_number || order.trackingNumber) && (
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
               <p className="text-sm text-blue-800 dark:text-blue-400 mb-1">Tracking Number</p>
-              <p className="font-mono font-bold text-blue-900 dark:text-blue-300">{order.trackingNumber}</p>
+              <p className="font-mono font-bold text-blue-900 dark:text-blue-300">{order.tracking_number || order.trackingNumber}</p>
             </div>
           )}
         </div>
@@ -163,10 +175,10 @@ const OrderTracking = () => {
           </div>
 
           {/* Estimated Delivery */}
-          {order.estimatedDelivery && order.status !== 'delivered' && (
+          {(order.estimated_delivery || order.estimatedDelivery) && order.status !== 'delivered' && (
             <div className="mt-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
               <p className="text-sm text-green-800 dark:text-green-400">
-                Estimated Delivery: <span className="font-semibold">{new Date(order.estimatedDelivery).toLocaleDateString()}</span>
+                Estimated Delivery: <span className="font-semibold">{new Date(order.estimated_delivery || order.estimatedDelivery).toLocaleDateString()}</span>
               </p>
             </div>
           )}
@@ -209,15 +221,15 @@ const OrderTracking = () => {
               <div key={index} className="flex gap-4 pb-4 border-b last:border-b-0">
                 <img 
                   src={item.image || 'https://via.placeholder.com/100'} 
-                  alt={item.productName}
+                  alt={item.product_name || item.productName}
                   className="w-20 h-20 object-cover rounded-lg"
                 />
                 <div className="flex-1">
-                  <h3 className="font-semibold text-gray-900 dark:text-white">{item.productName}</h3>
+                  <h3 className="font-semibold text-gray-900 dark:text-white">{item.product_name || item.productName}</h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400">Quantity: {item.quantity}</p>
-                  {item.selectedVariation && (
+                  {(item.selected_variation || item.selectedVariation) && (
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {Object.entries(item.selectedVariation).map(([key, value]) => `${key}: ${value}`).join(', ')}
+                      {Object.entries(item.selected_variation || item.selectedVariation).map(([key, value]) => `${key}: ${value}`).join(', ')}
                     </p>
                   )}
                 </div>
@@ -232,21 +244,21 @@ const OrderTracking = () => {
           <div className="mt-6 pt-4 border-t space-y-2">
             <div className="flex justify-between text-gray-600 dark:text-gray-400">
               <span>Subtotal</span>
-              <span>₦{order.subtotal?.toLocaleString()}</span>
+              <span>₦{(order.subtotal_amount || order.subtotal || 0).toLocaleString()}</span>
             </div>
             <div className="flex justify-between text-gray-600 dark:text-gray-400">
               <span>Shipping</span>
-              <span>₦{order.shippingFee?.toLocaleString()}</span>
+              <span>₦{(order.shipping_fee || order.shippingFee || 0).toLocaleString()}</span>
             </div>
-            {order.discount > 0 && (
+            {(order.discount_amount || order.discount) > 0 && (
               <div className="flex justify-between text-green-600">
                 <span>Discount</span>
-                <span>-₦{order.discount?.toLocaleString()}</span>
+                <span>-₦{(order.discount_amount || order.discount).toLocaleString()}</span>
               </div>
             )}
             <div className="flex justify-between text-lg font-bold text-gray-900 dark:text-white pt-2 border-t">
               <span>Total</span>
-              <span>₦{order.total?.toLocaleString()}</span>
+              <span>₦{(order.total_amount || order.total || 0).toLocaleString()}</span>
             </div>
           </div>
         </div>
@@ -255,12 +267,12 @@ const OrderTracking = () => {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
           <h2 className="text-xl font-semibold mb-4">Shipping Address</h2>
           <div className="text-gray-700 dark:text-gray-300">
-            <p className="font-medium">{order.customerName}</p>
-            <p>{order.shippingAddress?.address}</p>
-            <p>{order.shippingAddress?.city}, {order.shippingAddress?.state}</p>
-            {order.shippingAddress?.zipCode && <p>{order.shippingAddress.zipCode}</p>}
-            <p className="mt-2">{order.customerPhone}</p>
-            <p>{order.customerEmail}</p>
+            <p className="font-medium">{order.users?.name || order.customer_name || order.customerName}</p>
+            <p>{order.shipping_address?.address || order.shippingAddress?.address}</p>
+            <p>{order.shipping_address?.city || order.shippingAddress?.city}, {order.shipping_address?.state || order.shippingAddress?.state}</p>
+            {(order.shipping_address?.zip_code || order.shippingAddress?.zipCode) && <p>{order.shipping_address?.zip_code || order.shippingAddress?.zipCode}</p>}
+            <p className="mt-2">{order.customer_phone || order.customerPhone}</p>
+            <p>{order.users?.email || order.customer_email || order.customerEmail}</p>
           </div>
         </div>
 

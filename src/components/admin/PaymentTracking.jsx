@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import Loader from '../common/Loader';
 
 const PaymentTracking = () => {
@@ -20,16 +19,20 @@ const PaymentTracking = () => {
 
   const fetchPayments = async () => {
     try {
-      const q = query(collection(db, 'payments'), orderBy('createdAt', 'desc'));
-      const snapshot = await getDocs(q);
-      const paymentsList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      const { data, error } = await supabase
+        .from('payments')
+        .select(`
+          *,
+          users!payments_user_id_fkey (name, email)
+        `)
+        .order('created_at', { ascending: false });
+        
+      if (error) throw error;
       
+      const paymentsList = data || [];
       setPayments(paymentsList);
       
-      const stats = {
+      const calcStats = {
         total: paymentsList.length,
         successful: paymentsList.filter(p => p.status === 'successful').length,
         failed: paymentsList.filter(p => p.status === 'failed').length,
@@ -38,9 +41,9 @@ const PaymentTracking = () => {
           .filter(p => p.status === 'successful')
           .reduce((sum, p) => sum + (p.amount || 0), 0)
       };
-      setStats(stats);
+      setStats(calcStats);
     } catch (error) {
-      console.error('Error fetching payments:', error);
+      console.error('Error fetching payments:', error.message);
     } finally {
       setLoading(false);
     }
@@ -96,10 +99,10 @@ const PaymentTracking = () => {
                   {payment.reference}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  {payment.createdAt?.toDate().toLocaleDateString()}
+                  {new Date(payment.created_at || payment.createdAt).toLocaleDateString()}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  {payment.customerName || payment.email}
+                  {payment.users?.name || payment.users?.email || payment.customer_name || payment.customerName || payment.email || 'Unknown'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                   <span className="px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-800">

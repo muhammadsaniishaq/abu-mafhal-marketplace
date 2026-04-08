@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useAuth } from '../../context/AuthContext';
 import Loader from '../common/Loader';
 
@@ -16,19 +15,16 @@ const PaymentHistory = () => {
 
   const fetchPayments = async () => {
     try {
-      const q = query(
-        collection(db, 'payments'),
-        where('userId', '==', currentUser.uid),
-        orderBy('createdAt', 'desc')
-      );
-      const snapshot = await getDocs(q);
-      const paymentsList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setPayments(paymentsList);
+      const { data, error } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('user_id', currentUser.id || currentUser.uid)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setPayments(data || []);
     } catch (error) {
-      console.error('Error fetching payments:', error);
+      console.error('Error fetching payments:', error.message);
     } finally {
       setLoading(false);
     }
@@ -93,8 +89,8 @@ const PaymentHistory = () => {
                   <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
                     <p>Reference: {payment.reference}</p>
                     <p>Method: {payment.method}</p>
-                    <p>Date: {payment.createdAt?.toDate().toLocaleString()}</p>
-                    {payment.orderId && <p>Order: #{payment.orderId.slice(0, 8)}</p>}
+                    <p>Date: {new Date(payment.created_at || payment.createdAt).toLocaleString()}</p>
+                    {(payment.order_id || payment.orderId) && <p>Order: #{(payment.order_id || payment.orderId).slice(0, 8)}</p>}
                   </div>
                 </div>
 
@@ -109,10 +105,10 @@ const PaymentHistory = () => {
                 )}
               </div>
 
-              {payment.status === 'failed' && payment.errorMessage && (
+              {payment.status === 'failed' && (payment.error_message || payment.errorMessage) && (
                 <div className="mt-3 p-3 bg-red-50 dark:bg-red-900 rounded text-sm">
                   <p className="text-red-800 dark:text-red-200">
-                    Error: {payment.errorMessage}
+                    Error: {payment.error_message || payment.errorMessage}
                   </p>
                 </div>
               )}

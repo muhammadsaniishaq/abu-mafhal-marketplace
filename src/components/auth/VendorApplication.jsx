@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 
 const VendorApplication = () => {
   const { currentUser } = useAuth();
@@ -98,26 +97,50 @@ const VendorApplication = () => {
 
     try {
       // Check if already applied
-      const existingApp = await getDoc(doc(db, 'vendorApplications', currentUser.uid));
+      const { data: existingApp, error: fetchError } = await supabase
+        .from('vendor_applications')
+        .select('status')
+        .eq('user_id', currentUser.id || currentUser.uid)
+        .eq('status', 'pending')
+        .maybeSingle();
       
-      if (existingApp.exists() && existingApp.data().status === 'pending') {
+      if (existingApp) {
         alert('You already have a pending application. Please wait for admin review.');
         navigate('/buyer');
         return;
       }
 
       // Submit application
-      await setDoc(doc(db, 'vendorApplications', currentUser.uid), {
-        userId: currentUser.uid,
-        userName: currentUser.name,
-        userEmail: currentUser.email,
-        ...formData,
+      const applicationData = {
+        user_id: currentUser.id || currentUser.uid,
+        user_name: currentUser.name || currentUser.displayName,
+        user_email: currentUser.email,
+        business_name: formData.businessName,
+        business_type: formData.businessType,
+        business_address: formData.businessAddress,
+        city: formData.city,
+        state: formData.state,
+        phone: formData.phone,
+        email: formData.email,
+        tax_id: formData.taxId,
+        bank_name: formData.bankName,
+        account_number: formData.accountNumber,
+        account_name: formData.accountName,
+        business_description: formData.businessDescription,
+        product_categories: formData.productCategories,
+        estimated_monthly_revenue: formData.estimatedMonthlyRevenue,
+        years_in_business: formData.yearsInBusiness,
+        website: formData.website,
+        social_media: formData.socialMedia,
         status: 'pending',
-        submittedAt: new Date().toISOString(),
-        reviewedAt: null,
-        reviewedBy: null,
-        rejectionReason: null
-      });
+        submitted_at: new Date().toISOString()
+      };
+
+      const { error: submitError } = await supabase
+        .from('vendor_applications')
+        .upsert([applicationData], { onConflict: 'user_id' });
+
+      if (submitError) throw submitError;
 
       alert('Application submitted successfully! We will review it within 2-3 business days.');
       navigate('/buyer');

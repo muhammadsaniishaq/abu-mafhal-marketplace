@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, createContext, useContext } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebaseClient";
+
+const AuthContext = createContext<any>(null);
 
 export function useAuth() {
   const [profile, setProfile] = useState<any>(null);
@@ -15,6 +17,7 @@ export function useAuth() {
           uid: user.uid,
           email: user.email,
           name: user.displayName,
+          role: 'buyer' // Default role for firebase auth if not found
         });
       } else {
         setProfile(null);
@@ -27,3 +30,14 @@ export function useAuth() {
 
   return { profile, loading };
 }
+
+export function AuthProviderInner({ children }: { children: React.ReactNode }) {
+  const authValue = useAuth();
+  return (
+    <AuthContext.Provider value={authValue}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export const useAuthContext = () => useContext(AuthContext);

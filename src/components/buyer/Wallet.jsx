@@ -1,8 +1,7 @@
 // src/components/buyer/Wallet.jsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { formatCurrency, formatDateTime } from '../../utils/helpers';
 
 const Wallet = () => {
@@ -18,26 +17,33 @@ const Wallet = () => {
   const fetchWalletData = async () => {
     try {
       // Fetch wallet balance
-      const walletDoc = await getDocs(query(
-        collection(db, 'wallets'),
-        where('userId', '==', currentUser.uid),
-        limit(1)
-      ));
+      const { data: walletData, error: walletError } = await supabase
+        .from('wallets')
+        .select('balance')
+        .eq('user_id', currentUser.id || currentUser.uid)
+        .single();
+        
+      if (walletError && walletError.code !== 'PGRST116') throw walletError;
       
-      if (!walletDoc.empty) {
-        setBalance(walletDoc.docs[0].data().balance || 0);
+      if (walletData) {
+        setBalance(walletData.balance || 0);
       }
 
       // Fetch transactions
-      const txQuery = query(
-        collection(db, 'wallets', currentUser.uid, 'transactions'),
-        orderBy('createdAt', 'desc'),
-        limit(20)
-      );
-      const txSnap = await getDocs(txQuery);
-      setTransactions(txSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const { data: txData, error: txError } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('wallet_id', currentUser.id || currentUser.uid)
+        .order('created_at', { ascending: false })
+        .limit(20);
+        
+      if (txError) throw txError;
+      
+      if (txData) {
+        setTransactions(txData);
+      }
     } catch (error) {
-      console.error('Error fetching wallet data:', error);
+      console.error('Error fetching wallet data:', error.message);
     } finally {
       setLoading(false);
     }
@@ -99,7 +105,7 @@ const Wallet = () => {
                       {tx.description || tx.type}
                     </p>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {formatDateTime(tx.createdAt)}
+                      {formatDateTime(tx.created_at || tx.createdAt)}
                     </p>
                   </div>
                 </div>

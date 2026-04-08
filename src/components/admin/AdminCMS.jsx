@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 
 const AdminCMS = () => {
   const [activeTab, setActiveTab] = useState('banners');
@@ -15,7 +14,7 @@ const AdminCMS = () => {
   const [bannerForm, setBannerForm] = useState({
     title: '',
     subtitle: '',
-    imageUrl: '',
+    image_url: '',
     link: '',
     active: true,
     order: 0
@@ -41,16 +40,16 @@ const AdminCMS = () => {
 
   const fetchAllContent = async () => {
     try {
-      const bannersSnap = await getDocs(collection(db, 'banners'));
-      setBanners(bannersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const { data: bannersData } = await supabase.from('banners').select('*').order('order', { ascending: true });
+      setBanners(bannersData || []);
 
-      const pagesSnap = await getDocs(collection(db, 'pages'));
-      setPages(pagesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const { data: pagesData } = await supabase.from('pages').select('*');
+      setPages(pagesData || []);
 
-      const faqsSnap = await getDocs(collection(db, 'faqs'));
-      setFaqs(faqsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const { data: faqsData } = await supabase.from('faqs').select('*').order('order', { ascending: true });
+      setFaqs(faqsData || []);
     } catch (error) {
-      console.error('Error fetching content:', error);
+      console.error('Error fetching content:', error.message);
     } finally {
       setLoading(false);
     }
@@ -59,24 +58,28 @@ const AdminCMS = () => {
   // Banner Functions
   const handleSaveBanner = async () => {
     try {
-      if (editingItem) {
-        await updateDoc(doc(db, 'banners', editingItem.id), {
-          ...bannerForm,
-          updatedAt: new Date().toISOString()
-        });
-        alert('Banner updated successfully');
-      } else {
-        await addDoc(collection(db, 'banners'), {
-          ...bannerForm,
-          createdAt: new Date().toISOString()
-        });
-        alert('Banner created successfully');
+      const bannerData = {
+        ...bannerForm,
+        updated_at: new Date().toISOString()
+      };
+
+      if (!editingItem) {
+        bannerData.created_at = new Date().toISOString();
       }
+
+      const { error } = editingItem
+        ? await supabase.from('banners').update(bannerData).eq('id', editingItem.id)
+        : await supabase.from('banners').insert(bannerData);
+
+      if (error) throw error;
+      
+      alert(`Banner ${editingItem ? 'updated' : 'created'} successfully`);
       setShowModal(false);
-      setBannerForm({ title: '', subtitle: '', imageUrl: '', link: '', active: true, order: 0 });
+      setBannerForm({ title: '', subtitle: '', image_url: '', link: '', active: true, order: 0 });
       setEditingItem(null);
       fetchAllContent();
     } catch (error) {
+      console.error('Banner save error:', error.message);
       alert('Failed to save banner');
     }
   };
@@ -84,7 +87,8 @@ const AdminCMS = () => {
   const handleDeleteBanner = async (id) => {
     if (!window.confirm('Delete this banner?')) return;
     try {
-      await deleteDoc(doc(db, 'banners', id));
+      const { error } = await supabase.from('banners').delete().eq('id', id);
+      if (error) throw error;
       alert('Banner deleted');
       fetchAllContent();
     } catch (error) {
@@ -95,24 +99,28 @@ const AdminCMS = () => {
   // Page Functions
   const handleSavePage = async () => {
     try {
-      if (editingItem) {
-        await updateDoc(doc(db, 'pages', editingItem.id), {
-          ...pageForm,
-          updatedAt: new Date().toISOString()
-        });
-        alert('Page updated successfully');
-      } else {
-        await addDoc(collection(db, 'pages'), {
-          ...pageForm,
-          createdAt: new Date().toISOString()
-        });
-        alert('Page created successfully');
+      const pageData = {
+        ...pageForm,
+        updated_at: new Date().toISOString()
+      };
+
+      if (!editingItem) {
+        pageData.created_at = new Date().toISOString();
       }
+
+      const { error } = editingItem
+        ? await supabase.from('pages').update(pageData).eq('id', editingItem.id)
+        : await supabase.from('pages').insert(pageData);
+
+      if (error) throw error;
+      
+      alert(`Page ${editingItem ? 'updated' : 'created'} successfully`);
       setShowModal(false);
       setPageForm({ title: '', slug: '', content: '', published: true });
       setEditingItem(null);
       fetchAllContent();
     } catch (error) {
+      console.error('Page save error:', error.message);
       alert('Failed to save page');
     }
   };
@@ -120,7 +128,8 @@ const AdminCMS = () => {
   const handleDeletePage = async (id) => {
     if (!window.confirm('Delete this page?')) return;
     try {
-      await deleteDoc(doc(db, 'pages', id));
+      const { error } = await supabase.from('pages').delete().eq('id', id);
+      if (error) throw error;
       alert('Page deleted');
       fetchAllContent();
     } catch (error) {
@@ -131,24 +140,28 @@ const AdminCMS = () => {
   // FAQ Functions
   const handleSaveFAQ = async () => {
     try {
-      if (editingItem) {
-        await updateDoc(doc(db, 'faqs', editingItem.id), {
-          ...faqForm,
-          updatedAt: new Date().toISOString()
-        });
-        alert('FAQ updated successfully');
-      } else {
-        await addDoc(collection(db, 'faqs'), {
-          ...faqForm,
-          createdAt: new Date().toISOString()
-        });
-        alert('FAQ created successfully');
+      const faqData = {
+        ...faqForm,
+        updated_at: new Date().toISOString()
+      };
+
+      if (!editingItem) {
+        faqData.created_at = new Date().toISOString();
       }
+
+      const { error } = editingItem
+        ? await supabase.from('faqs').update(faqData).eq('id', editingItem.id)
+        : await supabase.from('faqs').insert(faqData);
+
+      if (error) throw error;
+
+      alert(`FAQ ${editingItem ? 'updated' : 'created'} successfully`);
       setShowModal(false);
       setFaqForm({ question: '', answer: '', category: 'general', order: 0 });
       setEditingItem(null);
       fetchAllContent();
     } catch (error) {
+      console.error('FAQ save error:', error.message);
       alert('Failed to save FAQ');
     }
   };
@@ -156,7 +169,8 @@ const AdminCMS = () => {
   const handleDeleteFAQ = async (id) => {
     if (!window.confirm('Delete this FAQ?')) return;
     try {
-      await deleteDoc(doc(db, 'faqs', id));
+      const { error } = await supabase.from('faqs').delete().eq('id', id);
+      if (error) throw error;
       alert('FAQ deleted');
       fetchAllContent();
     } catch (error) {
@@ -216,7 +230,7 @@ const AdminCMS = () => {
           <button
             onClick={() => {
               setEditingItem(null);
-              setBannerForm({ title: '', subtitle: '', imageUrl: '', link: '', active: true, order: 0 });
+              setBannerForm({ title: '', subtitle: '', image_url: '', link: '', active: true, order: 0 });
               setShowModal(true);
             }}
             className="mb-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
@@ -227,8 +241,8 @@ const AdminCMS = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {banners.map(banner => (
               <div key={banner.id} className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-                {banner.imageUrl && (
-                  <img src={banner.imageUrl} alt={banner.title} className="w-full h-32 object-cover rounded mb-3" />
+                {(banner.image_url || banner.imageUrl) && (
+                  <img src={banner.image_url || banner.imageUrl} alt={banner.title} className="w-full h-32 object-cover rounded mb-3" />
                 )}
                 <h3 className="font-bold mb-1">{banner.title}</h3>
                 <p className="text-sm text-gray-600 mb-2">{banner.subtitle}</p>
@@ -242,7 +256,14 @@ const AdminCMS = () => {
                   <button
                     onClick={() => {
                       setEditingItem(banner);
-                      setBannerForm(banner);
+                      setBannerForm({
+                        title: banner.title || '',
+                        subtitle: banner.subtitle || '',
+                        image_url: banner.image_url || banner.imageUrl || '',
+                        link: banner.link || '',
+                        active: banner.active ?? true,
+                        order: banner.order || 0
+                      });
                       setShowModal(true);
                     }}
                     className="flex-1 px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
@@ -407,8 +428,8 @@ const AdminCMS = () => {
                   <label className="block text-sm font-medium mb-2">Image URL</label>
                   <input
                     type="text"
-                    value={bannerForm.imageUrl}
-                    onChange={(e) => setBannerForm({ ...bannerForm, imageUrl: e.target.value })}
+                    value={bannerForm.image_url}
+                    onChange={(e) => setBannerForm({ ...bannerForm, image_url: e.target.value })}
                     className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
                   />
                 </div>

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, updateDoc, doc, getDoc, query, where } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { sendProductNotification } from '../../services/notificationService';
 
 const VendorApproval = () => {
@@ -17,11 +16,14 @@ const VendorApproval = () => {
 
   const fetchApplications = async () => {
     try {
-      const snapshot = await getDocs(collection(db, 'vendorApplications'));
-      const appsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setApplications(appsData);
+      const { data, error } = await supabase
+        .from('vendor_applications')
+        .select('*');
+      
+      if (error) throw error;
+      setApplications(data || []);
     } catch (error) {
-      console.error('Error fetching applications:', error);
+      console.error('Error fetching applications:', error.message);
     } finally {
       setLoading(false);
     }
@@ -31,24 +33,34 @@ const VendorApproval = () => {
     if (!window.confirm('Are you sure you want to approve this vendor application?')) return;
 
     try {
-      // Update application status
-      await updateDoc(doc(db, 'vendorApplications', appId), {
-        status: 'approved',
-        approvedAt: new Date().toISOString(),
-        reviewedBy: 'admin'
-      });
+      // 1. Update application status
+      const { error: appError } = await supabase
+        .from('vendor_applications')
+        .update({
+          status: 'approved',
+          approved_at: new Date().toISOString(),
+          reviewed_by: 'admin'
+        })
+        .eq('id', appId);
 
-      // Update user role to vendor
-      await updateDoc(doc(db, 'users', userId), {
-        role: 'vendor',
-        vendorApproved: true,
-        approvedAt: new Date().toISOString()
-      });
+      if (appError) throw appError;
+
+      // 2. Update user profile role to vendor
+      const { error: userError } = await supabase
+        .from('profiles')
+        .update({
+          role: 'vendor',
+          vendor_approved: true,
+          approved_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+
+      if (userError) throw userError;
 
       alert('Vendor application approved successfully!');
       fetchApplications();
     } catch (error) {
-      console.error('Error approving vendor:', error);
+      console.error('Error approving vendor:', error.message);
       alert('Failed to approve vendor application');
     }
   };
@@ -60,12 +72,17 @@ const VendorApproval = () => {
     }
 
     try {
-      await updateDoc(doc(db, 'vendorApplications', appId), {
-        status: 'rejected',
-        rejectedAt: new Date().toISOString(),
-        rejectionReason: rejectReason,
-        reviewedBy: 'admin'
-      });
+      const { error } = await supabase
+        .from('vendor_applications')
+        .update({
+          status: 'rejected',
+          rejected_at: new Date().toISOString(),
+          rejection_reason: rejectReason,
+          reviewed_by: 'admin'
+        })
+        .eq('id', appId);
+
+      if (error) throw error;
 
       alert('Vendor application rejected');
       setShowModal(false);
@@ -161,12 +178,12 @@ const VendorApproval = () => {
             {filteredApplications.map(app => (
               <tr key={app.id} className="border-b dark:border-gray-700">
                 <td className="py-3 px-4">
-                  <p className="font-medium">{app.fullName}</p>
+                  <p className="font-medium">{app.full_name || app.fullName}</p>
                   <p className="text-sm text-gray-600">{app.email}</p>
                 </td>
-                <td className="py-3 px-4">{app.businessName}</td>
+                <td className="py-3 px-4">{app.business_name || app.businessName}</td>
                 <td className="py-3 px-4">
-                  {new Date(app.createdAt).toLocaleDateString()}
+                  {(app.created_at || app.createdAt) ? new Date(app.created_at || app.createdAt).toLocaleDateString() : 'N/A'}
                 </td>
                 <td className="py-3 px-4">
                   <span className={`px-3 py-1 rounded-full text-xs ${
@@ -232,7 +249,7 @@ const VendorApproval = () => {
             <div className="space-y-4">
               <div>
                 <p className="text-sm text-gray-600">Applicant Name</p>
-                <p className="font-medium">{selectedApp.fullName}</p>
+                <p className="font-medium">{selectedApp.full_name || selectedApp.fullName}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600">Email</p>
@@ -244,23 +261,23 @@ const VendorApproval = () => {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Business Name</p>
-                <p className="font-medium">{selectedApp.businessName}</p>
+                <p className="font-medium">{selectedApp.business_name || selectedApp.businessName}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600">Business Type</p>
-                <p className="font-medium">{selectedApp.businessType}</p>
+                <p className="font-medium">{selectedApp.business_type || selectedApp.businessType}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600">Business Address</p>
-                <p className="font-medium">{selectedApp.businessAddress}</p>
+                <p className="font-medium">{selectedApp.business_address || selectedApp.businessAddress}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600">Product Categories</p>
-                <p className="font-medium">{selectedApp.productCategories?.join(', ')}</p>
+                <p className="font-medium">{selectedApp.product_categories?.join(', ') || selectedApp.productCategories?.join(', ')}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-600">Business Description</p>
-                <p className="font-medium">{selectedApp.businessDescription}</p>
+                <p className="font-medium">{selectedApp.business_description || selectedApp.businessDescription}</p>
               </div>
 
               {selectedApp.status === 'pending' && (

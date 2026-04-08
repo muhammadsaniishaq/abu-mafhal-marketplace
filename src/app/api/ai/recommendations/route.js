@@ -1,15 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, query, onSnapshot, getDoc } from 'firebase/firestore';
+import { supabase } from '../../../../../config/supabase';
 
 // --- Global Variables (Provided by Canvas Environment) ---
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-// Sanitize the appId to ensure it does not contain invalid path characters (like '/')
-const sanitizedAppId = appId.replace(/[#$.\[\]/]/g, '_'); 
 
 // Mock product data 
 const MOCK_PRODUCTS = [
@@ -80,8 +73,6 @@ const generateRecommendations = (currentProductId, purchaseHistory) => {
 // --- React Application Component ---
 
 const App = () => {
-    const [db, setDb] = useState(null);
-    const [auth, setAuth] = useState(null);
     const [userId, setUserId] = useState(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [purchaseHistory, setPurchaseHistory] = useState([]);
@@ -90,97 +81,122 @@ const App = () => {
     // Hardcode the product being viewed for demonstration
     const currentProductId = 'prod3'; 
     const currentProduct = MOCK_PRODUCTS.find(p => p.id === currentProductId);
-    
-    // Define user document reference path
-    const userDocRef = db && userId 
-        ? doc(db, 'artifacts', sanitizedAppId, 'users', userId, 'private_data', 'profile') 
-        : null;
 
-    // Initialize Firebase and Auth
+    // Initialize Auth
     useEffect(() => {
-        try {
-            const app = initializeApp(firebaseConfig);
-            const firestore = getFirestore(app);
-            const authentication = getAuth(app);
-
-            setDb(firestore);
-            setAuth(authentication);
-            
-            // Listen for auth state changes
-            const unsubscribe = onAuthStateChanged(authentication, async (user) => {
+        const initializeAuth = async () => {
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                
                 let currentUserId;
-                if (user) {
-                    currentUserId = user.uid;
-                } else if (initialAuthToken) {
-                    // Sign in with custom token if available
-                    const userCredential = await signInWithCustomToken(authentication, initialAuthToken);
-                    currentUserId = userCredential.user.uid;
+                if (session && session.user) {
+                    currentUserId = session.user.id;
                 } else {
-                    // Sign in anonymously if no token
-                    const userCredential = await signInAnonymously(authentication);
-                    currentUserId = userCredential.user.uid;
+                    // Sign in anonymously (Supabase anonymous sign-in or a mock ID for demo purposes)
+                    const { data, error } = await supabase.auth.signInAnonymously();
+                    if (data && data.user) {
+                        currentUserId = data.user.id;
+                    } else {
+                        // Fallback mock ID for demo
+                        currentUserId = `anon_${Math.random().toString(36).substring(2, 9)}`;
+                    }
                 }
+                
                 setUserId(currentUserId);
                 setIsAuthReady(true);
                 setLoading(false);
-            });
+            } catch (error) {
+                console.error("Supabase initialization failed:", error);
+                setLoading(false);
+            }
+        };
 
-            return () => unsubscribe();
-        } catch (error) {
-            console.error("Firebase initialization failed:", error);
-            setLoading(false);
-        }
+        initializeAuth();
+
+        const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+            if (session && session.user) {
+                setUserId(session.user.id);
+            }
+        });
+
+        return () => {
+            if (authListener && authListener.subscription) {
+                authListener.subscription.unsubscribe();
+            }
+        };
     }, []);
 
     // Fetch and initialize user data (Purchase History)
     useEffect(() => {
-        if (!isAuthReady || !userDocRef) return;
+        if (!isAuthReady || !userId) return;
 
         // Initializer function (run once to ensure the mock data exists)
         const initializeUserData = async () => {
             try {
-                const docSnap = await getDoc(userDocRef);
-                if (!docSnap.exists() || !docSnap.data().purchaseItems) { 
+                const { data, error } = await supabase
+                    .from('user_profiles') // We use a generic user_profiles table for mock
+                    .select('purchase_items')
+                    .eq('id', userId)
+                    .maybeSingle();
+
+                if (!data || !data.purchase_items) { 
                     console.log("Initializing mock purchase history for new user.");
-                    await setDoc(userDocRef, {
-                        purchaseItems: [
-                            { productId: 'prod1', purchaseCount: 2, date: new Date().toISOString() }, 
-                            { productId: 'prod5', purchaseCount: 1, date: new Date().toISOString() }, 
-                        ]
-                    }, { merge: true }); // Use merge: true to avoid overwriting other potential fields
+                    await supabase
+                        .from('user_profiles')
+                        .upsert({
+                            id: userId,
+                            purchase_items: [
+                                { productId: 'prod1', purchaseCount: 2, date: new Date().toISOString() }, 
+                                { productId: 'prod5', purchaseCount: 1, date: new Date().toISOString() }, 
+                            ]
+                        });
+                } else {
+                    setPurchaseHistory(data.purchase_items || []);
                 }
             } catch (error) {
                  console.error("Error initializing user data:", error);
             }
         };
         
-        // Setup Real-time Listener (onSnapshot)
-        const setupListener = () => onSnapshot(userDocRef, (docSnap) => {
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                setPurchaseHistory(data.purchaseItems || []); 
-            } else {
-                setPurchaseHistory([]);
-            }
-        }, (error) => {
-            console.error("Error listening to purchase history:", error);
-        });
+        // Setup Real-time Listener
+        const setupListener = () => {
+            return supabase
+                .channel('schema-db-changes')
+                .on(
+                    'postgres_changes',
+                    {
+                        event: '*',
+                        schema: 'public',
+                        table: 'user_profiles',
+                        filter: `id=eq.${userId}`
+                    },
+                    (payload) => {
+                        if (payload.new && payload.new.purchase_items) {
+                            setPurchaseHistory(payload.new.purchase_items);
+                        }
+                    }
+                )
+                .subscribe();
+        };
 
         // Run initialization, then start the listener
+        let channel;
         initializeUserData().then(() => {
-            const unsubscribe = setupListener();
-            return unsubscribe; // Return cleanup function
+            channel = setupListener();
         });
-        
-    }, [isAuthReady, userDocRef]);
+
+        return () => {
+            if (channel) supabase.removeChannel(channel);
+        };
+    }, [isAuthReady, userId]);
     
     /**
-     * Updates the purchase history in Firestore to simulate a purchase.
+     * Updates the purchase history in Supabase to simulate a purchase.
      * @param {string} productId - The ID of the product purchased.
      */
     const simulatePurchase = useCallback(async (productId) => {
-        if (!userDocRef || !db) {
-            console.error("Database or user reference is not ready.");
+        if (!userId) {
+            console.error("User reference is not ready.");
             return;
         }
 
@@ -204,14 +220,20 @@ const App = () => {
                 });
             }
 
-            // Write the updated history back to Firestore
-            await setDoc(userDocRef, { purchaseItems: newHistory }, { merge: true });
+            // Write the updated history back to Supabase
+            await supabase
+                .from('user_profiles')
+                .upsert({ id: userId, purchase_items: newHistory });
+                
             console.log(`Purchase simulated for product: ${productId}. History updated.`);
+
+            // Optimistically update
+            setPurchaseHistory(newHistory);
 
         } catch (error) {
             console.error("Error simulating purchase:", error);
         }
-    }, [purchaseHistory, userDocRef, db]);
+    }, [purchaseHistory, userId]);
 
     // Generate Recommendations once purchase history is available
     const recommendations = generateRecommendations(currentProductId, purchaseHistory);

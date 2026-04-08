@@ -1,5 +1,4 @@
-import { collection, addDoc } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { supabase } from '../config/supabase';
 
 // Email templates
 const emailTemplates = {
@@ -243,6 +242,45 @@ const emailTemplates = {
       </html>
     `
   }),
+  
+  driverAssignment: (order, driverName) => ({
+    subject: `New Delivery Assigned - #${order.id.substring(0, 8).toUpperCase()}`,
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: white; padding: 30px; text-align: center; }
+          .content { background: #f9fafb; padding: 30px; }
+          .button { background: #3b82f6; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; margin: 20px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>📦 New Task for ${driverName}</h1>
+          </div>
+          <div class="content">
+            <p>Hi ${driverName},</p>
+            <p>You have been assigned to deliver order #${order.id.substring(0, 8).toUpperCase()}.</p>
+            
+            <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <p><strong>Customer:</strong> ${order.customerName}</p>
+              <p><strong>Address:</strong> ${order.address}</p>
+              <p><strong>Phone:</strong> ${order.customerPhone}</p>
+            </div>
+            
+            <center>
+              <a href="${window.location.origin}/driver/orders" class="button">View Order Details</a>
+            </center>
+          </div>
+        </div>
+      </body>
+      </html>
+    `
+  }),
 
   passwordReset: (resetLink) => ({
     subject: 'Reset Your Password - Abu Mafhal',
@@ -319,10 +357,51 @@ const emailTemplates = {
       </body>
       </html>
     `
+  }),
+
+  otp: (data) => ({
+    subject: `🔐 Your Verification Code: ${data.otp}`,
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #0f172a 0%, #334155 100%); color: white; padding: 30px; text-align: center; border-radius: 12px 12px 0 0; }
+          .content { background: #f8fafc; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px; }
+          .otp-box { text-align: center; margin: 30px 0; }
+          .otp-code { font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #0f172a; background: #f1f5f9; padding: 15px 25px; border-radius: 8px; border: 1px solid #e2e8f0; }
+          .footer { text-align: center; color: #94a3b8; padding: 20px; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🔐 Verification Code</h1>
+          </div>
+          <div class="content">
+            <p>Hello,</p>
+            <p>Your verification code for Abu Mafhal Marketplace is:</p>
+            <div class="otp-box">
+              <span class="otp-code">${data.otp}</span>
+            </div>
+            <p>This code will expire in 5 minutes. Please do not share this code with anyone.</p>
+            <p style="color: #64748b; font-size: 13px;">
+              If you didn't request this code, please ignore this email.
+            </p>
+          </div>
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} Abu Mafhal Marketplace</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `
   })
 };
 
-// Queue email for sending
+// Queue email for sending (Supabase Parity)
 export const sendEmail = async (to, templateName, data) => {
   try {
     const template = emailTemplates[templateName];
@@ -333,20 +412,28 @@ export const sendEmail = async (to, templateName, data) => {
 
     const emailData = template(data);
     
-    // Add to email queue in Firestore
-    await addDoc(collection(db, 'emailQueue'), {
-      to,
-      subject: emailData.subject,
-      html: emailData.html,
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      attempts: 0
-    });
+    // Add to 'mail' table in Supabase (matching mobile logic)
+    const { error } = await supabase
+      .from('mail')
+      .insert({
+        to: to,
+        subject: emailData.subject,
+        html: emailData.html,
+        status: 'pending',
+        type: templateName,
+        created_at: new Date().toISOString()
+      });
 
-    console.log('Email queued successfully');
+    if (error) throw error;
+
+    console.log('Email queued successfully in Supabase');
   } catch (error) {
-    console.error('Error queuing email:', error);
+    console.error('Error queuing email:', error.message);
   }
+};
+
+export const sendOtpEmail = async (email, otp) => {
+  return await sendEmail(email, 'otp', { otp });
 };
 
 // Send multiple emails

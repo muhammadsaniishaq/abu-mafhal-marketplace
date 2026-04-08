@@ -16,7 +16,7 @@ import { UserAvatar } from '../components/UserAvatar';
 import * as ImagePicker from 'expo-image-picker';
 import { geminiService } from '../services/geminiService';
 import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 const { width } = Dimensions.get('window');
 
@@ -132,7 +132,16 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                     return { ...promo, linkData };
                 }).filter(promo => {
                     const hasLocation = !promo.linkData.locations || promo.linkData.locations.length === 0 || promo.linkData.locations.includes('home');
-                    const isNotExpired = !promo.linkData.timerEnd || new Date(promo.linkData.timerEnd) > new Date();
+
+                    // Filter out expired promos if a timerEnd date is specified
+                    let isNotExpired = true;
+                    if (promo.linkData?.timerEnd) {
+                        const expiryDate = new Date(promo.linkData.timerEnd);
+                        // If it's just a date string, it marks the START of that day.
+                        // We check if current time is past that.
+                        isNotExpired = isNaN(expiryDate.getTime()) || new Date() <= expiryDate;
+                    }
+
                     return hasLocation && isNotExpired;
                 });
                 setPromoBanners(validPromos);

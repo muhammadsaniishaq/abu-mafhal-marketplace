@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 
 const AdminCoupons = () => {
   const [coupons, setCoupons] = useState([]);
@@ -26,12 +25,15 @@ const AdminCoupons = () => {
 
   const fetchCoupons = async () => {
     try {
-      const snapshot = await getDocs(collection(db, 'coupons'));
-      const couponsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      couponsData.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-      setCoupons(couponsData);
+      const { data, error } = await supabase
+        .from('coupons')
+        .select('*')
+        .order('created_at', { ascending: false });
+        
+      if (error) throw error;
+      setCoupons(data || []);
     } catch (error) {
-      console.error('Error fetching coupons:', error);
+      console.error('Error fetching coupons:', error.message);
     } finally {
       setLoading(false);
     }
@@ -52,22 +54,26 @@ const AdminCoupons = () => {
 
     try {
       const couponData = {
-        ...formData,
         code: formData.code.toUpperCase(),
+        type: formData.type,
         value: parseFloat(formData.value),
-        minPurchase: parseFloat(formData.minPurchase) || 0,
-        maxDiscount: parseFloat(formData.maxDiscount) || 0,
-        usageLimit: parseInt(formData.usageLimit) || 0,
-        usedCount: editingId ? formData.usedCount : 0,
-        createdAt: editingId ? formData.createdAt : new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        min_purchase: parseFloat(formData.minPurchase || formData.min_purchase) || 0,
+        max_discount: parseFloat(formData.maxDiscount || formData.max_discount) || 0,
+        usage_limit: parseInt(formData.usageLimit || formData.usage_limit) || 0,
+        used_count: editingId ? (formData.usedCount || formData.used_count) : 0,
+        expiry_date: formData.expiryDate || formData.expiry_date,
+        active: formData.active,
+        description: formData.description,
+        updated_at: new Date().toISOString()
       };
 
       if (editingId) {
-        await updateDoc(doc(db, 'coupons', editingId), couponData);
+        const { error } = await supabase.from('coupons').update(couponData).eq('id', editingId);
+        if (error) throw error;
         alert('Coupon updated successfully!');
       } else {
-        await addDoc(collection(db, 'coupons'), couponData);
+        const { error } = await supabase.from('coupons').insert([couponData]);
+        if (error) throw error;
         alert('Coupon created successfully!');
       }
 
@@ -75,7 +81,7 @@ const AdminCoupons = () => {
       resetForm();
       fetchCoupons();
     } catch (error) {
-      console.error('Error saving coupon:', error);
+      console.error('Error saving coupon:', error.message);
       alert('Failed to save coupon');
     } finally {
       setLoading(false);
@@ -83,7 +89,14 @@ const AdminCoupons = () => {
   };
 
   const handleEdit = (coupon) => {
-    setFormData(coupon);
+    setFormData({
+      ...coupon,
+      minPurchase: coupon.min_purchase,
+      maxDiscount: coupon.max_discount,
+      usageLimit: coupon.usage_limit,
+      usedCount: coupon.used_count,
+      expiryDate: coupon.expiry_date
+    });
     setEditingId(coupon.id);
     setShowCreateModal(true);
   };
@@ -92,24 +105,30 @@ const AdminCoupons = () => {
     if (!window.confirm('Are you sure you want to delete this coupon?')) return;
 
     try {
-      await deleteDoc(doc(db, 'coupons', id));
+      const { error } = await supabase.from('coupons').delete().eq('id', id);
+      if (error) throw error;
       alert('Coupon deleted successfully!');
       fetchCoupons();
     } catch (error) {
-      console.error('Error deleting coupon:', error);
+      console.error('Error deleting coupon:', error.message);
       alert('Failed to delete coupon');
     }
   };
 
   const toggleActive = async (id, currentStatus) => {
     try {
-      await updateDoc(doc(db, 'coupons', id), {
-        active: !currentStatus,
-        updatedAt: new Date().toISOString()
-      });
+      const { error } = await supabase
+        .from('coupons')
+        .update({
+          active: !currentStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
+        
+      if (error) throw error;
       fetchCoupons();
     } catch (error) {
-      console.error('Error toggling coupon status:', error);
+      console.error('Error toggling coupon status:', error.message);
     }
   };
 
@@ -165,19 +184,19 @@ const AdminCoupons = () => {
         <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 shadow">
           <p className="text-sm text-green-700 dark:text-green-400">Active Coupons</p>
           <p className="text-2xl font-bold text-green-800 dark:text-green-300">
-            {coupons.filter(c => c.active && !isExpired(c.expiryDate)).length}
+            {coupons.filter(c => c.active && !isExpired(c.expiry_date || c.expiryDate)).length}
           </p>
         </div>
         <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 shadow">
           <p className="text-sm text-blue-700 dark:text-blue-400">Total Uses</p>
           <p className="text-2xl font-bold text-blue-800 dark:text-blue-300">
-            {coupons.reduce((sum, c) => sum + (c.usedCount || 0), 0)}
+            {coupons.reduce((sum, c) => sum + (c.used_count || c.usedCount || 0), 0)}
           </p>
         </div>
         <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4 shadow">
           <p className="text-sm text-red-700 dark:text-red-400">Expired</p>
           <p className="text-2xl font-bold text-red-800 dark:text-red-300">
-            {coupons.filter(c => isExpired(c.expiryDate)).length}
+            {coupons.filter(c => isExpired(c.expiry_date || c.expiryDate)).length}
           </p>
         </div>
       </div>
@@ -210,29 +229,29 @@ const AdminCoupons = () => {
                   <p className="font-bold text-green-600">
                     {coupon.type === 'percentage' ? `${coupon.value}%` : `₦${coupon.value.toLocaleString()}`}
                   </p>
-                  {coupon.minPurchase > 0 && (
-                    <p className="text-xs text-gray-500">Min: ₦{coupon.minPurchase.toLocaleString()}</p>
+                  {(coupon.min_purchase || coupon.minPurchase) > 0 && (
+                    <p className="text-xs text-gray-500">Min: ₦{(coupon.min_purchase || coupon.minPurchase).toLocaleString()}</p>
                   )}
-                  {coupon.maxDiscount > 0 && coupon.type === 'percentage' && (
-                    <p className="text-xs text-gray-500">Max: ₦{coupon.maxDiscount.toLocaleString()}</p>
+                  {(coupon.max_discount || coupon.maxDiscount) > 0 && coupon.type === 'percentage' && (
+                    <p className="text-xs text-gray-500">Max: ₦{(coupon.max_discount || coupon.maxDiscount).toLocaleString()}</p>
                   )}
                 </td>
                 <td className="py-3 px-4">
-                  <p>{coupon.usedCount || 0} / {coupon.usageLimit || '∞'}</p>
-                  {coupon.usageLimit > 0 && (
+                  <p>{coupon.used_count || coupon.usedCount || 0} / {coupon.usage_limit || coupon.usageLimit || '∞'}</p>
+                  {(coupon.usage_limit || coupon.usageLimit) > 0 && (
                     <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
                       <div 
                         className="bg-blue-600 h-2 rounded-full" 
-                        style={{ width: `${((coupon.usedCount || 0) / coupon.usageLimit) * 100}%` }}
+                        style={{ width: `${((coupon.used_count || coupon.usedCount || 0) / (coupon.usage_limit || coupon.usageLimit)) * 100}%` }}
                       ></div>
                     </div>
                   )}
                 </td>
                 <td className="py-3 px-4 text-sm">
-                  {new Date(coupon.expiryDate).toLocaleDateString()}
+                  {new Date(coupon.expiry_date || coupon.expiryDate).toLocaleDateString()}
                 </td>
                 <td className="py-3 px-4">
-                  {isExpired(coupon.expiryDate) ? (
+                  {isExpired(coupon.expiry_date || coupon.expiryDate) ? (
                     <span className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">Expired</span>
                   ) : coupon.active ? (
                     <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">Active</span>

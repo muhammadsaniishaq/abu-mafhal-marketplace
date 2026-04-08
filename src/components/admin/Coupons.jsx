@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 
 const Coupons = () => {
   const [coupons, setCoupons] = useState([]);
@@ -12,12 +11,12 @@ const Coupons = () => {
     code: '',
     type: 'percentage',
     value: 0,
-    minPurchase: 0,
-    maxDiscount: 0,
-    usageLimit: 0,
-    expiryDate: '',
+    min_purchase: 0,
+    max_discount: 0,
+    usage_limit: 0,
+    expiry_date: '',
     active: true,
-    applicableTo: 'all'
+    applicable_to: 'all'
   });
 
   useEffect(() => {
@@ -26,11 +25,15 @@ const Coupons = () => {
 
   const fetchCoupons = async () => {
     try {
-      const snapshot = await getDocs(collection(db, 'coupons'));
-      const couponsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setCoupons(couponsData);
+      const { data, error } = await supabase
+        .from('coupons')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setCoupons(data || []);
     } catch (error) {
-      console.error('Error fetching coupons:', error);
+      console.error('Error fetching coupons:', error.message);
     } finally {
       setLoading(false);
     }
@@ -41,25 +44,40 @@ const Coupons = () => {
     setLoading(true);
 
     try {
+      const couponData = {
+        code: formData.code,
+        type: formData.type,
+        value: parseFloat(formData.value),
+        min_purchase: parseFloat(formData.min_purchase),
+        max_discount: parseFloat(formData.max_discount),
+        usage_limit: parseInt(formData.usage_limit),
+        expiry_date: formData.expiry_date,
+        active: formData.active,
+        applicable_to: formData.applicable_to,
+        updated_at: new Date().toISOString()
+      };
+
       if (editingCoupon) {
-        await updateDoc(doc(db, 'coupons', editingCoupon.id), {
-          ...formData,
-          updatedAt: new Date().toISOString()
-        });
+        const { error } = await supabase
+          .from('coupons')
+          .update(couponData)
+          .eq('id', editingCoupon.id);
+        if (error) throw error;
         alert('Coupon updated successfully!');
       } else {
-        await addDoc(collection(db, 'coupons'), {
-          ...formData,
-          usedCount: 0,
-          createdAt: new Date().toISOString()
-        });
+        couponData.used_count = 0;
+        couponData.created_at = new Date().toISOString();
+        const { error } = await supabase
+          .from('coupons')
+          .insert(couponData);
+        if (error) throw error;
         alert('Coupon created successfully!');
       }
       
       resetForm();
       fetchCoupons();
     } catch (error) {
-      console.error('Error saving coupon:', error);
+      console.error('Error saving coupon:', error.message);
       alert('Failed to save coupon');
     } finally {
       setLoading(false);
@@ -69,15 +87,15 @@ const Coupons = () => {
   const handleEdit = (coupon) => {
     setEditingCoupon(coupon);
     setFormData({
-      code: coupon.code,
-      type: coupon.type,
-      value: coupon.value,
-      minPurchase: coupon.minPurchase,
-      maxDiscount: coupon.maxDiscount,
-      usageLimit: coupon.usageLimit,
-      expiryDate: coupon.expiryDate,
-      active: coupon.active,
-      applicableTo: coupon.applicableTo
+      code: coupon.code || '',
+      type: coupon.type || 'percentage',
+      value: coupon.value || 0,
+      min_purchase: coupon.min_purchase || coupon.minPurchase || 0,
+      max_discount: coupon.max_discount || coupon.maxDiscount || 0,
+      usage_limit: coupon.usage_limit || coupon.usageLimit || 0,
+      expiry_date: coupon.expiry_date || coupon.expiryDate || '',
+      active: coupon.active ?? true,
+      applicable_to: coupon.applicable_to || coupon.applicableTo || 'all'
     });
     setShowModal(true);
   };
@@ -85,11 +103,15 @@ const Coupons = () => {
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this coupon?')) {
       try {
-        await deleteDoc(doc(db, 'coupons', id));
+        const { error } = await supabase
+          .from('coupons')
+          .delete()
+          .eq('id', id);
+        if (error) throw error;
         alert('Coupon deleted successfully!');
         fetchCoupons();
       } catch (error) {
-        console.error('Error deleting coupon:', error);
+        console.error('Error deleting coupon:', error.message);
       }
     }
   };
@@ -99,12 +121,12 @@ const Coupons = () => {
       code: '',
       type: 'percentage',
       value: 0,
-      minPurchase: 0,
-      maxDiscount: 0,
-      usageLimit: 0,
-      expiryDate: '',
+      min_purchase: 0,
+      max_discount: 0,
+      usage_limit: 0,
+      expiry_date: '',
       active: true,
-      applicableTo: 'all'
+      applicable_to: 'all'
     });
     setEditingCoupon(null);
     setShowModal(false);
@@ -153,10 +175,12 @@ const Coupons = () => {
 
             <div className="space-y-2 text-sm">
               <p><strong>Discount:</strong> {coupon.type === 'percentage' ? `${coupon.value}%` : `₦${coupon.value}`}</p>
-              <p><strong>Min Purchase:</strong> ₦{coupon.minPurchase?.toLocaleString()}</p>
-              {coupon.maxDiscount > 0 && <p><strong>Max Discount:</strong> ₦{coupon.maxDiscount?.toLocaleString()}</p>}
-              <p><strong>Usage:</strong> {coupon.usedCount || 0} / {coupon.usageLimit || '∞'}</p>
-              <p><strong>Expires:</strong> {new Date(coupon.expiryDate).toLocaleDateString()}</p>
+              <p><strong>Min Purchase:</strong> ₦{(coupon.min_purchase || coupon.minPurchase || 0).toLocaleString()}</p>
+              {(coupon.max_discount > 0 || coupon.maxDiscount > 0) && (
+                <p><strong>Max Discount:</strong> ₦{(coupon.max_discount || coupon.maxDiscount || 0).toLocaleString()}</p>
+              )}
+              <p><strong>Usage:</strong> {coupon.used_count || coupon.usedCount || 0} / {coupon.usage_limit || coupon.usageLimit || '∞'}</p>
+              <p><strong>Expires:</strong> {new Date(coupon.expiry_date || coupon.expiryDate).toLocaleDateString()}</p>
             </div>
           </div>
         ))}
@@ -218,8 +242,8 @@ const Coupons = () => {
                   <label className="block text-sm font-medium mb-2">Min Purchase (₦)</label>
                   <input
                     type="number"
-                    value={formData.minPurchase}
-                    onChange={(e) => setFormData({...formData, minPurchase: parseFloat(e.target.value)})}
+                    value={formData.min_purchase}
+                    onChange={(e) => setFormData({...formData, min_purchase: parseFloat(e.target.value)})}
                     min="0"
                     className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
                   />
@@ -229,8 +253,8 @@ const Coupons = () => {
                   <label className="block text-sm font-medium mb-2">Max Discount (₦)</label>
                   <input
                     type="number"
-                    value={formData.maxDiscount}
-                    onChange={(e) => setFormData({...formData, maxDiscount: parseFloat(e.target.value)})}
+                    value={formData.max_discount}
+                    onChange={(e) => setFormData({...formData, max_discount: parseFloat(e.target.value)})}
                     min="0"
                     className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
                   />
@@ -240,8 +264,8 @@ const Coupons = () => {
                   <label className="block text-sm font-medium mb-2">Usage Limit</label>
                   <input
                     type="number"
-                    value={formData.usageLimit}
-                    onChange={(e) => setFormData({...formData, usageLimit: parseInt(e.target.value)})}
+                    value={formData.usage_limit}
+                    onChange={(e) => setFormData({...formData, usage_limit: parseInt(e.target.value)})}
                     min="0"
                     placeholder="0 for unlimited"
                     className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
@@ -252,8 +276,8 @@ const Coupons = () => {
                   <label className="block text-sm font-medium mb-2">Expiry Date</label>
                   <input
                     type="date"
-                    value={formData.expiryDate}
-                    onChange={(e) => setFormData({...formData, expiryDate: e.target.value})}
+                    value={formData.expiry_date}
+                    onChange={(e) => setFormData({...formData, expiry_date: e.target.value})}
                     required
                     className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
                   />
@@ -263,8 +287,8 @@ const Coupons = () => {
               <div>
                 <label className="block text-sm font-medium mb-2">Applicable To</label>
                 <select
-                  value={formData.applicableTo}
-                  onChange={(e) => setFormData({...formData, applicableTo: e.target.value})}
+                  value={formData.applicable_to}
+                  onChange={(e) => setFormData({...formData, applicable_to: e.target.value})}
                   className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
                 >
                   <option value="all">All Products</option>

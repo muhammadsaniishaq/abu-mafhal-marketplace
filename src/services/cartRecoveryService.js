@@ -1,5 +1,4 @@
-import { collection, addDoc, query, where, getDocs, updateDoc, doc, deleteDoc } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { supabase } from '../config/supabase';
 
 export const saveAbandonedCart = async (userId, cartItems, userEmail, userName) => {
   try {
@@ -8,109 +7,120 @@ export const saveAbandonedCart = async (userId, cartItems, userEmail, userName) 
     const total = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
     // Check if abandoned cart already exists
-    const q = query(
-      collection(db, 'abandonedCarts'),
-      where('userId', '==', userId),
-      where('recovered', '==', false)
-    );
-    const existing = await getDocs(q);
+    const { data: existing, error: findError } = await supabase
+      .from('abandoned_carts')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('recovered', false)
+      .maybeSingle();
 
-    if (!existing.empty) {
+    if (existing) {
       // Update existing
-      await updateDoc(doc(db, 'abandonedCarts', existing.docs[0].id), {
-        items: cartItems,
-        total,
-        updatedAt: new Date().toISOString()
-      });
+      await supabase
+        .from('abandoned_carts')
+        .update({
+          items: cartItems,
+          total,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existing.id);
     } else {
       // Create new
-      await addDoc(collection(db, 'abandonedCarts'), {
-        userId,
-        userEmail,
-        userName,
-        items: cartItems,
-        total,
-        recovered: false,
-        remindersSent: 0,
-        createdAt: new Date().toISOString(),
-        lastReminderSent: null
-      });
+      await supabase
+        .from('abandoned_carts')
+        .insert({
+          user_id: userId,
+          user_email: userEmail,
+          user_name: userName,
+          items: cartItems,
+          total,
+          recovered: false,
+          reminders_sent: 0,
+          created_at: new Date().toISOString(),
+          last_reminder_sent: null
+        });
     }
   } catch (error) {
-    console.error('Error saving abandoned cart:', error);
+    console.error('Error saving abandoned cart:', error.message);
   }
 };
 
 export const markCartAsRecovered = async (userId) => {
   try {
-    const q = query(
-      collection(db, 'abandonedCarts'),
-      where('userId', '==', userId),
-      where('recovered', '==', false)
-    );
-    const snapshot = await getDocs(q);
-    
-    snapshot.docs.forEach(async (docSnap) => {
-      await updateDoc(doc(db, 'abandonedCarts', docSnap.id), {
+    await supabase
+      .from('abandoned_carts')
+      .update({
         recovered: true,
-        recoveredAt: new Date().toISOString()
-      });
-    });
+        recovered_at: new Date().toISOString()
+      })
+      .eq('user_id', userId)
+      .eq('recovered', false);
   } catch (error) {
-    console.error('Error marking cart as recovered:', error);
+    console.error('Error marking cart as recovered:', error.message);
   }
 };
 
 export const deleteAbandonedCart = async (userId) => {
   try {
-    const q = query(
-      collection(db, 'abandonedCarts'),
-      where('userId', '==', userId)
-    );
-    const snapshot = await getDocs(q);
-    
-    snapshot.docs.forEach(async (docSnap) => {
-      await deleteDoc(doc(db, 'abandonedCarts', docSnap.id));
-    });
+    await supabase
+      .from('abandoned_carts')
+      .delete()
+      .eq('user_id', userId);
   } catch (error) {
-    console.error('Error deleting abandoned cart:', error);
+    console.error('Error deleting abandoned cart:', error.message);
   }
 };
 
 export const getAbandonedCarts = async () => {
   try {
-    const snapshot = await getDocs(collection(db, 'abandonedCarts'));
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const { data, error } = await supabase
+      .from('abandoned_carts')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    return data || [];
   } catch (error) {
-    console.error('Error getting abandoned carts:', error);
+    console.error('Error getting abandoned carts:', error.message);
     return [];
   }
 };
 
 export const sendCartReminder = async (cartId) => {
   try {
-    const cartDoc = await getDocs(doc(db, 'abandonedCarts', cartId));
-    const cart = cartDoc.data();
+    const { data: cart, error: fetchError } = await supabase
+      .from('abandoned_carts')
+      .select('*')
+      .eq('id', cartId)
+      .single();
 
-    await updateDoc(doc(db, 'abandonedCarts', cartId), {
-      remindersSent: (cart.remindersSent || 0) + 1,
-      lastReminderSent: new Date().toISOString()
-    });
+    if (fetchError) throw fetchError;
 
-    // Queue email notification
-    await addDoc(collection(db, 'emailQueue'), {
-      to: cart.userEmail,
-      template: 'cart-reminder',
-      data: {
-        userName: cart.userName,
-        items: cart.items,
-        total: cart.total,
-        cartUrl: `${window.location.origin}/cart`
-      },
-      status: 'pending',
-      createdAt: new Date().toISOString()
-    });
+    await supabase
+      .from('abandoned_carts')
+      .update({
+        reminders_sent: (cart.reminders_sent || 0) + 1,
+        last_reminder_sent: new Date().toISOString()
+      })
+      .eq('id', cartId);
+
+    // Queue email notification in Supabase 'mail' table
+    await supabase
+      .from('mail')
+      .insert({
+        to: cart.user_email,
+        subject: 'Don\'t forget your items!',
+        html: `
+          <h1>Hi ${cart.user_name || 'there'},</h1>
+          <p>You left some items in your cart. Come back and finish your purchase!</p>
+          <p><strong>Total: ₦${cart.total.toLocaleString()}</strong></p>
+          <a href="${window.location.origin}/cart">View Your Cart</a>
+        `,
+        status: 'pending',
+        type: 'cart-reminder',
+        created_at: new Date().toISOString()
+      });
   } catch (error) {
-    console.error('Error sending cart reminder:', error);
+    console.error('Error sending cart reminder:', error.message);
   }
 };

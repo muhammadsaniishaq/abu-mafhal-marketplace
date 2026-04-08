@@ -1,5 +1,4 @@
-import { collection, addDoc, query, where, getDocs, updateDoc, doc, orderBy, limit } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { supabase } from '../config/supabase';
 
 export const NOTIFICATION_TYPES = {
   ORDER_PLACED: 'order_placed',
@@ -21,13 +20,17 @@ export const NOTIFICATION_TYPES = {
 
 export const createNotification = async (notificationData) => {
   try {
-    await addDoc(collection(db, 'notifications'), {
-      ...notificationData,
-      read: false,
-      createdAt: new Date().toISOString()
-    });
+    const { error } = await supabase
+      .from('notifications')
+      .insert({
+        ...notificationData,
+        user_id: notificationData.userId,
+        read: false,
+        created_at: new Date().toISOString()
+      });
+    if (error) throw error;
   } catch (error) {
-    console.error('Error creating notification:', error);
+    console.error('Error creating notification:', error.message);
     throw error;
   }
 };
@@ -184,79 +187,80 @@ export const sendLoyaltyMilestone = async (userId, tier, points) => {
 
 export const getUserNotifications = async (userId, unreadOnly = false) => {
   try {
-    let q = query(
-      collection(db, 'notifications'),
-      where('userId', '==', userId),
-      orderBy('createdAt', 'desc'),
-      limit(50)
-    );
+    let query = supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(50);
 
     if (unreadOnly) {
-      q = query(q, where('read', '==', false));
+      query = query.eq('read', false);
     }
 
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
   } catch (error) {
-    console.error('Error getting notifications:', error);
+    console.error('Error getting notifications:', error.message);
     return [];
   }
 };
 
 export const markAsRead = async (notificationId) => {
   try {
-    await updateDoc(doc(db, 'notifications', notificationId), {
-      read: true,
-      readAt: new Date().toISOString()
-    });
+    await supabase
+      .from('notifications')
+      .update({
+        read: true,
+        read_at: new Date().toISOString()
+      })
+      .eq('id', notificationId);
   } catch (error) {
-    console.error('Error marking notification as read:', error);
+    console.error('Error marking notification as read:', error.message);
   }
 };
 
 export const markAllAsRead = async (userId) => {
   try {
-    const q = query(
-      collection(db, 'notifications'),
-      where('userId', '==', userId),
-      where('read', '==', false)
-    );
-    const snapshot = await getDocs(q);
-    
-    const updates = snapshot.docs.map(doc => 
-      updateDoc(doc.ref, {
+    await supabase
+      .from('notifications')
+      .update({
         read: true,
-        readAt: new Date().toISOString()
+        read_at: new Date().toISOString()
       })
-    );
-
-    await Promise.all(updates);
+      .eq('user_id', userId)
+      .eq('read', false);
   } catch (error) {
-    console.error('Error marking all as read:', error);
+    console.error('Error marking all as read:', error.message);
   }
 };
 
 export const deleteNotification = async (notificationId) => {
   try {
-    await updateDoc(doc(db, 'notifications', notificationId), {
-      deleted: true
-    });
+    await supabase
+      .from('notifications')
+      .update({
+        deleted: true
+      })
+      .eq('id', notificationId);
   } catch (error) {
-    console.error('Error deleting notification:', error);
+    console.error('Error deleting notification:', error.message);
   }
 };
 
 export const getUnreadCount = async (userId) => {
   try {
-    const q = query(
-      collection(db, 'notifications'),
-      where('userId', '==', userId),
-      where('read', '==', false)
-    );
-    const snapshot = await getDocs(q);
-    return snapshot.size;
+    const { count, error } = await supabase
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('read', false);
+      
+    if (error) throw error;
+    return count || 0;
   } catch (error) {
-    console.error('Error getting unread count:', error);
+    console.error('Error getting unread count:', error.message);
     return 0;
   }
 };

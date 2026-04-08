@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import { useCart } from '../context/CartContext';
 import AddToWishlistButton from '../components/common/AddToWishlistButton';
 import ProductReviews from '../components/common/ProductReviews';
@@ -22,28 +21,34 @@ const ProductDetails = () => {
 
   const fetchProduct = async () => {
     try {
-      const productDoc = await getDoc(doc(db, 'products', id));
-      if (productDoc.exists()) {
-        const productData = { id: productDoc.id, ...productDoc.data() };
+      const { data: productData, error: productError } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', id)
+        .single();
+        
+      if (productError) throw productError;
+
+      if (productData) {
         setProduct(productData);
 
         // Fetch related products
         if (productData.category) {
-          const q = query(
-            collection(db, 'products'),
-            where('category', '==', productData.category),
-            where('status', '==', 'approved')
-          );
-          const snapshot = await getDocs(q);
-          const related = snapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() }))
-            .filter(p => p.id !== id)
-            .slice(0, 4);
-          setRelatedProducts(related);
+          const { data: relatedData, error: relatedError } = await supabase
+            .from('products')
+            .select('*')
+            .eq('category', productData.category)
+            .eq('status', 'approved')
+            .neq('id', id)
+            .limit(4);
+
+          if (!relatedError && relatedData) {
+            setRelatedProducts(relatedData);
+          }
         }
       }
     } catch (error) {
-      console.error('Error fetching product:', error);
+      console.error('Error fetching product:', error.message);
     } finally {
       setLoading(false);
     }
@@ -157,9 +162,9 @@ const ProductDetails = () => {
                 <p className="text-4xl font-bold text-orange-600">
                   ₦{product.price?.toLocaleString()}
                 </p>
-                {product.originalPrice && product.originalPrice > product.price && (
+                {(product.original_price || product.originalPrice) && (product.original_price || product.originalPrice) > product.price && (
                   <p className="text-xl text-gray-500 line-through">
-                    ₦{product.originalPrice?.toLocaleString()}
+                    ₦{(product.original_price || product.originalPrice)?.toLocaleString()}
                   </p>
                 )}
                 {product.discount && (
@@ -222,19 +227,19 @@ const ProductDetails = () => {
               </div>
 
               {/* Additional Info */}
-              {product.shippingInfo && (
-                <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                  <h4 className="font-semibold mb-2">🚚 Shipping Information</h4>
-                  <p className="text-sm">{product.shippingInfo}</p>
-                </div>
-              )}
+                {(product.shipping_info || product.shippingInfo) && (
+                  <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                    <h4 className="font-semibold mb-2">🚚 Shipping Information</h4>
+                    <p className="text-sm">{product.shipping_info || product.shippingInfo}</p>
+                  </div>
+                )}
 
-              {product.returnPolicy && (
-                <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                  <h4 className="font-semibold mb-2">↩️ Return Policy</h4>
-                  <p className="text-sm">{product.returnPolicy}</p>
-                </div>
-              )}
+                {(product.return_policy || product.returnPolicy) && (
+                  <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                    <h4 className="font-semibold mb-2">↩️ Return Policy</h4>
+                    <p className="text-sm">{product.return_policy || product.returnPolicy}</p>
+                  </div>
+                )}
             </div>
           </div>
         </div>
@@ -242,7 +247,7 @@ const ProductDetails = () => {
         {/* REVIEWS SECTION - NEW */}
         <div className="mb-6">
           <ProductReviews productId={id} />
-          <ProductReviews productId={id} vendorId={product.vendorId} />
+          <ProductReviews productId={id} vendorId={product.vendor_id || product.vendorId} />
 
         </div>
 

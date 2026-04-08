@@ -1,5 +1,4 @@
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import { 
   createNotification, 
   NOTIFICATION_TYPES
@@ -17,7 +16,7 @@ export const sendBulkNotification = async (userIds, notificationData) => {
     await Promise.all(notifications);
     return true;
   } catch (error) {
-    console.error('Error sending bulk notifications:', error);
+    console.error('Error sending bulk notifications:', error.message);
     throw error;
   }
 };
@@ -25,17 +24,19 @@ export const sendBulkNotification = async (userIds, notificationData) => {
 // Send notification to all users with specific role
 export const sendNotificationToRole = async (role, notificationData) => {
   try {
-    const q = query(
-      collection(db, 'users'),
-      where('role', '==', role)
-    );
-    const snapshot = await getDocs(q);
-    const userIds = snapshot.docs.map(doc => doc.id);
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('role', role);
+
+    if (error) throw error;
+    
+    const userIds = data.map(doc => doc.id);
     
     await sendBulkNotification(userIds, notificationData);
     return true;
   } catch (error) {
-    console.error('Error sending notification to role:', error);
+    console.error('Error sending notification to role:', error.message);
     throw error;
   }
 };

@@ -1,6 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
-// Assume the firebase services and global variables are available in the scope
-// of the immersive environment.
+// Abu Mafhal AI Chat Assistant Prototype
 
 // --- CONFIGURATION CONSTANTS (To be used by the Next.js API Route) ---
 // In a real Next.js app, this would be a server-side API call.

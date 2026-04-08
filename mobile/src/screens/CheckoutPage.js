@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { styles as themeStyles } from '../styles/theme';
-import { useAppSettings } from '../context/AppSettingsContext';
+import { useAppSettings, useBrandTheme } from '../context/AppSettingsContext';
 import FlutterwaveCheckout from '../lib/flutterwave/FlutterwaveCheckout';
 import CheckoutAddressCard from '../components/CheckoutAddressCard';
 import { CheckoutAddressSkeleton, CheckoutSummarySkeleton } from '../components/CheckoutSkeleton';
@@ -26,6 +26,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
     }, [cart]);
 
     const { settings } = useAppSettings();
+    const { primary, secondary, primaryBg, onPrimary } = useBrandTheme();
 
     // Wizard State
     const [currentStep, setCurrentStep] = useState(1);
@@ -37,8 +38,25 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
     const [addresses, setAddresses] = useState([]);
     const [selectedAddressId, setSelectedAddressId] = useState(null);
 
+    const availableMethods = useMemo(() => {
+        return [
+            { id: 'Paystack', enabled: settings?.payment_methods?.paystack !== false, name: 'Paystack', sub: 'Cards, Transfer, USSD, Bank', logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSzFzmpCa0Tav9NttiYF10t9wftJPQ0XYPBkA&s', recommended: true, icon: 'card-outline' },
+            { id: 'Flutterwave', enabled: settings?.payment_methods?.flutterwave !== false, name: 'Flutterwave', sub: 'Cards, Bank, Mobile Money', logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-W6MLvD_saE20EDSZzVPspKqcKxZ89rW8uw&s', icon: 'flash' },
+            { id: 'Coinbase', enabled: settings?.payment_methods?.crypto !== false, name: 'Coinbase Crypto', sub: 'BTC, ETH, USDT, USDC', logo: 'https://media.licdn.com/dms/image/v2/D4E0BAQFBUuEd8VGK4w/company-logo_200_200/B4EZs3tEB3IQAI-/0/1766166118811/coinbase_logo?e=2147483647&v=beta&t=mPgscbzEhR9TBOuI9MM0BDNcbE4tvvbhF38KM3V1CAY', icon: 'logo-bitcoin' },
+            { id: 'Wallet', enabled: settings?.payment_methods?.wallet !== false, name: 'My Wallet', sub: `Balance: \u20A6${(profile?.wallet_balance || 0).toLocaleString()}`, icon: 'wallet' }
+        ].filter(m => m.enabled);
+    }, [settings, profile]);
+
     // Step 2 State
-    const [paymentMethod, setPaymentMethod] = useState('Paystack');
+    const [paymentMethod, setPaymentMethod] = useState('');
+
+    useEffect(() => {
+        if (!paymentMethod && availableMethods.length > 0) {
+            setPaymentMethod(availableMethods[0].id);
+        } else if (paymentMethod && !availableMethods.find(m => m.id === paymentMethod) && availableMethods.length > 0) {
+            setPaymentMethod(availableMethods[0].id);
+        }
+    }, [availableMethods, paymentMethod]);
 
     // Step 3 State
     const [couponCode, setCouponCode] = useState('');
@@ -54,18 +72,35 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [paymentLink, setPaymentLink] = useState('');
 
-    // Calculations
+    // ── Dynamic Shipping Fee ─────────────────────────────────────────────────
     const shippingFee = useMemo(() => {
         const selectedAddr = addresses.find(a => a.id === selectedAddressId);
-        if (!selectedAddr) return 0;
-        // Basic shipping logic for demonstration
-        const majorStates = ['Lagos', 'Abuja', 'Kano', 'Rivers'];
-        return majorStates.includes(selectedAddr.state) ? 1500 : 3000;
-    }, [selectedAddressId, addresses]);
+        // If all items in cart have free_shipping, it's free
+        const allFreeShipping = cart.length > 0 && cart.every(item => item.free_shipping === true);
+        if (allFreeShipping) return 0;
+        // Check admin-set free nationwide shipping
+        if (settings?.free_nationwide_shipping) return 0;
+        // Per-state lookup from admin settings
+        if (selectedAddr?.state && settings?.shipping_fees) {
+            const fee = settings.shipping_fees[selectedAddr.state];
+            if (fee !== undefined) return fee;
+        }
+        // Fallback
+        return parseFloat(settings?.default_shipping_fee) || 3000;
+    }, [selectedAddressId, addresses, cart, settings]);
 
+    // ── Tax Amount ───────────────────────────────────────────────────────────
     const taxAmount = useMemo(() => {
-        return Math.round(initialTotal * 0.05); // 5% VAT
-    }, [initialTotal]);
+        if (settings?.tax_enabled === false) return 0;
+        const rate = parseFloat(settings?.tax_rate) || 7.5;
+        return Math.round(initialTotal * (rate / 100));
+    }, [initialTotal, settings]);
+
+    const taxRateLabel = (parseFloat(settings?.tax_rate) || 7.5).toFixed(1);
+    const isTaxEnabled = settings?.tax_enabled !== false;
+
+    // ── Is shipping waived ───────────────────────────────────────────────────
+    const isShippingFree = shippingFee === 0;
 
     const finalTotal = useMemo(() => {
         return Math.max(0, initialTotal + shippingFee + taxAmount - discountAmount);
@@ -422,12 +457,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                         <Text style={localStyles.sectionTitle}>Payment</Text>
                         <Text style={localStyles.sectionSub}>Select your preferred payment method</Text>
 
-                        {[
-                            { id: 'Paystack', name: 'Paystack', sub: 'Cards, Transfer, USSD, Bank', logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSzFzmpCa0Tav9NttiYF10t9wftJPQ0XYPBkA&s', recommended: true, icon: 'card-outline' },
-                            { id: 'Flutterwave', name: 'Flutterwave', sub: 'Cards, Bank, Mobile Money', logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-W6MLvD_saE20EDSZzVPspKqcKxZ89rW8uw&s', icon: 'flash' },
-                            { id: 'Coinbase', name: 'Coinbase Crypto', sub: 'BTC, ETH, USDT, USDC', logo: 'https://media.licdn.com/dms/image/v2/D4E0BAQFBUuEd8VGK4w/company-logo_200_200/B4EZs3tEB3IQAI-/0/1766166118811/coinbase_logo?e=2147483647&v=beta&t=mPgscbzEhR9TBOuI9MM0BDNcbE4tvvbhF38KM3V1CAY', icon: 'logo-bitcoin' },
-                            { id: 'Wallet', name: 'My Wallet', sub: `Balance: \u20A6${(profile?.wallet_balance || 0).toLocaleString()}`, icon: 'wallet' }
-                        ].map(method => (
+                        {availableMethods.map(method => (
                             <TouchableOpacity
                                 key={method.id}
                                 style={[localStyles.paymentCard, paymentMethod === method.id && localStyles.paymentCardActive]}
@@ -558,29 +588,31 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                         </View>
 
                         {/* Coupon Section */}
-                        <View style={localStyles.couponOuter}>
-                            <Text style={localStyles.labelSmall}>Have a coupon?</Text>
-                            <View style={localStyles.couponRow}>
-                                <TextInput
-                                    style={localStyles.couponInput}
-                                    placeholder="Enter promo code"
-                                    value={couponCode}
-                                    onChangeText={setCouponCode}
-                                    autoCapitalize="characters"
-                                    placeholderTextColor="#94A3B8"
-                                    editable={!appliedCoupon}
-                                />
-                                <TouchableOpacity
-                                    style={[localStyles.couponBtn, appliedCoupon && localStyles.couponBtnApplied]}
-                                    onPress={appliedCoupon ? () => { setAppliedCoupon(null); setDiscountAmount(0); setCouponCode(''); } : handleApplyCoupon}
-                                    disabled={validatingCoupon}
-                                >
-                                    {validatingCoupon ? <ActivityIndicator size="small" color="white" /> : (
-                                        <Text style={localStyles.couponBtnText}>{appliedCoupon ? 'Remove' : 'Apply'}</Text>
-                                    )}
-                                </TouchableOpacity>
+                        {settings?.enable_coupons !== false && (
+                            <View style={localStyles.couponOuter}>
+                                <Text style={localStyles.labelSmall}>Have a coupon?</Text>
+                                <View style={localStyles.couponRow}>
+                                    <TextInput
+                                        style={localStyles.couponInput}
+                                        placeholder="Enter promo code"
+                                        value={couponCode}
+                                        onChangeText={setCouponCode}
+                                        autoCapitalize="characters"
+                                        placeholderTextColor="#94A3B8"
+                                        editable={!appliedCoupon}
+                                    />
+                                    <TouchableOpacity
+                                        style={[localStyles.couponBtn, appliedCoupon && localStyles.couponBtnApplied]}
+                                        onPress={appliedCoupon ? () => { setAppliedCoupon(null); setDiscountAmount(0); setCouponCode(''); } : handleApplyCoupon}
+                                        disabled={validatingCoupon}
+                                    >
+                                        {validatingCoupon ? <ActivityIndicator size="small" color="white" /> : (
+                                            <Text style={localStyles.couponBtnText}>{appliedCoupon ? 'Remove' : 'Apply'}</Text>
+                                        )}
+                                    </TouchableOpacity>
+                                </View>
                             </View>
-                        </View>
+                        )}
 
                         {/* Notes Section */}
                         <View style={localStyles.noteContainer}>
@@ -629,12 +661,22 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                                 </View>
                                 <View style={localStyles.invoiceRow}>
                                     <Text style={localStyles.invoiceLabel}>Shipping & Delivery</Text>
-                                    <Text style={localStyles.invoiceValue}>{formatCurrency(shippingFee)}</Text>
+                                    {isShippingFree ? (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                            <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#16A34A' }}>FREE 🎉</Text>
+                                            </View>
+                                        </View>
+                                    ) : (
+                                        <Text style={localStyles.invoiceValue}>{formatCurrency(shippingFee)}</Text>
+                                    )}
                                 </View>
-                                <View style={localStyles.invoiceRow}>
-                                    <Text style={localStyles.invoiceLabel}>VAT (5.0%)</Text>
-                                    <Text style={localStyles.invoiceValue}>{formatCurrency(taxAmount)}</Text>
-                                </View>
+                                {isTaxEnabled && (
+                                    <View style={localStyles.invoiceRow}>
+                                        <Text style={localStyles.invoiceLabel}>VAT ({taxRateLabel}%)</Text>
+                                        <Text style={localStyles.invoiceValue}>{formatCurrency(taxAmount)}</Text>
+                                    </View>
+                                )}
                                 {discountAmount > 0 && (
                                     <View style={localStyles.invoiceRow}>
                                         <Text style={[localStyles.invoiceLabel, { color: '#10B981' }]}>Promotional Discount</Text>
@@ -667,7 +709,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                     </TouchableOpacity>
                 )}
                 <TouchableOpacity
-                    style={[localStyles.btnPrimary, { flex: 1 }]}
+                    style={[localStyles.btnPrimary, { flex: 1, backgroundColor: primary, shadowColor: primary }]}
                     onPress={currentStep === 3 ? handleFinalSubmit : validateAndNext}
                     disabled={isProcessing}
                 >
@@ -798,7 +840,7 @@ const localStyles = StyleSheet.create({
     finalTotalSub: { fontSize: 11, color: '#94A3B8', marginTop: 4 },
     finalTotalValue: { fontSize: 28, fontWeight: '900', color: '#6366F1' },
     footerActions: { backgroundColor: 'white', padding: 20, paddingBottom: Platform.OS === 'ios' ? 40 : 20, flexDirection: 'row', gap: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9', shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 20 },
-    btnPrimary: { height: 64, backgroundColor: '#0F172A', borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', shadowColor: '#0F172A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
+    btnPrimary: { height: 64, borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.22, shadowRadius: 8, elevation: 4 },
     btnPrimaryText: { color: 'white', fontSize: 16, fontWeight: '800' },
     btnSecondary: { height: 64, paddingHorizontal: 28, backgroundColor: '#F1F5F9', borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
     btnSecondaryText: { color: '#0F172A', fontSize: 16, fontWeight: '800' }

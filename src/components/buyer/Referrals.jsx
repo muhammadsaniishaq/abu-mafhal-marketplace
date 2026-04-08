@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, addDoc, query, where, doc, updateDoc, getDoc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useAuth } from '../../context/AuthContext';
 
 const Referrals = () => {
@@ -15,7 +14,7 @@ const Referrals = () => {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
-  const referralCode = currentUser?.uid?.substring(0, 8).toUpperCase() || 'LOADING';
+  const referralCode = (currentUser?.id || currentUser?.uid)?.substring(0, 8).toUpperCase() || 'LOADING';
   const referralLink = `${window.location.origin}/register?ref=${referralCode}`;
   const referralReward = 500; // 500 Naira per successful referral
 
@@ -25,10 +24,14 @@ const Referrals = () => {
 
   const fetchReferrals = async () => {
     try {
-      const q = query(collection(db, 'referrals'), where('referrerId', '==', currentUser.uid));
-      const snapshot = await getDocs(q);
-      const referralsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const { data, error } = await supabase
+        .from('referrals')
+        .select('*')
+        .eq('referrer_id', currentUser.id || currentUser.uid);
+
+      if (error) throw error;
       
+      const referralsData = data || [];
       setReferrals(referralsData);
 
       const successful = referralsData.filter(r => r.status === 'completed');
@@ -41,7 +44,7 @@ const Referrals = () => {
         pendingRewards: pending.length * referralReward
       });
     } catch (error) {
-      console.error('Error fetching referrals:', error);
+      console.error('Error fetching referrals:', error.message);
     } finally {
       setLoading(false);
     }
@@ -194,8 +197,8 @@ const Referrals = () => {
               <tbody>
                 {referrals.map(referral => (
                   <tr key={referral.id} className="border-b dark:border-gray-700">
-                    <td className="py-3 px-4">{new Date(referral.createdAt).toLocaleDateString()}</td>
-                    <td className="py-3 px-4">{referral.referredUserName || 'New User'}</td>
+                    <td className="py-3 px-4">{new Date(referral.created_at || referral.createdAt).toLocaleDateString()}</td>
+                    <td className="py-3 px-4">{referral.referred_user_name || referral.referredUserName || 'New User'}</td>
                     <td className="py-3 px-4">
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                         referral.status === 'completed' ? 'bg-green-100 text-green-800' :

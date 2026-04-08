@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import Loader from '../common/Loader';
 
 const CMS = () => {
@@ -20,14 +19,11 @@ const CMS = () => {
 
   const fetchContent = async () => {
     try {
-      const snapshot = await getDocs(collection(db, 'cms'));
-      const contentList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setContent(contentList);
+      const { data, error } = await supabase.from('cms').select('*');
+      if (error) throw error;
+      setContent(data || []);
     } catch (error) {
-      console.error('Error fetching content:', error);
+      console.error('Error fetching content:', error.message);
     } finally {
       setLoading(false);
     }
@@ -36,39 +32,44 @@ const CMS = () => {
   const handleAdd = async (e) => {
     e.preventDefault();
     try {
-      await addDoc(collection(db, 'cms'), {
-        ...newContent,
-        createdAt: new Date()
-      });
+      const { error } = await supabase.from('cms').insert([{
+        type: newContent.type,
+        title: newContent.title,
+        content: newContent.content,
+        active: newContent.active
+      }]);
+      if (error) throw error;
       alert('Content added successfully!');
       fetchContent();
       setNewContent({ type: 'banner', title: '', content: '', active: true });
     } catch (error) {
-      console.error('Error adding content:', error);
+      console.error('Error adding content:', error.message);
       alert('Error adding content');
     }
   };
 
   const handleUpdate = async (id, data) => {
     try {
-      await updateDoc(doc(db, 'cms', id), data);
+      const { error } = await supabase.from('cms').update(data).eq('id', id);
+      if (error) throw error;
       alert('Content updated successfully!');
       fetchContent();
       setEditing(null);
     } catch (error) {
-      console.error('Error updating content:', error);
+      console.error('Error updating content:', error.message);
       alert('Error updating content');
     }
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this content?')) return;
+    if (!window.confirm('Are you sure you want to delete this content?')) return;
     try {
-      await deleteDoc(doc(db, 'cms', id));
+      const { error } = await supabase.from('cms').delete().eq('id', id);
+      if (error) throw error;
       alert('Content deleted successfully!');
       fetchContent();
     } catch (error) {
-      console.error('Error deleting content:', error);
+      console.error('Error deleting content:', error.message);
       alert('Error deleting content');
     }
   };

@@ -1,7 +1,6 @@
 // src/components/admin/ProductModeration.jsx
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { formatCurrency, formatDate, getStatusColor } from '../../utils/helpers';
 
 const ProductModeration = () => {
@@ -15,11 +14,18 @@ const ProductModeration = () => {
 
   const fetchProducts = async () => {
     try {
-      const snapshot = await getDocs(collection(db, 'products'));
-      const productsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setProducts(productsData);
+      const { data, error } = await supabase
+        .from('products')
+        .select(`
+          *,
+          users!products_vendor_id_fkey (name, business_name)
+        `)
+        .order('created_at', { ascending: false });
+        
+      if (error) throw error;
+      setProducts(data || []);
     } catch (error) {
-      console.error('Error fetching products:', error);
+      console.error('Error fetching products:', error.message);
     } finally {
       setLoading(false);
     }
@@ -27,10 +33,15 @@ const ProductModeration = () => {
 
   const handleApprove = async (productId) => {
     try {
-      await updateDoc(doc(db, 'products', productId), { 
-        status: 'approved',
-        approvedAt: new Date().toISOString()
-      });
+      const { error } = await supabase
+        .from('products')
+        .update({
+          status: 'approved',
+          approved_at: new Date().toISOString()
+        })
+        .eq('id', productId);
+        
+      if (error) throw error;
       setProducts(products.map(p => p.id === productId ? {...p, status: 'approved'} : p));
     } catch (error) {
       alert('Failed to approve product');
@@ -42,11 +53,16 @@ const ProductModeration = () => {
     if (!reason) return;
 
     try {
-      await updateDoc(doc(db, 'products', productId), { 
-        status: 'rejected',
-        rejectionReason: reason,
-        rejectedAt: new Date().toISOString()
-      });
+      const { error } = await supabase
+        .from('products')
+        .update({
+          status: 'rejected',
+          rejection_reason: reason,
+          rejected_at: new Date().toISOString()
+        })
+        .eq('id', productId);
+        
+      if (error) throw error;
       setProducts(products.map(p => p.id === productId ? {...p, status: 'rejected'} : p));
     } catch (error) {
       alert('Failed to reject product');
@@ -109,7 +125,7 @@ const ProductModeration = () => {
                   </span>
                 </div>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                  by {product.vendorName}
+                  by {product.users?.business_name || product.users?.name || product.vendor_name || product.vendorName || 'Vendor'}
                 </p>
                 <p className="text-xl font-bold text-blue-600 mb-4">
                   {formatCurrency(product.price)}

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 
 const FlashSales = () => {
   const [flashSales, setFlashSales] = useState([]);
@@ -28,11 +27,11 @@ const FlashSales = () => {
 
   const fetchFlashSales = async () => {
     try {
-      const snapshot = await getDocs(collection(db, 'flashSales'));
-      const sales = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setFlashSales(sales);
+      const { data, error } = await supabase.from('flash_sales').select('*');
+      if (error) throw error;
+      setFlashSales(data || []);
     } catch (error) {
-      console.error('Error fetching flash sales:', error);
+      console.error('Error fetching flash sales:', error.message);
     } finally {
       setLoading(false);
     }
@@ -40,12 +39,11 @@ const FlashSales = () => {
 
   const fetchProducts = async () => {
     try {
-      const q = query(collection(db, 'products'), where('status', '==', 'approved'));
-      const snapshot = await getDocs(q);
-      const productsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setProducts(productsData);
+      const { data, error } = await supabase.from('products').select('*').eq('status', 'approved');
+      if (error) throw error;
+      setProducts(data || []);
     } catch (error) {
-      console.error('Error fetching products:', error);
+      console.error('Error fetching products:', error.message);
     }
   };
 
@@ -55,19 +53,27 @@ const FlashSales = () => {
 
     try {
       const saleData = {
-        ...formData,
-        soldCount: 0,
-        createdAt: new Date().toISOString()
+        title: formData.title,
+        description: formData.description,
+        discount_percentage: formData.discountPercentage,
+        start_date: formData.startDate,
+        end_date: formData.endDate,
+        product_ids: formData.productIds,
+        max_quantity_per_user: formData.maxQuantityPerUser,
+        total_stock: formData.totalStock,
+        active: formData.active,
+        sold_count: editingSale ? editingSale.sold_count : 0,
+        updated_at: new Date().toISOString()
       };
 
       if (editingSale) {
-        await updateDoc(doc(db, 'flashSales', editingSale.id), {
-          ...formData,
-          updatedAt: new Date().toISOString()
-        });
+        const { error } = await supabase.from('flash_sales').update(saleData).eq('id', editingSale.id);
+        if (error) throw error;
         alert('Flash sale updated successfully!');
       } else {
-        await addDoc(collection(db, 'flashSales'), saleData);
+        saleData.created_at = new Date().toISOString();
+        const { error } = await supabase.from('flash_sales').insert([saleData]);
+        if (error) throw error;
         alert('Flash sale created successfully!');
       }
       
@@ -86,12 +92,12 @@ const FlashSales = () => {
     setFormData({
       title: sale.title,
       description: sale.description,
-      discountPercentage: sale.discountPercentage,
-      startDate: sale.startDate,
-      endDate: sale.endDate,
-      productIds: sale.productIds,
-      maxQuantityPerUser: sale.maxQuantityPerUser,
-      totalStock: sale.totalStock,
+      discountPercentage: sale.discount_percentage || sale.discountPercentage,
+      startDate: sale.start_date || sale.startDate,
+      endDate: sale.end_date || sale.endDate,
+      productIds: sale.product_ids || sale.productIds || [],
+      maxQuantityPerUser: sale.max_quantity_per_user || sale.maxQuantityPerUser,
+      totalStock: sale.total_stock || sale.totalStock,
       active: sale.active
     });
     setShowModal(true);
@@ -100,11 +106,12 @@ const FlashSales = () => {
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this flash sale?')) {
       try {
-        await deleteDoc(doc(db, 'flashSales', id));
+        const { error } = await supabase.from('flash_sales').delete().eq('id', id);
+        if (error) throw error;
         alert('Flash sale deleted successfully!');
         fetchFlashSales();
       } catch (error) {
-        console.error('Error deleting flash sale:', error);
+        console.error('Error deleting flash sale:', error.message);
       }
     }
   };
@@ -162,7 +169,7 @@ const FlashSales = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {flashSales.map(sale => {
-          const timeRemaining = getTimeRemaining(sale.endDate);
+          const timeRemaining = getTimeRemaining(sale.end_date || sale.endDate);
           const isActive = timeRemaining.total > 0 && sale.active;
 
           return (
@@ -179,7 +186,7 @@ const FlashSales = () => {
               </div>
 
               <div className="bg-white/20 rounded-lg p-4 mb-4">
-                <p className="text-3xl font-bold text-center">{sale.discountPercentage}% OFF</p>
+                <p className="text-3xl font-bold text-center">{sale.discount_percentage || sale.discountPercentage}% OFF</p>
               </div>
 
               {isActive ? (
@@ -213,9 +220,9 @@ const FlashSales = () => {
               )}
 
               <div className="mt-4 pt-4 border-t border-white/20 space-y-2 text-sm">
-                <p>Products: {sale.productIds?.length || 0}</p>
-                <p>Sold: {sale.soldCount || 0} / {sale.totalStock}</p>
-                <p>Max per user: {sale.maxQuantityPerUser}</p>
+                <p>Products: {(sale.product_ids || sale.productIds)?.length || 0}</p>
+                <p>Sold: {sale.sold_count || sale.soldCount || 0} / {sale.total_stock || sale.totalStock}</p>
+                <p>Max per user: {sale.max_quantity_per_user || sale.maxQuantityPerUser}</p>
               </div>
             </div>
           );

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { Link } from 'react-router-dom';
 import { createDispute } from '../../services/disputeService';
@@ -36,31 +35,32 @@ const BuyerDisputes = () => {
 
   const fetchDisputes = async () => {
     try {
-      const q = query(
-        collection(db, 'disputes'),
-        where('buyerId', '==', currentUser.uid),
-        orderBy('createdAt', 'desc')
-      );
-      const snapshot = await getDocs(q);
-      const disputesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setDisputes(disputesData);
+      const { data, error } = await supabase
+        .from('disputes')
+        .select('*')
+        .eq('buyer_id', currentUser.id || currentUser.uid)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setDisputes(data || []);
     } catch (error) {
-      console.error('Error fetching disputes:', error);
+      console.error('Error fetching disputes:', error.message);
     }
   };
 
   const fetchOrders = async () => {
     try {
-      const q = query(
-        collection(db, 'orders'),
-        where('userId', '==', currentUser.uid),
-        where('status', 'in', ['delivered', 'completed'])
-      );
-      const snapshot = await getDocs(q);
-      const ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setOrders(ordersData);
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('buyer_id', currentUser.id || currentUser.uid)
+        .in('status', ['delivered', 'completed'])
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setOrders(data || []);
     } catch (error) {
-      console.error('Error fetching orders:', error);
+      console.error('Error fetching orders:', error.message);
     } finally {
       setLoading(false);
     }
@@ -72,17 +72,18 @@ const BuyerDisputes = () => {
 
     try {
       const disputeData = {
-        buyerId: currentUser.uid,
-        buyerName: currentUser.name,
-        buyerEmail: currentUser.email,
-        orderId: selectedOrder.id,
-        vendorId: selectedOrder.items[0].vendorId,
-        vendorName: selectedOrder.items[0].vendorName,
-        orderTotal: selectedOrder.total,
+        buyer_id: currentUser.id || currentUser.uid,
+        buyer_name: currentUser.name || currentUser.full_name,
+        buyer_email: currentUser.email,
+        order_id: selectedOrder.id,
+        vendor_id: selectedOrder.items?.[0]?.vendor_id || selectedOrder.items?.[0]?.vendorId,
+        vendor_name: selectedOrder.items?.[0]?.vendor_name || selectedOrder.items?.[0]?.vendorName,
+        order_total: selectedOrder.total_amount || selectedOrder.total,
         subject: formData.subject,
         category: formData.category,
         description: formData.description,
-        desiredResolution: formData.desiredResolution
+        desired_resolution: formData.desiredResolution,
+        status: 'open'
       };
 
       await createDispute(disputeData);
@@ -151,7 +152,7 @@ const BuyerDisputes = () => {
                     {dispute.subject}
                   </h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Dispute #{dispute.id.substring(0, 8)} • Order #{dispute.orderId.substring(0, 8)}
+                    Dispute #{String(dispute.id).substring(0, 8)} • Order #{String(dispute.order_id || dispute.orderId).substring(0, 8)}
                   </p>
                 </div>
                 <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(dispute.status)}`}>
@@ -165,7 +166,7 @@ const BuyerDisputes = () => {
 
               <div className="flex justify-between items-center">
                 <div className="text-sm text-gray-500">
-                  Filed on {new Date(dispute.createdAt).toLocaleDateString()}
+                  Filed on {new Date(dispute.created_at || dispute.createdAt).toLocaleDateString()}
                 </div>
                 <Link
                   to={`/buyer/disputes/${dispute.id}`}
@@ -208,12 +209,12 @@ const BuyerDisputes = () => {
                         onClick={() => setSelectedOrder(order)}
                         className="w-full p-4 border rounded-lg text-left hover:bg-gray-50 dark:hover:bg-gray-900"
                       >
-                        <p className="font-medium">Order #{order.id.substring(0, 8)}</p>
+                        <p className="font-medium">Order #{String(order.id).substring(0, 8)}</p>
                         <p className="text-sm text-gray-600">
-                          {order.items.length} items • ₦{order.total.toLocaleString()}
+                          {order.items?.length || 0} items • ₦{(order.total_amount || order.total || 0).toLocaleString()}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {new Date(order.createdAt).toLocaleDateString()}
+                          {new Date(order.created_at || order.createdAt).toLocaleDateString()}
                         </p>
                       </button>
                     ))}
@@ -224,7 +225,7 @@ const BuyerDisputes = () => {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                   <p className="text-sm">
-                    Order #{selectedOrder.id.substring(0, 8)}
+                    Order #{String(selectedOrder.id).substring(0, 8)}
                   </p>
                   <button
                     type="button"

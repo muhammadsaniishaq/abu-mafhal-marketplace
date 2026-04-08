@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, orderBy, limit } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import { useAuth } from './AuthContext';
 
 const ChatContext = createContext();
@@ -21,90 +20,135 @@ export const ChatProvider = ({ children }) => {
   useEffect(() => {
     if (!currentUser) return;
 
-    const q = query(
-      collection(db, 'conversations'),
-      where('participants', 'array-contains', currentUser.uid),
-      orderBy('lastMessageAt', 'desc')
-    );
+    // Fetch initial conversations
+    const fetchConversations = async () => {
+      const { data, error } = await supabase
+        .from('conversations')
+        .select('*')
+        .contains('participants', [currentUser.id])
+        .order('last_message_at', { ascending: false });
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const convos = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setConversations(convos);
-
-      const unread = convos.reduce((count, convo) => {
-        return count + (convo.unreadCount?.[currentUser.uid] || 0);
+      if (error) {
+        console.error('Error fetching conversations:', error.message);
+        return;
+      }
+      setConversations(data || []);
+      
+      const totalUnread = (data || []).reduce((count, convo) => {
+        return count + (convo.unread_count?.[currentUser.id] || 0);
       }, 0);
-      setUnreadCount(unread);
-    });
+      setUnreadCount(totalUnread);
+    };
 
-    return () => unsubscribe();
+    fetchConversations();
+
+    // Subscribe to real-time changes
+    const channel = supabase
+      .channel('public:conversations')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'conversations',
+        filter: `participants=cs.{${currentUser.id}}`
+      }, (payload) => {
+        fetchConversations();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [currentUser]);
 
   const createConversation = async (otherUserId, otherUserName, otherUserAvatar) => {
     try {
-      const conversationRef = await addDoc(collection(db, 'conversations'), {
-        participants: [currentUser.uid, otherUserId],
-        participantDetails: {
-          [currentUser.uid]: {
-            name: currentUser.name,
-            avatar: currentUser.avatar
+      const { data, error } = await supabase
+        .from('conversations')
+        .insert({
+          participants: [currentUser.id, otherUserId],
+          participant_details: {
+            [currentUser.id]: {
+              name: currentUser.full_name || currentUser.name,
+              avatar: currentUser.avatar_url || currentUser.avatar
+            },
+            [otherUserId]: {
+              name: otherUserName,
+              avatar: otherUserAvatar
+            }
           },
-          [otherUserId]: {
-            name: otherUserName,
-            avatar: otherUserAvatar
-          }
-        },
-        lastMessage: '',
-        lastMessageAt: new Date().toISOString(),
-        unreadCount: {
-          [currentUser.uid]: 0,
-          [otherUserId]: 0
-        },
-        createdAt: new Date().toISOString()
-      });
-      return conversationRef.id;
+          last_message: '',
+          last_message_at: new Date().toISOString(),
+          unread_count: {
+            [currentUser.id]: 0,
+            [otherUserId]: 0
+          },
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data.id;
     } catch (error) {
-      console.error('Error creating conversation:', error);
+      console.error('Error creating conversation:', error.message);
       throw error;
     }
   };
 
   const sendMessage = async (conversationId, message, attachments = []) => {
     try {
-      await addDoc(collection(db, 'conversations', conversationId, 'messages'), {
-        senderId: currentUser.uid,
-        senderName: currentUser.name,
-        message,
-        attachments,
-        read: false,
-        createdAt: new Date().toISOString()
-      });
+      const { error: msgError } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: conversationId,
+          sender_id: currentUser.id,
+          sender_name: currentUser.full_name || currentUser.name,
+          message,
+          attachments,
+          read: false,
+          created_at: new Date().toISOString()
+        });
+
+      if (msgError) throw msgError;
 
       // Update conversation
       const convo = conversations.find(c => c.id === conversationId);
-      const otherUserId = convo.participants.find(id => id !== currentUser.uid);
+      if (!convo) return;
+      
+      const otherUserId = convo.participants.find(id => id !== currentUser.id);
+      const newUnreadCount = { ...convo.unread_count };
+      newUnreadCount[otherUserId] = (newUnreadCount[otherUserId] || 0) + 1;
 
-      await updateDoc(doc(db, 'conversations', conversationId), {
-        lastMessage: message,
-        lastMessageAt: new Date().toISOString(),
-        [`unreadCount.${otherUserId}`]: (convo.unreadCount?.[otherUserId] || 0) + 1
-      });
+      const { error: convoError } = await supabase
+        .from('conversations')
+        .update({
+          last_message: message,
+          last_message_at: new Date().toISOString(),
+          unread_count: newUnreadCount
+        })
+        .eq('id', conversationId);
+
+      if (convoError) throw convoError;
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('Error sending message:', error.message);
       throw error;
     }
   };
 
   const markAsRead = async (conversationId) => {
     try {
-      await updateDoc(doc(db, 'conversations', conversationId), {
-        [`unreadCount.${currentUser.uid}`]: 0
-      });
+      const convo = conversations.find(c => c.id === conversationId);
+      if (!convo) return;
+
+      const newUnreadCount = { ...convo.unread_count };
+      newUnreadCount[currentUser.id] = 0;
+
+      await supabase
+        .from('conversations')
+        .update({ unread_count: newUnreadCount })
+        .eq('id', conversationId);
     } catch (error) {
-      console.error('Error marking as read:', error);
+      console.error('Error marking as read:', error.message);
     }
   };
 

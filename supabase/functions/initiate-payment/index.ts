@@ -97,6 +97,14 @@ Deno.serve(async (req) => {
             throw productsError;
         }
 
+        // Fetch Global Settings for Shipping and Tax
+        const { data: settingsData, error: settingsError } = await supabaseAdmin
+            .from("app_settings")
+            .select("settings")
+            .single();
+            
+        const appSettings = settingsData?.settings || {};
+
         let subtotal = 0;
         const orderItems = items.map((cartItem: any) => {
             const product = products.find((p: any) => p.id === cartItem.id);
@@ -117,11 +125,24 @@ Deno.serve(async (req) => {
         });
         console.log("Subtotal calculated:", subtotal);
 
-        const majorStates = ["Lagos", "Abuja", "Kano", "Rivers"];
-        const shippingFee = (address && majorStates.includes(address.state)) ? 1500 : 3000;
+        // 2. Dynamic Shipping Calculation
+        let shippingFee = 0;
+        const allFreeShipping = items.every((i: any) => i.free_shipping === true);
+        
+        if (allFreeShipping || appSettings.free_nationwide_shipping) {
+            shippingFee = 0;
+        } else if (address?.state && appSettings.shipping_fees?.[address.state] !== undefined) {
+            shippingFee = Number(appSettings.shipping_fees[address.state]);
+        } else {
+            shippingFee = Number(appSettings.default_shipping_fee) || 3000;
+        }
 
-        // 3. Tax (5% standard)
-        const tax = Math.round(subtotal * 0.05);
+        // 3. Dynamic Tax Calculation
+        let tax = 0;
+        if (appSettings.tax_enabled !== false) {
+            const taxRate = parseFloat(appSettings.tax_rate) || 7.5;
+            tax = Math.round(subtotal * (taxRate / 100));
+        }
 
         // 4. Coupon validation
         let discount = 0;

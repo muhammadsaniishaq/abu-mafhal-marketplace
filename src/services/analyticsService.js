@@ -1,27 +1,29 @@
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns';
 
 export const getVendorAnalytics = async (vendorId, months = 6) => {
   try {
-    const startDate = subMonths(new Date(), months);
+    const startDate = subMonths(new Date(), months).toISOString();
     
-    // Fetch orders
-    const ordersQuery = query(
-      collection(db, 'vendorOrders'),
-      where('vendorId', '==', vendorId),
-      where('createdAt', '>=', startDate.toISOString())
-    );
-    const ordersSnapshot = await getDocs(ordersQuery);
-    const orders = ordersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    // Fetch orders (Note: In Supabase, we might need to join or a view if vendor_orders is not a table)
+    // Assuming 'orders' table has vendor specific items or there's a joinable structure.
+    // Parity with previous logic: Querying orders that involve this vendor.
+    const { data: orders, error: ordersError } = await supabase
+      .from('orders')
+      .select('*, order_items!inner(vendor_id)')
+      .eq('order_items.vendor_id', vendorId)
+      .gte('created_at', startDate)
+      .order('created_at', { ascending: false });
+
+    if (ordersError) throw ordersError;
 
     // Fetch products
-    const productsQuery = query(
-      collection(db, 'products'),
-      where('vendorId', '==', vendorId)
-    );
-    const productsSnapshot = await getDocs(productsQuery);
-    const products = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const { data: products, error: productsError } = await supabase
+      .from('products')
+      .select('*')
+      .eq('vendor_id', vendorId);
+
+    if (productsError) throw productsError;
 
     // Calculate metrics
     const totalRevenue = orders.reduce((sum, order) => sum + (order.total || 0), 0);
@@ -31,24 +33,24 @@ export const getVendorAnalytics = async (vendorId, months = 6) => {
     // Revenue by month
     const revenueByMonth = {};
     orders.forEach(order => {
-      const month = format(new Date(order.createdAt), 'MMM yyyy');
+      const month = format(new Date(order.created_at), 'MMM yyyy');
       revenueByMonth[month] = (revenueByMonth[month] || 0) + order.total;
     });
 
     // Top selling products
     const productSales = {};
     orders.forEach(order => {
-      order.items?.forEach(item => {
-        if (!productSales[item.productId]) {
-          productSales[item.productId] = {
-            id: item.productId,
-            name: item.productName,
+      order.order_items?.forEach(item => {
+        if (!productSales[item.product_id]) {
+          productSales[item.product_id] = {
+            id: item.product_id,
+            name: item.product_name,
             quantity: 0,
             revenue: 0
           };
         }
-        productSales[item.productId].quantity += item.quantity;
-        productSales[item.productId].revenue += item.price * item.quantity;
+        productSales[item.product_id].quantity += item.quantity;
+        productSales[item.product_id].revenue += item.price * item.quantity;
       });
     });
 
@@ -69,7 +71,7 @@ export const getVendorAnalytics = async (vendorId, months = 6) => {
       .slice(0, 10);
 
     // Customer insights
-    const uniqueCustomers = new Set(orders.map(o => o.userId)).size;
+    const uniqueCustomers = new Set(orders.map(o => o.user_id)).size;
 
     return {
       overview: {
@@ -93,30 +95,37 @@ export const getVendorAnalytics = async (vendorId, months = 6) => {
       recentOrders: orders.slice(0, 10)
     };
   } catch (error) {
-    console.error('Error getting vendor analytics:', error);
+    console.error('Error getting vendor analytics:', error.message);
     throw error;
   }
 };
 
 export const getAdminAnalytics = async (months = 6) => {
   try {
-    const startDate = subMonths(new Date(), months);
+    const startDate = subMonths(new Date(), months).toISOString();
 
     // Fetch all orders
-    const ordersQuery = query(
-      collection(db, 'orders'),
-      where('createdAt', '>=', startDate.toISOString())
-    );
-    const ordersSnapshot = await getDocs(ordersQuery);
-    const orders = ordersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const { data: orders, error: ordersError } = await supabase
+      .from('orders')
+      .select('*')
+      .gte('created_at', startDate)
+      .order('created_at', { ascending: false });
 
-    // Fetch users
-    const usersSnapshot = await getDocs(collection(db, 'users'));
-    const users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    if (ordersError) throw ordersError;
+
+    // Fetch users (profiles)
+    const { data: users, error: usersError } = await supabase
+      .from('profiles')
+      .select('*');
+
+    if (usersError) throw usersError;
 
     // Fetch products
-    const productsSnapshot = await getDocs(collection(db, 'products'));
-    const products = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const { data: products, error: productsError } = await supabase
+      .from('products')
+      .select('*');
+
+    if (productsError) throw productsError;
 
     // Calculate metrics
     const totalRevenue = orders.reduce((sum, order) => sum + (order.total || 0), 0);
@@ -126,15 +135,15 @@ export const getAdminAnalytics = async (months = 6) => {
     // Revenue trends
     const revenueByMonth = {};
     orders.forEach(order => {
-      const month = format(new Date(order.createdAt), 'MMM yyyy');
+      const month = format(new Date(order.created_at), 'MMM yyyy');
       revenueByMonth[month] = (revenueByMonth[month] || 0) + order.total;
     });
 
     // User growth
     const usersByMonth = {};
     users.forEach(user => {
-      if (user.createdAt) {
-        const month = format(new Date(user.createdAt), 'MMM yyyy');
+      if (user.created_at) {
+        const month = format(new Date(user.created_at), 'MMM yyyy');
         usersByMonth[month] = (usersByMonth[month] || 0) + 1;
       }
     });
@@ -142,8 +151,8 @@ export const getAdminAnalytics = async (months = 6) => {
     // Category distribution
     const categoryRevenue = {};
     orders.forEach(order => {
-      order.items?.forEach(item => {
-        const product = products.find(p => p.id === item.productId);
+      order.order_items?.forEach(item => {
+        const product = products.find(p => p.id === item.product_id);
         if (product?.category) {
           categoryRevenue[product.category] = (categoryRevenue[product.category] || 0) + (item.price * item.quantity);
         }
@@ -153,8 +162,8 @@ export const getAdminAnalytics = async (months = 6) => {
     // Top vendors
     const vendorRevenue = {};
     orders.forEach(order => {
-      order.items?.forEach(item => {
-        vendorRevenue[item.vendorId] = (vendorRevenue[item.vendorId] || 0) + (item.price * item.quantity);
+      order.order_items?.forEach(item => {
+        vendorRevenue[item.vendor_id] = (vendorRevenue[item.vendor_id] || 0) + (item.price * item.quantity);
       });
     });
 
@@ -163,7 +172,7 @@ export const getAdminAnalytics = async (months = 6) => {
         const vendor = users.find(u => u.id === vendorId);
         return {
           id: vendorId,
-          name: vendor?.name || 'Unknown',
+          name: vendor?.full_name || 'Unknown',
           revenue
         };
       })
@@ -196,7 +205,7 @@ export const getAdminAnalytics = async (months = 6) => {
       topVendors
     };
   } catch (error) {
-    console.error('Error getting admin analytics:', error);
+    console.error('Error getting admin analytics:', error.message);
     throw error;
   }
 };

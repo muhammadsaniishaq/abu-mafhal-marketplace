@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../lib/supabase';
 import { decode } from 'base64-arraybuffer'; // Import decode
-import * as FileSystem from 'expo-file-system'; // Add Import
+import * as FileSystem from 'expo-file-system/legacy'; // Add Import
 import { styles } from '../styles/theme';
 import { geminiService } from '../services/geminiService'; // Import Gemini Service
 import { parsePrice } from '../utils/helpers';
@@ -45,7 +45,8 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
         lowStockThreshold: initialData?.metadata?.low_stock_threshold?.toString() || '5',
         allowBackorders: initialData?.metadata?.allow_backorders || false,
         taxClass: initialData?.metadata?.tax_class || 'standard', // standard, reduced, zero
-        maxQuantity: initialData?.metadata?.max_quantity?.toString() || ''
+        maxQuantity: initialData?.metadata?.max_quantity?.toString() || '',
+        freeShipping: initialData?.free_shipping || false,
     });
 
     const categories = ['Electronics', 'Fashion', 'Home', 'Beauty', 'Sports', 'Books', 'Toys', 'Food', 'Automotive', 'Other'];
@@ -239,6 +240,7 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
                 affiliate_link: formData.affiliateLink,
                 is_new: !isEditing,
                 shipping_weight: parseFloat(formData.weight) || null,
+                free_shipping: formData.freeShipping,
                 seo_title: formData.seoTitle,
                 seo_description: formData.seoDesc,
                 tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean),
@@ -411,6 +413,37 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
                             <View style={{ flex: 1 }}>{renderInput('Price', 'price', '0.00', true)}</View>
                             <View style={{ flex: 1 }}>{renderInput('Original Price', 'originalPrice', '0.00', true)}</View>
                         </View>
+
+                        {/* Free Shipping Toggle */}
+                        <TouchableOpacity
+                            activeOpacity={0.8}
+                            onPress={() => setFormData({ ...formData, freeShipping: !formData.freeShipping })}
+                            style={[
+                                { flexDirection: 'row', alignItems: 'center', borderRadius: 16, padding: 16, marginBottom: 18, borderWidth: 2, gap: 14 },
+                                formData.freeShipping
+                                    ? { backgroundColor: '#ECFDF5', borderColor: '#6EE7B7' }
+                                    : { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' }
+                            ]}
+                        >
+                            <View style={[
+                                { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+                                { backgroundColor: formData.freeShipping ? '#D1FAE5' : '#F1F5F9' }
+                            ]}>
+                                <Ionicons name="airplane" size={20} color={formData.freeShipping ? '#059669' : '#94A3B8'} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 15, fontWeight: '800', color: formData.freeShipping ? '#065F46' : '#1E293B' }}>Free Shipping</Text>
+                                <Text style={{ fontSize: 12, color: formData.freeShipping ? '#059669' : '#64748B', marginTop: 2 }}>
+                                    {formData.freeShipping ? 'Customers pay ₦0 shipping for this product' : 'Customers will pay the platform shipping fee'}
+                                </Text>
+                            </View>
+                            <Switch
+                                value={formData.freeShipping}
+                                onValueChange={v => setFormData({ ...formData, freeShipping: v })}
+                                trackColor={{ false: '#E2E8F0', true: '#6EE7B7' }}
+                                thumbColor={formData.freeShipping ? '#059669' : '#94A3B8'}
+                            />
+                        </TouchableOpacity>
                         <View style={{ flexDirection: 'row', gap: 16 }}>
                             <View style={{ flex: 1 }}>{renderInput('Stock', 'stock', '0', true)}</View>
                             <View style={{ flex: 1 }}>{renderInput('SKU', 'sku', 'Item-XS-001')}</View>

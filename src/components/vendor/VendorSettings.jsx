@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { updatePassword, updateEmail } from 'firebase/auth';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { auth, db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 
 const VendorSettings = () => {
   const { currentUser } = useAuth();
@@ -81,22 +79,30 @@ const VendorSettings = () => {
   });
 
   useEffect(() => {
-    fetchSettings();
+    if (currentUser) {
+      fetchSettings();
+    }
   }, [currentUser]);
 
   const fetchSettings = async () => {
     try {
-      const settingsDoc = await getDoc(doc(db, 'vendorSettings', currentUser.uid));
-      if (settingsDoc.exists()) {
-        const data = settingsDoc.data();
+      const { data, error } = await supabase
+        .from('vendor_settings')
+        .select('*')
+        .eq('vendor_id', currentUser.uid)
+        .single();
+        
+      if (error && error.code !== 'PGRST116') throw error;
+      
+      if (data) {
         setNotifications(data.notifications || notifications);
         setPrivacy(data.privacy || privacy);
-        setStoreSettings(data.storeSettings || storeSettings);
-        setDisplaySettings(data.displaySettings || displaySettings);
-        setTwoFactor(data.twoFactor || twoFactor);
+        setStoreSettings(data.store_settings || data.storeSettings || storeSettings);
+        setDisplaySettings(data.display_settings || data.displaySettings || displaySettings);
+        setTwoFactor(data.two_factor || data.twoFactor || twoFactor);
       }
     } catch (error) {
-      console.error('Error fetching settings:', error);
+      console.error('Error fetching settings:', error.message);
     }
   };
 
@@ -115,7 +121,9 @@ const VendorSettings = () => {
     
     setLoading(true);
     try {
-      await updatePassword(auth.currentUser, passwordData.newPassword);
+      const { error } = await supabase.auth.updateUser({ password: passwordData.newPassword });
+      if (error) throw error;
+      
       setMessage({ type: 'success', text: 'Password changed successfully!' });
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (error) {
@@ -128,13 +136,47 @@ const VendorSettings = () => {
   const saveSettings = async (settingsType, data) => {
     setLoading(true);
     try {
-      await updateDoc(doc(db, 'vendorSettings', currentUser.uid), {
-        [settingsType]: data,
-        updatedAt: new Date().toISOString()
-      });
+      const dbField = settingsType === 'storeSettings' ? 'store_settings' :
+                      settingsType === 'displaySettings' ? 'display_settings' :
+                      settingsType === 'twoFactor' ? 'two_factor' : settingsType;
+
+      const { data: existingData, error: fetchError } = await supabase
+        .from('vendor_settings')
+        .select('id')
+        .eq('vendor_id', currentUser.uid)
+        .single();
+
+      if (fetchError && fetchError.code !== 'PGRST116') throw fetchError;
+
+      if (existingData) {
+        const { error } = await supabase
+          .from('vendor_settings')
+          .update({
+            [dbField]: data,
+            updated_at: new Date().toISOString()
+          })
+          .eq('vendor_id', currentUser.uid);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('vendor_settings')
+          .insert({
+            vendor_id: currentUser.uid,
+            [dbField]: data,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            notifications: settingsType === 'notifications' ? data : notifications,
+            privacy: settingsType === 'privacy' ? data : privacy,
+            store_settings: settingsType === 'storeSettings' ? data : storeSettings,
+            display_settings: settingsType === 'displaySettings' ? data : displaySettings,
+            two_factor: settingsType === 'twoFactor' ? data : twoFactor
+          });
+        if (error) throw error;
+      }
+
       setMessage({ type: 'success', text: 'Settings saved successfully!' });
     } catch (error) {
-      console.error('Error saving settings:', error);
+      console.error('Error saving settings:', error.message);
       setMessage({ type: 'error', text: 'Failed to save settings' });
     } finally {
       setLoading(false);
@@ -611,7 +653,7 @@ const VendorSettings = () => {
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600 dark:text-gray-400">Member Since:</span>
-                <span className="font-semibold">{new Date(currentUser?.metadata?.creationTime).toLocaleDateString()}</span>
+                <span className="font-semibold">{new Date(currentUser?.created_at || currentUser?.metadata?.creationTime || new Date()).toLocaleDateString()}</span>
               </div>
             </div>
           </div>
