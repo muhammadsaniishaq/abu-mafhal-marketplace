@@ -290,9 +290,9 @@ const Shop = () => {
       const { data: allProds, error: allErr } = await supabase
         .from('products')
         .select('*')
-        .eq('status', 'approved')
+        .eq('is_active', true)
         .order('created_at', { ascending: false })
-        .limit(2000); 
+        .limit(200);
 
       if (allErr) {
         setFetchError(`DB Error: ${allErr.message}`);
@@ -381,72 +381,93 @@ const Shop = () => {
   const resetFilters = () => { setSearchQuery(''); setActiveCategory('All'); setSortBy('default'); setMaxPrice(1000000); };
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-[#f8f9fc]">
       <Navbar />
 
-      {/* ── STICKY HEADER ── */}
-      <div className="sticky top-0 z-40 bg-white shadow-sm border-b border-slate-100">
-        <div className="max-w-7xl mx-auto px-4 pt-3 pb-2">
-          {/* Search row */}
-          <div className="flex items-center gap-2">
-            {/* Search input */}
-            <div className="flex-1 flex items-center bg-slate-50 border border-slate-200 rounded-xl overflow-hidden focus-within:border-blue-500 focus-within:shadow-lg focus-within:shadow-blue-500/10 transition-all">
+      {/* ── STICKY SEARCH HEADER ── */}
+      <div className="sticky top-0 z-40 bg-white/90 backdrop-blur-xl border-b border-slate-100 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3">
+          {/* Top row */}
+          <div className="flex items-center gap-3">
+            {/* Search */}
+            <div className="flex-1 flex items-center bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-500/10 transition-all">
               <Search className="w-4 h-4 text-slate-400 ml-4 flex-shrink-0" />
               <input
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 onKeyDown={e => e.key === 'Escape' && setSearchQuery('')}
-                placeholder="Search products..."
-                className="flex-1 px-3 py-2.5 bg-transparent text-slate-900 placeholder-slate-400 font-semibold text-sm outline-none"
+                placeholder="Search products, brands, categories..."
+                className="flex-1 px-3 py-3 bg-transparent text-slate-900 placeholder-slate-400 font-medium text-sm outline-none"
               />
-              {searchQuery && <button onClick={() => setSearchQuery('')} className="mr-2 text-slate-400 hover:text-slate-700 transition-colors"><X className="w-4 h-4" /></button>}
-              <div className="flex items-center gap-1.5 border-l border-slate-200 px-3">
-                <button onClick={handleVoiceSearch} title="Voice Search" className={`transition-colors ${isRecording ? 'text-red-500 animate-pulse' : 'text-blue-500 hover:text-blue-700'}`}>
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')} className="mr-2 w-6 h-6 flex items-center justify-center rounded-full bg-slate-200 text-slate-500 hover:bg-slate-300 transition-colors">
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+              <div className="flex items-center gap-1 border-l border-slate-200 px-3">
+                <button onClick={handleVoiceSearch} title="Voice Search"
+                  className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${isRecording ? 'bg-red-500 text-white animate-pulse' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}>
                   <Mic className="w-4 h-4" />
                 </button>
-                <button onClick={() => fileInputRef.current?.click()} title="Image Search" className="text-blue-500 hover:text-blue-700 transition-colors">
+                <button onClick={() => fileInputRef.current?.click()} title="Image Search"
+                  className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all">
                   <Camera className="w-4 h-4" />
                 </button>
                 <input ref={fileInputRef} type="file" accept="image/*" onChange={() => showToast('AI Image Search coming soon!', '🤖')} className="hidden" />
               </div>
-              {/* Sort inside search bar */}
-              <div className="border-l border-slate-200 px-3">
-                <button onClick={() => setShowSort(s => !s)} className={`flex items-center gap-1 text-xs font-black uppercase tracking-wider transition-colors ${sortBy !== 'default' ? 'text-blue-600' : 'text-slate-400 hover:text-slate-700'}`}>
-                  <Filter className="w-4 h-4" />
-                  <ChevronDown className={`w-3 h-3 transition-transform ${showSort ? 'rotate-180' : ''}`} />
-                </button>
-              </div>
             </div>
 
-            {/* View & Filter buttons */}
-            <div className="flex items-center gap-1.5 border border-slate-200 rounded-xl overflow-hidden bg-white">
-              <button onClick={() => setView('grid')} className={`p-2.5 transition-all ${view === 'grid' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-50'}`}><Grid3X3 className="w-4 h-4" /></button>
-              <button onClick={() => setView('list')} className={`p-2.5 transition-all ${view === 'list' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-50'}`}><List className="w-4 h-4" /></button>
+            {/* View toggle */}
+            <div className="hidden sm:flex items-center bg-slate-100 rounded-2xl p-1 gap-1">
+              <button onClick={() => setView('grid')}
+                className={`p-2 rounded-xl transition-all ${view === 'grid' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}>
+                <Grid3X3 className="w-4 h-4" />
+              </button>
+              <button onClick={() => setView('list')}
+                className={`p-2 rounded-xl transition-all ${view === 'list' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}>
+                <List className="w-4 h-4" />
+              </button>
             </div>
-            <button onClick={() => setShowFilters(true)} className="flex items-center gap-2 border border-slate-200 bg-white rounded-xl px-3 py-2.5 text-slate-500 hover:border-blue-500 hover:text-blue-600 transition-all">
-              <SlidersHorizontal className="w-4 h-4" />
-              <span className="hidden sm:inline text-xs font-black uppercase tracking-widest">Filter</span>
+
+            {/* Sort */}
+            <div className="relative">
+              <button onClick={() => setShowSort(s => !s)}
+                className={`flex items-center gap-2 px-4 py-3 rounded-2xl border text-sm font-bold transition-all ${sortBy !== 'default' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+                <SlidersHorizontal className="w-4 h-4" />
+                <span className="hidden sm:inline">{sortBy !== 'default' ? SORT_OPTIONS.find(s => s.val === sortBy)?.label : 'Sort'}</span>
+                <ChevronDown className={`w-3 h-3 transition-transform ${showSort ? 'rotate-180' : ''}`} />
+              </button>
+              {showSort && (
+                <div className="absolute right-0 top-full mt-2 bg-white border border-slate-100 rounded-2xl shadow-2xl shadow-slate-200/80 p-2 min-w-[160px] z-50">
+                  {SORT_OPTIONS.map(opt => (
+                    <button key={opt.val} onClick={() => { setSortBy(opt.val); setShowSort(false); }}
+                      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${sortBy === opt.val ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
+                      {sortBy === opt.val && <Check className="w-3.5 h-3.5" />}
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Filter */}
+            <button onClick={() => setShowFilters(true)}
+              className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-slate-900 text-white text-sm font-bold hover:bg-blue-600 transition-all shadow-lg shadow-slate-900/20">
+              <Filter className="w-4 h-4" />
+              <span className="hidden sm:inline">Filters</span>
             </button>
           </div>
 
-          {/* Sort Dropdown */}
-          {showSort && (
-            <div className="mt-2 flex flex-wrap gap-2">
-              {SORT_OPTIONS.map(opt => (
-                <button key={opt.val} onClick={() => { setSortBy(opt.val); setShowSort(false); }}
-                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition-all border ${sortBy === opt.val ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}>
-                  {sortBy === opt.val && <Check className="w-3 h-3" />}
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div className="mt-2 overflow-x-auto pb-1">
+          {/* Category pills */}
+          <div className="mt-3 overflow-x-auto pb-1 no-scrollbar">
             <div className="flex gap-2 min-w-max">
               {categories.map(cat => (
                 <button key={cat} onClick={() => setActiveCategory(cat)}
-                  className={`px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider whitespace-nowrap transition-all border ${activeCategory === cat ? 'bg-slate-900 text-white border-slate-900 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}>
+                  className={`px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider whitespace-nowrap transition-all ${
+                    activeCategory === cat
+                      ? 'bg-slate-900 text-white shadow-md shadow-slate-900/20'
+                      : 'bg-white text-slate-500 border border-slate-200 hover:border-slate-900 hover:text-slate-900'
+                  }`}>
                   {cat}
                 </button>
               ))}
@@ -455,97 +476,110 @@ const Shop = () => {
         </div>
       </div>
 
-      {/* ── FILTER SIDEBAR ── */}
+      {/* ── FILTER DRAWER ── */}
       {showFilters && (
         <>
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50" onClick={() => setShowFilters(false)} />
-          <div className="fixed right-0 top-0 bottom-0 w-80 bg-white z-50 shadow-2xl overflow-y-auto flex flex-col">
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h3 className="text-base font-black text-slate-900 tracking-tighter">Filters</h3>
-              <button onClick={() => setShowFilters(false)} className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-slate-50"><X className="w-4 h-4" /></button>
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50" onClick={() => setShowFilters(false)} />
+          <div className="fixed right-0 top-0 bottom-0 w-[320px] bg-white z-50 shadow-2xl flex flex-col">
+            {/* Header */}
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-black text-slate-900">Filters</h3>
+                <p className="text-xs text-slate-400 font-medium mt-0.5">{filtered.length} results</p>
+              </div>
+              <button onClick={() => setShowFilters(false)} className="w-9 h-9 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-all">
+                <X className="w-4 h-4" />
+              </button>
             </div>
-            <div className="flex-1 p-5 space-y-7 overflow-y-auto">
+
+            <div className="flex-1 p-6 space-y-8 overflow-y-auto">
+              {/* Category */}
               <div>
                 <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Category</label>
                 <div className="flex flex-wrap gap-2">
-                  {categories.map(cat => <button key={cat} onClick={() => setActiveCategory(cat)} className={`px-3 py-1.5 rounded-full text-[11px] font-black border transition-all ${activeCategory === cat ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-100'}`}>{cat}</button>)}
+                  {categories.map(cat => (
+                    <button key={cat} onClick={() => setActiveCategory(cat)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black border transition-all ${activeCategory === cat ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}>
+                      {cat}
+                    </button>
+                  ))}
                 </div>
               </div>
+
+              {/* Price range */}
               <div>
-                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Max Price: <span className="text-slate-900 normal-case">₦{maxPrice.toLocaleString()}</span></label>
-                <input type="range" min="0" max={absMaxPrice} step={absMaxPrice / 100} value={maxPrice} onChange={e => setMaxPrice(+e.target.value)} className="w-full accent-blue-600" />
-                <div className="flex justify-between text-xs font-bold text-slate-400 mt-1"><span>₦0</span><span>₦{absMaxPrice.toLocaleString()}</span></div>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Max Price</label>
+                <p className="text-2xl font-black text-slate-900 mb-4">₦{maxPrice.toLocaleString()}</p>
+                <input type="range" min="0" max={absMaxPrice} step={absMaxPrice / 100} value={maxPrice}
+                  onChange={e => setMaxPrice(+e.target.value)} className="w-full accent-blue-600" />
+                <div className="flex justify-between text-xs font-bold text-slate-400 mt-2">
+                  <span>₦0</span><span>₦{absMaxPrice.toLocaleString()}</span>
+                </div>
               </div>
+
+              {/* Sort */}
               <div>
                 <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Sort By</label>
                 <div className="space-y-2">
                   {SORT_OPTIONS.map(opt => (
-                    <button key={opt.val} onClick={() => setSortBy(opt.val)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-left transition-all border ${sortBy === opt.val ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-50 text-slate-600 border-slate-100 hover:bg-slate-100'}`}>
-                      {sortBy === opt.val ? <Check className="w-4 h-4 flex-shrink-0" /> : <div className="w-4" />}
+                    <button key={opt.val} onClick={() => setSortBy(opt.val)}
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all ${sortBy === opt.val ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}>
+                      {sortBy === opt.val ? <Check className="w-4 h-4" /> : <div className="w-4" />}
                       {opt.label}
                     </button>
                   ))}
                 </div>
               </div>
             </div>
-            <div className="p-5 flex gap-3 border-t border-slate-100">
-              <button onClick={resetFilters} className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-700 font-black text-sm hover:bg-slate-200 transition-all">Reset</button>
-              <button onClick={() => setShowFilters(false)} className="flex-1 py-3 rounded-xl bg-slate-900 text-white font-black text-sm hover:bg-blue-600 transition-all">Apply</button>
+
+            {/* Footer */}
+            <div className="p-6 border-t border-slate-100 flex gap-3">
+              <button onClick={resetFilters} className="flex-1 py-3.5 rounded-2xl bg-slate-100 text-slate-700 font-black text-sm hover:bg-slate-200 transition-all">Reset</button>
+              <button onClick={() => setShowFilters(false)} className="flex-1 py-3.5 rounded-2xl bg-slate-900 text-white font-black text-sm hover:bg-blue-600 transition-all shadow-lg">Apply</button>
             </div>
           </div>
         </>
       )}
 
       {/* ── MAIN CONTENT ── */}
-      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
 
-        {/* Banners */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        {/* Hero Banner Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
           <div className="lg:col-span-3">
             <BannerCarousel banners={banners} />
           </div>
-          <div className="lg:col-span-2 space-y-4">
+          <div className="lg:col-span-2">
             {promoBanners.length > 0 ? (
-              <div className="relative overflow-hidden rounded-[2rem] shadow-2xl group/promo" style={{ height: 320 }}>
+              <div className="relative rounded-[2rem] overflow-hidden shadow-2xl" style={{ height: 320 }}>
                 <div className="flex transition-transform duration-700 ease-out h-full" style={{ transform: `translateX(-${promoIdx * 100}%)` }}>
                   {promoBanners.map((promo, i) => (
-                    <div key={promo.id || i} className="relative min-w-full h-full bg-slate-900 cursor-pointer overflow-hidden" onClick={() => navigate('/shop')}>
-                      <img src={promo.image_url} alt={promo.title} className="w-full h-full object-cover opacity-60 group-hover/promo:scale-110 transition-transform duration-700" />
-                      <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/40 to-transparent" />
-                      <div className="absolute inset-0 flex flex-col justify-end p-8 space-y-2">
-                        <div className="p-4 bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl space-y-1">
-                          {promo.subtitle && <span className="inline-block bg-amber-400 text-slate-900 text-[9px] font-black uppercase px-2.5 py-1 rounded-full shadow-lg">{promo.subtitle}</span>}
-                          <h3 className="text-xl font-black text-white leading-tight tracking-tight">{promo.title}</h3>
-                          <div className="flex items-center gap-2 group/btn">
-                             <div className="text-white font-bold text-xs">Claim Deal</div>
-                             <ArrowRight className="w-4 h-4 text-amber-400 group-hover/btn:translate-x-1 transition-transform" />
-                          </div>
+                    <div key={promo.id || i} className="relative min-w-full h-full bg-slate-900 cursor-pointer overflow-hidden group" onClick={() => navigate('/shop')}>
+                      <img src={promo.image_url} alt={promo.title} className="w-full h-full object-cover opacity-60 group-hover:scale-110 transition-transform duration-700" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 to-transparent" />
+                      <div className="absolute inset-0 flex flex-col justify-end p-7">
+                        <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-4 space-y-2">
+                          {promo.subtitle && <span className="inline-block bg-amber-400 text-slate-900 text-[9px] font-black uppercase px-2.5 py-1 rounded-full">{promo.subtitle}</span>}
+                          <h3 className="text-xl font-black text-white">{promo.title}</h3>
+                          <div className="flex items-center gap-2 text-amber-400 font-bold text-xs">Claim Deal <ArrowRight className="w-3.5 h-3.5" /></div>
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
-                {promoBanners.length > 1 && (
-                  <div className="absolute top-6 right-8 flex gap-2">
-                    {promoBanners.map((_, i) => <button key={i} onClick={() => setPromoIdx(i)} className={`h-1.5 rounded-full transition-all duration-300 ${i === promoIdx ? 'bg-white w-8' : 'bg-white/40 w-1.5'}`} />)}
-                  </div>
-                )}
               </div>
             ) : (
-              <div className="h-full bg-slate-900 rounded-[2rem] flex items-center p-10 relative overflow-hidden shadow-2xl border border-white/5" style={{ minHeight: 320 }}>
-                <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-blue-600 to-indigo-700 opacity-90" />
-                <div className="absolute -top-24 -right-24 w-64 h-64 bg-white/10 rounded-full blur-3xl animate-pulse" />
-                <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-blue-400/20 rounded-full blur-3xl" />
-                
+              <div className="h-full rounded-[2rem] overflow-hidden relative flex items-center p-8 shadow-2xl" style={{ minHeight: 320, background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #312e81 100%)' }}>
+                <div className="absolute top-0 right-0 w-48 h-48 bg-blue-400/20 rounded-full blur-3xl" />
                 <div className="relative z-10 space-y-4">
-                  <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/20 backdrop-blur-lg border border-white/30 rounded-full">
-                    <Zap className="w-4 h-4 text-amber-400 fill-amber-400 animate-bounce" />
-                    <span className="text-[10px] font-black text-white uppercase tracking-[0.1em]">Elite Access</span>
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/15 backdrop-blur border border-white/20 rounded-full">
+                    <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
+                    <span className="text-[10px] font-black text-white uppercase tracking-wider">Elite Access</span>
                   </div>
-                  <h3 className="text-3xl font-black text-white tracking-tight leading-[1.1]">Exclusive<br />Vendor Pricing</h3>
-                  <p className="text-white/80 text-sm font-medium leading-relaxed max-w-[200px]">Unlock lower prices on premium gadgets.</p>
-                  <Link to="/shop" className="inline-flex items-center gap-3 bg-white text-slate-900 font-black text-[11px] uppercase tracking-widest px-7 py-3.5 rounded-2xl hover:bg-amber-400 transition-all shadow-xl hover:-translate-y-1 group">
-                    Explore <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  <h3 className="text-3xl font-black text-white leading-tight">Exclusive<br />Vendor Deals</h3>
+                  <p className="text-white/70 text-sm font-medium max-w-[180px]">Unlock premium prices on top products.</p>
+                  <Link to="/shop" className="inline-flex items-center gap-2 bg-white text-slate-900 font-black text-xs uppercase tracking-widest px-6 py-3 rounded-2xl hover:bg-amber-400 transition-all shadow-xl group">
+                    Explore <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
                   </Link>
                 </div>
               </div>
@@ -553,52 +587,45 @@ const Shop = () => {
           </div>
         </div>
 
-        {/* Results info */}
+        {/* Results bar */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <p className="text-sm font-black text-slate-900">{filtered.length} Products</p>
-            {(searchQuery || activeCategory !== 'All' || sortBy !== 'default' || maxPrice < 1000000) && (
-              <button onClick={resetFilters} className="flex items-center gap-1 px-3 py-1 rounded-full bg-red-50 text-red-500 text-xs font-black border border-red-100 hover:bg-red-100 transition-all">
-                <X className="w-3 h-3" /> Clear
+            <span className="text-sm font-black text-slate-900">{loading ? '—' : filtered.length} Products</span>
+            {(searchQuery || activeCategory !== 'All' || sortBy !== 'default' || maxPrice < absMaxPrice) && (
+              <button onClick={resetFilters} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-50 text-red-500 text-xs font-black border border-red-100 hover:bg-red-100 transition-all">
+                <X className="w-3 h-3" /> Clear filters
               </button>
             )}
           </div>
-          {sortBy !== 'default' && <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{SORT_OPTIONS.find(s => s.val === sortBy)?.label}</span>}
+          {activeCategory !== 'All' && (
+            <span className="text-xs font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-3 py-1.5 rounded-full">{activeCategory}</span>
+          )}
         </div>
 
-        {/* Product grid */}
+        {/* Product Grid */}
         {loading ? (
           <div className={view === 'grid' ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4' : 'space-y-3'}>
             {[...Array(10)].map((_, i) => (
-              <div key={i} className={`bg-white border border-slate-100 rounded-2xl animate-pulse ${view === 'grid' ? 'h-64' : 'h-28'}`} />
+              <div key={i} className={`bg-white rounded-3xl animate-pulse ${view === 'grid' ? 'h-72' : 'h-28'}`} />
             ))}
           </div>
         ) : fetchError ? (
-          <div className="text-center py-24 space-y-4">
+          <div className="text-center py-24 bg-white rounded-3xl border border-slate-100 space-y-4">
             <div className="w-20 h-20 bg-red-50 rounded-3xl flex items-center justify-center mx-auto">
               <AlertCircle className="w-10 h-10 text-red-400" />
             </div>
             <h3 className="text-xl font-black text-slate-900">Could not load products</h3>
-            <p className="text-slate-400 font-medium text-sm">{fetchError}</p>
-            <button onClick={fetchData} className="mt-2 px-6 py-3 bg-slate-900 text-white font-black text-sm rounded-xl hover:bg-blue-600 transition-all shadow-lg">Try Again</button>
-          </div>
-        ) : filtered.length === 0 && products.length > 0 ? (
-          <div className="text-center py-24 space-y-4">
-            <div className="w-20 h-20 bg-slate-100 rounded-3xl flex items-center justify-center mx-auto">
-              <Package className="w-10 h-10 text-slate-300" />
-            </div>
-            <h3 className="text-xl font-black text-slate-900">No products match</h3>
-            <p className="text-slate-400 font-medium text-sm">Try adjusting your filters or search.</p>
-            <button onClick={resetFilters} className="mt-2 px-6 py-3 bg-slate-900 text-white font-black text-sm rounded-xl hover:bg-blue-600 transition-all shadow-lg">Clear all filters</button>
+            <p className="text-slate-400 text-sm">{fetchError}</p>
+            <button onClick={fetchData} className="px-8 py-3 bg-slate-900 text-white font-black text-sm rounded-2xl hover:bg-blue-600 transition-all shadow-lg">Try Again</button>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-24 space-y-4">
-            <div className="w-20 h-20 bg-slate-100 rounded-3xl flex items-center justify-center mx-auto">
+          <div className="text-center py-24 bg-white rounded-3xl border border-slate-100 space-y-4">
+            <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto">
               <Package className="w-10 h-10 text-slate-300" />
             </div>
-            <h3 className="text-xl font-black text-slate-900">No products found</h3>
-            <p className="text-slate-400 font-medium text-sm">Try adjusting your filters or search for something else.</p>
-            <button onClick={resetFilters} className="mt-2 px-6 py-3 bg-slate-900 text-white font-black text-sm rounded-xl hover:bg-blue-600 transition-all shadow-lg">Clear all filters</button>
+            <h3 className="text-xl font-black text-slate-900">{products.length > 0 ? 'No products match' : 'No products yet'}</h3>
+            <p className="text-slate-400 text-sm">{products.length > 0 ? 'Try adjusting your filters or search.' : 'Check back soon!'}</p>
+            {products.length > 0 && <button onClick={resetFilters} className="px-8 py-3 bg-slate-900 text-white font-black text-sm rounded-2xl hover:bg-blue-600 transition-all shadow-lg">Clear filters</button>}
           </div>
         ) : (
           <div className={view === 'grid'
@@ -621,13 +648,18 @@ const Shop = () => {
 
       {/* Voice overlay */}
       {isRecording && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-white rounded-3xl p-10 text-center shadow-2xl space-y-4">
-            <div className="w-20 h-20 bg-red-500 rounded-full flex items-center justify-center mx-auto animate-pulse shadow-xl shadow-red-500/40">
-              <Mic className="w-10 h-10 text-white" />
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center">
+          <div className="bg-white rounded-3xl p-12 text-center shadow-2xl space-y-5 mx-6">
+            <div className="relative mx-auto w-24 h-24">
+              <div className="absolute inset-0 bg-red-500/30 rounded-full animate-ping" />
+              <div className="w-24 h-24 bg-red-500 rounded-full flex items-center justify-center shadow-2xl shadow-red-500/50">
+                <Mic className="w-10 h-10 text-white" />
+              </div>
             </div>
-            <h3 className="text-xl font-black text-slate-900">Listening...</h3>
-            <p className="text-slate-400 font-medium text-sm">Say a product name or category</p>
+            <div>
+              <h3 className="text-xl font-black text-slate-900">Listening...</h3>
+              <p className="text-slate-400 font-medium text-sm mt-1">Say a product name or category</p>
+            </div>
           </div>
         </div>
       )}

@@ -74,8 +74,15 @@ export const AuthProvider = ({ children }) => {
 
       if (error) throw error;
 
-      const userData = await getUserData(data.user.id);
-      return { ...data.user, ...userData };
+      // Try to get profile data but don't block login if it fails
+      let userData = null;
+      try {
+        userData = await getUserData(data.user.id);
+      } catch (profileErr) {
+        console.warn('Profile fetch failed during login, using session data:', profileErr.message);
+      }
+
+      return { ...data.user, ...(userData || {}), role: userData?.role || data.user.user_metadata?.role || 'buyer' };
     } catch (error) {
       console.error('Login error:', error.message);
       throw error;

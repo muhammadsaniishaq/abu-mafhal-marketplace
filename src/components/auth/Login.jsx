@@ -4,6 +4,12 @@ import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../config/supabase';
 import { Mail, Lock, Eye, EyeOff, Loader2, Bell } from 'lucide-react';
 
+const redirectByRole = (role, navigate) => {
+  if (role === 'admin') navigate('/admin', { replace: true });
+  else if (role === 'vendor') navigate('/vendor', { replace: true });
+  else navigate('/buyer', { replace: true });
+};
+
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -11,8 +17,15 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [settings, setSettings] = useState(null);
-  const { login } = useAuth();
+  const { login, currentUser } = useAuth();
   const navigate = useNavigate();
+
+  // If already logged in (e.g. cached session), redirect immediately
+  useEffect(() => {
+    if (currentUser) {
+      redirectByRole(currentUser.role, navigate);
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     fetchSettings();
@@ -20,14 +33,12 @@ const Login = () => {
 
   const fetchSettings = async () => {
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('app_settings')
         .select('*')
         .single();
       if (data) setSettings(data);
-    } catch (err) {
-      console.error('Error fetching settings:', err);
-    }
+    } catch (err) { /* silent */ }
   };
 
   const handleSubmit = async (e) => {
@@ -37,15 +48,7 @@ const Login = () => {
 
     try {
       const userData = await login(email, password);
-
-      // Redirect based on user role
-      if (userData.role === 'admin') {
-        navigate('/admin');
-      } else if (userData.role === 'vendor') {
-        navigate('/vendor');
-      } else {
-        navigate('/buyer');
-      }
+      redirectByRole(userData?.role, navigate);
     } catch (error) {
       setError(error.message || 'Failed to login. Please check your credentials.');
     } finally {
