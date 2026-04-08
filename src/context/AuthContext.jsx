@@ -125,33 +125,43 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    // Check initial session
-    const checkInitialSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        const userData = await getUserData(session.user.id);
-        setCurrentUser({ ...session.user, ...userData });
-        setUserRole(userData?.role || null);
-      }
-      setLoading(false);
-    };
+    // In Supabase v2, onAuthStateChange fires immediately with INITIAL_SESSION
+    // so we don't need a separate checkInitialSession — that causes duplicate getUserData calls.
+    // We wrap everything in try/catch/finally so a DB error never freezes loading.
 
-    checkInitialSession();
+    // Hard timeout: if after 8s loading is still true, force-unlock the page
+    const timeout = setTimeout(() => setLoading(false), 8000);
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session) {
-        const userData = await getUserData(session.user.id);
-        setCurrentUser({ ...session.user, ...userData });
-        setUserRole(userData?.role || null);
-      } else {
-        setCurrentUser(null);
-        setUserRole(null);
+      try {
+        if (session) {
+          const userData = await getUserData(session.user.id);
+          setCurrentUser({ ...session.user, ...(userData || {}) });
+          setUserRole(userData?.role || null);
+        } else {
+          setCurrentUser(null);
+          setUserRole(null);
+        }
+      } catch (err) {
+        console.error('Auth state change error:', err);
+        // If DB fetch fails, still set user from session so we don't block
+        if (session) {
+          setCurrentUser(session.user);
+          setUserRole(null);
+        } else {
+          setCurrentUser(null);
+          setUserRole(null);
+        }
+      } finally {
+        clearTimeout(timeout);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
   }, []);
 
   // Update user profile (Supabase)
