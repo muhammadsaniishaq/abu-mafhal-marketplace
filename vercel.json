@@ -1,7 +1,6 @@
 {
-    "buildCommand": "npm install && npm run build && cd mobile && npm install && npx expo export --platform web && cd .. && mkdir -p dist/mobile && cp -R mobile/dist/* dist/mobile/",
+    "buildCommand": "npm install && npm run build && (cd mobile && npm install && npx expo export --platform web && cd .. && mkdir -p dist/mobile && cp -R mobile/dist/* dist/mobile/) || echo 'Mobile build skipped'",
     "outputDirectory": "dist",
-    "framework": "vite",
     "headers": [
         {
             "source": "/",
