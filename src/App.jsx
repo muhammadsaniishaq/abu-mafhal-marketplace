@@ -107,7 +107,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 // ==================== MAIN APP COMPONENT ====================
 function App() {
   return (
-    <>
+    <AuthProvider>
       <CartProvider>
         <WishlistProvider>
           <ComparisonProvider>
@@ -279,7 +279,7 @@ function App() {
           </ComparisonProvider>
         </WishlistProvider>
       </CartProvider>
-    </>
+    </AuthProvider>
   );
 }
 

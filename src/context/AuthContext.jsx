@@ -1,5 +1,6 @@
 // src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import LoadingScreen from '../components/common/LoadingScreen';
 import { supabase } from '../config/supabase';
 
 const AuthContext = createContext({});
@@ -191,7 +192,7 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {loading ? <LoadingScreen /> : children}
     </AuthContext.Provider>
   );
 };
