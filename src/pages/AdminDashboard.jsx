@@ -1,292 +1,306 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { 
-  FiBarChart2, FiUsers, FiShoppingBag, FiCheckCircle, 
-  FiPackage, FiShoppingCart, FiAlertCircle, FiCreditCard, 
-  FiFileText, FiClipboard, FiTag, FiZap, FiDollarSign, 
-  FiStar, FiTrendingUp, FiSettings, FiMenu, FiX, FiLogOut, FiBell, FiChevronDown, FiSearch
-} from 'react-icons/fi';
+import {
+  BarChart2, Users, ShoppingBag, CheckCircle,
+  Package, ShoppingCart, AlertCircle, CreditCard,
+  FileText, ClipboardList, Tag, Zap, DollarSign,
+  Star, TrendingUp, Settings, Menu, X, LogOut,
+  Bell, ChevronDown, Search, Store, Shield,
+  ChevronRight, LayoutDashboard
+} from 'lucide-react';
+
+const NAV_GROUPS = [
+  {
+    title: 'Overview',
+    items: [
+      { label: 'Analytics', path: '/admin/analytics', icon: BarChart2, color: 'text-violet-400' },
+      { label: 'Audit Logs', path: '/admin/audit-logs', icon: ClipboardList, color: 'text-blue-400' },
+    ]
+  },
+  {
+    title: 'Store',
+    items: [
+      { label: 'Products', path: '/admin/products', icon: Package, color: 'text-emerald-400' },
+      { label: 'Orders', path: '/admin/orders', icon: ShoppingCart, color: 'text-amber-400' },
+      { label: 'Abandoned Carts', path: '/admin/abandoned-carts', icon: AlertCircle, color: 'text-red-400' },
+      { label: 'Reviews', path: '/admin/reviews', icon: Star, color: 'text-yellow-400' },
+    ]
+  },
+  {
+    title: 'Users',
+    items: [
+      { label: 'All Users', path: '/admin/users', icon: Users, color: 'text-cyan-400' },
+      { label: 'Vendors', path: '/admin/vendors', icon: ShoppingBag, color: 'text-pink-400' },
+      { label: 'Vendor Approvals', path: '/admin/vendor-approvals', icon: CheckCircle, color: 'text-green-400' },
+    ]
+  },
+  {
+    title: 'Finance',
+    items: [
+      { label: 'Payments', path: '/admin/payments', icon: CreditCard, color: 'text-violet-400' },
+      { label: 'Payouts', path: '/admin/payouts', icon: DollarSign, color: 'text-emerald-400' },
+      { label: 'Financials', path: '/admin/financials', icon: TrendingUp, color: 'text-blue-400' },
+      { label: 'Disputes', path: '/admin/disputes', icon: AlertCircle, color: 'text-red-400' },
+    ]
+  },
+  {
+    title: 'Marketing',
+    items: [
+      { label: 'CMS / Campaigns', path: '/admin/cms', icon: FileText, color: 'text-orange-400' },
+      { label: 'Coupons', path: '/admin/coupons', icon: Tag, color: 'text-pink-400' },
+      { label: 'Flash Sales', path: '/admin/flash-sales', icon: Zap, color: 'text-yellow-400' },
+      { label: 'Settings', path: '/admin/settings', icon: Settings, color: 'text-slate-400' },
+    ]
+  }
+];
 
 const AdminDashboard = () => {
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState({});
 
-  // Close sidebar on route change for mobile
+  useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
+
+  // Close profile dropdown on outside click
   useEffect(() => {
-    setSidebarOpen(false);
-  }, [location.pathname]);
+    if (!profileOpen) return;
+    const handler = () => setProfileOpen(false);
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [profileOpen]);
 
-  const menuGroups = [
-    {
-      title: 'Overview',
-      items: [
-        { label: 'Analytics', path: '/admin/analytics', icon: <FiBarChart2 /> },
-        { label: 'Audit Logs', path: '/admin/audit-logs', icon: <FiClipboard /> },
-      ]
-    },
-    {
-      title: 'Store Management',
-      items: [
-        { label: 'Products', path: '/admin/products', icon: <FiPackage /> },
-        { label: 'Orders', path: '/admin/orders', icon: <FiShoppingCart /> },
-        { label: 'Abandoned Carts', path: '/admin/abandoned-carts', icon: <FiAlertCircle /> },
-        { label: 'Reviews', path: '/admin/reviews', icon: <FiStar /> },
-      ]
-    },
-    {
-      title: 'User Management',
-      items: [
-        { label: 'Users', path: '/admin/users', icon: <FiUsers /> },
-        { label: 'Vendors', path: '/admin/vendors', icon: <FiShoppingBag /> },
-        { label: 'Vendor Approvals', path: '/admin/vendor-approvals', icon: <FiCheckCircle /> },
-      ]
-    },
-    {
-      title: 'Finance & Growth',
-      items: [
-        { label: 'Payments', path: '/admin/payments', icon: <FiCreditCard /> },
-        { label: 'Payouts', path: '/admin/payouts', icon: <FiDollarSign /> },
-        { label: 'Financials', path: '/admin/financials', icon: <FiTrendingUp /> },
-        { label: 'Disputes', path: '/admin/disputes', icon: <FiAlertCircle /> },
-      ]
-    },
-    {
-      title: 'Marketing & Settings',
-      items: [
-        { label: 'Campaigns/CMS', path: '/admin/cms', icon: <FiFileText /> },
-        { label: 'Coupons', path: '/admin/coupons', icon: <FiTag /> },
-        { label: 'Flash Sales', path: '/admin/flash-sales', icon: <FiZap /> },
-        { label: 'Platform Settings', path: '/admin/settings', icon: <FiSettings /> },
-      ]
-    }
-  ];
+  const toggleGroup = (title) =>
+    setCollapsedGroups(prev => ({ ...prev, [title]: !prev[title] }));
 
   const handleLogout = async () => {
-    if (window.confirm('Are you sure you want to logout?')) {
-      try {
-        await logout();
-        navigate('/login');
-      } catch (error) {
-        console.error('Logout error:', error);
-      }
-    }
+    try { await logout(); navigate('/login'); } catch (e) { console.error(e); }
   };
 
-  // Get current page title for breadcrumb
+  // Get current page label
   let pageTitle = 'Dashboard';
-  menuGroups.forEach(group => {
-    const route = group.items.find(item => location.pathname.startsWith(item.path));
-    if (route) pageTitle = route.label;
+  NAV_GROUPS.forEach(g => {
+    const found = g.items.find(i => location.pathname.startsWith(i.path));
+    if (found) pageTitle = found.label;
   });
 
-  const handleScroll = (e) => {
-    setScrolled(e.target.scrollTop > 10);
-  };
+  const userInitial = (currentUser?.full_name || currentUser?.name || 'A')[0].toUpperCase();
+  const userName = currentUser?.full_name || currentUser?.name || 'Admin';
+  const userEmail = currentUser?.email || 'admin@abumafhal.com';
 
   return (
-    <div className="min-h-screen bg-[#FDFDFD] dark:bg-[#0A0A0A] flex overflow-hidden font-sans text-gray-900 dark:text-gray-100">
-      
-      {/* Dynamic Background Elements for depth */}
-      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-purple-400/5 dark:bg-purple-900/10 blur-[120px]"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-blue-400/5 dark:bg-blue-900/10 blur-[120px]"></div>
-      </div>
+    <div className="min-h-screen flex bg-[#0f1117] text-white overflow-hidden font-sans">
 
-      {/* Mobile Sidebar Overlay */}
+      {/* ── MOBILE OVERLAY ── */}
       {sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 lg:hidden transition-opacity duration-300" 
-          onClick={() => setSidebarOpen(false)} 
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      {/* Sidebar */}
+      {/* ══════════════════ SIDEBAR ══════════════════ */}
       <aside className={`
         fixed lg:static inset-y-0 left-0 z-50
-        w-72 bg-white/70 dark:bg-[#111111]/70 backdrop-blur-2xl border-r border-gray-200/50 dark:border-white/5
-        transform transition-transform duration-300 cubic-bezier(0.4, 0, 0.2, 1) shadow-[4px_0_24px_rgba(0,0,0,0.02)] dark:shadow-[4px_0_24px_rgba(0,0,0,0.2)] lg:shadow-none
+        w-[260px] flex-shrink-0 flex flex-col h-screen
+        bg-[#13151c] border-r border-white/5
+        transform transition-transform duration-300
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-        flex flex-col h-screen
       `}>
-        {/* Sidebar Header */}
-        <div className="h-20 flex-shrink-0 flex items-center justify-between px-6 border-b border-gray-200/50 dark:border-white/5">
-          <Link to="/admin/analytics" className="flex items-center gap-4 group">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-indigo-500/20 group-hover:shadow-indigo-500/40 transition-all duration-300 group-hover:scale-105">
+
+        {/* Logo */}
+        <div className="h-16 flex items-center justify-between px-5 border-b border-white/5 flex-shrink-0">
+          <Link to="/admin/analytics" className="flex items-center gap-3 group">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center font-black text-sm shadow-lg shadow-violet-500/30 group-hover:shadow-violet-500/50 transition-all">
               AM
             </div>
-            <div className="flex flex-col">
-               <span className="font-bold text-lg tracking-tight leading-tight">Admin Console</span>
-               <span className="text-[10px] uppercase tracking-widest text-indigo-600 dark:text-indigo-400 font-bold">Workspace</span>
+            <div>
+              <p className="font-black text-sm text-white leading-none">Admin Console</p>
+              <p className="text-[10px] text-violet-400 font-bold uppercase tracking-widest mt-0.5">Abu Mafhal</p>
             </div>
           </Link>
-          <button 
-            onClick={() => setSidebarOpen(false)}
-            className="p-2 -mr-2 text-gray-400 hover:text-gray-900 dark:hover:text-white lg:hidden rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
-          >
-            <FiX size={20} />
+          <button onClick={() => setSidebarOpen(false)} className="lg:hidden w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-all">
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Navigation Menu */}
-        <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-6 custom-scrollbar z-10">
-          {menuGroups.map((group, idx) => (
-            <div key={idx} className="space-y-1">
-              <div className="px-3 mb-2 text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                {group.title}
-              </div>
-              {group.items.map((item) => {
-                const isActive = location.pathname.startsWith(item.path);
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 text-sm font-semibold overflow-hidden ${
-                      isActive 
-                        ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 shadow-sm border border-indigo-100 dark:border-indigo-500/20' 
-                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-gray-200 border border-transparent'
-                    }`}
-                  >
-                    {/* Active State Background Glow */}
-                    {isActive && <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/5 to-transparent dark:from-indigo-400/10 pointer-events-none" />}
-                    
-                    <div className={`text-[1.1rem] transition-transform duration-200 ${isActive ? 'scale-110' : 'group-hover:scale-110 group-hover:text-indigo-500 dark:group-hover:text-indigo-400'}`}>
-                      {item.icon}
-                    </div>
-                    <span className="relative z-10">{item.label}</span>
+        {/* Nav */}
+        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+          {NAV_GROUPS.map((group) => {
+            const isCollapsed = collapsedGroups[group.title];
+            return (
+              <div key={group.title} className="mb-1">
+                {/* Group header */}
+                <button
+                  onClick={() => toggleGroup(group.title)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-300 transition-colors"
+                >
+                  {group.title}
+                  <ChevronRight className={`w-3 h-3 transition-transform ${isCollapsed ? '' : 'rotate-90'}`} />
+                </button>
 
-                    {/* Active Indicator Line */}
-                    {isActive && (
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-1/2 bg-indigo-600 dark:bg-indigo-400 rounded-r-md" />
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
-          ))}
+                {/* Items */}
+                {!isCollapsed && (
+                  <div className="space-y-0.5">
+                    {group.items.map((item) => {
+                      const isActive = location.pathname.startsWith(item.path);
+                      const Icon = item.icon;
+                      return (
+                        <Link
+                          key={item.path}
+                          to={item.path}
+                          className={`
+                            relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200
+                            ${isActive
+                              ? 'bg-violet-600/20 text-white border border-violet-500/30 shadow-sm shadow-violet-500/10'
+                              : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'
+                            }
+                          `}
+                        >
+                          {/* Active left bar */}
+                          {isActive && (
+                            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-violet-500 rounded-r-full" />
+                          )}
+
+                          <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-violet-400' : item.color} transition-colors`} />
+                          <span>{item.label}</span>
+
+                          {isActive && (
+                            <div className="ml-auto w-1.5 h-1.5 rounded-full bg-violet-400" />
+                          )}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </nav>
 
-        {/* Sidebar Footer */}
-        <div className="p-5 border-t border-gray-200/50 dark:border-white/5 bg-white/50 dark:bg-black/20 backdrop-blur-md">
-           <Link to="/shop" className="group flex items-center justify-center gap-2 w-full py-3 px-4 bg-gray-900 dark:bg-white border border-transparent rounded-xl text-sm font-bold text-white dark:text-gray-900 hover:shadow-lg hover:shadow-gray-900/20 dark:hover:shadow-white/20 transition-all duration-300 hover:-translate-y-0.5">
-             <FiShoppingBag className="group-hover:animate-bounce" /> Visit Storefront
-           </Link>
+        {/* Sidebar footer */}
+        <div className="p-4 border-t border-white/5 flex-shrink-0 space-y-2">
+          <Link to="/shop"
+            className="flex items-center gap-3 px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-sm font-bold text-slate-300 hover:text-white transition-all group">
+            <Store className="w-4 h-4 group-hover:text-violet-400 transition-colors" />
+            Visit Storefront
+          </Link>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-3 px-4 py-3 w-full hover:bg-red-500/10 border border-transparent hover:border-red-500/20 rounded-xl text-sm font-bold text-slate-500 hover:text-red-400 transition-all group">
+            <LogOut className="w-4 h-4" />
+            Sign Out
+          </button>
         </div>
       </aside>
 
-      {/* Main Content Wrapper */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen relative z-10">
-        
-        {/* Top App Bar */}
-        <header className={`
-          absolute top-0 inset-x-0 z-30 flex items-center justify-between px-4 sm:px-8 h-20
-          transition-all duration-300 pointer-events-none
-        `}>
-          {/* Glass background container that fades in/out on scroll */}
-          <div className={`absolute inset-0 transition-opacity duration-300 pointer-events-auto ${scrolled ? 'opacity-100 bg-white/70 dark:bg-[#0A0A0A]/70 backdrop-blur-xl border-b border-gray-200/50 dark:border-white/5 shadow-sm' : 'opacity-0'}`} />
+      {/* ══════════════════ MAIN AREA ══════════════════ */}
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
 
-          <div className="flex items-center gap-4 relative pointer-events-auto">
+        {/* ── TOP BAR ── */}
+        <header className="h-16 flex-shrink-0 flex items-center justify-between px-4 sm:px-6 bg-[#13151c]/80 backdrop-blur-xl border-b border-white/5">
+
+          <div className="flex items-center gap-3">
+            {/* Mobile menu toggle */}
             <button
               onClick={() => setSidebarOpen(true)}
-              className="p-2 -ml-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white lg:hidden rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 transition"
+              className="lg:hidden w-9 h-9 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 rounded-xl transition-all"
             >
-              <FiMenu size={24} />
+              <Menu className="w-5 h-5" />
             </button>
-            
-            {/* Breadcrumb / Title */}
+
+            {/* Page title */}
             <div>
-              <h2 className="text-2xl font-black text-gray-900 dark:text-white hidden sm:block tracking-tight">
-                {pageTitle}
-              </h2>
-              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 hidden sm:block">
-                Overview & Management
-              </p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 font-medium hidden sm:block">Admin</span>
+                <ChevronRight className="w-3 h-3 text-slate-600 hidden sm:block" />
+                <h1 className="text-sm font-black text-white">{pageTitle}</h1>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-4 sm:gap-6 relative pointer-events-auto">
-            
-            {/* Command Search Simulation */}
-            <button className="hidden md:flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-[#1A1A1A] hover:bg-gray-200 dark:hover:bg-[#222] border border-transparent dark:border-white/5 text-gray-500 dark:text-gray-400 rounded-full text-sm font-medium transition-all duration-200">
-              <FiSearch size={16} />
-              <span>Search anywhere...</span>
-              <div className="flex gap-1 ml-4">
-                 <kbd className="font-sans px-1.5 py-0.5 bg-white dark:bg-black rounded-md shadow-sm text-[10px] font-bold">⌘</kbd>
-                 <kbd className="font-sans px-1.5 py-0.5 bg-white dark:bg-black rounded-md shadow-sm text-[10px] font-bold">K</kbd>
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Search button */}
+            <button className="hidden md:flex items-center gap-2.5 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white rounded-xl text-xs font-medium transition-all">
+              <Search className="w-3.5 h-3.5" />
+              <span>Search...</span>
+              <div className="flex gap-1 ml-2">
+                <kbd className="px-1.5 py-0.5 bg-white/10 rounded text-[9px] font-bold">⌘</kbd>
+                <kbd className="px-1.5 py-0.5 bg-white/10 rounded text-[9px] font-bold">K</kbd>
               </div>
             </button>
 
-            {/* Notification Bell */}
-            <button className="relative p-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
-              <FiBell size={20} />
-              <span className="absolute top-1 right-1.5 w-2.5 h-2.5 bg-pink-500 rounded-full border-2 border-[#FDFDFD] dark:border-[#0A0A0A]"></span>
+            {/* Notifications */}
+            <button className="relative w-9 h-9 flex items-center justify-center text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all">
+              <Bell className="w-4 h-4" />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-violet-500 rounded-full border-2 border-[#13151c]" />
             </button>
 
-            {/* Profile Dropdown */}
-            <div className="flex items-center gap-3 pl-4 sm:pl-6 border-l border-gray-200 dark:border-white/10">
-              <div className="hidden sm:block text-right">
-                <p className="text-sm font-black text-gray-900 dark:text-white leading-none mb-1 shadow-sm">
-                  {currentUser?.name || 'Admin'}
-                </p>
-                <p className="text-xs font-bold text-indigo-600 dark:text-indigo-400 leading-none">
-                  Super Admin
-                </p>
-              </div>
-              <div className="relative group/menu">
-                <button className="flex items-center gap-2 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-all">
-                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/40 dark:to-purple-900/40 flex items-center justify-center text-indigo-700 dark:text-indigo-300 font-bold overflow-hidden border-2 border-white dark:border-gray-800 shadow-md">
-                    {currentUser?.avatar ? (
-                      <img src={currentUser.avatar} alt="Avatar" className="w-full h-full object-cover" />
-                    ) : (
-                      (currentUser?.name?.[0] || 'A').toUpperCase()
-                    )}
+            {/* Profile */}
+            <div className="relative" onMouseDown={(e) => e.stopPropagation()}>
+              <button
+                onClick={() => setProfileOpen(p => !p)}
+                className="flex items-center gap-2.5 pl-3 pr-2 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all"
+              >
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center text-xs font-black shadow-lg shadow-violet-500/20">
+                  {userInitial}
+                </div>
+                <span className="hidden sm:block text-sm font-bold text-white max-w-[80px] truncate">{userName.split(' ')[0]}</span>
+                <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Profile dropdown */}
+              {profileOpen && (
+                <div className="absolute right-0 top-full mt-2 w-60 bg-[#1a1d27] border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden z-50">
+                  {/* User info */}
+                  <div className="p-4 border-b border-white/5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center font-black shadow-lg shadow-violet-500/30">
+                        {userInitial}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-black text-white truncate">{userName}</p>
+                        <p className="text-xs text-slate-400 truncate">{userEmail}</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 bg-violet-500/15 border border-violet-500/25 rounded-full">
+                      <Shield className="w-3 h-3 text-violet-400" />
+                      <span className="text-[10px] font-black text-violet-400 uppercase tracking-wider">Super Admin</span>
+                    </div>
                   </div>
-                  <FiChevronDown className="text-gray-500 sm:hidden" size={16} />
-                </button>
-                
-                {/* Dropdown Menu Overlay */}
-                <div className="absolute right-0 top-[110%] pt-2 w-64 opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all duration-200 origin-top-right z-50">
-                  <div className="bg-white/90 dark:bg-[#111111]/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200/50 dark:border-white/10 overflow-hidden px-2 py-2">
-                    <div className="p-3 mb-1 sm:hidden border-b border-gray-200/50 dark:border-white/10">
-                       <p className="text-sm font-bold text-gray-900 dark:text-white truncate">
-                          {currentUser?.name || 'Admin'}
-                       </p>
-                       <p className="text-xs font-medium text-gray-500 dark:text-gray-400 truncate mt-1">
-                          {currentUser?.email || 'admin@store.com'}
-                       </p>
-                    </div>
-                    <div className="px-1 py-1">
-                      <Link to="/admin/settings" className="flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors">
-                        <FiSettings size={18} className="text-gray-500" /> Platform Settings
-                      </Link>
-                      <div className="h-px bg-gray-100 dark:bg-white/5 my-1 mx-2"></div>
-                      <button 
-                        onClick={handleLogout}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-colors"
-                      >
-                        <FiLogOut size={18} /> Sign out securely
-                      </button>
-                    </div>
+
+                  {/* Menu items */}
+                  <div className="p-2">
+                    <Link to="/admin/settings" onClick={() => setProfileOpen(false)}
+                      className="flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-slate-300 hover:text-white hover:bg-white/5 rounded-xl transition-all">
+                      <Settings className="w-4 h-4 text-slate-500" /> Platform Settings
+                    </Link>
+                    <Link to="/shop" onClick={() => setProfileOpen(false)}
+                      className="flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-slate-300 hover:text-white hover:bg-white/5 rounded-xl transition-all">
+                      <Store className="w-4 h-4 text-slate-500" /> View Storefront
+                    </Link>
+                    <div className="h-px bg-white/5 my-1" />
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-red-400 hover:bg-red-500/10 rounded-xl transition-all">
+                      <LogOut className="w-4 h-4" /> Sign Out
+                    </button>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </header>
 
-        {/* Scrollable Main Area */}
-        <div 
-          className="flex-1 overflow-y-auto w-full pt-20 pb-8 px-4 sm:px-8 relative z-10 custom-scrollbar"
-          onScroll={handleScroll}
-        >
-          <div className="max-w-7xl mx-auto min-h-full py-8">
+        {/* ── CONTENT AREA ── */}
+        <main className="flex-1 overflow-y-auto bg-[#0f1117]">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 min-h-full">
             <Outlet />
           </div>
-        </div>
-
+        </main>
       </div>
     </div>
   );
