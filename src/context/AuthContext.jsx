@@ -8,9 +8,18 @@ const AuthContext = createContext({});
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState(null);
-  const [userRole, setUserRole] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const cached = localStorage.getItem('auth_user');
+      return cached ? JSON.parse(cached) : null;
+    } catch { return null; }
+  });
+  const [userRole, setUserRole] = useState(() => {
+    try {
+      return localStorage.getItem('auth_role');
+    } catch { return null; }
+  });
+  const [loading, setLoading] = useState(!currentUser); // Only show loader if no cache exists
 
   // Get user data from Supabase profiles table
   const getUserData = async (userId) => {
@@ -112,6 +121,8 @@ export const AuthProvider = ({ children }) => {
       await supabase.auth.signOut();
       setCurrentUser(null);
       setUserRole(null);
+      localStorage.removeItem('auth_user');
+      localStorage.removeItem('auth_role');
     } catch (error) {
       console.error('Logout error:', error.message);
       throw error;
@@ -143,21 +154,26 @@ export const AuthProvider = ({ children }) => {
       try {
         if (session) {
           const userData = await getUserData(session.user.id);
-          setCurrentUser({ ...session.user, ...(userData || {}) });
-          setUserRole(userData?.role || null);
+          const fullUser = { ...session.user, ...(userData || {}) };
+          const role = userData?.role || session.user.user_metadata?.role || null;
+          
+          setCurrentUser(fullUser);
+          setUserRole(role);
+          
+          // Persistence for "Zero Loading" experience
+          localStorage.setItem('auth_user', JSON.stringify(fullUser));
+          if (role) localStorage.setItem('auth_role', role);
         } else {
           setCurrentUser(null);
           setUserRole(null);
+          localStorage.removeItem('auth_user');
+          localStorage.removeItem('auth_role');
         }
       } catch (err) {
         console.error('Auth state change error:', err);
-        // If DB fetch fails, still set user from session so we don't block
         if (session) {
           setCurrentUser(session.user);
-          setUserRole(null);
-        } else {
-          setCurrentUser(null);
-          setUserRole(null);
+          setUserRole(session.user.user_metadata?.role || null);
         }
       } finally {
         clearTimeout(timeout);

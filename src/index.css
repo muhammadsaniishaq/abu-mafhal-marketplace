@@ -2,6 +2,39 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  :root {
+    --slate-50: #f8fafc;
+    --slate-100: #f1f5f9;
+    --slate-200: #e2e8f0;
+    --slate-300: #cbd5e1;
+    --slate-400: #94a3b8;
+    --slate-500: #64748b;
+    --slate-600: #475569;
+    --slate-700: #334155;
+    --slate-800: #1e293b;
+    --slate-900: #0f172a;
+    --slate-950: #020617;
+  }
+}
+
+/* ── Modern Premium UI ── */
+.glass-effect {
+  @apply backdrop-blur-xl bg-white/70 border border-white/20 shadow-xl shadow-slate-200/50;
+}
+
+.glass-card {
+  @apply bg-white/60 backdrop-blur-md border border-white/20 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300;
+}
+
+.premium-gradient {
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
+}
+
+.premium-border {
+  @apply border border-slate-200/60 hover:border-violet-300/50 transition-colors;
+}
+
 /* ── Marquee / Ticker ── */
 @keyframes marquee {
   0%   { transform: translateX(0); }
@@ -37,14 +70,14 @@
   100% { background-position: 200% 0; }
 }
 .animate-shimmer {
-  background: linear-gradient(90deg, #1f2937 25%, #374151 50%, #1f2937 75%);
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
 
 /* ── Gradient text utility ── */
 .gradient-text {
-  background: linear-gradient(135deg, #60a5fa, #818cf8, #34d399);
+  background: linear-gradient(135deg, #6366f1, #a855f7, #ec4899);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -52,7 +85,7 @@
 
 /* ── Glow on focus ── */
 .glow-focus:focus-within {
-  box-shadow: 0 0 40px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 40px rgba(99, 102, 241, 0.2);
 }
 
 /* ── Smooth scroll ── */
@@ -60,8 +93,8 @@ html {
   scroll-behavior: smooth;
 }
 
-/* ── Custom scrollbar ── */
+/* ── Modern Scrollbar ── */
 ::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #0f172a; }
-::-webkit-scrollbar-thumb { background: #1e40af; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #2563eb; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }

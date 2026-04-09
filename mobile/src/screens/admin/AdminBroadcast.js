@@ -179,7 +179,7 @@ export const AdminBroadcast = () => {
                             <html>
                             <head>
                                 <meta charset="UTF-8">
-                                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                                <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
                             </head>
                             <body style="font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #F8FAFC; margin: 0; padding: 40px 20px;">
                                 <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); overflow: hidden;">

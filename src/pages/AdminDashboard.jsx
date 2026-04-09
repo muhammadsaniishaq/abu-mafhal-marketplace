@@ -92,7 +92,7 @@ const AdminDashboard = () => {
   const userEmail = currentUser?.email || 'admin@abumafhal.com';
 
   return (
-    <div className="min-h-screen flex bg-[#0f1117] text-white overflow-hidden font-sans">
+    <div className="min-h-screen flex bg-slate-50 text-slate-900 overflow-hidden font-sans">
 
       {/* ── MOBILE OVERLAY ── */}
       {sidebarOpen && (
@@ -106,23 +106,23 @@ const AdminDashboard = () => {
       <aside className={`
         fixed lg:static inset-y-0 left-0 z-50
         w-[260px] flex-shrink-0 flex flex-col h-screen
-        bg-[#13151c] border-r border-white/5
+        bg-white/80 backdrop-blur-xl border-r border-slate-200
         transform transition-transform duration-300
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
 
         {/* Logo */}
-        <div className="h-16 flex items-center justify-between px-5 border-b border-white/5 flex-shrink-0">
+        <div className="h-16 flex items-center justify-between px-5 border-b border-slate-100 flex-shrink-0">
           <Link to="/admin/analytics" className="flex items-center gap-3 group">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center font-black text-sm shadow-lg shadow-violet-500/30 group-hover:shadow-violet-500/50 transition-all">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center font-black text-sm shadow-lg shadow-violet-500/30 group-hover:shadow-violet-500/50 transition-all text-white">
               AM
             </div>
             <div>
-              <p className="font-black text-sm text-white leading-none">Admin Console</p>
-              <p className="text-[10px] text-violet-400 font-bold uppercase tracking-widest mt-0.5">Abu Mafhal</p>
+              <p className="font-black text-sm text-slate-900 leading-none">Admin Console</p>
+              <p className="text-[10px] text-violet-600 font-bold uppercase tracking-widest mt-0.5">Abu Mafhal</p>
             </div>
           </Link>
-          <button onClick={() => setSidebarOpen(false)} className="lg:hidden w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-all">
+          <button onClick={() => setSidebarOpen(false)} className="lg:hidden w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-950 hover:bg-slate-100 rounded-lg transition-all">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -155,21 +155,21 @@ const AdminDashboard = () => {
                           className={`
                             relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200
                             ${isActive
-                              ? 'bg-violet-600/20 text-white border border-violet-500/30 shadow-sm shadow-violet-500/10'
-                              : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'
+                              ? 'bg-violet-50 text-violet-600 border border-violet-100 shadow-sm shadow-violet-500/5'
+                              : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50 border border-transparent'
                             }
                           `}
                         >
                           {/* Active left bar */}
                           {isActive && (
-                            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-violet-500 rounded-r-full" />
+                            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-violet-600 rounded-r-full" />
                           )}
 
-                          <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-violet-400' : item.color} transition-colors`} />
+                          <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-violet-600' : item.color} transition-colors`} />
                           <span>{item.label}</span>
 
                           {isActive && (
-                            <div className="ml-auto w-1.5 h-1.5 rounded-full bg-violet-400" />
+                            <div className="ml-auto w-1.5 h-1.5 rounded-full bg-violet-600" />
                           )}
                         </Link>
                       );
@@ -182,15 +182,15 @@ const AdminDashboard = () => {
         </nav>
 
         {/* Sidebar footer */}
-        <div className="p-4 border-t border-white/5 flex-shrink-0 space-y-2">
+        <div className="p-4 border-t border-slate-100 flex-shrink-0 space-y-2">
           <Link to="/shop"
-            className="flex items-center gap-3 px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-sm font-bold text-slate-300 hover:text-white transition-all group">
-            <Store className="w-4 h-4 group-hover:text-violet-400 transition-colors" />
+            className="flex items-center gap-3 px-4 py-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:text-slate-900 transition-all group">
+            <Store className="w-4 h-4 group-hover:text-violet-600 transition-colors" />
             Visit Storefront
           </Link>
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 px-4 py-3 w-full hover:bg-red-500/10 border border-transparent hover:border-red-500/20 rounded-xl text-sm font-bold text-slate-500 hover:text-red-400 transition-all group">
+            className="flex items-center gap-3 px-4 py-3 w-full hover:bg-red-50 border border-transparent hover:border-red-100 rounded-xl text-sm font-bold text-slate-500 hover:text-red-600 transition-all group">
             <LogOut className="w-4 h-4" />
             Sign Out
           </button>
@@ -201,13 +201,13 @@ const AdminDashboard = () => {
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
 
         {/* ── TOP BAR ── */}
-        <header className="h-16 flex-shrink-0 flex items-center justify-between px-4 sm:px-6 bg-[#13151c]/80 backdrop-blur-xl border-b border-white/5">
+        <header className="h-16 flex-shrink-0 flex items-center justify-between px-4 sm:px-6 bg-white/70 backdrop-blur-xl border-b border-slate-200">
 
           <div className="flex items-center gap-3">
             {/* Mobile menu toggle */}
             <button
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden w-9 h-9 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 rounded-xl transition-all"
+              className="lg:hidden w-9 h-9 flex items-center justify-center text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all"
             >
               <Menu className="w-5 h-5" />
             </button>
@@ -215,77 +215,77 @@ const AdminDashboard = () => {
             {/* Page title */}
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-500 font-medium hidden sm:block">Admin</span>
-                <ChevronRight className="w-3 h-3 text-slate-600 hidden sm:block" />
-                <h1 className="text-sm font-black text-white">{pageTitle}</h1>
+                <span className="text-xs text-slate-400 font-medium hidden sm:block">Admin</span>
+                <ChevronRight className="w-3 h-3 text-slate-400 hidden sm:block" />
+                <h1 className="text-sm font-black text-slate-900">{pageTitle}</h1>
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
             {/* Search button */}
-            <button className="hidden md:flex items-center gap-2.5 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-white rounded-xl text-xs font-medium transition-all">
+            <button className="hidden md:flex items-center gap-2.5 px-4 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-500 hover:text-slate-900 rounded-xl text-xs font-medium transition-all">
               <Search className="w-3.5 h-3.5" />
               <span>Search...</span>
               <div className="flex gap-1 ml-2">
-                <kbd className="px-1.5 py-0.5 bg-white/10 rounded text-[9px] font-bold">⌘</kbd>
-                <kbd className="px-1.5 py-0.5 bg-white/10 rounded text-[9px] font-bold">K</kbd>
+                <kbd className="px-1.5 py-0.5 bg-slate-200 rounded text-[9px] font-bold">⌘</kbd>
+                <kbd className="px-1.5 py-0.5 bg-slate-200 rounded text-[9px] font-bold">K</kbd>
               </div>
             </button>
 
             {/* Notifications */}
-            <button className="relative w-9 h-9 flex items-center justify-center text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all">
+            <button className="relative w-9 h-9 flex items-center justify-center text-slate-500 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-all">
               <Bell className="w-4 h-4" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-violet-500 rounded-full border-2 border-[#13151c]" />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-violet-600 rounded-full border-2 border-white" />
             </button>
 
             {/* Profile */}
             <div className="relative" onMouseDown={(e) => e.stopPropagation()}>
               <button
                 onClick={() => setProfileOpen(p => !p)}
-                className="flex items-center gap-2.5 pl-3 pr-2 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all"
+                className="flex items-center gap-2.5 pl-3 pr-2 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-all"
               >
-                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center text-xs font-black shadow-lg shadow-violet-500/20">
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center text-xs font-black shadow-lg shadow-violet-500/20 text-white">
                   {userInitial}
                 </div>
-                <span className="hidden sm:block text-sm font-bold text-white max-w-[80px] truncate">{userName.split(' ')[0]}</span>
-                <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
+                <span className="hidden sm:block text-sm font-bold text-slate-900 max-w-[80px] truncate">{userName.split(' ')[0]}</span>
+                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
               </button>
 
               {/* Profile dropdown */}
               {profileOpen && (
-                <div className="absolute right-0 top-full mt-2 w-60 bg-[#1a1d27] border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden z-50">
+                <div className="absolute right-0 top-full mt-2 w-64 bg-white border border-slate-200 rounded-2xl shadow-2xl shadow-slate-200/50 overflow-hidden z-50">
                   {/* User info */}
-                  <div className="p-4 border-b border-white/5">
+                  <div className="p-4 border-b border-slate-50 bg-slate-50/50">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center font-black shadow-lg shadow-violet-500/30">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center font-black shadow-lg shadow-violet-500/30 text-white">
                         {userInitial}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-black text-white truncate">{userName}</p>
+                        <p className="text-sm font-black text-slate-900 truncate">{userName}</p>
                         <p className="text-xs text-slate-400 truncate">{userEmail}</p>
                       </div>
                     </div>
-                    <div className="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 bg-violet-500/15 border border-violet-500/25 rounded-full">
-                      <Shield className="w-3 h-3 text-violet-400" />
-                      <span className="text-[10px] font-black text-violet-400 uppercase tracking-wider">Super Admin</span>
+                    <div className="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 bg-violet-50 border border-violet-100 rounded-full">
+                      <Shield className="w-3 h-3 text-violet-600" />
+                      <span className="text-[10px] font-black text-violet-600 uppercase tracking-wider">Super Admin</span>
                     </div>
                   </div>
 
                   {/* Menu items */}
                   <div className="p-2">
                     <Link to="/admin/settings" onClick={() => setProfileOpen(false)}
-                      className="flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-slate-300 hover:text-white hover:bg-white/5 rounded-xl transition-all">
-                      <Settings className="w-4 h-4 text-slate-500" /> Platform Settings
+                      className="flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition-all">
+                      <Settings className="w-4 h-4 text-slate-400" /> Platform Settings
                     </Link>
                     <Link to="/shop" onClick={() => setProfileOpen(false)}
-                      className="flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-slate-300 hover:text-white hover:bg-white/5 rounded-xl transition-all">
-                      <Store className="w-4 h-4 text-slate-500" /> View Storefront
+                      className="flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition-all">
+                      <Store className="w-4 h-4 text-slate-400" /> View Storefront
                     </Link>
-                    <div className="h-px bg-white/5 my-1" />
+                    <div className="h-px bg-slate-100 my-1" />
                     <button
                       onClick={handleLogout}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-red-400 hover:bg-red-500/10 rounded-xl transition-all">
+                      className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-red-500 hover:bg-red-50 rounded-xl transition-all">
                       <LogOut className="w-4 h-4" /> Sign Out
                     </button>
                   </div>
@@ -296,8 +296,8 @@ const AdminDashboard = () => {
         </header>
 
         {/* ── CONTENT AREA ── */}
-        <main className="flex-1 overflow-y-auto bg-[#0f1117]">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 min-h-full">
+        <main className="flex-1 overflow-y-auto bg-slate-50 scroll-smooth">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 min-h-full">
             <Outlet />
           </div>
         </main>
