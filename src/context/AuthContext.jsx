@@ -147,37 +147,39 @@ export const AuthProvider = ({ children }) => {
     // so we don't need a separate checkInitialSession — that causes duplicate getUserData calls.
     // We wrap everything in try/catch/finally so a DB error never freezes loading.
 
-    // Hard timeout: if after 8s loading is still true, force-unlock the page
-    const timeout = setTimeout(() => setLoading(false), 8000);
+    // Hard timeout: if for some reason auth doesn't resolve in 3s, unlock the app shell.
+    const timeout = setTimeout(() => setLoading(false), 3000);
 
+    let isInitialCheck = true;
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       try {
         if (session) {
+          // If we have a session, validate/get profile but don't block if we already have a cached user
           const userData = await getUserData(session.user.id);
           const fullUser = { ...session.user, ...(userData || {}) };
           const role = userData?.role || session.user.user_metadata?.role || null;
           
           setCurrentUser(fullUser);
           setUserRole(role);
-          
-          // Persistence for "Zero Loading" experience
           localStorage.setItem('auth_user', JSON.stringify(fullUser));
           if (role) localStorage.setItem('auth_role', role);
         } else {
-          setCurrentUser(null);
-          setUserRole(null);
-          localStorage.removeItem('auth_user');
-          localStorage.removeItem('auth_role');
+          // No session - clear everything
+          if (event === 'SIGNED_OUT') {
+            setCurrentUser(null);
+            setUserRole(null);
+            localStorage.removeItem('auth_user');
+            localStorage.removeItem('auth_role');
+          }
         }
       } catch (err) {
         console.error('Auth state change error:', err);
-        if (session) {
-          setCurrentUser(session.user);
-          setUserRole(session.user.user_metadata?.role || null);
-        }
       } finally {
-        clearTimeout(timeout);
-        setLoading(false);
+        if (isInitialCheck) {
+          isInitialCheck = false;
+          clearTimeout(timeout);
+          setLoading(false);
+        }
       }
     });
 
@@ -225,7 +227,7 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={value}>
-      {loading ? <LoadingScreen /> : children}
+      {children}
     </AuthContext.Provider>
   );
 };

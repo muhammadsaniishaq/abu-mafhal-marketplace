@@ -47,11 +47,10 @@ const Login = () => {
     setLoading(true);
 
     try {
-      const userData = await login(email, password);
-      redirectByRole(userData?.role, navigate);
+      await login(email, password);
+      // Let the useEffect handle the redirect when currentUser updates
     } catch (error) {
       setError(error.message || 'Failed to login. Please check your credentials.');
-    } finally {
       setLoading(false);
     }
   };
