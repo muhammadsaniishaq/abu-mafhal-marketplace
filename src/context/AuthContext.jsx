@@ -91,7 +91,15 @@ export const AuthProvider = ({ children }) => {
         console.warn('Profile fetch failed during login, using session data:', profileErr.message);
       }
 
-      return { ...data.user, ...(userData || {}), role: userData?.role || data.user.user_metadata?.role || 'buyer' };
+      const fullUser = { ...data.user, ...(userData || {}), role: userData?.role || data.user.user_metadata?.role || 'buyer' };
+      const role = fullUser.role;
+
+      setCurrentUser(fullUser);
+      setUserRole(role);
+      localStorage.setItem('auth_user', JSON.stringify(fullUser));
+      if (role) localStorage.setItem('auth_role', role);
+
+      return fullUser;
     } catch (error) {
       console.error('Login error:', error.message);
       throw error;
