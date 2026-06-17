@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { whatsappService } from '../../services/whatsappService';
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 const fmtDate = (dateString) => {
@@ -77,6 +78,12 @@ const TicketDetailsModal = ({ visible, ticket, onClose, onSuccess, onDelete, onR
                 message: `Admin replied: ${reply.trim().substring(0, 50)}...`,
                 type: 'system'
             }]);
+        }
+
+        if (ticket.user?.phone) {
+            const supportMsg = `Hi! A reply has been posted to your support query "${ticket.subject}". Reply: ${reply.trim().substring(0, 80)}... Please check the app for details.`;
+            whatsappService.sendDirect(ticket.user.phone, supportMsg, ticket.user_id)
+                .catch(e => console.log('Support Reply WhatsApp Error:', e));
         }
 
         Alert.alert('Success', 'Reply sent and ticket marked as resolved.');
@@ -219,7 +226,7 @@ export const AdminSupport = () => {
         setLoading(true);
         const { data, error } = await supabase
             .from('support_tickets')
-            .select('*, user:profiles(full_name, email)')
+            .select('*, user:profiles(full_name, email, phone)')
             .order('created_at', { ascending: false });
 
         if (error && error.code !== '42P01') {

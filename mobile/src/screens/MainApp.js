@@ -21,6 +21,7 @@ import { SupportPage } from './SupportPage';
 import { AboutPage } from './AboutPage';
 import { PAGE_CONTENT } from '../data/pageContent';
 import { supabase } from '../lib/supabase';
+import { WalletPage } from './WalletPage';
 
 export const MainApp = ({ navigation, user, onLogout, cartLines, onUpdateQty, onRemoveCart, onAddToCart, onClearCart, onOpenVendorRegister, onOpenAdmin, onOpenVendor, onUpdateUser }) => {
     const [activeTab, setActiveTab] = useState('home');
@@ -50,7 +51,7 @@ export const MainApp = ({ navigation, user, onLogout, cartLines, onUpdateQty, on
 
     const handleNavigate = (screen, params) => {
         console.log('[DEBUG-NAV] Navigating to:', screen);
-        if (['DriverDashboard', 'VendorDashboard', 'AdminDashboard', 'ProductDetails', 'ConversationsScreen', 'TrackOrder', 'Invoice', 'CheckoutPage'].includes(screen)) {
+        if (['DriverDashboard', 'VendorDashboard', 'AdminDashboard', 'ProductDetails', 'ConversationsScreen', 'TrackOrder', 'Invoice', 'CheckoutPage', 'ProductComparison'].includes(screen)) {
             navigation.navigate(screen, params);
         } else {
             setActiveTab(screen);
@@ -76,6 +77,7 @@ export const MainApp = ({ navigation, user, onLogout, cartLines, onUpdateQty, on
                     onGoToCart={() => setActiveTab('cart')}
                     addToCart={onAddToCart}
                     onProductClick={(product) => handleNavigate('ProductDetails', { product })}
+                    onCompareClick={() => handleNavigate('ProductComparison')}
                 />}
                 {activeTab === 'cart' && <CartPage cart={cartLines} onBack={() => setActiveTab('home')} onUpdateQty={onUpdateQty} onRemove={onRemoveCart} onClear={onClearCart} />}
                 {activeTab === 'wishlist' && <WishlistPage onBack={() => setActiveTab('home')} onAddToCart={onAddToCart} onProductClick={(product) => handleNavigate('ProductDetails', { product })} />}

@@ -8,6 +8,8 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { supabase } from '../../lib/supabase';
 import { sendOrderStatusUpdateEmail, sendDriverAssignmentEmail } from '../../services/simpleEmailService';
+import { whatsappService } from '../../services/whatsappService';
+import { WhatsAppActionModal } from '../../components/WhatsAppActionModal';
 
 const STATUSES = ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
 
@@ -33,6 +35,11 @@ function formatAddress(addr) {
 
 export const AdminOrders = () => {
     const [orders, setOrders] = useState([]);
+    const [whatsappVisible, setWhatsappVisible] = useState(false);
+    const [whatsappPhone, setWhatsappPhone] = useState('');
+    const [whatsappUserId, setWhatsappUserId] = useState(null);
+    const [whatsappRecipientName, setWhatsappRecipientName] = useState('Customer');
+    const [whatsappOrder, setWhatsappOrder] = useState(null);
     const [drivers, setDrivers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -213,6 +220,11 @@ export const AdminOrders = () => {
                         status: newStatus
                     }).catch(e => console.log('Email err:', e));
                 }
+                if (orderToNotify?.user?.phone) {
+                    const statusMsg = `Your Abu Mafhal order #${id.slice(0, 8).toUpperCase()} status has been updated to: ${newStatus.toUpperCase()}.`;
+                    whatsappService.sendDirect(orderToNotify.user.phone, statusMsg, orderToNotify?.user_id)
+                        .catch(e => console.log('Status update WhatsApp error:', e));
+                }
                 Alert.alert('Success', `Order marked as ${newStatus}`);
             }
         } catch (err) {
@@ -261,6 +273,11 @@ export const AdminOrders = () => {
                         customerPhone: orderToNotify?.user?.phone || 'N/A',
                         earnings: '500.00'
                     }).catch(e => console.log('Driver Email Error', e));
+                }
+                if (orderToNotify?.user?.phone) {
+                    const driverMsg = `Your Abu Mafhal order #${orderId.slice(0, 8).toUpperCase()} has been shipped! Driver ${assignedDriver?.name || 'Unknown'} is on the way.`;
+                    whatsappService.sendDirect(orderToNotify.user.phone, driverMsg, orderToNotify?.user_id)
+                        .catch(e => console.log('Driver assignment WhatsApp error:', e));
                 }
             }
         } catch (err) {
@@ -348,11 +365,13 @@ export const AdminOrders = () => {
     };
 
     // 4. WHATSAPP ─────────────────────────────────────────────────────────────
-    const openWhatsApp = (phone, order) => {
-        if (!phone) return Alert.alert('No phone', 'Customer phone number not available.');
-        const clean = phone.replace(/\D/g, '');
-        const msg = encodeURIComponent(`Hi! Your Abu Mafhal order #${order.id.slice(0, 8).toUpperCase()} is currently: ${order.status?.toUpperCase()}. Total: ₦${order.total_amount?.toLocaleString()}`);
-        Linking.openURL(`whatsapp://send?phone=+234${clean.replace(/^0/, '')}&text=${msg}`).catch(() => Alert.alert('WhatsApp not installed'));
+    const openWhatsApp = (phone, order, recipientName = 'Customer') => {
+        if (!phone) return Alert.alert('No phone', 'Phone number not available.');
+        setWhatsappPhone(phone);
+        setWhatsappUserId(order?.user_id || null);
+        setWhatsappRecipientName(recipientName);
+        setWhatsappOrder(order);
+        setWhatsappVisible(true);
     };
 
     // 5. OPEN IN MAPS ─────────────────────────────────────────────────────────
@@ -879,9 +898,14 @@ export const AdminOrders = () => {
                                                     <Text style={{ color: '#1D4ED8', fontWeight: '700', fontSize: 13 }}>{order.driver.name}</Text>
                                                     <Text style={{ color: '#60A5FA', fontSize: 11 }}>{order.driver.vehicle_type} • {order.driver.xp || 0} XP</Text>
                                                 </View>
-                                                <TouchableOpacity onPress={() => Linking.openURL('tel:' + order.driver.phone)} style={S.callBtn}>
-                                                    <Ionicons name="call" size={14} color="white" />
-                                                </TouchableOpacity>
+                                                <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                                                    <TouchableOpacity onPress={() => Linking.openURL('tel:' + order.driver.phone)} style={[S.callBtn, { marginTop: 0 }]}>
+                                                        <Ionicons name="call" size={14} color="white" />
+                                                    </TouchableOpacity>
+                                                    <TouchableOpacity onPress={() => openWhatsApp(order.driver.phone, order, order.driver.name)} style={[S.callBtn, { marginTop: 0, backgroundColor: '#25D366' }]}>
+                                                        <Ionicons name="logo-whatsapp" size={14} color="white" />
+                                                    </TouchableOpacity>
+                                                </View>
                                             </View>
                                         )}
                                     </View>
@@ -1030,6 +1054,15 @@ export const AdminOrders = () => {
                     </View>
                 </View>
             </Modal>
+
+            <WhatsAppActionModal
+                visible={whatsappVisible}
+                phone={whatsappPhone}
+                userId={whatsappUserId}
+                recipientName={whatsappRecipientName}
+                orderData={whatsappOrder}
+                onClose={() => setWhatsappVisible(false)}
+            />
         </View>
     );
 };

@@ -8,8 +8,10 @@ import { supabase } from './src/lib/supabase';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ComparisonProvider } from './src/context/ComparisonContext';
 
 // Screens
+import { ProductComparison } from './src/screens/ProductComparison';
 import { LandingPage } from './src/screens/LandingPage';
 import { AuthPage } from './src/screens/AuthPage';
 import { MainApp } from './src/screens/MainApp';
@@ -156,7 +158,8 @@ export default function App() {
         <GestureHandlerRootView style={{ flex: 1 }}>
             <SafeAreaProvider style={{ flex: 1 }}>
                 <AppSettingsProvider>
-                    <NavigationContainer linking={linking}>
+                    <ComparisonProvider>
+                        <NavigationContainer linking={linking}>
                         <Stack.Navigator screenOptions={{ headerShown: false, detachInactiveScreens: false }}>
                             {!user ? (
                                 <>
@@ -217,10 +220,14 @@ export default function App() {
                                         {props => <CheckoutPage {...props} onClearCart={handleClearCart} />}
                                     </Stack.Screen>
                                     <Stack.Screen name="AddressPage" component={AddressPage} />
+                                    <Stack.Screen name="ProductComparison">
+                                        {props => <ProductComparison {...props} addToCart={handleAddToCart} />}
+                                    </Stack.Screen>
                                 </>
                             )}
                         </Stack.Navigator>
                     </NavigationContainer>
+                    </ComparisonProvider>
                 </AppSettingsProvider>
             </SafeAreaProvider>
         </GestureHandlerRootView>

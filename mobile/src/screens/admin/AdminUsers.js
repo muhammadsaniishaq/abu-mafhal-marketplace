@@ -2,7 +2,7 @@ import * as React from 'react';
 import {
     View, Text, TouchableOpacity, FlatList, ActivityIndicator,
     Alert, TextInput, RefreshControl, ScrollView, Modal, StyleSheet,
-    Share, Animated, StatusBar, Easing, Pressable,
+    Share, Animated, StatusBar, Easing, Pressable, Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
@@ -12,6 +12,7 @@ import { NotificationService } from '../../lib/notifications';
 import { UserAvatar } from '../../components/UserAvatar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AdminUserDetails } from './AdminUserDetails';
+import { WhatsAppActionModal } from '../../components/WhatsAppActionModal';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 const ROLES = {
@@ -115,6 +116,11 @@ export const AdminUsers = ({ navigation: propNav }) => {
     const [walVis, setWalVis] = React.useState(false);
     const [walAmt, setWalAmt] = React.useState('');
     const [tagVis, setTagVis] = React.useState(false);
+
+    const [whatsappVisible, setWhatsappVisible] = React.useState(false);
+    const [whatsappPhone, setWhatsappPhone] = React.useState('');
+    const [whatsappUserId, setWhatsappUserId] = React.useState(null);
+    const [whatsappRecipientName, setWhatsappRecipientName] = React.useState('User');
 
     // Bulk
     const [selMode, setSelMode] = React.useState(false);
@@ -559,6 +565,21 @@ export const AdminUsers = ({ navigation: propNav }) => {
                             {/* Action buttons */}
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
                                 <QBtn icon="chatbubble" label="Chat" color="#6366F1" onPress={() => closeSheet(() => nav.navigate('Chat', { vendorId: actUser.id, vendorName: actUser.full_name }))} />
+                                {actUser.phone ? (
+                                    <QBtn 
+                                        icon="logo-whatsapp" 
+                                        label="WhatsApp" 
+                                        color="#22C55E" 
+                                        onPress={() => {
+                                            closeSheet(() => {
+                                                setWhatsappPhone(actUser.phone);
+                                                setWhatsappUserId(actUser.id);
+                                                setWhatsappRecipientName(actUser.full_name || 'User');
+                                                setWhatsappVisible(true);
+                                            });
+                                        }} 
+                                    />
+                                ) : null}
                                 <QBtn icon="person-outline" label="Profile" color="#0EA5E9" onPress={() => closeSheet(() => { setSelUser(actUser); setDetailVis(true); })} />
                                 <QBtn icon={actUser.is_verified ? 'close-circle-outline' : 'checkmark-circle'} label={actUser.is_verified ? 'Unverify' : 'Verify'} color={actUser.is_verified ? '#64748B' : '#22C55E'} onPress={() => closeSheet(() => toggleVerify(actUser))} />
                                 <QBtn icon={actUser.is_banned ? 'shield-checkmark' : 'ban'} label={actUser.is_banned ? 'Unban' : 'Ban'} color={actUser.is_banned ? '#22C55E' : '#EF4444'} onPress={() => closeSheet(() => toggleBan(actUser))} />
@@ -664,6 +685,14 @@ export const AdminUsers = ({ navigation: propNav }) => {
             </Modal>
 
             <AdminUserDetails visible={detailVis} user={selUser} navigation={nav} onClose={() => setDetailVis(false)} onUpdate={load} />
+
+            <WhatsAppActionModal
+                visible={whatsappVisible}
+                phone={whatsappPhone}
+                userId={whatsappUserId}
+                recipientName={whatsappRecipientName}
+                onClose={() => setWhatsappVisible(false)}
+            />
         </View>
     );
 };

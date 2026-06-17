@@ -5,6 +5,7 @@ import { styles } from '../styles/theme';
 import { supabase } from '../lib/supabase';
 import { NotificationService } from '../lib/notifications';
 import { sendOtpEmail } from '../services/simpleEmailService';
+import { whatsappService } from '../services/whatsappService';
 
 import { useAppSettings } from '../context/AppSettingsContext';
 
@@ -262,6 +263,14 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
                     type: 'welcome',
                     email: email
                 });
+
+                if (phone) {
+                    whatsappService.sendDirect(
+                        phone,
+                        'Welcome to Abu Mafhal! Your account has been successfully created. We are excited to have you on board.',
+                        user.id
+                    ).catch(e => console.log('Welcome WhatsApp notification error:', e));
+                }
 
                 Alert.alert('Success', 'Account verified! Welcome to Abu Mafhal.');
                 if (onLoginSuccess) onLoginSuccess(user);

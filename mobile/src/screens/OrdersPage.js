@@ -289,8 +289,8 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
     // ── Contact Support ───────────────────────────────────────────────────────
     const contactSupport = (order) => {
         const msg = encodeURIComponent(`Hi Abu Mafhal Support, I need help with order #${order.id.slice(0, 8).toUpperCase()}`);
-        Linking.openURL(`whatsapp://send?phone=+2348145853539&text=${msg}`)
-            .catch(() => Linking.openURL('mailto:support@abumafhal.com'));
+        Linking.openURL(`whatsapp://send?phone=2348145853539&text=${msg}`)
+            .catch(() => Linking.openURL(`https://wa.me/2348145853539?text=${msg}`).catch(() => Linking.openURL('mailto:support@abumafhal.com')));
     };
 
     // ── Render Card ───────────────────────────────────────────────────────────

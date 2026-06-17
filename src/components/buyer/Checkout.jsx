@@ -9,6 +9,7 @@ import { awardPoints, calculatePurchasePoints, getLoyaltyAccount } from '../../s
 import { markCartAsRecovered } from '../../services/cartRecoveryService';
 import { triggerOrderConfirmationEmail, triggerVendorNewOrderEmail } from '../../utils/emailTriggers';
 import { triggerOrderNotification, triggerVendorOrderNotification } from '../../utils/notificationTriggers';
+import { triggerOrderConfirmationWhatsApp, triggerPaymentSuccessWhatsApp } from '../../utils/whatsappTriggers';
 
 
 const Checkout = () => {
@@ -188,6 +189,17 @@ const Checkout = () => {
         await triggerOrderNotification({ id: orderId, userId: currentUser.uid }, 'placed');
       } catch (notifError) {
         console.error('Error sending buyer notification:', notifError);
+      }
+
+      // Send WhatsApp notifications
+      try {
+        const phone = shippingInfo.phone;
+        if (phone) {
+          await triggerOrderConfirmationWhatsApp(phone, orderId, total, currentUser.uid || currentUser.id);
+          await triggerPaymentSuccessWhatsApp(phone, orderId, total, reference.reference, currentUser.uid || currentUser.id);
+        }
+      } catch (waError) {
+        console.error('Error sending WhatsApp notifications:', waError);
       }
 
       // Update coupon usage if applied

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert, Linking, ActivityIndicator, Modal, Image, Switch, Platform, ScrollView, TextInput, Animated, Easing } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
+import { styles as themeStyles } from '../styles/theme';
+import { supabase } from '../lib/supabase';
+import { whatsappService } from '../services/whatsappService';
+import { WhatsAppActionModal } from '../components/WhatsAppActionModal';
 
 const PRIMARY_COLOR = '#6366F1'; // Indigo
 const ACCENT_COLOR = '#8B5CF6';  // Violet
@@ -50,6 +52,11 @@ export const DriverDashboard = ({ user, onLogout }) => {
     const [banks, setBanks] = useState([]);
     const [filteredBanks, setFilteredBanks] = useState([]);
     const [showBankDropdown, setShowBankDropdown] = useState(false);
+
+    const [whatsappVisible, setWhatsappVisible] = useState(false);
+    const [whatsappPhone, setWhatsappPhone] = useState('');
+    const [whatsappUserId, setWhatsappUserId] = useState(null);
+    const [whatsappRecipientName, setWhatsappRecipientName] = useState('Customer');
     const [searchBankQuery, setSearchBankQuery] = useState('');
     const [resolvingAccount, setResolvingAccount] = useState(false);
 
@@ -385,7 +392,7 @@ export const DriverDashboard = ({ user, onLogout }) => {
         ]);
     };
 
-    const markDelivered = async (orderId) => {
+    const markDelivered = async (orderId, customerPhone, userId) => {
         Alert.alert('Complete Delivery', 'Confirm item has been handed to customer?', [
             { text: 'Cancel', style: 'cancel' },
             {
@@ -399,6 +406,13 @@ export const DriverDashboard = ({ user, onLogout }) => {
                     if (error) Alert.alert('Error', error.message);
                     else {
                         Alert.alert('Great Job!', 'Order delivered. Earnings added to wallet.');
+                        
+                        if (customerPhone) {
+                            const deliverMsg = `Your Abu Mafhal order #${orderId.slice(0, 8).toUpperCase()} has been delivered successfully. Thank you for choosing us!`;
+                            whatsappService.sendDirect(customerPhone, deliverMsg, userId)
+                                .catch(e => console.log('Delivery WhatsApp notification error:', e));
+                        }
+
                         handleRefresh(); // This will now refetch profile/wallet too
                     }
                 }
@@ -572,16 +586,28 @@ export const DriverDashboard = ({ user, onLogout }) => {
                             </TouchableOpacity>
                         )}
                         {!isPool && !isHistory && (
-                            <TouchableOpacity onPress={() => handleCall(item.user?.phone)} style={[styles.iconCircle, { backgroundColor: '#D1FAE5' }]}>
-                                <Ionicons name="call" size={18} color={SUCCESS_COLOR} />
-                            </TouchableOpacity>
+                            <View style={{ flexDirection: 'row', gap: 8 }}>
+                                <TouchableOpacity onPress={() => handleCall(item.user?.phone)} style={[styles.iconCircle, { backgroundColor: '#D1FAE5' }]}>
+                                    <Ionicons name="call" size={18} color={SUCCESS_COLOR} />
+                                </TouchableOpacity>
+                                {item.user?.phone ? (
+                                    <TouchableOpacity onPress={() => {
+                                        setWhatsappPhone(item.user.phone);
+                                        setWhatsappUserId(item.user_id);
+                                        setWhatsappRecipientName(item.user?.full_name || 'Customer');
+                                        setWhatsappVisible(true);
+                                    }} style={[styles.iconCircle, { backgroundColor: '#DCFCE7' }]}>
+                                        <Ionicons name="logo-whatsapp" size={18} color="#16A34A" />
+                                    </TouchableOpacity>
+                                ) : null}
+                            </View>
                         )}
                         {isPool ? (
                             <TouchableOpacity style={styles.mainActionBtn} onPress={() => acceptOrder(item.id)}>
                                 <Text style={styles.mainActionText}>Accept</Text>
                             </TouchableOpacity>
                         ) : !isHistory ? (
-                            <TouchableOpacity style={[styles.mainActionBtn, { backgroundColor: SUCCESS_COLOR, elevation: 4, shadowColor: SUCCESS_COLOR }]} onPress={() => markDelivered(item.id)}>
+                            <TouchableOpacity style={[styles.mainActionBtn, { backgroundColor: SUCCESS_COLOR, elevation: 4, shadowColor: SUCCESS_COLOR }]} onPress={() => markDelivered(item.id, item.user?.phone, item.user_id)}>
                                 <Text style={styles.mainActionText}>Finish</Text>
                             </TouchableOpacity>
                         ) : (
@@ -1165,6 +1191,13 @@ export const DriverDashboard = ({ user, onLogout }) => {
                 </View>
             )}
 
+            <WhatsAppActionModal
+                visible={whatsappVisible}
+                phone={whatsappPhone}
+                userId={whatsappUserId}
+                recipientName={whatsappRecipientName}
+                onClose={() => setWhatsappVisible(false)}
+            />
         </SafeAreaView>
     );
 };

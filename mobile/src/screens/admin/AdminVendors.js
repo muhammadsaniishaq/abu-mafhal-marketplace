@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { styles } from '../../styles/theme';
 import { NotificationService } from '../../lib/notifications';
+import { WhatsAppActionModal } from '../../components/WhatsAppActionModal';
 
 export const AdminVendors = () => {
     const [view, setView] = useState('list'); // 'list' or 'detail'
@@ -11,6 +12,11 @@ export const AdminVendors = () => {
     const [applications, setApplications] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+
+    const [whatsappVisible, setWhatsappVisible] = useState(false);
+    const [whatsappPhone, setWhatsappPhone] = useState('');
+    const [whatsappUserId, setWhatsappUserId] = useState(null);
+    const [whatsappRecipientName, setWhatsappRecipientName] = useState('Vendor');
 
     useEffect(() => {
         fetchApplications();
@@ -22,7 +28,7 @@ export const AdminVendors = () => {
             console.log('AdminVendors: Fetching applications...');
             const { data, error } = await supabase
                 .from('vendor_applications')
-                .select('*, profiles(email, full_name)')
+                .select('*, profiles(email, full_name, phone)')
                 .order('created_at', { ascending: false })
                 .limit(50);
 
@@ -204,6 +210,29 @@ export const AdminVendors = () => {
                     <Section title="Owner Info">
                         <InfoRow label="Full Name" value={selectedApp.profiles?.full_name} />
                         <InfoRow label="Email" value={selectedApp.profiles?.email} />
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <Text style={{ color: '#64748B', fontSize: 13 }}>Phone</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <Text style={{ fontWeight: '600', color: '#0F172A', fontSize: 13 }}>
+                                    {selectedApp.phone || selectedApp.profiles?.phone || 'N/A'}
+                                </Text>
+                                {(selectedApp.phone || selectedApp.profiles?.phone) ? (
+                                    <TouchableOpacity 
+                                        onPress={() => {
+                                            const rawPhone = selectedApp.phone || selectedApp.profiles?.phone;
+                                            setWhatsappPhone(rawPhone);
+                                            setWhatsappUserId(selectedApp.user_id || null);
+                                            setWhatsappRecipientName(selectedApp.profiles?.full_name || selectedApp.business_name || 'Vendor');
+                                            setWhatsappVisible(true);
+                                        }}
+                                        style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                                    >
+                                        <Ionicons name="logo-whatsapp" size={12} color="#16A34A" />
+                                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#16A34A' }}>Chat</Text>
+                                    </TouchableOpacity>
+                                ) : null}
+                            </View>
+                        </View>
                         <InfoRow label="NIN" value={selectedApp.nin} />
                         <InfoRow label="BVN" value={selectedApp.bvn} />
                     </Section>
@@ -387,6 +416,14 @@ export const AdminVendors = () => {
                     </View>
                 </View>
             </Modal>
+
+            <WhatsAppActionModal
+                visible={whatsappVisible}
+                phone={whatsappPhone}
+                userId={whatsappUserId}
+                recipientName={whatsappRecipientName}
+                onClose={() => setWhatsappVisible(false)}
+            />
         </View>
     );
 };

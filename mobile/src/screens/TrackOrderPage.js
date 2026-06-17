@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
+import { WhatsAppActionModal } from '../components/WhatsAppActionModal';
 
 const STEPS = [
     { key: 'pending', title: 'Order Placed', desc: 'We received your order successfully.', icon: 'document-text-outline' },
@@ -37,6 +38,9 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) 
     const [loading, setLoading] = useState(false);
     const [copied, setCopied] = useState(false);
     const [timeline, setTimeline] = useState([]);
+    const [whatsappVisible, setWhatsappVisible] = useState(false);
+    const [whatsappPhone, setWhatsappPhone] = useState('');
+    const [whatsappRecipientName, setWhatsappRecipientName] = useState('');
 
     // Pulse animation for current step dot
     const pulse = useRef(new Animated.Value(1)).current;
@@ -118,9 +122,9 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) 
 
     const handleWhatsAppDriver = () => {
         if (!driver?.phone) { Alert.alert('No Driver', 'No driver assigned yet.'); return; }
-        const msg = encodeURIComponent(`Hi, I'm tracking my order #${order.id.slice(0, 8).toUpperCase()}. Can you update me?`);
-        Linking.openURL(`whatsapp://send?phone=${driver.phone}&text=${msg}`)
-            .catch(() => Linking.openURL(`tel:${driver.phone}`));
+        setWhatsappPhone(driver.phone);
+        setWhatsappRecipientName(driver.name || 'Driver');
+        setWhatsappVisible(true);
     };
 
     const handleCallDriver = () => {
@@ -388,6 +392,13 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) 
                 )}
 
             </ScrollView>
+            <WhatsAppActionModal
+                visible={whatsappVisible}
+                phone={whatsappPhone}
+                recipientName={whatsappRecipientName}
+                orderData={order}
+                onClose={() => setWhatsappVisible(false)}
+            />
         </View>
     );
 };

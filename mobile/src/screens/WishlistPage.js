@@ -3,11 +3,13 @@ import { View, Text, TouchableOpacity, SafeAreaView, ScrollView, StyleSheet, Ima
 import { Ionicons } from '@expo/vector-icons';
 import { styles, WIDTH } from '../styles/theme';
 import { supabase } from '../lib/supabase';
+import { useComparison } from '../context/ComparisonContext';
 
 export const WishlistPage = ({ onBack, onAddToCart, onProductClick }) => {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const { addToComparison, isInComparison } = useComparison();
 
     useEffect(() => {
         fetchWishlist();
@@ -93,13 +95,22 @@ export const WishlistPage = ({ onBack, onAddToCart, onProductClick }) => {
                     <Text style={localStyles.itemTitle} numberOfLines={1}>{item?.name || 'Product'}</Text>
                     <Text style={localStyles.itemPrice}>₦{item?.price?.toLocaleString() || '0'}</Text>
 
-                    <TouchableOpacity
-                        style={localStyles.addCartBtn}
-                        onPress={() => handleAddToCart(item)}
-                    >
-                        <Ionicons name="cart-outline" size={16} color="white" />
-                        <Text style={localStyles.addCartText}>Add to Cart</Text>
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                        <TouchableOpacity
+                            style={[localStyles.addCartBtn, { flex: 1.2 }]}
+                            onPress={() => handleAddToCart(item)}
+                        >
+                            <Ionicons name="cart-outline" size={12} color="white" />
+                            <Text style={localStyles.addCartText} numberOfLines={1}>Add</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[localStyles.addCartBtn, { flex: 1, backgroundColor: isInComparison(item.id) ? '#3B82F6' : '#64748B' }]}
+                            onPress={() => addToComparison(item)}
+                        >
+                            <Ionicons name="git-compare" size={12} color="white" />
+                            <Text style={localStyles.addCartText} numberOfLines={1}>Compare</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </TouchableOpacity>
         );

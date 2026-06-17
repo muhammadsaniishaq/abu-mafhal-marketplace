@@ -12,6 +12,7 @@ import { useFlutterwave, closePaymentModal } from 'flutterwave-react-v3';
 
 import { supabase } from '../config/supabase';
 import { parsePrice } from '../utils/helpers';
+import { triggerOrderConfirmationWhatsApp, triggerPaymentSuccessWhatsApp } from '../utils/whatsappTriggers';
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
@@ -141,6 +142,20 @@ const CheckoutPage = () => {
       if (itemsError) throw itemsError;
 
       console.log('Order successfully synced to Supabase:', orderData);
+
+      // Trigger WhatsApp notifications
+      try {
+        const phone = shippingInfo.phone;
+        const total = finalTotal;
+        const orderId = orderData.id;
+        const userId = currentUser?.uid || currentUser?.id;
+        if (phone) {
+          await triggerOrderConfirmationWhatsApp(phone, orderId, total, userId);
+          await triggerPaymentSuccessWhatsApp(phone, orderId, total, transactionId, userId);
+        }
+      } catch (err) {
+        console.error('Failed to trigger WhatsApp notifications:', err);
+      }
 
       clearCart();
       setOrderPlaced(true);

@@ -8,6 +8,7 @@ import { useAppSettings, useBrandTheme } from '../context/AppSettingsContext';
 import FlutterwaveCheckout from '../lib/flutterwave/FlutterwaveCheckout';
 import CheckoutAddressCard from '../components/CheckoutAddressCard';
 import { CheckoutAddressSkeleton, CheckoutSummarySkeleton } from '../components/CheckoutSkeleton';
+import { whatsappService } from '../services/whatsappService';
 
 const { width, height } = Dimensions.get('window');
 const CHECKOUT_STORAGE_KEY = '@checkout_progress_v3';
@@ -71,6 +72,26 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
     const [orderSuccess, setOrderSuccess] = useState(false);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [paymentLink, setPaymentLink] = useState('');
+    const [currentOrderId, setCurrentOrderId] = useState(null);
+
+    const triggerOrderWhatsApp = (orderId, totalAmount, payMethod) => {
+        try {
+            const addr = addresses.find(a => a.id === selectedAddressId);
+            const customerPhone = addr?.phone || profile?.phone_number || profile?.phone || user?.phone;
+            if (!customerPhone) return;
+
+            const formattedId = orderId?.slice(0, 8).toUpperCase() || '';
+            const formattedAmount = totalAmount?.toLocaleString() || '';
+
+            const orderMsg = `Your order #${formattedId} has been placed successfully via ${payMethod}. Thank you for shopping with Abu Mafhal!`;
+            whatsappService.sendDirect(customerPhone, orderMsg, user?.id).catch(e => console.log('Order WhatsApp Error:', e));
+
+            const receiptMsg = `Payment confirmed for order #${formattedId}. Paid: ₦${formattedAmount} via ${payMethod}. We are processing your request.`;
+            whatsappService.sendDirect(customerPhone, receiptMsg, user?.id).catch(e => console.log('Payment receipt WhatsApp Error:', e));
+        } catch (err) {
+            console.log('Error triggering WhatsApp from checkout:', err);
+        }
+    };
 
     // ── Dynamic Shipping Fee ─────────────────────────────────────────────────
     const shippingFee = useMemo(() => {
@@ -237,10 +258,12 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
             if (!data) throw new Error("Checkout failed to initialize");
 
             const { order_id, checkout_url } = data;
+            setCurrentOrderId(order_id);
 
             // Handle immediate success (Wallet)
             if (checkout_url === 'success') {
                 setOrderSuccess(true);
+                triggerOrderWhatsApp(order_id, finalTotal, 'Wallet');
                 await clearProgress();
                 if (onClearCart) onClearCart();
                 return;
@@ -744,6 +767,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                     setShowPaymentModal(false);
                     if (data.status === 'successful' || data.status === 'completed' || data.status === 'success') {
                         setOrderSuccess(true);
+                        triggerOrderWhatsApp(currentOrderId, finalTotal, paymentMethod || 'Online Payment');
                         if (onClearCart) onClearCart();
                     } else {
                         Alert.alert('Payment Incomplete', 'The transaction was not successful or was cancelled.');
