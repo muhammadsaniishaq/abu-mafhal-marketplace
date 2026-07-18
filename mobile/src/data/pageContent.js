@@ -101,5 +101,47 @@ To track your order:
 2. Select the order you want to track.
 3. View the current status (Processing, Shipped, Delivered).
 
-For further assistance, please contact our support team.`
+For further assistance, please contact our support team.`,
+
+    'How It Works': `How Abu Mafhal Marketplace Works
+
+Abu Mafhal Marketplace is designed to make buying and selling as simple and secure as possible.
+
+For Buyers:
+1. Browse thousands of verified products from local and digital sellers.
+2. Add items to your cart and pay securely using our integrated escrow system.
+3. Track your order in real-time until it is safely delivered.
+
+For Sellers:
+1. Register as a seller from your Profile menu.
+2. List your products, set pricing, and publish them to the marketplace.
+3. Get notified when an order is placed, ship it to the buyer, and receive automatic payouts directly to your wallet.`,
+
+    'Blog': `Abu Mafhal Blog & Insights
+
+Stay updated with the latest trends, tips, and stories from the Abu Mafhal community.
+
+Featured Articles:
+1. Empowering Northern Artisans in the Digital Era
+Discover how local vendors are expanding their reach beyond physical borders using the Abu Mafhal ecosystem.
+
+2. A Guide to Selling Digital Products Online
+Learn best practices for packaging, uploading, and pricing your digital books, courses, and software.
+
+3. Secure Online Shopping: Escrow Systems Explained
+How Abu Mafhal protects both buyers and sellers by holding funds safely until successful delivery.`,
+
+    'Careers': `Careers at Abu Mafhal
+
+Join us in building Africa's premier elite ecosystem! We are always looking for passionate individuals to join our growing team.
+
+Current Openings:
+1. Software Engineer (React Native & Node.js)
+Help us build next-generation features, AI search, and secure payment integrations.
+
+2. Logistics Coordinator
+Optimize regional fulfillment paths, delivery speeds, and vendor dropshipping pipelines.
+
+3. Customer Support Specialist
+Provide 24/7 world-class assistance to our buyers and sellers.`
 };

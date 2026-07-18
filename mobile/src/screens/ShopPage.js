@@ -62,15 +62,15 @@ const sk = StyleSheet.create({
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductClick, onCompareClick }) => {
+export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductClick, onCompareClick, initialQuery, initialCategory }) => {
     const { addToComparison, isInComparison, comparisonCount } = useComparison();
 
     const [products,         setProducts]         = useState([]);
     const [filteredProducts, setFilteredProducts] = useState([]);
     const [loading,          setLoading]          = useState(true);
     const [refreshing,       setRefreshing]       = useState(false);
-    const [activeCategory,   setActiveCategory]   = useState('All');
-    const [searchQuery,      setSearchQuery]      = useState('');
+    const [activeCategory,   setActiveCategory]   = useState(initialCategory || 'All');
+    const [searchQuery,      setSearchQuery]      = useState(initialQuery || '');
     const [sortBy,           setSortBy]           = useState('default');
     const [wishlist,         setWishlist]         = useState([]);
     const [showVoiceModal,   setShowVoiceModal]   = useState(false);
@@ -122,6 +122,18 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
     }, [promoBanners.length]);
 
     useEffect(() => { filterProducts(); }, [activeCategory, searchQuery, products, sortBy]);
+
+    useEffect(() => {
+        if (initialQuery !== undefined) {
+            setSearchQuery(initialQuery);
+        }
+    }, [initialQuery]);
+
+    useEffect(() => {
+        if (initialCategory !== undefined) {
+            setActiveCategory(initialCategory || 'All');
+        }
+    }, [initialCategory]);
 
     useEffect(() => {
         (async () => {

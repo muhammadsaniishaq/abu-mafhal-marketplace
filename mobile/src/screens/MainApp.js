@@ -23,9 +23,16 @@ import { PAGE_CONTENT } from '../data/pageContent';
 import { supabase } from '../lib/supabase';
 import { WalletPage } from './WalletPage';
 
-export const MainApp = ({ navigation, user, onLogout, cartLines, onUpdateQty, onRemoveCart, onAddToCart, onClearCart, onOpenVendorRegister, onOpenAdmin, onOpenVendor, onUpdateUser }) => {
+export const MainApp = ({ route, navigation, user, onLogout, cartLines, onUpdateQty, onRemoveCart, onAddToCart, onClearCart, onOpenVendorRegister, onOpenAdmin, onOpenVendor, onUpdateUser }) => {
     const [activeTab, setActiveTab] = useState('home');
     const [showAI, setShowAI] = useState(false);
+
+    // Dynamic Tab Navigation from Route Params
+    React.useEffect(() => {
+        if (route?.params?.screen) {
+            setActiveTab(route.params.screen);
+        }
+    }, [route?.params?.screen]);
 
     // [NEW] Refresh user profile on mount to catch role updates (e.g. after approval)
     // This fixes the issue where a user logs in as 'buyer' even after being approved as 'vendor'
@@ -78,6 +85,8 @@ export const MainApp = ({ navigation, user, onLogout, cartLines, onUpdateQty, on
                     addToCart={onAddToCart}
                     onProductClick={(product) => handleNavigate('ProductDetails', { product })}
                     onCompareClick={() => handleNavigate('ProductComparison')}
+                    initialQuery={route?.params?.query}
+                    initialCategory={route?.params?.category}
                 />}
                 {activeTab === 'cart' && <CartPage cart={cartLines} onBack={() => setActiveTab('home')} onUpdateQty={onUpdateQty} onRemove={onRemoveCart} onClear={onClearCart} />}
                 {activeTab === 'wishlist' && <WishlistPage onBack={() => setActiveTab('home')} onAddToCart={onAddToCart} onProductClick={(product) => handleNavigate('ProductDetails', { product })} />}

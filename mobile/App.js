@@ -1,7 +1,7 @@
 import 'react-native-gesture-handler';
 import { LogBox } from 'react-native';
 import React, { useState, useEffect } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { AppSettingsProvider } from './src/context/AppSettingsContext';
 import { supabase } from './src/lib/supabase';
@@ -28,6 +28,7 @@ import { CheckoutPage } from './src/screens/CheckoutPage';
 import { AddressPage } from './src/screens/AddressPage';
 
 const Stack = createNativeStackNavigator();
+const navigationRef = createNavigationContainerRef();
 
 const linking = {
     prefixes: ['abumafhal://', 'https://abumafhal.com', 'http://abumafhal.com'],
@@ -159,7 +160,7 @@ export default function App() {
             <SafeAreaProvider style={{ flex: 1 }}>
                 <AppSettingsProvider>
                     <ComparisonProvider>
-                        <NavigationContainer linking={linking}>
+                        <NavigationContainer ref={navigationRef} linking={linking}>
                         <Stack.Navigator screenOptions={{ headerShown: false, detachInactiveScreens: false }}>
                             {!user ? (
                                 <>
@@ -167,14 +168,55 @@ export default function App() {
                                         {props => (
                                             <LandingPage
                                                 {...props}
-                                                onEnterShop={() => props.navigation.navigate('Auth')}
+                                                onEnterShop={() => props.navigation.navigate('Main')}
                                                 onLogin={() => props.navigation.navigate('Auth')}
-                                                onNavigate={(screen) => props.navigation.navigate(screen)}
+                                                onNavigate={(screen, params) => props.navigation.navigate(screen, params)}
                                             />
                                         )}
                                     </Stack.Screen>
                                     <Stack.Screen name="Auth">
-                                        {props => <AuthPage {...props} onBack={() => props.navigation.goBack()} />}
+                                        {props => (
+                                            <AuthPage
+                                                {...props}
+                                                onBack={() => props.navigation.goBack()}
+                                                onLoginSuccess={(loggedInUser) => {
+                                                    setUser(loggedInUser);
+                                                    const redirectTo = props.route?.params?.redirectTo;
+                                                    const redirectParams = props.route?.params?.redirectParams;
+                                                    if (redirectTo) {
+                                                        setTimeout(() => {
+                                                            if (navigationRef.isReady()) {
+                                                                navigationRef.navigate(redirectTo, redirectParams);
+                                                            }
+                                                        }, 150);
+                                                    }
+                                                }}
+                                            />
+                                        )}
+                                    </Stack.Screen>
+                                    <Stack.Screen name="Main">
+                                        {props => (
+                                            <MainApp
+                                                {...props}
+                                                user={null}
+                                                onUpdateUser={setUser}
+                                                onLogout={handleLogout}
+                                                cartLines={cartLines}
+                                                onUpdateQty={handleUpdateQty}
+                                                onRemoveCart={handleRemoveCart}
+                                                onAddToCart={handleAddToCart}
+                                                onClearCart={handleClearCart}
+                                                onOpenVendorRegister={() => props.navigation.navigate('Auth')}
+                                                onOpenAdmin={() => props.navigation.navigate('Auth')}
+                                                onOpenVendor={() => props.navigation.navigate('Auth')}
+                                            />
+                                        )}
+                                    </Stack.Screen>
+                                    <Stack.Screen name="ProductDetails">
+                                        {props => <ProductDetails {...props} addToCart={handleAddToCart} />}
+                                    </Stack.Screen>
+                                    <Stack.Screen name="ProductComparison">
+                                        {props => <ProductComparison {...props} addToCart={handleAddToCart} />}
                                     </Stack.Screen>
                                 </>
                             ) : (

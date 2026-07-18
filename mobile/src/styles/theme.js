@@ -73,7 +73,7 @@ export const styles = StyleSheet.create({
     brandText: { fontSize: 10, fontWeight: '600' },
 
     // MODERN FOOTER
-    modernFooter: { backgroundColor: '#0F172A', marginTop: 24, padding: 24, paddingBottom: 40 },
+    modernFooter: { backgroundColor: '#0E1A2E', marginTop: 24, padding: 24, paddingBottom: 40 },
     footerBrandSection: { borderBottomWidth: 1, borderBottomColor: '#1E293B', paddingBottom: 24, marginBottom: 24 },
     footerBrandTitle: { color: 'white', fontSize: 18, fontWeight: '900', letterSpacing: 1 },
     footerBrandSub: { color: '#94A3B8', fontSize: 11, letterSpacing: 2 },

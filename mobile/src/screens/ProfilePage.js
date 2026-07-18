@@ -312,46 +312,68 @@ const ProfilePageInner = ({ user, onLogout, onBack, onOpenVendorRegister, onOpen
                 {/* PROFILE INFO - LIVE */}
                 <View style={{ alignItems: 'center', marginTop: 10 }}>
                     <View style={{ position: 'relative' }}>
-                        <View style={{
-                            width: 74,
-                            height: 74,
-                            borderRadius: 37,
-                            backgroundColor: '#334155',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            borderWidth: 3,
-                            borderColor: 'rgba(255,255,255,0.2)',
-                            shadowColor: '#10B981',
-                            shadowOffset: { width: 0, height: 4 },
-                            shadowOpacity: 0.15,
-                            shadowRadius: 8,
-                            overflow: 'hidden'
-                        }}>
-                            <UserAvatar user={user} size={74} border="#10B981" />
-                        </View>
-                        {/* Elegant Verified Seal badge */}
-                        <View style={{
-                            position: 'absolute',
-                            bottom: 0,
-                            right: 0,
-                            backgroundColor: '#1E293B',
-                            width: 20,
-                            height: 20,
-                            borderRadius: 10,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            borderWidth: 2,
-                            borderColor: '#0F172A'
-                        }}>
-                            <Ionicons name="checkmark-circle" size={14} color="#3B82F6" />
-                        </View>
+                        {user ? (
+                            <>
+                                <View style={{
+                                    width: 74,
+                                    height: 74,
+                                    borderRadius: 37,
+                                    backgroundColor: '#334155',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderWidth: 3,
+                                    borderColor: 'rgba(255,255,255,0.2)',
+                                    shadowColor: '#10B981',
+                                    shadowOffset: { width: 0, height: 4 },
+                                    shadowOpacity: 0.15,
+                                    shadowRadius: 8,
+                                    overflow: 'hidden'
+                                }}>
+                                    <UserAvatar user={user} size={74} border="#10B981" />
+                                </View>
+                                {/* Elegant Verified Seal badge */}
+                                <View style={{
+                                    position: 'absolute',
+                                    bottom: 0,
+                                    right: 0,
+                                    backgroundColor: '#1E293B',
+                                    width: 20,
+                                    height: 20,
+                                    borderRadius: 10,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderWidth: 2,
+                                    borderColor: '#0F172A'
+                                }}>
+                                    <Ionicons name="checkmark-circle" size={14} color="#3B82F6" />
+                                </View>
+                            </>
+                        ) : (
+                            <View style={{
+                                width: 74,
+                                height: 74,
+                                borderRadius: 37,
+                                backgroundColor: '#1E293B',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                borderWidth: 3,
+                                borderColor: 'rgba(255,255,255,0.2)',
+                                shadowColor: '#D9A73A',
+                                shadowOffset: { width: 0, height: 4 },
+                                shadowOpacity: 0.15,
+                                shadowRadius: 8,
+                                overflow: 'hidden'
+                            }}>
+                                <Ionicons name="person-outline" size={32} color="#CBD5E1" />
+                            </View>
+                        )}
                     </View>
 
                     <Text style={{ color: 'white', fontSize: 17.5, fontWeight: '800', marginTop: 10 }}>
-                        {user?.fullName || user?.full_name || user?.user_metadata?.full_name || 'User'}
+                        {user ? (user?.fullName || user?.full_name || user?.user_metadata?.full_name || 'User') : 'Welcome, Guest!'}
                     </Text>
 
-                    {(user?.username || user?.user_metadata?.username) && (
+                    {user && (user?.username || user?.user_metadata?.username) && (
                         <View style={{
                             backgroundColor: 'rgba(255,255,255,0.06)',
                             paddingHorizontal: 8,
@@ -367,7 +389,7 @@ const ProfilePageInner = ({ user, onLogout, onBack, onOpenVendorRegister, onOpen
 
                     {/* ROLE BADGE */}
                     <View style={{
-                        backgroundColor: user?.role === 'admin' ? '#EF4444' : user?.role === 'vendor' ? '#10B981' : '#3B82F6',
+                        backgroundColor: !user ? '#64748B' : user?.role === 'admin' ? '#EF4444' : user?.role === 'vendor' ? '#10B981' : '#3B82F6',
                         paddingHorizontal: 7,
                         paddingVertical: 2,
                         borderRadius: 6,
@@ -375,117 +397,121 @@ const ProfilePageInner = ({ user, onLogout, onBack, onOpenVendorRegister, onOpen
                         marginBottom: 4
                     }}>
                         <Text style={{ color: 'white', fontSize: 9, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.8 }}>
-                            {user?.role || 'User'}
+                            {user ? (user?.role || 'User') : 'Guest'}
                         </Text>
                     </View>
 
-                    {/* CONTACT INFO SCROLL */}
-                    <View style={{
-                        flexDirection: 'row',
-                        flexWrap: 'wrap',
-                        justifyContent: 'center',
-                        columnGap: 12,
-                        rowGap: 4,
-                        marginTop: 6,
-                        paddingHorizontal: 20
-                    }}>
-                        {(user?.location || user?.user_metadata?.location) && (
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                <Ionicons name="location-outline" size={12} color="#94A3B8" />
-                                <Text style={{ color: '#CBD5E1', fontSize: 11.5, marginLeft: 3 }}>
-                                    {user?.location || user?.user_metadata?.location}
-                                </Text>
-                            </View>
-                        )}
-
-                        {(user?.phoneNumber || user?.phone_number || user?.user_metadata?.phone_number || user?.phone) && (
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                <Ionicons name="call-outline" size={12} color="#94A3B8" />
-                                <Text style={{ color: '#CBD5E1', fontSize: 11.5, marginLeft: 3 }}>
-                                    {user?.phoneNumber || user?.phone_number || user?.user_metadata?.phone_number || user?.phone}
-                                </Text>
-                            </View>
-                        )}
-
-                        {user?.email && (
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                <Ionicons name="mail-outline" size={12} color="#94A3B8" />
-                                <Text style={{ color: '#CBD5E1', fontSize: 11.5, marginLeft: 3 }}>
-                                    {user?.email}
-                                </Text>
-                            </View>
-                        )}
-                    </View>
-
-                    {(user?.bio || user?.user_metadata?.bio) && (
-                        <Text style={{
-                            color: '#94A3B8',
-                            fontSize: 11.5,
-                            textAlign: 'center',
-                            marginTop: 10,
-                            paddingHorizontal: 36,
-                            lineHeight: 16
-                        }}>
-                            {user?.bio || user?.user_metadata?.bio}
-                        </Text>
-                    )}
-
-                    {/* LOYALTY TIER PROGRESS TRACKER */}
-                    <View style={{
-                        width: '85%',
-                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                        borderRadius: 14,
-                        padding: 12,
-                        marginTop: 14,
-                        borderWidth: 1,
-                        borderColor: 'rgba(255, 255, 255, 0.06)'
-                    }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                                <Ionicons name={loyalty.icon} size={14} color={loyalty.color} />
-                                <Text style={{ color: 'white', fontSize: 12.5, fontWeight: '800' }}>
-                                    {loyalty.tier}
-                                </Text>
-                            </View>
+                    {user && (
+                        <>
+                            {/* CONTACT INFO SCROLL */}
                             <View style={{
                                 flexDirection: 'row',
-                                alignItems: 'center',
-                                backgroundColor: 'rgba(251, 191, 36, 0.1)',
-                                paddingHorizontal: 6,
-                                paddingVertical: 1.5,
-                                borderRadius: 6
+                                flexWrap: 'wrap',
+                                justifyContent: 'center',
+                                columnGap: 12,
+                                rowGap: 4,
+                                marginTop: 6,
+                                paddingHorizontal: 20
                             }}>
-                                <Ionicons name="star" size={10} color="#FBBF24" style={{ marginRight: 3 }} />
-                                <Text style={{ color: '#FBBF24', fontSize: 10.5, fontWeight: '800' }}>
-                                    {wallet.points} pts
-                                </Text>
+                                {(user?.location || user?.user_metadata?.location) && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Ionicons name="location-outline" size={12} color="#94A3B8" />
+                                        <Text style={{ color: '#CBD5E1', fontSize: 11.5, marginLeft: 3 }}>
+                                            {user?.location || user?.user_metadata?.location}
+                                        </Text>
+                                    </View>
+                                )}
+
+                                {(user?.phoneNumber || user?.phone_number || user?.user_metadata?.phone_number || user?.phone) && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Ionicons name="call-outline" size={12} color="#94A3B8" />
+                                        <Text style={{ color: '#CBD5E1', fontSize: 11.5, marginLeft: 3 }}>
+                                            {user?.phoneNumber || user?.phone_number || user?.user_metadata?.phone_number || user?.phone}
+                                        </Text>
+                                    </View>
+                                )}
+
+                                {user?.email && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Ionicons name="mail-outline" size={12} color="#94A3B8" />
+                                        <Text style={{ color: '#CBD5E1', fontSize: 11.5, marginLeft: 3 }}>
+                                            {user?.email}
+                                        </Text>
+                                    </View>
+                                )}
                             </View>
-                        </View>
 
-                        {/* Progress Bar Track */}
-                        <View style={{ height: 6, backgroundColor: 'rgba(255, 255, 255, 0.1)', borderRadius: 3, overflow: 'hidden', position: 'relative' }}>
-                            <LinearGradient
-                                colors={loyalty.gradient}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 0 }}
-                                style={{
-                                    width: `${loyaltyProgress * 100}%`,
-                                    height: '100%',
-                                    borderRadius: 3
-                                }}
-                            />
-                        </View>
+                            {(user?.bio || user?.user_metadata?.bio) && (
+                                <Text style={{
+                                    color: '#94A3B8',
+                                    fontSize: 11.5,
+                                    textAlign: 'center',
+                                    marginTop: 10,
+                                    paddingHorizontal: 36,
+                                    lineHeight: 16
+                                }}>
+                                    {user?.bio || user?.user_metadata?.bio}
+                                </Text>
+                            )}
 
-                        {/* Progress Helper Label */}
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 5 }}>
-                            <Text style={{ color: '#64748B', fontSize: 9.5, fontWeight: '600' }}>
-                                {loyalty.currentMin} pts
-                            </Text>
-                            <Text style={{ color: '#94A3B8', fontSize: 9.5, fontWeight: '600' }}>
-                                {loyalty.nextTier ? `Next milestone: ${loyalty.nextTier} (${loyalty.nextMin} pts)` : 'Maximum loyalty achieved'}
-                            </Text>
-                        </View>
-                    </View>
+                            {/* LOYALTY TIER PROGRESS TRACKER */}
+                            <View style={{
+                                width: '85%',
+                                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                                borderRadius: 14,
+                                padding: 12,
+                                marginTop: 14,
+                                borderWidth: 1,
+                                borderColor: 'rgba(255, 255, 255, 0.06)'
+                            }}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                        <Ionicons name={loyalty.icon} size={14} color={loyalty.color} />
+                                        <Text style={{ color: 'white', fontSize: 12.5, fontWeight: '800' }}>
+                                            {loyalty.tier}
+                                        </Text>
+                                    </View>
+                                    <View style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        backgroundColor: 'rgba(251, 191, 36, 0.1)',
+                                        paddingHorizontal: 6,
+                                        paddingVertical: 1.5,
+                                        borderRadius: 6
+                                    }}>
+                                        <Ionicons name="star" size={10} color="#FBBF24" style={{ marginRight: 3 }} />
+                                        <Text style={{ color: '#FBBF24', fontSize: 10.5, fontWeight: '800' }}>
+                                            {wallet.points} pts
+                                        </Text>
+                                    </View>
+                                </View>
+
+                                {/* Progress Bar Track */}
+                                <View style={{ height: 6, backgroundColor: 'rgba(255, 255, 255, 0.1)', borderRadius: 3, overflow: 'hidden', position: 'relative' }}>
+                                    <LinearGradient
+                                        colors={loyalty.gradient}
+                                        start={{ x: 0, y: 0 }}
+                                        end={{ x: 1, y: 0 }}
+                                        style={{
+                                            width: `${loyaltyProgress * 100}%`,
+                                            height: '100%',
+                                            borderRadius: 3
+                                        }}
+                                    />
+                                </View>
+
+                                {/* Progress Helper Label */}
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 5 }}>
+                                    <Text style={{ color: '#64748B', fontSize: 9.5, fontWeight: '600' }}>
+                                        {loyalty.currentMin} pts
+                                    </Text>
+                                    <Text style={{ color: '#94A3B8', fontSize: 9.5, fontWeight: '600' }}>
+                                        {loyalty.nextTier ? `Next milestone: ${loyalty.nextTier} (${loyalty.nextMin} pts)` : 'Maximum loyalty achieved'}
+                                    </Text>
+                                </View>
+                            </View>
+                        </>
+                    )}
                 </View>
 
                 {/* BOTTOM GLOW BORDER ACCENT */}
@@ -495,8 +521,8 @@ const ProfilePageInner = ({ user, onLogout, onBack, onOpenVendorRegister, onOpen
                     left: 0,
                     right: 0,
                     height: 2.5,
-                    backgroundColor: loyalty.color,
-                    shadowColor: loyalty.color,
+                    backgroundColor: user ? loyalty.color : '#D9A73A',
+                    shadowColor: user ? loyalty.color : '#D9A73A',
                     shadowOffset: { width: 0, height: -2 },
                     shadowOpacity: 0.6,
                     shadowRadius: 4,
@@ -505,259 +531,315 @@ const ProfilePageInner = ({ user, onLogout, onBack, onOpenVendorRegister, onOpen
             </LinearGradient>
 
             <View style={{ paddingHorizontal: 20, marginTop: -20 }}>
-                {/* GLASSMORPHIC STATS STRIP */}
-                <View style={{
-                    flexDirection: 'row',
-                    backgroundColor: 'rgba(255,255,255,0.95)',
-                    borderRadius: 16,
-                    paddingVertical: 12,
-                    paddingHorizontal: 16,
-                    borderWidth: 1,
-                    borderColor: '#E2E8F0',
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.05,
-                    shadowRadius: 10,
-                    elevation: 2,
-                    justifyContent: 'space-around',
-                    alignItems: 'center'
-                }}>
-                    <View style={{ alignItems: 'center' }}>
-                        <Ionicons name="cart-outline" size={16} color="#64748B" style={{ marginBottom: 2 }} />
-                        <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>{stats.totalOrders}</Text>
-                        <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 1, fontWeight: '700', textTransform: 'uppercase' }}>Orders</Text>
-                    </View>
-                    <View style={{ width: 1, height: 24, backgroundColor: '#E2E8F0' }} />
-                    <View style={{ alignItems: 'center' }}>
-                        <Ionicons name="time-outline" size={16} color="#64748B" style={{ marginBottom: 2 }} />
-                        <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>{stats.pending}</Text>
-                        <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 1, fontWeight: '700', textTransform: 'uppercase' }}>Pending</Text>
-                    </View>
-                    <View style={{ width: 1, height: 24, backgroundColor: '#E2E8F0' }} />
-                    <View style={{ alignItems: 'center' }}>
-                        <Ionicons name="cash-outline" size={16} color="#64748B" style={{ marginBottom: 2 }} />
-                        <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>₦{(stats.spend / 1000).toFixed(0)}k</Text>
-                        <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 1, fontWeight: '700', textTransform: 'uppercase' }}>Spend</Text>
-                    </View>
-                </View>
-
-                {/* PREMIUM METALLIC WALLET CARD */}
-                <LinearGradient
-                    colors={['#4F46E5', '#3B82F6', '#06B6D4']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={{
-                        marginTop: 16,
-                        borderRadius: 16,
-                        padding: 16,
-                        position: 'relative',
-                        overflow: 'hidden',
-                        shadowColor: '#4F46E5',
-                        shadowOffset: { width: 0, height: 8 },
-                        shadowOpacity: 0.15,
-                        shadowRadius: 14,
-                        elevation: 4
-                    }}
-                >
-                    {/* Decorative abstract curves */}
-                    <View style={{
-                        position: 'absolute',
-                        top: -50,
-                        right: -30,
-                        width: 120,
-                        height: 120,
-                        borderRadius: 60,
-                        backgroundColor: 'rgba(255,255,255,0.06)',
-                    }} />
-                    <View style={{
-                        position: 'absolute',
-                        bottom: -30,
-                        left: -20,
-                        width: 80,
-                        height: 80,
-                        borderRadius: 40,
-                        backgroundColor: 'rgba(255,255,255,0.04)',
-                    }} />
-
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <View>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-                                <Ionicons name="card" size={14} color="rgba(255,255,255,0.8)" />
-                                <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>Mafhal Pay Balance</Text>
-                            </View>
-                            <Text style={{ color: 'white', fontSize: 24, fontWeight: '900' }}>{formatCurrency(wallet.balance)}</Text>
-                        </View>
+                {user ? (
+                    <>
+                        {/* GLASSMORPHIC STATS STRIP */}
                         <View style={{
-                            backgroundColor: 'rgba(255,255,255,0.15)',
-                            paddingHorizontal: 8,
-                            paddingVertical: 4,
-                            borderRadius: 6,
-                            borderWidth: 1,
-                            borderColor: 'rgba(255,255,255,0.2)'
-                        }}>
-                            <Text style={{ color: 'white', fontSize: 9, fontWeight: '900', letterSpacing: 1 }}>GOLD TIER</Text>
-                        </View>
-                    </View>
-
-                    <View style={{
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginTop: 16,
-                        borderTopWidth: 1,
-                        borderColor: 'rgba(255,255,255,0.1)',
-                        paddingTop: 10
-                    }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                            <Ionicons name="star" size={12} color="#FBBF24" />
-                            <Text style={{ color: '#FBBF24', fontSize: 11.5, fontWeight: '800' }}>{wallet.points} Points Available</Text>
-                        </View>
-
-                        <TouchableOpacity
-                            activeOpacity={0.8}
-                            style={{
-                                backgroundColor: 'white',
-                                paddingHorizontal: 12,
-                                paddingVertical: 5.5,
-                                borderRadius: 8,
-                                shadowColor: '#000',
-                                shadowOffset: { width: 0, height: 2 },
-                                shadowOpacity: 0.1,
-                                shadowRadius: 4
-                            }}
-                            onPress={() => onNavigate('wallet')}
-                        >
-                            <Text style={{ color: '#1E293B', fontWeight: '800', fontSize: 11.5 }}>Manage</Text>
-                        </TouchableOpacity>
-                    </View>
-                </LinearGradient>
-
-                {/* DASHBOARD ACCESS SHORTCUTS */}
-                {renderDashboardShortcut()}
-
-                {/* REFERRAL CARD */}
-                {settings?.enable_affiliate !== false && (
-                    <TouchableOpacity
-                        activeOpacity={0.85}
-                        style={{
-                            marginTop: 12,
+                            flexDirection: 'row',
+                            backgroundColor: 'rgba(255,255,255,0.95)',
+                            borderRadius: 16,
                             paddingVertical: 12,
                             paddingHorizontal: 16,
-                            borderRadius: 16,
-                            borderWidth: 1.5,
-                            borderColor: '#10B98125',
-                            borderStyle: 'dashed',
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            backgroundColor: '#F0FDF4'
-                        }}
-                        onPress={() => onNavigate('referral')}
-                    >
-                        <View style={{
-                            width: 34,
-                            height: 34,
-                            borderRadius: 10,
-                            backgroundColor: '#DCFCE7',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            marginRight: 12
+                            borderWidth: 1,
+                            borderColor: '#E2E8F0',
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 4 },
+                            shadowOpacity: 0.05,
+                            shadowRadius: 10,
+                            elevation: 2,
+                            justifyContent: 'space-around',
+                            alignItems: 'center'
                         }}>
-                            <Ionicons name="gift" size={18} color="#10B981" />
+                            <View style={{ alignItems: 'center' }}>
+                                <Ionicons name="cart-outline" size={16} color="#64748B" style={{ marginBottom: 2 }} />
+                                <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>{stats.totalOrders}</Text>
+                                <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 1, fontWeight: '700', textTransform: 'uppercase' }}>Orders</Text>
+                            </View>
+                            <View style={{ width: 1, height: 24, backgroundColor: '#E2E8F0' }} />
+                            <View style={{ alignItems: 'center' }}>
+                                <Ionicons name="time-outline" size={16} color="#64748B" style={{ marginBottom: 2 }} />
+                                <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>{stats.pending}</Text>
+                                <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 1, fontWeight: '700', textTransform: 'uppercase' }}>Pending</Text>
+                            </View>
+                            <View style={{ width: 1, height: 24, backgroundColor: '#E2E8F0' }} />
+                            <View style={{ alignItems: 'center' }}>
+                                <Ionicons name="cash-outline" size={16} color="#64748B" style={{ marginBottom: 2 }} />
+                                <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>₦{(stats.spend / 1000).toFixed(0)}k</Text>
+                                <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 1, fontWeight: '700', textTransform: 'uppercase' }}>Spend</Text>
+                            </View>
                         </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>Refer Friends & Earn</Text>
-                            <Text style={{ fontSize: 10.5, color: '#64748B', marginTop: 1 }}>Send invitations and get 500 AMC bonus coins</Text>
-                        </View>
-                        <Ionicons name="chevron-forward" size={14} color="#A7F3D0" />
-                    </TouchableOpacity>
-                )}
 
-                {/* RECENT ORDERS */}
-                <View style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    marginTop: 24,
-                    marginBottom: 12
-                }}>
-                    <View style={{ width: 3.5, height: 14, borderRadius: 2, backgroundColor: '#3B82F6', marginRight: 6 }} />
-                    <Text style={{ fontSize: 14.5, fontWeight: '800', color: '#0F172A' }}>
-                        Recent Orders ({orders.length})
-                    </Text>
-                </View>
+                        {/* PREMIUM METALLIC WALLET CARD */}
+                        <LinearGradient
+                            colors={['#4F46E5', '#3B82F6', '#06B6D4']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={{
+                                marginTop: 16,
+                                borderRadius: 16,
+                                padding: 16,
+                                position: 'relative',
+                                overflow: 'hidden',
+                                shadowColor: '#4F46E5',
+                                shadowOffset: { width: 0, height: 8 },
+                                shadowOpacity: 0.15,
+                                shadowRadius: 14,
+                                elevation: 4
+                            }}
+                        >
+                            {/* Decorative abstract curves */}
+                            <View style={{
+                                position: 'absolute',
+                                top: -50,
+                                right: -30,
+                                width: 120,
+                                height: 120,
+                                borderRadius: 60,
+                                backgroundColor: 'rgba(255,255,255,0.06)',
+                            }} />
+                            <View style={{
+                                position: 'absolute',
+                                bottom: -30,
+                                left: -20,
+                                width: 80,
+                                height: 80,
+                                borderRadius: 40,
+                                backgroundColor: 'rgba(255,255,255,0.04)',
+                            }} />
 
-                {loading ? (
-                    <ActivityIndicator color="#0F172A" style={{ marginTop: 20 }} />
-                ) : orders.length > 0 ? (
-                    orders.slice(0, 3).map((order) => {
-                        const tag = getStatusTag(order.status);
-                        return (
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                <View>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                                        <Ionicons name="card" size={14} color="rgba(255,255,255,0.8)" />
+                                        <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>Mafhal Pay Balance</Text>
+                                    </View>
+                                    <Text style={{ color: 'white', fontSize: 24, fontWeight: '900' }}>{formatCurrency(wallet.balance)}</Text>
+                                </View>
+                                <View style={{
+                                    backgroundColor: 'rgba(255,255,255,0.15)',
+                                    paddingHorizontal: 8,
+                                    paddingVertical: 4,
+                                    borderRadius: 6,
+                                    borderWidth: 1,
+                                    borderColor: 'rgba(255,255,255,0.2)'
+                                }}>
+                                    <Text style={{ color: 'white', fontSize: 9, fontWeight: '900', letterSpacing: 1 }}>GOLD TIER</Text>
+                                </View>
+                            </View>
+
+                            <View style={{
+                                flexDirection: 'row',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                marginTop: 16,
+                                borderTopWidth: 1,
+                                borderColor: 'rgba(255,255,255,0.1)',
+                                paddingTop: 10
+                            }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                    <Ionicons name="star" size={12} color="#FBBF24" />
+                                    <Text style={{ color: '#FBBF24', fontSize: 11.5, fontWeight: '800' }}>{wallet.points} Points Available</Text>
+                                </View>
+
+                                <TouchableOpacity
+                                    activeOpacity={0.8}
+                                    style={{
+                                        backgroundColor: 'white',
+                                        paddingHorizontal: 12,
+                                        paddingVertical: 5.5,
+                                        borderRadius: 8,
+                                        shadowColor: '#000',
+                                        shadowOffset: { width: 0, height: 2 },
+                                        shadowOpacity: 0.1,
+                                        shadowRadius: 4
+                                    }}
+                                    onPress={() => onNavigate('wallet')}
+                                >
+                                    <Text style={{ color: '#1E293B', fontWeight: '800', fontSize: 11.5 }}>Manage</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </LinearGradient>
+
+                        {/* DASHBOARD ACCESS SHORTCUTS */}
+                        {renderDashboardShortcut()}
+
+                        {/* REFERRAL CARD */}
+                        {settings?.enable_affiliate !== false && (
                             <TouchableOpacity
-                                activeOpacity={0.8}
-                                key={order.id}
+                                activeOpacity={0.85}
                                 style={{
+                                    marginTop: 12,
+                                    paddingVertical: 12,
+                                    paddingHorizontal: 16,
+                                    borderRadius: 16,
+                                    borderWidth: 1.5,
+                                    borderColor: '#10B98125',
+                                    borderStyle: 'dashed',
                                     flexDirection: 'row',
                                     alignItems: 'center',
-                                    backgroundColor: 'white',
-                                    marginBottom: 10,
-                                    paddingVertical: 12,
-                                    paddingHorizontal: 14,
-                                    borderRadius: 14,
-                                    borderWidth: 1,
-                                    borderColor: '#E2E8F0',
-                                    shadowColor: '#000',
-                                    shadowOffset: { width: 0, height: 2 },
-                                    shadowOpacity: 0.02,
-                                    shadowRadius: 6,
-                                    elevation: 1
+                                    backgroundColor: '#F0FDF4'
                                 }}
+                                onPress={() => onNavigate('referral')}
                             >
                                 <View style={{
-                                    width: 32,
-                                    height: 32,
-                                    borderRadius: 8,
-                                    backgroundColor: '#F8FAFC',
+                                    width: 34,
+                                    height: 34,
+                                    borderRadius: 10,
+                                    backgroundColor: '#DCFCE7',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    marginRight: 12,
-                                    borderWidth: 1,
-                                    borderColor: '#E2E8F0'
+                                    marginRight: 12
                                 }}>
-                                    <Ionicons name="cube-outline" size={16} color="#64748B" />
+                                    <Ionicons name="gift" size={18} color="#10B981" />
                                 </View>
                                 <View style={{ flex: 1 }}>
-                                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>
-                                        #{order.id.toString().slice(0, 8).toUpperCase()}
-                                    </Text>
-                                    <Text style={{ fontSize: 10.5, color: '#64748B', marginTop: 1 }}>
-                                        {new Date(order.created_at).toLocaleDateString()} • {order.items_count || order.items?.length || 1} items
-                                    </Text>
+                                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>Refer Friends & Earn</Text>
+                                    <Text style={{ fontSize: 10.5, color: '#64748B', marginTop: 1 }}>Send invitations and get 500 AMC bonus coins</Text>
                                 </View>
-                                <View style={{ alignItems: 'flex-end' }}>
-                                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>
-                                        {formatCurrency(order.total_amount)}
-                                    </Text>
-                                    <View style={{
-                                        backgroundColor: tag.bg,
-                                        paddingHorizontal: 8,
-                                        paddingVertical: 2.5,
-                                        borderRadius: 6,
-                                        marginTop: 4,
-                                        flexDirection: 'row',
-                                        alignItems: 'center',
-                                        gap: 4
-                                    }}>
-                                        <View style={{ width: 4.5, height: 4.5, borderRadius: 2.25, backgroundColor: tag.dot }} />
-                                        <Text style={{ fontSize: 8.5, fontWeight: '800', color: tag.text, textTransform: 'uppercase' }}>
-                                            {order.status}
-                                        </Text>
-                                    </View>
-                                </View>
+                                <Ionicons name="chevron-forward" size={14} color="#A7F3D0" />
                             </TouchableOpacity>
-                        );
-                    })
+                        )}
+
+                        {/* RECENT ORDERS */}
+                        <View style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            marginTop: 24,
+                            marginBottom: 12
+                        }}>
+                            <View style={{ width: 3.5, height: 14, borderRadius: 2, backgroundColor: '#3B82F6', marginRight: 6 }} />
+                            <Text style={{ fontSize: 14.5, fontWeight: '800', color: '#0F172A' }}>
+                                Recent Orders ({orders.length})
+                            </Text>
+                        </View>
+
+                        {loading ? (
+                            <ActivityIndicator color="#0F172A" style={{ marginTop: 20 }} />
+                        ) : orders.length > 0 ? (
+                            orders.slice(0, 3).map((order) => {
+                                const tag = getStatusTag(order.status);
+                                return (
+                                    <TouchableOpacity
+                                        activeOpacity={0.8}
+                                        key={order.id}
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            backgroundColor: 'white',
+                                            marginBottom: 10,
+                                            paddingVertical: 12,
+                                            paddingHorizontal: 14,
+                                            borderRadius: 14,
+                                            borderWidth: 1,
+                                            borderColor: '#E2E8F0',
+                                            shadowColor: '#000',
+                                            shadowOffset: { width: 0, height: 2 },
+                                            shadowOpacity: 0.02,
+                                            shadowRadius: 6,
+                                            elevation: 1
+                                        }}
+                                    >
+                                        <View style={{
+                                            width: 32,
+                                            height: 32,
+                                            borderRadius: 8,
+                                            backgroundColor: '#F8FAFC',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            marginRight: 12,
+                                            borderWidth: 1,
+                                            borderColor: '#E2E8F0'
+                                        }}>
+                                            <Ionicons name="cube-outline" size={16} color="#64748B" />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>
+                                                #{order.id.toString().slice(0, 8).toUpperCase()}
+                                            </Text>
+                                            <Text style={{ fontSize: 10.5, color: '#64748B', marginTop: 1 }}>
+                                                {new Date(order.created_at).toLocaleDateString()} • {order.items_count || order.items?.length || 1} items
+                                            </Text>
+                                        </View>
+                                        <View style={{ alignItems: 'flex-end' }}>
+                                            <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>
+                                                {formatCurrency(order.total_amount)}
+                                            </Text>
+                                            <View style={{
+                                                backgroundColor: tag.bg,
+                                                paddingHorizontal: 8,
+                                                paddingVertical: 2.5,
+                                                borderRadius: 6,
+                                                marginTop: 4,
+                                                flexDirection: 'row',
+                                                alignItems: 'center',
+                                                gap: 4
+                                            }}>
+                                                <View style={{ width: 4.5, height: 4.5, borderRadius: 2.25, backgroundColor: tag.dot }} />
+                                                <Text style={{ fontSize: 8.5, fontWeight: '800', color: tag.text, textTransform: 'uppercase' }}>
+                                                    {order.status}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    </TouchableOpacity>
+                                );
+                            })
+                        ) : (
+                            <View style={{ alignItems: 'center', padding: 20, backgroundColor: 'white', borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                                <Text style={{ color: '#94A3B8', fontSize: 12.5 }}>No recent orders found</Text>
+                            </View>
+                        )}
+                    </>
                 ) : (
-                    <View style={{ alignItems: 'center', padding: 20, backgroundColor: 'white', borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                        <Text style={{ color: '#94A3B8', fontSize: 12.5 }}>No recent orders found</Text>
+                    /* GUEST ONBOARDING CARD */
+                    <View style={{
+                        backgroundColor: 'white',
+                        borderRadius: 20,
+                        padding: 20,
+                        marginTop: 16,
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0',
+                        shadowColor: '#0E1A2E',
+                        shadowOffset: { width: 0, height: 6 },
+                        shadowOpacity: 0.06,
+                        shadowRadius: 12,
+                        elevation: 3
+                    }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                            <View style={{
+                                width: 42,
+                                height: 42,
+                                borderRadius: 12,
+                                backgroundColor: '#FEF3C7',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                marginRight: 12
+                            }}>
+                                <Ionicons name="sparkles" size={20} color="#D9A73A" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 15, fontWeight: '800', color: '#0E1A2E' }}>Unlock Premium Features</Text>
+                                <Text style={{ fontSize: 11, color: '#64748B' }}>Join Abu Mafhal Online Marketplace</Text>
+                            </View>
+                        </View>
+                        <Text style={{ fontSize: 12, color: '#64748B', lineHeight: 18, marginBottom: 16 }}>
+                            Sign in or register to track orders, manage your custom wallet, earn loyalty milestone coins, chat with sellers, and list your own items to start earning today!
+                        </Text>
+                        <TouchableOpacity
+                            activeOpacity={0.85}
+                            onPress={() => onNavigate('Auth')}
+                            style={{
+                                backgroundColor: '#0E1A2E',
+                                paddingVertical: 12,
+                                borderRadius: 12,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexDirection: 'row',
+                                gap: 6
+                            }}
+                        >
+                            <Text style={{ color: 'white', fontWeight: '800', fontSize: 13 }}>Get Started Now</Text>
+                            <Ionicons name="arrow-forward" size={15} color="white" />
+                        </TouchableOpacity>
                     </View>
                 )}
 
@@ -785,7 +867,13 @@ const ProfilePageInner = ({ user, onLogout, onBack, onOpenVendorRegister, onOpen
                                     paddingVertical: 12,
                                     paddingHorizontal: 16
                                 }}
-                                onPress={() => item.screen ? onNavigate(item.screen) : alert('Coming Soon')}
+                                onPress={() => {
+                                    if (!user && item.screen !== 'support' && item.screen !== 'about') {
+                                        onNavigate('Auth');
+                                    } else {
+                                        item.screen ? onNavigate(item.screen) : alert('Coming Soon');
+                                    }
+                                }}
                             >
                                 <View style={{
                                     width: 34,
@@ -807,7 +895,7 @@ const ProfilePageInner = ({ user, onLogout, onBack, onOpenVendorRegister, onOpen
                                     </Text>
                                 </View>
 
-                                {item.badge && (
+                                {user && item.badge && (
                                     <View style={{
                                         backgroundColor: '#EF4444',
                                         paddingHorizontal: 6,
@@ -830,25 +918,45 @@ const ProfilePageInner = ({ user, onLogout, onBack, onOpenVendorRegister, onOpen
                     ))}
                 </View>
 
-                {/* LOG OUT BUTTON */}
+                {/* BOTTOM BUTTON */}
                 <View style={{ marginTop: 18, paddingBottom: 40 }}>
-                    <TouchableOpacity
-                        activeOpacity={0.8}
-                        style={{
-                            backgroundColor: '#FFF5F5',
-                            borderRadius: 14,
-                            paddingVertical: 12,
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            borderWidth: 1.5,
-                            borderColor: '#FEE2E2'
-                        }}
-                        onPress={onLogout}
-                    >
-                        <Text style={{ color: '#EF4444', fontWeight: '800', fontSize: 13.5, letterSpacing: 0.5 }}>LOG OUT ACCOUNT</Text>
-                        <Ionicons name="log-out-outline" size={18} color="#EF4444" style={{ marginLeft: 6 }} />
-                    </TouchableOpacity>
+                    {user ? (
+                        <TouchableOpacity
+                            activeOpacity={0.8}
+                            style={{
+                                backgroundColor: '#FFF5F5',
+                                borderRadius: 14,
+                                paddingVertical: 12,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                borderWidth: 1.5,
+                                borderColor: '#FEE2E2'
+                            }}
+                            onPress={onLogout}
+                        >
+                            <Text style={{ color: '#EF4444', fontWeight: '800', fontSize: 13.5, letterSpacing: 0.5 }}>LOG OUT ACCOUNT</Text>
+                            <Ionicons name="log-out-outline" size={18} color="#EF4444" style={{ marginLeft: 6 }} />
+                        </TouchableOpacity>
+                    ) : (
+                        <TouchableOpacity
+                            activeOpacity={0.8}
+                            style={{
+                                backgroundColor: '#F5F3EB',
+                                borderRadius: 14,
+                                paddingVertical: 12,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                borderWidth: 1.5,
+                                borderColor: '#D9A73A'
+                            }}
+                            onPress={() => onNavigate('Auth')}
+                        >
+                            <Text style={{ color: '#0E1A2E', fontWeight: '800', fontSize: 13.5, letterSpacing: 0.5 }}>LOG IN / REGISTER</Text>
+                            <Ionicons name="log-in-outline" size={18} color="#0E1A2E" style={{ marginLeft: 6 }} />
+                        </TouchableOpacity>
+                    )}
                 </View>
             </View>
         </ScrollView>
