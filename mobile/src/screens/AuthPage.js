@@ -90,13 +90,17 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
                     console.log('IP Fetch Error:', e);
                 }
 
-                await NotificationService.send({
-                    userId: data.user.id,
-                    title: 'New Login Detected 🛡️',
-                    message: `New login to your account from IP: ${ipAddress}. If this wasn't you, please reset your password immediately.`,
-                    type: 'login',
-                    email: email
-                });
+                try {
+                    await NotificationService.send({
+                        userId: data.user.id,
+                        title: 'New Login Detected 🛡️',
+                        message: `New login to your account from IP: ${ipAddress}. If this wasn't you, please reset your password immediately.`,
+                        type: 'login',
+                        email: email
+                    });
+                } catch (notifErr) {
+                    console.log('Login Notification error (non-fatal):', notifErr);
+                }
 
                 Alert.alert('Success', 'Welcome back!');
                 if (onLoginSuccess) onLoginSuccess(data.user);
