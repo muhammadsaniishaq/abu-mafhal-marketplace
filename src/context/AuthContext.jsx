@@ -40,11 +40,24 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Known admin email addresses
+  const KNOWN_ADMIN_EMAILS = [
+    'sale.abumafhal@gmail.com',
+    'admin@abumafhal.com',
+    'abumafhal@gmail.com'
+  ];
+
+  const isAdminEmail = (email) => {
+    if (!email) return false;
+    const lower = email.toLowerCase().trim();
+    return KNOWN_ADMIN_EMAILS.includes(lower) || lower.includes('admin');
+  };
+
   // Helper to accurately resolve user role across DB profile, auth metadata, and admin email pattern
   const resolveRole = (userData, user) => {
+    if (user?.email && isAdminEmail(user.email)) return 'admin';
     if (userData?.role) return userData.role;
     if (user?.user_metadata?.role) return user.user_metadata.role;
-    if (user?.email && user.email.toLowerCase().includes('admin')) return 'admin';
     return 'buyer';
   };
 
@@ -107,9 +120,9 @@ export const AuthProvider = ({ children }) => {
         };
         await supabase.from('profiles').upsert([profileData]).catch(err => console.warn('Profile sync warning:', err.message));
         userData = profileData;
-      } else if (!userData.role || (email.toLowerCase().includes('admin') && userData.role !== 'admin')) {
-        await supabase.from('profiles').update({ role }).eq('id', data.user.id).catch(err => console.warn('Profile update warning:', err.message));
-        userData = { ...userData, role };
+      } else if (!userData.role || (isAdminEmail(email) && userData.role !== 'admin')) {
+        await supabase.from('profiles').update({ role: 'admin' }).eq('id', data.user.id).catch(err => console.warn('Profile update warning:', err.message));
+        userData = { ...userData, role: 'admin' };
       }
 
       const fullUser = { ...data.user, ...(userData || {}), role };
