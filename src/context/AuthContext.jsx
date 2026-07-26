@@ -163,14 +163,14 @@ export const AuthProvider = ({ children }) => {
   // Logout (Supabase)
   const logout = async () => {
     try {
-      await supabase.auth.signOut();
+      await supabase.auth.signOut().catch(err => console.warn('SignOut network warning:', err.message));
+    } finally {
       setCurrentUser(null);
       setUserRole(null);
       localStorage.removeItem('auth_user');
       localStorage.removeItem('auth_role');
-    } catch (error) {
-      console.error('Logout error:', error.message);
-      throw error;
+      localStorage.clear();
+      sessionStorage.clear();
     }
   };
 
@@ -206,15 +206,13 @@ export const AuthProvider = ({ children }) => {
           setCurrentUser(fullUser);
           setUserRole(role);
           localStorage.setItem('auth_user', JSON.stringify(fullUser));
-          if (role) localStorage.setItem('auth_role', role);
+          localStorage.setItem('auth_role', role);
         } else {
-          // No session - clear everything
-          if (event === 'SIGNED_OUT') {
-            setCurrentUser(null);
-            setUserRole(null);
-            localStorage.removeItem('auth_user');
-            localStorage.removeItem('auth_role');
-          }
+          // If session is null/empty for ANY reason, ALWAYS clear currentUser and localStorage
+          setCurrentUser(null);
+          setUserRole(null);
+          localStorage.removeItem('auth_user');
+          localStorage.removeItem('auth_role');
         }
       } catch (err) {
         console.error('Auth state change error:', err);
