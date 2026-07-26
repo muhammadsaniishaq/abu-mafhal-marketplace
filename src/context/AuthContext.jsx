@@ -28,14 +28,24 @@ export const AuthProvider = ({ children }) => {
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
       
-      if (error) throw error;
-      return data;
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error getting user data:', error.message);
+      }
+      return data || null;
     } catch (error) {
       console.error('Error getting user data:', error.message);
       return null;
     }
+  };
+
+  // Helper to accurately resolve user role across DB profile, auth metadata, and admin email pattern
+  const resolveRole = (userData, user) => {
+    if (userData?.role) return userData.role;
+    if (user?.user_metadata?.role) return user.user_metadata.role;
+    if (user?.email && user.email.toLowerCase().includes('admin')) return 'admin';
+    return 'buyer';
   };
 
   // Register new user (Supabase)
@@ -83,16 +93,26 @@ export const AuthProvider = ({ children }) => {
 
       if (error) throw error;
 
-      // Try to get profile data but don't block login if it fails
-      let userData = null;
-      try {
-        userData = await getUserData(data.user.id);
-      } catch (profileErr) {
-        console.warn('Profile fetch failed during login, using session data:', profileErr.message);
+      let userData = await getUserData(data.user.id);
+      const role = resolveRole(userData, data.user);
+
+      // Ensure profile exists in Supabase DB and is kept in sync
+      if (!userData) {
+        const profileData = {
+          id: data.user.id,
+          email: data.user.email || email,
+          full_name: data.user.user_metadata?.full_name || data.user.user_metadata?.name || email.split('@')[0],
+          role: role,
+          created_at: new Date().toISOString()
+        };
+        await supabase.from('profiles').upsert([profileData]).catch(err => console.warn('Profile sync warning:', err.message));
+        userData = profileData;
+      } else if (!userData.role || (email.toLowerCase().includes('admin') && userData.role !== 'admin')) {
+        await supabase.from('profiles').update({ role }).eq('id', data.user.id).catch(err => console.warn('Profile update warning:', err.message));
+        userData = { ...userData, role };
       }
 
-      const fullUser = { ...data.user, ...(userData || {}), role: userData?.role || data.user.user_metadata?.role || 'buyer' };
-      const role = fullUser.role;
+      const fullUser = { ...data.user, ...(userData || {}), role };
 
       setCurrentUser(fullUser);
       setUserRole(role);
@@ -161,11 +181,10 @@ export const AuthProvider = ({ children }) => {
     let isInitialCheck = true;
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       try {
-        if (session) {
-          // If we have a session, validate/get profile but don't block if we already have a cached user
-          const userData = await getUserData(session.user.id);
-          const fullUser = { ...session.user, ...(userData || {}) };
-          const role = userData?.role || session.user.user_metadata?.role || null;
+        if (session?.user) {
+          let userData = await getUserData(session.user.id);
+          const role = resolveRole(userData, session.user);
+          const fullUser = { ...session.user, ...(userData || {}), role };
           
           setCurrentUser(fullUser);
           setUserRole(role);
