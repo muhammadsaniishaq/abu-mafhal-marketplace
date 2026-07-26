@@ -77,7 +77,7 @@ const AdminDashboard = () => {
     setCollapsedGroups(prev => ({ ...prev, [title]: !prev[title] }));
 
   const handleLogout = async () => {
-    try { await logout(); navigate('/login'); } catch (e) { console.error(e); }
+    try { await logout(); navigate('/'); } catch (e) { console.error(e); }
   };
 
   // Get current page label

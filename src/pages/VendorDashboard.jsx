@@ -22,7 +22,7 @@ const VendorDashboard = () => {
     if (window.confirm('Are you sure you want to logout?')) {
       try {
         await logout();
-        navigate('/login');
+        navigate('/');
       } catch (error) {
         console.error('Logout error:', error);
       }
