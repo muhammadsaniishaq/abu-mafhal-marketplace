@@ -125,17 +125,49 @@ export default function App() {
         if (!loading) saveCart();
     }, [cartLines, loading]);
 
-    const fetchUserProfile = async (userId) => {
-        const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
-        if (data) {
-            setUser({ ...data, id: userId });
+    const KNOWN_ADMIN_EMAILS = ['sale.abumafhal@gmail.com', 'admin@abumafhal.com', 'abumafhal@gmail.com'];
+
+    const fetchUserProfile = async (userId, sessionUser = null) => {
+        try {
+            const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+            
+            const email = data?.email || sessionUser?.email;
+            const lowerEmail = email ? email.toLowerCase().trim() : '';
+            const isAdmin = lowerEmail && (KNOWN_ADMIN_EMAILS.includes(lowerEmail) || lowerEmail.includes('admin'));
+
+            let resolvedRole = data?.role;
+            if (isAdmin) {
+                resolvedRole = 'admin';
+                if (data && data.role !== 'admin') {
+                    await supabase.from('profiles').update({ role: 'admin' }).eq('id', userId).catch(console.error);
+                }
+            }
+
+            const userProfile = {
+                ...(data || {}),
+                id: userId,
+                email: email,
+                role: resolvedRole || data?.role || 'buyer'
+            };
+
+            setUser(userProfile);
+            return userProfile;
+        } catch (e) {
+            console.error('Error fetching user profile:', e);
+            return null;
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const handleLogout = async () => {
-        await supabase.auth.signOut();
-        setUser(null);
+        try {
+            await supabase.auth.signOut();
+        } catch (e) {
+            console.error('Logout error:', e);
+        } finally {
+            setUser(null);
+        }
     };
 
     const handleUpdateQty = (id, change) => {
@@ -179,18 +211,24 @@ export default function App() {
                                             <AuthPage
                                                 {...props}
                                                 onBack={() => props.navigation.goBack()}
-                                                onLoginSuccess={(loggedInUser) => {
-                                                    setUser(loggedInUser);
-                                                    const redirectTo = props.route?.params?.redirectTo;
-                                                    const redirectParams = props.route?.params?.redirectParams;
-                                                    if (redirectTo) {
-                                                        setTimeout(() => {
-                                                            if (navigationRef.isReady()) {
-                                                                navigationRef.navigate(redirectTo, redirectParams);
-                                                            }
-                                                        }, 150);
-                                                    }
-                                                }}
+                                                 onLoginSuccess={async (loggedInUser) => {
+                                                     const profile = await fetchUserProfile(loggedInUser.id, loggedInUser);
+                                                     const userRole = profile?.role || 'buyer';
+                                                     const redirectTo = props.route?.params?.redirectTo;
+                                                     const redirectParams = props.route?.params?.redirectParams;
+
+                                                     setTimeout(() => {
+                                                         if (navigationRef.isReady()) {
+                                                             if (redirectTo) {
+                                                                 navigationRef.navigate(redirectTo, redirectParams);
+                                                             } else if (userRole === 'admin') {
+                                                                 navigationRef.navigate('AdminDashboard');
+                                                             } else if (userRole === 'vendor') {
+                                                                 navigationRef.navigate('VendorDashboard');
+                                                             }
+                                                         }
+                                                     }, 150);
+                                                 }}
                                             />
                                         )}
                                     </Stack.Screen>
