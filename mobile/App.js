@@ -187,13 +187,25 @@ export default function App() {
 
     if (loading) return null; // Or a custom splash screen
 
+    let initialRoute = 'Landing';
+    if (user) {
+        if (user.role === 'admin') initialRoute = 'AdminDashboard';
+        else if (user.role === 'vendor') initialRoute = 'VendorDashboard';
+        else if (user.role === 'driver') initialRoute = 'DriverDashboard';
+        else initialRoute = 'Main';
+    }
+
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
             <SafeAreaProvider style={{ flex: 1 }}>
                 <AppSettingsProvider>
                     <ComparisonProvider>
                         <NavigationContainer ref={navigationRef} linking={linking}>
-                        <Stack.Navigator screenOptions={{ headerShown: false, detachInactiveScreens: false }}>
+                        <Stack.Navigator
+                            key={user ? `user-${user.id}-${user.role}` : 'guest'}
+                            initialRouteName={initialRoute}
+                            screenOptions={{ headerShown: false, detachInactiveScreens: false }}
+                        >
                             {!user ? (
                                 <>
                                     <Stack.Screen name="Landing">
