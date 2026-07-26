@@ -99,6 +99,10 @@ export const AuthProvider = ({ children }) => {
   // Login (Supabase)
   const login = async (email, password) => {
     try {
+      // Clear any previous stale cached user session
+      localStorage.removeItem('auth_user');
+      localStorage.removeItem('auth_role');
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
@@ -120,7 +124,7 @@ export const AuthProvider = ({ children }) => {
         };
         await supabase.from('profiles').upsert([profileData]).catch(err => console.warn('Profile sync warning:', err.message));
         userData = profileData;
-      } else if (!userData.role || (isAdminEmail(email) && userData.role !== 'admin')) {
+      } else if (role === 'admin' && userData.role !== 'admin') {
         await supabase.from('profiles').update({ role: 'admin' }).eq('id', data.user.id).catch(err => console.warn('Profile update warning:', err.message));
         userData = { ...userData, role: 'admin' };
       }
@@ -130,7 +134,7 @@ export const AuthProvider = ({ children }) => {
       setCurrentUser(fullUser);
       setUserRole(role);
       localStorage.setItem('auth_user', JSON.stringify(fullUser));
-      if (role) localStorage.setItem('auth_role', role);
+      localStorage.setItem('auth_role', role);
 
       return fullUser;
     } catch (error) {
