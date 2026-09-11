@@ -25,9 +25,7 @@ export const WishlistPage = ({ onBack, onAddToCart, onProductClick }) => {
                 .from('wishlists')
                 .select('items')
                 .eq('id', user.id)
-                .single();
-
-            if (error && error.code !== 'PGRST116') throw error;
+                .maybeSingle();
 
             const itemIds = data?.items || [];
             if (itemIds.length === 0) {
@@ -38,7 +36,7 @@ export const WishlistPage = ({ onBack, onAddToCart, onProductClick }) => {
             // 2. Fetch product details for those IDs
             const { data: products, error: pError } = await supabase
                 .from('products')
-                .select('*')
+                .select('id, name, price, original_price, images, category, rating, reviews, status, discount, stock')
                 .in('id', itemIds);
 
             if (pError) throw pError;

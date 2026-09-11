@@ -10,6 +10,7 @@ import { decode } from 'base64-arraybuffer';
 import * as FileSystem from 'expo-file-system/legacy';
 import { supabase } from '../lib/supabase';
 import { useAppSettings } from '../context/AppSettingsContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const STATUS_CFG = {
     pending: { color: '#D97706', bg: '#FEF3C7', icon: 'time-outline', label: 'Pending' },
@@ -53,19 +54,51 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
     const [cancelling, setCancelling] = useState(null);
     const [confirming, setConfirming] = useState(null);
 
-    useEffect(() => { if (user) fetchOrders(); }, [user]);
+    useEffect(() => {
+        fetchOrders();
+    }, [user?.id]);
 
     const fetchOrders = async () => {
-        if (!user) return;
-        setLoading(true);
-        const { data, error } = await supabase
-            .from('orders')
-            .select('*, user_confirmed, confirmed_at, driver:drivers(id, name), order_items(id, quantity, price, variant, product_id, product:products(id, name, images))')
-            .eq('user_id', user.id || user.sub)
-            .order('created_at', { ascending: false });
-        if (!error) setOrders(data || []);
-        setLoading(false);
-        setRefreshing(false);
+        let activeUserId = user?.id || user?.sub;
+        if (!activeUserId) {
+            const { data: authData } = await supabase.auth.getUser();
+            activeUserId = authData?.user?.id;
+        }
+        if (!activeUserId) {
+            setLoading(false);
+            setRefreshing(false);
+            return;
+        }
+
+        // Instant cache load
+        try {
+            const cacheKey = `@abumafhal_orders_${activeUserId}`;
+            const cached = await AsyncStorage.getItem(cacheKey);
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    setOrders(parsed);
+                    setLoading(false);
+                }
+            }
+        } catch (_) {}
+
+        try {
+            const { data, error } = await supabase
+                .from('orders')
+                .select('*, user_confirmed, confirmed_at, driver:drivers(id, name), order_items(id, quantity, price, variant, product_id, product:products(id, name, images))')
+                .eq('user_id', activeUserId)
+                .order('created_at', { ascending: false });
+            if (!error && data) {
+                setOrders(data);
+                AsyncStorage.setItem(`@abumafhal_orders_${activeUserId}`, JSON.stringify(data)).catch(() => {});
+            }
+        } catch (e) {
+            console.log('Orders fetch error:', e);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
     };
 
     const stats = useMemo(() => ({

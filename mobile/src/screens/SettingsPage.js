@@ -43,7 +43,16 @@ export const SettingsPage = ({ onBack, onLogout, onNavigate }) => {
 
                 <TouchableOpacity
                     style={[styles.modernBtn, { backgroundColor: '#EF4444', marginTop: 40 }]}
-                    onPress={onLogout}
+                    onPress={() => {
+                        Alert.alert(
+                            'Log Out',
+                            'Are you sure you want to log out of Abu Mafhal?',
+                            [
+                                { text: 'Cancel', style: 'cancel' },
+                                { text: 'Log Out', style: 'destructive', onPress: onLogout }
+                            ]
+                        );
+                    }}
                 >
                     <Text style={{ color: 'white', fontWeight: '700' }}>Log Out</Text>
                     <Ionicons name="log-out-outline" size={20} color="white" style={{ marginLeft: 8 }} />

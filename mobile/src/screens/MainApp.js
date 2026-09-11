@@ -44,10 +44,9 @@ export const MainApp = ({ route, navigation, user, onLogout, cartLines, onUpdate
                 .from('profiles')
                 .select('*')
                 .eq('id', user.id)
-                .single();
+                .maybeSingle();
 
-            if (data && data.role !== user.role) {
-                console.log('MainApp: User role updated from', user.role, 'to', data.role);
+            if (data && (data.role !== user.role || data.full_name !== user.fullName)) {
                 if (typeof onUpdateUser === 'function') {
                     onUpdateUser({ ...user, ...data });
                 }

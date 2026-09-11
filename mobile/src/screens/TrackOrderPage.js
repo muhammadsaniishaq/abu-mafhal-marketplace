@@ -65,7 +65,7 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) 
         try {
             // Fetch driver if not already embedded
             if (order.driver_id && !order.driver) {
-                const { data: d } = await supabase.from('drivers').select('*').eq('id', order.driver_id).single();
+                const { data: d } = await supabase.from('drivers').select('*').eq('id', order.driver_id).maybeSingle();
                 if (d) setDriver(d);
             }
             // Fetch order items with product images if not already embedded

@@ -3,6 +3,7 @@ import { View, Text, Image, TouchableOpacity, ScrollView, Dimensions, Platform, 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppSettings } from '../context/AppSettingsContext';
 import { supabase } from '../lib/supabase';
 import { CountdownTimer } from '../components/CountdownTimer';
@@ -187,92 +188,93 @@ export const LandingPage = ({ navigation, onEnterShop, cartCount, onGoToCart, on
         setNewsletterEmail('');
     };
 
+    const LANDING_CACHE_KEY = '@abumafhal_landing_cache_v1';
+
     useEffect(() => {
+        // Fast instant cache restore
+        AsyncStorage.getItem(LANDING_CACHE_KEY).then(cached => {
+            if (cached) {
+                try {
+                    const c = JSON.parse(cached);
+                    if (c.categories?.length) setCategories(c.categories);
+                    if (c.popularProducts?.length) setPopularProducts(c.popularProducts);
+                    if (c.testimonials?.length) setTestimonials(c.testimonials);
+                    if (c.flashSale?.length) setFlashSale(c.flashSale);
+                    if (c.homeBanner) setHomeBanner(c.homeBanner);
+                } catch (_) {}
+            }
+        }).catch(() => {});
+
+        const defaultCats = [
+            { id: 'cat-elect', name: 'Electronics', icon: 'desktop-outline' },
+            { id: 'cat-fashion', name: 'Fashion', icon: 'shirt-outline' },
+            { id: 'cat-phones', name: 'Phones', icon: 'phone-portrait-outline' },
+            { id: 'cat-home', name: 'Home & Living', icon: 'home-outline' },
+            { id: 'cat-beauty', name: 'Beauty', icon: 'sparkles-outline' },
+            { id: 'cat-services', name: 'Services', icon: 'build-outline' },
+            { id: 'cat-digital', name: 'Digital Products', icon: 'document-text-outline' }
+        ];
+
         const fetchLandingProducts = async () => {
             try {
-                // 1. Fetch Categories: Select unique categories from products, merge with default categories
-                const { data: distinctCats } = await supabase
-                    .from('products')
-                    .select('category')
-                    .eq('is_active', true);
-                
-                const dbCategories = distinctCats ? [...new Set(distinctCats.map(p => p.category).filter(Boolean))] : [];
-                
-                const defaultCats = [
-                    { id: 'cat-elect', name: 'Electronics', icon: 'desktop-outline' },
-                    { id: 'cat-fashion', name: 'Fashion', icon: 'shirt-outline' },
-                    { id: 'cat-phones', name: 'Phones', icon: 'phone-portrait-outline' },
-                    { id: 'cat-home', name: 'Home & Living', icon: 'home-outline' },
-                    { id: 'cat-beauty', name: 'Beauty', icon: 'sparkles-outline' },
-                    { id: 'cat-services', name: 'Services', icon: 'build-outline' },
-                    { id: 'cat-digital', name: 'Digital Products', icon: 'document-text-outline' }
-                ];
+                const now = new Date().toISOString();
 
-                const finalCats = [...defaultCats];
-                dbCategories.forEach(dbCat => {
-                    if (!finalCats.some(c => c.name.toLowerCase() === dbCat.toLowerCase())) {
-                        finalCats.push({
-                            id: `cat-${dbCat.toLowerCase()}`,
-                            name: dbCat,
-                            icon: 'grid-outline'
-                        });
-                    }
-                });
+                // Run all landing queries simultaneously in parallel
+                const [catsRes, saleRes, prodsRes, testRes, bannerRes] = await Promise.allSettled([
+                    supabase.from('categories').select('id, name, icon').eq('is_active', true).order('display_order').limit(10),
+                    supabase.from('flash_sales').select('*').eq('is_active', true).gt('end_time', now).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+                    supabase.from('products').select('id, name, price, compare_at_price, original_price, images, category, rating, reviews_count').eq('is_active', true).order('rating', { ascending: false }).limit(10),
+                    supabase.from('testimonials').select('id, quote, name, role, avatar, rating, is_verified, display_order').eq('is_active', true).order('display_order'),
+                    supabase.from('banners').select('id, image_url, title, action_link, section, is_active, display_order').eq('is_active', true).order('display_order', { ascending: true })
+                ]);
+
+                // 1. Process Categories
+                let finalCats = [...defaultCats];
+                if (catsRes.status === 'fulfilled' && catsRes.value.data?.length > 0) {
+                    const dbCats = catsRes.value.data;
+                    dbCats.forEach(dbCat => {
+                        if (!finalCats.some(c => c.name.toLowerCase() === dbCat.name.toLowerCase())) {
+                            finalCats.push({
+                                id: `cat-${dbCat.id || dbCat.name.toLowerCase()}`,
+                                name: dbCat.name,
+                                icon: dbCat.icon || 'grid-outline'
+                            });
+                        }
+                    });
+                }
                 setCategories(finalCats);
 
-                // 2. Fetch Flash Sale Products from flash_sales table (NO FALLBACK/MOCK DATA)
-                const now = new Date().toISOString();
-                try {
-                    const { data: saleData, error: saleErr } = await supabase
-                        .from('flash_sales')
-                        .select('*')
-                        .eq('is_active', true)
-                        .gt('end_time', now)
-                        .order('created_at', { ascending: false })
-                        .limit(1)
-                        .single();
+                // 2. Process Flash Sales
+                let flashProducts = [];
+                if (saleRes.status === 'fulfilled' && saleRes.value.data) {
+                    const saleData = saleRes.value.data;
+                    if (saleData.end_time) setTargetDate(saleData.end_time);
 
-                    if (!saleErr && saleData && saleData.product_ids && saleData.product_ids.length > 0) {
-                        if (saleData.end_time) {
-                            setTargetDate(saleData.end_time);
-                        }
-
-                        const { data: prods, error: prodsErr } = await supabase
+                    if (saleData.product_ids?.length > 0) {
+                        const { data: prods } = await supabase
                             .from('products')
-                            .select('*')
+                            .select('id, name, price, compare_at_price, images, category, rating')
                             .in('id', saleData.product_ids)
                             .eq('is_active', true);
 
-                        if (!prodsErr && prods && prods.length > 0) {
+                        if (prods?.length > 0) {
                             const discountPercentage = saleData.discount_percent || 20;
-                            const flashProducts = prods.map(p => ({
+                            flashProducts = prods.map(p => ({
                                 ...p,
                                 discount: p.compare_at_price && p.compare_at_price > p.price
                                     ? Math.round(((p.compare_at_price - p.price) / p.compare_at_price) * 100)
                                     : discountPercentage
                             }));
-                            setFlashSale(flashProducts);
-                        } else {
-                            setFlashSale([]);
                         }
-                    } else {
-                        setFlashSale([]);
                     }
-                } catch (e) {
-                    console.log('Error loading flash sales:', e.message);
-                    setFlashSale([]);
                 }
+                setFlashSale(flashProducts);
 
-                // 3. Fetch Popular Products from products table (sort by rating or active)
-                const { data: prodsData, error: prodsError } = await supabase
-                    .from('products')
-                    .select('*')
-                    .eq('is_active', true)
-                    .order('rating', { ascending: false })
-                    .limit(10);
-
-                if (!prodsError && prodsData && prodsData.length > 0) {
-                    const mappedProds = prodsData.map(p => ({
+                // 3. Process Popular Products
+                let mappedProds = POPULAR_FALLBACKS;
+                if (prodsRes.status === 'fulfilled' && prodsRes.value.data?.length > 0) {
+                    const prodsData = prodsRes.value.data;
+                    mappedProds = prodsData.map(p => ({
                         id: p.id,
                         name: p.name,
                         price: p.price,
@@ -285,38 +287,33 @@ export const LandingPage = ({ navigation, onEnterShop, cartCount, onGoToCart, on
                         category: p.category || 'Product',
                         image: Array.isArray(p.images) ? p.images[0] : p.images || 'https://placehold.co/300'
                     }));
-                    setPopularProducts(mappedProds);
                     setRecommended(prodsData);
-                } else {
-                    setPopularProducts(POPULAR_FALLBACKS);
-                    setRecommended([]);
                 }
+                setPopularProducts(mappedProds);
 
-                // 4. Fetch Testimonials from testimonials table
-                const { data: testData, error: testErr } = await supabase
-                    .from('testimonials')
-                    .select('*')
-                    .eq('is_active', true)
-                    .order('display_order');
-                if (!testErr && testData && testData.length > 0) {
-                    setTestimonials(testData);
-                } else {
-                    setTestimonials([]);
+                // 4. Process Testimonials
+                let finalTestimonials = [];
+                if (testRes.status === 'fulfilled' && testRes.value.data?.length > 0) {
+                    finalTestimonials = testRes.value.data;
                 }
+                setTestimonials(finalTestimonials);
 
-                // Fetch active banner for 'home' or 'all'
-                const { data: bAll, error: bannerErr } = await supabase
-                    .from('banners')
-                    .select('*')
-                    .eq('is_active', true)
-                    .order('display_order', { ascending: true });
-
-                if (!bannerErr && bAll) {
-                    const homeB = bAll.find(b => !b.section || b.section === 'home' || b.section === 'all');
-                    setHomeBanner(homeB || null);
-                } else {
-                    setHomeBanner(null);
+                // 5. Process Banner
+                let homeB = null;
+                if (bannerRes.status === 'fulfilled' && bannerRes.value.data) {
+                    homeB = bannerRes.value.data.find(b => !b.section || b.section === 'home' || b.section === 'all') || null;
                 }
+                setHomeBanner(homeB);
+
+                // Cache for fast startup
+                AsyncStorage.setItem(LANDING_CACHE_KEY, JSON.stringify({
+                    categories: finalCats,
+                    popularProducts: mappedProds,
+                    testimonials: finalTestimonials,
+                    flashSale: flashProducts,
+                    homeBanner: homeB,
+                    savedAt: Date.now()
+                })).catch(() => {});
 
             } catch (err) {
                 console.warn('LandingPage: Failed to load Supabase assets', err.message);

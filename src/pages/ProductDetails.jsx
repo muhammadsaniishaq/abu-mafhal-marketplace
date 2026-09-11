@@ -228,6 +228,13 @@ const ProductDetails = () => {
           </div>
         </div>
 
+        {/* Customer Reviews Section */}
+        {product && (
+          <div className="mb-12">
+            <ProductReviews productId={product.id} vendorId={product.vendor_id} />
+          </div>
+        )}
+
         {/* RELATED SECTION */}
         <div className="space-y-8">
            <h2 className="text-2xl font-black text-slate-900 tracking-tight">You might also like</h2>

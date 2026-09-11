@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, SafeAreaView, ScrollView, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, SafeAreaView, ScrollView, ActivityIndicator, Platform, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../lib/supabase';
@@ -43,89 +43,94 @@ const ProfilePageInner = ({ user, onLogout, onBack, onOpenVendorRegister, onOpen
     ];
 
     useEffect(() => {
-        if (user) {
-            fetchProfileData();
-        }
+        const checkAndFetch = async () => {
+            let activeUid = user?.id;
+            if (!activeUid) {
+                try {
+                    const { data: { user: authUser } } = await supabase.auth.getUser();
+                    if (authUser) {
+                        activeUid = authUser.id;
+                        if (onUpdateUser) {
+                            onUpdateUser({
+                                id: authUser.id,
+                                email: authUser.email,
+                                full_name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0],
+                                fullName: authUser.user_metadata?.full_name || authUser.email?.split('@')[0],
+                                phone: authUser.user_metadata?.phone || authUser.phone,
+                                avatar_url: authUser.user_metadata?.avatar_url,
+                                role: authUser.user_metadata?.role || 'buyer'
+                            });
+                        }
+                    }
+                } catch (_) {}
+            }
+
+            if (activeUid) {
+                fetchProfileData(activeUid);
+            } else {
+                setLoading(false);
+            }
+        };
+
+        checkAndFetch();
     }, [user?.id]);
 
-    const fetchProfileData = async () => {
+    const fetchProfileData = async (targetUserId) => {
+        const activeUid = targetUserId || user?.id;
+        if (!activeUid) {
+            setLoading(false);
+            return;
+        }
+
         try {
             setLoading(true);
 
-            // 0. REFRESH USER DATA (Role, etc.) to ensure admin status is up to date
-            const { data: userData, error: userError } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', user.id)
-                .single();
+            // Fetch all profile resources in parallel so one failure never blocks the others
+            const [profileRes, walletRes, ordersRes, appRes, driverRes] = await Promise.allSettled([
+                supabase.from('profiles').select('*').eq('id', activeUid).maybeSingle(),
+                supabase.from('wallets').select('*').eq('user_id', activeUid).maybeSingle(),
+                supabase.from('orders').select('*').eq('user_id', activeUid).order('created_at', { ascending: false }),
+                supabase.from('vendor_applications').select('status').eq('user_id', activeUid).maybeSingle(),
+                supabase.from('drivers').select('*').eq('user_id', activeUid).maybeSingle()
+            ]);
 
+            // 0. Profiles
+            const userData = profileRes.status === 'fulfilled' ? profileRes.value.data : null;
             if (userData && onUpdateUser) {
                 onUpdateUser({ ...user, ...userData });
             }
 
-            // 1. Fetch Wallet
-            const { data: walletData, error: walletError } = await supabase
-                .from('wallets')
-                .select('*')
-                .eq('user_id', user.id)
-                .maybeSingle();
-
+            // 1. Wallets
+            const walletData = walletRes.status === 'fulfilled' ? walletRes.value.data : null;
             if (walletData) {
-                // Sync: Prefer Profile points for display if they are higher, to handle lag
                 const displayPoints = Math.max(walletData.points || 0, userData?.mafhal_coins || 0);
                 setWallet({
                     balance: walletData.balance || 0,
                     points: displayPoints
                 });
             } else {
-                // Fallback for missing wallet row
                 setWallet({ balance: 0, points: userData?.mafhal_coins || 0 });
             }
 
-            // 2. Fetch Orders
-            const { data: ordersData, error: ordersError } = await supabase
-                .from('orders')
-                .select('*')
-                .eq('user_id', user.id)
-                .order('created_at', { ascending: false });
+            // 2. Orders & Stats
+            const ordersData = ordersRes.status === 'fulfilled' ? ordersRes.value.data || [] : [];
+            setOrders(ordersData);
 
-            if (ordersData) {
-                setOrders(ordersData);
+            const totalOrders = ordersData.length;
+            const pending = ordersData.filter(o => {
+                const s = o.status?.toLowerCase();
+                return s === 'pending' || s === 'processing';
+            }).length;
+            const spend = ordersData.reduce((sum, order) => sum + (order.total_amount || 0), 0);
+            setStats({ totalOrders, pending, spend });
 
-                // Calculate Stats
-                const totalOrders = ordersData.length;
-                const pending = ordersData.filter(o => {
-                    const s = o.status?.toLowerCase();
-                    return s === 'pending' || s === 'processing';
-                }).length;
-                const spend = ordersData.reduce((sum, order) => sum + (order.total_amount || 0), 0);
+            // 3. Vendor Application
+            const appData = appRes.status === 'fulfilled' ? appRes.value.data : null;
+            if (appData) setVendorApp(appData);
 
-                setStats({ totalOrders, pending, spend });
-            }
-
-            // 3. Fetch Vendor Application (Safe fetch)
-            try {
-                const { data: appData } = await supabase
-                    .from('vendor_applications')
-                    .select('status')
-                    .eq('user_id', user.id)
-                    .maybeSingle();
-
-                if (appData) setVendorApp(appData);
-            } catch (appErr) {
-                console.log("Safe App Fetch Error:", appErr);
-            }
-
-            // 4. Fetch Driver Profile
-            try {
-                const { data: driverData } = await supabase
-                    .from('drivers')
-                    .select('*')
-                    .eq('user_id', user.id)
-                    .maybeSingle();
-
-                if (driverData) setDriverProfile(driverData);
-            } catch (driverErr) { console.log("Driver Fetch Err", driverErr); }
+            // 4. Driver Profile
+            const driverData = driverRes.status === 'fulfilled' ? driverRes.value.data : null;
+            if (driverData) setDriverProfile(driverData);
 
         } catch (error) {
             console.log("Profile Data Error:", error);
@@ -933,7 +938,24 @@ const ProfilePageInner = ({ user, onLogout, onBack, onOpenVendorRegister, onOpen
                                 borderWidth: 1.5,
                                 borderColor: '#FEE2E2'
                             }}
-                            onPress={onLogout}
+                            onPress={() => {
+                                Alert.alert(
+                                    'Log Out',
+                                    'Are you sure you want to log out of Abu Mafhal?',
+                                    [
+                                        { text: 'Cancel', style: 'cancel' },
+                                        {
+                                            text: 'Log Out',
+                                            style: 'destructive',
+                                            onPress: async () => {
+                                                if (typeof onLogout === 'function') {
+                                                    await onLogout();
+                                                }
+                                            }
+                                        }
+                                    ]
+                                );
+                            }}
                         >
                             <Text style={{ color: '#EF4444', fontWeight: '800', fontSize: 13.5, letterSpacing: 0.5 }}>LOG OUT ACCOUNT</Text>
                             <Ionicons name="log-out-outline" size={18} color="#EF4444" style={{ marginLeft: 6 }} />

@@ -118,7 +118,7 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
         const vId = product.vendor_id || product.user_id || product.owner_id;
         if (!vId || vId === 'admin') {
             try {
-                const { data } = await supabase.from('profiles').select('*').eq('email', 'muhammadsaniisyaku3@gmail.com').single();
+                const { data } = await supabase.from('profiles').select('*').eq('email', 'muhammadsaniisyaku3@gmail.com').maybeSingle();
                 setVendor(data ? { ...data, full_name: 'Abu Mafhal Admin', role: 'Admin' } : { id: 'admin', full_name: 'Abu Mafhal Admin', role: 'Admin', avatar_url: null });
             } catch { setVendor({ id: 'admin', full_name: 'Abu Mafhal Admin', role: 'Admin', avatar_url: null }); }
             setLoadingVend(false); return;
@@ -132,8 +132,8 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                 setVendor({ ...user, full_name: user.user_metadata?.full_name || 'You', role: 'Vendor', avatar_url: av });
                 setLoadingVend(false); return;
             }
-            let { data } = await supabase.from('profiles').select('*').eq('id', vId).single();
-            if (!data) { const r = await supabase.from('users').select('*').eq('id', vId).single(); data = r.data; }
+            let { data } = await supabase.from('profiles').select('*').eq('id', vId).maybeSingle();
+            if (!data) { const r = await supabase.from('users').select('*').eq('id', vId).maybeSingle(); data = r.data; }
             if (data) {
                 let av = data.avatar_url || null;
                 if (av?.startsWith('file://') || av?.startsWith('/data/')) av = null;
@@ -165,7 +165,7 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return;
-            const { data } = await supabase.from('wishlists').select('items').eq('id', user.id).single();
+            const { data } = await supabase.from('wishlists').select('items').eq('id', user.id).maybeSingle();
             if (data?.items) setLiked(data.items.includes(product.id));
         } catch {}
     };
@@ -192,7 +192,7 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) { Alert.alert('Login Required', 'Please login to save wishlist'); return; }
-            const { data } = await supabase.from('wishlists').select('items').eq('id', user.id).single();
+            const { data } = await supabase.from('wishlists').select('items').eq('id', user.id).maybeSingle();
             const curr = data?.items || [];
             const next = liked ? curr.filter(i => i !== product.id) : [...curr, product.id];
             setLiked(!liked);

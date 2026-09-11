@@ -151,26 +151,38 @@ export const ReferAndEarn = ({ user, onBack }) => {
     const initializeData = async () => {
         setLoading(true);
         try {
-            const { data: bannerData } = await supabase.from('banners').select('image_url').eq('section', 'referral').eq('is_active', true).order('display_order').limit(1).single();
-            if (bannerData?.image_url) setBannerUrl(bannerData.image_url);
+            let activeUserId = user?.id;
+            if (!activeUserId) {
+                const { data: authData } = await supabase.auth.getUser();
+                activeUserId = authData?.user?.id;
+            }
 
-            const { data: globalSettings } = await supabase.from('referral_settings').select('*').eq('id', 'default').single();
-            if (globalSettings) setSettings(globalSettings);
+            const [bannerRes, settingsRes, profileRes] = await Promise.allSettled([
+                supabase.from('banners').select('image_url').eq('section', 'referral').eq('is_active', true).order('display_order').limit(1).maybeSingle(),
+                supabase.from('referral_settings').select('*').eq('id', 'default').maybeSingle(),
+                activeUserId ? supabase.from('profiles').select('referral_code, mafhal_coins, full_name, check_in_streak, last_check_in').eq('id', activeUserId).maybeSingle() : Promise.resolve({ data: null })
+            ]);
 
-            const { data: profile } = await supabase.from('profiles').select('referral_code, mafhal_coins, full_name').eq('id', user.id).single();
+            if (bannerRes.status === 'fulfilled' && bannerRes.value?.data?.image_url) {
+                setBannerUrl(bannerRes.value.data.image_url);
+            }
+            if (settingsRes.status === 'fulfilled' && settingsRes.value?.data) {
+                setSettings(settingsRes.value.data);
+            }
+
+            const profile = profileRes.status === 'fulfilled' ? profileRes.value?.data : null;
             let code = profile?.referral_code;
-            if (!code) {
+            if (!code && activeUserId) {
                 const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
                 code = 'ABU-';
                 for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
-                await supabase.from('profiles').update({ referral_code: code }).eq('id', user.id);
+                supabase.from('profiles').update({ referral_code: code }).eq('id', activeUserId).catch(() => {});
             }
-            setNewCode(code);
+            if (code) setNewCode(code);
 
-            // Fetch Check-In Data (Gracefully handles missing columns by defaulting to 0)
-            const { data: ckData, error: ckError } = await supabase.from('profiles').select('check_in_streak, last_check_in').eq('id', user.id).single();
-            let streak = ckData?.check_in_streak || 0;
-            let lastCheckIn = ckData?.last_check_in || null;
+            // Fetch Check-In Data
+            let streak = profile?.check_in_streak || 0;
+            let lastCheckIn = profile?.last_check_in || null;
             let canCheckIn = true;
 
             if (lastCheckIn) {

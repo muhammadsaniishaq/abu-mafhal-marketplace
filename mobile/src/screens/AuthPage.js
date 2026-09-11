@@ -46,7 +46,7 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
                 .from('profiles')
                 .select('full_name')
                 .eq('referral_code', referralCode.toUpperCase())
-                .single();
+                .maybeSingle();
 
             if (data && data.full_name) {
                 setReferrerName(data.full_name);
@@ -227,7 +227,7 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
                         .from('profiles')
                         .select('id')
                         .eq('referral_code', referralCode.trim().toUpperCase())
-                        .single();
+                        .maybeSingle();
 
                     if (referrer && referrer.id !== user.id) {
                         console.log("[DEBUG] Valid Referrer Found, Calling RPC...");

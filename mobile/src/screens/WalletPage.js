@@ -71,31 +71,63 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
     const { settings } = useAppSettings();
 
     const fetchWalletData = async () => {
-        if (!user) return;
         try {
-            const [wRes, pRes] = await Promise.all([
-                supabase.from('wallets').select('*').eq('user_id', user.id).maybeSingle(),
-                supabase.from('profiles').select('mafhal_coins').eq('id', user.id).single()
-            ]);
-
-            if (wRes.data) {
-                const displayPoints = Math.max(wRes.data.points || 0, pRes.data?.mafhal_coins || 0);
-                setWallet({
-                    balance: wRes.data.balance || 0,
-                    points: displayPoints
-                });
-            } else {
-                setWallet({ balance: 0, points: pRes.data?.mafhal_coins || 0 });
+            let activeUserId = user?.id;
+            if (!activeUserId) {
+                const { data: authData } = await supabase.auth.getUser();
+                activeUserId = authData?.user?.id;
+            }
+            if (!activeUserId) {
+                setLoading(false);
+                return;
             }
 
-            const { data: txData } = await supabase
-                .from('wallet_transactions')
-                .select('*')
-                .eq('user_id', user.id)
-                .order('created_at', { ascending: false })
-                .limit(25);
+            // 1. Instant cache load if available
+            try {
+                const cacheKey = `@abumafhal_wallet_${activeUserId}`;
+                const cached = await AsyncStorage.getItem(cacheKey);
+                if (cached) {
+                    const parsed = JSON.parse(cached);
+                    if (parsed.wallet) setWallet(parsed.wallet);
+                    if (parsed.transactions?.length) setTransactions(parsed.transactions);
+                    setLoading(false);
+                }
+            } catch (_) {}
 
-            if (txData) setTransactions(txData);
+            // 2. Fetch fresh data in parallel
+            const [wRes, pRes, txRes] = await Promise.allSettled([
+                supabase.from('wallets').select('*').eq('user_id', activeUserId).maybeSingle(),
+                supabase.from('profiles').select('mafhal_coins').eq('id', activeUserId).maybeSingle(),
+                supabase.from('wallet_transactions').select('*').eq('user_id', activeUserId).order('created_at', { ascending: false }).limit(30)
+            ]);
+
+            let newWallet = { balance: 0, points: 0 };
+            const wData = wRes.status === 'fulfilled' ? wRes.value?.data : null;
+            const pData = pRes.status === 'fulfilled' ? pRes.value?.data : null;
+
+            if (wData) {
+                const displayPoints = Math.max(wData.points || 0, pData?.mafhal_coins || 0);
+                newWallet = {
+                    balance: wData.balance || 0,
+                    points: displayPoints
+                };
+            } else if (pData) {
+                newWallet = { balance: 0, points: pData.mafhal_coins || 0 };
+            }
+            setWallet(newWallet);
+
+            let newTx = [];
+            if (txRes.status === 'fulfilled' && txRes.value?.data) {
+                newTx = txRes.value.data;
+                setTransactions(newTx);
+            }
+
+            // Update cache
+            AsyncStorage.setItem(`@abumafhal_wallet_${activeUserId}`, JSON.stringify({
+                wallet: newWallet,
+                transactions: newTx,
+                updatedAt: Date.now()
+            })).catch(() => {});
 
         } catch (error) {
             console.log("Wallet Data Error:", error);

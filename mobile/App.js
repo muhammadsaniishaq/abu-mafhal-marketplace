@@ -48,34 +48,52 @@ export default function App() {
     const [lastHeartbeat, setLastHeartbeat] = useState(0);
 
     const CART_STORAGE_KEY = '@abumafhal_cart_v1';
+    const USER_STORAGE_KEY = '@abumafhal_user_v1';
 
     useEffect(() => {
-        // Load session and cart
+        // Fast instant boot from local cache, then background session verification
         const init = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user) {
-                await fetchUserProfile(session.user.id);
-            }
-
             try {
-                const savedCart = await AsyncStorage.getItem(CART_STORAGE_KEY);
+                // 1. Instantly read cached cart and user in parallel
+                const [savedCart, savedUser] = await Promise.all([
+                    AsyncStorage.getItem(CART_STORAGE_KEY).catch(() => null),
+                    AsyncStorage.getItem(USER_STORAGE_KEY).catch(() => null)
+                ]);
+
                 if (savedCart) {
-                    setCartLines(JSON.parse(savedCart));
+                    try { setCartLines(JSON.parse(savedCart)); } catch (_) {}
+                }
+                if (savedUser) {
+                    try { setUser(JSON.parse(savedUser)); } catch (_) {}
                 }
             } catch (e) {
-                console.error('Error loading cart:', e);
+                console.error('Error loading local cache:', e);
+            } finally {
+                // Instantly unblock UI so user never stares at a frozen screen
+                setLoading(false);
             }
-            setLoading(false);
+
+            // 2. Background check: verify Supabase session without wiping cached user prematurely
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.user) {
+                    await fetchUserProfile(session.user.id, session.user);
+                }
+            } catch (authErr) {
+                console.log('Background session check note:', authErr?.message);
+            }
+
+            logVisit(); // Async visit log
         };
 
         init();
-        logVisit(); // Initial visit log
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
             if (session?.user) {
-                fetchUserProfile(session.user.id);
-            } else {
+                fetchUserProfile(session.user.id, session.user);
+            } else if (event === 'SIGNED_OUT') {
                 setUser(null);
+                AsyncStorage.removeItem(USER_STORAGE_KEY).catch(() => {});
             }
         });
 
@@ -131,7 +149,7 @@ export default function App() {
         try {
             const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
             
-            const email = data?.email || sessionUser?.email;
+            const email = data?.email || sessionUser?.email || '';
             const lowerEmail = email ? email.toLowerCase().trim() : '';
             const isAdmin = lowerEmail && (KNOWN_ADMIN_EMAILS.includes(lowerEmail) || lowerEmail.includes('admin'));
 
@@ -139,18 +157,31 @@ export default function App() {
             if (isAdmin) {
                 resolvedRole = 'admin';
                 if (data && data.role !== 'admin') {
-                    await supabase.from('profiles').update({ role: 'admin' }).eq('id', userId).catch(console.error);
+                    supabase.from('profiles').update({ role: 'admin' }).eq('id', userId).catch(() => {});
                 }
             }
 
+            const fullName = data?.full_name || data?.name || sessionUser?.user_metadata?.full_name || (email ? email.split('@')[0] : 'User');
+            const phone = data?.phone_number || data?.phone || sessionUser?.user_metadata?.phone_number || sessionUser?.user_metadata?.phone || '';
+            const avatarUrl = data?.avatar_url || sessionUser?.user_metadata?.avatar_url || null;
+            const username = data?.username || sessionUser?.user_metadata?.username || (email ? email.split('@')[0] : 'user');
+
             const userProfile = {
-                ...(data || {}),
                 id: userId,
                 email: email,
-                role: resolvedRole || data?.role || 'buyer'
+                role: resolvedRole || data?.role || sessionUser?.user_metadata?.role || 'buyer',
+                full_name: fullName,
+                fullName: fullName,
+                phone: phone,
+                phoneNumber: phone,
+                phone_number: phone,
+                avatar_url: avatarUrl,
+                username: username,
+                ...(data || {})
             };
 
             setUser(userProfile);
+            AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userProfile)).catch(() => {});
             return userProfile;
         } catch (e) {
             console.error('Error fetching user profile:', e);
@@ -162,11 +193,20 @@ export default function App() {
 
     const handleLogout = async () => {
         try {
-            await supabase.auth.signOut();
+            await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
         } catch (e) {
             console.error('Logout error:', e);
         } finally {
             setUser(null);
+            await AsyncStorage.removeItem(USER_STORAGE_KEY).catch(() => {});
+            setTimeout(() => {
+                if (navigationRef.isReady()) {
+                    navigationRef.reset({
+                        index: 0,
+                        routes: [{ name: 'Landing' }],
+                    });
+                }
+            }, 50);
         }
     };
 

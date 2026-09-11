@@ -13,6 +13,7 @@ import { geminiService } from '../services/geminiService';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 import { CountdownTimer } from '../components/CountdownTimer';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmtPrice = (n) => {
@@ -135,12 +136,28 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
         }
     }, [initialCategory]);
 
+    const SHOP_CACHE_KEY = '@abumafhal_shop_cache_v2';
+    const PROD_FIELDS = 'id, name, price, original_price, images, category, rating, reviews, status, discount, stock, is_featured, brand, isNew';
+
     useEffect(() => {
+        // 1. Instant cache load
         (async () => {
-            await Audio.requestPermissionsAsync();
-            await ImagePicker.requestMediaLibraryPermissionsAsync();
+            try {
+                const cached = await AsyncStorage.getItem(SHOP_CACHE_KEY);
+                if (cached) {
+                    const parsed = JSON.parse(cached);
+                    if (parsed.products?.length) setProducts(parsed.products);
+                    if (parsed.banners?.length) setBanners(parsed.banners);
+                    if (parsed.promoBanners?.length) setPromoBanners(parsed.promoBanners);
+                    setLoading(false);
+                }
+            } catch (_) {}
+            fetchData();
         })();
-        return () => { recording?.stopAndUnloadAsync(); };
+
+        return () => {
+            recording?.stopAndUnloadAsync().catch(() => {});
+        };
     }, []);
 
     // Scroll-to-top visibility
@@ -155,35 +172,62 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
 
     // ── Data ──────────────────────────────────────────────────────────────────
     const fetchData = async (isRefresh = false) => {
-        if (!isRefresh) setLoading(true);
+        if (!isRefresh && products.length === 0) setLoading(true);
         try {
-            const { data: bAll } = await supabase.from('banners').select('*').eq('is_active', true).order('display_order');
-            setBanners((bAll || []).filter(b => !b.section || b.section === 'shop' || b.section === 'all' || b.section === ''));
+            const [bannersRes, promoRes, prodRes, userRes] = await Promise.allSettled([
+                supabase.from('banners').select('*').eq('is_active', true).order('display_order'),
+                supabase.from('banners').select('*').eq('section', 'promo').eq('is_active', true).order('created_at', { ascending: false }),
+                supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').order('created_at', { ascending: false }).limit(80),
+                supabase.auth.getUser()
+            ]);
 
-            const { data: promoData } = await supabase.from('banners').select('*').eq('section', 'promo').eq('is_active', true).order('created_at', { ascending: false });
-            const validPromos = (promoData || []).map(p => {
-                let linkData = { text: p.action_link || '', locations: ['home'] };
-                try { const parsed = JSON.parse(p.action_link); if (parsed && typeof parsed === 'object') linkData = { ...linkData, ...parsed }; } catch (_) {}
-                return { ...p, linkData };
-            }).filter(p => {
-                const loc = p.linkData.locations?.includes('shop');
-                const exp = p.linkData?.timerEnd ? (isNaN(new Date(p.linkData.timerEnd)) || new Date() <= new Date(p.linkData.timerEnd)) : true;
-                return loc && exp;
-            });
-            setPromoBanners(validPromos);
+            let newBanners = banners;
+            if (bannersRes.status === 'fulfilled' && bannersRes.value?.data) {
+                newBanners = bannersRes.value.data.filter(b => !b.section || b.section === 'shop' || b.section === 'all' || b.section === '');
+                setBanners(newBanners);
+            }
 
-            const { data } = await supabase.from('products').select('*').eq('status', 'approved').limit(100);
-            setProducts((data || []).map(p => ({ ...p, rating: p.rating || 5, reviews: p.reviews || 0 })));
-            console.log('ShopPage: Real Data Fetched', (data || []).length);
+            let newPromos = promoBanners;
+            if (promoRes.status === 'fulfilled' && promoRes.value?.data) {
+                newPromos = promoRes.value.data.map(p => {
+                    let linkData = { text: p.action_link || '', locations: ['home'] };
+                    try { const parsed = JSON.parse(p.action_link); if (parsed && typeof parsed === 'object') linkData = { ...linkData, ...parsed }; } catch (_) {}
+                    return { ...p, linkData };
+                }).filter(p => {
+                    const loc = p.linkData.locations?.includes('shop');
+                    const exp = p.linkData?.timerEnd ? (isNaN(new Date(p.linkData.timerEnd)) || new Date() <= new Date(p.linkData.timerEnd)) : true;
+                    return loc && exp;
+                });
+                setPromoBanners(newPromos);
+            }
 
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
-                const { data: wData } = await supabase.from('wishlists').select('items').eq('id', user.id).single();
-                if (wData?.items) setWishlist(wData.items);
+            let newProducts = products;
+            if (prodRes.status === 'fulfilled' && prodRes.value?.data) {
+                newProducts = prodRes.value.data.map(p => ({
+                    ...p,
+                    rating: p.rating || 5,
+                    reviews: p.reviews || 0
+                }));
+                setProducts(newProducts);
+            }
+
+            // Save to local cache for instant reload next time
+            AsyncStorage.setItem(SHOP_CACHE_KEY, JSON.stringify({
+                products: newProducts,
+                banners: newBanners,
+                promoBanners: newPromos,
+                savedAt: Date.now()
+            })).catch(() => {});
+
+            // Fetch wishlist if authenticated
+            if (userRes.status === 'fulfilled' && userRes.value?.data?.user) {
+                const uid = userRes.value.data.user.id;
+                supabase.from('wishlists').select('items').eq('id', uid).maybeSingle().then(({ data: wData }) => {
+                    if (wData?.items) setWishlist(wData.items);
+                }).catch(() => {});
             }
         } catch (err) {
             console.log('ShopPage fetchData error:', err);
-            setProducts([]);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -213,15 +257,14 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
     const showToast = (message, icon = 'checkmark-circle') => {
         setToast({ visible: true, message, icon });
         Animated.sequence([
-            Animated.timing(fadeAnim, { toValue: 1, duration: 280, useNativeDriver: false }),
+            Animated.timing(fadeAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
             Animated.delay(2000),
-            Animated.timing(fadeAnim, { toValue: 0, duration: 280, useNativeDriver: false }),
+            Animated.timing(fadeAnim, { toValue: 0, duration: 250, useNativeDriver: true }),
         ]).start(() => setToast(t => ({ ...t, visible: false })));
     };
 
     // ── Actions ───────────────────────────────────────────────────────────────
     const handleAddToCart = (item) => {
-        // Pulse FAB
         Animated.sequence([
             Animated.spring(fabScale, { toValue: 1.3, useNativeDriver: true, tension: 200 }),
             Animated.spring(fabScale, { toValue: 1,   useNativeDriver: true, tension: 200 }),
@@ -247,6 +290,11 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
             if (recording) {
                 await stopRecording();
             } else {
+                const perm = await Audio.requestPermissionsAsync();
+                if (!perm.granted) {
+                    showToast('Microphone permission required', 'mic-off');
+                    return;
+                }
                 await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
                 const { recording: rec } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
                 setRecording(rec); setShowVoiceModal(true);
@@ -271,6 +319,11 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
 
     const handleImageSearch = async () => {
         try {
+            const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!perm.granted) {
+                showToast('Photo library permission required', 'images');
+                return;
+            }
             const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.5, base64: true });
             if (!res.canceled && res.assets[0].base64) {
                 showToast('Analyzing image…', 'scan');

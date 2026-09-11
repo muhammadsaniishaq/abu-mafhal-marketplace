@@ -145,21 +145,21 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
             }
             setUser(currentUser);
 
-            const [profileRes, addrRes, savedProgress] = await Promise.all([
-                supabase.from('profiles').select('*').eq('id', currentUser.id).single(),
+            const [profileRes, addrRes, savedProgress] = await Promise.allSettled([
+                supabase.from('profiles').select('*').eq('id', currentUser.id).maybeSingle(),
                 supabase.from('addresses').select('*').eq('user_id', currentUser.id),
                 AsyncStorage.getItem(CHECKOUT_STORAGE_KEY)
             ]);
 
-            if (profileRes.data) setProfile(profileRes.data);
-            if (addrRes.data) {
-                setAddresses(addrRes.data);
-                const defaultAddr = addrRes.data.find(a => a.is_default);
+            if (profileRes.status === 'fulfilled' && profileRes.value?.data) setProfile(profileRes.value.data);
+            if (addrRes.status === 'fulfilled' && addrRes.value?.data) {
+                setAddresses(addrRes.value.data);
+                const defaultAddr = addrRes.value.data.find(a => a.is_default);
                 if (defaultAddr) setSelectedAddressId(defaultAddr.id);
             }
 
-            if (savedProgress) {
-                const sp = JSON.parse(savedProgress);
+            if (savedProgress.status === 'fulfilled' && savedProgress.value) {
+                const sp = JSON.parse(savedProgress.value);
                 if (sp.step) setCurrentStep(sp.step);
                 if (sp.addressId) setSelectedAddressId(sp.addressId);
                 if (sp.paymentMethod) setPaymentMethod(sp.paymentMethod);
@@ -199,7 +199,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                 .select('*')
                 .eq('code', couponCode.toUpperCase())
                 .eq('is_active', true)
-                .single();
+                .maybeSingle();
 
             if (error || !data) {
                 Alert.alert('Invalid Coupon', 'This promo code does not exist or has expired.');

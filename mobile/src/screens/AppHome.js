@@ -19,6 +19,7 @@ import { geminiService } from '../services/geminiService';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 const AM_LOGO = require('../../assets/am_logo.png');
@@ -68,127 +69,163 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
     const fadeAnim = useRef(new Animated.Value(0)).current;
 
     const scrollX = useRef(new Animated.Value(0)).current;
+    const HOME_CACHE_KEY = '@abumafhal_home_cache_v2';
+    const lastFetchRef = useRef(0);
+
+    const PROD_FIELDS = 'id, name, price, compare_at_price, images, category, rating, average_rating, total_sales, is_new, stock_quantity, status, created_at, updated_at';
+
+    // 1. Instant cache restoration on mount
+    useEffect(() => {
+        AsyncStorage.getItem(HOME_CACHE_KEY).then(cached => {
+            if (cached) {
+                try {
+                    const c = JSON.parse(cached);
+                    if (c.banners?.length) setBanners(c.banners);
+                    if (c.promoBanners?.length) setPromoBanners(c.promoBanners);
+                    if (c.flashSale?.length) setFlashSale(c.flashSale);
+                    if (c.newArrivals?.length) setNewArrivals(c.newArrivals);
+                    if (c.recommended?.length) setRecommended(c.recommended);
+                    if (c.categories?.length) setCategories(c.categories);
+                    if (c.topVendors?.length) setTopVendors(c.topVendors);
+                    if (c.homeServices?.length) setHomeServices(c.homeServices);
+                    if (c.topCustomers?.length) setTopCustomers(c.topCustomers);
+                    if (c.reviews?.length) setReviews(c.reviews);
+                    if (c.brands?.length) setBrands(c.brands);
+                    if (c.trendingProducts?.length) setTrending(c.trendingProducts);
+                    if (c.mostRated?.length) setMostRated(c.mostRated);
+                    if (c.dealOfDay) setDealOfDay(c.dealOfDay);
+                    if (c.limitedStock?.length) setLimitedStock(c.limitedStock);
+                    if (c.priceDrops?.length) setPriceDrops(c.priceDrops);
+                    if (c.spotlightVendor) setSpotlightVendor(c.spotlightVendor);
+                    setLoading(false); // Instant rendering without skeleton delay
+                } catch (_) {}
+            }
+        }).catch(() => {});
+
+        fetchData();
+    }, []);
 
     const fetchData = async () => {
+        lastFetchRef.current = Date.now();
         try {
             const { data: { user: currentUser } } = await supabase.auth.getUser();
 
-            // Promise.allSettled allows all queries to run in parallel
-            // If one fails, others still complete.
+            // Lightweight, parallelized query execution
             const results = await Promise.allSettled([
-                // 0: All Banners
-                supabase.from('banners').select('*').eq('is_active', true).order('display_order'),
-                // 1: Promo Banners
-                supabase.from('banners').select('*').eq('section', 'promo').eq('is_active', true).order('created_at', { ascending: false }),
-                // 2: Flash Sale
-                supabase.from('products').select('*').eq('status', 'approved').not('compare_at_price', 'is', null).limit(4),
-                // 3: New Arrivals
-                supabase.from('products').select('*').eq('status', 'approved').eq('is_new', true).limit(6),
-                // 4: Recommended
-                supabase.from('products').select('*').eq('status', 'approved').limit(10),
-                // 5: Categories
-                supabase.from('categories').select('*').eq('is_active', true).order('display_order').limit(6),
-                // 6: Top Vendors
-                supabase.from('vendors').select('*').eq('vendor_status', 'active').eq('is_verified', true).order('total_sales', { ascending: false }).order('review_count', { ascending: false }).limit(8),
-                // 7: Home Services
-                supabase.from('home_services').select('*').eq('is_active', true).order('display_order'),
-                // 8: Top Customers
-                supabase.from('profiles').select('*').eq('is_featured', true).order('total_spend', { ascending: false }).limit(10),
-                // 9: Reviews
-                supabase.from('reviews').select('*, user:user_id(full_name, avatar_url)').eq('is_displayed', true).limit(10),
-                // 10: Brands
-                supabase.from('brands').select('*').eq('is_featured', true).limit(10),
-                // 11: Trending
-                supabase.from('products').select('*').eq('status', 'approved').order('total_sales', { ascending: false }).limit(8),
-                // 12: Most Rated
-                supabase.from('products').select('*').eq('status', 'approved').not('average_rating', 'is', null).order('average_rating', { ascending: false }).limit(8),
-                // 13: Deal of Day
-                supabase.from('products').select('*').eq('status', 'approved').not('compare_at_price', 'is', null).order('compare_at_price', { ascending: false }).limit(1),
-                // 14: Limited Stock
-                supabase.from('products').select('*').eq('status', 'approved').not('stock_quantity', 'is', null).lt('stock_quantity', 10).gt('stock_quantity', 0).order('stock_quantity', { ascending: true }).limit(8),
-                // 15: Price Drops
-                supabase.from('products').select('*').eq('status', 'approved').not('compare_at_price', 'is', null).order('updated_at', { ascending: false }).limit(8),
-                // 16: Spotlight Vendor
-                supabase.from('vendors').select('*').eq('vendor_status', 'active').eq('is_verified', true).order('created_at', { ascending: false }).limit(1),
-                // 17-19: User specific data (conditional)
-                currentUser ? supabase.from('loyalty').select('*').eq('user_id', currentUser.id).maybeSingle() : Promise.resolve({ data: null }),
+                // 0: All Banners (covers both home and promo, eliminates redundant query)
+                supabase.from('banners').select('id, image_url, title, subtitle, action_link, section, is_active, display_order').eq('is_active', true).order('display_order'),
+                // 1: Flash Sale (light projection)
+                supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').not('compare_at_price', 'is', null).limit(4),
+                // 2: New Arrivals
+                supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').eq('is_new', true).limit(6),
+                // 3: Recommended
+                supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').limit(10),
+                // 4: Categories
+                supabase.from('categories').select('id, name, icon, image_url, display_order, is_active').eq('is_active', true).order('display_order').limit(8),
+                // 5: Top Vendors
+                supabase.from('vendors').select('id, user_id, business_name, logo_url, rating, review_count, total_sales, is_verified, vendor_status').eq('vendor_status', 'active').eq('is_verified', true).order('total_sales', { ascending: false }).limit(8),
+                // 6: Home Services
+                supabase.from('home_services').select('id, title, description, icon, is_active, display_order').eq('is_active', true).order('display_order'),
+                // 7: Top Customers
+                supabase.from('profiles').select('id, full_name, avatar_url, total_spend, is_featured').eq('is_featured', true).order('total_spend', { ascending: false }).limit(10),
+                // 8: Reviews
+                supabase.from('reviews').select('id, comment, rating, created_at, is_displayed, user:user_id(full_name, avatar_url)').eq('is_displayed', true).limit(10),
+                // 9: Brands
+                supabase.from('brands').select('id, name, logo_url, is_featured').eq('is_featured', true).limit(10),
+                // 10: Trending
+                supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').order('total_sales', { ascending: false }).limit(8),
+                // 11: Most Rated
+                supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').not('average_rating', 'is', null).order('average_rating', { ascending: false }).limit(8),
+                // 12: Deal of Day
+                supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').not('compare_at_price', 'is', null).order('compare_at_price', { ascending: false }).limit(1),
+                // 13: Limited Stock
+                supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').not('stock_quantity', 'is', null).lt('stock_quantity', 10).gt('stock_quantity', 0).order('stock_quantity', { ascending: true }).limit(8),
+                // 14: Price Drops
+                supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').not('compare_at_price', 'is', null).order('updated_at', { ascending: false }).limit(8),
+                // 15: Spotlight Vendor
+                supabase.from('vendors').select('id, user_id, business_name, logo_url, rating, review_count, total_sales, is_verified, vendor_status').eq('vendor_status', 'active').eq('is_verified', true).order('created_at', { ascending: false }).limit(1),
+                // 16-19: User specific data (conditional)
+                currentUser ? supabase.from('loyalty').select('id, points, tier').eq('user_id', currentUser.id).maybeSingle() : Promise.resolve({ data: null }),
                 currentUser ? supabase.from('orders').select('id, status, total_amount, created_at, order_items(id)').eq('user_id', currentUser.id).order('created_at', { ascending: false }).limit(2) : Promise.resolve({ data: null }),
                 currentUser ? supabase.from('cart_items').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id) : Promise.resolve({ count: 0 }),
                 currentUser ? supabase.from('daily_checkins').select('*').eq('user_id', currentUser.id).order('checkin_date', { ascending: false }).order('created_at', { ascending: false }).limit(1) : Promise.resolve({ data: null }),
             ]);
 
-            // Helper to get data safely
             const getVal = (idx) => (results[idx].status === 'fulfilled' ? results[idx].value : { data: null });
 
-            // 0: Banners
-            const bAll = getVal(0).data;
-            if (bAll) {
-                const homeBanners = bAll.filter(b => b.section === 'home' || !b.section || b.section === 'all' || b.section === '');
-                setBanners(homeBanners);
-            }
+            // 0: Banners & Promo Banners (extracted in memory from single banner query)
+            const bAll = getVal(0).data || [];
+            const homeBanners = bAll.filter(b => b.section === 'home' || !b.section || b.section === 'all' || b.section === '');
+            setBanners(homeBanners);
 
-            // 1: Promo
-            const promoData = getVal(1).data;
-            if (promoData) {
-                const validPromos = promoData.map(promo => {
-                    let linkData = { text: promo.action_link || '', locations: ['home'] };
-                    try { const parsed = JSON.parse(promo.action_link); if (parsed && typeof parsed === 'object') linkData = { ...linkData, ...parsed }; } catch (e) { }
-                    return { ...promo, linkData };
-                }).filter(promo => {
-                    const hasLocation = !promo.linkData.locations || promo.linkData.locations.length === 0 || promo.linkData.locations.includes('home');
+            const promoData = bAll.filter(b => b.section === 'promo');
+            const validPromos = promoData.map(promo => {
+                let linkData = { text: promo.action_link || '', locations: ['home'] };
+                try { const parsed = JSON.parse(promo.action_link); if (parsed && typeof parsed === 'object') linkData = { ...linkData, ...parsed }; } catch (e) { }
+                return { ...promo, linkData };
+            }).filter(promo => {
+                const hasLocation = !promo.linkData.locations || promo.linkData.locations.length === 0 || promo.linkData.locations.includes('home');
+                let isNotExpired = true;
+                if (promo.linkData?.timerEnd) {
+                    const expiryDate = new Date(promo.linkData.timerEnd);
+                    isNotExpired = isNaN(expiryDate.getTime()) || new Date() <= expiryDate;
+                }
+                return hasLocation && isNotExpired;
+            });
+            setPromoBanners(validPromos);
 
-                    // Filter out expired promos if a timerEnd date is specified
-                    let isNotExpired = true;
-                    if (promo.linkData?.timerEnd) {
-                        const expiryDate = new Date(promo.linkData.timerEnd);
-                        // If it's just a date string, it marks the START of that day.
-                        // We check if current time is past that.
-                        isNotExpired = isNaN(expiryDate.getTime()) || new Date() <= expiryDate;
-                    }
+            // 1-4: Basic product grids
+            const flashData = getVal(1).data || [];
+            const newArrData = getVal(2).data || [];
+            const recData = getVal(3).data || [];
+            const catData = getVal(4).data || [];
 
-                    return hasLocation && isNotExpired;
-                });
-                setPromoBanners(validPromos);
-            }
+            setFlashSale(flashData);
+            setNewArrivals(newArrData);
+            setRecommended(recData);
+            setCategories(catData);
 
-            // 2-5: Basic grids
-            setFlashSale(getVal(2).data || []);
-            setNewArrivals(getVal(3).data || []);
-            setRecommended(getVal(4).data || []);
-            setCategories(getVal(5).data || []);
+            // 5: Top Vendors
+            const vendorData = getVal(5).data || [];
+            setTopVendors(vendorData);
 
-            // 6: Top Vendors + Profiles (Post-process)
-            const vendorData = getVal(6).data || [];
-            if (vendorData.length > 0) {
-                const userIds = vendorData.map(v => v.user_id).filter(Boolean);
-                const { data: profileData } = await supabase.from('profiles').select('id, avatar_url, full_name').in('id', userIds);
-                setTopVendors(vendorData.map(v => ({ ...v, profiles: profileData?.find(p => p.id === v.user_id) || null })));
-            } else { setTopVendors([]); }
+            // 6-11: Horizontal lists
+            const servicesData = getVal(6).data || [];
+            const customersData = getVal(7).data || [];
+            const reviewsData = getVal(8).data || [];
+            const brandsData = getVal(9).data || [];
+            const trendingData = getVal(10).data || [];
+            const mostRatedData = getVal(11).data || [];
 
-            // 7-12: Misc horizontal lists
-            setHomeServices(getVal(7).data || []);
-            setTopCustomers(getVal(8).data || []);
-            setReviews(getVal(9).data || []);
-            setBrands(getVal(10).data || []);
-            setTrending(getVal(11).data || []);
-            setMostRated(getVal(12).data || []);
+            setHomeServices(servicesData);
+            setTopCustomers(customersData);
+            setReviews(reviewsData);
+            setBrands(brandsData);
+            setTrending(trendingData);
+            setMostRated(mostRatedData);
 
-            // 13-16: Spotlight features
-            const dealData = getVal(13).data;
-            if (dealData?.[0]) setDealOfDay(dealData[0]);
-            setLimitedStock(getVal(14).data || []);
-            const pdData = getVal(15).data || [];
-            setPriceDrops(pdData.filter(p => p.price < (p.compare_at_price || Infinity)));
-            setSpotlightVendor(getVal(16).data?.[0] || null);
+            // 12-15: Spotlight features
+            const dealData = getVal(12).data;
+            const dealObj = dealData?.[0] || null;
+            if (dealObj) setDealOfDay(dealObj);
 
-            // 17-20: User specific
+            const limStockData = getVal(13).data || [];
+            setLimitedStock(limStockData);
+
+            const pdData = getVal(14).data || [];
+            const filteredPd = pdData.filter(p => p.price < (p.compare_at_price || Infinity));
+            setPriceDrops(filteredPd);
+
+            const spotVendorObj = getVal(15).data?.[0] || null;
+            setSpotlightVendor(spotVendorObj);
+
+            // 16-19: User specific
             if (currentUser) {
-                setLoyalty(getVal(17).data);
-                setRecentOrders(getVal(18).data || []);
-                setCartCount(getVal(19).count || 0);
+                setLoyalty(getVal(16).data);
+                setRecentOrders(getVal(17).data || []);
+                setCartCount(getVal(18).count || 0);
 
-                // 20: Check-in logic
-                const ci = getVal(20).data;
+                const ci = getVal(19).data;
                 const todayStr = new Date().toLocaleDateString('en-CA');
                 const CHECKIN_REWARDS = [3, 4, 5, 6, 7, 8, 9, 10, 10, 10];
 
@@ -203,6 +240,28 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                 }
             }
 
+            // Save snapshot to local cache for instant future loads
+            AsyncStorage.setItem(HOME_CACHE_KEY, JSON.stringify({
+                banners: homeBanners,
+                promoBanners: validPromos,
+                flashSale: flashData,
+                newArrivals: newArrData,
+                recommended: recData,
+                categories: catData,
+                topVendors: vendorData,
+                homeServices: servicesData,
+                topCustomers: customersData,
+                reviews: reviewsData,
+                brands: brandsData,
+                trendingProducts: trendingData,
+                mostRated: mostRatedData,
+                dealOfDay: dealObj,
+                limitedStock: limStockData,
+                priceDrops: filteredPd,
+                spotlightVendor: spotVendorObj,
+                savedAt: Date.now()
+            })).catch(() => {});
+
         } catch (e) {
             console.log('Error fetching home data:', e);
         } finally {
@@ -214,34 +273,32 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
     const showToast = (message, icon = 'checkmark-circle') => {
         setToast({ visible: true, message, icon });
         Animated.sequence([
-            Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: false }),
+            Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
             Animated.delay(2000),
-            Animated.timing(fadeAnim, { toValue: 0, duration: 300, useNativeDriver: false })
+            Animated.timing(fadeAnim, { toValue: 0, duration: 300, useNativeDriver: true })
         ]).start(() => setToast({ ...toast, visible: false }));
     };
 
-    // Helper to request permissions
+    // Cleanup recording if active
     useEffect(() => {
-        (async () => {
-            const { status: audioStatus } = await Audio.requestPermissionsAsync();
-            const { status: cameraStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (audioStatus !== 'granted' || cameraStatus !== 'granted') {
-                console.log('Permissions denied');
-            }
-        })();
         return () => {
             if (recording) {
-                recording.stopAndUnloadAsync();
+                recording.stopAndUnloadAsync().catch(() => {});
             }
         };
     }, []);
 
-    // AI Search Handlers
+    // AI Search Handlers — Request permissions on-demand only when tapped
     const handleVoiceSearch = async () => {
         try {
             if (recording) {
                 await stopRecording();
             } else {
+                const { status } = await Audio.requestPermissionsAsync();
+                if (status !== 'granted') {
+                    showToast('Microphone permission required', 'alert-circle');
+                    return;
+                }
                 await startRecording();
             }
         } catch (error) {
@@ -259,16 +316,16 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                 playsInSilentModeIOS: true,
             });
 
-            const { recording } = await Audio.Recording.createAsync(
+            const { recording: newRecording } = await Audio.Recording.createAsync(
                 Audio.RecordingOptionsPresets.HIGH_QUALITY
             );
 
-            setRecording(recording);
+            setRecording(newRecording);
             setIsListening(true);
             setShowVoiceModal(true);
 
             setTimeout(() => {
-                stopRecording(recording);
+                stopRecording(newRecording);
             }, 4000);
 
         } catch (err) {
@@ -310,6 +367,12 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
 
     const handleImageSearch = async () => {
         try {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+                showToast('Photo library permission required', 'alert-circle');
+                return;
+            }
+
             const result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
                 allowsEditing: true,
@@ -338,9 +401,13 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
         }
     };
 
+    // Throttle focus refetch — only refetch if > 3 minutes elapsed since last fetch
     useFocusEffect(
         React.useCallback(() => {
-            fetchData();
+            const now = Date.now();
+            if (now - lastFetchRef.current > 180000) {
+                fetchData();
+            }
         }, [])
     );
 

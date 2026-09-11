@@ -1,7 +1,9 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 
 const AppSettingsContext = createContext();
+const SETTINGS_CACHE_KEY = '@abumafhal_settings_v1';
 
 const DEFAULT_VENDOR_PLANS = [
     { id: 'free_trial', label: '1 Month Free Trial', price: 0, badge: 'TRY FREE', is_active: true },
@@ -25,7 +27,7 @@ export const AppSettingsProvider = ({ children }) => {
         prembly_app_id: '',
         prembly_secret_key: '',
         vendor_plans: DEFAULT_VENDOR_PLANS,
-        loading: true
+        loading: false
     });
 
     const fetchSettings = async () => {
@@ -33,7 +35,7 @@ export const AppSettingsProvider = ({ children }) => {
             const { data, error } = await supabase
                 .from('app_settings')
                 .select('*, default_shipping_address')
-                .single();
+                .maybeSingle();
 
             if (error) {
                 console.log('Error fetching app settings:', error);
@@ -49,6 +51,7 @@ export const AppSettingsProvider = ({ children }) => {
                     vendor_plans: hasValidPlans ? data.vendor_plans : DEFAULT_VENDOR_PLANS
                 };
                 setSettings({ ...enriched, loading: false });
+                AsyncStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(enriched)).catch(() => {});
             }
         } catch (error) {
             console.log('Exception fetching settings:', error);
@@ -58,6 +61,17 @@ export const AppSettingsProvider = ({ children }) => {
     };
 
     useEffect(() => {
+        // 1. Instant cache load
+        AsyncStorage.getItem(SETTINGS_CACHE_KEY).then(cached => {
+            if (cached) {
+                try {
+                    const parsed = JSON.parse(cached);
+                    setSettings(prev => ({ ...prev, ...parsed, loading: false }));
+                } catch (_) {}
+            }
+        }).catch(() => {});
+
+        // 2. Background sync
         fetchSettings();
 
         // Subscribe to changes (Realtime)

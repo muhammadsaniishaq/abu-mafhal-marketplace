@@ -7,10 +7,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Abu Mafhal Marketplace</title>
 
+  <style>
+    html, body, #root {
+      touch-action: manipulation !important;
+      -webkit-text-size-adjust: 100% !important;
+      overflow-x: hidden !important;
+    }
+    @media screen and (max-width: 768px) {
+      input, select, textarea, [role="textbox"], [contenteditable="true"] {
+        font-size: 16px !important;
+      }
+    }
+  </style>
+
   <script>
     document.addEventListener('gesturestart', function (e) {
       e.preventDefault();
     });
+    document.addEventListener('dblclick', function (e) {
+      e.preventDefault();
+    }, { passive: false });
   </script>
   
   <!-- Premium Fonts -->
@@ -18,7 +34,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Montserrat:wght@400;500;600;700;800;900&family=Poppins:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
 
-  <script type="module" crossorigin src="/assets/index-DNcrI3q7.js"></script>
+  <script type="module" crossorigin src="/assets/index-C5SqgJGb.js"></script>
   <link rel="stylesheet" crossorigin href="/assets/index-CmJ77Bxz.css">
 </head>
 
