@@ -367,7 +367,13 @@ export default function App() {
                                         {props => (
                                             <LandingPage
                                                 {...props}
-                                                onEnterShop={() => props.navigation.navigate('Main')}
+                                                user={user}
+                                                cartCount={cartLines?.length || 0}
+                                                cartLines={cartLines}
+                                                onAddToCart={handleAddToCart}
+                                                onEnterShop={(tab = 'shop', params = {}) => {
+                                                    props.navigation.navigate('Main', { screen: tab, ...params });
+                                                }}
                                                 onLogin={() => props.navigation.navigate('Auth')}
                                                 onNavigate={(screen, params) => props.navigation.navigate(screen, params)}
                                             />

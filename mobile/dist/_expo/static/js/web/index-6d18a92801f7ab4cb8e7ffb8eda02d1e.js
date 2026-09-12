@@ -36135,7 +36135,15 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
                   children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Stack.Screen, {
                     name: "Landing",
                     children: props => /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_srcScreensLandingPage.LandingPage, Object.assign({}, props, {
-                      onEnterShop: () => props.navigation.navigate('Main'),
+                      user: user,
+                      cartCount: cartLines?.length || 0,
+                      cartLines: cartLines,
+                      onAddToCart: handleAddToCart,
+                      onEnterShop: (tab = 'shop', params = {}) => {
+                        props.navigation.navigate('Main', Object.assign({
+                          screen: tab
+                        }, params));
+                      },
                       onLogin: () => props.navigation.navigate('Auth'),
                       onNavigate: (screen, params) => props.navigation.navigate(screen, params)
                     }))
@@ -36263,7 +36271,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })
     });
   }
-},169,[170,732,583,586,268,230,684,58,733,856,918,925,890,919,987,989,1088,1093,1097,1218,1259,1274,1166,1260,1275,1276,1277,1278,1279,1152,127]);
+},169,[170,732,583,586,268,230,684,58,733,856,918,925,890,919,987,989,1088,1092,1096,1217,1258,1273,1165,1259,1274,1275,1276,1277,1278,1151,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -176550,2494 +176558,1505 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   var StyleSheet = _interopDefault(_reactNativeWebDistExportsStyleSheet);
   var _reactNativeWebDistExportsTextInput = require(_dependencyMap[10]);
   var TextInput = _interopDefault(_reactNativeWebDistExportsTextInput);
-  var _reactNativeWebDistExportsAlert = require(_dependencyMap[11]);
-  var Alert = _interopDefault(_reactNativeWebDistExportsAlert);
-  var _reactNativeWebDistExportsLinking = require(_dependencyMap[12]);
-  var Linking = _interopDefault(_reactNativeWebDistExportsLinking);
-  var _reactNativeSafeAreaContext = require(_dependencyMap[13]);
-  var _expoVectorIcons = require(_dependencyMap[14]);
-  require(_dependencyMap[15]);
-  var _reactNativeAsyncStorageAsyncStorage = require(_dependencyMap[16]);
+  var _reactNativeWebDistExportsRefreshControl = require(_dependencyMap[11]);
+  var RefreshControl = _interopDefault(_reactNativeWebDistExportsRefreshControl);
+  var _reactNativeWebDistExportsAnimated = require(_dependencyMap[12]);
+  var Animated = _interopDefault(_reactNativeWebDistExportsAnimated);
+  require(_dependencyMap[13]);
+  var _reactNativeSafeAreaContext = require(_dependencyMap[14]);
+  var _expoVectorIcons = require(_dependencyMap[15]);
+  var _expoLinearGradient = require(_dependencyMap[16]);
+  var _reactNativeAsyncStorageAsyncStorage = require(_dependencyMap[17]);
   var AsyncStorage = _interopDefault(_reactNativeAsyncStorageAsyncStorage);
-  var _contextAppSettingsContext = require(_dependencyMap[17]);
-  var _libSupabase = require(_dependencyMap[18]);
-  var _componentsCountdownTimer = require(_dependencyMap[19]);
-  var _reactJsxRuntime = require(_dependencyMap[20]);
+  var _contextAppSettingsContext = require(_dependencyMap[18]);
+  var _libSupabase = require(_dependencyMap[19]);
+  var _componentsCountdownTimer = require(_dependencyMap[20]);
+  var _reactJsxRuntime = require(_dependencyMap[21]);
   const {
     width
   } = Dimensions.default.get('window');
+  const AM_LOGO = require(_dependencyMap[22]);
 
-  // Existing Trust Strip Items
-  const TRUST_ITEMS = [{
-    icon: 'shield-checkmark-outline',
-    label: 'Secure Payments',
-    color: '#10B981'
-  }, {
-    icon: 'airplane-outline',
-    label: 'Priority Cargo',
-    color: '#3B82F6'
-  }, {
-    icon: 'headset-outline',
-    label: '24/7 Verified Help',
-    color: '#8B5CF6'
-  }];
-
-  // Why Choose Us Items
-  const WHY_CHOOSE_US = [{
-    id: 1,
-    icon: 'shield-checkmark-outline',
-    title: 'Secure Payments',
-    desc: 'Your payments are 100% secure and encrypted.',
-    color: '#10B981',
-    bgColor: '#E6F4EA'
-  }, {
-    id: 2,
-    icon: 'sparkles-outline',
-    title: 'AI Smart Assistant',
-    desc: 'Smart recommendations and better search results.',
-    color: '#8B5CF6',
-    bgColor: '#F3E8FF'
-  }, {
-    id: 3,
-    icon: 'airplane-outline',
-    title: 'Fast Delivery',
-    desc: 'Get your orders delivered fast and safe.',
-    color: '#D9A73A',
-    bgColor: '#FEF3C7'
-  }, {
-    id: 4,
-    icon: 'pricetag-outline',
-    title: 'Best Prices',
-    desc: 'Enjoy the best prices and exclusive deals everyday.',
-    color: '#EF4444',
-    bgColor: '#FEE2E2'
-  }, {
-    id: 5,
-    icon: 'people-outline',
-    title: 'Trusted Community',
-    desc: 'Join thousands of verified buyers and sellers.',
-    color: '#3B82F6',
-    bgColor: '#E0F2FE'
-  }];
-
-  // Popular Products Mockup Fallbacks (in case DB is temporarily offline/empty)
-  const POPULAR_FALLBACKS = [{
-    id: 'pop-1',
-    name: 'iPhone 15 Pro Max',
-    price: 1250000,
-    oldPrice: 1470000,
-    discount: 15,
-    rating: 4.8,
-    reviews_count: 128,
-    category: 'Phones',
-    image: 'https://images.unsplash.com/photo-1695048133142-1a20484d2569?w=300'
-  }, {
-    id: 'pop-2',
-    name: 'Apple Watch Series 9',
-    price: 390000,
-    oldPrice: 450000,
-    discount: 20,
-    rating: 4.7,
-    reviews_count: 98,
-    category: 'Accessories',
-    image: 'https://images.unsplash.com/photo-1542496658-e33a6d0d50f6?w=300'
-  }, {
-    id: 'pop-3',
-    name: 'Nike Air Jordan 1',
-    price: 85000,
-    oldPrice: 95000,
-    discount: 10,
-    rating: 4.6,
-    reviews_count: 76,
-    category: 'Fashion',
-    image: 'https://images.unsplash.com/photo-1552346154-21d32810aba3?w=300'
-  }, {
-    id: 'pop-4',
-    name: 'Dior Sauvage EDT',
-    price: 78000,
-    oldPrice: 95000,
-    discount: 18,
-    rating: 4.9,
-    reviews_count: 65,
-    category: 'Beauty',
-    image: 'https://images.unsplash.com/photo-1547887537-6158d64c35b3?w=300'
-  }];
-
-  // Testimonials Mockup Fallbacks
-  const TESTIMONIALS_FALLBACK = [{
-    id: 't-1',
-    quote: "Abu Mafhal has made it so easy to reach more customers and grow my business.",
-    name: "Ahmed S.",
-    role: "Verified Seller",
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
-    rating: 5,
-    is_verified: true
-  }, {
-    id: 't-2',
-    quote: "I found exactly what I was looking for at the best price with fast delivery.",
-    name: "Fatima A.",
-    role: "Verified Buyer",
-    avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
-    rating: 5,
-    is_verified: true
-  }];
-
-  // Animated Counter helper component for React Native
-  const AnimatedCounter = ({
-    target,
-    suffix = '',
-    duration = 1000
-  }) => {
-    const [count, setCount] = (0, _react.useState)(0);
-    (0, _react.useEffect)(() => {
-      let start = 0;
-      const end = parseFloat(target);
-      if (isNaN(end) || start === end) return;
-      const steps = 30;
-      const increment = end / steps;
-      const stepTime = duration / steps;
-      let currentStep = 0;
-      const timer = setInterval(() => {
-        currentStep += 1;
-        const currentVal = currentStep * increment;
-        setCount(end % 1 === 0 ? Math.round(currentVal) : parseFloat(currentVal.toFixed(1)));
-        if (currentStep >= steps) {
-          setCount(end);
-          clearInterval(timer);
-        }
-      }, stepTime);
-      return () => clearInterval(timer);
-    }, [target]);
-    return /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
-      style: localStyles.statsNumber,
-      children: [count.toLocaleString(), suffix]
-    });
+  // Format price into clean Nigerian Naira currency string
+  const fmtPrice = val => {
+    const num = Number(val);
+    if (!num || isNaN(num)) return '₦0';
+    return `₦${num.toLocaleString()}`;
   };
+
+  // Clean image URL resolver without broken placeholders
+  const resolveImage = item => {
+    if (!item) return 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=400';
+    if (item.image_url) return item.image_url;
+    if (Array.isArray(item.images) && item.images.length > 0 && typeof item.images[0] === 'string') return item.images[0];
+    if (typeof item.images === 'string' && item.images.startsWith('http')) return item.images;
+    if (item.image && typeof item.image === 'string') return item.image;
+    return 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=400';
+  };
+  const DEFAULT_CATEGORIES = [{
+    id: '1',
+    name: 'Phones & Tablets',
+    icon: 'phone-portrait-outline'
+  }, {
+    id: '2',
+    name: 'Fashion & Apparel',
+    icon: 'shirt-outline'
+  }, {
+    id: '3',
+    name: 'Electronics & Gadgets',
+    icon: 'tv-outline'
+  }, {
+    id: '4',
+    name: 'Shoes & Footwear',
+    icon: 'footsteps-outline'
+  }, {
+    id: '5',
+    name: 'Beauty & Health',
+    icon: 'sparkles-outline'
+  }, {
+    id: '6',
+    name: 'Home & Living',
+    icon: 'home-outline'
+  }];
   const LandingPage = ({
     navigation,
     onEnterShop,
-    cartCount,
-    onGoToCart,
+    cartCount = 0,
+    cartLines = [],
+    onAddToCart,
     onLogin,
     user,
-    onGoToProfile,
-    onNavigate,
-    addToCart
+    onNavigate
   }) => {
+    const insets = (0, _reactNativeSafeAreaContext.useSafeAreaInsets)();
     const {
       settings
     } = (0, _contextAppSettingsContext.useAppSettings)();
-    const [recommended, setRecommended] = (0, _react.useState)([]);
-    const [flashSale, setFlashSale] = (0, _react.useState)([]);
-    const [categories, setCategories] = (0, _react.useState)([]);
-    const [popularProducts, setPopularProducts] = (0, _react.useState)([]);
-    const [testimonials, setTestimonials] = (0, _react.useState)([]);
+    const [products, setProducts] = (0, _react.useState)([]);
+    const [categories, setCategories] = (0, _react.useState)(DEFAULT_CATEGORIES);
+    const [banners, setBanners] = (0, _react.useState)([]);
+    const [loading, setLoading] = (0, _react.useState)(true);
+    const [refreshing, setRefreshing] = (0, _react.useState)(false);
     const [searchQuery, setSearchQuery] = (0, _react.useState)('');
     const [wishlist, setWishlist] = (0, _react.useState)({});
-    const [newsletterEmail, setNewsletterEmail] = (0, _react.useState)('');
-    const [homeBanner, setHomeBanner] = (0, _react.useState)(null);
-    const [targetDate, setTargetDate] = (0, _react.useState)(() => {
-      const d = new Date();
-      d.setHours(d.getHours() + 2); // 2 hours from now
-      return d.toISOString();
+    const [currentBannerIndex, setCurrentBannerIndex] = (0, _react.useState)(0);
+    const [toast, setToast] = (0, _react.useState)({
+      visible: false,
+      message: ''
     });
-    const handleEnterShop = (tab = 'home', category = undefined) => {
-      if (!user) {
-        onNavigate('Auth', {
-          redirectTo: 'Main',
-          redirectParams: {
-            screen: tab,
-            category
-          }
-        });
-      } else {
-        navigation.navigate('Main', {
-          screen: tab,
-          category
-        });
-      }
-    };
-    const handleSearchSubmit = () => {
-      if (!user) {
-        onNavigate('Auth', {
-          redirectTo: 'Main',
-          redirectParams: {
-            screen: 'shop',
-            query: searchQuery
-          }
-        });
-      } else {
-        navigation.navigate('Main', {
-          screen: 'shop',
-          query: searchQuery
-        });
-      }
-    };
-    const handleBecomeSeller = () => {
-      if (!user) {
-        onNavigate('Auth', {
-          redirectTo: 'Main',
-          redirectParams: {
-            screen: 'profile'
-          }
-        });
-      } else {
-        navigation.navigate('Main', {
-          screen: 'profile'
-        });
-      }
-    };
-    const toggleWishlist = id => {
-      setWishlist(prev => Object.assign({}, prev, {
-        [id]: !prev[id]
+    const bannerScrollRef = (0, _react.useRef)(null);
+    const toastAnim = (0, _react.useRef)(new Animated.default.Value(0)).current;
+    const showToast = message => {
+      setToast({
+        visible: true,
+        message
+      });
+      Animated.default.sequence([Animated.default.timing(toastAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true
+      }), Animated.default.delay(2200), Animated.default.timing(toastAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true
+      })]).start(() => setToast({
+        visible: false,
+        message: ''
       }));
     };
-    const handleNewsletterSubmit = () => {
-      if (!newsletterEmail) return;
-      Alert.default.alert('Success', `Subscription request received for: ${newsletterEmail}`);
-      setNewsletterEmail('');
-    };
-    const LANDING_CACHE_KEY = '@abumafhal_landing_cache_v1';
+
+    // Load wishlist from storage
     (0, _react.useEffect)(() => {
-      // Fast instant cache restore
-      AsyncStorage.default.getItem(LANDING_CACHE_KEY).then(cached => {
-        if (cached) {
+      AsyncStorage.default.getItem('@abumafhal_wishlist').then(data => {
+        if (data) {
           try {
-            const c = JSON.parse(cached);
-            if (c.categories?.length) setCategories(c.categories);
-            if (c.popularProducts?.length) setPopularProducts(c.popularProducts);
-            if (c.testimonials?.length) setTestimonials(c.testimonials);
-            if (c.flashSale?.length) setFlashSale(c.flashSale);
-            if (c.homeBanner) setHomeBanner(c.homeBanner);
+            setWishlist(JSON.parse(data));
           } catch (_) {}
         }
       }).catch(() => {});
-      const defaultCats = [{
-        id: 'cat-elect',
-        name: 'Electronics',
-        icon: 'desktop-outline'
-      }, {
-        id: 'cat-fashion',
-        name: 'Fashion',
-        icon: 'shirt-outline'
-      }, {
-        id: 'cat-phones',
-        name: 'Phones',
-        icon: 'phone-portrait-outline'
-      }, {
-        id: 'cat-home',
-        name: 'Home & Living',
-        icon: 'home-outline'
-      }, {
-        id: 'cat-beauty',
-        name: 'Beauty',
-        icon: 'sparkles-outline'
-      }, {
-        id: 'cat-services',
-        name: 'Services',
-        icon: 'build-outline'
-      }, {
-        id: 'cat-digital',
-        name: 'Digital Products',
-        icon: 'document-text-outline'
-      }];
-      const fetchLandingProducts = async () => {
-        try {
-          const now = new Date().toISOString();
-
-          // Run all landing queries simultaneously in parallel
-          const [catsRes, saleRes, prodsRes, testRes, bannerRes] = await Promise.allSettled([_libSupabase.supabase.from('categories').select('id, name, icon').eq('is_active', true).order('display_order').limit(10), _libSupabase.supabase.from('flash_sales').select('*').eq('is_active', true).gt('end_time', now).order('created_at', {
-            ascending: false
-          }).limit(1).maybeSingle(), _libSupabase.supabase.from('products').select('id, name, price, compare_at_price, original_price, images, category, rating, reviews_count').eq('is_active', true).order('rating', {
-            ascending: false
-          }).limit(10), _libSupabase.supabase.from('testimonials').select('id, quote, name, role, avatar, rating, is_verified, display_order').eq('is_active', true).order('display_order'), _libSupabase.supabase.from('banners').select('id, image_url, title, action_link, section, is_active, display_order').eq('is_active', true).order('display_order', {
-            ascending: true
-          })]);
-
-          // 1. Process Categories
-          let finalCats = [...defaultCats];
-          if (catsRes.status === 'fulfilled' && catsRes.value.data?.length > 0) {
-            const dbCats = catsRes.value.data;
-            dbCats.forEach(dbCat => {
-              if (!finalCats.some(c => c.name.toLowerCase() === dbCat.name.toLowerCase())) {
-                finalCats.push({
-                  id: `cat-${dbCat.id || dbCat.name.toLowerCase()}`,
-                  name: dbCat.name,
-                  icon: dbCat.icon || 'grid-outline'
-                });
-              }
-            });
-          }
-          setCategories(finalCats);
-
-          // 2. Process Flash Sales
-          let flashProducts = [];
-          if (saleRes.status === 'fulfilled' && saleRes.value.data) {
-            const saleData = saleRes.value.data;
-            if (saleData.end_time) setTargetDate(saleData.end_time);
-            if (saleData.product_ids?.length > 0) {
-              const {
-                data: prods
-              } = await _libSupabase.supabase.from('products').select('id, name, price, compare_at_price, images, category, rating').in('id', saleData.product_ids).eq('is_active', true);
-              if (prods?.length > 0) {
-                const discountPercentage = saleData.discount_percent || 20;
-                flashProducts = prods.map(p => Object.assign({}, p, {
-                  discount: p.compare_at_price && p.compare_at_price > p.price ? Math.round((p.compare_at_price - p.price) / p.compare_at_price * 100) : discountPercentage
-                }));
-              }
-            }
-          }
-          setFlashSale(flashProducts);
-
-          // 3. Process Popular Products
-          let mappedProds = POPULAR_FALLBACKS;
-          if (prodsRes.status === 'fulfilled' && prodsRes.value.data?.length > 0) {
-            const prodsData = prodsRes.value.data;
-            mappedProds = prodsData.map(p => ({
-              id: p.id,
-              name: p.name,
-              price: p.price,
-              oldPrice: p.compare_at_price || p.original_price,
-              discount: p.compare_at_price && p.compare_at_price > p.price ? Math.round((p.compare_at_price - p.price) / p.compare_at_price * 100) : null,
-              rating: p.rating || 5.0,
-              reviews_count: p.reviews_count || 0,
-              category: p.category || 'Product',
-              image: Array.isArray(p.images) ? p.images[0] : p.images || 'https://placehold.co/300'
-            }));
-            setRecommended(prodsData);
-          }
-          setPopularProducts(mappedProds);
-
-          // 4. Process Testimonials
-          let finalTestimonials = [];
-          if (testRes.status === 'fulfilled' && testRes.value.data?.length > 0) {
-            finalTestimonials = testRes.value.data;
-          }
-          setTestimonials(finalTestimonials);
-
-          // 5. Process Banner
-          let homeB = null;
-          if (bannerRes.status === 'fulfilled' && bannerRes.value.data) {
-            homeB = bannerRes.value.data.find(b => !b.section || b.section === 'home' || b.section === 'all') || null;
-          }
-          setHomeBanner(homeB);
-
-          // Cache for fast startup
-          AsyncStorage.default.setItem(LANDING_CACHE_KEY, JSON.stringify({
-            categories: finalCats,
-            popularProducts: mappedProds,
-            testimonials: finalTestimonials,
-            flashSale: flashProducts,
-            homeBanner: homeB,
-            savedAt: Date.now()
-          })).catch(() => {});
-        } catch (err) {
-          console.warn('LandingPage: Failed to load Supabase assets', err.message);
-          setPopularProducts(POPULAR_FALLBACKS);
-        }
-      };
-      fetchLandingProducts();
     }, []);
-    return /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(_reactNativeSafeAreaContext.SafeAreaView, {
-      style: localStyles.safeContainer,
+    const toggleWishlist = async id => {
+      const updated = Object.assign({}, wishlist, {
+        [id]: !wishlist[id]
+      });
+      setWishlist(updated);
+      try {
+        await AsyncStorage.default.setItem('@abumafhal_wishlist', JSON.stringify(updated));
+      } catch (_) {}
+    };
+
+    // Fetch 100% REAL data from Supabase
+    const loadRealData = async () => {
+      try {
+        const [prodsRes, catsRes, bansRes] = await Promise.allSettled([_libSupabase.supabase.from('products').select('*').eq('is_active', true).order('created_at', {
+          ascending: false
+        }), _libSupabase.supabase.from('categories').select('*').eq('is_active', true).order('display_order', {
+          ascending: true
+        }), _libSupabase.supabase.from('banners').select('*').eq('is_active', true).order('display_order', {
+          ascending: true
+        })]);
+        if (prodsRes.status === 'fulfilled' && prodsRes.value.data) {
+          setProducts(prodsRes.value.data);
+        }
+        if (catsRes.status === 'fulfilled' && catsRes.value.data?.length > 0) {
+          setCategories(catsRes.value.data);
+        }
+        if (bansRes.status === 'fulfilled' && bansRes.value.data?.length > 0) {
+          setBanners(bansRes.value.data);
+        }
+      } catch (e) {
+        console.error('Error fetching live landing data:', e);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    };
+    (0, _react.useEffect)(() => {
+      loadRealData();
+    }, []);
+    const onRefresh = () => {
+      setRefreshing(true);
+      loadRealData();
+    };
+
+    // Banner auto-sliding logic
+    (0, _react.useEffect)(() => {
+      if (banners.length > 1) {
+        const timer = setInterval(() => {
+          setCurrentBannerIndex(prev => {
+            const next = (prev + 1) % banners.length;
+            bannerScrollRef.current?.scrollTo({
+              x: next * (width - 32),
+              animated: true
+            });
+            return next;
+          });
+        }, 5000);
+        return () => clearInterval(timer);
+      }
+    }, [banners.length]);
+
+    // Handle product click -> opens real ProductDetails
+    const handleProductPress = product => {
+      if (onNavigate) {
+        onNavigate('ProductDetails', {
+          product
+        });
+      } else if (navigation) {
+        navigation.navigate('ProductDetails', {
+          product
+        });
+      }
+    };
+
+    // Handle Add to Cart -> 100% working
+    const handleAddToCartPress = (product, e) => {
+      if (e && e.stopPropagation) e.stopPropagation();
+      if (typeof onAddToCart === 'function') {
+        onAddToCart(product);
+        showToast(`Added "${product.name}" to cart! 🛒`);
+      }
+    };
+
+    // Filter products by search query if typed
+    const filteredProducts = searchQuery.trim() ? products.filter(p => p.name?.toLowerCase().includes(searchQuery.toLowerCase()) || p.category?.toLowerCase().includes(searchQuery.toLowerCase())) : products;
+
+    // Flash deals: products with compare_at_price > price, or first 3 products
+    const flashDeals = products.filter(p => p.compare_at_price && p.compare_at_price > p.price);
+    const displayFlash = flashDeals.length > 0 ? flashDeals : products.slice(0, 3);
+    return /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+      style: s.root,
       children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(StatusBar.default, {
-        barStyle: "dark-content",
-        backgroundColor: "#F5F3EB"
+        backgroundColor: "#FFFFFF",
+        barStyle: "dark-content"
       }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-        style: localStyles.headerCentered,
-        children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-          style: localStyles.logoContainer,
-          children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
-            source: settings?.logo_url ? {
-              uri: settings.logo_url
-            } : require(_dependencyMap[21]),
-            style: localStyles.logoImageMark,
-            resizeMode: "contain"
-          })
-        }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-          style: localStyles.brandTextRow,
-          children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-            style: localStyles.brandTextAbu,
-            children: "ABU "
-          }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-            style: localStyles.brandTextMafhal,
-            children: "MAFHAL"
+        style: [s.topBar, {
+          paddingTop: Math.max(insets.top, 24) + 6
+        }],
+        children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+          style: s.topRow,
+          children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
+            style: s.brandBlock,
+            onPress: () => onEnterShop ? onEnterShop('home') : null,
+            activeOpacity: 0.8,
+            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
+              source: AM_LOGO,
+              style: s.brandLogo,
+              resizeMode: "contain"
+            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+                style: s.brandNameRow,
+                children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                  style: s.brandNameNavy,
+                  children: "ABU "
+                }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                  style: s.brandNameGold,
+                  children: "MAFHAL"
+                })]
+              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                style: s.brandTagline,
+                children: "ONLINE MARKETPLACE"
+              })]
+            })]
+          }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+            style: s.topActions,
+            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
+              style: s.iconButton,
+              onPress: () => onEnterShop ? onEnterShop('cart') : null,
+              activeOpacity: 0.7,
+              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+                name: "cart-outline",
+                size: 24,
+                color: "#0A192F"
+              }), cartCount > 0 && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+                style: s.cartBadge,
+                children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                  style: s.cartBadgeText,
+                  children: cartCount > 99 ? '99+' : cartCount
+                })
+              })]
+            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
+              style: s.userPill,
+              onPress: () => user ? onEnterShop ? onEnterShop('profile') : null : onLogin ? onLogin() : null,
+              activeOpacity: 0.85,
+              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+                name: user ? 'person-circle-outline' : 'log-in-outline',
+                size: 18,
+                color: "#FFFFFF"
+              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                style: s.userPillText,
+                numberOfLines: 1,
+                children: user ? user.full_name?.split(' ')[0] || 'Account' : 'Sign In'
+              })]
+            })]
           })]
-        }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-          style: localStyles.brandSubCentered,
-          children: "ONLINE MARKETPLACE"
-        }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
-          onPress: onLogin,
-          style: localStyles.headerLoginAbsolute,
-          activeOpacity: 0.8,
+        }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+          style: s.searchContainer,
           children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-            name: "log-in-outline",
-            size: 14,
-            color: "#D9A73A",
+            name: "search-outline",
+            size: 19,
+            color: "#64748B",
             style: {
-              marginRight: 4
+              marginRight: 8
             }
-          }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-            style: localStyles.headerLoginText,
-            children: "Sign In"
+          }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TextInput.default, {
+            placeholder: "Search products, brands, categories...",
+            placeholderTextColor: "#94A3B8",
+            value: searchQuery,
+            onChangeText: setSearchQuery,
+            onSubmitEditing: () => onEnterShop ? onEnterShop('shop', {
+              query: searchQuery
+            }) : null,
+            style: s.searchInput,
+            returnKeyType: "search"
+          }), searchQuery.length > 0 ? /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
+            onPress: () => setSearchQuery(''),
+            style: {
+              padding: 4
+            },
+            children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+              name: "close-circle",
+              size: 18,
+              color: "#94A3B8"
+            })
+          }) : /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
+            onPress: () => onEnterShop ? onEnterShop('categories') : null,
+            style: {
+              padding: 4
+            },
+            children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+              name: "options-outline",
+              size: 18,
+              color: "#0A192F"
+            })
           })]
         })]
       }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(ScrollView.default, {
         showsVerticalScrollIndicator: false,
+        refreshControl: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(RefreshControl.default, {
+          refreshing: refreshing,
+          onRefresh: onRefresh,
+          colors: ['#D9A73A']
+        }),
         contentContainerStyle: {
-          paddingBottom: 60
+          paddingBottom: Math.max(insets.bottom, 20) + 75
         },
-        scrollEventThrottle: 16,
         children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-          style: localStyles.heroRow,
-          children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-            style: localStyles.heroLeftCol,
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-              style: localStyles.pillBadgeContainer,
-              children: /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-                style: localStyles.pillBadge,
-                children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                  name: "people",
-                  size: 12,
-                  color: "#0E1A2E"
-                }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: localStyles.pillBadgeText,
-                  children: "Trusted by thousands across the community"
-                })]
-              })
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              style: localStyles.heroTextContainer,
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.heroLine1,
-                children: "Shop Smart."
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.heroLine2,
-                children: "Sell More."
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.heroLineGold,
-                children: "Grow Together."
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.heroDescription,
-                children: "The all-in-one marketplace for everyone. Buy, sell, earn and grow with secure payments and fast delivery you can trust."
-              })]
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              style: localStyles.heroButtonsContainer,
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
-                onPress: () => handleEnterShop('shop'),
-                style: localStyles.btnStartShopping,
-                activeOpacity: 0.9,
-                children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: localStyles.btnStartShoppingText,
-                  numberOfLines: 1,
-                  children: "Start Shopping"
-                }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                  style: localStyles.circleArrowWhite,
-                  children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                    name: "arrow-forward",
-                    size: 12,
-                    color: "#0E1A2E"
-                  })
-                })]
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
-                onPress: handleBecomeSeller,
-                style: localStyles.btnStartSelling,
-                activeOpacity: 0.9,
-                children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-                  style: {
-                    flexDirection: 'row',
-                    alignItems: 'center'
-                  },
-                  children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                    name: "storefront-outline",
-                    size: 14,
-                    color: "#D9A73A",
-                    style: {
-                      marginRight: 5
-                    }
-                  }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                    style: localStyles.btnStartSellingText,
-                    numberOfLines: 1,
-                    children: "Start Selling"
-                  })]
-                }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                  style: localStyles.circleArrowGold,
-                  children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                    name: "arrow-forward",
-                    size: 12,
-                    color: "white"
-                  })
-                })]
-              })]
-            })]
-          }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-            style: localStyles.heroRightCol,
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-              style: localStyles.decorCircle1
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-              style: localStyles.decorCircle2
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
-              source: require(_dependencyMap[22]),
-              style: localStyles.heroMockupImage,
-              resizeMode: "contain"
-            })]
-          })]
-        }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-          style: localStyles.searchBarContainer,
-          children: /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-            style: localStyles.searchBox,
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-              name: "search-outline",
-              size: 18,
-              color: "#94A3B8",
-              style: {
-                marginRight: 8
-              }
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TextInput.default, {
-              placeholder: "Search premium products...",
-              placeholderTextColor: "#94A3B8",
-              value: searchQuery,
-              onChangeText: setSearchQuery,
-              onSubmitEditing: handleSearchSubmit,
-              style: localStyles.searchBoxInput
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-              onPress: () => handleEnterShop('shop'),
-              style: localStyles.searchFilterIcon,
-              children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                name: "options-outline",
-                size: 18,
-                color: "#0E1A2E"
-              })
-            })]
-          })
-        }), homeBanner && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-          style: localStyles.promoContainer,
-          children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-            activeOpacity: 0.9,
-            onPress: () => {
-              if (homeBanner.action_link) {
-                try {
-                  const parsed = JSON.parse(homeBanner.action_link);
-                  if (parsed && parsed.screen) {
-                    navigation.navigate(parsed.screen, parsed.params);
-                    return;
-                  }
-                } catch (_) {}
-                handleEnterShop('shop');
-              } else {
-                handleEnterShop('shop');
-              }
-            },
-            style: localStyles.slimBannerTouch,
-            children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
-              source: {
-                uri: homeBanner.image_url
-              },
-              style: localStyles.slimBannerImage,
-              resizeMode: "cover"
-            })
-          })
-        }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-          style: localStyles.sectionContainer,
-          children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-            style: localStyles.sectionHeaderRow,
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-              style: localStyles.sectionTitleText,
-              children: "Categories"
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-              onPress: () => handleEnterShop('shop'),
-              children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.sectionLinkText,
-                children: "See all"
-              })
-            })]
-          }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(ScrollView.default, {
+          style: s.bannerSection,
+          children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(ScrollView.default, {
+            ref: bannerScrollRef,
             horizontal: true,
+            pagingEnabled: true,
             showsHorizontalScrollIndicator: false,
-            contentContainerStyle: localStyles.categoriesScrollContainer,
-            children: categories.map((cat, index) => /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
-              style: localStyles.categoryCard,
-              onPress: () => handleEnterShop('shop', cat.name),
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                style: localStyles.categoryIconBox,
-                children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                  name: cat.icon || 'grid-outline',
-                  size: 20,
-                  color: "#D9A73A"
-                })
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.categoryText,
-                children: cat.name
-              })]
-            }, cat.id || index))
-          })]
-        }), flashSale && flashSale.length > 0 && /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-          style: localStyles.sectionContainer,
-          children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-            style: localStyles.sectionHeaderRow,
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              style: {
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 10
-              },
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.sectionTitleText,
-                children: "Flash Deals"
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_componentsCountdownTimer.CountdownTimer, {
-                targetDate: targetDate
-              })]
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-              onPress: () => handleEnterShop('shop'),
-              children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.sectionLinkText,
-                children: "See all"
-              })
-            })]
-          }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(ScrollView.default, {
-            horizontal: true,
-            showsHorizontalScrollIndicator: false,
-            contentContainerStyle: {
-              gap: 12,
-              paddingHorizontal: 20
+            onMomentumScrollEnd: e => {
+              const newIdx = Math.round(e.nativeEvent.contentOffset.x / (width - 32));
+              setCurrentBannerIndex(newIdx);
             },
-            children: flashSale.map((item, i) => /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
-              style: localStyles.flashDealCard,
-              onPress: () => {
-                if (!user) {
-                  onNavigate('Auth', {
-                    redirectTo: 'ProductDetails',
-                    redirectParams: {
-                      product: item
-                    }
-                  });
-                } else {
-                  navigation.navigate('ProductDetails', {
-                    product: item
-                  });
-                }
-              },
+            children: banners.length > 0 ? banners.map((b, idx) => /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
+              activeOpacity: 0.92,
+              onPress: () => onEnterShop ? onEnterShop('shop') : null,
+              style: s.bannerCard,
               children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
                 source: {
-                  uri: Array.isArray(item.images) ? item.images[0] : item.image || 'https://placehold.co/200'
+                  uri: b.image_url
                 },
-                style: localStyles.flashDealImg
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                style: localStyles.flashDiscountBadge,
-                children: /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
-                  style: {
-                    color: 'white',
-                    fontSize: 9,
-                    fontWeight: '900'
-                  },
-                  children: ["-", item.discount || 15, "%"]
-                })
+                style: s.bannerImage,
+                resizeMode: "cover"
+              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoLinearGradient.LinearGradient, {
+                colors: ['rgba(10,25,47,0.15)', 'rgba(10,25,47,0.85)'],
+                style: StyleSheet.default.absoluteFillObject
               }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-                style: {
-                  padding: 12
-                },
-                children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: localStyles.flashDealName,
-                  numberOfLines: 1,
-                  children: item.name
-                }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
-                  style: localStyles.flashDealPrice,
-                  children: ["\u20A6", item.price ? item.price.toLocaleString() : '0']
+                style: s.bannerContent,
+                children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+                  style: s.badgePill,
+                  children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                    style: s.badgePillText,
+                    children: "EXCLUSIVE OFFER"
+                  })
+                }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                  style: s.bannerTitle,
+                  children: b.title || 'Mega Deals on Abu Mafhal'
+                }), b.subtitle && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                  style: s.bannerSubtitle,
+                  children: b.subtitle
+                }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+                  style: s.bannerCta,
+                  children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                    style: s.bannerCtaText,
+                    children: "Shop Now"
+                  }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+                    name: "arrow-forward",
+                    size: 13,
+                    color: "#0A192F"
+                  })]
                 })]
               })]
-            }, item.id || i))
-          })]
-        }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-          style: localStyles.featureHighlightsContainer,
-          children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-            style: localStyles.centerHeader,
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-              style: localStyles.centerHeaderText,
-              children: "Key Highlights"
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-              style: localStyles.goldAccentLine
-            })]
-          }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-            style: localStyles.featureGrid,
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              style: localStyles.featureCard,
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                style: [localStyles.featureIconCircle, {
-                  backgroundColor: '#E6F4EA'
-                }],
-                children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                  name: "shield-checkmark-outline",
-                  size: 22,
-                  color: "#10B981"
-                })
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.featureTitle,
-                children: "Secure Payments"
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.featureDesc,
-                children: "100% safe & escrow encrypted"
+            }, b.id || idx)) : /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
+              activeOpacity: 0.92,
+              onPress: () => onEnterShop ? onEnterShop('shop') : null,
+              style: s.bannerCard,
+              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoLinearGradient.LinearGradient, {
+                colors: ['#0A192F', '#0E2A4D', '#1B3B6F'],
+                start: {
+                  x: 0,
+                  y: 0
+                },
+                end: {
+                  x: 1,
+                  y: 1
+                },
+                style: StyleSheet.default.absoluteFillObject
+              }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+                style: s.bannerContent,
+                children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+                  style: s.badgePill,
+                  children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                    style: s.badgePillText,
+                    children: "VERIFIED MARKETPLACE"
+                  })
+                }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                  style: s.bannerTitle,
+                  children: "Buy & Sell with Confidence"
+                }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                  style: s.bannerSubtitle,
+                  children: "Escrow protected payments & fast cargo nationwide."
+                }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+                  style: s.bannerCta,
+                  children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                    style: s.bannerCtaText,
+                    children: "Explore Market"
+                  }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+                    name: "arrow-forward",
+                    size: 13,
+                    color: "#0A192F"
+                  })]
+                })]
               })]
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              style: localStyles.featureCard,
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                style: [localStyles.featureIconCircle, {
-                  backgroundColor: '#F3E8FF'
-                }],
-                children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                  name: "sparkles-outline",
-                  size: 22,
-                  color: "#8B5CF6"
-                })
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.featureTitle,
-                children: "AI Smart Assistant"
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.featureDesc,
-                children: "Shop smarter everyday"
-              })]
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              style: localStyles.featureCard,
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                style: [localStyles.featureIconCircle, {
-                  backgroundColor: '#FEF3C7'
-                }],
-                children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                  name: "airplane-outline",
-                  size: 22,
-                  color: "#D9A73A"
-                })
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.featureTitle,
-                children: "Fast Delivery"
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.featureDesc,
-                children: "Across Nigeria in air time"
-              })]
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              style: localStyles.featureCard,
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                style: [localStyles.featureIconCircle, {
-                  backgroundColor: '#FEE2E2'
-                }],
-                children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                  name: "pricetag-outline",
-                  size: 22,
-                  color: "#EF4444"
-                })
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.featureTitle,
-                children: "Best Prices"
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.featureDesc,
-                children: "Great deals everyday"
-              })]
-            })]
-          })]
-        }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-          style: localStyles.statsCardContainer,
-          children: /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-            style: localStyles.statsRow,
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              style: localStyles.statsItem,
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                name: "people-outline",
-                size: 18,
-                color: "#0E1A2E",
-                style: {
-                  marginBottom: 4
-                }
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(AnimatedCounter, {
-                target: 100,
-                suffix: "K+"
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.statsLabelText,
-                children: "Happy Customers"
-              })]
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-              style: localStyles.statsDivider
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              style: localStyles.statsItem,
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                name: "storefront-outline",
-                size: 18,
-                color: "#0E1A2E",
-                style: {
-                  marginBottom: 4
-                }
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(AnimatedCounter, {
-                target: 15,
-                suffix: "K+"
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.statsLabelText,
-                children: "Active Sellers"
-              })]
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-              style: localStyles.statsDivider
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              style: localStyles.statsItem,
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                name: "gift-outline",
-                size: 18,
-                color: "#0E1A2E",
-                style: {
-                  marginBottom: 4
-                }
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(AnimatedCounter, {
-                target: 250,
-                suffix: "K+"
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.statsLabelText,
-                children: "Products Listed"
-              })]
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-              style: localStyles.statsDivider
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              style: localStyles.statsItem,
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                name: "star-outline",
-                size: 18,
-                color: "#D9A73A",
-                style: {
-                  marginBottom: 4
-                }
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(AnimatedCounter, {
-                target: 4.8,
-                suffix: "/5"
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.statsLabelText,
-                children: "Customer Rating"
-              })]
-            })]
-          })
-        }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-          style: localStyles.missionSection,
-          children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-            style: localStyles.missionBadge,
-            children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-              style: localStyles.missionBadgeText,
-              children: "OUR MISSION"
             })
-          }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-            style: localStyles.missionTitle,
-            children: "Empowering People. Building Opportunities. Stronger Community."
-          }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-            style: localStyles.missionDesc,
-            children: "Abu Mafhal is more than a marketplace. It empowers sellers, supports businesses, and connects communities."
-          }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-            style: localStyles.missionImageContainer,
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
-              source: {
-                uri: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?q=80&w=800'
-              },
-              style: localStyles.missionImg
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              style: localStyles.missionFloatingBadge,
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                name: "people",
-                size: 14,
-                color: "white"
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.missionFloatingBadgeText,
-                children: "Join thousands of smart buyers & sellers today!"
-              })]
-            })]
+          }), banners.length > 1 && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+            style: s.dotsContainer,
+            children: banners.map((_, i) => /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+              style: [s.dot, currentBannerIndex === i ? s.dotActive : null]
+            }, i))
           })]
         }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-          style: localStyles.whyChooseUsContainer,
+          style: s.sectionBlock,
           children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-            style: localStyles.centerHeader,
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-              style: localStyles.centerHeaderText,
-              children: "Why Abu Mafhal"
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-              style: localStyles.goldAccentLine
+            style: s.sectionHeader,
+            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+              style: s.sectionTitleRow,
+              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+                name: "grid-outline",
+                size: 18,
+                color: "#D9A73A"
+              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                style: s.sectionTitle,
+                children: "Categories"
+              })]
+            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
+              onPress: () => onEnterShop ? onEnterShop('shop') : null,
+              children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                style: s.sectionAction,
+                children: "See All >"
+              })
             })]
           }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(ScrollView.default, {
             horizontal: true,
             showsHorizontalScrollIndicator: false,
-            contentContainerStyle: localStyles.whyScrollContent,
-            children: WHY_CHOOSE_US.map(item => /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              style: localStyles.whyCard,
+            contentContainerStyle: s.categoriesScroll,
+            children: categories.map((cat, idx) => /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
+              style: s.categoryItem,
+              onPress: () => onEnterShop ? onEnterShop('shop', {
+                category: cat.name
+              }) : null,
+              activeOpacity: 0.75,
               children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                style: [localStyles.whyIconContainer, {
-                  backgroundColor: item.bgColor
-                }],
+                style: s.categoryIconCircle,
                 children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                  name: item.icon,
-                  size: 24,
-                  color: item.color
+                  name: cat.icon || 'apps-outline',
+                  size: 22,
+                  color: "#0A192F"
                 })
               }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.whyCardTitle,
-                children: item.title
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.whyCardDesc,
-                children: item.desc
-              })]
-            }, item.id))
-          })]
-        }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-          style: localStyles.sectionContainer,
-          children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-            style: localStyles.sectionHeaderRow,
-            children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-              style: localStyles.sectionTitleText,
-              children: "Market Categories"
-            })
-          }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-            style: localStyles.categoriesGrid,
-            children: categories.slice(0, 7).map((cat, index) => /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
-              style: localStyles.gridCategoryCard,
-              onPress: () => handleEnterShop('shop', cat.name),
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                style: localStyles.gridCategoryIconBox,
-                children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                  name: cat.icon || 'grid-outline',
-                  size: 20,
-                  color: "#D9A73A"
-                })
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.gridCategoryText,
+                style: s.categoryLabel,
                 numberOfLines: 1,
                 children: cat.name
               })]
-            }, cat.id || index))
+            }, cat.id || idx))
           })]
-        }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-          style: localStyles.sellAnythingContainer,
-          children: /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-            style: localStyles.sellBannerCard,
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              style: localStyles.sellBannerLeft,
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
-                style: localStyles.sellBannerHeadline,
-                children: ["Sell Anything. ", "\n", /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: {
-                    color: '#10B981'
-                  },
-                  children: "Earn More."
-                })]
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.sellBannerDesc,
-                children: "Turn your products, skills, and services into income with Abu Mafhal."
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
-                onPress: handleBecomeSeller,
-                style: localStyles.btnSellNow,
-                activeOpacity: 0.9,
-                children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: localStyles.btnSellNowText,
-                  children: "Become a Seller"
-                }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                  style: localStyles.circleArrowWhite,
-                  children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                    name: "arrow-forward",
-                    size: 13,
-                    color: "#10B981"
-                  })
-                })]
-              })]
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              style: localStyles.sellBannerRight,
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-                style: localStyles.dashboardBadge,
-                children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: {
-                    fontSize: 7,
-                    fontWeight: '700',
-                    color: '#64748B'
-                  },
-                  children: "Seller Earnings"
-                }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: {
-                    fontSize: 11,
-                    fontWeight: '900',
-                    color: '#0E1A2E',
-                    marginTop: 2
-                  },
-                  children: "\u20A61,250,000"
-                }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: {
-                    fontSize: 7,
-                    fontWeight: '800',
-                    color: '#10B981',
-                    marginTop: 1
-                  },
-                  children: "+12.5% this month"
-                })]
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                name: "bag-handle",
-                size: 56,
-                color: "#10B981",
-                style: {
-                  position: 'absolute',
-                  bottom: -5,
-                  right: 10,
-                  opacity: 0.15
-                }
-              })]
-            })]
-          })
-        }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-          style: localStyles.sectionContainer,
+        }), displayFlash.length > 0 && /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+          style: s.sectionBlock,
           children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-            style: localStyles.sectionHeaderRow,
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-              style: localStyles.sectionTitleText,
-              children: "Popular Right Now"
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
-              onPress: () => handleEnterShop('shop'),
-              style: {
-                flexDirection: 'row',
-                alignItems: 'center'
-              },
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.sectionLinkText,
-                children: "View all products"
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                name: "arrow-forward-outline",
-                size: 14,
-                color: "#D9A73A",
+            style: s.sectionHeader,
+            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+              style: s.sectionTitleRow,
+              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+                name: "flash",
+                size: 19,
+                color: "#EF4444"
+              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                style: s.sectionTitle,
+                children: "Flash Deals"
+              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
                 style: {
-                  marginLeft: 4
-                }
+                  marginLeft: 6
+                },
+                children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_componentsCountdownTimer.CountdownTimer, {})
               })]
+            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
+              onPress: () => onEnterShop ? onEnterShop('shop') : null,
+              children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                style: s.sectionAction,
+                children: "See All >"
+              })
             })]
           }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(ScrollView.default, {
             horizontal: true,
             showsHorizontalScrollIndicator: false,
-            contentContainerStyle: localStyles.popularScrollContent,
-            children: popularProducts.map(item => {
-              const isLiked = !!wishlist[item.id];
+            contentContainerStyle: s.flashScroll,
+            children: displayFlash.map((item, i) => {
+              const discountPct = item.compare_at_price && item.compare_at_price > item.price ? Math.round((item.compare_at_price - item.price) / item.compare_at_price * 100) : 15;
               return /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
-                style: localStyles.popularProductCard,
-                onPress: () => {
-                  if (!user) {
-                    onNavigate('Auth', {
-                      redirectTo: 'ProductDetails',
-                      redirectParams: {
-                        product: item
-                      }
-                    });
-                  } else {
-                    navigation.navigate('ProductDetails', {
-                      product: item
-                    });
-                  }
-                },
-                children: [item.discount && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                  style: localStyles.popDiscountBadge,
+                style: s.flashCard,
+                onPress: () => handleProductPress(item),
+                activeOpacity: 0.88,
+                children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+                  style: s.flashDiscountBadge,
                   children: /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
-                    style: localStyles.popDiscountText,
-                    children: ["-", item.discount, "%"]
-                  })
-                }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-                  style: localStyles.popLikeButton,
-                  onPress: () => {
-                    if (!user) {
-                      onNavigate('Auth', {
-                        redirectTo: 'ProductDetails',
-                        redirectParams: {
-                          product: item
-                        }
-                      });
-                    } else {
-                      toggleWishlist(item.id);
-                    }
-                  },
-                  activeOpacity: 0.8,
-                  children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                    name: isLiked ? 'heart' : 'heart-outline',
-                    size: 16,
-                    color: isLiked ? '#EF4444' : '#64748B'
+                    style: s.flashDiscountText,
+                    children: ["-", discountPct, "%"]
                   })
                 }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
                   source: {
-                    uri: item.image
+                    uri: resolveImage(item)
                   },
-                  style: localStyles.popularProductImg
+                  style: s.flashImage,
+                  resizeMode: "cover"
                 }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-                  style: localStyles.popProductDetails,
+                  style: s.flashBody,
                   children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                    style: localStyles.popCategoryText,
-                    children: item.category
-                  }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                    style: localStyles.popNameText,
+                    style: s.flashName,
                     numberOfLines: 1,
                     children: item.name
                   }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-                    style: localStyles.popPriceRow,
-                    children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
-                      style: localStyles.popCurrentPrice,
-                      children: ["\u20A6", item.price ? item.price.toLocaleString() : '0']
-                    }), item.oldPrice && /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
-                      style: localStyles.popOldPrice,
-                      children: ["\u20A6", item.oldPrice.toLocaleString()]
-                    })]
-                  }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-                    style: localStyles.popRatingRow,
-                    children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                      name: "star",
-                      size: 12,
-                      color: "#F59E0B"
-                    }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
-                      style: localStyles.popRatingText,
-                      children: [item.rating || 5.0, " (", item.reviews_count || 0, ")"]
+                    style: s.flashPriceRow,
+                    children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                      style: s.flashPrice,
+                      children: fmtPrice(item.price)
+                    }), item.compare_at_price && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                      style: s.flashOldPrice,
+                      children: fmtPrice(item.compare_at_price)
                     })]
                   })]
                 })]
-              }, item.id);
+              }, item.id || i);
             })
           })]
         }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-          style: localStyles.sectionContainer,
+          style: s.sectionBlock,
           children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-            style: localStyles.sectionHeaderRow,
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-              style: localStyles.sectionTitleText,
-              children: "What Our Community Says"
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
-              onPress: () => handleEnterShop('about'),
-              style: {
-                flexDirection: 'row',
-                alignItems: 'center'
-              },
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.sectionLinkText,
-                children: "See more reviews"
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                name: "arrow-forward-outline",
-                size: 14,
-                color: "#D9A73A",
-                style: {
-                  marginLeft: 4
-                }
-              })]
-            })]
-          }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(ScrollView.default, {
-            horizontal: true,
-            showsHorizontalScrollIndicator: false,
-            contentContainerStyle: localStyles.testimonialScrollContent,
-            children: (testimonials.length > 0 ? testimonials : TESTIMONIALS_FALLBACK).map(t => /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              style: localStyles.testimonialCard,
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
-                style: localStyles.testimonialQuote,
-                children: ["\u201C", t.testimonial || t.quote, "\u201D"]
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-                style: localStyles.testimonialUserRow,
-                children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
-                  source: {
-                    uri: t.customer_image || t.avatar || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150'
-                  },
-                  style: localStyles.testimonialAvatar
-                }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-                  style: localStyles.testimonialUserInfo,
-                  children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                    style: localStyles.testimonialName,
-                    children: t.customer_name || t.name
-                  }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-                    style: {
-                      flexDirection: 'row',
-                      alignItems: 'center'
-                    },
-                    children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                      style: localStyles.testimonialRole,
-                      children: t.customer_title || t.role
-                    }), (t.is_verified || t.verified) && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                      name: "checkmark-circle",
-                      size: 12,
-                      color: "#10B981",
-                      style: {
-                        marginLeft: 4
-                      }
-                    })]
-                  })]
-                })]
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                style: localStyles.testimonialStars,
-                children: [...Array(t.rating || 5)].map((_, idx) => /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                  name: "star",
-                  size: 12,
-                  color: "#F59E0B",
-                  style: {
-                    marginRight: 2
-                  }
-                }, idx))
-              })]
-            }, t.id))
-          })]
-        }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-          style: localStyles.trustStrip,
-          children: TRUST_ITEMS.map((t, idx) => /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-            style: localStyles.trustItem,
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-              name: t.icon,
-              size: 20,
-              color: t.color
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-              style: localStyles.trustText,
-              children: t.label
-            })]
-          }, idx))
-        }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-          style: localStyles.landingFooter,
-          children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-            style: localStyles.footerBrandBlock,
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-              style: localStyles.footerLogoCircle,
-              children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
-                source: settings?.logo_url ? {
-                  uri: settings.logo_url
-                } : require(_dependencyMap[21]),
-                style: localStyles.footerLogoImage,
-                resizeMode: "contain"
-              })
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-              style: localStyles.footerBrandTitle,
-              children: "ABU MAFHAL"
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-              style: localStyles.footerBrandSub,
-              children: "ONLINE MARKETPLACE"
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-              style: localStyles.footerBrandDesc,
-              children: "Buy. Sell. Earn. Grow. Together. Abu Mafhal is more than a marketplace. It's a movement to empower people and build a better community."
-            })]
-          }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-            style: localStyles.footerSocialRow,
-            children: [{
-              icon: 'logo-facebook',
-              url: 'https://facebook.com/abumafhal'
-            }, {
-              icon: 'logo-instagram',
-              url: 'https://instagram.com/abumafhal'
-            }, {
-              icon: 'logo-twitter',
-              url: 'https://x.com/abumafhal'
-            }, {
-              icon: 'logo-youtube',
-              url: 'https://youtube.com/abumafhal'
-            }].map((soc, idx) => /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-              style: localStyles.footerSocialBtn,
-              onPress: () => Linking.default.openURL(soc.url),
-              children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                name: soc.icon,
+            style: s.sectionHeader,
+            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+              style: s.sectionTitleRow,
+              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+                name: "sparkles",
                 size: 18,
                 color: "#D9A73A"
+              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                style: s.sectionTitle,
+                children: searchQuery.trim() ? `Search Results (${filteredProducts.length})` : 'Popular Products'
+              })]
+            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
+              onPress: () => onEnterShop ? onEnterShop('shop') : null,
+              children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                style: s.sectionAction,
+                children: "View All >"
               })
-            }, idx))
-          }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-            style: localStyles.footerLinksGrid,
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              style: localStyles.footerLinkCol,
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.footerColHeading,
-                children: "Marketplace"
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-                onPress: () => handleEnterShop('shop'),
-                children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: localStyles.footerLinkText,
-                  children: "All Categories"
-                })
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-                onPress: () => handleEnterShop('shop'),
-                children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: localStyles.footerLinkText,
-                  children: "Popular Products"
-                })
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-                onPress: () => handleEnterShop('shop'),
-                children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: localStyles.footerLinkText,
-                  children: "Deals"
-                })
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-                onPress: () => handleEnterShop('shop', 'Digital Products'),
-                children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: localStyles.footerLinkText,
-                  children: "Digital Products"
-                })
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-                onPress: () => handleEnterShop('shop'),
-                children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: localStyles.footerLinkText,
-                  children: "Stores"
-                })
-              })]
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              style: localStyles.footerLinkCol,
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.footerColHeading,
-                children: "Company"
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-                onPress: () => handleEnterShop('about'),
-                children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: localStyles.footerLinkText,
-                  children: "About Us"
-                })
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-                onPress: () => handleEnterShop('How It Works'),
-                children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: localStyles.footerLinkText,
-                  children: "How It Works"
-                })
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-                onPress: handleBecomeSeller,
-                children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: localStyles.footerLinkText,
-                  children: "Become a Seller"
-                })
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-                onPress: () => handleEnterShop('Blog'),
-                children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: localStyles.footerLinkText,
-                  children: "Blog"
-                })
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-                onPress: () => handleEnterShop('Careers'),
-                children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: localStyles.footerLinkText,
-                  children: "Careers"
-                })
-              })]
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              style: localStyles.footerLinkCol,
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: localStyles.footerColHeading,
-                children: "Support"
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-                onPress: () => handleEnterShop('support'),
-                children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: localStyles.footerLinkText,
-                  children: "Help Center"
-                })
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-                onPress: () => handleEnterShop('Contact'),
-                children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: localStyles.footerLinkText,
-                  children: "Contact Us"
-                })
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-                onPress: () => handleEnterShop('Shipping & Returns'),
-                children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: localStyles.footerLinkText,
-                  children: "Shipping & Delivery"
-                })
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-                onPress: () => handleEnterShop('Shipping & Returns'),
-                children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: localStyles.footerLinkText,
-                  children: "Returns & Refunds"
-                })
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-                onPress: () => handleEnterShop('Terms of Service'),
-                children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: localStyles.footerLinkText,
-                  children: "Terms & Conditions"
-                })
-              })]
             })]
-          }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-            style: localStyles.footerNewsletter,
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-              style: localStyles.footerColHeading,
-              children: "Stay Connected"
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-              style: localStyles.newsletterSubText,
-              children: "Get the best deals and updates delivered to your inbox."
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              style: localStyles.newsletterInputRow,
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(TextInput.default, {
-                placeholder: "Enter your email",
-                placeholderTextColor: "#475569",
-                value: newsletterEmail,
-                onChangeText: setNewsletterEmail,
-                style: localStyles.newsletterInput
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-                onPress: handleNewsletterSubmit,
-                style: localStyles.btnNewsletterSubmit,
-                children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                  name: "arrow-forward",
-                  size: 14,
-                  color: "white"
+          }), filteredProducts.length > 0 ? /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+            style: s.productGrid,
+            children: filteredProducts.map(p => {
+              const isLiked = !!wishlist[p.id];
+              const hasDiscount = p.compare_at_price && p.compare_at_price > p.price;
+              const discountVal = hasDiscount ? Math.round((p.compare_at_price - p.price) / p.compare_at_price * 100) : null;
+              return /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+                style: s.productCol,
+                children: /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
+                  style: s.productCard,
+                  onPress: () => handleProductPress(p),
+                  activeOpacity: 0.88,
+                  children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+                    style: s.productMediaWrapper,
+                    children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
+                      source: {
+                        uri: resolveImage(p)
+                      },
+                      style: s.productImage,
+                      resizeMode: "cover"
+                    }), discountVal && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+                      style: s.prodDiscountTag,
+                      children: /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
+                        style: s.prodDiscountText,
+                        children: ["-", discountVal, "%"]
+                      })
+                    }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
+                      style: s.prodLikeBtn,
+                      onPress: e => {
+                        e.stopPropagation();
+                        toggleWishlist(p.id);
+                      },
+                      activeOpacity: 0.7,
+                      children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+                        name: isLiked ? 'heart' : 'heart-outline',
+                        size: 16,
+                        color: isLiked ? '#EF4444' : '#64748B'
+                      })
+                    })]
+                  }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+                    style: s.productDetails,
+                    children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                      style: s.productCategoryText,
+                      numberOfLines: 1,
+                      children: p.category || 'Marketplace'
+                    }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                      style: s.productTitle,
+                      numberOfLines: 2,
+                      children: p.name
+                    }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+                      style: s.ratingRow,
+                      children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+                        name: "star",
+                        size: 12,
+                        color: "#F59E0B"
+                      }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                        style: s.ratingScore,
+                        children: p.rating || 5.0
+                      }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
+                        style: s.reviewsCount,
+                        children: ["(", p.reviews || p.reviews_count || 12, ")"]
+                      })]
+                    }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+                      style: s.priceActionRow,
+                      children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+                        style: s.priceColumn,
+                        children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                          style: s.productPrice,
+                          children: fmtPrice(p.price)
+                        }), hasDiscount && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                          style: s.productOldPrice,
+                          children: fmtPrice(p.compare_at_price)
+                        })]
+                      }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
+                        style: s.quickAddBtn,
+                        onPress: e => handleAddToCartPress(p, e),
+                        activeOpacity: 0.8,
+                        children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+                          name: "cart-outline",
+                          size: 15,
+                          color: "#FFFFFF"
+                        })
+                      })]
+                    })]
+                  })]
                 })
-              })]
-            })]
-          }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-            style: localStyles.footerBottom,
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-              style: localStyles.footerBottomText,
-              children: "\xA9 2026 Abu Mafhal. All rights reserved."
+              }, p.id);
+            })
+          }) : /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+            style: s.emptyBox,
+            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+              name: "cube-outline",
+              size: 44,
+              color: "#94A3B8"
             }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-              style: localStyles.footerBottomText,
-              children: "Made with \u2764\uFE0F in Nigeria \uD83C\uDDF3\uD83C\uDDEC \u2022 Secured Escrow Platform"
+              style: s.emptyTitle,
+              children: "No products found"
+            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+              style: s.emptySubtitle,
+              children: "Try searching with different keywords"
             })]
           })]
+        }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+          style: s.sellerCardContainer,
+          children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoLinearGradient.LinearGradient, {
+            colors: ['#0A192F', '#064E3B'],
+            start: {
+              x: 0,
+              y: 0
+            },
+            end: {
+              x: 1,
+              y: 1
+            },
+            style: s.sellerBanner,
+            children: /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+              style: s.sellerBannerContent,
+              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+                style: s.sellerIconCircle,
+                children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+                  name: "storefront",
+                  size: 24,
+                  color: "#10B981"
+                })
+              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                style: s.sellerHeadline,
+                children: "Sell on Abu Mafhal"
+              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                style: s.sellerDesc,
+                children: "Reach thousands of verified buyers across Nigeria. Enjoy 100% secure escrow settlements and low fees."
+              }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
+                style: s.sellerButton,
+                onPress: () => {
+                  if (!user) {
+                    if (onLogin) onLogin();
+                  } else {
+                    if (onNavigate) onNavigate('VendorRegister');
+                  }
+                },
+                activeOpacity: 0.85,
+                children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                  style: s.sellerButtonText,
+                  children: "Become a Seller"
+                }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+                  name: "arrow-forward",
+                  size: 14,
+                  color: "#0A192F"
+                })]
+              })]
+            })
+          })
+        }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+          style: s.trustStripContainer,
+          children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+            style: s.trustCard,
+            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+              name: "shield-checkmark",
+              size: 22,
+              color: "#10B981"
+            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+              style: s.trustCardTitle,
+              children: "Escrow Secured"
+            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+              style: s.trustCardDesc,
+              children: "Safe payment release upon order confirmation"
+            })]
+          }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+            style: s.trustCard,
+            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+              name: "airplane",
+              size: 22,
+              color: "#0284C7"
+            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+              style: s.trustCardTitle,
+              children: "Fast Delivery"
+            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+              style: s.trustCardDesc,
+              children: "Speedy, tracked shipping across all states"
+            })]
+          }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+            style: s.trustCard,
+            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+              name: "headset",
+              size: 22,
+              color: "#D9A73A"
+            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+              style: s.trustCardTitle,
+              children: "24/7 Verified Help"
+            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+              style: s.trustCardDesc,
+              children: "Dedicated support whenever you need"
+            })]
+          })]
+        }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+          style: s.footerContainer,
+          children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+            style: s.footerBrandRow,
+            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
+              source: AM_LOGO,
+              style: s.footerLogo,
+              resizeMode: "contain"
+            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+              style: s.footerBrandTitle,
+              children: "Abu Mafhal Marketplace"
+            })]
+          }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+            style: s.footerSlogan,
+            children: "Your Marketplace, Your Choice."
+          }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+            style: s.footerCopyright,
+            children: "\xA9 2026 Abu Mafhal. All Rights Reserved."
+          })]
+        })]
+      }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+        style: [s.bottomBar, {
+          paddingBottom: Math.max(insets.bottom, 8)
+        }],
+        children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
+          style: s.tabItem,
+          onPress: () => onEnterShop ? onEnterShop('home') : null,
+          activeOpacity: 0.7,
+          children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+            name: "home",
+            size: 22,
+            color: "#D9A73A"
+          }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+            style: [s.tabLabel, s.tabLabelActive],
+            children: "Home"
+          })]
+        }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
+          style: s.tabItem,
+          onPress: () => onEnterShop ? onEnterShop('shop') : null,
+          activeOpacity: 0.7,
+          children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+            name: "bag-handle-outline",
+            size: 22,
+            color: "#64748B"
+          }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+            style: s.tabLabel,
+            children: "Shop"
+          })]
+        }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
+          style: s.tabItem,
+          onPress: () => onEnterShop ? onEnterShop('cart') : null,
+          activeOpacity: 0.7,
+          children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+            style: {
+              position: 'relative'
+            },
+            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+              name: "cart-outline",
+              size: 23,
+              color: "#64748B"
+            }), cartCount > 0 && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+              style: s.bottomCartBadge,
+              children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                style: s.bottomCartBadgeText,
+                children: cartCount > 99 ? '99+' : cartCount
+              })
+            })]
+          }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+            style: s.tabLabel,
+            children: "Cart"
+          })]
+        }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
+          style: s.tabItem,
+          onPress: () => user ? onEnterShop ? onEnterShop('profile') : null : onLogin ? onLogin() : null,
+          activeOpacity: 0.7,
+          children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+            name: user ? 'person' : 'person-outline',
+            size: 22,
+            color: "#64748B"
+          }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+            style: s.tabLabel,
+            children: user ? 'Account' : 'Sign In'
+          })]
+        })]
+      }), toast.visible && /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Animated.default.View, {
+        style: [s.toastBox, {
+          opacity: toastAnim
+        }],
+        children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+          name: "checkmark-circle",
+          size: 18,
+          color: "#10B981",
+          style: {
+            marginRight: 6
+          }
+        }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+          style: s.toastText,
+          children: toast.message
         })]
       })]
     });
   };
-  const localStyles = StyleSheet.default.create({
-    safeContainer: {
+  const s = StyleSheet.default.create({
+    root: {
       flex: 1,
-      backgroundColor: '#F5F3EB'
+      backgroundColor: '#F8FAFC'
     },
-    headerCentered: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingTop: 35,
-      paddingBottom: 20,
-      backgroundColor: '#F5F3EB',
-      position: 'relative'
-    },
-    logoContainer: {
-      width: 68,
-      height: 68,
-      borderRadius: 34,
-      alignItems: 'center',
-      justifyContent: 'center',
+    /* ─── Header ─── */
+    topBar: {
       backgroundColor: '#FFFFFF',
-      shadowColor: '#0E1A2E',
+      paddingHorizontal: 16,
+      paddingBottom: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: '#F1F5F9',
+      elevation: 2,
+      shadowColor: '#000',
       shadowOffset: {
         width: 0,
-        height: 4
+        height: 1
       },
-      shadowOpacity: 0.05,
-      shadowRadius: 8,
-      elevation: 2,
-      borderWidth: 1.5,
-      borderColor: '#D9A73A30'
+      shadowOpacity: 0.04,
+      shadowRadius: 3,
+      zIndex: 10
     },
-    logoImageMark: {
-      width: 58,
-      height: 58,
-      borderRadius: 29
-    },
-    brandTextRow: {
-      flexDirection: 'row',
-      marginTop: 10,
-      alignItems: 'center'
-    },
-    brandTextAbu: {
-      fontSize: 20,
-      fontWeight: '900',
-      color: '#0E1A2E',
-      letterSpacing: 0.5
-    },
-    brandTextMafhal: {
-      fontSize: 20,
-      fontWeight: '900',
-      color: '#D9A73A',
-      letterSpacing: 0.5
-    },
-    brandSubCentered: {
-      fontSize: 10,
-      fontWeight: '800',
-      color: '#0E1A2E',
-      letterSpacing: 2.2,
-      marginTop: 3
-    },
-    headerLoginAbsolute: {
-      position: 'absolute',
-      top: 40,
-      right: 16,
+    topRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: 'rgba(14, 26, 46, 0.04)',
-      borderWidth: 1,
-      borderColor: '#D9A73A',
-      paddingHorizontal: 8,
-      paddingVertical: 5,
-      borderRadius: 8
-    },
-    headerLoginText: {
-      color: '#D9A73A',
-      fontSize: 10,
-      fontWeight: '800'
-    },
-    heroRow: {
-      flexDirection: 'row',
-      paddingLeft: 16,
-      paddingRight: 0,
-      paddingVertical: 12,
-      alignItems: 'center',
-      minHeight: 380,
-      position: 'relative'
-    },
-    heroLeftCol: {
-      width: '48%',
-      paddingRight: 4,
-      zIndex: 2
-    },
-    heroRightCol: {
-      position: 'absolute',
-      right: -25,
-      top: 0,
-      bottom: 0,
-      width: '62%',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1
-    },
-    decorCircle1: {
-      position: 'absolute',
-      width: 220,
-      height: 220,
-      borderRadius: 110,
-      backgroundColor: '#EAE6DB',
-      bottom: 10,
-      right: -10,
-      opacity: 0.4,
-      zIndex: 0
-    },
-    decorCircle2: {
-      position: 'absolute',
-      width: 150,
-      height: 150,
-      borderRadius: 75,
-      borderWidth: 2,
-      borderColor: '#D9A73A20',
-      top: 10,
-      right: -20,
-      opacity: 0.3,
-      zIndex: 0
-    },
-    heroMockupImage: {
-      width: '100%',
-      height: '100%',
-      zIndex: 1
-    },
-    pillBadgeContainer: {
-      alignItems: 'flex-start',
+      justifyContent: 'space-between',
       marginBottom: 10
     },
-    pillBadge: {
+    brandBlock: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 5,
-      backgroundColor: '#FFFFFF',
-      paddingHorizontal: 8,
-      paddingVertical: 5,
-      borderRadius: 16,
+      gap: 8
+    },
+    brandLogo: {
+      width: 36,
+      height: 36
+    },
+    brandNameRow: {
+      flexDirection: 'row',
+      alignItems: 'center'
+    },
+    brandNameNavy: {
+      fontSize: 16,
+      fontWeight: '900',
+      color: '#0A192F',
+      letterSpacing: 0.5
+    },
+    brandNameGold: {
+      fontSize: 16,
+      fontWeight: '900',
+      color: '#D9A73A',
+      letterSpacing: 0.5
+    },
+    brandTagline: {
+      fontSize: 7.5,
+      fontWeight: '700',
+      color: '#64748B',
+      letterSpacing: 0.6,
+      textTransform: 'uppercase'
+    },
+    topActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12
+    },
+    iconButton: {
+      position: 'relative',
+      padding: 4
+    },
+    cartBadge: {
+      position: 'absolute',
+      top: -2,
+      right: -4,
+      backgroundColor: '#EF4444',
+      minWidth: 16,
+      height: 16,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 3
+    },
+    cartBadgeText: {
+      color: '#FFFFFF',
+      fontSize: 9,
+      fontWeight: '900'
+    },
+    userPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: '#0A192F',
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 16
+    },
+    userPillText: {
+      color: '#FFFFFF',
+      fontSize: 11,
+      fontWeight: '700'
+    },
+    /* ─── Search ─── */
+    searchContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#F1F5F9',
+      borderRadius: 14,
+      paddingHorizontal: 12,
+      height: 42,
       borderWidth: 1,
       borderColor: '#E2E8F0'
     },
-    pillBadgeText: {
-      fontSize: 8,
-      fontWeight: '700',
-      color: '#64748B'
+    searchInput: {
+      flex: 1,
+      fontSize: 13,
+      color: '#0F172A',
+      fontWeight: '500'
     },
-    heroTextContainer: {
-      marginTop: 4
-    },
-    heroLine1: {
-      fontSize: 28,
-      fontWeight: '900',
-      color: '#0E1A2E',
-      letterSpacing: -0.5,
-      lineHeight: 32
-    },
-    heroLine2: {
-      fontSize: 28,
-      fontWeight: '900',
-      color: '#0E1A2E',
-      letterSpacing: -0.5,
-      lineHeight: 32,
-      marginTop: 2
-    },
-    heroLineGold: {
-      fontSize: 28,
-      fontWeight: '900',
-      color: '#D9A73A',
-      letterSpacing: -0.5,
-      lineHeight: 32,
-      marginTop: 2,
-      marginBottom: 8
-    },
-    heroDescription: {
-      fontSize: 11,
-      color: '#64748B',
-      lineHeight: 17,
-      fontWeight: '600'
-    },
-    heroButtonsContainer: {
-      flexDirection: 'column',
-      gap: 10,
-      marginTop: 16,
-      width: '100%'
-    },
-    btnStartShopping: {
-      width: '100%',
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      backgroundColor: '#0E1A2E',
-      paddingLeft: 12,
-      paddingRight: 6,
-      paddingVertical: 10,
-      borderRadius: 10,
-      shadowColor: '#0E1A2E',
-      shadowOffset: {
-        width: 0,
-        height: 3
-      },
-      shadowOpacity: 0.12,
-      shadowRadius: 6,
-      elevation: 2
-    },
-    btnStartShoppingText: {
-      color: '#FFFFFF',
-      fontWeight: '800',
-      fontSize: 12
-    },
-    circleArrowWhite: {
-      width: 22,
-      height: 22,
-      borderRadius: 11,
-      backgroundColor: '#FFFFFF',
-      alignItems: 'center',
-      justifyContent: 'center'
-    },
-    btnStartSelling: {
-      width: '100%',
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      backgroundColor: '#FFFFFF',
-      borderWidth: 1,
-      borderColor: '#D9A73A',
-      paddingLeft: 10,
-      paddingRight: 6,
-      paddingVertical: 10,
-      borderRadius: 10
-    },
-    btnStartSellingText: {
-      color: '#0E1A2E',
-      fontWeight: '800',
-      fontSize: 12
-    },
-    circleArrowGold: {
-      width: 22,
-      height: 22,
-      borderRadius: 11,
-      backgroundColor: '#D9A73A',
-      alignItems: 'center',
-      justifyContent: 'center'
-    },
-    searchBarContainer: {
-      paddingHorizontal: 20,
-      marginTop: 24
-    },
-    searchBox: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: '#FFFFFF',
-      borderRadius: 16,
+    /* ─── Banner Carousel ─── */
+    bannerSection: {
       paddingHorizontal: 16,
+      paddingTop: 12,
+      marginBottom: 16
+    },
+    bannerCard: {
+      width: width - 32,
+      height: 155,
+      borderRadius: 18,
+      overflow: 'hidden',
+      position: 'relative',
+      justifyContent: 'flex-end',
+      padding: 16,
+      backgroundColor: '#0A192F'
+    },
+    bannerImage: Object.assign({}, StyleSheet.default.absoluteFillObject),
+    bannerContent: {
+      zIndex: 2
+    },
+    badgePill: {
+      backgroundColor: '#D9A73A',
+      alignSelf: 'flex-start',
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 6,
+      marginBottom: 6
+    },
+    badgePillText: {
+      color: '#0A192F',
+      fontSize: 9,
+      fontWeight: '900',
+      letterSpacing: 0.5
+    },
+    bannerTitle: {
+      color: '#FFFFFF',
+      fontSize: 18,
+      fontWeight: '900',
+      marginBottom: 3
+    },
+    bannerSubtitle: {
+      color: '#CBD5E1',
+      fontSize: 11,
+      fontWeight: '500',
+      marginBottom: 10
+    },
+    bannerCta: {
+      backgroundColor: '#FFFFFF',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 12,
       paddingVertical: 6,
-      borderWidth: 1.5,
+      borderRadius: 16,
+      alignSelf: 'flex-start'
+    },
+    bannerCtaText: {
+      color: '#0A192F',
+      fontSize: 11,
+      fontWeight: '800'
+    },
+    dotsContainer: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginTop: 8,
+      gap: 6
+    },
+    dot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: '#CBD5E1'
+    },
+    dotActive: {
+      width: 16,
+      backgroundColor: '#D9A73A'
+    },
+    /* ─── Section Layout ─── */
+    sectionBlock: {
+      marginBottom: 20
+    },
+    sectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      marginBottom: 12
+    },
+    sectionTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontWeight: '800',
+      color: '#0A192F'
+    },
+    sectionAction: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: '#0284C7'
+    },
+    /* ─── Categories ─── */
+    categoriesScroll: {
+      paddingHorizontal: 16,
+      gap: 12
+    },
+    categoryItem: {
+      alignItems: 'center',
+      width: 68
+    },
+    categoryIconCircle: {
+      width: 52,
+      height: 52,
+      borderRadius: 16,
+      backgroundColor: '#FFFFFF',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 6,
+      borderWidth: 1,
       borderColor: '#E2E8F0',
+      elevation: 1,
       shadowColor: '#000',
       shadowOffset: {
         width: 0,
-        height: 2
+        height: 1
       },
-      shadowOpacity: 0.04,
-      shadowRadius: 8,
-      elevation: 1
+      shadowOpacity: 0.05,
+      shadowRadius: 2
     },
-    searchBoxInput: {
-      flex: 1,
-      color: '#0E1A2E',
+    categoryLabel: {
+      fontSize: 10.5,
       fontWeight: '600',
-      fontSize: 13,
-      paddingVertical: 4
+      color: '#334155',
+      textAlign: 'center'
     },
-    searchFilterIcon: {
-      paddingLeft: 8
+    /* ─── Flash Deals ─── */
+    flashScroll: {
+      paddingHorizontal: 16,
+      gap: 12
     },
-    promoContainer: {
-      paddingHorizontal: 20,
-      marginTop: 20
-    },
-    slimBannerTouch: {
-      width: '100%',
-      height: 75,
+    flashCard: {
+      width: 140,
+      backgroundColor: '#FFFFFF',
       borderRadius: 14,
       overflow: 'hidden',
       borderWidth: 1,
-      borderColor: '#E2E8F0',
+      borderColor: '#F1F5F9',
+      elevation: 1,
       shadowColor: '#000',
       shadowOffset: {
         width: 0,
-        height: 2
+        height: 1
       },
       shadowOpacity: 0.04,
-      shadowRadius: 6,
-      elevation: 1
-    },
-    slimBannerImage: {
-      width: '100%',
-      height: '100%'
-    },
-    sectionContainer: {
-      marginTop: 28
-    },
-    sectionHeaderRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingHorizontal: 20,
-      marginBottom: 12
-    },
-    sectionTitleText: {
-      fontSize: 18,
-      fontWeight: '900',
-      color: '#0E1A2E'
-    },
-    sectionLinkText: {
-      color: '#D9A73A',
-      fontWeight: '800',
-      fontSize: 12
-    },
-    categoriesScrollContainer: {
-      paddingHorizontal: 20,
-      gap: 16
-    },
-    categoryCard: {
-      alignItems: 'center',
-      width: 70
-    },
-    categoryIconBox: {
-      width: 56,
-      height: 56,
-      borderRadius: 16,
-      backgroundColor: '#FFFFFF',
-      borderWidth: 1.5,
-      borderColor: '#F1F5F9',
-      alignItems: 'center',
-      justifyContent: 'center',
-      shadowColor: '#000',
-      shadowOffset: {
-        width: 0,
-        height: 2
-      },
-      shadowOpacity: 0.02,
-      shadowRadius: 6,
-      elevation: 1,
-      marginBottom: 8
-    },
-    categoryText: {
-      fontSize: 11,
-      fontWeight: '700',
-      color: '#64748B',
-      textAlign: 'center'
-    },
-    flashDealCard: {
-      width: 140,
-      backgroundColor: '#FFFFFF',
-      borderRadius: 20,
-      borderWidth: 1,
-      borderColor: '#F1F5F9',
-      overflow: 'hidden',
-      shadowColor: '#000',
-      shadowOffset: {
-        width: 0,
-        height: 2
-      },
-      shadowOpacity: 0.03,
-      shadowRadius: 8,
-      elevation: 1
-    },
-    flashDealImg: {
-      width: '100%',
-      height: 110,
-      backgroundColor: '#F8FAFC'
+      shadowRadius: 3,
+      position: 'relative'
     },
     flashDiscountBadge: {
       position: 'absolute',
       top: 8,
-      right: 8,
+      left: 8,
       backgroundColor: '#EF4444',
-      paddingHorizontal: 6,
-      paddingVertical: 3,
-      borderRadius: 6
-    },
-    flashDealName: {
-      color: '#334155',
-      fontWeight: '700',
-      fontSize: 12
-    },
-    flashDealPrice: {
-      color: '#D9A73A',
-      fontWeight: '900',
-      fontSize: 14,
-      marginTop: 2
-    },
-    featureHighlightsContainer: {
-      marginTop: 32
-    },
-    featureGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      paddingHorizontal: 20,
-      gap: 12,
-      marginTop: 16
-    },
-    featureCard: {
-      width: (width - 52) / 2,
-      backgroundColor: '#FFFFFF',
-      borderRadius: 20,
-      borderWidth: 1.5,
-      borderColor: '#F1F5F9',
-      padding: 16,
-      shadowColor: '#000',
-      shadowOffset: {
-        width: 0,
-        height: 2
-      },
-      shadowOpacity: 0.02,
-      shadowRadius: 8,
-      elevation: 1
-    },
-    featureIconCircle: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: 12
-    },
-    featureTitle: {
-      fontSize: 13,
-      fontWeight: '800',
-      color: '#0E1A2E',
-      marginBottom: 4
-    },
-    featureDesc: {
-      fontSize: 10,
-      fontWeight: '550',
-      color: '#64748B'
-    },
-    statsCardContainer: {
-      paddingHorizontal: 20,
-      marginTop: 28
-    },
-    statsRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      backgroundColor: '#FFFFFF',
-      borderRadius: 24,
-      borderWidth: 1.5,
-      borderColor: '#F1F5F9',
-      paddingVertical: 16,
-      paddingHorizontal: 10,
-      shadowColor: '#000',
-      shadowOffset: {
-        width: 0,
-        height: 4
-      },
-      shadowOpacity: 0.02,
-      shadowRadius: 10,
-      elevation: 1
-    },
-    statsItem: {
-      flex: 1,
-      alignItems: 'center'
-    },
-    statsNumber: {
-      fontSize: 15,
-      fontWeight: '900',
-      color: '#0E1A2E'
-    },
-    statsLabelText: {
-      fontSize: 8,
-      fontWeight: '700',
-      color: '#64748B',
-      textAlign: 'center',
-      marginTop: 2
-    },
-    statsDivider: {
-      width: 1,
-      height: 30,
-      backgroundColor: '#E2E8F0'
-    },
-    missionSection: {
-      backgroundColor: '#FFFFFF',
-      borderTopWidth: 1,
-      borderBottomWidth: 1,
-      borderColor: '#E2E8F0',
-      paddingVertical: 32,
-      paddingHorizontal: 20,
-      marginTop: 32
-    },
-    missionBadge: {
-      backgroundColor: '#0E1A2E',
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 6,
-      alignSelf: 'flex-start',
-      marginBottom: 12
-    },
-    missionBadgeText: {
-      color: '#FFFFFF',
-      fontSize: 8,
-      fontWeight: '900',
-      letterSpacing: 1
-    },
-    missionTitle: {
-      fontSize: 22,
-      fontWeight: '900',
-      color: '#0E1A2E',
-      lineHeight: 28,
-      letterSpacing: -0.5,
-      marginBottom: 12
-    },
-    missionDesc: {
-      fontSize: 13,
-      color: '#64748B',
-      lineHeight: 20,
-      fontWeight: '550',
-      marginBottom: 20
-    },
-    missionImageContainer: {
-      borderRadius: 24,
-      overflow: 'hidden',
-      position: 'relative'
-    },
-    missionImg: {
-      width: '100%',
-      height: 200
-    },
-    missionFloatingBadge: {
-      position: 'absolute',
-      bottom: 16,
-      right: 16,
-      left: 16,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      backgroundColor: 'rgba(14,26,46,0.9)',
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: 14,
-      borderWidth: 1,
-      borderColor: 'rgba(255,255,255,0.1)'
-    },
-    missionFloatingBadgeText: {
-      color: '#FFFFFF',
-      fontSize: 10,
-      fontWeight: '700',
-      flex: 1
-    },
-    whyChooseUsContainer: {
-      marginTop: 32,
-      paddingVertical: 12
-    },
-    centerHeader: {
-      alignItems: 'center',
-      marginBottom: 20,
-      paddingHorizontal: 20
-    },
-    centerHeaderText: {
-      fontSize: 20,
-      fontWeight: '900',
-      color: '#0E1A2E',
-      textAlign: 'center'
-    },
-    goldAccentLine: {
-      width: 40,
-      height: 3,
-      backgroundColor: '#D9A73A',
-      borderRadius: 2,
-      marginTop: 8
-    },
-    whyScrollContent: {
-      paddingHorizontal: 20,
-      gap: 16,
-      paddingBottom: 8
-    },
-    whyCard: {
-      width: 200,
-      backgroundColor: '#FFFFFF',
-      borderRadius: 20,
-      padding: 16,
-      borderWidth: 1,
-      borderColor: '#F1F5F9',
-      shadowColor: '#000',
-      shadowOffset: {
-        width: 0,
-        height: 4
-      },
-      shadowOpacity: 0.02,
-      shadowRadius: 8,
-      elevation: 1
-    },
-    whyIconContainer: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: 12
-    },
-    whyCardTitle: {
-      fontSize: 14,
-      fontWeight: '800',
-      color: '#0E1A2E',
-      marginBottom: 6
-    },
-    whyCardDesc: {
-      fontSize: 11,
-      fontWeight: '550',
-      color: '#64748B',
-      lineHeight: 16
-    },
-    categoriesGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      paddingHorizontal: 20,
-      gap: 10
-    },
-    gridCategoryCard: {
-      width: (width - 60) / 3,
-      backgroundColor: '#FFFFFF',
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: '#E2E8F0',
-      padding: 12,
-      alignItems: 'center',
-      justifyContent: 'center',
-      shadowColor: '#000',
-      shadowOffset: {
-        width: 0,
-        height: 2
-      },
-      shadowOpacity: 0.02,
-      shadowRadius: 4,
-      elevation: 1
-    },
-    gridCategoryIconBox: {
-      width: 40,
-      height: 40,
-      borderRadius: 12,
-      backgroundColor: '#F5F3EB',
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: 8
-    },
-    gridCategoryText: {
-      fontSize: 10,
-      fontWeight: '800',
-      color: '#0E1A2E',
-      textAlign: 'center'
-    },
-    sellAnythingContainer: {
-      paddingHorizontal: 20,
-      marginTop: 32
-    },
-    sellBannerCard: {
-      flexDirection: 'row',
-      backgroundColor: '#E6F4EA',
-      borderRadius: 24,
-      padding: 20,
-      position: 'relative',
-      overflow: 'hidden'
-    },
-    sellBannerLeft: {
-      flex: 1.3,
-      justifyContent: 'center',
+      paddingHorizontal: 5,
+      paddingVertical: 2,
+      borderRadius: 4,
       zIndex: 2
     },
-    sellBannerRight: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      position: 'relative'
-    },
-    dashboardBadge: {
-      backgroundColor: '#FFFFFF',
-      padding: 10,
-      borderRadius: 14,
-      shadowColor: '#000',
-      shadowOffset: {
-        width: 0,
-        height: 4
-      },
-      shadowOpacity: 0.05,
-      shadowRadius: 6,
-      elevation: 2,
-      alignItems: 'center'
-    },
-    sellBannerHeadline: {
-      fontSize: 22,
-      fontWeight: '900',
-      color: '#0E1A2E',
-      lineHeight: 26,
-      marginBottom: 8
-    },
-    sellBannerDesc: {
-      fontSize: 12,
-      fontWeight: '550',
-      color: '#64748B',
-      lineHeight: 18,
-      marginBottom: 16
-    },
-    btnSellNow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      backgroundColor: '#10B981',
-      paddingLeft: 14,
-      paddingRight: 6,
-      paddingVertical: 10,
-      borderRadius: 12,
-      alignSelf: 'flex-start',
-      shadowColor: '#10B981',
-      shadowOffset: {
-        width: 0,
-        height: 4
-      },
-      shadowOpacity: 0.15,
-      shadowRadius: 8,
-      elevation: 3
-    },
-    btnSellNowText: {
+    flashDiscountText: {
       color: '#FFFFFF',
-      fontWeight: '800',
-      fontSize: 12,
-      marginRight: 8
-    },
-    circleArrowWhite: {
-      width: 22,
-      height: 22,
-      borderRadius: 11,
-      backgroundColor: '#FFFFFF',
-      alignItems: 'center',
-      justifyContent: 'center'
-    },
-    popularScrollContent: {
-      paddingHorizontal: 20,
-      gap: 16,
-      paddingBottom: 8
-    },
-    popularProductCard: {
-      width: 160,
-      backgroundColor: '#FFFFFF',
-      borderRadius: 20,
-      borderWidth: 1,
-      borderColor: '#F1F5F9',
-      padding: 10,
-      shadowColor: '#000',
-      shadowOffset: {
-        width: 0,
-        height: 4
-      },
-      shadowOpacity: 0.03,
-      shadowRadius: 10,
-      elevation: 1.5,
-      position: 'relative'
-    },
-    popDiscountBadge: {
-      position: 'absolute',
-      top: 10,
-      left: 10,
-      backgroundColor: '#FEE2E2',
-      paddingHorizontal: 6,
-      paddingVertical: 3,
-      borderRadius: 6,
-      zIndex: 2
-    },
-    popDiscountText: {
-      color: '#EF4444',
       fontSize: 9,
       fontWeight: '900'
     },
-    popLikeButton: {
-      position: 'absolute',
-      top: 10,
-      right: 10,
-      backgroundColor: '#FFFFFF',
-      width: 26,
-      height: 26,
-      borderRadius: 13,
-      alignItems: 'center',
-      justifyContent: 'center',
-      shadowColor: '#000',
-      shadowOffset: {
-        width: 0,
-        height: 2
-      },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 2,
-      zIndex: 2
-    },
-    popularProductImg: {
+    flashImage: {
       width: '100%',
-      height: 120,
-      borderRadius: 14,
-      backgroundColor: '#F8FAFC',
-      marginBottom: 8
+      height: 100,
+      backgroundColor: '#F1F5F9'
     },
-    popProductDetails: {
-      paddingHorizontal: 2
+    flashBody: {
+      padding: 10
     },
-    popCategoryText: {
-      fontSize: 9,
-      fontWeight: '850',
-      color: '#0E1A2E',
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-      marginBottom: 3
-    },
-    popNameText: {
-      fontSize: 13,
-      fontWeight: '800',
-      color: '#0E1A2E',
-      marginBottom: 6
-    },
-    popPriceRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
+    flashName: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: '#0F172A',
       marginBottom: 4
     },
-    popCurrentPrice: {
-      fontSize: 14,
-      fontWeight: '900',
-      color: '#10B981'
+    flashPriceRow: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: 4
     },
-    popOldPrice: {
-      fontSize: 11,
-      fontWeight: '600',
+    flashPrice: {
+      fontSize: 12,
+      fontWeight: '900',
+      color: '#0A192F'
+    },
+    flashOldPrice: {
+      fontSize: 9.5,
       color: '#94A3B8',
       textDecorationLine: 'line-through'
     },
-    popRatingRow: {
+    /* ─── Product Grid (2 Columns) ─── */
+    productGrid: {
       flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4
+      flexWrap: 'wrap',
+      paddingHorizontal: 12
     },
-    popRatingText: {
-      fontSize: 10,
-      fontWeight: '700',
-      color: '#64748B'
+    productCol: {
+      width: '50%',
+      paddingHorizontal: 4,
+      marginBottom: 10
     },
-    testimonialScrollContent: {
-      paddingHorizontal: 20,
-      gap: 16,
-      paddingBottom: 8
-    },
-    testimonialCard: {
-      width: 240,
+    productCard: {
       backgroundColor: '#FFFFFF',
-      borderRadius: 20,
-      padding: 16,
+      borderRadius: 14,
+      overflow: 'hidden',
       borderWidth: 1,
       borderColor: '#F1F5F9',
+      elevation: 1,
+      shadowColor: '#000',
+      shadowOffset: {
+        width: 0,
+        height: 1
+      },
+      shadowOpacity: 0.04,
+      shadowRadius: 3
+    },
+    productMediaWrapper: {
+      width: '100%',
+      height: 140,
+      backgroundColor: '#F8FAFC',
+      position: 'relative'
+    },
+    productImage: {
+      width: '100%',
+      height: '100%'
+    },
+    prodDiscountTag: {
+      position: 'absolute',
+      top: 8,
+      left: 8,
+      backgroundColor: '#EF4444',
+      paddingHorizontal: 5,
+      paddingVertical: 2,
+      borderRadius: 4
+    },
+    prodDiscountText: {
+      color: '#FFFFFF',
+      fontSize: 8.5,
+      fontWeight: '900'
+    },
+    prodLikeBtn: {
+      position: 'absolute',
+      top: 8,
+      right: 8,
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: 'rgba(255,255,255,0.85)',
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    productDetails: {
+      padding: 10
+    },
+    productCategoryText: {
+      fontSize: 9.5,
+      color: '#64748B',
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      marginBottom: 2
+    },
+    productTitle: {
+      fontSize: 12.5,
+      fontWeight: '700',
+      color: '#0F172A',
+      lineHeight: 16,
+      marginBottom: 4
+    },
+    ratingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      marginBottom: 6
+    },
+    ratingScore: {
+      fontSize: 10,
+      fontWeight: '800',
+      color: '#0A192F'
+    },
+    reviewsCount: {
+      fontSize: 9,
+      color: '#94A3B8'
+    },
+    priceActionRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      justifyContent: 'space-between',
+      marginTop: 2
+    },
+    priceColumn: {
+      flex: 1
+    },
+    productPrice: {
+      fontSize: 13,
+      fontWeight: '900',
+      color: '#0A192F'
+    },
+    productOldPrice: {
+      fontSize: 9.5,
+      color: '#94A3B8',
+      textDecorationLine: 'line-through'
+    },
+    quickAddBtn: {
+      backgroundColor: '#0A192F',
+      width: 28,
+      height: 28,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    /* ─── Empty state ─── */
+    emptyBox: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 32
+    },
+    emptyTitle: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: '#334155',
+      marginTop: 8
+    },
+    emptySubtitle: {
+      fontSize: 11,
+      color: '#94A3B8',
+      marginTop: 2
+    },
+    /* ─── Seller Invitation Card ─── */
+    sellerCardContainer: {
+      paddingHorizontal: 16,
+      marginBottom: 20
+    },
+    sellerBanner: {
+      borderRadius: 18,
+      padding: 18
+    },
+    sellerBannerContent: {
+      alignItems: 'flex-start'
+    },
+    sellerIconCircle: {
+      width: 44,
+      height: 44,
+      borderRadius: 12,
+      backgroundColor: 'rgba(16, 185, 129, 0.15)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 10
+    },
+    sellerHeadline: {
+      color: '#FFFFFF',
+      fontSize: 17,
+      fontWeight: '900',
+      marginBottom: 4
+    },
+    sellerDesc: {
+      color: '#94A3B8',
+      fontSize: 11.5,
+      lineHeight: 16,
+      marginBottom: 14
+    },
+    sellerButton: {
+      backgroundColor: '#D9A73A',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 20
+    },
+    sellerButtonText: {
+      color: '#0A192F',
+      fontSize: 12,
+      fontWeight: '800'
+    },
+    /* ─── Trust Strip ─── */
+    trustStripContainer: {
+      paddingHorizontal: 16,
+      gap: 8,
+      marginBottom: 24
+    },
+    trustCard: {
+      backgroundColor: '#FFFFFF',
+      padding: 12,
+      borderRadius: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      borderWidth: 1,
+      borderColor: '#F1F5F9'
+    },
+    trustCardTitle: {
+      fontSize: 12,
+      fontWeight: '800',
+      color: '#0A192F',
+      width: 90
+    },
+    trustCardDesc: {
+      fontSize: 10,
+      color: '#64748B',
+      flex: 1
+    },
+    /* ─── Footer ─── */
+    footerContainer: {
+      alignItems: 'center',
+      paddingVertical: 20,
+      paddingHorizontal: 16,
+      borderTopWidth: 1,
+      borderTopColor: '#F1F5F9'
+    },
+    footerBrandRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: 4
+    },
+    footerLogo: {
+      width: 24,
+      height: 24
+    },
+    footerBrandTitle: {
+      fontSize: 13,
+      fontWeight: '800',
+      color: '#0A192F'
+    },
+    footerSlogan: {
+      fontSize: 9.5,
+      fontWeight: '600',
+      color: '#94A3B8',
+      marginBottom: 8
+    },
+    footerCopyright: {
+      fontSize: 9,
+      color: '#CBD5E1'
+    },
+    /* ─── Bottom Nav Bar ─── */
+    bottomBar: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      backgroundColor: '#FFFFFF',
+      borderTopWidth: 1,
+      borderTopColor: '#F1F5F9',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-around',
+      paddingTop: 8,
+      elevation: 12,
+      shadowColor: '#000',
+      shadowOffset: {
+        width: 0,
+        height: -2
+      },
+      shadowOpacity: 0.06,
+      shadowRadius: 8,
+      zIndex: 20
+    },
+    tabItem: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 2
+    },
+    tabLabel: {
+      fontSize: 10,
+      fontWeight: '600',
+      color: '#64748B',
+      marginTop: 2
+    },
+    tabLabelActive: {
+      color: '#D9A73A',
+      fontWeight: '800'
+    },
+    bottomCartBadge: {
+      position: 'absolute',
+      top: -4,
+      right: -8,
+      backgroundColor: '#EF4444',
+      borderRadius: 8,
+      minWidth: 16,
+      height: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 3
+    },
+    bottomCartBadgeText: {
+      color: '#FFFFFF',
+      fontSize: 8.5,
+      fontWeight: '900'
+    },
+    /* ─── Toast ─── */
+    toastBox: {
+      position: 'absolute',
+      bottom: 70,
+      alignSelf: 'center',
+      backgroundColor: '#0A192F',
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 24,
+      elevation: 8,
       shadowColor: '#000',
       shadowOffset: {
         width: 0,
         height: 4
       },
-      shadowOpacity: 0.02,
-      shadowRadius: 8,
-      elevation: 1
+      shadowOpacity: 0.2,
+      shadowRadius: 6,
+      zIndex: 999
     },
-    testimonialQuote: {
-      fontSize: 12,
-      fontStyle: 'italic',
-      fontWeight: '600',
-      color: '#334155',
-      lineHeight: 18,
-      marginBottom: 12
-    },
-    testimonialUserRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-      marginBottom: 8
-    },
-    testimonialAvatar: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: '#F1F5F9'
-    },
-    testimonialUserInfo: {
-      flex: 1
-    },
-    testimonialName: {
-      fontSize: 12,
-      fontWeight: '800',
-      color: '#0E1A2E'
-    },
-    testimonialRole: {
-      fontSize: 9,
-      fontWeight: '700',
-      color: '#64748B'
-    },
-    testimonialStars: {
-      flexDirection: 'row'
-    },
-    trustStrip: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      paddingHorizontal: 20,
-      paddingVertical: 24,
-      borderBottomWidth: 1,
-      borderBottomColor: '#E2E8F0'
-    },
-    trustItem: {
-      alignItems: 'center',
-      width: '30%'
-    },
-    trustText: {
-      color: '#64748B',
-      fontSize: 9,
-      fontWeight: '700',
-      marginTop: 6,
-      textAlign: 'center',
-      textTransform: 'uppercase',
-      letterSpacing: 0.5
-    },
-    landingFooter: {
-      backgroundColor: '#0E1A2E',
-      borderTopWidth: 2,
-      borderColor: '#D9A73A',
-      paddingTop: 32,
-      paddingBottom: 40,
-      paddingHorizontal: 20,
-      marginTop: 32
-    },
-    footerBrandBlock: {
-      alignItems: 'flex-start',
-      marginBottom: 24
-    },
-    footerLogoCircle: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      backgroundColor: '#FFFFFF',
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: 8,
-      borderWidth: 1,
-      borderColor: '#D9A73A30'
-    },
-    footerLogoImage: {
-      width: 38,
-      height: 38,
-      borderRadius: 19
-    },
-    footerBrandTitle: {
-      fontSize: 18,
-      fontWeight: '900',
-      color: '#FFFFFF'
-    },
-    footerBrandSub: {
-      fontSize: 8,
-      fontWeight: '800',
-      color: '#D9A73A',
-      letterSpacing: 1.5,
-      marginTop: 1
-    },
-    footerBrandDesc: {
-      fontSize: 12,
-      color: '#94A3B8',
-      lineHeight: 18,
-      fontWeight: '550',
-      marginTop: 12
-    },
-    footerSocialRow: {
-      flexDirection: 'row',
-      gap: 12,
-      marginBottom: 28
-    },
-    footerSocialBtn: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: 'rgba(255, 255, 255, 0.08)',
-      alignItems: 'center',
-      justifyContent: 'center'
-    },
-    footerLinksGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      justifyContent: 'space-between',
-      gap: 20,
-      marginBottom: 28
-    },
-    footerLinkCol: {
-      width: (width - 60) / 2
-    },
-    footerColHeading: {
-      fontSize: 13,
-      fontWeight: '900',
-      color: '#FFFFFF',
-      marginBottom: 12,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5
-    },
-    footerLinkText: {
-      fontSize: 13,
-      color: '#94A3B8',
-      fontWeight: '650',
-      marginVertical: 6
-    },
-    footerNewsletter: {
-      backgroundColor: 'rgba(255, 255, 255, 0.03)',
-      padding: 16,
-      borderRadius: 20,
-      borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.08)',
-      marginBottom: 28
-    },
-    newsletterSubText: {
-      fontSize: 12,
-      color: '#94A3B8',
-      fontWeight: '550',
-      marginBottom: 12,
-      lineHeight: 16
-    },
-    newsletterInputRow: {
-      flexDirection: 'row',
-      height: 44,
-      gap: 8
-    },
-    newsletterInput: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.25)',
-      borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.1)',
-      borderRadius: 10,
-      paddingHorizontal: 12,
+    toastText: {
       color: '#FFFFFF',
       fontSize: 12,
-      fontWeight: '600'
-    },
-    btnNewsletterSubmit: {
-      backgroundColor: '#D9A73A',
-      width: 44,
-      height: 44,
-      borderRadius: 10,
-      alignItems: 'center',
-      justifyContent: 'center'
-    },
-    footerBottom: {
-      borderTopWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.08)',
-      paddingTop: 20,
-      alignItems: 'center',
-      gap: 4
-    },
-    footerBottomText: {
-      fontSize: 11,
-      fontWeight: '600',
-      color: '#64748B'
+      fontWeight: '700'
     }
   });
-},1088,[58,232,583,559,990,268,220,122,731,69,586,988,1089,890,997,1085,919,918,925,1090,127,1091,1092]);
+},1088,[58,232,583,559,990,268,220,122,731,69,586,267,660,1089,890,997,1085,919,918,925,1090,127,1091]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -179288,13 +178307,6 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     height: 500
   };
 },1091,[]);
-__d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
-  module.exports = {
-    uri: "/assets/assets/hero_mockup.c24154e89e948d946cabbc80b7fe0b23.png",
-    width: 1024,
-    height: 1024
-  };
-},1092,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -181307,7 +180319,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     }
   });
   var _default = AuthPage;
-},1093,[58,232,583,586,990,559,988,991,69,220,731,1094,122,268,660,992,718,997,1085,890,925,1095,1096,918,127,1091]);
+},1092,[58,232,583,586,990,559,988,991,69,220,731,1093,122,268,660,992,718,997,1085,890,925,1094,1095,918,127,1091]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   /**
    * Copyright (c) Nicolas Gallagher.
@@ -181389,7 +180401,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     }
   }
   var _default = KeyboardAvoidingView;
-},1094,[50,70,58,232]);
+},1093,[50,70,58,232]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -181518,7 +180530,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       }
     }
   };
-},1095,[925,988]);
+},1094,[925,988]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -182136,7 +181148,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     sendPasswordResetEmail,
     sendOtpEmail
   };
-},1096,[925,1095]);
+},1095,[925,1094]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -182395,7 +181407,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1097,[58,232,990,583,1098,1137,1138,1140,1141,1142,1145,1146,1152,1161,1162,1163,1164,1165,1166,1168,1177,1183,1184,1186,925,1187,1216,1217,127]);
+},1096,[58,232,990,583,1097,1136,1137,1139,1140,1141,1144,1145,1151,1160,1161,1162,1163,1164,1165,1167,1176,1182,1183,1185,925,1186,1215,1216,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -182488,73 +181500,6 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     width
   } = Dimensions.default.get('window');
   const AM_LOGO = require(_dependencyMap[37]);
-  const FALLBACK_FLASH_PRODUCTS = [{
-    id: 'fs1',
-    name: 'Oraimo FreePods 4',
-    subtitle: 'Wireless Earbuds',
-    category: 'Electronics',
-    price: 25000,
-    compare_at_price: 38500,
-    discount: 35,
-    rating: 4.7,
-    reviews: '1.2k',
-    image: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?q=80&w=400&auto=format&fit=crop'
-  }, {
-    id: 'fs2',
-    name: 'Samsung Galaxy A55',
-    subtitle: '5G Smartphone',
-    category: 'Electronics',
-    price: 420000,
-    compare_at_price: 580000,
-    discount: 28,
-    rating: 4.8,
-    reviews: '856',
-    image: 'https://images.unsplash.com/photo-1598327105666-5b89351aff97?q=80&w=400&auto=format&fit=crop'
-  }, {
-    id: 'fs3',
-    name: 'Nike Air Force 1',
-    subtitle: "Men's Sneakers",
-    category: 'Fashion',
-    price: 60000,
-    compare_at_price: 100000,
-    discount: 40,
-    rating: 4.6,
-    reviews: '2.1k',
-    image: 'https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?q=80&w=400&auto=format&fit=crop'
-  }, {
-    id: 'fs4',
-    name: 'Oraimo Watch 4 Plus',
-    subtitle: 'Smart Watch',
-    category: 'Electronics',
-    price: 28000,
-    compare_at_price: 40000,
-    discount: 30,
-    rating: 4.5,
-    reviews: '934',
-    image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=400&auto=format&fit=crop'
-  }, {
-    id: 'fs5',
-    name: 'Classy Handbag',
-    subtitle: "Women's Fashion",
-    category: 'Fashion',
-    price: 18500,
-    compare_at_price: 25000,
-    discount: 25,
-    rating: 4.7,
-    reviews: '1.3k',
-    image: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?q=80&w=400&auto=format&fit=crop'
-  }, {
-    id: 'fs6',
-    name: 'Buchymix Blender',
-    subtitle: 'Kitchen Appliance',
-    category: 'Home',
-    price: 78000,
-    compare_at_price: 98000,
-    discount: 20,
-    rating: 4.6,
-    reviews: '780',
-    image: 'https://images.unsplash.com/photo-1570222094114-d054a817e56b?q=80&w=400&auto=format&fit=crop'
-  }];
   const AppHome = ({
     onGoToShop,
     onGoToCart,
@@ -182618,7 +181563,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     const scrollX = (0, _react.useRef)(new Animated.default.Value(0)).current;
     const HOME_CACHE_KEY = '@abumafhal_home_cache_v2';
     const lastFetchRef = (0, _react.useRef)(0);
-    const PROD_FIELDS = 'id, name, price, compare_at_price, images, category, rating, average_rating, total_sales, is_new, stock_quantity, status, created_at, updated_at';
+    const PROD_FIELDS = 'id, name, price, compare_at_price, images, image_url, category, rating, average_rating, total_sales, is_new, stock_quantity, status, created_at, updated_at';
 
     // 1. Instant cache restoration on mount
     (0, _react.useEffect)(() => {
@@ -182950,7 +181895,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
         children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_componentsSkeletonLoader.HomeSkeleton, {})
       });
     }
-    const combinedFlash = flashSale && flashSale.length >= 3 ? flashSale : [...(flashSale || []), ...FALLBACK_FLASH_PRODUCTS.filter(fb => !(flashSale || []).some(fs => fs.id === fb.id))].slice(0, 6);
+    const combinedFlash = flashSale && flashSale.length > 0 ? flashSale : recommended && recommended.length > 0 ? recommended.slice(0, 6) : (newArrivals || []).slice(0, 6);
     const displayFlashProducts = combinedFlash.filter(p => {
       if (activeCategoryFilter === 'All') return true;
       const cat = (p.category || p.subtitle || '').toLowerCase();
@@ -183382,7 +182327,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
                   },
                   children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
                     source: {
-                      uri: prod.image || (Array.isArray(prod.images) ? prod.images[0] : prod.images) || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=300&auto=format&fit=crop'
+                      uri: prod.image_url || prod.image || (Array.isArray(prod.images) ? prod.images[0] : prod.images) || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=300&auto=format&fit=crop'
                     },
                     style: {
                       width: '90%',
@@ -187096,7 +186041,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     })
   }));
-},1098,[58,232,583,990,1099,268,1100,559,586,267,220,660,230,122,731,1101,1089,997,733,1085,1102,1103,1104,1105,925,1090,1106,1107,1108,1109,1110,1114,1115,1131,890,919,127,1091]);
+},1097,[58,232,583,990,1098,268,1099,559,586,267,220,660,230,122,731,1100,1089,997,733,1085,1101,1102,1103,1104,925,1090,1105,1106,1107,1108,1109,1113,1114,1130,890,919,127,1091]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -187176,7 +186121,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     }
   });
   var _default = SafeAreaView;
-},1099,[50,70,58,69,232,66]);
+},1098,[50,70,58,69,232,66]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -187267,7 +186212,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   });
   ImageBackground.displayName = 'ImageBackground';
   var _default = ImageBackground;
-},1100,[50,70,58,559,69,232]);
+},1099,[50,70,58,559,69,232]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -187307,7 +186252,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     }
   };
   var _default = Vibration;
-},1101,[]);
+},1100,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -189761,7 +188706,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       elevation: 10
     }
   });
-},1102,[69,220,122]);
+},1101,[69,220,122]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -189807,7 +188752,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })
     })]
   });
-},1103,[58,232,583,990,997,1102,127]);
+},1102,[58,232,583,990,997,1101,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -190453,7 +189398,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1104,[58,232,583,990,1089,988,586,559,997,1085,127,1091]);
+},1103,[58,232,583,990,1089,988,586,559,997,1085,127,1091]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -190513,7 +189458,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       children: label
     })]
   });
-},1105,[58,232,583,990,997,1102,127]);
+},1104,[58,232,583,990,997,1101,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -190634,7 +189579,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1106,[58,232,583,586,990,988,997,1102,127]);
+},1105,[58,232,583,586,990,988,997,1101,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -190793,7 +189738,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     })]
   });
-},1107,[58,232,660,69,127]);
+},1106,[58,232,660,69,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -190870,7 +189815,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })
     });
   };
-},1108,[58,230,232,220,127]);
+},1107,[58,230,232,220,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -190989,7 +189934,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       color: '#64748B'
     }
   });
-},1109,[58,232,583,559,69,997,127]);
+},1108,[58,232,583,559,69,997,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -191198,7 +190143,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     }
     return await ExponentImagePicker.default.launchImageLibraryAsync(mappedOptions);
   }
-},1110,[131,1111,1113,1112]);
+},1109,[131,1110,1112,1111]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -191465,7 +190410,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     }
     return result;
   }
-},1111,[131,1112,1113]);
+},1110,[131,1111,1112]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -191699,7 +190644,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
      */
     CameraType["front"] = "front";
   })(CameraType || (CameraType = {}));
-},1112,[]);
+},1111,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -191736,7 +190681,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       mediaTypes: parseMediaTypes(options.mediaTypes ?? [])
     });
   }
-},1113,[1112]);
+},1112,[1111]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -191989,7 +190934,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       }
     }
   };
-},1114,[925]);
+},1113,[925]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -192070,7 +191015,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     console.warn('[expo-av]: Expo AV has been deprecated and will be removed in SDK 54. Use the `expo-audio` and `expo-video` packages to replace the required functionality.');
     loggedDeprecationWarning = true;
   }
-},1115,[1116,1126,1124,1117,1130]);
+},1114,[1115,1125,1123,1116,1129]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -192166,7 +191111,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     currentAudioMode = mode;
     return await ExponentAV.default.setAudioMode(mode);
   }
-},1116,[1117,1118,1120,1122,1121,1123]);
+},1115,[1116,1117,1119,1121,1120,1122]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -192218,7 +191163,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
      */
     InterruptionModeAndroid[InterruptionModeAndroid["DuckOthers"] = 2] = "DuckOthers";
   })(InterruptionModeAndroid || (InterruptionModeAndroid = {}));
-},1117,[]);
+},1116,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -192552,7 +191497,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       }
     }
   };
-},1118,[161,131,35,1119]);
+},1117,[161,131,35,1118]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -192851,7 +191796,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     HIGH_QUALITY,
     LOW_QUALITY
   };
-},1119,[]);
+},1118,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -193303,7 +192248,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       }, initialStatus, onPlaybackStatusUpdate, false);
     }
   }
-},1120,[131,1121,1119,1122,1123,1118,1125]);
+},1119,[131,1120,1118,1121,1122,1117,1124]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -193343,7 +192288,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     // enabling API is for people to enable / disable this audio library, but I think that it should
     // intuitively also double as a global pause/resume.
   }
-},1121,[1118]);
+},1120,[1117]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -193642,7 +192587,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     // Methods of the Playback interface that are set via PlaybackMixin
   }
   Object.assign(Sound.prototype, _AV.PlaybackMixin);
-},1122,[131,1121,1123,1118]);
+},1121,[131,1120,1122,1117]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -193903,7 +192848,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       });
     }
   };
-},1123,[1006,131,1124]);
+},1122,[1006,131,1123]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -193942,10 +192887,10 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
      */
     PitchCorrectionQuality[PitchCorrectionQuality["High"] = ExponentAV.default && ExponentAV.default.Qualities && ExponentAV.default.Qualities.High] = "High";
   })(PitchCorrectionQuality || (PitchCorrectionQuality = {}));
-},1124,[1118]);
+},1123,[1117]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
-},1125,[]);
+},1124,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -194260,7 +193205,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   Object.assign(Video.prototype, _AV.PlaybackMixin);
   // note(simek): TypeDoc cannot resolve correctly name of inline and default exported class
   var _default = Video;
-},1126,[58,211,559,69,232,122,1123,1127,1118,1129,1130,127]);
+},1125,[58,211,559,69,232,122,1122,1126,1117,1128,1129,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -194303,7 +193248,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       return ExponentAV.default.getStatusForVideo(element);
     }
   };
-},1127,[1118,1128]);
+},1126,[1117,1127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -194416,7 +193361,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       return () => {};
     }
   }
-},1128,[]);
+},1127,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -194580,7 +193525,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       });
     }
   }
-},1129,[58,233,1118,1128,1130,127]);
+},1128,[58,233,1117,1127,1129,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -194635,7 +193580,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
      */
     VideoFullscreenUpdate[VideoFullscreenUpdate["PLAYER_DID_DISMISS"] = 3] = "PLAYER_DID_DISMISS";
   })(VideoFullscreenUpdate || (VideoFullscreenUpdate = {}));
-},1130,[]);
+},1129,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -194653,7 +193598,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       });
     }
   });
-},1131,[1132]);
+},1130,[1131]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -194682,7 +193627,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       });
     }
   });
-},1132,[1133,1136]);
+},1131,[1132,1135]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -195325,7 +194270,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     const moveAsync = _StorageAccessFramework.moveAsync = baseMoveAsync;
     const copyAsync = _StorageAccessFramework.copyAsync = baseCopyAsync;
   })(StorageAccessFramework || (StorageAccessFramework = {}));
-},1133,[131,122,1134,1136]);
+},1132,[131,122,1133,1135]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -195346,7 +194291,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   var _ExponentFileSystemShim = require(_dependencyMap[0]);
   var ExponentFileSystemShim = _interopDefault(_ExponentFileSystemShim);
   var _default = ExponentFileSystemShim.default;
-},1134,[1135]);
+},1133,[1134]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -195365,7 +194310,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     cacheDirectory = null;
     bundleDirectory = null;
   }
-},1135,[131]);
+},1134,[131]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -195448,7 +194393,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     return EncodingType;
   }({}); // @docsMissing
   // @docsMissing
-},1136,[]);
+},1135,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -197359,7 +196304,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       letterSpacing: 0.3
     }
   });
-},1137,[58,232,583,990,1099,586,230,559,1100,660,69,122,731,267,268,997,1102,987,925,1110,1114,1115,1131,1090,919,127]);
+},1136,[58,232,583,990,1098,586,230,559,1099,660,69,122,731,267,268,997,1101,987,925,1109,1113,1114,1130,1090,919,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -198169,7 +197114,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     });
   };
   const styles = StyleSheet.default.create({});
-},1138,[58,232,583,990,268,559,731,122,988,69,733,997,925,1139,127,1091]);
+},1137,[58,232,583,990,268,559,731,122,988,69,733,997,925,1138,127,1091]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -198221,7 +197166,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       maximumFractionDigits: 0
     })}`;
   };
-},1139,[]);
+},1138,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -198594,7 +197539,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       fontSize: 16
     }
   });
-},1140,[58,232,583,990,1099,268,69,559,991,230,988,122,997,1102,925,987,127]);
+},1139,[58,232,583,990,1098,268,69,559,991,230,988,122,997,1101,925,987,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -200151,7 +199096,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   const ProfilePage = props => {
     return /*#__PURE__*/(0, _reactJsxRuntime.jsx)(ProfilePageInner, Object.assign({}, props));
   };
-},1141,[58,232,583,990,1099,268,991,122,988,997,1085,925,1109,918,127]);
+},1140,[58,232,583,990,1098,268,991,122,988,997,1085,925,1108,918,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -201716,7 +200661,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       marginBottom: 8
     }
   };
-},1142,[58,232,583,990,230,991,1099,268,559,1143,1089,267,586,988,992,731,122,997,1110,1144,1131,925,918,919,127]);
+},1141,[58,232,583,990,230,991,1098,268,559,1142,1089,267,586,988,992,731,122,997,1109,1143,1130,925,918,919,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -201782,7 +200727,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     }
   }
   var _default = Share;
-},1143,[47]);
+},1142,[47]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -201858,7 +200803,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     }
     return arraybuffer;
   };
-},1144,[]);
+},1143,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -202069,7 +201014,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       color: "#CBD5E1"
     })]
   });
-},1145,[58,232,583,990,268,1099,718,988,997,1102,127]);
+},1144,[58,232,583,990,268,1098,718,988,997,1101,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -202519,7 +201464,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1146,[58,232,583,586,990,268,1099,988,991,559,122,997,1102,925,1110,1144,1147,1109,127]);
+},1145,[58,232,583,586,990,268,1098,988,991,559,122,997,1101,925,1109,1143,1146,1108,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -202558,7 +201503,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   });
   var _DateTimePickerAndroid = require(_dependencyMap[2]);
   var _default = RNDateTimePicker.default;
-},1147,[1148,1149,1151]);
+},1146,[1147,1148,1150]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -202585,7 +201530,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     }, []);
     return null;
   }
-},1148,[58,122]);
+},1147,[58,122]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -202638,7 +201583,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       }
     }, date];
   };
-},1149,[1150]);
+},1148,[1149]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -202772,7 +201717,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   const TIME_SET_ACTION = 'timeSetAction';
   const DISMISS_ACTION = 'dismissedAction';
   const NEUTRAL_BUTTON_ACTION = 'neutralButtonAction';
-},1150,[]);
+},1149,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -202793,7 +201738,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     open: warn,
     dismiss: warn
   };
-},1151,[122]);
+},1150,[122]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -203656,7 +202601,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       fontWeight: '700'
     }
   });
-},1152,[58,232,583,990,268,1099,586,988,69,991,267,1094,122,718,992,230,997,1102,925,1153,1154,127]);
+},1151,[58,232,583,990,268,1098,586,988,69,991,267,1093,122,718,992,230,997,1101,925,1152,1153,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -203781,7 +202726,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     state: "Zamfara",
     lgas: ["Anka", "Bakura", "Birnin Magaji/Kiyaw", "Bukkuyum", "Bungudu", "Chafe", "Gummi", "Gusau", "Kaura Namoda", "Maradun", "Maru", "Shinkafi", "Talata Mafara", "Zurmi"]
   }];
-},1153,[]);
+},1152,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -203862,7 +202807,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       });
     }
   });
-},1154,[131,1155,1156,1159,1160,1158]);
+},1153,[131,1154,1155,1158,1159,1157]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -203877,7 +202822,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   });
   var _expoModulesCore = require(_dependencyMap[0]);
   const LocationEventEmitter = new _expoModulesCore.EventEmitter();
-},1155,[131]);
+},1154,[131]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -203979,7 +202924,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   function _getCurrentWatchId() {
     return nextWatchId;
   }
-},1156,[1157,1155]);
+},1155,[1156,1154]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -204161,7 +203106,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       return getPermissionsAsync();
     }
   };
-},1157,[131,1158,1155]);
+},1156,[131,1157,1154]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -204289,7 +203234,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
      */
     LocationGeofencingRegionState[LocationGeofencingRegionState["Outside"] = 2] = "Outside";
   })(LocationGeofencingRegionState || (LocationGeofencingRegionState = {}));
-},1158,[]);
+},1157,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -204319,7 +203264,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   // Polyfill: navigator.geolocation.watchPosition
 
   // Polyfill: navigator.geolocation.clearWatch
-},1159,[131,1157,1158,1156]);
+},1158,[131,1156,1157,1155]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -204775,7 +203720,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     _validate(taskName);
     return ExpoLocation.default.hasStartedGeofencingAsync(taskName);
   }
-},1160,[1,131,1157,1158,1156]);
+},1159,[1,131,1156,1157,1155]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -204917,7 +203862,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1161,[58,232,583,586,990,268,1099,988,991,997,1102,925,127]);
+},1160,[58,232,583,586,990,268,1098,988,991,997,1101,925,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -205063,7 +204008,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       fontWeight: '700'
     }
   });
-},1162,[58,232,583,990,69,122,997,890,127]);
+},1161,[58,232,583,990,69,122,997,890,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -205170,7 +204115,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1163,[58,232,583,990,1099,69,559,997,1102,127]);
+},1162,[58,232,583,990,1098,69,559,997,1101,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -205958,7 +204903,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       fontSize: 16
     }
   });
-},1164,[58,232,583,990,684,69,991,660,268,988,122,992,586,997,1102,925,127]);
+},1163,[58,232,583,990,684,69,991,660,268,988,122,992,586,997,1101,925,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -206039,7 +204984,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1165,[58,232,583,268,990,1099,122,997,1102,127]);
+},1164,[58,232,583,268,990,1098,122,997,1101,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -207544,7 +206489,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       height: 400
     }
   });
-},1166,[58,232,583,268,559,990,220,660,731,1143,988,991,69,122,992,1167,1089,878,997,987,1115,890,925,1131,127,1091]);
+},1165,[58,232,583,268,559,990,220,660,731,1142,988,991,69,122,992,1166,1089,878,997,987,1114,890,925,1130,127,1091]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   /**
    * Copyright (c) Nicolas Gallagher.
@@ -207612,7 +206557,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       return success;
     }
   }
-},1167,[]);
+},1166,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -210339,7 +209284,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       fontWeight: '900'
     }
   });
-},1168,[58,232,583,990,268,991,988,1143,220,992,559,660,1100,1099,122,586,230,69,267,997,1169,925,1085,127]);
+},1167,[58,232,583,990,268,991,988,1142,220,992,559,660,1099,1098,122,586,230,69,267,997,1168,925,1085,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -210598,7 +209543,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
    * `true` if the component is available, and `false` otherwise.
    */
   const isPasteButtonAvailable = false;
-},1169,[131,1170,1172,1176]);
+},1168,[131,1169,1171,1175]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -210652,7 +209597,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       onPastePressed: onPastePressed
     }, restProps));
   }
-},1170,[161,58,1171,127]);
+},1169,[161,58,1170,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -210669,7 +209614,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   require(_dependencyMap[1]);
   let ExpoClipboard;
   var _default = ExpoClipboard;
-},1171,[131,122]);
+},1170,[131,122]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -210689,7 +209634,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   });
   var _webClipboardModule = require(_dependencyMap[0]);
   var _webClipboardModule2 = _interopDefault(_webClipboardModule);
-},1172,[1173]);
+},1171,[1172]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -210879,7 +209824,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })
     });
   }
-},1173,[1174,1175,1176]);
+},1172,[1173,1174,1175]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -210931,7 +209876,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       super('ERR_NO_PERMISSION', 'User denied permission to access clipboard');
     }
   }
-},1174,[131]);
+},1173,[131]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -211030,7 +209975,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     const permissionStatus = await navigator.permissions.query(queryOpts);
     return permissionStatus.state === 'denied';
   }
-},1175,[]);
+},1174,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -211070,7 +210015,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     StringFormat["PLAIN_TEXT"] = "plainText";
     StringFormat["HTML"] = "html";
   })(StringFormat || (StringFormat = {}));
-},1176,[]);
+},1175,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -212731,7 +211676,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     })]
   });
-},1177,[58,232,583,586,990,1178,268,992,991,1094,122,559,660,705,1167,988,220,1143,997,1085,890,1110,1179,919,918,1182,925,127]);
+},1176,[58,232,583,586,990,1177,268,992,991,1093,122,559,660,705,1166,988,220,1142,997,1085,890,1109,1178,919,918,1181,925,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   /**
    * Copyright (c) Meta Platforms, Inc. and affiliates.
@@ -212838,7 +211783,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   var MemoedTouchableWithoutFeedback = /*#__PURE__*/React.memo(/*#__PURE__*/React.forwardRef(TouchableWithoutFeedback));
   MemoedTouchableWithoutFeedback.displayName = 'TouchableWithoutFeedback';
   var _default = MemoedTouchableWithoutFeedback;
-},1178,[58,242,250,883,114]);
+},1177,[58,242,250,883,114]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -213023,7 +211968,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
    * On iOS, this returns `Number.MAX_VALUE`.
    */
   const maxSpeechInputLength = ExponentSpeech.default.maxSpeechInputLength || Number.MAX_VALUE;
-},1179,[131,1180,1181]);
+},1178,[131,1179,1180]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -213145,7 +212090,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     maxSpeechInputLength = MAX_SPEECH_INPUT_LENGTH;
   }
   var _default = (0, _expoModulesCore.registerWebModule)(ExpoSpeech, 'ExpoSpeech');
-},1180,[131,1181]);
+},1179,[131,1180]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -213167,7 +212112,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     VoiceQuality["Default"] = "Default";
     VoiceQuality["Enhanced"] = "Enhanced";
   })(VoiceQuality || (VoiceQuality = {}));
-},1181,[]);
+},1180,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -213451,7 +212396,7 @@ Be specific. If unsure, make your best guess.`;
       }
     }
   };
-},1182,[]);
+},1181,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -214007,7 +212952,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1183,[58,232,583,990,268,1099,586,991,988,992,997,925,1102,1085,127]);
+},1182,[58,232,583,990,268,1098,586,991,988,992,997,925,1101,1085,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -214650,14 +213595,14 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       elevation: 10
     }
   });
-},1184,[58,232,583,268,559,990,69,220,1089,997,1102,1085,127,1185]);
+},1183,[58,232,583,268,559,990,69,220,1089,997,1101,1085,127,1184]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   module.exports = {
     uri: "/assets/assets/founder.816498aabe69a3c8d07004e2ceae2ee9.png",
     width: 1024,
     height: 1536
   };
-},1185,[]);
+},1184,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -214807,7 +213752,7 @@ Optimize regional fulfillment paths, delivery speeds, and vendor dropshipping pi
 3. Customer Support Specialist
 Provide 24/7 world-class assistance to our buyers and sellers.`
   };
-},1186,[]);
+},1185,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -217613,7 +216558,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     }
     return /*#__PURE__*/(0, _reactJsxRuntime.jsx)(WalletPageInner, Object.assign({}, props));
   };
-},1187,[58,232,583,990,1099,268,586,991,988,267,69,992,122,559,220,997,1085,925,1188,918,1215,919,127,1091]);
+},1186,[58,232,583,990,1098,268,586,991,988,267,69,992,122,559,220,997,1085,925,1187,918,1214,919,127,1091]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -217640,7 +216585,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   var _libWebView = require(_dependencyMap[0]);
   var WebView = _interopDefault(_libWebView);
   var _default = WebView.default;
-},1188,[1189]);
+},1187,[1188]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   var _interopRequireDefault = require(_dependencyMap[0]);
   Object.defineProperty(exports, "__esModule", {
@@ -217663,7 +216608,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     });
   };
   var _default = exports.default = WebView;
-},1189,[1190,58,1191,1214,127]);
+},1188,[1189,58,1190,1213,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   function _interopRequireDefault(e) {
     return e && e.__esModule ? e : {
@@ -217671,7 +216616,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     };
   }
   module.exports = _interopRequireDefault, module.exports.__esModule = true, module.exports["default"] = module.exports;
-},1190,[]);
+},1189,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -218171,7 +217116,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   var _exportsUseLocaleContext2 = _interopDefault(_exportsUseLocaleContext);
   var _exportsUseWindowDimensions = require(_dependencyMap[60]);
   var _exportsUseWindowDimensions2 = _interopDefault(_exportsUseWindowDimensions);
-},1191,[233,211,77,52,48,932,1192,988,660,1193,41,926,1194,1167,220,705,722,730,275,1195,1089,125,1197,219,122,1143,69,245,1101,991,1200,1201,230,559,1100,1094,992,1202,878,1204,267,1099,268,684,731,718,583,586,1205,1027,711,990,1178,232,1209,1210,732,35,1211,1212,1213]);
+},1190,[233,211,77,52,48,932,1191,988,660,1192,41,926,1193,1166,220,705,722,730,275,1194,1089,125,1196,219,122,1142,69,245,1100,991,1199,1200,230,559,1099,1093,992,1201,878,1203,267,1098,268,684,731,718,583,586,1204,1027,711,990,1177,232,1208,1209,732,35,1210,1211,1212]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   /**
    * Copyright (c) Meta Platforms, Inc. and affiliates.
@@ -218283,7 +217228,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     }
   };
   var _default = AccessibilityInfo;
-},1192,[66]);
+},1191,[66]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   /**
    * Copyright (c) Nicolas Gallagher.
@@ -218350,7 +217295,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     }
   };
   var _default = Appearance;
-},1193,[66]);
+},1192,[66]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -218372,7 +217317,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     removeEventListener: emptyFunction
   };
   var _default = BackHandler;
-},1194,[]);
+},1193,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -218403,7 +217348,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
    */
 
   var _default = LayoutAnimation.default;
-},1195,[1196]);
+},1194,[1195]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   /**
    * Copyright (c) Meta Platforms, Inc. and affiliates.
@@ -218529,7 +217474,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     spring: configureNext.bind(null, Presets.spring)
   };
   var _default = LayoutAnimation;
-},1196,[122,245]);
+},1195,[122,245]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -218550,7 +217495,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   var _vendorReactNativePanResponder = require(_dependencyMap[0]);
   var PanResponder = _interopDefault(_vendorReactNativePanResponder);
   var _default = PanResponder.default;
-},1197,[1198]);
+},1196,[1197]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   /**
    * Copyright (c) Meta Platforms, Inc. and affiliates.
@@ -218984,7 +217929,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     }, 250);
   }
   var _default = PanResponder;
-},1198,[275,1199]);
+},1197,[275,1198]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -219097,7 +218042,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     noCentroid: -1
   };
   var _default = TouchHistoryMath;
-},1199,[]);
+},1198,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -219195,7 +218140,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     }
   });
   var _default = Button;
-},1200,[58,69,990,583]);
+},1199,[58,69,990,583]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   /**
    * Copyright (c) Nicolas Gallagher.
@@ -219340,7 +218285,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     })
   });
   var _default = CheckBox;
-},1201,[42,50,70,58,233,69,232]);
+},1200,[42,50,70,58,233,69,232]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   /**
    * Copyright (c) Nicolas Gallagher.
@@ -219447,7 +218392,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     }
   });
   var _default = Picker;
-},1202,[42,70,58,233,250,252,1203,69]);
+},1201,[42,70,58,233,250,252,1202,69]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -219492,7 +218437,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       value
     });
   }
-},1203,[233]);
+},1202,[233]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   /**
    * Copyright (c) Nicolas Gallagher.
@@ -219604,7 +218549,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     }
   });
   var _default = ProgressBar;
-},1204,[50,70,58,69,232]);
+},1203,[50,70,58,69,232]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   /**
    * Copyright (c) Meta Platforms, Inc. and affiliates.
@@ -220464,7 +219409,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     }
   };
   var _default = Touchable;
-},1205,[70,42,234,1206,78,1208,58,245,232,114]);
+},1204,[70,42,234,1205,78,1207,58,245,232,114]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -220512,7 +219457,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   };
   PooledClass.default.addPoolingTo(BoundingDimensions, twoArgumentPooler);
   var _default = BoundingDimensions;
-},1206,[1207]);
+},1205,[1206]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -220583,7 +219528,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     twoArgumentPooler: twoArgumentPooler
   };
   var _default = PooledClass;
-},1207,[47]);
+},1206,[47]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -220623,7 +219568,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   };
   PooledClass.default.addPoolingTo(Position, twoArgumentPooler);
   var _default = Position;
-},1208,[1207]);
+},1207,[1206]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   /**
    * Copyright (c) Meta Platforms, Inc. and affiliates.
@@ -220654,7 +219599,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   var _vendorReactNativeVirtualizedList = require(_dependencyMap[0]);
   var VirtualizedList = _interopDefault(_vendorReactNativeVirtualizedList);
   var _default = VirtualizedList.default;
-},1209,[263]);
+},1208,[263]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -220691,7 +219636,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   }
   YellowBox.ignoreWarnings = () => {};
   var _default = YellowBox;
-},1210,[58,712]);
+},1209,[58,712]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   /**
    * Copyright (c) Nicolas Gallagher.
@@ -220753,7 +219698,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     });
     return colorScheme;
   }
-},1211,[58,1193]);
+},1210,[58,1192]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   /**
    * Copyright (c) Nicolas Gallagher.
@@ -220778,7 +219723,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   });
   var _modulesUseLocale = require(_dependencyMap[0]);
   var _default = _modulesUseLocale.useLocaleContext;
-},1212,[239]);
+},1211,[239]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   /**
    * Copyright (c) Meta Platforms, Inc. and affiliates.
@@ -220832,7 +219777,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     }, []);
     return dims;
   }
-},1213,[220,58]);
+},1212,[220,58]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   Object.defineProperty(exports, "__esModule", {
     value: true
@@ -220877,7 +219822,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     }
   });
   var _default = exports.default = styles;
-},1214,[1191]);
+},1213,[1190]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -220970,7 +219915,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       }
     }
   };
-},1215,[925]);
+},1214,[925]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -221365,7 +220310,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1216,[58,232,583,586,990,268,559,1099,220,731,997,127,1091]);
+},1215,[58,232,583,586,990,268,559,1098,220,731,997,127,1091]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -222175,7 +221120,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1217,[58,232,583,586,990,268,559,220,230,731,988,997,925,127,1091]);
+},1216,[58,232,583,586,990,268,559,220,230,731,988,997,925,127,1091]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -224375,7 +223320,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1218,[58,232,583,990,268,988,991,586,559,731,122,997,1102,925,1085,1219,1220,1222,1228,1230,1236,1237,1238,1239,1240,1241,1242,1243,1244,1245,1246,1247,1248,1249,1250,1251,1253,1254,1256,1257,127,1091]);
+},1217,[58,232,583,990,268,988,991,586,559,731,122,997,1101,925,1085,1218,1219,1221,1227,1229,1235,1236,1237,1238,1239,1240,1241,1242,1243,1244,1245,1246,1247,1248,1249,1250,1252,1253,1255,1256,127,1091]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -224847,7 +223792,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   const localStyles = StyleSheet.default.create({
     // Using existing styles where possible
   });
-},1219,[58,232,583,990,559,586,268,988,991,992,69,220,122,997,925,1102,1110,1144,127]);
+},1218,[58,232,583,990,559,586,268,988,991,992,69,220,122,997,925,1101,1109,1143,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -225341,7 +224286,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1220,[58,232,583,990,559,586,268,988,991,230,267,997,925,1102,1221,127]);
+},1219,[58,232,583,990,559,586,268,988,991,230,267,997,925,1101,1220,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -227081,7 +226026,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       color: '#6366F1'
     }
   });
-},1221,[58,232,583,586,990,268,559,991,988,718,731,122,660,220,69,992,230,997,890,1110,925,1144,1131,1114,1139,127]);
+},1220,[58,232,583,586,990,268,559,991,988,718,731,122,660,220,69,992,230,997,890,1109,925,1143,1130,1113,1138,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -229153,7 +228098,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       borderRadius: 14
     }
   };
-},1222,[58,232,583,990,230,991,988,992,268,586,1143,1089,267,1167,559,997,1223,1225,925,1096,1215,1227,127]);
+},1221,[58,232,583,990,230,991,988,992,268,586,1142,1089,267,1166,559,997,1222,1224,925,1095,1214,1226,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -229242,7 +228187,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   async function printToFileAsync(options = {}) {
     return await ExponentPrint.default.printToFileAsync(options);
   }
-},1223,[131,122,1224]);
+},1222,[131,122,1223]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -229269,7 +228214,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       window.print();
     }
   };
-},1224,[]);
+},1223,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -229312,7 +228257,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     }
     return await Sharing.default.shareAsync(url, options);
   }
-},1225,[131,1226]);
+},1224,[131,1225]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -229344,7 +228289,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       }
     }
   };
-},1226,[131]);
+},1225,[131]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -230060,7 +229005,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       justifyContent: 'center'
     }
   });
-},1227,[58,232,583,69,992,990,268,586,991,988,1089,1094,122,997,925,1215,127]);
+},1226,[58,232,583,69,992,990,268,586,991,988,1089,1093,122,997,925,1214,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -232243,7 +231188,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       borderColor: '#E2E8F0'
     }
   });
-},1228,[58,232,583,990,230,991,988,586,267,268,992,69,1143,660,731,705,878,1089,1085,733,997,925,1095,1109,890,1229,1227,127]);
+},1227,[58,232,583,990,230,991,988,586,267,268,992,69,1142,660,731,705,878,1089,1085,733,997,925,1094,1108,890,1228,1226,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -234063,7 +233008,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       fontWeight: '600'
     }
   });
-},1229,[58,232,583,992,990,268,586,991,988,559,69,1089,230,1094,122,220,1085,733,997,925,890,1109,127]);
+},1228,[58,232,583,992,990,268,586,991,988,559,69,1089,230,1093,122,220,1085,733,997,925,890,1108,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -234995,7 +233940,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       borderColor: '#0F172A'
     }
   };
-},1230,[58,232,583,990,586,991,230,660,268,992,997,925,1231,1232,1085,918,1110,1235,559,127]);
+},1229,[58,232,583,990,586,991,230,660,268,992,997,925,1230,1231,1085,918,1109,1234,559,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -236663,7 +235608,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       return new GenerativeModel(this.apiKey, modelParamsFromCache, requestOptions);
     }
   }
-},1231,[]);
+},1230,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -236683,7 +235628,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   });
   var _BlurView = require(_dependencyMap[0]);
   var _BlurView2 = _interopDefault(_BlurView);
-},1232,[1233]);
+},1231,[1232]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   // Copyright © 2024 650 Industries.
   'use client';
@@ -236766,7 +235711,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     };
   }
   var _default = BlurView;
-},1233,[161,58,232,1234,127]);
+},1232,[161,58,232,1233,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -236821,7 +235766,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
         return `rgba(199,199,199,${opacity * 0.78})`;
     }
   }
-},1234,[]);
+},1233,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -236888,7 +235833,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       }
     }
   };
-},1235,[925]);
+},1234,[925]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -237938,7 +236883,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1236,[58,232,583,990,230,991,988,586,992,268,660,1094,122,997,925,1085,890,1215,127]);
+},1235,[58,232,583,990,230,991,988,586,992,268,660,1093,122,997,925,1085,890,1214,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -240021,7 +238966,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       color: 'white'
     }
   });
-},1237,[58,232,583,990,230,586,988,992,718,268,69,991,1167,220,731,997,1085,890,925,127]);
+},1236,[58,232,583,990,230,586,988,992,718,268,69,991,1166,220,731,997,1085,890,925,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -242795,7 +241740,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       minWidth: 60
     }
   };
-},1238,[58,232,583,718,990,268,586,988,991,559,660,220,731,992,230,1167,122,997,890,918,1110,1235,127]);
+},1237,[58,232,583,718,990,268,586,988,991,559,660,220,731,992,230,1166,122,997,890,918,1109,1234,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -244008,7 +242953,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1239,[58,232,583,990,230,991,988,992,586,268,267,997,1223,1225,925,1102,127]);
+},1238,[58,232,583,990,230,991,988,992,586,268,267,997,1222,1224,925,1101,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -244287,7 +243232,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1240,[58,232,583,990,230,559,988,992,586,997,925,1102,127]);
+},1239,[58,232,583,990,230,559,988,992,586,997,925,1101,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -244507,7 +243452,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       fontSize: 14
     }
   };
-},1241,[58,232,583,990,586,988,718,268,991,997,925,1102,127]);
+},1240,[58,232,583,990,586,988,718,268,991,997,925,1101,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -244654,7 +243599,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1242,[58,232,583,990,586,988,268,925,1102,127]);
+},1241,[58,232,583,990,586,988,268,925,1101,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -245020,7 +243965,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1243,[58,232,583,990,230,988,991,559,997,925,1102,127]);
+},1242,[58,232,583,990,230,988,991,559,997,925,1101,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -245851,7 +244796,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1244,[58,232,583,990,559,268,988,991,230,267,1089,992,586,997,925,1102,1095,1227,127]);
+},1243,[58,232,583,990,559,268,988,991,230,267,1089,992,586,997,925,1101,1094,1226,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -246608,7 +245553,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1245,[58,232,583,268,220,991,990,267,660,705,988,997,1102,925,127]);
+},1244,[58,232,583,268,220,991,990,267,660,705,988,997,1101,925,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -246947,7 +245892,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1246,[58,232,583,990,230,586,988,992,268,991,997,925,1102,127]);
+},1245,[58,232,583,990,230,586,988,992,268,991,997,925,1101,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -247953,7 +246898,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1247,[58,232,583,268,991,990,988,586,220,718,992,230,1102,925,997,1109,127]);
+},1246,[58,232,583,268,991,990,988,586,220,718,992,230,1101,925,997,1108,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -248213,7 +247158,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1248,[58,232,583,268,991,1102,925,997,127]);
+},1247,[58,232,583,268,991,1101,925,997,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -249217,7 +248162,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1249,[58,232,583,230,991,990,992,268,586,267,1143,660,705,988,997,1102,925,1169,127]);
+},1248,[58,232,583,230,991,990,992,268,586,267,1142,660,705,988,997,1101,925,1168,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -249436,7 +248381,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1250,[58,232,583,230,990,988,991,1102,925,997,127]);
+},1249,[58,232,583,230,990,988,991,1101,925,997,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -250019,7 +248964,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1251,[58,232,583,230,990,992,268,988,1143,559,586,1102,925,997,1252,1188,1110,1144,127]);
+},1250,[58,232,583,230,990,992,268,988,1142,559,586,1101,925,997,1251,1187,1109,1143,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -250423,7 +249368,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       return false;
     }
   }
-},1252,[988,122,1223,1131,1144,925]);
+},1251,[988,122,1222,1130,1143,925]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -250732,7 +249677,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1253,[58,232,583,990,230,559,988,586,991,997,925,1110,1144,1102,127]);
+},1252,[58,232,583,990,230,559,988,586,991,997,925,1109,1143,1101,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -252243,7 +251188,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1254,[58,232,583,990,586,268,559,267,992,991,660,122,1100,997,1110,925,1105,1255,1144,1147,127]);
+},1253,[58,232,583,990,586,268,559,267,992,991,660,122,1099,997,1109,925,1104,1254,1143,1146,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -252346,7 +251291,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1255,[58,660,232,583,997,127]);
+},1254,[58,660,232,583,997,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -253947,7 +252892,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1256,[58,232,583,990,586,268,559,991,122,220,230,988,997,1110,925,1144,1147,1255,1114,127]);
+},1255,[58,232,583,990,586,268,559,991,122,220,230,988,997,1109,925,1143,1146,1254,1113,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -255605,7 +254550,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     shadowRadius: 6,
     elevation: 2
   });
-},1257,[58,232,583,586,990,1178,268,992,991,1094,122,660,705,1167,988,220,1143,559,997,1085,890,1179,1110,919,918,1258,127,1091]);
+},1256,[58,232,583,586,990,1177,268,992,991,1093,122,660,705,1166,988,220,1142,559,997,1085,890,1178,1109,919,918,1257,127,1091]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -256412,7 +255357,7 @@ After your response, append on a new line EXACTLY: FOLLOW_UP: <q1> | <q2> | <q3>
       }
     }
   };
-},1258,[925]);
+},1257,[925]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -256909,7 +255854,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1259,[58,232,583,990,268,1099,559,991,230,69,1194,992,586,988,267,997,1102,925,1260,1264,1269,1270,1271,1272,1273,1109,127]);
+},1258,[58,232,583,990,268,1098,559,991,230,69,1193,992,586,988,267,997,1101,925,1259,1263,1268,1269,1270,1271,1272,1108,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -259132,7 +258077,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       activeVendorPlans: activeVendorPlans
     }));
   };
-},1260,[58,232,583,586,990,1099,268,988,69,991,1195,122,245,992,559,997,1102,925,1261,1110,1235,1188,1264,918,127]);
+},1259,[58,232,583,586,990,1098,268,988,69,991,1194,122,245,992,559,997,1101,925,1260,1109,1234,1187,1263,918,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -259186,7 +258131,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       base64
     });
   }
-},1261,[1262,1263]);
+},1260,[1261,1262]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -259294,10 +258239,10 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       reader.readAsDataURL(targetFile);
     });
   }
-},1262,[131]);
+},1261,[131]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
-},1263,[]);
+},1262,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -259871,7 +258816,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       letterSpacing: 1
     }
   });
-},1264,[1131,1225,1265,58,232,583,69,559,990,268,1099,988,122,220,997,1102,918,925,127,1268]);
+},1263,[1130,1224,1264,58,232,583,69,559,990,268,1098,988,122,220,997,1101,918,925,127,1267]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -260082,7 +259027,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       });
     }
   }
-},1265,[58,232,122,211,1191,1266,127]);
+},1264,[58,232,122,211,1190,1265,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -260131,7 +259076,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     captureScreen,
     releaseCapture
   };
-},1266,[1267]);
+},1265,[1266]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   /*!
    * html2canvas 1.4.1 <https://html2canvas.hertzen.com>
@@ -267858,14 +266803,14 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     };
     return html2canvas;
   });
-},1267,[]);
+},1266,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   module.exports = {
     uri: "/assets/assets/logo.29a393523981d5867065075297f64df0.jpg",
     width: 1024,
     height: 1024
   };
-},1268,[]);
+},1267,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -269230,7 +268175,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1269,[58,232,583,586,990,268,559,991,988,718,1099,122,731,997,1110,925,1144,1131,1102,1114,1139,127]);
+},1268,[58,232,583,586,990,268,559,991,988,718,1098,122,731,997,1109,925,1143,1130,1101,1113,1138,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -269415,7 +268360,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       elevation: 1
     }
   });
-},1270,[58,232,583,69,997,127]);
+},1269,[58,232,583,69,997,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -269761,7 +268706,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1271,[58,232,583,990,230,586,559,997,1102,127]);
+},1270,[58,232,583,990,230,586,559,997,1101,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -270085,7 +269030,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1272,[58,232,583,990,268,230,267,997,127]);
+},1271,[58,232,583,990,268,230,267,997,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -271770,7 +270715,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       color: '#334155'
     }
   });
-},1273,[58,733,232,583,990,268,992,586,988,69,991,267,660,705,997,1223,1225,1102,925,127]);
+},1272,[58,733,232,583,990,268,992,586,988,69,991,267,660,705,997,1222,1224,1101,925,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -274546,7 +273491,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       color: '#334155'
     }
   });
-},1274,[58,232,583,69,230,990,267,988,1089,991,992,559,718,122,268,586,660,705,890,1102,925,1215,1227,127]);
+},1273,[58,232,583,69,230,990,267,988,1089,991,992,559,718,122,268,586,660,705,890,1101,925,1214,1226,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -275129,7 +274074,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     if (Array.isArray(imgs) && imgs.length > 0) return imgs[0];
     return null;
   };
-},1275,[58,232,583,586,990,230,1094,122,1099,991,559,992,988,997,925,1102,1109,1110,1131,1144,127]);
+},1274,[58,232,583,586,990,230,1093,122,1098,991,559,992,988,997,925,1101,1108,1109,1130,1143,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -275390,7 +274335,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1276,[58,232,583,990,230,559,1099,991,731,997,925,1102,1109,127]);
+},1275,[58,232,583,990,230,559,1098,991,731,997,925,1101,1108,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -276098,7 +275043,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1277,[58,232,583,268,990,559,1089,988,731,122,997,925,127,1091]);
+},1276,[58,232,583,268,990,559,1089,988,731,122,997,925,127,1091]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -276649,7 +275594,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1278,[58,232,583,990,268,1099,559,122,988,1143,997,1223,1225,1102,127]);
+},1277,[58,232,583,990,268,1098,559,122,988,1142,997,1222,1224,1101,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -278307,7 +277252,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       fontWeight: '800'
     }
   });
-},1279,[58,232,583,990,268,1099,988,991,586,559,69,122,731,992,220,1094,997,919,925,1102,918,1280,1282,1283,1215,1139,127]);
+},1278,[58,232,583,990,268,1098,988,991,586,559,69,122,731,992,220,1093,997,919,925,1101,918,1279,1281,1282,1214,1138,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -278628,7 +277573,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     }
   });
   var _default = FlutterwaveCheckout;
-},1280,[58,69,992,232,660,1178,583,988,559,220,705,990,122,991,1188,1281,127]);
+},1279,[58,69,992,232,660,1177,583,988,559,220,705,990,122,991,1187,1280,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -278700,7 +277645,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
    * Payment options available in V2 API
    */
   var PAYMENT_OPTIONS_V2 = ['card', 'account', 'ussd', 'qr', 'mpesa', 'mobilemoneyghana', 'mobilemoneyuganda', 'mobilemoneyrwanda', 'mobilemoneyzambia', 'mobilemoneytanzania', 'barter', 'bank transfer', 'wechat'];
-},1281,[]);
+},1280,[]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -278894,7 +277839,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     }
   });
   var _default = CheckoutAddressCard;
-},1282,[58,232,583,990,69,997,127]);
+},1281,[58,232,583,990,69,997,127]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -279054,6 +277999,6 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       marginVertical: 16
     }
   });
-},1283,[58,232,69,660,127]);
+},1282,[58,232,69,660,127]);
 __r(3);
 __r(0);

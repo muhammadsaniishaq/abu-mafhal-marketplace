@@ -24,80 +24,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const { width } = Dimensions.get('window');
 const AM_LOGO = require('../../assets/am_logo.png');
 
-const FALLBACK_FLASH_PRODUCTS = [
-    {
-        id: 'fs1',
-        name: 'Oraimo FreePods 4',
-        subtitle: 'Wireless Earbuds',
-        category: 'Electronics',
-        price: 25000,
-        compare_at_price: 38500,
-        discount: 35,
-        rating: 4.7,
-        reviews: '1.2k',
-        image: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-        id: 'fs2',
-        name: 'Samsung Galaxy A55',
-        subtitle: '5G Smartphone',
-        category: 'Electronics',
-        price: 420000,
-        compare_at_price: 580000,
-        discount: 28,
-        rating: 4.8,
-        reviews: '856',
-        image: 'https://images.unsplash.com/photo-1598327105666-5b89351aff97?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-        id: 'fs3',
-        name: 'Nike Air Force 1',
-        subtitle: "Men's Sneakers",
-        category: 'Fashion',
-        price: 60000,
-        compare_at_price: 100000,
-        discount: 40,
-        rating: 4.6,
-        reviews: '2.1k',
-        image: 'https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-        id: 'fs4',
-        name: 'Oraimo Watch 4 Plus',
-        subtitle: 'Smart Watch',
-        category: 'Electronics',
-        price: 28000,
-        compare_at_price: 40000,
-        discount: 30,
-        rating: 4.5,
-        reviews: '934',
-        image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-        id: 'fs5',
-        name: 'Classy Handbag',
-        subtitle: "Women's Fashion",
-        category: 'Fashion',
-        price: 18500,
-        compare_at_price: 25000,
-        discount: 25,
-        rating: 4.7,
-        reviews: '1.3k',
-        image: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-        id: 'fs6',
-        name: 'Buchymix Blender',
-        subtitle: 'Kitchen Appliance',
-        category: 'Home',
-        price: 78000,
-        compare_at_price: 98000,
-        discount: 20,
-        rating: 4.6,
-        reviews: '780',
-        image: 'https://images.unsplash.com/photo-1570222094114-d054a817e56b?q=80&w=400&auto=format&fit=crop',
-    },
-];
+
+
 
 
 export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigate, onProductClick, user, cartCount: initialCartCount = 0, onAddToCart }) => {
@@ -153,7 +81,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
     const HOME_CACHE_KEY = '@abumafhal_home_cache_v2';
     const lastFetchRef = useRef(0);
 
-    const PROD_FIELDS = 'id, name, price, compare_at_price, images, category, rating, average_rating, total_sales, is_new, stock_quantity, status, created_at, updated_at';
+    const PROD_FIELDS = 'id, name, price, compare_at_price, images, image_url, category, rating, average_rating, total_sales, is_new, stock_quantity, status, created_at, updated_at';
 
     // 1. Instant cache restoration on mount
     useEffect(() => {
@@ -555,9 +483,9 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
         );
     }
 
-    const combinedFlash = (flashSale && flashSale.length >= 3)
+    const combinedFlash = (flashSale && flashSale.length > 0)
         ? flashSale
-        : [...(flashSale || []), ...FALLBACK_FLASH_PRODUCTS.filter(fb => !(flashSale || []).some(fs => fs.id === fb.id))].slice(0, 6);
+        : (recommended && recommended.length > 0 ? recommended.slice(0, 6) : (newArrivals || []).slice(0, 6));
 
     const displayFlashProducts = combinedFlash.filter(p => {
         if (activeCategoryFilter === 'All') return true;
@@ -769,7 +697,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                                     {/* Product Image */}
                                     <View style={{ width: '100%', height: 85, alignItems: 'center', justifyContent: 'center', marginBottom: 6, backgroundColor: '#F8FAFC', borderRadius: 8, overflow: 'hidden' }}>
                                         <Image
-                                            source={{ uri: prod.image || (Array.isArray(prod.images) ? prod.images[0] : prod.images) || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=300&auto=format&fit=crop' }}
+                                            source={{ uri: prod.image_url || prod.image || (Array.isArray(prod.images) ? prod.images[0] : prod.images) || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=300&auto=format&fit=crop' }}
                                             style={{ width: '90%', height: '90%' }}
                                             resizeMode="contain"
                                         />
