@@ -41,11 +41,12 @@ const AdminSettings = () => {
         try {
             const { data, error } = await supabase
                 .from('app_settings')
-                .select('*')
-                .single();
+                .select('*');
 
             if (error) throw error;
-            if (data) {
+            const singleData = (data && data.length > 0) ? (data.find(r => r.is_singleton) || data[0]) : null;
+            if (singleData) {
+                const data = singleData;
                 // Initialize arrays/objects if null
                 if (!data.shipping_fees) {
                     const defaultFees = {};

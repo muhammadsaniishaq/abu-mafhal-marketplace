@@ -44,14 +44,13 @@ export default function HeroManager() {
     const fetchSlides = async () => {
         try {
             const { data, error } = await supabase
-                .from('hero_slides')
+                .from('banners')
                 .select('*')
-                .order('sort_order', { ascending: true });
+                .order('display_order', { ascending: true, nullsFirst: false });
 
             if (error) throw error;
             setSlides(data || []);
         } catch (error) {
-            // Silent fail if table doesn't exist yet (user needs to run SQL)
             console.error(error);
         } finally {
             setLoading(false);
@@ -67,13 +66,15 @@ export default function HeroManager() {
             const imageUrl = await uploadImage(newSlide.image_file);
 
             const { data, error } = await supabase
-                .from('hero_slides')
+                .from('banners')
                 .insert([{
                     title: newSlide.title,
                     subtitle: newSlide.subtitle,
-                    cta_link: newSlide.cta_link,
+                    action_link: newSlide.cta_link,
                     image_url: imageUrl,
-                    sort_order: slides.length // append to end
+                    display_order: slides.length + 1,
+                    section: 'home',
+                    is_active: true
                 }])
                 .select()
                 .single();
@@ -98,7 +99,7 @@ export default function HeroManager() {
     const handleDelete = async (id) => {
         if (!confirm("Delete this slide?")) return;
         try {
-            await supabase.from('hero_slides').delete().eq('id', id);
+            await supabase.from('banners').delete().eq('id', id);
             setSlides(slides.filter(s => s.id !== id));
             toast.success("Slide deleted");
         } catch (e) { toast.error("Delete failed"); }
@@ -106,8 +107,9 @@ export default function HeroManager() {
 
     const toggleActive = async (slide) => {
         try {
-            await supabase.from('hero_slides').update({ is_active: !slide.is_active }).eq('id', slide.id);
-            setSlides(slides.map(s => s.id === slide.id ? { ...s, is_active: !s.is_active } : s));
+            const newStatus = slide.is_active === false;
+            await supabase.from('banners').update({ is_active: newStatus }).eq('id', slide.id);
+            setSlides(slides.map(s => s.id === slide.id ? { ...s, is_active: newStatus } : s));
         } catch (e) { toast.error("Update failed"); }
     };
 

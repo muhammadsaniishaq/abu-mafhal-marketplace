@@ -34,21 +34,28 @@ export const AppSettingsProvider = ({ children }) => {
         try {
             const { data, error } = await supabase
                 .from('app_settings')
-                .select('*, default_shipping_address')
-                .maybeSingle();
+                .select('*');
 
             if (error) {
                 console.log('Error fetching app settings:', error);
                 return;
             }
 
-            if (data) {
+            if (data && data.length > 0) {
+                const mainRow = data.find(r => r.is_singleton) || data[0];
+                const merged = { ...mainRow };
+                data.forEach(r => {
+                    if (r.key && r.value) {
+                        merged[r.key] = r.value;
+                    }
+                });
+
                 // Ensure default arrays and addresses exist
-                const hasValidPlans = Array.isArray(data.vendor_plans) && data.vendor_plans.length > 0;
+                const hasValidPlans = Array.isArray(merged.vendor_plans) && merged.vendor_plans.length > 0;
                 const enriched = {
-                    ...data,
-                    default_shipping_address: data.default_shipping_address || '',
-                    vendor_plans: hasValidPlans ? data.vendor_plans : DEFAULT_VENDOR_PLANS
+                    ...merged,
+                    default_shipping_address: merged.default_shipping_address || '',
+                    vendor_plans: hasValidPlans ? merged.vendor_plans : DEFAULT_VENDOR_PLANS
                 };
                 setSettings({ ...enriched, loading: false });
                 AsyncStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(enriched)).catch(() => {});

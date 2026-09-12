@@ -40,7 +40,7 @@ const AdminCMS = () => {
 
   const fetchAllContent = async () => {
     try {
-      const { data: bannersData } = await supabase.from('banners').select('*').order('order', { ascending: true });
+      const { data: bannersData } = await supabase.from('banners').select('*').order('display_order', { ascending: true, nullsFirst: false });
       setBanners(bannersData || []);
 
       const { data: pagesData } = await supabase.from('pages').select('*');
@@ -59,7 +59,13 @@ const AdminCMS = () => {
   const handleSaveBanner = async () => {
     try {
       const bannerData = {
-        ...bannerForm,
+        title: bannerForm.title,
+        subtitle: bannerForm.subtitle,
+        image_url: bannerForm.image_url,
+        action_link: bannerForm.link,
+        is_active: bannerForm.active !== false,
+        display_order: Number(bannerForm.order) || 0,
+        section: bannerForm.section || 'home',
         updated_at: new Date().toISOString()
       };
 
@@ -75,12 +81,12 @@ const AdminCMS = () => {
       
       alert(`Banner ${editingItem ? 'updated' : 'created'} successfully`);
       setShowModal(false);
-      setBannerForm({ title: '', subtitle: '', image_url: '', link: '', active: true, order: 0 });
+      setBannerForm({ title: '', subtitle: '', image_url: '', link: '', active: true, order: 0, section: 'home' });
       setEditingItem(null);
       fetchAllContent();
     } catch (error) {
       console.error('Banner save error:', error.message);
-      alert('Failed to save banner');
+      alert('Failed to save banner: ' + error.message);
     }
   };
 
@@ -247,10 +253,11 @@ const AdminCMS = () => {
                 <h3 className="font-bold mb-1">{banner.title}</h3>
                 <p className="text-sm text-gray-600 mb-2">{banner.subtitle}</p>
                 <div className="flex items-center gap-2 mb-3">
-                  <span className={`text-xs px-2 py-1 rounded ${banner.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-                    {banner.active ? 'Active' : 'Inactive'}
+                  <span className={`text-xs px-2 py-1 rounded ${(banner.is_active !== false && banner.active !== false) ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                    {(banner.is_active !== false && banner.active !== false) ? 'Active' : 'Inactive'}
                   </span>
-                  <span className="text-xs text-gray-500">Order: {banner.order}</span>
+                  <span className="text-xs text-gray-500">Order: {banner.display_order ?? banner.order ?? 0}</span>
+                  <span className="text-xs text-blue-500 capitalize">({banner.section || 'home'})</span>
                 </div>
                 <div className="flex gap-2">
                   <button
@@ -260,9 +267,10 @@ const AdminCMS = () => {
                         title: banner.title || '',
                         subtitle: banner.subtitle || '',
                         image_url: banner.image_url || banner.imageUrl || '',
-                        link: banner.link || '',
-                        active: banner.active ?? true,
-                        order: banner.order || 0
+                        link: banner.action_link || banner.link || '',
+                        active: (banner.is_active !== false && banner.active !== false),
+                        order: banner.display_order ?? banner.order ?? 0,
+                        section: banner.section || 'home'
                       });
                       setShowModal(true);
                     }}

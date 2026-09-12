@@ -64,9 +64,9 @@ const linking = {
     ],
     config: {
         screens: {
-            Landing: '',
+            Main: '',
+            Landing: 'landing',
             Auth: 'auth',
-            Main: 'main',
         },
     },
 };
@@ -348,7 +348,7 @@ export default function App() {
 
     if (loading) return null; // Or a custom splash screen
 
-    let initialRoute = user ? 'Main' : 'Landing';
+    let initialRoute = 'Main';
 
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>

@@ -35809,9 +35809,9 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     prefixes: ['abumafhal://', 'https://abumafhal.com', 'http://abumafhal.com', 'https://www.abumafhal.com', 'http://www.abumafhal.com'],
     config: {
       screens: {
-        Landing: '',
-        Auth: 'auth',
-        Main: 'main'
+        Main: '',
+        Landing: 'landing',
+        Auth: 'auth'
       }
     }
   };
@@ -36111,7 +36111,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     const handleClearCart = () => setCartLines([]);
     if (loading) return null; // Or a custom splash screen
 
-    let initialRoute = user ? 'Main' : 'Landing';
+    let initialRoute = 'Main';
     return /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_reactNativeGestureHandler.GestureHandlerRootView, {
       style: {
         flex: 1
@@ -126128,17 +126128,25 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
         const {
           data,
           error
-        } = await _libSupabase.supabase.from('app_settings').select('*, default_shipping_address').maybeSingle();
+        } = await _libSupabase.supabase.from('app_settings').select('*');
         if (error) {
           console.log('Error fetching app settings:', error);
           return;
         }
-        if (data) {
+        if (data && data.length > 0) {
+          const mainRow = data.find(r => r.is_singleton) || data[0];
+          const merged = Object.assign({}, mainRow);
+          data.forEach(r => {
+            if (r.key && r.value) {
+              merged[r.key] = r.value;
+            }
+          });
+
           // Ensure default arrays and addresses exist
-          const hasValidPlans = Array.isArray(data.vendor_plans) && data.vendor_plans.length > 0;
-          const enriched = Object.assign({}, data, {
-            default_shipping_address: data.default_shipping_address || '',
-            vendor_plans: hasValidPlans ? data.vendor_plans : DEFAULT_VENDOR_PLANS
+          const hasValidPlans = Array.isArray(merged.vendor_plans) && merged.vendor_plans.length > 0;
+          const enriched = Object.assign({}, merged, {
+            default_shipping_address: merged.default_shipping_address || '',
+            vendor_plans: hasValidPlans ? merged.vendor_plans : DEFAULT_VENDOR_PLANS
           });
           setSettings(Object.assign({}, enriched, {
             loading: false
@@ -181434,6 +181442,18 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     n.default = e;
     return n;
   }
+  Object.defineProperty(exports, "getProductImage", {
+    enumerable: true,
+    get: function () {
+      return getProductImage;
+    }
+  });
+  Object.defineProperty(exports, "getCategoryCover", {
+    enumerable: true,
+    get: function () {
+      return getCategoryCover;
+    }
+  });
   Object.defineProperty(exports, "AppHome", {
     enumerable: true,
     get: function () {
@@ -181473,33 +181493,67 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   var Vibration = _interopDefault(_reactNativeWebDistExportsVibration);
   var _reactNativeWebDistExportsLinking = require(_dependencyMap[16]);
   var Linking = _interopDefault(_reactNativeWebDistExportsLinking);
-  var _expoVectorIcons = require(_dependencyMap[17]);
-  var _reactNavigationNative = require(_dependencyMap[18]);
-  var _expoLinearGradient = require(_dependencyMap[19]);
-  var _stylesTheme = require(_dependencyMap[20]);
-  require(_dependencyMap[21]);
-  var _componentsFooter = require(_dependencyMap[22]);
-  var _componentsServiceIcon = require(_dependencyMap[23]);
-  var _libSupabase = require(_dependencyMap[24]);
-  var _componentsCountdownTimer = require(_dependencyMap[25]);
-  var _componentsNewsletterCard = require(_dependencyMap[26]);
-  var _componentsSkeletonLoader = require(_dependencyMap[27]);
-  var _componentsAutoScrollList = require(_dependencyMap[28]);
-  var _componentsUserAvatar = require(_dependencyMap[29]);
-  var _expoImagePicker = require(_dependencyMap[30]);
+  require(_dependencyMap[17]);
+  var _expoVectorIcons = require(_dependencyMap[18]);
+  var _reactNavigationNative = require(_dependencyMap[19]);
+  var _expoLinearGradient = require(_dependencyMap[20]);
+  var _stylesTheme = require(_dependencyMap[21]);
+  require(_dependencyMap[22]);
+  var _componentsFooter = require(_dependencyMap[23]);
+  var _componentsServiceIcon = require(_dependencyMap[24]);
+  var _libSupabase = require(_dependencyMap[25]);
+  var _componentsCountdownTimer = require(_dependencyMap[26]);
+  var _componentsNewsletterCard = require(_dependencyMap[27]);
+  var _componentsSkeletonLoader = require(_dependencyMap[28]);
+  var _componentsAutoScrollList = require(_dependencyMap[29]);
+  var _componentsUserAvatar = require(_dependencyMap[30]);
+  var _expoImagePicker = require(_dependencyMap[31]);
   var ImagePicker = _interopNamespace(_expoImagePicker);
-  var _servicesGeminiService = require(_dependencyMap[31]);
-  var _expoAv = require(_dependencyMap[32]);
-  var _expoFileSystemLegacy = require(_dependencyMap[33]);
+  var _servicesGeminiService = require(_dependencyMap[32]);
+  var _expoAv = require(_dependencyMap[33]);
+  var _expoFileSystemLegacy = require(_dependencyMap[34]);
   var FileSystem = _interopNamespace(_expoFileSystemLegacy);
-  var _reactNativeSafeAreaContext = require(_dependencyMap[34]);
-  var _reactNativeAsyncStorageAsyncStorage = require(_dependencyMap[35]);
+  var _reactNativeSafeAreaContext = require(_dependencyMap[35]);
+  var _reactNativeAsyncStorageAsyncStorage = require(_dependencyMap[36]);
   var AsyncStorage = _interopDefault(_reactNativeAsyncStorageAsyncStorage);
-  var _reactJsxRuntime = require(_dependencyMap[36]);
+  var _contextAppSettingsContext = require(_dependencyMap[37]);
+  var _reactJsxRuntime = require(_dependencyMap[38]);
   const {
     width
   } = Dimensions.default.get('window');
-  const AM_LOGO = require(_dependencyMap[37]);
+  const AM_LOGO = require(_dependencyMap[39]);
+  const getProductImage = item => {
+    if (!item) return 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=300&auto=format&fit=crop';
+    if (item.image_url) return item.image_url;
+    if (Array.isArray(item.images) && item.images.length > 0 && typeof item.images[0] === 'string' && item.images[0]) return item.images[0];
+    if (typeof item.images === 'string' && item.images) return item.images;
+    if (item.image) return item.image;
+    return 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=300&auto=format&fit=crop';
+  };
+  const getCategoryCover = (cat, index = 0) => {
+    if (cat?.image_url) return cat.image_url;
+    const catName = (cat?.name || '').toLowerCase();
+    if (catName.includes('phone') || catName.includes('tablet')) {
+      return 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?q=80&w=600&auto=format&fit=crop';
+    }
+    if (catName.includes('fashion') || catName.includes('cloth') || catName.includes('apparel')) {
+      return 'https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?q=80&w=600&auto=format&fit=crop';
+    }
+    if (catName.includes('electr') || catName.includes('gadget')) {
+      return 'https://images.unsplash.com/photo-1498049794561-7780e7231661?q=80&w=600&auto=format&fit=crop';
+    }
+    if (catName.includes('shoe') || catName.includes('footwear')) {
+      return 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=600&auto=format&fit=crop';
+    }
+    if (catName.includes('beauty') || catName.includes('health') || catName.includes('care')) {
+      return 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?q=80&w=600&auto=format&fit=crop';
+    }
+    if (catName.includes('home') || catName.includes('living')) {
+      return 'https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?q=80&w=600&auto=format&fit=crop';
+    }
+    const fallbacks = ['https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?q=80&w=600&auto=format&fit=crop', 'https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?q=80&w=600&auto=format&fit=crop', 'https://images.unsplash.com/photo-1498049794561-7780e7231661?q=80&w=600&auto=format&fit=crop', 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=600&auto=format&fit=crop'];
+    return fallbacks[index % fallbacks.length];
+  };
   const AppHome = ({
     onGoToShop,
     onGoToCart,
@@ -181511,6 +181565,9 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     onAddToCart
   }) => {
     const insets = (0, _reactNativeSafeAreaContext.useSafeAreaInsets)();
+    const {
+      settings
+    } = (0, _contextAppSettingsContext.useAppSettings)();
     const [activeCategoryFilter, setActiveCategoryFilter] = (0, _react.useState)('All');
     const [banners, setBanners] = (0, _react.useState)([]);
     const [categories, setCategories] = (0, _react.useState)([]);
@@ -181594,6 +181651,55 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       }).catch(() => {});
       fetchData();
     }, []);
+
+    // 2. Realtime listener for instant admin updates from Supabase
+    (0, _react.useEffect)(() => {
+      const channel = _libSupabase.supabase.channel('apphome_admin_sync').on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'banners'
+      }, () => {
+        fetchData();
+      }).on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'categories'
+      }, () => {
+        fetchData();
+      }).on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'products'
+      }, () => {
+        fetchData();
+      }).on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'app_settings'
+      }, () => {
+        fetchData();
+      }).on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'vendors'
+      }, () => {
+        fetchData();
+      }).on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'reviews'
+      }, () => {
+        fetchData();
+      }).subscribe();
+      return () => {
+        _libSupabase.supabase.removeChannel(channel);
+      };
+    }, []);
+    (0, _reactNavigationNative.useFocusEffect)(React.default.useCallback(() => {
+      if (Date.now() - lastFetchRef.current > 2500) {
+        fetchData();
+      }
+    }, []));
     const fetchData = async () => {
       lastFetchRef.current = Date.now();
       try {
@@ -181605,16 +181711,24 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
 
         // Lightweight, parallelized query execution
         const results = await Promise.allSettled([
-        // 0: All Banners (covers both home and promo, eliminates redundant query)
-        _libSupabase.supabase.from('banners').select('id, image_url, title, subtitle, action_link, section, is_active, display_order').eq('is_active', true).order('display_order'),
+        // 0: All Banners from Admin
+        _libSupabase.supabase.from('banners').select('*').neq('is_active', false).order('display_order', {
+          ascending: true,
+          nullsFirst: false
+        }),
         // 1: Flash Sale (light projection)
-        _libSupabase.supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').not('compare_at_price', 'is', null).limit(4),
+        _libSupabase.supabase.from('products').select(PROD_FIELDS).neq('status', 'archived').neq('status', 'draft').not('compare_at_price', 'is', null).limit(6),
         // 2: New Arrivals
-        _libSupabase.supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').eq('is_new', true).limit(6),
+        _libSupabase.supabase.from('products').select(PROD_FIELDS).neq('status', 'archived').neq('status', 'draft').order('created_at', {
+          ascending: false
+        }).limit(8),
         // 3: Recommended
-        _libSupabase.supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').limit(10),
-        // 4: Categories
-        _libSupabase.supabase.from('categories').select('id, name, icon, image_url, display_order, is_active').eq('is_active', true).order('display_order').limit(8),
+        _libSupabase.supabase.from('products').select(PROD_FIELDS).neq('status', 'archived').neq('status', 'draft').limit(12),
+        // 4: Categories from Admin
+        _libSupabase.supabase.from('categories').select('id, name, icon, image_url, display_order, is_active, slug').neq('is_active', false).order('display_order', {
+          ascending: true,
+          nullsFirst: false
+        }),
         // 5: Top Vendors
         _libSupabase.supabase.from('vendors').select('id, user_id, business_name, logo_url, rating, review_count, total_sales, is_verified, vendor_status').eq('vendor_status', 'active').eq('is_verified', true).order('total_sales', {
           ascending: false
@@ -181630,23 +181744,24 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
         // 9: Brands
         _libSupabase.supabase.from('brands').select('id, name, logo_url, is_featured').eq('is_featured', true).limit(10),
         // 10: Trending
-        _libSupabase.supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').order('total_sales', {
-          ascending: false
+        _libSupabase.supabase.from('products').select(PROD_FIELDS).neq('status', 'archived').neq('status', 'draft').order('total_sales', {
+          ascending: false,
+          nullsFirst: false
         }).limit(8),
         // 11: Most Rated
-        _libSupabase.supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').not('average_rating', 'is', null).order('average_rating', {
+        _libSupabase.supabase.from('products').select(PROD_FIELDS).neq('status', 'archived').neq('status', 'draft').not('average_rating', 'is', null).order('average_rating', {
           ascending: false
         }).limit(8),
         // 12: Deal of Day
-        _libSupabase.supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').not('compare_at_price', 'is', null).order('compare_at_price', {
+        _libSupabase.supabase.from('products').select(PROD_FIELDS).neq('status', 'archived').neq('status', 'draft').not('compare_at_price', 'is', null).order('compare_at_price', {
           ascending: false
         }).limit(1),
         // 13: Limited Stock
-        _libSupabase.supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').not('stock_quantity', 'is', null).lt('stock_quantity', 10).gt('stock_quantity', 0).order('stock_quantity', {
+        _libSupabase.supabase.from('products').select(PROD_FIELDS).neq('status', 'archived').neq('status', 'draft').not('stock_quantity', 'is', null).lt('stock_quantity', 10).gt('stock_quantity', 0).order('stock_quantity', {
           ascending: true
         }).limit(8),
         // 14: Price Drops
-        _libSupabase.supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').not('compare_at_price', 'is', null).order('updated_at', {
+        _libSupabase.supabase.from('products').select(PROD_FIELDS).neq('status', 'archived').neq('status', 'draft').not('compare_at_price', 'is', null).order('updated_at', {
           ascending: false
         }).limit(8),
         // 15: Spotlight Vendor
@@ -181679,7 +181794,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
         // 0: Banners & Promo Banners (extracted in memory from single banner query)
         const bAll = getVal(0).data || [];
         const homeBanners = bAll.filter(b => b.section === 'home' || !b.section || b.section === 'all' || b.section === '');
-        setBanners(homeBanners);
+        setBanners(homeBanners.length > 0 ? homeBanners : bAll);
         const promoData = bAll.filter(b => b.section === 'promo');
         const validPromos = promoData.map(promo => {
           let linkData = {
@@ -181829,13 +181944,6 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
 
     // AI Search Handlers — Request permissions on-demand only when tapped
 
-    // Throttle focus refetch — only refetch if > 3 minutes elapsed since last fetch
-    (0, _reactNavigationNative.useFocusEffect)(React.default.useCallback(() => {
-      const now = Date.now();
-      if (now - lastFetchRef.current > 180000) {
-        fetchData();
-      }
-    }, []));
     const onRefresh = React.default.useCallback(() => {
       setRefreshing(true);
       fetchData();
@@ -181847,15 +181955,33 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
           setCurrentHeroIndex(prev => {
             const nextIndex = (prev + 1) % banners.length;
             heroScrollRef.current?.scrollTo({
-              x: nextIndex * width,
+              x: nextIndex * (width - 32),
               animated: true
             });
             return nextIndex;
           });
-        }, 5000); // 5 seconds for hero
+        }, 4500); // 4.5 seconds for hero
         return () => clearInterval(timer);
       }
     }, [banners.length]);
+    const handleBannerPress = banner => {
+      if (!banner) return onGoToShop();
+      const link = banner.action_link;
+      if (link && typeof link === 'string') {
+        if (link.startsWith('http://') || link.startsWith('https://')) {
+          Linking.default.openURL(link).catch(() => onGoToShop());
+          return;
+        }
+        if (link.startsWith('category:')) {
+          const cat = link.replace('category:', '').trim();
+          setActiveCategoryFilter(cat);
+          return;
+        }
+        if (link === 'cart') return onGoToCart();
+        if (link === 'notifications') return onGoToNotifications();
+      }
+      onGoToShop();
+    };
 
     // Promo Banner Auto-Slide Logic
     (0, _react.useEffect)(() => {
@@ -181895,11 +182021,14 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
         children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_componentsSkeletonLoader.HomeSkeleton, {})
       });
     }
-    const combinedFlash = flashSale && flashSale.length > 0 ? flashSale : recommended && recommended.length > 0 ? recommended.slice(0, 6) : (newArrivals || []).slice(0, 6);
-    const displayFlashProducts = combinedFlash.filter(p => {
-      if (activeCategoryFilter === 'All') return true;
+
+    // Pool all fetched products from admin/supabase so any category filter finds its items
+    const allProductsPool = [...(flashSale || []), ...(newArrivals || []), ...(recommended || []), ...(trendingProducts || [])];
+    const uniqueProducts = Array.from(new Map(allProductsPool.map(p => [p.id, p])).values());
+    const finalFlashProducts = activeCategoryFilter === 'All' ? flashSale && flashSale.length > 0 ? flashSale : uniqueProducts.slice(0, 6) : uniqueProducts.filter(p => {
       const cat = (p.category || p.subtitle || '').toLowerCase();
-      return cat.includes(activeCategoryFilter.toLowerCase());
+      const filter = activeCategoryFilter.toLowerCase();
+      return cat.includes(filter) || filter.includes(cat);
     });
     return /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
       style: _stylesTheme.styles.container,
@@ -181931,26 +182060,24 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
               gap: 8
             },
             children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
-              source: AM_LOGO,
+              source: settings?.logo_url ? {
+                uri: settings.logo_url
+              } : AM_LOGO,
               style: {
                 width: 34,
-                height: 34
+                height: 34,
+                borderRadius: 6
               },
               resizeMode: "contain"
             }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
+              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
                 style: {
                   fontSize: 14.5,
                   fontWeight: '900',
                   color: '#0A192F',
                   letterSpacing: 0.5
                 },
-                children: ["ABU ", /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: {
-                    color: '#00D2FF'
-                  },
-                  children: "MAFHAL"
-                })]
+                children: settings?.app_name ? settings.app_name.toUpperCase() : 'ABU MAFHAL'
               }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
                 style: {
                   fontSize: 7,
@@ -181959,7 +182086,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
                   letterSpacing: 0.5,
                   textTransform: 'uppercase'
                 },
-                children: "YOUR MARKETPLACE, YOUR CHOICE."
+                children: settings?.tagline || 'YOUR MARKETPLACE, YOUR CHOICE.'
               })]
             })]
           }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
@@ -182081,75 +182208,241 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
         },
         children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
           style: {
-            paddingHorizontal: 16,
-            paddingTop: 12,
-            marginBottom: 16
+            marginBottom: 16,
+            paddingTop: 12
           },
-          children: /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
-            activeOpacity: 0.9,
-            onPress: onGoToShop,
+          children: banners && banners.length > 0 ? /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(ScrollView.default, {
+              ref: heroScrollRef,
+              horizontal: true,
+              pagingEnabled: true,
+              showsHorizontalScrollIndicator: false,
+              onMomentumScrollEnd: e => {
+                const newIndex = Math.round(e.nativeEvent.contentOffset.x / (width - 32));
+                setCurrentHeroIndex(newIndex);
+              },
+              contentContainerStyle: {
+                paddingHorizontal: 16,
+                gap: 12
+              },
+              children: banners.map((banner, idx) => /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
+                activeOpacity: 0.9,
+                onPress: () => handleBannerPress(banner),
+                style: {
+                  width: width - 32,
+                  height: 160,
+                  borderRadius: 20,
+                  overflow: 'hidden',
+                  backgroundColor: '#0A192F',
+                  position: 'relative',
+                  shadowColor: '#000',
+                  shadowOffset: {
+                    width: 0,
+                    height: 4
+                  },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 10,
+                  elevation: 4
+                },
+                children: banner.image_url ? /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(ImageBackground.default, {
+                  source: {
+                    uri: banner.image_url
+                  },
+                  style: {
+                    width: '100%',
+                    height: '100%',
+                    justifyContent: 'flex-end'
+                  },
+                  resizeMode: "cover",
+                  children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoLinearGradient.LinearGradient, {
+                    colors: ['rgba(10, 25, 47, 0.15)', 'rgba(10, 25, 47, 0.75)', '#0A192F'],
+                    start: {
+                      x: 0,
+                      y: 0
+                    },
+                    end: {
+                      x: 1,
+                      y: 1
+                    },
+                    style: {
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0
+                    }
+                  }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+                    style: {
+                      padding: 16,
+                      zIndex: 2
+                    },
+                    children: [banner.title ? /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                      style: {
+                        fontSize: 20,
+                        fontWeight: '900',
+                        color: '#FFFFFF',
+                        lineHeight: 24
+                      },
+                      children: banner.title
+                    }) : null, banner.subtitle ? /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                      style: {
+                        fontSize: 11,
+                        color: '#CBD5E1',
+                        fontWeight: '600',
+                        marginTop: 4,
+                        marginBottom: 10
+                      },
+                      numberOfLines: 2,
+                      children: banner.subtitle
+                    }) : null, /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+                      style: {
+                        backgroundColor: '#F59E0B',
+                        paddingHorizontal: 14,
+                        paddingVertical: 6,
+                        borderRadius: 20,
+                        alignSelf: 'flex-start',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4
+                      },
+                      children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                        style: {
+                          color: '#0A192F',
+                          fontSize: 11,
+                          fontWeight: '800'
+                        },
+                        children: "Shop Now \u2192"
+                      })
+                    })]
+                  })]
+                }) : /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(_expoLinearGradient.LinearGradient, {
+                  colors: ['#0A192F', '#0E2A4D', '#133E68'],
+                  start: {
+                    x: 0,
+                    y: 0
+                  },
+                  end: {
+                    x: 1,
+                    y: 1
+                  },
+                  style: {
+                    flex: 1,
+                    padding: 18,
+                    justifyContent: 'center'
+                  },
+                  children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                    style: {
+                      fontSize: 20,
+                      fontWeight: '900',
+                      color: '#F59E0B',
+                      lineHeight: 24
+                    },
+                    children: banner.title || 'Special Deals'
+                  }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                    style: {
+                      fontSize: 11,
+                      color: '#E2E8F0',
+                      fontWeight: '500',
+                      marginTop: 6,
+                      marginBottom: 12
+                    },
+                    children: banner.subtitle || 'Discover quality products at Abu Mafhal'
+                  }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+                    style: {
+                      backgroundColor: '#F59E0B',
+                      paddingHorizontal: 14,
+                      paddingVertical: 7,
+                      borderRadius: 20,
+                      alignSelf: 'flex-start'
+                    },
+                    children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                      style: {
+                        color: '#0A192F',
+                        fontSize: 11,
+                        fontWeight: '800'
+                      },
+                      children: "Shop Now \u2192"
+                    })
+                  })]
+                })
+              }, banner.id || idx))
+            }), banners.length > 1 && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+              style: {
+                flexDirection: 'row',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: 6,
+                marginTop: 8
+              },
+              children: banners.map((_, dotIdx) => /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+                style: {
+                  width: currentHeroIndex === dotIdx ? 18 : 6,
+                  height: 5,
+                  borderRadius: 3,
+                  backgroundColor: currentHeroIndex === dotIdx ? '#F59E0B' : '#CBD5E1'
+                }
+              }, dotIdx))
+            })]
+          }) :
+          /*#__PURE__*/
+          /* Fallback branded card if no banner in DB */
+          (0, _reactJsxRuntime.jsx)(View.default, {
             style: {
-              height: 155,
-              borderRadius: 20,
-              overflow: 'hidden',
-              backgroundColor: '#0A192F',
-              flexDirection: 'row',
-              alignItems: 'center',
-              position: 'relative',
               paddingHorizontal: 16
             },
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoLinearGradient.LinearGradient, {
-              colors: ['#0A192F', '#0E2A4D', '#133E68'],
-              start: {
-                x: 0,
-                y: 0
-              },
-              end: {
-                x: 1,
-                y: 1
-              },
-              style: StyleSheet.absoluteFillObject
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+            children: /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
+              activeOpacity: 0.9,
+              onPress: onGoToShop,
               style: {
-                flex: 1.15,
-                zIndex: 2
+                height: 155,
+                borderRadius: 20,
+                overflow: 'hidden',
+                backgroundColor: '#0A192F',
+                padding: 18,
+                justifyContent: 'center',
+                position: 'relative'
               },
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
+              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoLinearGradient.LinearGradient, {
+                colors: ['#0A192F', '#0E2A4D', '#133E68'],
+                start: {
+                  x: 0,
+                  y: 0
+                },
+                end: {
+                  x: 1,
+                  y: 1
+                },
+                style: {
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0
+                }
+              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
                 style: {
                   fontSize: 20,
                   fontWeight: '900',
+                  color: '#F59E0B',
                   lineHeight: 24
                 },
-                children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: {
-                    color: '#F59E0B'
-                  },
-                  children: "Big Deals"
-                }), '\n', /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: {
-                    color: '#FFFFFF'
-                  },
-                  children: "Every Day"
-                })]
+                children: settings?.app_name || 'Abu Mafhal Marketplace'
               }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
                 style: {
-                  fontSize: 9.5,
+                  fontSize: 11,
                   color: '#94A3B8',
                   fontWeight: '600',
                   marginTop: 6,
                   marginBottom: 12
                 },
-                children: "Quality Products | Trusted Sellers | Fast Delivery"
+                children: settings?.tagline || 'Quality Products | Trusted Sellers | Fast Delivery'
               }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
                 style: {
                   backgroundColor: '#F59E0B',
                   paddingHorizontal: 14,
                   paddingVertical: 7,
                   borderRadius: 20,
-                  alignSelf: 'flex-start',
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 4
+                  alignSelf: 'flex-start'
                 },
                 children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
                   style: {
@@ -182160,25 +182453,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
                   children: "Shop Now \u2192"
                 })
               })]
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-              style: {
-                flex: 0.85,
-                height: '100%',
-                justifyContent: 'center',
-                alignItems: 'center',
-                zIndex: 1
-              },
-              children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
-                source: {
-                  uri: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=400&auto=format&fit=crop'
-                },
-                style: {
-                  width: 130,
-                  height: 130
-                },
-                resizeMode: "contain"
-              })
-            })]
+            })
           })
         }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
           style: {
@@ -182227,7 +182502,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
               gap: 8,
               paddingVertical: 4
             },
-            children: [['All', 'Electronics', 'Fashion', 'Home', 'Beauty'].map(cat => /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
+            children: [['All', ...(categories && categories.length > 0 ? categories.map(c => c.name) : ['Phones & Tablets', 'Fashion & Apparel', 'Electronics & Gadgets', 'Shoes & Footwear', 'Beauty & Health', 'Home & Living'])].map(cat => /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
               onPress: () => setActiveCategoryFilter(cat),
               style: {
                 backgroundColor: activeCategoryFilter === cat ? '#0A192F' : '#F1F5F9',
@@ -182264,13 +182539,13 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
             paddingHorizontal: 16,
             marginBottom: 20
           },
-          children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+          children: finalFlashProducts.length > 0 ? /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
             style: {
               flexDirection: 'row',
               flexWrap: 'wrap',
               marginHorizontal: -4
             },
-            children: displayFlashProducts.map((prod, idx) => /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+            children: finalFlashProducts.map((prod, idx) => /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
               style: {
                 width: '33.33%',
                 paddingHorizontal: 4,
@@ -182426,83 +182701,55 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
                 })]
               })
             }, prod.id || idx))
-          })
-        }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(PlatformStats, {}), banners.length > 0 && /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-          style: {
-            height: 95,
-            marginTop: 6
-          },
-          children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Animated.default.ScrollView, {
-            ref: heroScrollRef,
-            horizontal: true,
-            pagingEnabled: true,
-            showsHorizontalScrollIndicator: false,
-            onScroll: Animated.default.event([{
-              nativeEvent: {
-                contentOffset: {
-                  x: scrollX
-                }
-              }
-            }], {
-              useNativeDriver: false
-            }),
-            onMomentumScrollEnd: e => {
-              const index = Math.round(e.nativeEvent.contentOffset.x / width);
-              if (index !== currentHeroIndex) setCurrentHeroIndex(index);
-            },
-            scrollEventThrottle: 16,
-            children: banners.map((item, index) => /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-              activeOpacity: 0.9,
-              onPress: onGoToShop,
-              style: {
-                width: width,
-                paddingHorizontal: 16,
-                height: 95
-              },
-              children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(ImageBackground.default, {
-                source: {
-                  uri: item?.image_url || 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?q=80&w=2670&auto=format&fit=crop'
-                },
-                style: {
-                  width: '100%',
-                  height: '100%'
-                },
-                imageStyle: {
-                  borderRadius: 10
-                },
-                resizeMode: "cover"
-              })
-            }, index))
-          }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+          }) : /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
             style: {
-              flexDirection: 'row',
+              paddingVertical: 28,
+              alignItems: 'center',
               justifyContent: 'center',
-              marginTop: 4
+              backgroundColor: '#F8FAFC',
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: '#E2E8F0'
             },
-            children: banners.map((_, i) => {
-              const opacity = scrollX.interpolate({
-                inputRange: [(i - 1) * width, i * width, (i + 1) * width],
-                outputRange: [0.3, 1, 0.3],
-                extrapolate: 'clamp'
-              });
-              const dotWidth = scrollX.interpolate({
-                inputRange: [(i - 1) * width, i * width, (i + 1) * width],
-                outputRange: [3, 8, 3],
-                extrapolate: 'clamp'
-              });
-              return /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Animated.default.View, {
+            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+              name: "cube-outline",
+              size: 36,
+              color: "#94A3B8"
+            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
+              style: {
+                fontSize: 13.5,
+                fontWeight: '800',
+                color: '#334155',
+                marginTop: 8
+              },
+              children: ["No products in \"", activeCategoryFilter, "\" yet"]
+            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+              style: {
+                fontSize: 11,
+                color: '#94A3B8',
+                marginTop: 3
+              },
+              children: "Check back soon or explore other categories"
+            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
+              onPress: () => setActiveCategoryFilter('All'),
+              style: {
+                marginTop: 12,
+                backgroundColor: '#0A192F',
+                paddingHorizontal: 16,
+                paddingVertical: 7,
+                borderRadius: 20
+              },
+              children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
                 style: {
-                  height: 3,
-                  width: dotWidth,
-                  borderRadius: 1.5,
-                  backgroundColor: '#0E1A2E',
-                  marginHorizontal: 1.5,
-                  opacity
-                }
-              }, i);
-            })
-          })]
-        }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(EliteMembershipCard, {
+                  color: '#FFFFFF',
+                  fontSize: 11,
+                  fontWeight: '800'
+                },
+                children: "Show All Products"
+              })
+            })]
+          })
+        }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(PlatformStats, {}), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(EliteMembershipCard, {
           user: user,
           checkInData: checkInData,
           loyalty: loyalty
@@ -183132,7 +183379,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
                 },
                 children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
                   source: {
-                    uri: vendor?.profiles?.avatar_url || vendor?.logo_url || 'https://placehold.co/200'
+                    uri: vendor?.profiles?.avatar_url || vendor?.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(vendor?.business_name || vendor?.store_name || 'Vendor')}&background=0E1A2E&color=D9A73A`
                   },
                   style: {
                     width: '100%',
@@ -183438,7 +183685,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
                 },
                 children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
                   source: {
-                    uri: brand?.logo_url || 'https://placehold.co/100'
+                    uri: brand?.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(brand?.name || 'Brand')}&background=0E1A2E&color=D9A73A`
                   },
                   style: {
                     width: 32,
@@ -183454,119 +183701,6 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
                   color: '#475569'
                 },
                 children: brand?.name || 'Brand'
-              })]
-            }, i))
-          })]
-        }), flashSale.length > 0 && /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-          style: {
-            marginTop: 14,
-            paddingHorizontal: 16
-          },
-          children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-            style: {
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: 6
-            },
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              style: {
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 4
-              },
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                style: {
-                  width: 3,
-                  height: 13,
-                  backgroundColor: '#D9A73A',
-                  borderRadius: 1.5
-                }
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: {
-                  fontSize: 13,
-                  fontWeight: '900',
-                  color: '#0E1A2E'
-                },
-                children: "Flash Sale"
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_componentsCountdownTimer.CountdownTimer, {
-                targetDate: new Date().setHours(24, 0, 0, 0)
-              })]
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-              onPress: onGoToShop,
-              children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: {
-                  color: '#D9A73A',
-                  fontWeight: '800',
-                  fontSize: 10.5
-                },
-                children: "See All"
-              })
-            })]
-          }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-            style: {
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              gap: 6
-            },
-            children: flashSale.map((item, i) => /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
-              style: [_stylesTheme.styles.recCard, {
-                width: '49%',
-                borderRadius: 10,
-                padding: 0,
-                overflow: 'hidden',
-                marginBottom: 6,
-                borderWidth: 1,
-                borderColor: 'rgba(217, 167, 58, 0.12)'
-              }],
-              onPress: () => onProductClick(item),
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
-                source: {
-                  uri: item?.images?.[0] || 'https://placehold.co/200'
-                },
-                style: {
-                  width: '100%',
-                  height: 115
-                }
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                style: {
-                  position: 'absolute',
-                  top: 4,
-                  left: 4,
-                  backgroundColor: '#D9A73A',
-                  paddingHorizontal: 5,
-                  paddingVertical: 2,
-                  borderRadius: 4
-                },
-                children: /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
-                  style: {
-                    color: '#0E1A2E',
-                    fontSize: 8,
-                    fontWeight: '900'
-                  },
-                  children: ["-", item?.discount, "%"]
-                })
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-                style: {
-                  padding: 8
-                },
-                children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: {
-                    fontWeight: '700',
-                    fontSize: 13,
-                    color: '#0E1A2E'
-                  },
-                  numberOfLines: 1,
-                  children: item?.name
-                }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
-                  style: {
-                    fontWeight: '900',
-                    fontSize: 14.5,
-                    color: '#D9A73A',
-                    marginTop: 1
-                  },
-                  children: ["\u20A6", item?.price?.toLocaleString() || '0']
-                })]
               })]
             }, i))
           })]
@@ -183611,7 +183745,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
             },
             children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
               source: {
-                uri: dealOfDay?.images?.[0] || 'https://placehold.co/600x400'
+                uri: getProductImage(dealOfDay)
               },
               style: {
                 width: '100%',
@@ -183777,7 +183911,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
               },
               children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
                 source: {
-                  uri: item?.images?.[0] || 'https://placehold.co/200'
+                  uri: getProductImage(item)
                 },
                 style: {
                   width: 115,
@@ -183999,7 +184133,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
               },
               children: /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(ImageBackground.default, {
                 source: {
-                  uri: categories[0]?.image_url || 'https://placehold.co/400x600'
+                  uri: getCategoryCover(categories[0], 0)
                 },
                 style: {
                   flex: 1,
@@ -184092,7 +184226,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
                 },
                 children: /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(ImageBackground.default, {
                   source: {
-                    uri: cat?.image_url || 'https://placehold.co/400x300'
+                    uri: getCategoryCover(cat, i + 1)
                   },
                   style: {
                     flex: 1,
@@ -184163,7 +184297,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
               },
               children: /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(ImageBackground.default, {
                 source: {
-                  uri: cat?.image_url || 'https://placehold.co/400x300'
+                  uri: getCategoryCover(cat, i + 3)
                 },
                 style: {
                   flex: 1,
@@ -184308,7 +184442,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
               },
               children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
                 source: {
-                  uri: item?.images?.[0] || 'https://placehold.co/200'
+                  uri: getProductImage(item)
                 },
                 style: {
                   width: 115,
@@ -184825,7 +184959,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
               },
               children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
                 source: {
-                  uri: item?.images?.[0] || 'https://placehold.co/200'
+                  uri: getProductImage(item)
                 },
                 style: {
                   width: 108,
@@ -184932,14 +185066,15 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
               onPress: () => onProductClick(item),
               children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
                 source: {
-                  uri: item?.images?.[0] || 'https://placehold.co/200'
+                  uri: getProductImage(item)
                 },
                 style: {
                   width: 108,
                   height: 95,
                   borderRadius: 12,
                   backgroundColor: '#F5F3EB'
-                }
+                },
+                resizeMode: "cover"
               }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
                 style: {
                   marginTop: 1.5,
@@ -185032,9 +185167,9 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
                 backgroundColor: 'white'
               },
               onPress: () => onProductClick(item),
-              children: [item?.images?.[0] ? /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
+              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
                 source: {
-                  uri: item.images[0]
+                  uri: getProductImage(item)
                 },
                 style: {
                   width: '100%',
@@ -185042,22 +185177,8 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
                   borderRadius: 8,
                   backgroundColor: '#F5F3EB',
                   marginBottom: 7
-                }
-              }) : /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                style: {
-                  width: '100%',
-                  height: 95,
-                  borderRadius: 8,
-                  backgroundColor: '#EEE9D9',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginBottom: 7
                 },
-                children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                  name: "image-outline",
-                  size: 22,
-                  color: "#D9A73A"
-                })
+                resizeMode: "cover"
               }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
                 style: {
                   paddingHorizontal: 2
@@ -185145,7 +185266,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
               },
               children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
                 source: {
-                  uri: item?.images?.[0] || 'https://placehold.co/200'
+                  uri: getProductImage(item)
                 },
                 style: {
                   width: 100,
@@ -185369,7 +185490,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
                 },
                 children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
                   source: {
-                    uri: item?.images?.[0] || 'https://placehold.co/200'
+                    uri: getProductImage(item)
                   },
                   style: {
                     width: 108,
@@ -186041,7 +186162,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     })
   }));
-},1097,[58,232,583,990,1098,268,1099,559,586,267,220,660,230,122,731,1100,1089,997,733,1085,1101,1102,1103,1104,925,1090,1105,1106,1107,1108,1109,1113,1114,1130,890,919,127,1091]);
+},1097,[58,232,583,990,1098,268,1099,559,586,267,220,660,230,122,731,1100,1089,69,997,733,1085,1101,1102,1103,1104,925,1090,1105,1106,1107,1108,1109,1113,1114,1130,890,919,918,127,1091]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 

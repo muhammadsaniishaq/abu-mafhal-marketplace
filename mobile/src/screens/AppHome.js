@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, SafeAreaView, ScrollView, ImageBackground, Image, TextInput, RefreshControl, Dimensions, Animated, FlatList, Platform, StatusBar, Vibration, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, SafeAreaView, ScrollView, ImageBackground, Image, TextInput, RefreshControl, Dimensions, Animated, FlatList, Platform, StatusBar, Vibration, Linking, StyleSheet } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -20,16 +20,53 @@ import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAppSettings } from '../context/AppSettingsContext';
 
 const { width } = Dimensions.get('window');
 const AM_LOGO = require('../../assets/am_logo.png');
 
+export const getProductImage = (item) => {
+    if (!item) return 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=300&auto=format&fit=crop';
+    if (item.image_url) return item.image_url;
+    if (Array.isArray(item.images) && item.images.length > 0 && typeof item.images[0] === 'string' && item.images[0]) return item.images[0];
+    if (typeof item.images === 'string' && item.images) return item.images;
+    if (item.image) return item.image;
+    return 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=300&auto=format&fit=crop';
+};
 
-
-
+export const getCategoryCover = (cat, index = 0) => {
+    if (cat?.image_url) return cat.image_url;
+    const catName = (cat?.name || '').toLowerCase();
+    if (catName.includes('phone') || catName.includes('tablet')) {
+        return 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?q=80&w=600&auto=format&fit=crop';
+    }
+    if (catName.includes('fashion') || catName.includes('cloth') || catName.includes('apparel')) {
+        return 'https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?q=80&w=600&auto=format&fit=crop';
+    }
+    if (catName.includes('electr') || catName.includes('gadget')) {
+        return 'https://images.unsplash.com/photo-1498049794561-7780e7231661?q=80&w=600&auto=format&fit=crop';
+    }
+    if (catName.includes('shoe') || catName.includes('footwear')) {
+        return 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=600&auto=format&fit=crop';
+    }
+    if (catName.includes('beauty') || catName.includes('health') || catName.includes('care')) {
+        return 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?q=80&w=600&auto=format&fit=crop';
+    }
+    if (catName.includes('home') || catName.includes('living')) {
+        return 'https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?q=80&w=600&auto=format&fit=crop';
+    }
+    const fallbacks = [
+        'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?q=80&w=600&auto=format&fit=crop',
+        'https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?q=80&w=600&auto=format&fit=crop',
+        'https://images.unsplash.com/photo-1498049794561-7780e7231661?q=80&w=600&auto=format&fit=crop',
+        'https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=600&auto=format&fit=crop',
+    ];
+    return fallbacks[index % fallbacks.length];
+};
 
 export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigate, onProductClick, user, cartCount: initialCartCount = 0, onAddToCart }) => {
     const insets = useSafeAreaInsets();
+    const { settings } = useAppSettings();
     const [activeCategoryFilter, setActiveCategoryFilter] = useState('All');
     const [banners, setBanners] = useState([]);
     const [categories, setCategories] = useState([]);
@@ -114,6 +151,42 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
         fetchData();
     }, []);
 
+    // 2. Realtime listener for instant admin updates from Supabase
+    useEffect(() => {
+        const channel = supabase.channel('apphome_admin_sync')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'banners' }, () => {
+                fetchData();
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, () => {
+                fetchData();
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
+                fetchData();
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => {
+                fetchData();
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'vendors' }, () => {
+                fetchData();
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'reviews' }, () => {
+                fetchData();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, []);
+
+    useFocusEffect(
+        React.useCallback(() => {
+            if (Date.now() - lastFetchRef.current > 2500) {
+                fetchData();
+            }
+        }, [])
+    );
+
     const fetchData = async () => {
         lastFetchRef.current = Date.now();
         try {
@@ -121,16 +194,16 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
 
             // Lightweight, parallelized query execution
             const results = await Promise.allSettled([
-                // 0: All Banners (covers both home and promo, eliminates redundant query)
-                supabase.from('banners').select('id, image_url, title, subtitle, action_link, section, is_active, display_order').eq('is_active', true).order('display_order'),
+                // 0: All Banners from Admin
+                supabase.from('banners').select('*').neq('is_active', false).order('display_order', { ascending: true, nullsFirst: false }),
                 // 1: Flash Sale (light projection)
-                supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').not('compare_at_price', 'is', null).limit(4),
+                supabase.from('products').select(PROD_FIELDS).neq('status', 'archived').neq('status', 'draft').not('compare_at_price', 'is', null).limit(6),
                 // 2: New Arrivals
-                supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').eq('is_new', true).limit(6),
+                supabase.from('products').select(PROD_FIELDS).neq('status', 'archived').neq('status', 'draft').order('created_at', { ascending: false }).limit(8),
                 // 3: Recommended
-                supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').limit(10),
-                // 4: Categories
-                supabase.from('categories').select('id, name, icon, image_url, display_order, is_active').eq('is_active', true).order('display_order').limit(8),
+                supabase.from('products').select(PROD_FIELDS).neq('status', 'archived').neq('status', 'draft').limit(12),
+                // 4: Categories from Admin
+                supabase.from('categories').select('id, name, icon, image_url, display_order, is_active, slug').neq('is_active', false).order('display_order', { ascending: true, nullsFirst: false }),
                 // 5: Top Vendors
                 supabase.from('vendors').select('id, user_id, business_name, logo_url, rating, review_count, total_sales, is_verified, vendor_status').eq('vendor_status', 'active').eq('is_verified', true).order('total_sales', { ascending: false }).limit(8),
                 // 6: Home Services
@@ -142,15 +215,15 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                 // 9: Brands
                 supabase.from('brands').select('id, name, logo_url, is_featured').eq('is_featured', true).limit(10),
                 // 10: Trending
-                supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').order('total_sales', { ascending: false }).limit(8),
+                supabase.from('products').select(PROD_FIELDS).neq('status', 'archived').neq('status', 'draft').order('total_sales', { ascending: false, nullsFirst: false }).limit(8),
                 // 11: Most Rated
-                supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').not('average_rating', 'is', null).order('average_rating', { ascending: false }).limit(8),
+                supabase.from('products').select(PROD_FIELDS).neq('status', 'archived').neq('status', 'draft').not('average_rating', 'is', null).order('average_rating', { ascending: false }).limit(8),
                 // 12: Deal of Day
-                supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').not('compare_at_price', 'is', null).order('compare_at_price', { ascending: false }).limit(1),
+                supabase.from('products').select(PROD_FIELDS).neq('status', 'archived').neq('status', 'draft').not('compare_at_price', 'is', null).order('compare_at_price', { ascending: false }).limit(1),
                 // 13: Limited Stock
-                supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').not('stock_quantity', 'is', null).lt('stock_quantity', 10).gt('stock_quantity', 0).order('stock_quantity', { ascending: true }).limit(8),
+                supabase.from('products').select(PROD_FIELDS).neq('status', 'archived').neq('status', 'draft').not('stock_quantity', 'is', null).lt('stock_quantity', 10).gt('stock_quantity', 0).order('stock_quantity', { ascending: true }).limit(8),
                 // 14: Price Drops
-                supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').not('compare_at_price', 'is', null).order('updated_at', { ascending: false }).limit(8),
+                supabase.from('products').select(PROD_FIELDS).neq('status', 'archived').neq('status', 'draft').not('compare_at_price', 'is', null).order('updated_at', { ascending: false }).limit(8),
                 // 15: Spotlight Vendor
                 supabase.from('vendors').select('id, user_id, business_name, logo_url, rating, review_count, total_sales, is_verified, vendor_status').eq('vendor_status', 'active').eq('is_verified', true).order('created_at', { ascending: false }).limit(1),
                 // 16-19: User specific data (conditional)
@@ -165,7 +238,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
             // 0: Banners & Promo Banners (extracted in memory from single banner query)
             const bAll = getVal(0).data || [];
             const homeBanners = bAll.filter(b => b.section === 'home' || !b.section || b.section === 'all' || b.section === '');
-            setBanners(homeBanners);
+            setBanners(homeBanners.length > 0 ? homeBanners : bAll);
 
             const promoData = bAll.filter(b => b.section === 'promo');
             const validPromos = promoData.map(promo => {
@@ -410,16 +483,6 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
         }
     };
 
-    // Throttle focus refetch — only refetch if > 3 minutes elapsed since last fetch
-    useFocusEffect(
-        React.useCallback(() => {
-            const now = Date.now();
-            if (now - lastFetchRef.current > 180000) {
-                fetchData();
-            }
-        }, [])
-    );
-
     const onRefresh = React.useCallback(() => {
         setRefreshing(true);
         fetchData();
@@ -438,13 +501,32 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
             const timer = setInterval(() => {
                 setCurrentHeroIndex(prev => {
                     const nextIndex = (prev + 1) % banners.length;
-                    heroScrollRef.current?.scrollTo({ x: nextIndex * width, animated: true });
+                    heroScrollRef.current?.scrollTo({ x: nextIndex * (width - 32), animated: true });
                     return nextIndex;
                 });
-            }, 5000); // 5 seconds for hero
+            }, 4500); // 4.5 seconds for hero
             return () => clearInterval(timer);
         }
     }, [banners.length]);
+
+    const handleBannerPress = (banner) => {
+        if (!banner) return onGoToShop();
+        const link = banner.action_link;
+        if (link && typeof link === 'string') {
+            if (link.startsWith('http://') || link.startsWith('https://')) {
+                Linking.openURL(link).catch(() => onGoToShop());
+                return;
+            }
+            if (link.startsWith('category:')) {
+                const cat = link.replace('category:', '').trim();
+                setActiveCategoryFilter(cat);
+                return;
+            }
+            if (link === 'cart') return onGoToCart();
+            if (link === 'notifications') return onGoToNotifications();
+        }
+        onGoToShop();
+    };
 
     // Promo Banner Auto-Slide Logic
     useEffect(() => {
@@ -483,15 +565,22 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
         );
     }
 
-    const combinedFlash = (flashSale && flashSale.length > 0)
-        ? flashSale
-        : (recommended && recommended.length > 0 ? recommended.slice(0, 6) : (newArrivals || []).slice(0, 6));
+    // Pool all fetched products from admin/supabase so any category filter finds its items
+    const allProductsPool = [
+        ...(flashSale || []),
+        ...(newArrivals || []),
+        ...(recommended || []),
+        ...(trendingProducts || []),
+    ];
+    const uniqueProducts = Array.from(new Map(allProductsPool.map(p => [p.id, p])).values());
 
-    const displayFlashProducts = combinedFlash.filter(p => {
-        if (activeCategoryFilter === 'All') return true;
-        const cat = (p.category || p.subtitle || '').toLowerCase();
-        return cat.includes(activeCategoryFilter.toLowerCase());
-    });
+    const finalFlashProducts = activeCategoryFilter === 'All'
+        ? ((flashSale && flashSale.length > 0) ? flashSale : uniqueProducts.slice(0, 6))
+        : uniqueProducts.filter(p => {
+            const cat = (p.category || p.subtitle || '').toLowerCase();
+            const filter = activeCategoryFilter.toLowerCase();
+            return cat.includes(filter) || filter.includes(cat);
+        });
 
 
     return (
@@ -511,13 +600,17 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                 {/* Top row: logo + actions */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <Image source={AM_LOGO} style={{ width: 34, height: 34 }} resizeMode="contain" />
+                        <Image
+                            source={settings?.logo_url ? { uri: settings.logo_url } : AM_LOGO}
+                            style={{ width: 34, height: 34, borderRadius: 6 }}
+                            resizeMode="contain"
+                        />
                         <View>
                             <Text style={{ fontSize: 14.5, fontWeight: '900', color: '#0A192F', letterSpacing: 0.5 }}>
-                                ABU <Text style={{ color: '#00D2FF' }}>MAFHAL</Text>
+                                {settings?.app_name ? settings.app_name.toUpperCase() : 'ABU MAFHAL'}
                             </Text>
                             <Text style={{ fontSize: 7, fontWeight: '700', color: '#64748B', letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                                YOUR MARKETPLACE, YOUR CHOICE.
+                                {settings?.tagline || 'YOUR MARKETPLACE, YOUR CHOICE.'}
                             </Text>
                         </View>
                     </View>
@@ -575,55 +668,146 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
                 contentContainerStyle={{ paddingBottom: 100 }}
             >
-                {/* ── HERO BANNER: BIG DEALS EVERY DAY (Screenshot 2) ── */}
-                <View style={{ paddingHorizontal: 16, paddingTop: 12, marginBottom: 16 }}>
-                    <TouchableOpacity
-                        activeOpacity={0.9}
-                        onPress={onGoToShop}
-                        style={{
-                            height: 155,
-                            borderRadius: 20,
-                            overflow: 'hidden',
-                            backgroundColor: '#0A192F',
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            position: 'relative',
-                            paddingHorizontal: 16,
-                        }}
-                    >
-                        <LinearGradient
-                            colors={['#0A192F', '#0E2A4D', '#133E68']}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={StyleSheet.absoluteFillObject}
-                        />
+                {/* ── HERO BANNER: 100% DYNAMIC FROM ADMIN / SUPABASE ── */}
+                <View style={{ marginBottom: 16, paddingTop: 12 }}>
+                    {banners && banners.length > 0 ? (
+                        <View>
+                            <ScrollView
+                                ref={heroScrollRef}
+                                horizontal
+                                pagingEnabled
+                                showsHorizontalScrollIndicator={false}
+                                onMomentumScrollEnd={(e) => {
+                                    const newIndex = Math.round(e.nativeEvent.contentOffset.x / (width - 32));
+                                    setCurrentHeroIndex(newIndex);
+                                }}
+                                contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}
+                            >
+                                {banners.map((banner, idx) => (
+                                    <TouchableOpacity
+                                        key={banner.id || idx}
+                                        activeOpacity={0.9}
+                                        onPress={() => handleBannerPress(banner)}
+                                        style={{
+                                            width: width - 32,
+                                            height: 160,
+                                            borderRadius: 20,
+                                            overflow: 'hidden',
+                                            backgroundColor: '#0A192F',
+                                            position: 'relative',
+                                            shadowColor: '#000',
+                                            shadowOffset: { width: 0, height: 4 },
+                                            shadowOpacity: 0.15,
+                                            shadowRadius: 10,
+                                            elevation: 4
+                                        }}
+                                    >
+                                        {banner.image_url ? (
+                                            <ImageBackground
+                                                source={{ uri: banner.image_url }}
+                                                style={{ width: '100%', height: '100%', justifyContent: 'flex-end' }}
+                                                resizeMode="cover"
+                                            >
+                                                <LinearGradient
+                                                    colors={['rgba(10, 25, 47, 0.15)', 'rgba(10, 25, 47, 0.75)', '#0A192F']}
+                                                    start={{ x: 0, y: 0 }}
+                                                    end={{ x: 1, y: 1 }}
+                                                    style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+                                                />
+                                                <View style={{ padding: 16, zIndex: 2 }}>
+                                                    {banner.title ? (
+                                                        <Text style={{ fontSize: 20, fontWeight: '900', color: '#FFFFFF', lineHeight: 24 }}>
+                                                            {banner.title}
+                                                        </Text>
+                                                    ) : null}
+                                                    {banner.subtitle ? (
+                                                        <Text style={{ fontSize: 11, color: '#CBD5E1', fontWeight: '600', marginTop: 4, marginBottom: 10 }} numberOfLines={2}>
+                                                            {banner.subtitle}
+                                                        </Text>
+                                                    ) : null}
+                                                    <View style={{ backgroundColor: '#F59E0B', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                        <Text style={{ color: '#0A192F', fontSize: 11, fontWeight: '800' }}>
+                                                            Shop Now →
+                                                        </Text>
+                                                    </View>
+                                                </View>
+                                            </ImageBackground>
+                                        ) : (
+                                            <LinearGradient
+                                                colors={['#0A192F', '#0E2A4D', '#133E68']}
+                                                start={{ x: 0, y: 0 }}
+                                                end={{ x: 1, y: 1 }}
+                                                style={{ flex: 1, padding: 18, justifyContent: 'center' }}
+                                            >
+                                                <Text style={{ fontSize: 20, fontWeight: '900', color: '#F59E0B', lineHeight: 24 }}>
+                                                    {banner.title || 'Special Deals'}
+                                                </Text>
+                                                <Text style={{ fontSize: 11, color: '#E2E8F0', fontWeight: '500', marginTop: 6, marginBottom: 12 }}>
+                                                    {banner.subtitle || 'Discover quality products at Abu Mafhal'}
+                                                </Text>
+                                                <View style={{ backgroundColor: '#F59E0B', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, alignSelf: 'flex-start' }}>
+                                                    <Text style={{ color: '#0A192F', fontSize: 11, fontWeight: '800' }}>Shop Now →</Text>
+                                                </View>
+                                            </LinearGradient>
+                                        )}
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
 
-                        {/* Left text */}
-                        <View style={{ flex: 1.15, zIndex: 2 }}>
-                            <Text style={{ fontSize: 20, fontWeight: '900', lineHeight: 24 }}>
-                                <Text style={{ color: '#F59E0B' }}>Big Deals</Text>{'\n'}
-                                <Text style={{ color: '#FFFFFF' }}>Every Day</Text>
-                            </Text>
-                            <Text style={{ fontSize: 9.5, color: '#94A3B8', fontWeight: '600', marginTop: 6, marginBottom: 12 }}>
-                                Quality Products | Trusted Sellers | Fast Delivery
-                            </Text>
-                            <View style={{ backgroundColor: '#F59E0B', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                <Text style={{ color: '#0A192F', fontSize: 11, fontWeight: '800' }}>Shop Now →</Text>
-                            </View>
+                            {/* Carousel Dots */}
+                            {banners.length > 1 && (
+                                <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                                    {banners.map((_, dotIdx) => (
+                                        <View
+                                            key={dotIdx}
+                                            style={{
+                                                width: currentHeroIndex === dotIdx ? 18 : 6,
+                                                height: 5,
+                                                borderRadius: 3,
+                                                backgroundColor: currentHeroIndex === dotIdx ? '#F59E0B' : '#CBD5E1',
+                                            }}
+                                        />
+                                    ))}
+                                </View>
+                            )}
                         </View>
-
-                        {/* Right product hero imagery */}
-                        <View style={{ flex: 0.85, height: '100%', justifyContent: 'center', alignItems: 'center', zIndex: 1 }}>
-                            <Image
-                                source={{ uri: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=400&auto=format&fit=crop' }}
-                                style={{ width: 130, height: 130 }}
-                                resizeMode="contain"
-                            />
+                    ) : (
+                        /* Fallback branded card if no banner in DB */
+                        <View style={{ paddingHorizontal: 16 }}>
+                            <TouchableOpacity
+                                activeOpacity={0.9}
+                                onPress={onGoToShop}
+                                style={{
+                                    height: 155,
+                                    borderRadius: 20,
+                                    overflow: 'hidden',
+                                    backgroundColor: '#0A192F',
+                                    padding: 18,
+                                    justifyContent: 'center',
+                                    position: 'relative'
+                                }}
+                            >
+                                <LinearGradient
+                                    colors={['#0A192F', '#0E2A4D', '#133E68']}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 1 }}
+                                    style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+                                />
+                                <Text style={{ fontSize: 20, fontWeight: '900', color: '#F59E0B', lineHeight: 24 }}>
+                                    {settings?.app_name || 'Abu Mafhal Marketplace'}
+                                </Text>
+                                <Text style={{ fontSize: 11, color: '#94A3B8', fontWeight: '600', marginTop: 6, marginBottom: 12 }}>
+                                    {settings?.tagline || 'Quality Products | Trusted Sellers | Fast Delivery'}
+                                </Text>
+                                <View style={{ backgroundColor: '#F59E0B', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, alignSelf: 'flex-start' }}>
+                                    <Text style={{ color: '#0A192F', fontSize: 11, fontWeight: '800' }}>Shop Now →</Text>
+                                </View>
+                            </TouchableOpacity>
                         </View>
-                    </TouchableOpacity>
+                    )}
                 </View>
 
-                {/* ── FLASH SALE SECTION WITH 4 COUNTDOWN BOXES (Screenshot 2) ── */}
+                {/* ── FLASH SALE SECTION WITH 4 COUNTDOWN BOXES ── */}
                 <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -637,9 +821,9 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                         <CountdownTimer />
                     </View>
 
-                    {/* Category Filter Pills */}
+                    {/* Category Filter Pills: 100% Dynamic from Admin */}
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
-                        {['All', 'Electronics', 'Fashion', 'Home', 'Beauty'].map((cat) => (
+                        {['All', ...(categories && categories.length > 0 ? categories.map(c => c.name) : ['Phones & Tablets', 'Fashion & Apparel', 'Electronics & Gadgets', 'Shoes & Footwear', 'Beauty & Health', 'Home & Living'])].map((cat) => (
                             <TouchableOpacity
                                 key={cat}
                                 onPress={() => setActiveCategoryFilter(cat)}
@@ -667,133 +851,117 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
 
                 {/* ── 3-COLUMN PRODUCT GRID (Screenshot 2) ── */}
                 <View style={{ paddingHorizontal: 16, marginBottom: 20 }}>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4 }}>
-                        {displayFlashProducts.map((prod, idx) => (
-                            <View key={prod.id || idx} style={{ width: '33.33%', paddingHorizontal: 4, marginBottom: 10 }}>
-                                <TouchableOpacity
-                                    activeOpacity={0.85}
-                                    onPress={() => onProductClick(prod)}
-                                    style={{
-                                        backgroundColor: '#FFFFFF',
-                                        borderRadius: 12,
-                                        borderWidth: 1,
-                                        borderColor: '#F1F5F9',
-                                        padding: 8,
-                                        position: 'relative',
-                                        elevation: 1,
-                                        shadowColor: '#000',
-                                        shadowOffset: { width: 0, height: 1 },
-                                        shadowOpacity: 0.04,
-                                        shadowRadius: 3,
-                                    }}
-                                >
-                                    {/* Discount Tag */}
-                                    <View style={{ position: 'absolute', top: 6, left: 6, backgroundColor: '#EF4444', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 5, zIndex: 2 }}>
-                                        <Text style={{ color: '#FFFFFF', fontSize: 8.5, fontWeight: '900' }}>
-                                            {prod.discount ? `-${prod.discount}%` : '-25%'}
-                                        </Text>
-                                    </View>
-
-                                    {/* Product Image */}
-                                    <View style={{ width: '100%', height: 85, alignItems: 'center', justifyContent: 'center', marginBottom: 6, backgroundColor: '#F8FAFC', borderRadius: 8, overflow: 'hidden' }}>
-                                        <Image
-                                            source={{ uri: prod.image_url || prod.image || (Array.isArray(prod.images) ? prod.images[0] : prod.images) || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=300&auto=format&fit=crop' }}
-                                            style={{ width: '90%', height: '90%' }}
-                                            resizeMode="contain"
-                                        />
-                                    </View>
-
-                                    {/* Name & Category */}
-                                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
-                                        {prod.name}
-                                    </Text>
-                                    <Text style={{ fontSize: 9, color: '#64748B', fontWeight: '500', marginBottom: 3 }} numberOfLines={1}>
-                                        {prod.subtitle || prod.category || 'Product'}
-                                    </Text>
-
-                                    {/* Rating */}
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 4 }}>
-                                        <Ionicons name="star" size={10} color="#F59E0B" />
-                                        <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#0F172A' }}>{prod.rating || 4.7}</Text>
-                                        <Text style={{ fontSize: 8.5, color: '#94A3B8' }}>({prod.reviews || '1.2k'})</Text>
-                                    </View>
-
-                                    {/* Price & Cart button row */}
-                                    <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 2 }}>
-                                        <View>
-                                            <Text style={{ fontSize: 12, fontWeight: '900', color: '#0F172A' }}>
-                                                ₦{(prod.price || 25000).toLocaleString()}
+                    {finalFlashProducts.length > 0 ? (
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4 }}>
+                            {finalFlashProducts.map((prod, idx) => (
+                                <View key={prod.id || idx} style={{ width: '33.33%', paddingHorizontal: 4, marginBottom: 10 }}>
+                                    <TouchableOpacity
+                                        activeOpacity={0.85}
+                                        onPress={() => onProductClick(prod)}
+                                        style={{
+                                            backgroundColor: '#FFFFFF',
+                                            borderRadius: 12,
+                                            borderWidth: 1,
+                                            borderColor: '#F1F5F9',
+                                            padding: 8,
+                                            position: 'relative',
+                                            elevation: 1,
+                                            shadowColor: '#000',
+                                            shadowOffset: { width: 0, height: 1 },
+                                            shadowOpacity: 0.04,
+                                            shadowRadius: 3,
+                                        }}
+                                    >
+                                        {/* Discount Tag */}
+                                        <View style={{ position: 'absolute', top: 6, left: 6, backgroundColor: '#EF4444', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 5, zIndex: 2 }}>
+                                            <Text style={{ color: '#FFFFFF', fontSize: 8.5, fontWeight: '900' }}>
+                                                {prod.discount ? `-${prod.discount}%` : '-25%'}
                                             </Text>
-                                            {prod.compare_at_price ? (
-                                                <Text style={{ fontSize: 8.5, color: '#94A3B8', textDecorationLine: 'line-through' }}>
-                                                    ₦{prod.compare_at_price.toLocaleString()}
-                                                </Text>
-                                            ) : null}
                                         </View>
 
-                                        <TouchableOpacity
-                                            onPress={(e) => {
-                                                if (typeof onAddToCart === 'function') {
-                                                    onAddToCart(prod);
-                                                    showToast(`${prod.name} added to cart!`);
-                                                } else {
-                                                    onProductClick(prod);
-                                                }
-                                            }}
-                                            style={{
-                                                width: 26,
-                                                height: 26,
-                                                borderRadius: 13,
-                                                backgroundColor: '#0A192F',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                            }}
-                                        >
-                                            <Ionicons name="cart" size={13} color="#FFFFFF" />
-                                        </TouchableOpacity>
-                                    </View>
-                                </TouchableOpacity>
-                            </View>
-                        ))}
-                    </View>
+                                        {/* Product Image */}
+                                        <View style={{ width: '100%', height: 85, alignItems: 'center', justifyContent: 'center', marginBottom: 6, backgroundColor: '#F8FAFC', borderRadius: 8, overflow: 'hidden' }}>
+                                            <Image
+                                                source={{ uri: prod.image_url || prod.image || (Array.isArray(prod.images) ? prod.images[0] : prod.images) || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=300&auto=format&fit=crop' }}
+                                                style={{ width: '90%', height: '90%' }}
+                                                resizeMode="contain"
+                                            />
+                                        </View>
+
+                                        {/* Name & Category */}
+                                        <Text style={{ fontSize: 11, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+                                            {prod.name}
+                                        </Text>
+                                        <Text style={{ fontSize: 9, color: '#64748B', fontWeight: '500', marginBottom: 3 }} numberOfLines={1}>
+                                            {prod.subtitle || prod.category || 'Product'}
+                                        </Text>
+
+                                        {/* Rating */}
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 4 }}>
+                                            <Ionicons name="star" size={10} color="#F59E0B" />
+                                            <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#0F172A' }}>{prod.rating || 4.7}</Text>
+                                            <Text style={{ fontSize: 8.5, color: '#94A3B8' }}>({prod.reviews || '1.2k'})</Text>
+                                        </View>
+
+                                        {/* Price & Cart button row */}
+                                        <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 2 }}>
+                                            <View>
+                                                <Text style={{ fontSize: 12, fontWeight: '900', color: '#0F172A' }}>
+                                                    ₦{(prod.price || 25000).toLocaleString()}
+                                                </Text>
+                                                {prod.compare_at_price ? (
+                                                    <Text style={{ fontSize: 8.5, color: '#94A3B8', textDecorationLine: 'line-through' }}>
+                                                        ₦{prod.compare_at_price.toLocaleString()}
+                                                    </Text>
+                                                ) : null}
+                                            </View>
+
+                                            <TouchableOpacity
+                                                onPress={(e) => {
+                                                    if (typeof onAddToCart === 'function') {
+                                                        onAddToCart(prod);
+                                                        showToast(`${prod.name} added to cart!`);
+                                                    } else {
+                                                        onProductClick(prod);
+                                                    }
+                                                }}
+                                                style={{
+                                                    width: 26,
+                                                    height: 26,
+                                                    borderRadius: 13,
+                                                    backgroundColor: '#0A192F',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                }}
+                                            >
+                                                <Ionicons name="cart" size={13} color="#FFFFFF" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    </TouchableOpacity>
+                                </View>
+                            ))}
+                        </View>
+                    ) : (
+                        <View style={{ paddingVertical: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC', borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                            <Ionicons name="cube-outline" size={36} color="#94A3B8" />
+                            <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#334155', marginTop: 8 }}>
+                                No products in "{activeCategoryFilter}" yet
+                            </Text>
+                            <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 3 }}>
+                                Check back soon or explore other categories
+                            </Text>
+                            <TouchableOpacity
+                                onPress={() => setActiveCategoryFilter('All')}
+                                style={{ marginTop: 12, backgroundColor: '#0A192F', paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20 }}
+                            >
+                                <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>Show All Products</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
                 </View>
 
                 {/* ── PLATFORM STATS STRIP ── */}
                 <PlatformStats />
-
-                {/* ── HERO CAROUSEL ── */}
-                {banners.length > 0 && (
-                    <View style={{ height: 95, marginTop: 6 }}>
-                        <Animated.ScrollView
-                            ref={heroScrollRef}
-                            horizontal pagingEnabled showsHorizontalScrollIndicator={false}
-                            onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: false })}
-                            onMomentumScrollEnd={(e) => {
-                                const index = Math.round(e.nativeEvent.contentOffset.x / width);
-                                if (index !== currentHeroIndex) setCurrentHeroIndex(index);
-                            }}
-                            scrollEventThrottle={16}
-                        >
-                            {banners.map((item, index) => (
-                                <TouchableOpacity key={index} activeOpacity={0.9} onPress={onGoToShop} style={{ width: width, paddingHorizontal: 16, height: 95 }}>
-                                    <ImageBackground
-                                        source={{ uri: item?.image_url || 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?q=80&w=2670&auto=format&fit=crop' }}
-                                        style={{ width: '100%', height: '100%' }}
-                                        imageStyle={{ borderRadius: 10 }}
-                                        resizeMode="cover"
-                                    />
-                                </TouchableOpacity>
-                            ))}
-                        </Animated.ScrollView>
-                        <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 4 }}>
-                            {banners.map((_, i) => {
-                                const opacity = scrollX.interpolate({ inputRange: [(i - 1) * width, i * width, (i + 1) * width], outputRange: [0.3, 1, 0.3], extrapolate: 'clamp' });
-                                const dotWidth = scrollX.interpolate({ inputRange: [(i - 1) * width, i * width, (i + 1) * width], outputRange: [3, 8, 3], extrapolate: 'clamp' });
-                                return <Animated.View key={i} style={{ height: 3, width: dotWidth, borderRadius: 1.5, backgroundColor: '#0E1A2E', marginHorizontal: 1.5, opacity }} />;
-                            })}
-                        </View>
-                    </View>
-                )}
 
                 {/* ELITE MEMBERSHIP CARD */}
                 <EliteMembershipCard user={user} checkInData={checkInData} loyalty={loyalty} />
@@ -1035,7 +1203,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                                 <TouchableOpacity style={{ alignItems: 'center', width: 72, marginRight: 8 }} onPress={onGoToShop}>
                                     <View style={{ width: 58, height: 58, borderRadius: 29, backgroundColor: '#F5F3EB', padding: 2.5, borderWidth: 2, borderColor: '#D9A73A', shadowColor: '#D9A73A', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 3 }}>
                                          <Image
-                                             source={{ uri: vendor?.profiles?.avatar_url || vendor?.logo_url || 'https://placehold.co/200' }}
+                                             source={{ uri: vendor?.profiles?.avatar_url || vendor?.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(vendor?.business_name || vendor?.store_name || 'Vendor')}&background=0E1A2E&color=D9A73A` }}
                                              style={{ width: '100%', height: '100%', borderRadius: 27 }}
                                              resizeMode="cover"
                                          />
@@ -1134,41 +1302,12 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                             {brands.map((brand, i) => (
                                 <TouchableOpacity key={i} style={{ alignItems: 'center' }} onPress={onGoToShop}>
                                     <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: 'white', padding: 6, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(217, 167, 58, 0.15)', boxShadow: '0px 2px 5px rgba(0,0,0,0.06)' }}>
-                                        <Image source={{ uri: brand?.logo_url || 'https://placehold.co/100' }} style={{ width: 32, height: 32, resizeMode: 'contain' }} />
+                                        <Image source={{ uri: brand?.logo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(brand?.name || 'Brand')}&background=0E1A2E&color=D9A73A` }} style={{ width: 32, height: 32, resizeMode: 'contain' }} />
                                     </View>
                                     <Text style={{ marginTop: 5, fontSize: 10.5, fontWeight: '600', color: '#475569' }}>{brand?.name || 'Brand'}</Text>
                                 </TouchableOpacity>
                             ))}
                         </ScrollView>
-                    </View>
-                )}
-
-                {/* FLASH SALE WITH TIMER */}
-                {flashSale.length > 0 && (
-                    <View style={{ marginTop: 14, paddingHorizontal: 16 }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                <View style={{ width: 3, height: 13, backgroundColor: '#D9A73A', borderRadius: 1.5 }} />
-                                <Text style={{ fontSize: 13, fontWeight: '900', color: '#0E1A2E' }}>Flash Sale</Text>
-                                <CountdownTimer targetDate={new Date().setHours(24, 0, 0, 0)} />
-                            </View>
-                            <TouchableOpacity onPress={onGoToShop}><Text style={{ color: '#D9A73A', fontWeight: '800', fontSize: 10.5 }}>See All</Text></TouchableOpacity>
-                        </View>
-
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                            {flashSale.map((item, i) => (
-                                <TouchableOpacity key={i} style={[styles.recCard, { width: '49%', borderRadius: 10, padding: 0, overflow: 'hidden', marginBottom: 6, borderWidth: 1, borderColor: 'rgba(217, 167, 58, 0.12)' }]} onPress={() => onProductClick(item)}>
-                                    <Image source={{ uri: item?.images?.[0] || 'https://placehold.co/200' }} style={{ width: '100%', height: 115 }} />
-                                    <View style={{ position: 'absolute', top: 4, left: 4, backgroundColor: '#D9A73A', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4 }}>
-                                        <Text style={{ color: '#0E1A2E', fontSize: 8, fontWeight: '900' }}>-{item?.discount}%</Text>
-                                    </View>
-                                    <View style={{ padding: 8 }}>
-                                        <Text style={{ fontWeight: '700', fontSize: 13, color: '#0E1A2E' }} numberOfLines={1}>{item?.name}</Text>
-                                        <Text style={{ fontWeight: '900', fontSize: 14.5, color: '#D9A73A', marginTop: 1 }}>₦{item?.price?.toLocaleString() || '0'}</Text>
-                                    </View>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
                     </View>
                 )}
 
@@ -1183,7 +1322,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                         <TouchableOpacity onPress={() => onProductClick(dealOfDay)} activeOpacity={0.9}
                             style={{ borderRadius: 10, overflow: 'hidden', height: 130, borderWidth: 1, borderColor: 'rgba(217, 167, 58, 0.15)' }}>
                             <Image
-                                source={{ uri: dealOfDay?.images?.[0] || 'https://placehold.co/600x400' }}
+                                source={{ uri: getProductImage(dealOfDay) }}
                                 style={{ width: '100%', height: '100%', position: 'absolute' }}
                                 resizeMode="cover"
                             />
@@ -1224,7 +1363,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                             {trendingProducts.map((item, i) => (
                                 <TouchableOpacity key={i} onPress={() => onProductClick(item)}
                                     style={{ width: 115, backgroundColor: 'white', borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(217, 167, 58, 0.12)', elevation: 1 }}>
-                                    <Image source={{ uri: item?.images?.[0] || 'https://placehold.co/200' }}
+                                    <Image source={{ uri: getProductImage(item) }}
                                         style={{ width: 115, height: 100, backgroundColor: '#F8FAFC' }} resizeMode="cover" />
                                     <View style={{ position: 'absolute', top: 4, left: 4, backgroundColor: '#0E1A2E', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4, borderWidth: 0.5, borderColor: '#D9A73A' }}>
                                         <Text style={{ color: '#D9A73A', fontSize: 8.5, fontWeight: '900' }}>#{i + 1} TREND</Text>
@@ -1293,7 +1432,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                             <TouchableOpacity onPress={onGoToShop} activeOpacity={0.9}
                                 style={{ flex: 1, height: 148, borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(217, 167, 58, 0.12)' }}>
                                 <ImageBackground
-                                    source={{ uri: categories[0]?.image_url || 'https://placehold.co/400x600' }}
+                                    source={{ uri: getCategoryCover(categories[0], 0) }}
                                     style={{ flex: 1, justifyContent: 'flex-end' }} resizeMode="cover">
                                     <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '60%', backgroundColor: 'rgba(14,26,46,0.7)' }} />
                                     <View style={{ position: 'absolute', top: 8, left: 8, backgroundColor: '#D9A73A', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4 }}>
@@ -1315,7 +1454,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                                     <TouchableOpacity key={i} onPress={onGoToShop} activeOpacity={0.9}
                                         style={{ height: 70, borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(217, 167, 58, 0.12)' }}>
                                         <ImageBackground
-                                            source={{ uri: cat?.image_url || 'https://placehold.co/400x300' }}
+                                            source={{ uri: getCategoryCover(cat, i + 1) }}
                                             style={{ flex: 1, justifyContent: 'flex-end' }} resizeMode="cover">
                                             <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '60%', backgroundColor: 'rgba(14,26,46,0.6)' }} />
                                             {/* NEW badge for recent categories */}
@@ -1341,7 +1480,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                                 <TouchableOpacity key={i} onPress={onGoToShop} activeOpacity={0.9}
                                     style={{ width: '49%', height: 76, borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(217, 167, 58, 0.12)' }}>
                                     <ImageBackground
-                                        source={{ uri: cat?.image_url || 'https://placehold.co/400x300' }}
+                                        source={{ uri: getCategoryCover(cat, i + 3) }}
                                         style={{ flex: 1, justifyContent: 'flex-end' }} resizeMode="cover">
                                         <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '60%', backgroundColor: 'rgba(14,26,46,0.6)' }} />
                                         {cat?.product_count > 0 && (
@@ -1380,7 +1519,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                             {limitedStock.map((item, i) => (
                                 <TouchableOpacity key={i} onPress={() => handleProductClick(item)}
                                     style={{ width: 115, backgroundColor: 'white', borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(217, 167, 58, 0.12)', elevation: 1 }}>
-                                    <Image source={{ uri: item?.images?.[0] || 'https://placehold.co/200' }}
+                                    <Image source={{ uri: getProductImage(item) }}
                                         style={{ width: 115, height: 100 }} resizeMode="cover" />
                                     <View style={{ position: 'absolute', top: 6, right: 6, backgroundColor: '#D9A73A', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
                                         <Text style={{ color: '#0E1A2E', fontSize: 8.5, fontWeight: '900' }}>Only {item.stock_quantity} left!</Text>
@@ -1585,7 +1724,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                             {mostRated.map((item, i) => (
                                 <TouchableOpacity key={i} onPress={() => onProductClick(item)}
                                     style={{ width: 108, backgroundColor: 'white', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(217,167,58,0.18)', elevation: 2 }}>
-                                    <Image source={{ uri: item?.images?.[0] || 'https://placehold.co/200' }}
+                                    <Image source={{ uri: getProductImage(item) }}
                                         style={{ width: 108, height: 95, backgroundColor: '#F5F3EB' }} resizeMode="cover" />
                                     <View style={{ padding: 7 }}>
                                         <Text style={{ fontWeight: '700', fontSize: 11, color: '#0E1A2E' }} numberOfLines={1}>{item?.name}</Text>
@@ -1614,7 +1753,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}>
                             {newArrivals.map((item, i) => (
                                 <TouchableOpacity key={i} style={{ width: 108 }} onPress={() => onProductClick(item)}>
-                                    <Image source={{ uri: item?.images?.[0] || 'https://placehold.co/200' }} style={{ width: 108, height: 95, borderRadius: 12, backgroundColor: '#F5F3EB' }} />
+                                    <Image source={{ uri: getProductImage(item) }} style={{ width: 108, height: 95, borderRadius: 12, backgroundColor: '#F5F3EB' }} resizeMode="cover" />
                                     <View style={{ marginTop: 1.5, paddingHorizontal: 1 }}>
                                         <Text style={{ marginTop: 5, fontSize: 11, fontWeight: '700', color: '#0E1A2E' }} numberOfLines={1}>{item?.name}</Text>
                                         <Text style={{ fontSize: 11.5, fontWeight: '900', color: '#D9A73A', marginTop: 2 }}>₦{item?.price?.toLocaleString() || '0'}</Text>
@@ -1637,13 +1776,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, justifyContent: 'space-between' }}>
                         {recommended.map((item, i) => (
                             <TouchableOpacity key={i} style={{ width: '49%', marginBottom: 10, borderWidth: 1, borderColor: 'rgba(217,167,58,0.15)', borderRadius: 12, padding: 7, backgroundColor: 'white' }} onPress={() => onProductClick(item)}>
-                                {item?.images?.[0] ? (
-                                    <Image source={{ uri: item.images[0] }} style={{ width: '100%', height: 95, borderRadius: 8, backgroundColor: '#F5F3EB', marginBottom: 7 }} />
-                                ) : (
-                                    <View style={{ width: '100%', height: 95, borderRadius: 8, backgroundColor: '#EEE9D9', alignItems: 'center', justifyContent: 'center', marginBottom: 7 }}>
-                                        <Ionicons name="image-outline" size={22} color="#D9A73A" />
-                                    </View>
-                                )}
+                                <Image source={{ uri: getProductImage(item) }} style={{ width: '100%', height: 95, borderRadius: 8, backgroundColor: '#F5F3EB', marginBottom: 7 }} resizeMode="cover" />
                                 <View style={{ paddingHorizontal: 2 }}>
                                     <Text style={{ fontSize: 11, color: '#0E1A2E', marginBottom: 3 }} numberOfLines={1}>{item?.name}</Text>
                                     <Text style={{ fontSize: 12, fontWeight: '900', color: '#D9A73A' }}>₦{item?.price?.toLocaleString() || '0'}</Text>
@@ -1667,7 +1800,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                             {recentlyViewed.map((item, i) => (
                                 <TouchableOpacity key={i} onPress={() => handleProductClick(item)}
                                     style={{ width: 100, backgroundColor: 'white', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(217,167,58,0.15)', elevation: 2 }}>
-                                    <Image source={{ uri: item?.images?.[0] || 'https://placehold.co/200' }}
+                                    <Image source={{ uri: getProductImage(item) }}
                                         style={{ width: 100, height: 85 }} resizeMode="cover" />
                                     <View style={{ padding: 6 }}>
                                         <Text style={{ fontWeight: '700', fontSize: 11, color: '#0E1A2E' }} numberOfLines={1}>{item?.name}</Text>
@@ -1724,7 +1857,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                                 return (
                                     <TouchableOpacity key={i} onPress={() => handleProductClick(item)}
                                         style={{ width: 108, backgroundColor: 'white', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(217,167,58,0.15)', elevation: 2 }}>
-                                        <Image source={{ uri: item?.images?.[0] || 'https://placehold.co/200' }}
+                                        <Image source={{ uri: getProductImage(item) }}
                                             style={{ width: 108, height: 95 }} resizeMode="cover" />
                                         <View style={{ position: 'absolute', top: 7, left: 7, backgroundColor: '#D9A73A', paddingHorizontal: 6, paddingVertical: 2.5, borderRadius: 5 }}>
                                             <Text style={{ color: '#0E1A2E', fontSize: 8.5, fontWeight: '900' }}>SAVE {saved}%</Text>
