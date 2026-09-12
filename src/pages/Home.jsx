@@ -1,648 +1,844 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../config/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
+import { useWishlist } from '../context/WishlistContext';
 import {
-  Search, Bell, ShoppingCart, User, MapPin, ChevronDown,
-  Home as HomeIcon, Grid, Store, Zap, Package, MessageSquare,
-  Wallet, Heart, Ticket, HelpCircle, ArrowRight, ShieldCheck,
-  Truck, CheckCircle, Star, Sparkles, Plus, Clock, ExternalLink,
-  ChevronRight, ArrowUpRight, Flame
+  Search, ShoppingCart, Heart, User, Check, Truck, ShieldCheck,
+  Star, Sparkles, ArrowRight, ChevronLeft, ChevronRight,
+  SlidersHorizontal, X, Store, ArrowUpRight, Zap, RefreshCw,
+  Package, CheckCircle2, PhoneCall, HelpCircle
 } from 'lucide-react';
 
 const AM_LOGO = "/logo.png";
 
-// Category Data with pastel accents
-const CATEGORIES = [
-  { id: 'fashion', name: 'Fashion', icon: '👗', bg: 'bg-pink-50 text-pink-600 border-pink-200' },
-  { id: 'electronics', name: 'Electronics', icon: '💻', bg: 'bg-blue-50 text-blue-600 border-blue-200' },
-  { id: 'phones', name: 'Mobile Accessories', icon: '📱', bg: 'bg-cyan-50 text-cyan-600 border-cyan-200' },
-  { id: 'beauty', name: 'Beauty & Personal Care', icon: '💄', bg: 'bg-rose-50 text-rose-600 border-rose-200' },
-  { id: 'home', name: 'Home & Living', icon: '🛋️', bg: 'bg-amber-50 text-amber-600 border-amber-200' },
-  { id: 'groceries', name: 'Groceries', icon: '🛒', bg: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
-  { id: 'health', name: 'Health & Wellness', icon: '💓', bg: 'bg-purple-50 text-purple-600 border-purple-200' },
-  { id: 'sports', name: 'Sports & Outdoors', icon: '⚽', bg: 'bg-teal-50 text-teal-600 border-teal-200' },
-  { id: 'kids', name: 'Baby & Kids', icon: '🧸', bg: 'bg-orange-50 text-orange-600 border-orange-200' },
-  { id: 'automotive', name: 'Automotive', icon: '🚗', bg: 'bg-sky-50 text-sky-600 border-sky-200' },
-  { id: 'books', name: 'Books & Stationery', icon: '📚', bg: 'bg-indigo-50 text-indigo-600 border-indigo-200' },
-];
-
-const FLASH_PRODUCTS = [
-  {
-    id: 'fp1',
-    name: 'iPhone 14 Pro 256GB',
-    brand: 'Apple',
-    category: 'Electronics',
-    price: 1200000,
-    oldPrice: 2000000,
-    discount: 40,
-    rating: 4.8,
-    reviews: 320,
-    inStock: true,
-    image: 'https://images.unsplash.com/photo-1591337676887-a217a6970a8a?q=80&w=400&auto=format&fit=crop',
-  },
-  {
-    id: 'fp2',
-    name: 'JBL Tune 720BT Wireless',
-    brand: 'JBL',
-    category: 'Audio',
-    price: 45000,
-    oldPrice: 70000,
-    discount: 35,
-    rating: 4.7,
-    reviews: 189,
-    inStock: true,
-    image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=400&auto=format&fit=crop',
-  },
-  {
-    id: 'fp3',
-    name: "Nike Air Max 270 Sneakers",
-    brand: 'Nike',
-    category: 'Footwear',
-    price: 60000,
-    oldPrice: 120000,
-    discount: 50,
-    rating: 4.6,
-    reviews: 421,
-    inStock: true,
-    image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=400&auto=format&fit=crop',
-  },
-  {
-    id: 'fp4',
-    name: 'Dior Sauvage EDP 100ml',
-    brand: 'Dior',
-    category: 'Beauty',
-    price: 95000,
-    oldPrice: 135000,
-    discount: 30,
-    rating: 4.9,
-    reviews: 228,
-    inStock: true,
-    image: 'https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?q=80&w=400&auto=format&fit=crop',
-  },
-  {
-    id: 'fp5',
-    name: 'Nexus Air Fryer 6.5L Digital',
-    brand: 'Nexus',
-    category: 'Appliances',
-    price: 75000,
-    oldPrice: 100000,
-    discount: 25,
-    rating: 4.5,
-    reviews: 367,
-    inStock: true,
-    image: 'https://images.unsplash.com/photo-1585659722983-3a675dabf23d?q=80&w=400&auto=format&fit=crop',
-  },
-  {
-    id: 'fp6',
-    name: 'Oraimo Watch 4 Plus',
-    brand: 'Oraimo',
-    category: 'Wearables',
-    price: 32000,
-    oldPrice: 40000,
-    discount: 20,
-    rating: 4.4,
-    reviews: 290,
-    inStock: true,
-    image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=400&auto=format&fit=crop',
-  },
-];
-
-const FEATURED_STORES = [
-  { id: 's1', name: 'Mafhal Fashion', category: 'Fashion & Clothing', rating: 4.8, products: 320, image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=200&auto=format&fit=crop' },
-  { id: 's2', name: 'TechWorld NG', category: 'Smartphones & Gadgets', rating: 4.7, products: 450, image: 'https://images.unsplash.com/photo-1550009158-9ebf69173e03?q=80&w=200&auto=format&fit=crop' },
-  { id: 's3', name: 'Home Essentials', category: 'Kitchen & Decor', rating: 4.6, products: 290, image: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?q=80&w=200&auto=format&fit=crop' },
-  { id: 's4', name: 'Beauty Hub', category: 'Perfumes & Cosmetics', rating: 4.7, products: 310, image: 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=200&auto=format&fit=crop' },
-  { id: 's5', name: 'Grocery Mart', category: 'Fresh & Packaged Food', rating: 4.6, products: 500, image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=200&auto=format&fit=crop' },
-];
-
-const FEATURED_PRODUCTS = [
-  { id: 'p1', name: "Smartphone 128GB 6.7'' Display", price: 185000, oldPrice: 220000, discount: 16, rating: 4.8, reviews: 320, image: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?q=80&w=400&auto=format&fit=crop' },
-  { id: 'p2', name: "Men's Casual Sneakers", price: 38000, oldPrice: 50000, discount: 24, rating: 4.6, reviews: 210, image: 'https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?q=80&w=400&auto=format&fit=crop' },
-  { id: 'p3', name: "Women's Handbag Premium Quality", price: 42000, oldPrice: 60000, discount: 30, rating: 4.7, reviews: 180, image: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?q=80&w=400&auto=format&fit=crop' },
-  { id: 'p4', name: 'Smart Watch Heart Rate Monitor', price: 65000, oldPrice: 90000, discount: 28, rating: 4.5, reviews: 410, image: 'https://images.unsplash.com/photo-1508685096489-7aacd43bd3b1?q=80&w=400&auto=format&fit=crop' },
-];
-
-const POPULAR_PRODUCTS = [
-  { id: 'pp1', name: 'Wireless Earbuds with Charging Case', price: 28000, oldPrice: 40000, discount: 30, rating: 4.6, reviews: 320, image: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?q=80&w=400&auto=format&fit=crop' },
-  { id: 'pp2', name: 'Electric Rice Cooker 5L Large', price: 55000, oldPrice: 75000, discount: 27, rating: 4.7, reviews: 260, image: 'https://images.unsplash.com/photo-1544233726-9f1d2b27be8b?q=80&w=400&auto=format&fit=crop' },
-  { id: 'pp3', name: "Men's Polo Shirt Premium Cotton", price: 18000, oldPrice: 25000, discount: 28, rating: 4.4, reviews: 190, image: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=400&auto=format&fit=crop' },
-  { id: 'pp4', name: 'Kitchen Blender High Speed Multi-blade', price: 32000, oldPrice: 45000, discount: 29, rating: 4.6, reviews: 310, image: 'https://images.unsplash.com/photo-1570222094114-d054a817e56b?q=80&w=400&auto=format&fit=crop' },
-];
+// Helper for extracting clean image URL
+const getImg = (product) => {
+  if (!product) return null;
+  const img = product.image_url || product.thumbnail;
+  if (img) return img;
+  const imgs = product.images;
+  if (!imgs) return null;
+  if (typeof imgs === 'string') {
+    try {
+      const parsed = JSON.parse(imgs);
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : parsed;
+    } catch {
+      return imgs;
+    }
+  }
+  if (Array.isArray(imgs) && imgs.length > 0) return imgs[0];
+  return null;
+};
 
 const Home = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { cartItems, addToCart } = useCart();
+  const { wishlistItems, addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
+
+  // ── LIVE SUPABASE STATES ──
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [banners, setBanners] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // ── FILTER & SORT STATES ──
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState('home');
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [sortBy, setSortBy] = useState('featured'); // 'featured', 'price-low', 'price-high', 'rating'
 
-  // Flash sale countdown timer (12 Days, 08 Hours, 24 Minutes, 36 Seconds)
-  const [timeLeft, setTimeLeft] = useState({ days: 12, hours: 8, minutes: 24, seconds: 36 });
+  // ── UI INTERACTION STATES ──
+  const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
+  const [addedItemIds, setAddedItemIds] = useState({});
+  const [toastMessage, setToastMessage] = useState(null);
+  const bannerTimerRef = useRef(null);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev.seconds > 0) return { ...prev, seconds: prev.seconds - 1 };
-        if (prev.minutes > 0) return { ...prev, minutes: 59, seconds: 59 };
-        if (prev.hours > 0) return { ...prev, hours: prev.hours - 1, minutes: 59, seconds: 59 };
-        if (prev.days > 0) return { ...prev, days: prev.days - 1, hours: 23, minutes: 59, seconds: 59 };
-        return { days: 12, hours: 8, minutes: 24, seconds: 36 };
+  // 1. Fetch All Real Data from Supabase
+  const fetchLiveMarketplaceData = async () => {
+    try {
+      setLoading(true);
+
+      // Parallel queries for speed & responsiveness
+      const [bannersRes, categoriesRes, productsRes] = await Promise.allSettled([
+        supabase
+          .from('banners')
+          .select('id, title, subtitle, image_url, action_link, section, display_order')
+          .eq('is_active', true)
+          .order('display_order', { ascending: true }),
+        supabase
+          .from('categories')
+          .select('id, name, icon, image_url, display_order')
+          .eq('is_active', true)
+          .order('display_order', { ascending: true }),
+        supabase
+          .from('products')
+          .select('*')
+          .eq('status', 'approved')
+          .order('created_at', { ascending: false })
+      ]);
+
+      // ── Process Banners ──
+      if (bannersRes.status === 'fulfilled' && bannersRes.value?.data?.length > 0) {
+        setBanners(bannersRes.value.data);
+      } else {
+        // High-end default banner if banners table has no records yet
+        setBanners([
+          {
+            id: 'b-default-1',
+            title: 'Experience Premium Quality',
+            subtitle: 'Nigeria’s Most Trusted Marketplace for Authentic Products & Fast Delivery',
+            image_url: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?q=80&w=1200&auto=format&fit=crop',
+            action_link: '/shop'
+          },
+          {
+            id: 'b-default-2',
+            title: 'Verified Sellers & Safe Escrow',
+            subtitle: 'Shop with 100% Peace of Mind — Direct Doorstep Dispatch Across All 36 States',
+            image_url: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=1200&auto=format&fit=crop',
+            action_link: '/shop'
+          }
+        ]);
+      }
+
+      // ── Process Products ──
+      const liveProducts = (productsRes.status === 'fulfilled' && productsRes.value?.data) || [];
+      setProducts(liveProducts);
+
+      // ── Process Categories ──
+      let liveCategories = (categoriesRes.status === 'fulfilled' && categoriesRes.value?.data) || [];
+      
+      // If categories table has records, use them; also incorporate distinct product categories
+      const distinctProdCategories = [...new Set(liveProducts.map(p => p.category).filter(Boolean))];
+      
+      const existingNames = new Set(liveCategories.map(c => c.name?.toLowerCase()));
+      distinctProdCategories.forEach(catName => {
+        if (!existingNames.has(catName.toLowerCase())) {
+          liveCategories.push({ id: `cat-${catName}`, name: catName });
+        }
       });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
 
-  const handleSearch = (e) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      navigate(`/shop?q=${encodeURIComponent(searchQuery.trim())}`);
+      setCategories(liveCategories);
+    } catch (err) {
+      console.error('Error loading marketplace data:', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   };
 
+  useEffect(() => {
+    fetchLiveMarketplaceData();
+  }, []);
+
+  // 2. Auto-advance Banner Carousel
+  useEffect(() => {
+    if (banners.length <= 1) return;
+    bannerTimerRef.current = setInterval(() => {
+      setCurrentBannerIndex((prev) => (prev + 1) % banners.length);
+    }, 6000);
+
+    return () => clearInterval(bannerTimerRef.current);
+  }, [banners]);
+
+  // 3. Filter and Sort Products
+  const filteredProducts = useMemo(() => {
+    let list = [...products];
+
+    // Category Filter
+    if (selectedCategory !== 'All') {
+      list = list.filter(
+        (p) => p.category?.toLowerCase() === selectedCategory.toLowerCase()
+      );
+    }
+
+    // Search Query Filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(
+        (p) =>
+          p.name?.toLowerCase().includes(q) ||
+          p.description?.toLowerCase().includes(q) ||
+          p.category?.toLowerCase().includes(q) ||
+          p.brand?.toLowerCase().includes(q)
+      );
+    }
+
+    // Sorting
+    if (sortBy === 'price-low') {
+      list.sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
+    } else if (sortBy === 'price-high') {
+      list.sort((a, b) => Number(b.price || 0) - Number(a.price || 0));
+    } else if (sortBy === 'rating') {
+      list.sort((a, b) => Number(b.rating || b.average_rating || 0) - Number(a.rating || a.average_rating || 0));
+    }
+
+    return list;
+  }, [products, selectedCategory, searchQuery, sortBy]);
+
+  // Handle Quick Add to Cart with Visual Feedback
+  const handleAddToCart = (e, product) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    addToCart(product, 1);
+
+    // Visual button success tick
+    setAddedItemIds((prev) => ({ ...prev, [product.id]: true }));
+    showToast(`"${product.name}" added to cart!`);
+
+    setTimeout(() => {
+      setAddedItemIds((prev) => ({ ...prev, [product.id]: false }));
+    }, 1800);
+  };
+
+  // Handle Wishlist Toggle
+  const handleWishlistToggle = (e, product) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (isInWishlist(product.id)) {
+      removeFromWishlist(product.id);
+      showToast('Removed from wishlist');
+    } else {
+      addToWishlist(product);
+      showToast('Saved to wishlist!');
+    }
+  };
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 2500);
+  };
+
+  const totalCartCount = cartItems?.reduce((acc, item) => acc + (item.quantity || 1), 0) || 0;
+  const totalWishlistCount = wishlistItems?.length || 0;
+
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans flex flex-col">
-      {/* ── TOP NAVBAR (Matching Desktop Mockup) ── */}
-      <header className="sticky top-0 z-50 bg-[#0A192F] text-white border-b border-slate-800 shadow-md">
-        <div className="max-w-[1600px] mx-auto px-4 lg:px-6 h-18 flex items-center justify-between gap-4 py-3">
-          {/* Left Brand Logo */}
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans flex flex-col selection:bg-amber-400 selection:text-slate-950">
+      
+      {/* ── TOAST NOTIFICATION ── */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-[#070F1E] text-white px-5 py-3 rounded-2xl shadow-2xl border border-slate-700 flex items-center gap-3 animate-fade-in">
+          <div className="w-6 h-6 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-bold text-xs">
+            ✓
+          </div>
+          <span className="text-xs font-semibold">{toastMessage}</span>
+        </div>
+      )}
+
+      {/* ── TOP ANNOUNCEMENT STRIP ── */}
+      <div className="bg-[#070F1E] text-slate-300 text-[11px] font-medium py-1.5 px-4 border-b border-slate-800/80">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Welcome to Abu Mafhal Marketplace — Direct Doorstep Dispatch Across Nigeria</span>
+          </div>
+          <div className="hidden sm:flex items-center gap-4 text-slate-400">
+            <Link to="/contact" className="hover:text-amber-400 transition-colors flex items-center gap-1">
+              <PhoneCall className="w-3 h-3" /> 24/7 Support
+            </Link>
+            <span>•</span>
+            <Link to="/vendor-application" className="text-amber-400 font-bold hover:underline">
+              Become a Verified Seller
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* ── MAIN HEADER / NAVBAR ── */}
+      <header className="sticky top-0 z-40 bg-[#0A192F]/95 backdrop-blur-md text-white border-b border-slate-800 shadow-lg">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between gap-4">
+          
+          {/* Logo & Brand Identity */}
           <Link to="/" className="flex items-center gap-3 group flex-shrink-0">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-400 to-amber-500 p-1.5 flex items-center justify-center shadow-lg shadow-amber-400/20">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-400 to-amber-500 p-1.5 flex items-center justify-center shadow-lg shadow-amber-500/20 group-hover:scale-105 transition-transform">
               <img src={AM_LOGO} alt="Abu Mafhal" className="w-full h-full object-contain" onError={(e) => { e.target.src = "/logo.png"; }} />
             </div>
             <div>
-              <h1 className="text-xl font-black tracking-wide text-white flex items-center gap-1.5">
-                ABU <span className="text-[#00D2FF]">MAFHAL</span>
-              </h1>
-              <p className="text-[8px] font-bold text-slate-400 tracking-widest uppercase">
-                Your Marketplace, Your Choice.
+              <div className="flex items-center gap-1.5">
+                <span className="text-lg font-black tracking-wide text-white">ABU</span>
+                <span className="text-lg font-black text-amber-400">MAFHAL</span>
+              </div>
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">
+                Marketplace
               </p>
             </div>
           </Link>
 
-          {/* Search Bar + Delivery Dropdown */}
-          <form onSubmit={handleSearch} className="flex-1 max-w-2xl mx-2 hidden sm:flex items-center bg-white rounded-full p-1 border border-slate-200 shadow-inner">
-            <div className="flex items-center flex-1 px-3 gap-2">
-              <Search className="w-4 h-4 text-slate-400" />
+          {/* Search Bar with Instant Live Filter */}
+          <div className="flex-1 max-w-xl mx-2 hidden md:block">
+            <div className="relative flex items-center">
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search for products, brands and stores..."
-                className="w-full text-xs md:text-sm text-slate-800 placeholder-slate-400 focus:outline-none bg-transparent"
+                placeholder="Search real products, categories, or brands..."
+                className="w-full bg-slate-800/80 hover:bg-slate-800 focus:bg-white text-white focus:text-slate-900 placeholder-slate-400 text-xs sm:text-sm pl-11 pr-10 py-3 rounded-2xl border border-slate-700/80 focus:border-amber-400 focus:outline-none transition-all shadow-inner"
               />
+              <Search className="w-4 h-4 text-slate-400 absolute left-4 pointer-events-none" />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 p-1 text-slate-400 hover:text-slate-200"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
-            <div className="hidden lg:flex items-center gap-1.5 border-l border-slate-200 px-3 py-1 text-xs text-slate-600 font-semibold cursor-pointer">
-              <MapPin className="w-3.5 h-3.5 text-[#00BFA5]" />
-              <span>Deliver to <strong>Gashua, Yobe State</strong></span>
-              <ChevronDown className="w-3 h-3 text-slate-400" />
-            </div>
-            <button
-              type="submit"
-              className="bg-[#00BFA5] hover:bg-[#00A892] text-white px-5 py-2 rounded-full text-xs font-bold transition-all shadow-sm flex items-center gap-1"
+          </div>
+
+          {/* User & Cart Navigation Actions */}
+          <div className="flex items-center gap-3 sm:gap-4">
+            
+            {/* Wishlist */}
+            <Link
+              to="/buyer/wishlist"
+              className="relative p-2.5 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800/60 transition-all"
+              title="Saved Items"
             >
-              Search
-            </button>
-          </form>
+              <Heart className="w-5 h-5" />
+              {totalWishlistCount > 0 && (
+                <span className="absolute top-1 right-1 w-4 h-4 bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">
+                  {totalWishlistCount}
+                </span>
+              )}
+            </Link>
 
-          {/* Right Action Icons */}
-          <div className="flex items-center gap-4">
-            <Link to="/notifications" className="relative p-2 text-slate-300 hover:text-white transition-colors">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[9px] font-bold flex items-center justify-center">
-                3
+            {/* Cart Button */}
+            <Link
+              to="/cart"
+              className="relative flex items-center gap-2 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 px-4 py-2.5 rounded-xl font-black text-xs shadow-md shadow-amber-500/15 transition-all"
+            >
+              <ShoppingCart className="w-4 h-4" />
+              <span className="hidden sm:inline">Cart</span>
+              <span className="bg-slate-950 text-amber-400 text-[10px] font-black px-1.5 py-0.5 rounded-full ml-0.5">
+                {totalCartCount}
               </span>
             </Link>
 
-            <Link to="/cart" className="relative p-2 text-slate-300 hover:text-white transition-colors">
-              <ShoppingCart className="w-5 h-5" />
-              <span className="absolute top-1 right-1 w-4 h-4 bg-[#F59E0B] text-slate-950 rounded-full text-[9px] font-black flex items-center justify-center">
-                {cartItems?.length || 2}
-              </span>
-            </Link>
-
+            {/* Profile / Auth */}
             {currentUser ? (
-              <Link to="/buyer/profile" className="flex items-center gap-2.5 pl-2 border-l border-slate-800">
-                <div className="w-8 h-8 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-400 flex items-center justify-center font-bold text-xs">
-                  {currentUser?.name?.[0] || 'U'}
+              <Link
+                to="/buyer/profile"
+                className="flex items-center gap-2.5 pl-2 border-l border-slate-800"
+              >
+                <div className="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 text-amber-400 flex items-center justify-center font-bold text-xs uppercase">
+                  {currentUser?.name?.[0] || currentUser?.email?.[0] || 'U'}
                 </div>
-                <div className="hidden xl:block text-left">
-                  <p className="text-xs font-bold text-white leading-tight">{currentUser.name || 'Muhammad Sani'}</p>
-                  <p className="text-[10px] text-slate-400 capitalize">{currentUser.role || 'Customer'}</p>
+                <div className="hidden lg:block text-left">
+                  <p className="text-xs font-bold text-white leading-tight truncate max-w-[120px]">
+                    {currentUser?.name || currentUser?.full_name || 'My Account'}
+                  </p>
+                  <p className="text-[10px] text-slate-400 capitalize">
+                    {currentUser?.role || 'Customer'}
+                  </p>
                 </div>
               </Link>
             ) : (
               <Link
                 to="/login"
-                className="flex items-center gap-2 bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 px-4 py-2 rounded-xl text-xs font-black shadow-md hover:from-amber-300 hover:to-amber-400 transition-all"
+                className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-white px-3.5 py-2.5 rounded-xl text-xs font-bold border border-slate-700 transition-all"
               >
-                <User className="w-3.5 h-3.5" />
+                <User className="w-4 h-4" />
                 <span>Sign In</span>
               </Link>
             )}
           </div>
         </div>
+
+        {/* Mobile Search Input */}
+        <div className="px-4 pb-3 md:hidden">
+          <div className="relative flex items-center">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search products..."
+              className="w-full bg-slate-800 text-white text-xs pl-10 pr-8 py-2.5 rounded-xl border border-slate-700 focus:border-amber-400 focus:outline-none"
+            />
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5" />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="absolute right-3 text-slate-400">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
       </header>
 
-      {/* ── MAIN BODY WITH SIDEBAR ── */}
-      <div className="flex-1 max-w-[1600px] w-full mx-auto flex flex-col md:flex-row gap-6 p-4 lg:p-6">
-        {/* Left Desktop Sidebar */}
-        <aside className="w-full md:w-60 flex-shrink-0 bg-[#070F1E] text-white rounded-3xl p-4 flex flex-col justify-between border border-slate-800 shadow-xl self-start sticky top-22 hidden md:flex">
-          <nav className="space-y-1">
-            {[
-              { id: 'home', label: 'Home', icon: HomeIcon, path: '/' },
-              { id: 'categories', label: 'Categories', icon: Grid, path: '/shop' },
-              { id: 'stores', label: 'Stores', icon: Store, path: '/stores' },
-              { id: 'flash-sale', label: 'Flash Sale', icon: Zap, path: '/shop?filter=flash' },
-              { id: 'orders', label: 'Orders', icon: Package, path: '/buyer/orders' },
-              { id: 'messages', label: 'Messages', icon: MessageSquare, path: '/messages', badge: 2 },
-              { id: 'wallet', label: 'Wallet', icon: Wallet, path: '/buyer/wallet' },
-              { id: 'wishlist', label: 'Wishlist', icon: Heart, path: '/buyer/wishlist' },
-              { id: 'vouchers', label: 'Vouchers', icon: Ticket, path: '/buyer/loyalty' },
-              { id: 'support', label: 'Help & Support', icon: HelpCircle, path: '/contact' },
-            ].map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
+      {/* ── MAIN CONTENT CONTAINER ── */}
+      <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 space-y-8 flex-1">
+        
+        {/* ── HERO BANNER CAROUSEL (Live Supabase Banners) ── */}
+        {banners.length > 0 && (
+          <section className="relative rounded-3xl overflow-hidden bg-slate-900 border border-slate-800 shadow-xl min-h-[300px] sm:min-h-[360px] flex items-center">
+            {banners.map((banner, index) => {
+              const isActive = index === currentBannerIndex;
               return (
-                <Link
-                  key={item.id}
-                  to={item.path}
-                  onClick={() => setActiveTab(item.id)}
-                  className={`flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all ${
-                    isActive
-                      ? 'bg-[#00BFA5] text-white shadow-md shadow-[#00BFA5]/20 font-black'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                <div
+                  key={banner.id}
+                  className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
+                    isActive ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <Icon className="w-4 h-4" />
-                    <span>{item.label}</span>
+                  {/* Background Image with Deep Gradient Overlay */}
+                  <img
+                    src={banner.image_url}
+                    alt={banner.title}
+                    className="w-full h-full object-cover object-center transform scale-105 transition-transform duration-1000"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-r from-[#070F1E] via-[#0A192F]/85 to-transparent" />
+                  
+                  {/* Banner Content */}
+                  <div className="relative z-20 h-full max-w-xl p-8 sm:p-12 flex flex-col justify-center text-white space-y-4">
+                    <div className="inline-flex items-center gap-2 bg-amber-400/20 border border-amber-400/30 text-amber-400 text-[10px] font-black uppercase px-3 py-1 rounded-full w-fit">
+                      <Sparkles className="w-3 h-3" />
+                      <span>Featured Marketplace Promotion</span>
+                    </div>
+
+                    <h2 className="text-2xl sm:text-4xl font-black leading-tight text-white tracking-tight">
+                      {banner.title}
+                    </h2>
+
+                    <p className="text-xs sm:text-sm text-slate-300 font-medium line-clamp-2">
+                      {banner.subtitle}
+                    </p>
+
+                    <div className="pt-2">
+                      <Link
+                        to={banner.action_link || '/shop'}
+                        className="inline-flex items-center gap-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs sm:text-sm px-6 py-3 rounded-xl shadow-lg shadow-amber-500/20 transition-all hover:translate-x-1"
+                      >
+                        <span>Explore Deals</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </Link>
+                    </div>
                   </div>
-                  {item.badge && (
-                    <span className="w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
-                      {item.badge}
-                    </span>
-                  )}
-                </Link>
+                </div>
               );
             })}
-          </nav>
 
-          {/* Referral Card */}
-          <div className="mt-8 bg-gradient-to-br from-amber-500/10 to-amber-500/5 border border-amber-500/20 rounded-2xl p-3.5">
-            <div className="flex items-center gap-2 mb-1 text-amber-400">
-              <Sparkles className="w-4 h-4" />
-              <span className="text-xs font-black">Invite & Earn</span>
+            {/* Slider Navigation Dots */}
+            {banners.length > 1 && (
+              <div className="absolute bottom-4 right-6 z-20 flex items-center gap-2">
+                {banners.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setCurrentBannerIndex(i)}
+                    className={`h-2 rounded-full transition-all ${
+                      i === currentBannerIndex
+                        ? 'w-7 bg-amber-400'
+                        : 'w-2 bg-white/40 hover:bg-white/70'
+                    }`}
+                    aria-label={`Slide ${i + 1}`}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ── VALUE PILLARS (Clean, Crisp & Trust-Building) ── */}
+        <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-sm flex items-center gap-3.5 hover:border-slate-300 transition-all">
+            <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
+              <Truck className="w-5 h-5" />
             </div>
-            <p className="text-[11px] text-slate-300 font-medium leading-snug">
-              Get rewards for inviting friends to shop on Abu Mafhal!
-            </p>
-            <Link to="/buyer/profile" className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-bold text-amber-400 hover:underline">
-              <span>Start Inviting</span>
-              <ArrowRight className="w-3 h-3" />
-            </Link>
-          </div>
-        </aside>
-
-        {/* ── MAIN CONTENT AREA ── */}
-        <main className="flex-1 min-w-0 space-y-6">
-          {/* ── TOP HERO ROW (Main Banner + 2 Side Promo Cards) ── */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-            {/* Left 2 Cols: Main Big Deals Banner */}
-            <div className="lg:col-span-2 relative rounded-3xl overflow-hidden bg-gradient-to-r from-[#0A192F] via-[#0E2A4D] to-[#133E68] text-white p-6 sm:p-8 flex flex-col justify-between shadow-xl border border-slate-700/50 min-h-[260px]">
-              <div className="relative z-10 max-w-md">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-6 h-6 rounded-lg bg-amber-400 p-1 flex items-center justify-center">
-                    <img src={AM_LOGO} alt="" className="w-full h-full object-contain" />
-                  </div>
-                  <span className="text-[10px] tracking-widest font-black uppercase text-amber-400">
-                    Abu Mafhal Marketplace
-                  </span>
-                </div>
-
-                <h2 className="text-2xl sm:text-4xl font-black leading-tight tracking-tight">
-                  Shop Everything <br />
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-200">
-                    You Need
-                  </span>
-                </h2>
-                <p className="text-xs sm:text-sm text-slate-300 mt-2 font-medium">
-                  From trusted sellers across Nigeria, all in one marketplace.
-                </p>
-
-                <div className="mt-5 flex items-center gap-3">
-                  <Link
-                    to="/shop"
-                    className="bg-[#F59E0B] hover:bg-amber-400 text-slate-950 px-6 py-2.5 rounded-full text-xs sm:text-sm font-black transition-all shadow-lg shadow-amber-500/20 flex items-center gap-2"
-                  >
-                    <span>Shop Now</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </Link>
-                </div>
-              </div>
-
-              {/* Bottom Feature Badges */}
-              <div className="relative z-10 mt-6 pt-4 border-t border-white/10 flex flex-wrap items-center gap-4 text-[11px] font-bold text-slate-300">
-                <span className="flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-400" /> Great Prices</span>
-                <span className="flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-400" /> Trusted Sellers</span>
-                <span className="flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5 text-emerald-400" /> Fast Delivery</span>
-              </div>
-
-              {/* Floating Product Artwork */}
-              <img
-                src="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=450&auto=format&fit=crop"
-                alt="Products"
-                className="absolute right-0 bottom-0 w-64 h-64 object-contain opacity-40 lg:opacity-90 pointer-events-none -mr-8 -mb-8 drop-shadow-2xl"
-              />
-            </div>
-
-            {/* Right Column: 2 Feature Cards */}
-            <div className="flex flex-col gap-4">
-              {/* Card 1: Fast & Reliable Delivery */}
-              <div className="flex-1 bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm flex items-center justify-between gap-3 relative overflow-hidden group hover:border-slate-300 transition-all">
-                <div className="space-y-1">
-                  <div className="inline-flex items-center gap-1 text-[10px] font-black uppercase text-[#00BFA5] tracking-wider">
-                    <Truck className="w-3.5 h-3.5" /> Fast Delivery
-                  </div>
-                  <h3 className="text-sm font-black text-slate-900">Fast & Reliable Delivery</h3>
-                  <p className="text-xs text-slate-500">To your doorstep across Nigeria</p>
-                  <Link to="/buyer/orders" className="text-xs font-bold text-[#00BFA5] flex items-center gap-1 pt-1 group-hover:underline">
-                    <span>Track Order</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </Link>
-                </div>
-                <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-3xl flex items-center justify-center flex-shrink-0">
-                  🛵
-                </div>
-              </div>
-
-              {/* Card 2: Become a Seller */}
-              <div className="flex-1 bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm flex items-center justify-between gap-3 relative overflow-hidden group hover:border-slate-300 transition-all">
-                <div className="space-y-1">
-                  <div className="inline-flex items-center gap-1 text-[10px] font-black uppercase text-amber-500 tracking-wider">
-                    <Store className="w-3.5 h-3.5" /> Vendor Hub
-                  </div>
-                  <h3 className="text-sm font-black text-slate-900">Become a Seller</h3>
-                  <p className="text-xs text-slate-500">Start selling on ABU MAFHAL today</p>
-                  <Link to="/vendor-application" className="mt-2 inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-full transition-all">
-                    <span>Open a Store</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </Link>
-                </div>
-                <div className="w-16 h-16 rounded-2xl bg-amber-50 text-3xl flex items-center justify-center flex-shrink-0">
-                  🏪
-                </div>
-              </div>
+            <div>
+              <h4 className="text-xs sm:text-sm font-bold text-slate-900">Nationwide Delivery</h4>
+              <p className="text-[11px] text-slate-500">Fast doorstep dispatch across Nigeria</p>
             </div>
           </div>
 
-          {/* ── HORIZONTAL CATEGORIES ROW (Soft Pastel Cards) ── */}
-          <section className="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm">
-            <div className="flex items-center justify-between mb-3 px-1">
-              <h3 className="text-sm font-black text-slate-900">Popular Categories</h3>
-              <Link to="/shop" className="text-xs font-bold text-[#00BFA5] hover:underline flex items-center gap-1">
-                <span>View All</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </Link>
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-sm flex items-center gap-3.5 hover:border-slate-300 transition-all">
+            <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
+              <ShieldCheck className="w-5 h-5" />
             </div>
-            <div className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-none">
-              {CATEGORIES.map((cat) => (
-                <Link
+            <div>
+              <h4 className="text-xs sm:text-sm font-bold text-slate-900">Escrow Protected</h4>
+              <p className="text-[11px] text-slate-500">100% money-back safe purchases</p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-sm flex items-center gap-3.5 hover:border-slate-300 transition-all">
+            <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-xs sm:text-sm font-bold text-slate-900">Verified Sellers</h4>
+              <p className="text-[11px] text-slate-500">Direct from vetted authentic merchants</p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-sm flex items-center gap-3.5 hover:border-slate-300 transition-all">
+            <div className="w-11 h-11 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center flex-shrink-0">
+              <Zap className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-xs sm:text-sm font-bold text-slate-900">Instant Support</h4>
+              <p className="text-[11px] text-slate-500">Real human help whenever you need</p>
+            </div>
+          </div>
+        </section>
+
+        {/* ── LIVE CATEGORIES SELECTOR (Filter Products Instantly) ── */}
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                Shop by Category
+              </h3>
+              <p className="text-xs text-slate-500">Select any department to filter real items</p>
+            </div>
+            <button
+              onClick={() => { setSelectedCategory('All'); setSearchQuery(''); }}
+              className="text-xs font-bold text-amber-600 hover:text-amber-700 hover:underline flex items-center gap-1"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>Reset Filters</span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2.5 overflow-x-auto pb-2 scrollbar-none">
+            <button
+              onClick={() => setSelectedCategory('All')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 ${
+                selectedCategory === 'All'
+                  ? 'bg-[#0A192F] text-white shadow-md shadow-slate-900/10'
+                  : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+              }`}
+            >
+              <span>All Products</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-700/30 font-black">
+                {products.length}
+              </span>
+            </button>
+
+            {categories.map((cat) => {
+              const isSelected = selectedCategory.toLowerCase() === cat.name.toLowerCase();
+              const categoryCount = products.filter(
+                (p) => p.category?.toLowerCase() === cat.name.toLowerCase()
+              ).length;
+
+              return (
+                <button
                   key={cat.id}
-                  to={`/shop?category=${cat.id}`}
-                  className="flex flex-col items-center justify-center min-w-[85px] p-3 rounded-2xl bg-slate-50 hover:bg-white hover:shadow-md border border-slate-200/60 transition-all text-center group flex-shrink-0"
+                  onClick={() => setSelectedCategory(cat.name)}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2 ${
+                    isSelected
+                      ? 'bg-amber-400 text-slate-950 font-black shadow-md shadow-amber-500/20'
+                      : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                  }`}
                 >
-                  <span className="text-2xl mb-1.5 group-hover:scale-110 transition-transform">{cat.icon}</span>
-                  <span className="text-[11px] font-bold text-slate-700 leading-tight line-clamp-1">{cat.name}</span>
-                </Link>
-              ))}
-            </div>
-          </section>
-
-          {/* ── FLASH SALE ROW (Matching Screenshot 5) ── */}
-          <section className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm space-y-4">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-gradient-to-r from-[#0A192F] to-[#122B4D] text-white p-5 rounded-2xl">
-              <div className="flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center shadow-lg shadow-amber-400/25">
-                  <Zap className="w-6 h-6 fill-slate-950" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 bg-rose-500 text-white font-black text-[9px] uppercase rounded tracking-wider">
-                      Limited Time
+                  <span>{cat.name}</span>
+                  {categoryCount > 0 && (
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-950/10 font-bold">
+                      {categoryCount}
                     </span>
-                    <h3 className="text-lg sm:text-xl font-black text-amber-400">FLASH SALE</h3>
-                  </div>
-                  <p className="text-xs text-slate-300 font-medium">Amazing Deals. Unbeatable Prices.</p>
-                </div>
-              </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </section>
 
-              {/* 4 Countdown Boxes + Shop Now button */}
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <div className="bg-slate-900/90 border border-slate-700 px-3 py-1.5 rounded-xl text-center min-w-[48px]">
-                    <p className="text-sm font-black text-white">{String(timeLeft.days).padStart(2, '0')}</p>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase">Days</p>
-                  </div>
-                  <span className="font-bold text-slate-500">:</span>
-                  <div className="bg-slate-900/90 border border-slate-700 px-3 py-1.5 rounded-xl text-center min-w-[48px]">
-                    <p className="text-sm font-black text-white">{String(timeLeft.hours).padStart(2, '0')}</p>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase">Hours</p>
-                  </div>
-                  <span className="font-bold text-slate-500">:</span>
-                  <div className="bg-slate-900/90 border border-slate-700 px-3 py-1.5 rounded-xl text-center min-w-[48px]">
-                    <p className="text-sm font-black text-white">{String(timeLeft.minutes).padStart(2, '0')}</p>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase">Mins</p>
-                  </div>
-                  <span className="font-bold text-slate-500">:</span>
-                  <div className="bg-slate-900/90 border border-slate-700 px-3 py-1.5 rounded-xl text-center min-w-[48px]">
-                    <p className="text-sm font-black text-amber-400">{String(timeLeft.seconds).padStart(2, '0')}</p>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase">Secs</p>
-                  </div>
-                </div>
-
-                <Link
-                  to="/shop?filter=flash"
-                  className="px-4 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5"
-                >
-                  <span>Shop Now</span>
-                  <span>→</span>
-                </Link>
-              </div>
+        {/* ── LIVE PRODUCTS CATALOG (Real Supabase Data Only) ── */}
+        <section className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+            <div>
+              <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
+                <span>{selectedCategory === 'All' ? 'Marketplace Catalog' : selectedCategory}</span>
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                  {filteredProducts.length} items
+                </span>
+              </h3>
+              {searchQuery && (
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Showing results matching "<span className="text-amber-600 font-bold">{searchQuery}</span>"
+                </p>
+              )}
             </div>
 
-            {/* 6-Column Product Grid Matching Screenshot 5 */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
-              {FLASH_PRODUCTS.map((prod) => (
-                <div
-                  key={prod.id}
-                  className="bg-slate-50/70 hover:bg-white rounded-2xl p-3 border border-slate-200/60 hover:shadow-lg transition-all flex flex-col justify-between group relative"
-                >
-                  {/* Discount tag */}
-                  <span className="absolute top-2.5 left-2.5 bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md z-10">
-                    -{prod.discount}%
-                  </span>
-
-                  {/* Image */}
-                  <div className="w-full h-32 rounded-xl overflow-hidden mb-2 bg-white flex items-center justify-center p-2">
-                    <img src={prod.image} alt={prod.name} className="w-full h-full object-contain group-hover:scale-105 transition-transform" />
-                  </div>
-
-                  {/* Details */}
-                  <div className="space-y-1">
-                    <h4 className="text-xs font-bold text-slate-900 truncate leading-snug">{prod.name}</h4>
-                    <p className="text-[10px] text-slate-400 font-medium">{prod.brand}</p>
-                    <div className="flex items-center gap-1 text-[10px] text-slate-500">
-                      <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
-                      <span className="font-bold text-slate-700">{prod.rating}</span>
-                      <span className="text-slate-400">({prod.reviews})</span>
-                    </div>
-
-                    {/* In Stock Badge */}
-                    <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 pt-0.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                      <span>In Stock</span>
-                    </div>
-
-                    {/* Price & Add to Cart button */}
-                    <div className="flex items-center justify-between pt-1">
-                      <div>
-                        <p className="text-xs sm:text-sm font-black text-slate-950">₦{prod.price.toLocaleString()}</p>
-                        <p className="text-[10px] text-slate-400 line-through">₦{prod.oldPrice.toLocaleString()}</p>
-                      </div>
-                      <button
-                        onClick={() => addToCart(prod)}
-                        className="w-7 h-7 rounded-lg bg-[#0A192F] hover:bg-[#00BFA5] text-white flex items-center justify-center transition-colors shadow-sm"
-                        title="Add to Cart"
-                      >
-                        <ShoppingCart className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
+            {/* Sort Dropdown */}
+            <div className="flex items-center gap-2 text-xs">
+              <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400" />
+              <span className="text-slate-500 font-medium">Sort by:</span>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="bg-slate-50 text-slate-800 text-xs font-bold border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-amber-400 cursor-pointer"
+              >
+                <option value="featured">Newest First</option>
+                <option value="price-low">Price: Low to High</option>
+                <option value="price-high">Price: High to Low</option>
+                <option value="rating">Top Rated</option>
+              </select>
             </div>
-          </section>
-
-          {/* ── FEATURED STORES ROW ── */}
-          <section className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-black text-slate-900">Featured Stores</h3>
-                <p className="text-xs text-slate-500 font-medium">Verified sellers with top-rated service</p>
-              </div>
-              <Link to="/stores" className="text-xs font-bold text-[#00BFA5] hover:underline flex items-center gap-1">
-                <span>View All Stores</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </Link>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-              {FEATURED_STORES.map((store) => (
-                <Link
-                  key={store.id}
-                  to="/stores"
-                  className="bg-slate-50 hover:bg-white rounded-2xl p-3 border border-slate-200/60 hover:shadow-md transition-all flex items-center gap-3"
-                >
-                  <img src={store.image} alt={store.name} className="w-10 h-10 rounded-xl object-cover border border-slate-200" />
-                  <div className="min-w-0">
-                    <h4 className="text-xs font-bold text-slate-900 truncate">{store.name}</h4>
-                    <p className="text-[10px] text-slate-500 flex items-center gap-1">
-                      <Star className="w-2.5 h-2.5 text-amber-400 fill-amber-400" />
-                      <span className="font-bold">{store.rating}</span>
-                      <span>• {store.products} items</span>
-                    </p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </section>
-
-          {/* ── FEATURED & POPULAR PRODUCTS GRID ── */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            {/* Left: Featured Products */}
-            <section className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-black text-slate-900">Featured Products</h3>
-                <Link to="/shop" className="text-xs font-bold text-[#00BFA5] hover:underline">View All</Link>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                {FEATURED_PRODUCTS.map((p) => (
-                  <div key={p.id} className="bg-slate-50/80 rounded-2xl p-3 border border-slate-200/60 flex flex-col justify-between group">
-                    <div className="w-full h-28 rounded-xl overflow-hidden mb-2 bg-white flex items-center justify-center p-2">
-                      <img src={p.image} alt={p.name} className="w-full h-full object-contain group-hover:scale-105 transition-transform" />
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-900 truncate">{p.name}</h4>
-                      <p className="text-xs font-black text-slate-950 mt-1">₦{p.price.toLocaleString()}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* Right: Popular Products */}
-            <section className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-black text-slate-900">Popular Products</h3>
-                <Link to="/shop" className="text-xs font-bold text-[#00BFA5] hover:underline">View All</Link>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                {POPULAR_PRODUCTS.map((p) => (
-                  <div key={p.id} className="bg-slate-50/80 rounded-2xl p-3 border border-slate-200/60 flex flex-col justify-between group">
-                    <div className="w-full h-28 rounded-xl overflow-hidden mb-2 bg-white flex items-center justify-center p-2">
-                      <img src={p.image} alt={p.name} className="w-full h-full object-contain group-hover:scale-105 transition-transform" />
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-900 truncate">{p.name}</h4>
-                      <p className="text-xs font-black text-slate-950 mt-1">₦{p.price.toLocaleString()}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
           </div>
 
-          {/* ── BOTTOM TRUST BANNER ── */}
-          <div className="bg-[#0A192F] text-white rounded-3xl p-5 flex flex-wrap items-center justify-between gap-4 border border-slate-800">
-            <div className="flex items-center gap-3">
-              <ShieldCheck className="w-6 h-6 text-[#00BFA5]" />
-              <div>
-                <h4 className="text-xs font-bold">Secure Shopping</h4>
-                <p className="text-[10px] text-slate-400">Your data is safe with 256-bit encryption</p>
-              </div>
+          {/* Loading Skeleton */}
+          {loading ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+              {[1, 2, 3, 4].map((n) => (
+                <div key={n} className="bg-white rounded-3xl p-4 border border-slate-200/70 shadow-sm animate-pulse space-y-3">
+                  <div className="w-full h-44 bg-slate-200 rounded-2xl" />
+                  <div className="w-2/3 h-4 bg-slate-200 rounded" />
+                  <div className="w-1/3 h-3 bg-slate-200 rounded" />
+                  <div className="w-1/2 h-5 bg-slate-200 rounded" />
+                </div>
+              ))}
             </div>
-
-            <div className="flex items-center gap-3">
-              <Truck className="w-6 h-6 text-amber-400" />
-              <div>
-                <h4 className="text-xs font-bold">Fast Delivery</h4>
-                <p className="text-[10px] text-slate-400">Across Nigeria & international exports</p>
+          ) : filteredProducts.length === 0 ? (
+            /* Empty State */
+            <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 shadow-sm space-y-4 max-w-md mx-auto my-8">
+              <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center mx-auto text-2xl">
+                <Package className="w-8 h-8" />
               </div>
+              <h4 className="text-base font-black text-slate-900">No Live Products Found</h4>
+              <p className="text-xs text-slate-500">
+                {searchQuery
+                  ? `No products match your search "${searchQuery}". Try clearing filters.`
+                  : `There are currently no approved products listed under ${selectedCategory}.`}
+              </p>
+              <button
+                onClick={() => { setSelectedCategory('All'); setSearchQuery(''); }}
+                className="inline-flex items-center gap-2 bg-[#0A192F] hover:bg-slate-800 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition-all shadow-md"
+              >
+                <span>View All Products</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
             </div>
+          ) : (
+            /* Live Product Grid */
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+              {filteredProducts.map((product) => {
+                const img = getImg(product);
+                const isItemInWishlist = isInWishlist(product.id);
+                const isJustAdded = addedItemIds[product.id];
+                const price = Number(product.price || 0);
+                const comparePrice = Number(product.compare_at_price || 0);
+                const hasDiscount = comparePrice > price;
+                const discountPct = hasDiscount ? Math.round(((comparePrice - price) / comparePrice) * 100) : 0;
+                const rating = Number(product.rating || product.average_rating || 5).toFixed(1);
+                const inStock = (product.stock_quantity ?? product.stock ?? 10) > 0;
 
-            <div className="flex items-center gap-3">
-              <CheckCircle className="w-6 h-6 text-emerald-400" />
-              <div>
-                <h4 className="text-xs font-bold">Genuine Products</h4>
-                <p className="text-[10px] text-slate-400">From 100% verified local sellers</p>
-              </div>
+                return (
+                  <Link
+                    key={product.id}
+                    to={`/product/${product.id}`}
+                    className="bg-white rounded-3xl p-3.5 sm:p-4 border border-slate-200/80 hover:border-slate-300 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between group relative"
+                  >
+                    {/* Top Badges */}
+                    <div className="absolute top-5 left-5 z-10 flex flex-col gap-1.5">
+                      {hasDiscount && (
+                        <span className="bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-lg shadow-sm">
+                          -{discountPct}%
+                        </span>
+                      )}
+                      {product.is_new && (
+                        <span className="bg-emerald-500 text-white text-[9px] font-black px-2 py-0.5 rounded-lg shadow-sm uppercase">
+                          New
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Wishlist Button */}
+                    <button
+                      onClick={(e) => handleWishlistToggle(e, product)}
+                      className="absolute top-5 right-5 z-10 w-8 h-8 rounded-full bg-white/90 hover:bg-white text-slate-400 hover:text-rose-500 flex items-center justify-center shadow-md transition-all"
+                      title={isItemInWishlist ? "Remove from wishlist" : "Add to wishlist"}
+                    >
+                      <Heart
+                        className={`w-4 h-4 transition-colors ${
+                          isItemInWishlist ? 'fill-rose-500 text-rose-500' : ''
+                        }`}
+                      />
+                    </button>
+
+                    {/* Image Box */}
+                    <div className="w-full h-44 sm:h-48 rounded-2xl overflow-hidden bg-slate-50 flex items-center justify-center p-3 mb-3 relative">
+                      {img ? (
+                        <img
+                          src={img}
+                          alt={product.name}
+                          className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <Package className="w-12 h-12 text-slate-300" />
+                      )}
+                    </div>
+
+                    {/* Details */}
+                    <div className="space-y-1.5 flex-1 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+                          <span className="font-bold uppercase tracking-wider truncate max-w-[120px]">
+                            {product.category || 'General'}
+                          </span>
+                          <div className="flex items-center gap-1 text-amber-500 font-black">
+                            <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                            <span>{rating}</span>
+                          </div>
+                        </div>
+
+                        <h4 className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-amber-600 transition-colors line-clamp-2 leading-snug">
+                          {product.name}
+                        </h4>
+                      </div>
+
+                      {/* Stock Indicator */}
+                      <div className="pt-1">
+                        <span
+                          className={`inline-flex items-center gap-1 text-[10px] font-bold ${
+                            inStock ? 'text-emerald-600' : 'text-rose-500'
+                          }`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${inStock ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                          {inStock ? 'In Stock' : 'Out of Stock'}
+                        </span>
+                      </div>
+
+                      {/* Price & Add to Cart Button */}
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 mt-2">
+                        <div>
+                          <p className="text-sm sm:text-base font-black text-slate-950">
+                            ₦{price.toLocaleString()}
+                          </p>
+                          {hasDiscount && (
+                            <p className="text-[10px] text-slate-400 line-through">
+                              ₦{comparePrice.toLocaleString()}
+                            </p>
+                          )}
+                        </div>
+
+                        <button
+                          onClick={(e) => handleAddToCart(e, product)}
+                          className={`px-3 py-2 rounded-xl text-xs font-black transition-all shadow-sm flex items-center gap-1.5 ${
+                            isJustAdded
+                              ? 'bg-emerald-500 text-white'
+                              : 'bg-[#0A192F] hover:bg-amber-400 hover:text-slate-950 text-white'
+                          }`}
+                          title="Add to Cart"
+                        >
+                          {isJustAdded ? (
+                            <>
+                              <Check className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">Added</span>
+                            </>
+                          ) : (
+                            <>
+                              <ShoppingCart className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">Add</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
+          )}
+        </section>
 
+        {/* ── SELLER INVITATION BANNER (Verified Vendor Hub) ── */}
+        <section className="bg-gradient-to-r from-[#070F1E] via-[#0A192F] to-[#122A4E] rounded-3xl p-6 sm:p-10 text-white border border-slate-800 shadow-xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="relative z-10 max-w-xl space-y-3 text-center md:text-left">
+            <div className="inline-flex items-center gap-1.5 bg-amber-400/20 text-amber-400 border border-amber-400/30 text-[10px] font-black uppercase px-3 py-1 rounded-full">
+              <Store className="w-3 h-3" />
+              <span>Vendor Empowerment Program</span>
+            </div>
+            <h3 className="text-2xl sm:text-3xl font-black text-white leading-tight">
+              Start Selling Your Products on <span className="text-amber-400">Abu Mafhal</span>
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-300 font-medium">
+              Join Nigeria's fastest growing digital marketplace. Reach verified buyers nationwide with instant payments and low commission fees.
+            </p>
+          </div>
+
+          <div className="relative z-10 flex flex-col sm:flex-row items-center gap-3">
+            <Link
+              to="/vendor-application"
+              className="bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 px-6 py-3 rounded-xl font-black text-xs sm:text-sm shadow-lg shadow-amber-500/20 transition-all flex items-center gap-2"
+            >
+              <span>Open Store Now</span>
+              <ArrowUpRight className="w-4 h-4" />
+            </Link>
             <Link
               to="/shop"
-              className="bg-amber-400 hover:bg-amber-300 text-slate-950 px-5 py-2 rounded-full text-xs font-black transition-all shadow-md"
+              className="bg-slate-800/80 hover:bg-slate-700 text-white px-5 py-3 rounded-xl font-bold text-xs sm:text-sm border border-slate-700 transition-all"
             >
-              Shop Now →
+              Browse Products
             </Link>
           </div>
-        </main>
-      </div>
+        </section>
+      </main>
 
-      {/* Footer */}
-      <footer className="bg-[#070F1E] text-slate-400 py-6 text-center text-xs border-t border-slate-800">
-        <p>© {new Date().getFullYear()} ABU MAFHAL Marketplace. All rights reserved. Shop Smarter, Live Better.</p>
+      {/* ── FOOTER ── */}
+      <footer className="bg-[#070F1E] text-slate-400 border-t border-slate-800/80 mt-12 py-10 px-4 sm:px-6">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+          
+          {/* Brand Info */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-amber-400 p-1 flex items-center justify-center">
+                <img src={AM_LOGO} alt="" className="w-full h-full object-contain" />
+              </div>
+              <span className="text-base font-black text-white">ABU MAFHAL</span>
+            </div>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Nigeria’s trusted digital marketplace connecting buyers with verified sellers nationwide. Authentic products, secured escrow payments, and swift delivery.
+            </p>
+          </div>
+
+          {/* Quick Links */}
+          <div className="space-y-2.5">
+            <h4 className="text-xs font-black uppercase text-white tracking-wider">Quick Links</h4>
+            <ul className="space-y-2 text-xs">
+              <li><Link to="/shop" className="hover:text-amber-400 transition-colors">All Products</Link></li>
+              <li><Link to="/stores" className="hover:text-amber-400 transition-colors">Verified Stores</Link></li>
+              <li><Link to="/buyer/orders" className="hover:text-amber-400 transition-colors">Track Orders</Link></li>
+              <li><Link to="/vendor-application" className="hover:text-amber-400 transition-colors">Sell on Abu Mafhal</Link></li>
+            </ul>
+          </div>
+
+          {/* Customer Care */}
+          <div className="space-y-2.5">
+            <h4 className="text-xs font-black uppercase text-white tracking-wider">Customer Care</h4>
+            <ul className="space-y-2 text-xs">
+              <li><Link to="/contact" className="hover:text-amber-400 transition-colors">Help Center & Support</Link></li>
+              <li><Link to="/terms" className="hover:text-amber-400 transition-colors">Terms of Service</Link></li>
+              <li><Link to="/privacy" className="hover:text-amber-400 transition-colors">Privacy Policy</Link></li>
+              <li><Link to="/about" className="hover:text-amber-400 transition-colors">About Us</Link></li>
+            </ul>
+          </div>
+
+          {/* Security & Guarantees */}
+          <div className="space-y-2.5">
+            <h4 className="text-xs font-black uppercase text-white tracking-wider">Security & Trust</h4>
+            <p className="text-xs text-slate-400">
+              Payments are 100% secured via 256-bit SSL encryption through certified CBN-approved payment gateways.
+            </p>
+            <div className="flex items-center gap-2 pt-2">
+              <span className="px-2.5 py-1 bg-slate-800 text-[10px] font-bold text-slate-300 rounded-md border border-slate-700">Paystack</span>
+              <span className="px-2.5 py-1 bg-slate-800 text-[10px] font-bold text-slate-300 rounded-md border border-slate-700">Flutterwave</span>
+              <span className="px-2.5 py-1 bg-slate-800 text-[10px] font-bold text-slate-300 rounded-md border border-slate-700">Bank Transfer</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="max-w-7xl mx-auto pt-6 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left text-xs text-slate-500">
+          <p>© {new Date().getFullYear()} Abu Mafhal Marketplace. All rights reserved.</p>
+          <p className="text-[11px]">Your Marketplace, Your Choice.</p>
+        </div>
       </footer>
     </div>
   );

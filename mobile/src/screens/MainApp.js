@@ -77,6 +77,8 @@ export const MainApp = ({ route, navigation, user, onLogout, cartLines, onUpdate
                         onGoToNotifications={() => setActiveTab('notifications')}
                         onNavigate={(screen) => setActiveTab(screen)}
                         onProductClick={(product) => handleNavigate('ProductDetails', { product })}
+                        cartCount={cartLines?.length || 0}
+                        onAddToCart={onAddToCart}
                     />
                 )}
                 {activeTab === 'shop' && <ShopPage
