@@ -1,36 +1,6 @@
 {
-    "buildCommand": "npm install && npm run build && (cd mobile && npm install && npx expo export --platform web && node patch-html.js && cd .. && mkdir -p dist/mobile && cp -R mobile/dist/* dist/mobile/) || echo 'Mobile build skipped'",
-
+    "buildCommand": "npm install && npm run build && node -e \"const fs = require('fs'); fs.mkdirSync('dist/mobile', { recursive: true }); if (fs.existsSync('mobile/dist')) fs.cpSync('mobile/dist', 'dist/mobile', { recursive: true });\"",
     "outputDirectory": "dist",
-    "headers": [
-        {
-            "source": "/",
-            "headers": [
-                {
-                    "key": "Vary",
-                    "value": "User-Agent"
-                }
-            ]
-        }
-    ],
-    "redirects": [
-        {
-            "source": "/",
-            "has": [
-                {
-                    "type": "header",
-                    "key": "User-Agent",
-                    "value": "(?i).*(android|iphone|ipad|ipod|opera mini|iemobile|mobile).*"
-                }
-            ],
-            "destination": "/mobile",
-            "permanent": false
-        },
-        {
-            "source": "/mobile",
-            "destination": "/mobile/"
-        }
-    ],
     "rewrites": [
         {
             "source": "/_expo/(.*)",
@@ -42,6 +12,10 @@
         },
         {
             "source": "/mobile/(.*)",
+            "destination": "/mobile/index.html"
+        },
+        {
+            "source": "/mobile",
             "destination": "/mobile/index.html"
         },
         {
