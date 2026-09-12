@@ -57,7 +57,6 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
     const [isCheckingReferral, setIsCheckingReferral] = useState(false);
 
     // ── Animations ────────────────────────────────────────────────────────────
-    const tabAnim = useRef(new Animated.Value(isLogin ? 0 : 1)).current;
     const scaleAnim = useRef(new Animated.Value(1)).current;
 
     // ── Translations Dictionary ───────────────────────────────────────────────
@@ -69,7 +68,6 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
             joinSub: 'Create an account to shop from verified stores across Nigeria.',
             signIn: 'Sign In',
             createAccount: 'Create Account',
-            guestBrowse: 'Browse as Guest',
             emailTab: 'Email Address',
             phoneTab: 'Phone Number',
             fullName: 'Full Name',
@@ -86,7 +84,8 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
             referralLabel: 'Referral Code (Optional)',
             referralPlaceholder: 'e.g. ABU-12345',
             continueBtn: 'Continue to Verification',
-            signInBtn: 'Sign In to Account',
+            signInBtn: 'Sign In',
+            createAccountBtn: 'Create Account',
             orDivider: 'or continue with',
             termsAgree: 'I agree to the Terms of Service & Privacy Policy',
             dontHaveAccount: "Don't have an account yet?",
@@ -109,7 +108,6 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
             joinSub: 'Buɗe asusu don cinikin kaya daga masu sayarwa a faɗin Najeriya.',
             signIn: 'Shiga Ciki',
             createAccount: 'Buɗe Asusu',
-            guestBrowse: 'Ci gaba a Baƙo',
             emailTab: 'Adireshin Email',
             phoneTab: 'Lambar Waya',
             fullName: 'Cikakken Suna',
@@ -126,7 +124,8 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
             referralLabel: 'Lambar Gayyata (Na Zaɓi)',
             referralPlaceholder: 'Misali: ABU-12345',
             continueBtn: 'Ci gaba zuwa Tabbatarwa',
-            signInBtn: 'Shiga Cikin Asusu',
+            signInBtn: 'Shiga Ciki',
+            createAccountBtn: 'Buɗe Asusu',
             orDivider: 'ko amfani da',
             termsAgree: "Na amince da Ƙa'idojin Sabis da Tsaro",
             dontHaveAccount: 'Ba ka da asusu tukuna?',
@@ -202,11 +201,6 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
     const handleSwitchTab = (loginTab) => {
         setIsLogin(loginTab);
         setErrorMsg('');
-        Animated.spring(tabAnim, {
-            toValue: loginTab ? 0 : 1,
-            friction: 7,
-            useNativeDriver: false,
-        }).start();
     };
 
     // ── Primary Action: Sign In or Send Signup OTP ────────────────────────────
@@ -215,26 +209,36 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
         const cleanEmail = (email || '').trim().toLowerCase();
         const cleanPassword = (password || '').trim();
 
-        if (loginMethod === 'email') {
-            if (!cleanEmail || !cleanPassword) {
-                setErrorMsg(lang === 'ha' ? 'Da fatan za a shigar da email da kalmar sirri.' : 'Please enter both your email address and password.');
-                return;
+        if (isLogin) {
+            // Validate Sign In fields only
+            if (loginMethod === 'email') {
+                if (!cleanEmail || !cleanPassword) {
+                    setErrorMsg(lang === 'ha' ? 'Da fatan za a shigar da email da kalmar sirri.' : 'Please enter both your email address and password.');
+                    return;
+                }
+            } else {
+                // Phone login
+                if (!phone.trim() || !cleanPassword) {
+                    setErrorMsg(lang === 'ha' ? 'Da fatan za a shigar da lambar waya da kalmar sirri.' : 'Please enter your phone number and password.');
+                    return;
+                }
             }
         } else {
-            // Phone login
-            if (!phone.trim() || !cleanPassword) {
-                setErrorMsg(lang === 'ha' ? 'Da fatan za a shigar da lambar waya da kalmar sirri.' : 'Please enter your phone number and password.');
-                return;
-            }
-        }
-
-        if (!isLogin) {
+            // Validate Sign Up fields only
             if (!fullName.trim()) {
                 setErrorMsg(lang === 'ha' ? 'Da fatan za a shigar da cikakken sunanka.' : 'Please enter your full name.');
                 return;
             }
             if (!phone.trim()) {
                 setErrorMsg(lang === 'ha' ? 'Da fatan za a shigar da lambar wayarka.' : 'Please enter your phone number.');
+                return;
+            }
+            if (!cleanEmail) {
+                setErrorMsg(lang === 'ha' ? 'Da fatan za a shigar da adireshin email.' : 'Please enter your email address.');
+                return;
+            }
+            if (!cleanPassword || cleanPassword.length < 6) {
+                setErrorMsg(lang === 'ha' ? 'Kalmar sirri ta zama aƙalla haruffa 6.' : 'Password must be at least 6 characters.');
                 return;
             }
             if (!agreedToTerms) {
@@ -490,11 +494,6 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
         );
     };
 
-    const tabTranslateX = tabAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [4, (width - 44) / 2],
-    });
-
     return (
         <View style={s.root}>
             <StatusBar barStyle="light-content" backgroundColor="#0A192F" />
@@ -520,30 +519,15 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
                     </View>
                 </View>
 
-                {/* Language Switcher + Guest Skip */}
+                {/* Language Switcher */}
                 <View style={s.headerRightActions}>
                     <TouchableOpacity
                         style={s.langBadge}
                         onPress={() => setLang(l => l === 'en' ? 'ha' : 'en')}
                         activeOpacity={0.7}
                     >
-                        <Ionicons name="globe-outline" size={12} color="#00D2FF" />
+                        <Ionicons name="globe-outline" size={13} color="#00D2FF" />
                         <Text style={s.langBadgeTxt}>{lang === 'en' ? 'EN' : 'HA'}</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={s.guestChip}
-                        onPress={() => {
-                            if (onLoginSuccess) {
-                                onLoginSuccess({ id: 'guest', role: 'buyer', isGuest: true });
-                            } else if (onBack) {
-                                onBack();
-                            }
-                        }}
-                        activeOpacity={0.7}
-                    >
-                        <Text style={s.guestChipTxt}>{t.guestBrowse}</Text>
-                        <Ionicons name="chevron-forward" size={12} color="#F59E0B" />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -617,16 +601,10 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
                         <View style={s.cardContainer}>
                             {/* ── SEGMENTED PILL SWITCH (SIGN IN vs CREATE ACCOUNT) ── */}
                             <View style={s.segmentedContainer}>
-                                <Animated.View
-                                    style={[
-                                        s.activeIndicator,
-                                        { transform: [{ translateX: tabTranslateX }], width: (width - 48) / 2 }
-                                    ]}
-                                />
                                 <TouchableOpacity
-                                    style={s.segmentedBtn}
+                                    style={[s.segmentedBtn, isLogin && s.segmentedBtnActive]}
                                     onPress={() => handleSwitchTab(true)}
-                                    activeOpacity={0.8}
+                                    activeOpacity={0.85}
                                 >
                                     <Ionicons
                                         name={isLogin ? "log-in" : "log-in-outline"}
@@ -640,9 +618,9 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
-                                    style={s.segmentedBtn}
+                                    style={[s.segmentedBtn, !isLogin && s.segmentedBtnActive]}
                                     onPress={() => handleSwitchTab(false)}
-                                    activeOpacity={0.8}
+                                    activeOpacity={0.85}
                                 >
                                     <Ionicons
                                         name={!isLogin ? "person-add" : "person-add-outline"}
@@ -656,301 +634,381 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
                                 </TouchableOpacity>
                             </View>
 
-                            {/* ── METHOD SWITCHER: EMAIL VS PHONE (LOGIN ONLY) ── */}
-                            {isLogin && (
-                                <View style={s.methodTabsRow}>
-                                    <TouchableOpacity
-                                        style={[s.methodTab, loginMethod === 'email' && s.methodTabActive]}
-                                        onPress={() => setLoginMethod('email')}
-                                    >
-                                        <Ionicons
-                                            name="mail-outline"
-                                            size={14}
-                                            color={loginMethod === 'email' ? '#00BFA5' : '#64748B'}
-                                        />
-                                        <Text style={[s.methodTabTxt, loginMethod === 'email' && s.methodTabTxtActive]}>
-                                            {t.emailTab}
-                                        </Text>
-                                    </TouchableOpacity>
+                            {isLogin ? (
+                                /* ══════════════ ONLY SIGN IN FORM ══════════════ */
+                                <View>
+                                    {/* ── METHOD SWITCHER: EMAIL VS PHONE (LOGIN ONLY) ── */}
+                                    <View style={s.methodTabsRow}>
+                                        <TouchableOpacity
+                                            style={[s.methodTab, loginMethod === 'email' && s.methodTabActive]}
+                                            onPress={() => setLoginMethod('email')}
+                                            activeOpacity={0.8}
+                                        >
+                                            <Ionicons
+                                                name="mail-outline"
+                                                size={14}
+                                                color={loginMethod === 'email' ? '#00BFA5' : '#64748B'}
+                                            />
+                                            <Text style={[s.methodTabTxt, loginMethod === 'email' && s.methodTabTxtActive]}>
+                                                {t.emailTab}
+                                            </Text>
+                                        </TouchableOpacity>
 
-                                    <TouchableOpacity
-                                        style={[s.methodTab, loginMethod === 'phone' && s.methodTabActive]}
-                                        onPress={() => setLoginMethod('phone')}
-                                    >
-                                        <Ionicons
-                                            name="call-outline"
-                                            size={14}
-                                            color={loginMethod === 'phone' ? '#00BFA5' : '#64748B'}
-                                        />
-                                        <Text style={[s.methodTabTxt, loginMethod === 'phone' && s.methodTabTxtActive]}>
-                                            {t.phoneTab}
-                                        </Text>
-                                    </TouchableOpacity>
-                                </View>
-                            )}
-
-                            {/* ── SIGNUP ONLY: FULL NAME ── */}
-                            {!isLogin && (
-                                <View style={s.inputWrap}>
-                                    <Text style={s.inputLabel}>{t.fullName}</Text>
-                                    <View style={s.inputBox}>
-                                        <Ionicons name="person-outline" size={18} color="#94A3B8" style={s.inputIcon} />
-                                        <TextInput
-                                            style={s.textInput}
-                                            placeholder={t.fullNamePlaceholder}
-                                            placeholderTextColor="#94A3B8"
-                                            value={fullName}
-                                            onChangeText={setFullName}
-                                            autoCapitalize="words"
-                                        />
+                                        <TouchableOpacity
+                                            style={[s.methodTab, loginMethod === 'phone' && s.methodTabActive]}
+                                            onPress={() => setLoginMethod('phone')}
+                                            activeOpacity={0.8}
+                                        >
+                                            <Ionicons
+                                                name="call-outline"
+                                                size={14}
+                                                color={loginMethod === 'phone' ? '#00BFA5' : '#64748B'}
+                                            />
+                                            <Text style={[s.methodTabTxt, loginMethod === 'phone' && s.methodTabTxtActive]}>
+                                                {t.phoneTab}
+                                            </Text>
+                                        </TouchableOpacity>
                                     </View>
-                                </View>
-                            )}
 
-                            {/* ── SIGNUP ONLY: PHONE NUMBER ── */}
-                            {!isLogin && (
-                                <View style={s.inputWrap}>
-                                    <Text style={s.inputLabel}>{t.phoneLabel}</Text>
-                                    <View style={s.inputBox}>
-                                        <View style={s.countryPrefix}>
-                                            <Text style={s.countryFlag}>🇳🇬</Text>
-                                            <Text style={s.countryCode}>+234</Text>
+                                    {/* ── EMAIL OR PHONE INPUT FOR SIGN IN ── */}
+                                    {loginMethod === 'email' ? (
+                                        <View style={s.inputWrap}>
+                                            <Text style={s.inputLabel}>{t.emailLabel}</Text>
+                                            <View style={s.inputBox}>
+                                                <Ionicons name="mail-outline" size={18} color="#94A3B8" style={s.inputIcon} />
+                                                <TextInput
+                                                    style={s.textInput}
+                                                    placeholder={t.emailPlaceholder}
+                                                    placeholderTextColor="#94A3B8"
+                                                    value={email}
+                                                    onChangeText={setEmail}
+                                                    autoCapitalize="none"
+                                                    keyboardType="email-address"
+                                                />
+                                            </View>
                                         </View>
-                                        <TextInput
-                                            style={s.textInput}
-                                            placeholder={t.phonePlaceholder}
-                                            placeholderTextColor="#94A3B8"
-                                            value={phone}
-                                            onChangeText={setPhone}
-                                            keyboardType="phone-pad"
-                                        />
-                                    </View>
-                                </View>
-                            )}
+                                    ) : (
+                                        <View style={s.inputWrap}>
+                                            <Text style={s.inputLabel}>{t.phoneLabel}</Text>
+                                            <View style={s.inputBox}>
+                                                <View style={s.countryPrefix}>
+                                                    <Text style={s.countryFlag}>🇳🇬</Text>
+                                                    <Text style={s.countryCode}>+234</Text>
+                                                </View>
+                                                <TextInput
+                                                    style={s.textInput}
+                                                    placeholder={t.phonePlaceholder}
+                                                    placeholderTextColor="#94A3B8"
+                                                    value={phone}
+                                                    onChangeText={setPhone}
+                                                    keyboardType="phone-pad"
+                                                />
+                                            </View>
+                                        </View>
+                                    )}
 
-                            {/* ── EMAIL INPUT (OR PHONE INPUT FOR LOGIN) ── */}
-                            {(!isLogin || loginMethod === 'email') ? (
-                                <View style={s.inputWrap}>
-                                    <Text style={s.inputLabel}>{t.emailLabel}</Text>
-                                    <View style={s.inputBox}>
-                                        <Ionicons name="mail-outline" size={18} color="#94A3B8" style={s.inputIcon} />
-                                        <TextInput
-                                            style={s.textInput}
-                                            placeholder={t.emailPlaceholder}
-                                            placeholderTextColor="#94A3B8"
-                                            value={email}
-                                            onChangeText={setEmail}
-                                            autoCapitalize="none"
-                                            keyboardType="email-address"
-                                        />
+                                    {/* ── PASSWORD INPUT ── */}
+                                    <View style={s.inputWrap}>
+                                        <View style={s.inputLabelRow}>
+                                            <Text style={s.inputLabel}>{t.passwordLabel}</Text>
+                                            <TouchableOpacity onPress={() => { setForgotEmail(email); setShowForgotModal(true); }}>
+                                                <Text style={s.forgotTxt}>{t.forgotPassword}</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                        <View style={s.inputBox}>
+                                            <Ionicons name="lock-closed-outline" size={18} color="#94A3B8" style={s.inputIcon} />
+                                            <TextInput
+                                                style={[s.textInput, { paddingRight: 42 }]}
+                                                placeholder={t.passwordPlaceholder}
+                                                placeholderTextColor="#94A3B8"
+                                                value={password}
+                                                onChangeText={setPassword}
+                                                secureTextEntry={!showPassword}
+                                            />
+                                            <TouchableOpacity
+                                                style={s.eyeBtn}
+                                                onPress={() => setShowPassword(p => !p)}
+                                            >
+                                                <Ionicons
+                                                    name={showPassword ? "eye-off-outline" : "eye-outline"}
+                                                    size={18}
+                                                    color="#64748B"
+                                                />
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+
+                                    {/* ── REMEMBER ME & BIOMETRICS ── */}
+                                    <View style={s.optionsRow}>
+                                        <TouchableOpacity
+                                            style={s.rememberMeBtn}
+                                            onPress={() => setRememberMe(r => !r)}
+                                            activeOpacity={0.8}
+                                        >
+                                            <View style={[s.checkbox, rememberMe && s.checkboxActive]}>
+                                                {rememberMe && <Ionicons name="checkmark" size={13} color="#FFFFFF" />}
+                                            </View>
+                                            <Text style={s.rememberMeTxt}>{t.rememberMe}</Text>
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity
+                                            style={s.biometricToggle}
+                                            onPress={() => setEnableBiometrics(b => !b)}
+                                            activeOpacity={0.8}
+                                        >
+                                            <Ionicons
+                                                name="finger-print-outline"
+                                                size={16}
+                                                color={enableBiometrics ? '#00BFA5' : '#64748B'}
+                                            />
+                                            <Text style={[s.biometricTxt, enableBiometrics && { color: '#00BFA5', fontWeight: '700' }]}>
+                                                {t.biometricLogin}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    {/* ── SIGN IN SUBMIT BUTTON (NO ARROW) ── */}
+                                    <TouchableOpacity
+                                        style={[s.primaryBtn, loading && s.primaryBtnDisabled]}
+                                        onPress={handleAuthAction}
+                                        disabled={loading}
+                                        activeOpacity={0.85}
+                                    >
+                                        {loading ? (
+                                            <ActivityIndicator color="#0A192F" size="small" />
+                                        ) : (
+                                            <Text style={s.primaryBtnTxt}>{t.signInBtn}</Text>
+                                        )}
+                                    </TouchableOpacity>
+
+                                    {/* ── SOCIAL AUTH DIVIDER ── */}
+                                    <View style={s.dividerWrap}>
+                                        <View style={s.dividerLine} />
+                                        <Text style={s.dividerTxt}>{t.orDivider}</Text>
+                                        <View style={s.dividerLine} />
+                                    </View>
+
+                                    {/* ── FAST SOCIAL LOGINS ── */}
+                                    <View style={s.socialRow}>
+                                        <TouchableOpacity
+                                            style={s.socialBtn}
+                                            onPress={() => handleSocialAuth('Google')}
+                                            activeOpacity={0.8}
+                                        >
+                                            <Ionicons name="logo-google" size={18} color="#EA4335" />
+                                            <Text style={s.socialBtnTxt}>Google</Text>
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity
+                                            style={s.socialBtn}
+                                            onPress={() => handleSocialAuth('Apple')}
+                                            activeOpacity={0.8}
+                                        >
+                                            <Ionicons name="logo-apple" size={18} color="#0F172A" />
+                                            <Text style={s.socialBtnTxt}>Apple</Text>
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    {/* ── SWITCH FOOTER TO SIGN UP ── */}
+                                    <View style={s.switchFooter}>
+                                        <Text style={s.switchFooterTxt}>{t.dontHaveAccount}</Text>
+                                        <TouchableOpacity onPress={() => handleSwitchTab(false)} style={{ marginLeft: 6 }}>
+                                            <Text style={s.switchFooterLink}>{t.createAccount}</Text>
+                                        </TouchableOpacity>
                                     </View>
                                 </View>
                             ) : (
-                                <View style={s.inputWrap}>
-                                    <Text style={s.inputLabel}>{t.phoneLabel}</Text>
-                                    <View style={s.inputBox}>
-                                        <View style={s.countryPrefix}>
-                                            <Text style={s.countryFlag}>🇳🇬</Text>
-                                            <Text style={s.countryCode}>+234</Text>
+                                /* ══════════════ ONLY SIGN UP FORM ══════════════ */
+                                <View>
+                                    {/* ── SIGNUP: FULL NAME ── */}
+                                    <View style={s.inputWrap}>
+                                        <Text style={s.inputLabel}>{t.fullName}</Text>
+                                        <View style={s.inputBox}>
+                                            <Ionicons name="person-outline" size={18} color="#94A3B8" style={s.inputIcon} />
+                                            <TextInput
+                                                style={s.textInput}
+                                                placeholder={t.fullNamePlaceholder}
+                                                placeholderTextColor="#94A3B8"
+                                                value={fullName}
+                                                onChangeText={setFullName}
+                                                autoCapitalize="words"
+                                            />
                                         </View>
-                                        <TextInput
-                                            style={s.textInput}
-                                            placeholder={t.phonePlaceholder}
-                                            placeholderTextColor="#94A3B8"
-                                            value={phone}
-                                            onChangeText={setPhone}
-                                            keyboardType="phone-pad"
-                                        />
                                     </View>
-                                </View>
-                            )}
 
-                            {/* ── PASSWORD INPUT ── */}
-                            <View style={s.inputWrap}>
-                                <View style={s.inputLabelRow}>
-                                    <Text style={s.inputLabel}>{t.passwordLabel}</Text>
-                                    {isLogin && (
-                                        <TouchableOpacity onPress={() => { setForgotEmail(email); setShowForgotModal(true); }}>
-                                            <Text style={s.forgotTxt}>{t.forgotPassword}</Text>
-                                        </TouchableOpacity>
-                                    )}
-                                </View>
-                                <View style={s.inputBox}>
-                                    <Ionicons name="lock-closed-outline" size={18} color="#94A3B8" style={s.inputIcon} />
-                                    <TextInput
-                                        style={[s.textInput, { paddingRight: 42 }]}
-                                        placeholder={t.passwordPlaceholder}
-                                        placeholderTextColor="#94A3B8"
-                                        value={password}
-                                        onChangeText={setPassword}
-                                        secureTextEntry={!showPassword}
-                                    />
-                                    <TouchableOpacity
-                                        style={s.eyeBtn}
-                                        onPress={() => setShowPassword(p => !p)}
-                                    >
-                                        <Ionicons
-                                            name={showPassword ? "eye-off-outline" : "eye-outline"}
-                                            size={18}
-                                            color="#64748B"
-                                        />
-                                    </TouchableOpacity>
-                                </View>
+                                    {/* ── SIGNUP: PHONE NUMBER ── */}
+                                    <View style={s.inputWrap}>
+                                        <Text style={s.inputLabel}>{t.phoneLabel}</Text>
+                                        <View style={s.inputBox}>
+                                            <View style={s.countryPrefix}>
+                                                <Text style={s.countryFlag}>🇳🇬</Text>
+                                                <Text style={s.countryCode}>+234</Text>
+                                            </View>
+                                            <TextInput
+                                                style={s.textInput}
+                                                placeholder={t.phonePlaceholder}
+                                                placeholderTextColor="#94A3B8"
+                                                value={phone}
+                                                onChangeText={setPhone}
+                                                keyboardType="phone-pad"
+                                            />
+                                        </View>
+                                    </View>
 
-                                {/* Live Password Strength Meter (Signup Only) */}
-                                {!isLogin && password.length > 0 && (
-                                    <View style={s.strengthMeterWrap}>
-                                        <View style={s.strengthBars}>
-                                            {[1, 2, 3, 4].map(idx => (
-                                                <View
-                                                    key={idx}
-                                                    style={[
-                                                        s.strengthBar,
-                                                        {
-                                                            backgroundColor: passStrength >= idx
-                                                                ? strengthColors[passStrength]
-                                                                : '#E2E8F0'
-                                                        }
-                                                    ]}
+                                    {/* ── SIGNUP: EMAIL ADDRESS ── */}
+                                    <View style={s.inputWrap}>
+                                        <Text style={s.inputLabel}>{t.emailLabel}</Text>
+                                        <View style={s.inputBox}>
+                                            <Ionicons name="mail-outline" size={18} color="#94A3B8" style={s.inputIcon} />
+                                            <TextInput
+                                                style={s.textInput}
+                                                placeholder={t.emailPlaceholder}
+                                                placeholderTextColor="#94A3B8"
+                                                value={email}
+                                                onChangeText={setEmail}
+                                                autoCapitalize="none"
+                                                keyboardType="email-address"
+                                            />
+                                        </View>
+                                    </View>
+
+                                    {/* ── SIGNUP: PASSWORD WITH LIVE STRENGTH ── */}
+                                    <View style={s.inputWrap}>
+                                        <Text style={s.inputLabel}>{t.passwordLabel}</Text>
+                                        <View style={s.inputBox}>
+                                            <Ionicons name="lock-closed-outline" size={18} color="#94A3B8" style={s.inputIcon} />
+                                            <TextInput
+                                                style={[s.textInput, { paddingRight: 42 }]}
+                                                placeholder={t.passwordPlaceholder}
+                                                placeholderTextColor="#94A3B8"
+                                                value={password}
+                                                onChangeText={setPassword}
+                                                secureTextEntry={!showPassword}
+                                            />
+                                            <TouchableOpacity
+                                                style={s.eyeBtn}
+                                                onPress={() => setShowPassword(p => !p)}
+                                            >
+                                                <Ionicons
+                                                    name={showPassword ? "eye-off-outline" : "eye-outline"}
+                                                    size={18}
+                                                    color="#64748B"
                                                 />
-                                            ))}
+                                            </TouchableOpacity>
                                         </View>
-                                        <Text style={[s.strengthLabel, { color: strengthColors[passStrength] }]}>
-                                            {strengthLabels[passStrength]}
-                                        </Text>
-                                    </View>
-                                )}
-                            </View>
 
-                            {/* ── SIGNUP ONLY: REFERRAL CODE FIELD ── */}
-                            {!isLogin && (
-                                <View style={s.inputWrap}>
-                                    <View style={s.inputLabelRow}>
-                                        <Text style={s.inputLabel}>{t.referralLabel}</Text>
-                                        <Text style={{ fontSize: 10, color: '#00BFA5', fontWeight: '700' }}>🎁 BONUS</Text>
-                                    </View>
-                                    <View style={s.inputBox}>
-                                        <Ionicons name="gift-outline" size={18} color="#94A3B8" style={s.inputIcon} />
-                                        <TextInput
-                                            style={s.textInput}
-                                            placeholder={t.referralPlaceholder}
-                                            placeholderTextColor="#94A3B8"
-                                            value={referralCode}
-                                            onChangeText={setReferralCode}
-                                            autoCapitalize="characters"
-                                        />
-                                        {referrerName && (
-                                            <Ionicons name="checkmark-circle" size={18} color="#10B981" style={{ marginRight: 10 }} />
+                                        {/* Live Password Strength Meter */}
+                                        {password.length > 0 && (
+                                            <View style={s.strengthMeterWrap}>
+                                                <View style={s.strengthBars}>
+                                                    {[1, 2, 3, 4].map(idx => (
+                                                        <View
+                                                            key={idx}
+                                                            style={[
+                                                                s.strengthBar,
+                                                                {
+                                                                    backgroundColor: passStrength >= idx
+                                                                        ? strengthColors[passStrength]
+                                                                        : '#E2E8F0'
+                                                                }
+                                                            ]}
+                                                        />
+                                                    ))}
+                                                </View>
+                                                <Text style={[s.strengthLabel, { color: strengthColors[passStrength] }]}>
+                                                    {strengthLabels[passStrength]}
+                                                </Text>
+                                            </View>
                                         )}
                                     </View>
-                                </View>
-                            )}
 
-                            {/* ── REMEMBER ME & BIOMETRICS (LOGIN ONLY) ── */}
-                            {isLogin && (
-                                <View style={s.optionsRow}>
-                                    <TouchableOpacity
-                                        style={s.rememberMeBtn}
-                                        onPress={() => setRememberMe(r => !r)}
-                                        activeOpacity={0.8}
-                                    >
-                                        <View style={[s.checkbox, rememberMe && s.checkboxActive]}>
-                                            {rememberMe && <Ionicons name="checkmark" size={13} color="#FFFFFF" />}
+                                    {/* ── SIGNUP: REFERRAL CODE (OPTIONAL) ── */}
+                                    <View style={s.inputWrap}>
+                                        <View style={s.inputLabelRow}>
+                                            <Text style={s.inputLabel}>{t.referralLabel}</Text>
+                                            <Text style={{ fontSize: 10, color: '#00BFA5', fontWeight: '700' }}>🎁 BONUS</Text>
                                         </View>
-                                        <Text style={s.rememberMeTxt}>{t.rememberMe}</Text>
-                                    </TouchableOpacity>
+                                        <View style={s.inputBox}>
+                                            <Ionicons name="gift-outline" size={18} color="#94A3B8" style={s.inputIcon} />
+                                            <TextInput
+                                                style={s.textInput}
+                                                placeholder={t.referralPlaceholder}
+                                                placeholderTextColor="#94A3B8"
+                                                value={referralCode}
+                                                onChangeText={setReferralCode}
+                                                autoCapitalize="characters"
+                                            />
+                                            {referrerName && (
+                                                <Ionicons name="checkmark-circle" size={18} color="#10B981" style={{ marginRight: 10 }} />
+                                            )}
+                                        </View>
+                                    </View>
 
+                                    {/* ── SIGNUP: TERMS AGREEMENT ── */}
                                     <TouchableOpacity
-                                        style={s.biometricToggle}
-                                        onPress={() => setEnableBiometrics(b => !b)}
+                                        style={s.termsRow}
+                                        onPress={() => setAgreedToTerms(a => !a)}
                                         activeOpacity={0.8}
                                     >
-                                        <Ionicons
-                                            name="finger-print-outline"
-                                            size={16}
-                                            color={enableBiometrics ? '#00BFA5' : '#64748B'}
-                                        />
-                                        <Text style={[s.biometricTxt, enableBiometrics && { color: '#00BFA5', fontWeight: '700' }]}>
-                                            {t.biometricLogin}
+                                        <View style={[s.checkbox, agreedToTerms && s.checkboxActive]}>
+                                            {agreedToTerms && <Ionicons name="checkmark" size={13} color="#FFFFFF" />}
+                                        </View>
+                                        <Text style={s.termsTxt}>
+                                            {t.termsAgree}
                                         </Text>
                                     </TouchableOpacity>
+
+                                    {/* ── SIGNUP SUBMIT BUTTON (NO ARROW) ── */}
+                                    <TouchableOpacity
+                                        style={[s.primaryBtn, loading && s.primaryBtnDisabled]}
+                                        onPress={handleAuthAction}
+                                        disabled={loading}
+                                        activeOpacity={0.85}
+                                    >
+                                        {loading ? (
+                                            <ActivityIndicator color="#0A192F" size="small" />
+                                        ) : (
+                                            <Text style={s.primaryBtnTxt}>{t.createAccountBtn}</Text>
+                                        )}
+                                    </TouchableOpacity>
+
+                                    {/* ── SOCIAL AUTH DIVIDER ── */}
+                                    <View style={s.dividerWrap}>
+                                        <View style={s.dividerLine} />
+                                        <Text style={s.dividerTxt}>{t.orDivider}</Text>
+                                        <View style={s.dividerLine} />
+                                    </View>
+
+                                    {/* ── FAST SOCIAL LOGINS ── */}
+                                    <View style={s.socialRow}>
+                                        <TouchableOpacity
+                                            style={s.socialBtn}
+                                            onPress={() => handleSocialAuth('Google')}
+                                            activeOpacity={0.8}
+                                        >
+                                            <Ionicons name="logo-google" size={18} color="#EA4335" />
+                                            <Text style={s.socialBtnTxt}>Google</Text>
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity
+                                            style={s.socialBtn}
+                                            onPress={() => handleSocialAuth('Apple')}
+                                            activeOpacity={0.8}
+                                        >
+                                            <Ionicons name="logo-apple" size={18} color="#0F172A" />
+                                            <Text style={s.socialBtnTxt}>Apple</Text>
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    {/* ── SWITCH FOOTER TO SIGN IN ── */}
+                                    <View style={s.switchFooter}>
+                                        <Text style={s.switchFooterTxt}>{t.alreadyHaveAccount}</Text>
+                                        <TouchableOpacity onPress={() => handleSwitchTab(true)} style={{ marginLeft: 6 }}>
+                                            <Text style={s.switchFooterLink}>{t.signIn}</Text>
+                                        </TouchableOpacity>
+                                    </View>
                                 </View>
                             )}
-
-                            {/* ── TERMS AGREEMENT (SIGNUP ONLY) ── */}
-                            {!isLogin && (
-                                <TouchableOpacity
-                                    style={s.termsRow}
-                                    onPress={() => setAgreedToTerms(a => !a)}
-                                    activeOpacity={0.8}
-                                >
-                                    <View style={[s.checkbox, agreedToTerms && s.checkboxActive]}>
-                                        {agreedToTerms && <Ionicons name="checkmark" size={13} color="#FFFFFF" />}
-                                    </View>
-                                    <Text style={s.termsTxt}>
-                                        {t.termsAgree}
-                                    </Text>
-                                </TouchableOpacity>
-                            )}
-
-                            {/* ── SUBMIT PRIMARY ACTION BUTTON ── */}
-                            <TouchableOpacity
-                                style={[s.primaryBtn, loading && s.primaryBtnDisabled]}
-                                onPress={handleAuthAction}
-                                disabled={loading}
-                                activeOpacity={0.85}
-                            >
-                                {loading ? (
-                                    <ActivityIndicator color="#0A192F" size="small" />
-                                ) : (
-                                    <View style={s.primaryBtnInner}>
-                                        <Text style={s.primaryBtnTxt}>
-                                            {isLogin ? t.signInBtn : t.continueBtn}
-                                        </Text>
-                                        <Ionicons name="arrow-forward" size={18} color="#0A192F" />
-                                    </View>
-                                )}
-                            </TouchableOpacity>
-
-                            {/* ── SOCIAL AUTH DIVIDER ── */}
-                            <View style={s.dividerWrap}>
-                                <View style={s.dividerLine} />
-                                <Text style={s.dividerTxt}>{t.orDivider}</Text>
-                                <View style={s.dividerLine} />
-                            </View>
-
-                            {/* ── FAST SOCIAL LOGINS ── */}
-                            <View style={s.socialRow}>
-                                <TouchableOpacity
-                                    style={s.socialBtn}
-                                    onPress={() => handleSocialAuth('Google')}
-                                    activeOpacity={0.8}
-                                >
-                                    <Ionicons name="logo-google" size={18} color="#EA4335" />
-                                    <Text style={s.socialBtnTxt}>Google</Text>
-                                </TouchableOpacity>
-
-                                <TouchableOpacity
-                                    style={s.socialBtn}
-                                    onPress={() => handleSocialAuth('Apple')}
-                                    activeOpacity={0.8}
-                                >
-                                    <Ionicons name="logo-apple" size={18} color="#0F172A" />
-                                    <Text style={s.socialBtnTxt}>Apple</Text>
-                                </TouchableOpacity>
-                            </View>
-
-                            {/* ── SWITCH FOOTER ── */}
-                            <View style={s.switchFooter}>
-                                <Text style={s.switchFooterTxt}>
-                                    {isLogin ? t.dontHaveAccount : t.alreadyHaveAccount}
-                                </Text>
-                                <TouchableOpacity onPress={() => handleSwitchTab(!isLogin)} style={{ marginLeft: 6 }}>
-                                    <Text style={s.switchFooterLink}>
-                                        {isLogin ? t.createAccount : t.signIn}
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
                         </View>
                     ) : (
                         /* ── OTP 6-DIGIT VERIFICATION VIEW ── */
@@ -1005,10 +1063,7 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
                                 {loading ? (
                                     <ActivityIndicator color="#0A192F" size="small" />
                                 ) : (
-                                    <View style={s.primaryBtnInner}>
-                                        <Text style={s.primaryBtnTxt}>{t.verifyBtn}</Text>
-                                        <Ionicons name="checkmark-circle" size={18} color="#0A192F" />
-                                    </View>
+                                    <Text style={s.primaryBtnTxt}>{t.verifyBtn}</Text>
                                 )}
                             </TouchableOpacity>
 
@@ -1165,22 +1220,6 @@ const s = StyleSheet.create({
         fontWeight: '900',
         color: '#00D2FF',
     },
-    guestChip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 3,
-        paddingHorizontal: 9,
-        paddingVertical: 5,
-        backgroundColor: 'rgba(245, 158, 11, 0.12)',
-        borderWidth: 1,
-        borderColor: 'rgba(245, 158, 11, 0.3)',
-        borderRadius: 10,
-    },
-    guestChipTxt: {
-        fontSize: 10,
-        fontWeight: '800',
-        color: '#F59E0B',
-    },
     heroBanner: {
         borderRadius: 24,
         padding: 20,
@@ -1290,30 +1329,29 @@ const s = StyleSheet.create({
     segmentedContainer: {
         flexDirection: 'row',
         backgroundColor: '#F1F5F9',
-        borderRadius: 16,
+        borderRadius: 18,
         padding: 4,
-        position: 'relative',
-        marginBottom: 16,
-        height: 48,
-    },
-    activeIndicator: {
-        position: 'absolute',
-        top: 4,
-        bottom: 4,
-        backgroundColor: '#F59E0B',
-        borderRadius: 12,
-        shadowColor: '#F59E0B',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-        elevation: 3,
+        marginBottom: 18,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        alignItems: 'center',
     },
     segmentedBtn: {
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 1,
+        paddingVertical: 11,
+        borderRadius: 14,
+        backgroundColor: 'transparent',
+    },
+    segmentedBtnActive: {
+        backgroundColor: '#F59E0B',
+        shadowColor: '#F59E0B',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.28,
+        shadowRadius: 5,
+        elevation: 3,
     },
     segmentedTxt: {
         fontSize: 13,
