@@ -1,6 +1,15 @@
 import 'react-native-gesture-handler';
-import { LogBox } from 'react-native';
+import { LogBox, Text, TextInput } from 'react-native';
 import React, { useState, useEffect } from 'react';
+
+// Kwata-kwata kange zoom da canza girman rubutu a dukkan manhajar mobile
+if (Text.defaultProps == null) Text.defaultProps = {};
+Text.defaultProps.allowFontScaling = false;
+Text.defaultProps.maxFontSizeMultiplier = 1;
+
+if (TextInput.defaultProps == null) TextInput.defaultProps = {};
+TextInput.defaultProps.allowFontScaling = false;
+TextInput.defaultProps.maxFontSizeMultiplier = 1;
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { AppSettingsProvider } from './src/context/AppSettingsContext';
