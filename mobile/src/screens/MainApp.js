@@ -22,6 +22,8 @@ import { AboutPage } from './AboutPage';
 import { PAGE_CONTENT } from '../data/pageContent';
 import { supabase } from '../lib/supabase';
 import { WalletPage } from './WalletPage';
+import { CategoriesPage } from './CategoriesPage';
+import { StoresPage } from './StoresPage';
 
 export const MainApp = ({ route, navigation, user, onLogout, cartLines, onUpdateQty, onRemoveCart, onAddToCart, onClearCart, onOpenVendorRegister, onOpenAdmin, onOpenVendor, onUpdateUser }) => {
     const [activeTab, setActiveTab] = useState('home');
@@ -113,8 +115,25 @@ export const MainApp = ({ route, navigation, user, onLogout, cartLines, onUpdate
                 {activeTab === 'about' && <AboutPage onBack={() => setActiveTab('profile')} />}
 
 
+                {activeTab === 'categories' && (
+                    <CategoriesPage
+                        onSelectCategory={(slug) => {
+                            handleNavigate('shop', { category: slug });
+                        }}
+                        onGoToCart={() => setActiveTab('cart')}
+                        cartCount={cartLines.length}
+                    />
+                )}
+                {activeTab === 'stores' && (
+                    <StoresPage
+                        onGoToCart={() => setActiveTab('cart')}
+                        onGoToNotifications={() => setActiveTab('notifications')}
+                        cartCount={cartLines.length}
+                        onProductClick={(product) => handleNavigate('ProductDetails', { product })}
+                    />
+                )}
                 {/* Fallback for Footer Pages */}
-                {!['home', 'shop', 'cart', 'wishlist', 'profile', 'orders', 'settings', 'editProfile', 'changePassword', 'address', 'paymentMethods', 'notifications', 'productDetails', 'wallet', 'referral', 'ReferAndEarn', 'support', 'about'].includes(activeTab) && (
+                {!['home', 'shop', 'cart', 'wishlist', 'categories', 'stores', 'profile', 'orders', 'settings', 'editProfile', 'changePassword', 'address', 'paymentMethods', 'notifications', 'productDetails', 'wallet', 'referral', 'ReferAndEarn', 'support', 'about'].includes(activeTab) && (
                     <InfoPage
                         title={activeTab}
                         content={PAGE_CONTENT[activeTab] || `Content for ${activeTab} is coming soon.`}

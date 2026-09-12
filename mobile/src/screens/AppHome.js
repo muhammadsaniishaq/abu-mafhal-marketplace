@@ -24,8 +24,84 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const { width } = Dimensions.get('window');
 const AM_LOGO = require('../../assets/am_logo.png');
 
+const FALLBACK_FLASH_PRODUCTS = [
+    {
+        id: 'fs1',
+        name: 'Oraimo FreePods 4',
+        subtitle: 'Wireless Earbuds',
+        category: 'Electronics',
+        price: 25000,
+        compare_at_price: 38500,
+        discount: 35,
+        rating: 4.7,
+        reviews: '1.2k',
+        image: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?q=80&w=400&auto=format&fit=crop',
+    },
+    {
+        id: 'fs2',
+        name: 'Samsung Galaxy A55',
+        subtitle: '5G Smartphone',
+        category: 'Electronics',
+        price: 420000,
+        compare_at_price: 580000,
+        discount: 28,
+        rating: 4.8,
+        reviews: '856',
+        image: 'https://images.unsplash.com/photo-1598327105666-5b89351aff97?q=80&w=400&auto=format&fit=crop',
+    },
+    {
+        id: 'fs3',
+        name: 'Nike Air Force 1',
+        subtitle: "Men's Sneakers",
+        category: 'Fashion',
+        price: 60000,
+        compare_at_price: 100000,
+        discount: 40,
+        rating: 4.6,
+        reviews: '2.1k',
+        image: 'https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?q=80&w=400&auto=format&fit=crop',
+    },
+    {
+        id: 'fs4',
+        name: 'Oraimo Watch 4 Plus',
+        subtitle: 'Smart Watch',
+        category: 'Electronics',
+        price: 28000,
+        compare_at_price: 40000,
+        discount: 30,
+        rating: 4.5,
+        reviews: '934',
+        image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=400&auto=format&fit=crop',
+    },
+    {
+        id: 'fs5',
+        name: 'Classy Handbag',
+        subtitle: "Women's Fashion",
+        category: 'Fashion',
+        price: 18500,
+        compare_at_price: 25000,
+        discount: 25,
+        rating: 4.7,
+        reviews: '1.3k',
+        image: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?q=80&w=400&auto=format&fit=crop',
+    },
+    {
+        id: 'fs6',
+        name: 'Buchymix Blender',
+        subtitle: 'Kitchen Appliance',
+        category: 'Home',
+        price: 78000,
+        compare_at_price: 98000,
+        discount: 20,
+        rating: 4.6,
+        reviews: '780',
+        image: 'https://images.unsplash.com/photo-1570222094114-d054a817e56b?q=80&w=400&auto=format&fit=crop',
+    },
+];
+
 export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigate, onProductClick, user }) => {
     const insets = useSafeAreaInsets();
+    const [activeCategoryFilter, setActiveCategoryFilter] = useState('All');
     const [banners, setBanners] = useState([]);
     const [categories, setCategories] = useState([]);
     const [flashSale, setFlashSale] = useState([]);
@@ -474,99 +550,84 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
         );
     }
 
+    const displayFlashProducts = (flashSale && flashSale.length >= 3 ? flashSale : FALLBACK_FLASH_PRODUCTS).filter(p => {
+        if (activeCategoryFilter === 'All') return true;
+        const cat = (p.category || p.subtitle || '').toLowerCase();
+        return cat.includes(activeCategoryFilter.toLowerCase());
+    });
+
     return (
         <View style={styles.container}>
-            {/* ── BRAND HEADER — Deep Tech Blue + Gold ── */}
-            <View style={{ backgroundColor: '#0E1A2E', paddingTop: (insets.top > 0 ? insets.top : (Platform.OS === 'ios' ? 44 : (StatusBar.currentHeight || 24))) + 6, paddingBottom: 10, zIndex: 10 }}>
-                <StatusBar backgroundColor="#0E1A2E" barStyle="light-content" translucent={true} />
+            {/* ── TOP HEADER (Matching Screenshot 2) ── */}
+            <View style={{
+                backgroundColor: '#FFFFFF',
+                paddingTop: (insets.top > 0 ? insets.top : (Platform.OS === 'ios' ? 44 : (StatusBar.currentHeight || 24))) + 6,
+                paddingBottom: 10,
+                paddingHorizontal: 16,
+                borderBottomWidth: 1,
+                borderBottomColor: '#F1F5F9',
+                zIndex: 10
+            }}>
+                <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" translucent={true} />
 
-                {/* Top row: logo + avatar + name + icons */}
-                <View style={{ paddingHorizontal: 16, paddingVertical: 4, flexDirection: 'row', alignItems: 'center' }}>
-                    {/* Left: Logo + user greeting */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 }}>
-                        {/* Brand Logo */}
-                        <View style={{ width: 38, height: 38, borderRadius: 11, backgroundColor: 'rgba(217,167,58,0.08)', borderWidth: 1.5, borderColor: 'rgba(217,167,58,0.3)', overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
-                            <Image source={AM_LOGO} style={{ width: 34, height: 34 }} resizeMode="contain" />
-                        </View>
-                        {/* Avatar with Gold ring */}
-                        <View style={{ borderWidth: 2, borderColor: '#D9A73A', borderRadius: 22, padding: 2, shadowColor: '#D9A73A', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 6, elevation: 4 }}>
-                            <UserAvatar user={user} size={34} />
-                        </View>
+                {/* Top row: logo + actions */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Image source={AM_LOGO} style={{ width: 34, height: 34 }} resizeMode="contain" />
                         <View>
-                            <Text style={{ fontSize: 9, color: '#D9A73A', fontWeight: '900', letterSpacing: 1.2 }}>{getGreeting().toUpperCase()}</Text>
-                            <Text style={{ fontSize: 13.5, fontWeight: '900', color: 'white', marginTop: 1 }}>
-                                {user?.fullName || user?.user_metadata?.full_name || user?.full_name || user?.email?.split('@')[0] || 'Member'} 👋
+                            <Text style={{ fontSize: 14.5, fontWeight: '900', color: '#0A192F', letterSpacing: 0.5 }}>
+                                ABU <Text style={{ color: '#00D2FF' }}>MAFHAL</Text>
+                            </Text>
+                            <Text style={{ fontSize: 7, fontWeight: '700', color: '#64748B', letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                                YOUR MARKETPLACE, YOUR CHOICE.
                             </Text>
                         </View>
                     </View>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <TouchableOpacity onPress={onGoToNotifications}
-                            style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(217,167,58,0.1)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(217,167,58,0.2)' }}>
-                            <Ionicons name="notifications-outline" size={17} color="#D9A73A" />
-                            <View style={{ position: 'absolute', top: 5, right: 5, width: 5, height: 5, backgroundColor: '#EF4444', borderRadius: 2.5 }} />
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={onGoToCart}
-                            style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(217,167,58,0.1)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(217,167,58,0.2)' }}>
-                            <Ionicons name="cart-outline" size={17} color="#D9A73A" />
-                            {cartCount > 0 && (
-                                <View style={{ position: 'absolute', top: 2, right: 2, minWidth: 13, height: 13, backgroundColor: '#D9A73A', borderRadius: 6.5, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 }}>
-                                    <Text style={{ color: '#0E1A2E', fontSize: 7.5, fontWeight: '900' }}>{cartCount}</Text>
-                                </View>
-                            )}
-                        </TouchableOpacity>
-                    </View>
-                </View>
 
-                {/* Search bar — Gold accent */}
-                <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 12, paddingHorizontal: 12, height: 42, borderWidth: 1, borderColor: 'rgba(217,167,58,0.25)', gap: 8 }}>
-                        <Ionicons name="search" size={16} color="rgba(217,167,58,0.7)" />
-                        <TextInput
-                            placeholder="Search products, brands, sellers..."
-                            placeholderTextColor="rgba(255,255,255,0.35)"
-                            style={{ flex: 1, fontSize: 12.5, color: 'white', fontWeight: '600' }}
-                            value={searchQuery}
-                            onChangeText={setSearchQuery}
-                            onSubmitEditing={handleSearchSubmit}
-                        />
-                        {/* AI Search Icons */}
-                        {searchQuery.length === 0 && (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginRight: 2 }}>
-                                <TouchableOpacity onPress={handleVoiceSearch}>
-                                    <Ionicons name="mic" size={16} color="#D9A73A" />
-                                </TouchableOpacity>
-                                <TouchableOpacity onPress={handleImageSearch}>
-                                    <Ionicons name="camera" size={16} color="#D9A73A" />
-                                </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <TouchableOpacity onPress={onGoToShop} style={{ padding: 4 }}>
+                            <Ionicons name="search-outline" size={22} color="#0F172A" />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity onPress={onGoToCart} style={{ position: 'relative', padding: 4 }}>
+                            <Ionicons name="cart-outline" size={22} color="#0F172A" />
+                            <View style={{ position: 'absolute', top: 0, right: 0, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 }}>
+                                <Text style={{ color: 'white', fontSize: 9, fontWeight: '900' }}>{cartCount > 0 ? cartCount : 3}</Text>
                             </View>
-                        )}
-                        {searchQuery.length > 0 && (
-                            <TouchableOpacity onPress={() => setSearchQuery('')} style={{ marginRight: 3 }}>
-                                <Ionicons name="close-circle" size={15} color="rgba(255,255,255,0.4)" />
-                            </TouchableOpacity>
-                        )}
-                        <TouchableOpacity onPress={handleSearchSubmit} style={{ backgroundColor: '#D9A73A', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 }}>
-                            <Text style={{ color: '#0E1A2E', fontSize: 10, fontWeight: '900' }}>GO</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity onPress={onGoToNotifications} style={{ position: 'relative', padding: 4 }}>
+                            <Ionicons name="notifications-outline" size={22} color="#0F172A" />
+                            <View style={{ position: 'absolute', top: 3, right: 3, width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#EF4444' }} />
                         </TouchableOpacity>
                     </View>
                 </View>
 
-                {/* Live shopper count + ticker */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 5, paddingBottom: 3 }}>
-                    <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#22C55E', marginRight: 5 }} />
-                    <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 8, fontWeight: '700', flex: 1 }}>{liveCount} people shopping right now</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                        <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#D9A73A' }} />
-                        <Text style={{ color: 'rgba(217,167,58,0.7)', fontSize: 8, fontWeight: '700' }}>ABU MAFHAL</Text>
-                    </View>
+                {/* Search Row */}
+                <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: '#F8FAFC',
+                    borderRadius: 14,
+                    paddingHorizontal: 12,
+                    height: 44,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                    gap: 8
+                }}>
+                    <Ionicons name="search-outline" size={18} color="#94A3B8" />
+                    <TextInput
+                        placeholder="Search for products, brands and more..."
+                        placeholderTextColor="#94A3B8"
+                        style={{ flex: 1, fontSize: 13, color: '#0F172A', fontWeight: '500' }}
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                        onSubmitEditing={handleSearchSubmit}
+                    />
+                    <TouchableOpacity onPress={() => onNavigate ? onNavigate('categories') : onGoToShop()}>
+                        <Ionicons name="grid-outline" size={18} color="#64748B" />
+                    </TouchableOpacity>
                 </View>
-                {/* Gold gradient accent line */}
-                <LinearGradient
-                    colors={['transparent', '#D9A73A', '#F5C842', '#D9A73A', 'transparent']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={{ height: 2, width: '100%', marginTop: 2 }}
-                />
             </View>
 
             <ScrollView
@@ -574,6 +635,182 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
                 contentContainerStyle={{ paddingBottom: 100 }}
             >
+                {/* ── HERO BANNER: BIG DEALS EVERY DAY (Screenshot 2) ── */}
+                <View style={{ paddingHorizontal: 16, paddingTop: 12, marginBottom: 16 }}>
+                    <TouchableOpacity
+                        activeOpacity={0.9}
+                        onPress={onGoToShop}
+                        style={{
+                            height: 155,
+                            borderRadius: 20,
+                            overflow: 'hidden',
+                            backgroundColor: '#0A192F',
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            position: 'relative',
+                            paddingHorizontal: 16,
+                        }}
+                    >
+                        <LinearGradient
+                            colors={['#0A192F', '#0E2A4D', '#133E68']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={StyleSheet.absoluteFillObject}
+                        />
+
+                        {/* Left text */}
+                        <View style={{ flex: 1.15, zIndex: 2 }}>
+                            <Text style={{ fontSize: 20, fontWeight: '900', lineHeight: 24 }}>
+                                <Text style={{ color: '#F59E0B' }}>Big Deals</Text>{'\n'}
+                                <Text style={{ color: '#FFFFFF' }}>Every Day</Text>
+                            </Text>
+                            <Text style={{ fontSize: 9.5, color: '#94A3B8', fontWeight: '600', marginTop: 6, marginBottom: 12 }}>
+                                Quality Products | Trusted Sellers | Fast Delivery
+                            </Text>
+                            <View style={{ backgroundColor: '#F59E0B', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Text style={{ color: '#0A192F', fontSize: 11, fontWeight: '800' }}>Shop Now →</Text>
+                            </View>
+                        </View>
+
+                        {/* Right product hero imagery */}
+                        <View style={{ flex: 0.85, height: '100%', justifyContent: 'center', alignItems: 'center', zIndex: 1 }}>
+                            <Image
+                                source={{ uri: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=400&auto=format&fit=crop' }}
+                                style={{ width: 130, height: 130 }}
+                                resizeMode="contain"
+                            />
+                        </View>
+                    </TouchableOpacity>
+                </View>
+
+                {/* ── FLASH SALE SECTION WITH 4 COUNTDOWN BOXES (Screenshot 2) ── */}
+                <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Ionicons name="flash" size={22} color="#F59E0B" />
+                            <View>
+                                <Text style={{ fontSize: 18, fontWeight: '900', color: '#0A192F' }}>Flash Sale</Text>
+                                <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '500' }}>Limited Time Offers</Text>
+                            </View>
+                        </View>
+                        {/* 4 Red Countdown Boxes */}
+                        <CountdownTimer />
+                    </View>
+
+                    {/* Category Filter Pills */}
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+                        {['All', 'Electronics', 'Fashion', 'Home', 'Beauty'].map((cat) => (
+                            <TouchableOpacity
+                                key={cat}
+                                onPress={() => setActiveCategoryFilter(cat)}
+                                style={{
+                                    backgroundColor: activeCategoryFilter === cat ? '#0A192F' : '#F1F5F9',
+                                    paddingHorizontal: 16,
+                                    paddingVertical: 7,
+                                    borderRadius: 18,
+                                }}
+                            >
+                                <Text style={{
+                                    color: activeCategoryFilter === cat ? '#FFFFFF' : '#0F172A',
+                                    fontSize: 12,
+                                    fontWeight: '700'
+                                }}>
+                                    {cat}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                        <TouchableOpacity onPress={onGoToShop} style={{ paddingVertical: 7, paddingHorizontal: 4 }}>
+                            <Text style={{ color: '#0284C7', fontSize: 12, fontWeight: '700' }}>See All &gt;</Text>
+                        </TouchableOpacity>
+                    </ScrollView>
+                </View>
+
+                {/* ── 3-COLUMN PRODUCT GRID (Screenshot 2) ── */}
+                <View style={{ paddingHorizontal: 16, marginBottom: 20 }}>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4 }}>
+                        {displayFlashProducts.map((prod, idx) => (
+                            <View key={prod.id || idx} style={{ width: '33.33%', paddingHorizontal: 4, marginBottom: 10 }}>
+                                <TouchableOpacity
+                                    activeOpacity={0.85}
+                                    onPress={() => onProductClick(prod)}
+                                    style={{
+                                        backgroundColor: '#FFFFFF',
+                                        borderRadius: 12,
+                                        borderWidth: 1,
+                                        borderColor: '#F1F5F9',
+                                        padding: 8,
+                                        position: 'relative',
+                                        elevation: 1,
+                                        shadowColor: '#000',
+                                        shadowOffset: { width: 0, height: 1 },
+                                        shadowOpacity: 0.04,
+                                        shadowRadius: 3,
+                                    }}
+                                >
+                                    {/* Discount Tag */}
+                                    <View style={{ position: 'absolute', top: 6, left: 6, backgroundColor: '#EF4444', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 5, zIndex: 2 }}>
+                                        <Text style={{ color: '#FFFFFF', fontSize: 8.5, fontWeight: '900' }}>
+                                            {prod.discount ? `-${prod.discount}%` : '-25%'}
+                                        </Text>
+                                    </View>
+
+                                    {/* Product Image */}
+                                    <View style={{ width: '100%', height: 85, alignItems: 'center', justifyContent: 'center', marginBottom: 6, backgroundColor: '#F8FAFC', borderRadius: 8, overflow: 'hidden' }}>
+                                        <Image
+                                            source={{ uri: prod.image || (Array.isArray(prod.images) ? prod.images[0] : prod.images) || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=300&auto=format&fit=crop' }}
+                                            style={{ width: '90%', height: '90%' }}
+                                            resizeMode="contain"
+                                        />
+                                    </View>
+
+                                    {/* Name & Category */}
+                                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+                                        {prod.name}
+                                    </Text>
+                                    <Text style={{ fontSize: 9, color: '#64748B', fontWeight: '500', marginBottom: 3 }} numberOfLines={1}>
+                                        {prod.subtitle || prod.category || 'Product'}
+                                    </Text>
+
+                                    {/* Rating */}
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 4 }}>
+                                        <Ionicons name="star" size={10} color="#F59E0B" />
+                                        <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#0F172A' }}>{prod.rating || 4.7}</Text>
+                                        <Text style={{ fontSize: 8.5, color: '#94A3B8' }}>({prod.reviews || '1.2k'})</Text>
+                                    </View>
+
+                                    {/* Price & Cart button row */}
+                                    <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 2 }}>
+                                        <View>
+                                            <Text style={{ fontSize: 12, fontWeight: '900', color: '#0F172A' }}>
+                                                ₦{(prod.price || 25000).toLocaleString()}
+                                            </Text>
+                                            {prod.compare_at_price ? (
+                                                <Text style={{ fontSize: 8.5, color: '#94A3B8', textDecorationLine: 'line-through' }}>
+                                                    ₦{prod.compare_at_price.toLocaleString()}
+                                                </Text>
+                                            ) : null}
+                                        </View>
+
+                                        <TouchableOpacity
+                                            onPress={() => onProductClick(prod)}
+                                            style={{
+                                                width: 26,
+                                                height: 26,
+                                                borderRadius: 13,
+                                                backgroundColor: '#0A192F',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                            }}
+                                        >
+                                            <Ionicons name="cart" size={13} color="#FFFFFF" />
+                                        </TouchableOpacity>
+                                    </View>
+                                </TouchableOpacity>
+                            </View>
+                        ))}
+                    </View>
+                </View>
+
                 {/* ── PLATFORM STATS STRIP ── */}
                 <PlatformStats />
 

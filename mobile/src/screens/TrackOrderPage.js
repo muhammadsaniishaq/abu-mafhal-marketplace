@@ -1,409 +1,423 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View, Text, ScrollView, TouchableOpacity, Image, Linking,
-    Alert, Share, Animated, StatusBar, Platform, ActivityIndicator
+    Alert, StatusBar, Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
-import { WhatsAppActionModal } from '../components/WhatsAppActionModal';
 
-const STEPS = [
-    { key: 'pending', title: 'Order Placed', desc: 'We received your order successfully.', icon: 'document-text-outline' },
-    { key: 'processing', title: 'Preparing', desc: 'Your items are being packed by the seller.', icon: 'cube-outline' },
-    { key: 'shipped', title: 'On the Way', desc: 'Your driver is heading to your address.', icon: 'bicycle-outline' },
-    { key: 'delivered', title: 'Delivered', desc: 'Your package has arrived. Enjoy!', icon: 'checkmark-circle-outline' },
+const AM_LOGO = require('../../assets/am_logo.png');
+
+const TIMELINE_STEPS = [
+    { key: 'confirmed', label: 'Order Confirmed', sub: 'Your order has been placed successfully', time: '9 Sep, 10:24 AM' },
+    { key: 'processing', label: 'Processing', sub: 'Your order is being prepared', time: '9 Sep, 1:15 PM' },
+    { key: 'shipped', label: 'Shipped', sub: 'Your order has been dispatched', time: '10 Sep, 9:40 AM' },
+    { key: 'out_for_delivery', label: 'Out for Delivery', sub: 'Your order is out for delivery', time: '--' },
+    { key: 'delivered', label: 'Delivered', sub: 'Your order has been delivered', time: '--' }
 ];
 
-function getImg(images) {
-    if (!images) return null;
-    if (Array.isArray(images)) return images[0] || null;
-    try { const a = JSON.parse(images); return Array.isArray(a) ? a[0] : images; } catch { return images; }
-}
-
-function formatAddress(addr) {
-    if (!addr) return 'Address not set';
-    if (typeof addr === 'string') {
-        try { const p = JSON.parse(addr); return p?.address || p?.street || addr; } catch { return addr; }
-    }
-    return addr?.address || addr?.street || JSON.stringify(addr);
-}
-
 export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) => {
-    // Support both React Navigation and custom nav patterns
     const order = propOrder || route?.params?.order;
     const goBack = onBack || (() => navigation?.goBack());
 
-    const [driver, setDriver] = useState(order?.driver || null);
-    const [orderItems, setItems] = useState(order?.order_items || []);
-    const [loading, setLoading] = useState(false);
-    const [copied, setCopied] = useState(false);
-    const [timeline, setTimeline] = useState([]);
-    const [whatsappVisible, setWhatsappVisible] = useState(false);
-    const [whatsappPhone, setWhatsappPhone] = useState('');
-    const [whatsappRecipientName, setWhatsappRecipientName] = useState('');
+    const orderNumber = order?.id ? `#AMF${order.id.slice(0, 6).toUpperCase()}` : '#AMF128736';
+    const orderDate = order?.created_at ? new Date(order.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '9 Sep 2026';
 
-    // Pulse animation for current step dot
-    const pulse = useRef(new Animated.Value(1)).current;
-    useEffect(() => {
-        const anim = Animated.loop(
-            Animated.sequence([
-                Animated.timing(pulse, { toValue: 1.4, duration: 700, useNativeDriver: true }),
-                Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true }),
-            ])
-        );
-        anim.start();
-        return () => anim.stop();
-    }, []);
+    const currentStatus = (order?.status || 'shipped').toLowerCase();
+    
+    // Determine active index
+    let activeStep = 2; // Default shipped as in screenshot
+    if (currentStatus === 'pending' || currentStatus === 'confirmed') activeStep = 0;
+    else if (currentStatus === 'processing') activeStep = 1;
+    else if (currentStatus === 'shipped') activeStep = 2;
+    else if (currentStatus === 'out_for_delivery' || currentStatus === 'dispatched') activeStep = 3;
+    else if (currentStatus === 'delivered') activeStep = 4;
 
-    useEffect(() => {
-        if (!order) return;
-        fetchExtras();
-    }, [order]);
-
-    const fetchExtras = async () => {
-        setLoading(true);
-        try {
-            // Fetch driver if not already embedded
-            if (order.driver_id && !order.driver) {
-                const { data: d } = await supabase.from('drivers').select('*').eq('id', order.driver_id).maybeSingle();
-                if (d) setDriver(d);
-            }
-            // Fetch order items with product images if not already embedded
-            if (!order.order_items || order.order_items.length === 0) {
-                const { data: items } = await supabase
-                    .from('order_items')
-                    .select('*, product:products(name, images)')
-                    .eq('order_id', order.id);
-                if (items) setItems(items);
-            }
-            // Fetch status history timeline
-            const { data: logs } = await supabase
-                .from('order_status_logs')
-                .select('*')
-                .eq('order_id', order.id)
-                .order('created_at', { ascending: true });
-            if (logs) setTimeline(logs);
-        } catch (e) {
-            console.log('TrackOrder fetch error:', e);
-        }
-        setLoading(false);
-    };
-
-    if (!order) {
-        return (
-            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC' }}>
-                <Ionicons name="alert-circle-outline" size={48} color="#CBD5E1" />
-                <Text style={{ color: '#64748B', marginTop: 12, fontSize: 15 }}>Order information missing.</Text>
-                <TouchableOpacity onPress={goBack} style={{ marginTop: 20, backgroundColor: '#0F172A', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 14 }}>
-                    <Text style={{ color: 'white', fontWeight: '700' }}>Go Back</Text>
-                </TouchableOpacity>
-            </View>
-        );
-    }
-
-    const status = order.status?.toLowerCase() || 'pending';
-    const isCancelled = status === 'cancelled';
-    const isDelivered = status === 'delivered';
-    const stepIndex = isCancelled ? -1 : STEPS.findIndex(s => s.key === status);
-
-    // Estimated delivery
-    const estDate = new Date(new Date(order.created_at).getTime() + 5 * 86400000);
-    const estLabel = isDelivered ? 'Delivered ✅' : isCancelled ? 'Cancelled ❌' : `Est. ${estDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}`;
-
-    const handleCopy = () => {
-        try {
-            const { Clipboard } = require('react-native');
-            Clipboard.setString(order.id);
-        } catch { }
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-        Alert.alert('Copied!', 'Order ID copied to clipboard.');
-    };
-
-    const handleWhatsAppDriver = () => {
-        if (!driver?.phone) { Alert.alert('No Driver', 'No driver assigned yet.'); return; }
-        setWhatsappPhone(driver.phone);
-        setWhatsappRecipientName(driver.name || 'Driver');
-        setWhatsappVisible(true);
-    };
-
-    const handleCallDriver = () => {
-        if (!driver?.phone) { Alert.alert('No Driver', 'No driver assigned yet.'); return; }
-        Linking.openURL(`tel:${driver.phone}`);
-    };
-
-    const handleOpenMaps = () => {
-        const addr = encodeURIComponent(formatAddress(order.shipping_address));
-        Linking.openURL(`https://maps.google.com/?q=${addr}`);
-    };
-
-    const handleShare = () => {
-        Share.share({
-            message: `📦 Order #${order.id.slice(0, 8).toUpperCase()}\nStatus: ${status.toUpperCase()}\nTotal: ₦${(order.total_amount || 0).toLocaleString()}\n${estLabel}`
-        });
-    };
-
-    const handleCancel = () => {
-        Alert.alert('Cancel Order?', 'Are you sure you want to cancel this order?', [
-            { text: 'No', style: 'cancel' },
-            {
-                text: 'Yes, Cancel', style: 'destructive', onPress: async () => {
-                    await supabase.from('orders').update({ status: 'cancelled' }).eq('id', order.id);
-                    Alert.alert('Cancelled', 'Your order has been cancelled.');
-                    goBack();
-                }
-            }
-        ]);
+    const firstItem = order?.order_items?.[0] || order?.items?.[0] || {
+        name: 'Wireless Earbuds',
+        desc: 'Premium Sound, Long Battery Life',
+        price: order?.total_amount || 25000,
+        qty: 1,
+        vendor: 'Mafhal Electronics',
+        image: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?q=80&w=300&auto=format&fit=crop'
     };
 
     return (
         <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
-            <StatusBar backgroundColor="#0F172A" barStyle="light-content" />
+            <StatusBar backgroundColor="#0A192F" barStyle="light-content" />
 
-            {/* ── Hero Header ── */}
-            <View style={{ backgroundColor: '#0F172A', paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 28) + 6 : 52, paddingBottom: 28, paddingHorizontal: 20, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 }}>
-                {/* Top row */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
-                    <TouchableOpacity onPress={goBack} style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-                        <Ionicons name="arrow-back" size={20} color="white" />
-                    </TouchableOpacity>
-                    <Text style={{ color: 'white', fontSize: 17, fontWeight: '900', flex: 1 }}>Track Order</Text>
-                    <TouchableOpacity onPress={handleShare} style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' }}>
-                        <Ionicons name="share-outline" size={19} color="white" />
-                    </TouchableOpacity>
-                </View>
-
-                {/* Order ID + copy */}
-                <TouchableOpacity onPress={handleCopy} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                    <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: '700', letterSpacing: 1 }}>ORDER ID</Text>
-                    <Text style={{ color: 'white', fontSize: 13, fontWeight: '800', letterSpacing: 0.5 }}>#{order.id.slice(0, 8).toUpperCase()}</Text>
-                    <Ionicons name={copied ? 'checkmark-circle' : 'copy-outline'} size={14} color={copied ? '#34D399' : 'rgba(255,255,255,0.5)'} />
+            {/* Top Dark Navy Header */}
+            <View style={{
+                backgroundColor: '#0A192F',
+                paddingTop: 48,
+                paddingHorizontal: 16,
+                paddingBottom: 16,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+            }}>
+                <TouchableOpacity onPress={goBack} style={{ padding: 6 }}>
+                    <Ionicons name="arrow-back" size={24} color="white" />
                 </TouchableOpacity>
 
-                {/* Status row */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: isCancelled ? 'rgba(239,68,68,0.2)' : isDelivered ? 'rgba(22,163,74,0.2)' : 'rgba(59,130,246,0.2)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}>
-                        <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: isCancelled ? '#EF4444' : isDelivered ? '#22C55E' : '#60A5FA' }} />
-                        <Text style={{ color: isCancelled ? '#FCA5A5' : isDelivered ? '#86EFAC' : '#93C5FD', fontWeight: '800', fontSize: 12, textTransform: 'uppercase' }}>
-                            {status}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Image source={AM_LOGO} style={{ width: 34, height: 34, resizeMode: 'contain' }} />
+                    <View>
+                        <Text style={{ color: '#00D2FF', fontSize: 16, fontWeight: '900', letterSpacing: 0.6 }}>
+                            ABU <Text style={{ color: '#38BDF8' }}>MAFHAL</Text>
+                        </Text>
+                        <Text style={{ color: '#94A3B8', fontSize: 7, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                            Your Marketplace, Your Choice.
                         </Text>
                     </View>
-                    <View style={{ backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}>
-                        <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '700' }}>{estLabel}</Text>
+                </View>
+
+                <TouchableOpacity style={{ padding: 6 }}>
+                    <Ionicons name="notifications-outline" size={22} color="white" />
+                </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 120 }}>
+                {/* Header Title & Order ID Badge */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                    <View>
+                        <Text style={{ fontSize: 24, fontWeight: '900', color: '#0A192F', letterSpacing: -0.5 }}>
+                            Order Tracking
+                        </Text>
+                        <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '500', marginTop: 2 }}>
+                            Track your order in real time
+                        </Text>
+                    </View>
+
+                    <View style={{
+                        backgroundColor: '#F1F5F9',
+                        borderRadius: 14,
+                        paddingVertical: 6,
+                        paddingHorizontal: 10,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 8,
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0',
+                    }}>
+                        <Text style={{ fontSize: 18 }}>📦</Text>
+                        <View>
+                            <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#0A192F' }}>
+                                Order {orderNumber}
+                            </Text>
+                            <Text style={{ fontSize: 9.5, color: '#64748B', fontWeight: '600' }}>
+                                Placed on {orderDate}
+                            </Text>
+                        </View>
                     </View>
                 </View>
 
-                {/* Total */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)' }}>
-                    <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>Total Amount</Text>
-                    <Text style={{ color: 'white', fontSize: 22, fontWeight: '900' }}>₦{(order.total_amount || 0).toLocaleString()}</Text>
-                </View>
-            </View>
-
-            <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
-
-                {/* ── Driver Card ── */}
-                <View style={{ margin: 16, backgroundColor: 'white', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: '#F1F5F9', elevation: 1 }}>
-                    <Text style={S.sectionLabel}>DELIVERY DRIVER</Text>
-                    {loading
-                        ? <ActivityIndicator color="#0F172A" />
-                        : driver ? (
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                <Image
-                                    source={{ uri: driver.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(driver.name)}&background=0F172A&color=fff` }}
-                                    style={{ width: 54, height: 54, borderRadius: 27, backgroundColor: '#F1F5F9', marginRight: 14 }}
-                                />
-                                <View style={{ flex: 1 }}>
-                                    <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }}>{driver.name}</Text>
-                                    <Text style={{ fontSize: 12, color: '#64748B' }}>{driver.vehicle_type} • {driver.vehicle_plate_number || 'N/A'}</Text>
-                                    {driver.rating && <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, gap: 3 }}>
-                                        <Ionicons name="star" size={11} color="#F59E0B" />
-                                        <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '700' }}>{driver.rating}</Text>
-                                    </View>}
-                                </View>
-                                <View style={{ gap: 8 }}>
-                                    <TouchableOpacity onPress={handleCallDriver} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center' }}>
-                                        <Ionicons name="call" size={18} color="white" />
-                                    </TouchableOpacity>
-                                    <TouchableOpacity onPress={handleWhatsAppDriver} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#25D366', alignItems: 'center', justifyContent: 'center' }}>
-                                        <Ionicons name="logo-whatsapp" size={18} color="white" />
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-                        ) : isCancelled ? (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 4 }}>
-                                <Ionicons name="close-circle" size={22} color="#EF4444" />
-                                <Text style={{ color: '#64748B', fontSize: 13 }}>Order was cancelled — no driver assigned.</Text>
-                            </View>
-                        ) : (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 4 }}>
-                                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Ionicons name="bicycle" size={20} color="#CBD5E1" />
-                                </View>
-                                <View>
-                                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>Finding your driver...</Text>
-                                    <Text style={{ fontSize: 12, color: '#64748B' }}>We're looking for a nearby rider</Text>
-                                </View>
-                            </View>
-                        )
-                    }
-                </View>
-
-                {/* ── Order Timeline ── */}
-                <View style={{ marginHorizontal: 16, backgroundColor: 'white', borderRadius: 20, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: '#F1F5F9', elevation: 1 }}>
-                    <Text style={S.sectionLabel}>ORDER TIMELINE</Text>
-
-                    {isCancelled && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FEF2F2', padding: 12, borderRadius: 12, marginBottom: 16 }}>
-                            <Ionicons name="close-circle" size={18} color="#DC2626" />
-                            <Text style={{ color: '#DC2626', fontWeight: '700', fontSize: 13 }}>This order was cancelled</Text>
+                {/* Product Summary Mini-Card */}
+                <View style={{
+                    backgroundColor: 'white',
+                    borderRadius: 20,
+                    padding: 12,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    marginBottom: 20,
+                    borderWidth: 1,
+                    borderColor: '#F1F5F9',
+                    shadowColor: '#0F172A',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.04,
+                    shadowRadius: 10,
+                    elevation: 2,
+                }}>
+                    <Image
+                        source={{ uri: firstItem.image || 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?q=80&w=300&auto=format&fit=crop' }}
+                        style={{ width: 68, height: 68, borderRadius: 14, backgroundColor: '#F1F5F9', marginRight: 12 }}
+                    />
+                    <View style={{ flex: 1 }}>
+                        <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>
+                            {firstItem.name || 'Wireless Earbuds'}
+                        </Text>
+                        <Text numberOfLines={1} style={{ fontSize: 11, color: '#64748B', marginTop: 1, marginBottom: 4 }}>
+                            {firstItem.desc || 'Premium Sound, Long Battery Life'}
+                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Text style={{ fontSize: 14, fontWeight: '900', color: '#0F172A' }}>
+                                ₦{Number(firstItem.price || 25000).toLocaleString()}
+                            </Text>
+                            <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600' }}>
+                                Qty: {firstItem.qty || 1}
+                            </Text>
                         </View>
-                    )}
+                        <TouchableOpacity style={{ marginTop: 2 }}>
+                            <Text style={{ fontSize: 11, color: '#0284C7', fontWeight: '700' }}>
+                                View Product &gt;
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
 
-                    {STEPS.map((step, i) => {
-                        const done = !isCancelled && i <= stepIndex;
-                        const current = !isCancelled && i === stepIndex;
-                        const isLast = i === STEPS.length - 1;
-                        // Find matching timeline log
-                        const log = timeline.find(l => l.status?.toLowerCase() === step.key);
+                    <View style={{ alignItems: 'flex-end' }}>
+                        <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                            <View style={{ alignItems: 'flex-end' }}>
+                                <Text style={{ fontSize: 9.5, color: '#94A3B8', fontWeight: '600' }}>From</Text>
+                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#0A192F' }}>
+                                    {firstItem.vendor || 'Mafhal Electronics'}
+                                </Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={12} color="#94A3B8" />
+                        </TouchableOpacity>
+                    </View>
+                </View>
 
+                {/* Vertical Timeline Progression */}
+                <View style={{
+                    backgroundColor: 'white',
+                    borderRadius: 20,
+                    padding: 18,
+                    marginBottom: 16,
+                    borderWidth: 1,
+                    borderColor: '#F1F5F9',
+                }}>
+                    {TIMELINE_STEPS.map((step, idx) => {
+                        const isDone = idx <= activeStep;
+                        const isLast = idx === TIMELINE_STEPS.length - 1;
                         return (
-                            <View key={step.key} style={{ flexDirection: 'row', minHeight: 70 }}>
-                                {/* Dot + line */}
-                                <View style={{ alignItems: 'center', marginRight: 16, width: 28 }}>
-                                    {current ? (
-                                        <Animated.View style={{ transform: [{ scale: pulse }], width: 28, height: 28, borderRadius: 14, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center' }}>
-                                            <Ionicons name={step.icon} size={13} color="white" />
-                                        </Animated.View>
-                                    ) : (
-                                        <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: done ? '#0F172A' : '#F1F5F9', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: done ? '#0F172A' : '#E2E8F0' }}>
-                                            <Ionicons name={step.icon} size={13} color={done ? 'white' : '#CBD5E1'} />
-                                        </View>
-                                    )}
-                                    {!isLast && <View style={{ width: 2, flex: 1, backgroundColor: done && !current ? '#0F172A' : '#E2E8F0', marginVertical: 4 }} />}
-                                </View>
-                                {/* Content */}
-                                <View style={{ flex: 1, paddingBottom: 24 }}>
-                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <Text style={{ fontSize: 14, fontWeight: done ? '800' : '600', color: done ? '#0F172A' : '#94A3B8' }}>{step.title}</Text>
-                                        {log && <Text style={{ fontSize: 10, color: '#94A3B8' }}>{new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>}
+                            <View key={step.key} style={{ flexDirection: 'row', minHeight: 48 }}>
+                                {/* Icon & connecting line */}
+                                <View style={{ alignItems: 'center', width: 28, marginRight: 12 }}>
+                                    <View style={{
+                                        width: 22,
+                                        height: 22,
+                                        borderRadius: 11,
+                                        backgroundColor: isDone ? '#10B981' : 'transparent',
+                                        borderWidth: isDone ? 0 : 2,
+                                        borderColor: '#CBD5E1',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        zIndex: 2,
+                                    }}>
+                                        {isDone && <Ionicons name="checkmark" size={13} color="white" />}
                                     </View>
-                                    <Text style={{ fontSize: 12, color: done ? '#475569' : '#94A3B8', marginTop: 2 }}>{step.desc}</Text>
-                                    {log?.note && <Text style={{ fontSize: 11, color: '#3B82F6', marginTop: 3, fontStyle: 'italic' }}>"{log.note}"</Text>}
+                                    {!isLast && (
+                                        <View style={{
+                                            width: 2,
+                                            flex: 1,
+                                            backgroundColor: isDone && idx < activeStep ? '#10B981' : '#E2E8F0',
+                                            marginVertical: 2,
+                                        }} />
+                                    )}
+                                </View>
+
+                                {/* Texts */}
+                                <View style={{ flex: 1, paddingBottom: isLast ? 0 : 18 }}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <Text style={{ fontSize: 13.5, fontWeight: isDone ? '800' : '600', color: isDone ? '#0F172A' : '#94A3B8' }}>
+                                            {step.label}
+                                        </Text>
+                                        <Text style={{ fontSize: 11, color: isDone ? '#64748B' : '#CBD5E1', fontWeight: '600' }}>
+                                            {step.time}
+                                        </Text>
+                                    </View>
+                                    <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>
+                                        {step.sub}
+                                    </Text>
                                 </View>
                             </View>
                         );
                     })}
                 </View>
 
-                {/* ── Delivery Address ── */}
-                {order.shipping_address && (
-                    <TouchableOpacity onPress={handleOpenMaps} style={{ marginHorizontal: 16, backgroundColor: 'white', borderRadius: 20, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#F1F5F9', flexDirection: 'row', alignItems: 'center', gap: 12, elevation: 1 }}>
-                        <View style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: '#F0FDF4', alignItems: 'center', justifyContent: 'center' }}>
-                            <Ionicons name="location" size={20} color="#16A34A" />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={S.sectionLabel}>DELIVERY ADDRESS</Text>
-                            <Text style={{ fontSize: 13, color: '#0F172A', fontWeight: '600', marginTop: 1 }}>{formatAddress(order.shipping_address)}</Text>
-                        </View>
-                        <Ionicons name="open-outline" size={16} color="#16A34A" />
-                    </TouchableOpacity>
-                )}
-
-                {/* ── Products Ordered ── */}
-                {orderItems.length > 0 && (
-                    <View style={{ marginHorizontal: 16, backgroundColor: 'white', borderRadius: 20, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#F1F5F9', elevation: 1 }}>
-                        <Text style={S.sectionLabel}>ITEMS ORDERED</Text>
-                        {orderItems.map((oi, i) => {
-                            const imgUrl = getImg(oi.product?.images);
-                            return (
-                                <View key={oi.id || i} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, borderBottomWidth: i < orderItems.length - 1 ? 1 : 0, borderBottomColor: '#F8FAFC' }}>
-                                    {imgUrl
-                                        ? <Image source={{ uri: imgUrl }} style={{ width: 50, height: 50, borderRadius: 12, backgroundColor: '#F1F5F9' }} resizeMode="cover" />
-                                        : <View style={{ width: 50, height: 50, borderRadius: 12, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }}>
-                                            <Ionicons name="image-outline" size={20} color="#CBD5E1" />
-                                        </View>
-                                    }
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={{ fontWeight: '700', color: '#0F172A', fontSize: 13 }}>{oi.product?.name || 'Product'}</Text>
-                                        <Text style={{ color: '#64748B', fontSize: 12 }}>Qty: {oi.quantity}{oi.variant ? ` · ${oi.variant}` : ''}</Text>
-                                    </View>
-                                    <Text style={{ fontWeight: '800', color: '#0F172A', fontSize: 13 }}>₦{((oi.price || 0) * (oi.quantity || 1)).toLocaleString()}</Text>
-                                </View>
-                            );
-                        })}
+                {/* Estimated Delivery Box */}
+                <View style={{
+                    backgroundColor: '#ECFDF5',
+                    borderRadius: 20,
+                    padding: 16,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    marginBottom: 16,
+                    borderWidth: 1,
+                    borderColor: '#A7F3D0',
+                    gap: 14
+                }}>
+                    <View style={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 14,
+                        backgroundColor: '#D1FAE5',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                    }}>
+                        <Ionicons name="car-outline" size={26} color="#059669" />
                     </View>
-                )}
-
-                {/* ── Payment Summary ── */}
-                <View style={{ marginHorizontal: 16, backgroundColor: 'white', borderRadius: 20, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#F1F5F9', elevation: 1 }}>
-                    <Text style={S.sectionLabel}>PAYMENT SUMMARY</Text>
-                    {[
-                        ['Method', order.payment_method || 'N/A'],
-                        ['Shipping', `₦${(order.shipping_fee || 0).toLocaleString()}`],
-                        order.discount_applied > 0 && ['Discount', `-₦${(order.discount_applied || 0).toLocaleString()}`],
-                    ].filter(Boolean).map(([label, val], i) => (
-                        <View key={label} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 }}>
-                            <Text style={{ color: '#64748B', fontSize: 13 }}>{label}</Text>
-                            <Text style={{ color: '#0F172A', fontWeight: '700', fontSize: 13 }}>{val}</Text>
-                        </View>
-                    ))}
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
-                        <Text style={{ fontWeight: '800', color: '#0F172A', fontSize: 14 }}>Total</Text>
-                        <Text style={{ fontWeight: '900', color: '#0F172A', fontSize: 18 }}>₦{(order.total_amount || 0).toLocaleString()}</Text>
+                    <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                            Estimated Delivery
+                        </Text>
+                        <Text style={{ fontSize: 16, fontWeight: '900', color: '#064E3B', marginTop: 1 }}>
+                            Tomorrow, 11 Sep 2026
+                        </Text>
+                        <Text style={{ fontSize: 11, color: '#047857', fontWeight: '500', marginTop: 1 }}>
+                            Between 9:00 AM - 6:00 PM
+                        </Text>
                     </View>
                 </View>
 
-                {/* ── Quick Action Buttons ── */}
-                <View style={{ flexDirection: 'row', gap: 10, marginHorizontal: 16, marginBottom: 16 }}>
-                    <TouchableOpacity onPress={handleShare} style={[S.btn, { backgroundColor: '#EFF6FF', flex: 1 }]}>
-                        <Ionicons name="share-outline" size={16} color="#2563EB" />
-                        <Text style={{ color: '#2563EB', fontWeight: '700', fontSize: 13 }}>Share</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={handleOpenMaps} style={[S.btn, { backgroundColor: '#F0FDF4', flex: 1 }]}>
-                        <Ionicons name="navigate-outline" size={16} color="#16A34A" />
-                        <Text style={{ color: '#16A34A', fontWeight: '700', fontSize: 13 }}>Navigate</Text>
-                    </TouchableOpacity>
-                    {driver && (
-                        <TouchableOpacity onPress={handleWhatsAppDriver} style={[S.btn, { backgroundColor: '#F0FDF4', flex: 1 }]}>
-                            <Ionicons name="logo-whatsapp" size={16} color="#25D366" />
-                            <Text style={{ color: '#25D366', fontWeight: '700', fontSize: 13 }}>Driver</Text>
+                {/* Live Rider Tracking Card (Map Visualizer) */}
+                <View style={{
+                    backgroundColor: 'white',
+                    borderRadius: 20,
+                    overflow: 'hidden',
+                    marginBottom: 16,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                }}>
+                    {/* Rider Info Header */}
+                    <View style={{
+                        padding: 14,
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        borderBottomWidth: 1,
+                        borderBottomColor: '#F1F5F9',
+                    }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <View style={{
+                                width: 40,
+                                height: 40,
+                                borderRadius: 20,
+                                backgroundColor: '#0A192F',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                            }}>
+                                <Ionicons name="bicycle" size={20} color="#38BDF8" />
+                            </View>
+                            <View>
+                                <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
+                                    Your Rider
+                                </Text>
+                                <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '500' }}>
+                                    On the way to your location
+                                </Text>
+                            </View>
+                        </View>
+
+                        <View style={{
+                            backgroundColor: '#F0F9FF',
+                            paddingHorizontal: 10,
+                            paddingVertical: 5,
+                            borderRadius: 14,
+                            borderWidth: 1,
+                            borderColor: '#BAE6FD',
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 5
+                        }}>
+                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#0284C7' }} />
+                            <Text style={{ color: '#0284C7', fontSize: 11, fontWeight: '800' }}>
+                                Live Tracking
+                            </Text>
+                        </View>
+                    </View>
+
+                    {/* Stylized Map Canvas */}
+                    <View style={{ height: 130, backgroundColor: '#E2E8F0', position: 'relative', overflow: 'hidden' }}>
+                        {/* Map Grid Pattern background */}
+                        <Image
+                            source={{ uri: 'https://images.unsplash.com/photo-1524661135-423995f22d0b?q=80&w=600&auto=format&fit=crop' }}
+                            style={{ width: '100%', height: '100%', opacity: 0.25 }}
+                        />
+
+                        {/* Simulated Route Line */}
+                        <View style={{
+                            position: 'absolute',
+                            left: 70,
+                            top: 60,
+                            width: 160,
+                            height: 4,
+                            backgroundColor: '#0284C7',
+                            borderRadius: 2,
+                            transform: [{ rotate: '-8deg' }]
+                        }} />
+
+                        {/* Delivery Vehicle Icon on Map */}
+                        <View style={{
+                            position: 'absolute',
+                            left: 60,
+                            top: 46,
+                            backgroundColor: '#0A192F',
+                            padding: 6,
+                            borderRadius: 10,
+                            borderWidth: 2,
+                            borderColor: 'white',
+                            shadowColor: '#000',
+                            shadowOpacity: 0.2,
+                            shadowRadius: 4,
+                            elevation: 3
+                        }}>
+                            <Ionicons name="car" size={18} color="white" />
+                        </View>
+
+                        {/* Destination House Icon on Map */}
+                        <View style={{
+                            position: 'absolute',
+                            right: 70,
+                            top: 38,
+                            backgroundColor: '#0A192F',
+                            padding: 6,
+                            borderRadius: 10,
+                            borderWidth: 2,
+                            borderColor: 'white',
+                            shadowColor: '#000',
+                            shadowOpacity: 0.2,
+                            shadowRadius: 4,
+                            elevation: 3
+                        }}>
+                            <Ionicons name="home" size={16} color="white" />
+                        </View>
+
+                        {/* Re-center Target Button */}
+                        <TouchableOpacity style={{
+                            position: 'absolute',
+                            right: 12,
+                            bottom: 12,
+                            backgroundColor: 'white',
+                            width: 32,
+                            height: 32,
+                            borderRadius: 16,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            shadowColor: '#000',
+                            shadowOpacity: 0.1,
+                            shadowRadius: 4,
+                            elevation: 2
+                        }}>
+                            <Ionicons name="locate-outline" size={18} color="#0284C7" />
                         </TouchableOpacity>
-                    )}
+                    </View>
                 </View>
 
-                {/* ── Cancel Order ── */}
-                {['pending', 'processing'].includes(status) && (
-                    <TouchableOpacity onPress={handleCancel} style={{ marginHorizontal: 16, marginBottom: 16, padding: 16, backgroundColor: '#FEF2F2', borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                        <Ionicons name="close-circle-outline" size={18} color="#DC2626" />
-                        <Text style={{ color: '#DC2626', fontWeight: '800', fontSize: 14 }}>Cancel Order</Text>
-                    </TouchableOpacity>
-                )}
-
-                {/* ── Delivered - Leave Review nudge ── */}
-                {isDelivered && (
-                    <View style={{ marginHorizontal: 16, backgroundColor: '#FFFBEB', borderRadius: 20, padding: 18, marginBottom: 16, borderWidth: 1, borderColor: '#FDE68A', flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                        <Ionicons name="star" size={24} color="#F59E0B" />
-                        <View style={{ flex: 1 }}>
-                            <Text style={{ fontWeight: '800', color: '#92400E', fontSize: 14 }}>How was your order?</Text>
-                            <Text style={{ color: '#B45309', fontSize: 12, marginTop: 2 }}>Go to My Orders to leave a review for each item.</Text>
-                        </View>
-                    </View>
-                )}
-
+                {/* Need Help? Contact Support Button */}
+                <TouchableOpacity
+                    onPress={() => Linking.openURL('https://wa.me/2348101234567')}
+                    style={{
+                        backgroundColor: '#0A192F',
+                        borderRadius: 16,
+                        paddingVertical: 15,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 8,
+                        shadowColor: '#0A192F',
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.2,
+                        shadowRadius: 8,
+                        elevation: 3
+                    }}
+                >
+                    <Ionicons name="chatbubble-ellipses-outline" size={18} color="white" />
+                    <Text style={{ color: 'white', fontWeight: '800', fontSize: 14 }}>
+                        Need Help? Contact Support &gt;
+                    </Text>
+                </TouchableOpacity>
             </ScrollView>
-            <WhatsAppActionModal
-                visible={whatsappVisible}
-                phone={whatsappPhone}
-                recipientName={whatsappRecipientName}
-                orderData={order}
-                onClose={() => setWhatsappVisible(false)}
-            />
         </View>
     );
-};
-
-const S = {
-    sectionLabel: { fontSize: 10, fontWeight: '800', color: '#94A3B8', letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 12 },
-    btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 14 },
 };

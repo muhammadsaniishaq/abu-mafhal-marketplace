@@ -25,6 +25,7 @@ import VendorApplication from './pages/VendorApplication';
 import Notifications from './pages/Notifications';
 import AITest from './pages/AITest';
 import CheckoutPage from './pages/CheckoutPage';
+import Stores from './pages/Stores';
 
 // ==================== DASHBOARD LAYOUTS ====================
 import AdminDashboard from './pages/AdminDashboard';
@@ -123,6 +124,7 @@ function App() {
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/ai-test" element={<AITest />} />
                 <Route path="/checkout" element={<CheckoutPage />} />
+                <Route path="/stores" element={<Stores />} />
                 <Route
                   path="/notifications"
                   element={

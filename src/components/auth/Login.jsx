@@ -2,13 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../config/supabase';
-import { Mail, Lock, Eye, EyeOff, Loader2, Bell } from 'lucide-react';
-
-const redirectByRole = (role, navigate) => {
-  if (role === 'admin') navigate('/admin', { replace: true });
-  else if (role === 'vendor') navigate('/vendor', { replace: true });
-  else navigate('/buyer', { replace: true });
-};
+import { Mail, Lock, Eye, EyeOff, Loader2, ArrowRight, ShieldCheck } from 'lucide-react';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -20,12 +14,11 @@ const Login = () => {
   const { login, currentUser } = useAuth();
   const navigate = useNavigate();
 
-  // If already logged in (e.g. cached session), redirect immediately
   useEffect(() => {
     if (currentUser) {
-      redirectByRole(currentUser.role, navigate);
+      navigate('/', { replace: true });
     }
-  }, [currentUser]);
+  }, [currentUser, navigate]);
 
   useEffect(() => {
     fetchSettings();
@@ -38,134 +31,190 @@ const Login = () => {
         .select('*')
         .single();
       if (data) setSettings(data);
-    } catch (err) { /* silent */ }
+    } catch (_) {}
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanPassword = (password || '').trim();
+
+    if (!cleanEmail || !cleanPassword) {
+      setError('Please enter both your email and password.');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const userData = await login(email, password);
+      const userData = await login(cleanEmail, cleanPassword);
       if (userData) {
-        redirectByRole(userData.role, navigate);
+        navigate('/', { replace: true });
       }
-    } catch (error) {
-      setError(error.message || 'Failed to login. Please check your credentials.');
+    } catch (err) {
+      const msg = err.message || 'Failed to login. Please check your credentials.';
+      if (msg.toLowerCase().includes('invalid login credentials')) {
+        setError('Incorrect email address or password. Please try again.');
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen relative bg-slate-50 overflow-hidden flex flex-col items-center justify-center px-6 py-12">
-      {/* MOBILE-STYLE DECORATIONS */}
-      <div className="absolute top-[-100px] left-[-60px] w-[300px] h-[300px] rounded-full bg-blue-100 opacity-60 pointer-events-none" />
-      <div className="absolute bottom-[-50px] right-[-60px] w-[250px] h-[250px] rounded-full bg-purple-100 opacity-60 pointer-events-none" />
-      <div className="absolute top-[40%] right-[-40px] w-[100px] h-[100px] rounded-full bg-amber-100 opacity-50 pointer-events-none" />
-      <div className="absolute bottom-[20%] left-[-30px] w-[80px] h-[80px] rounded-full bg-red-200 opacity-50 pointer-events-none" />
-      
-      {/* Dynamic Mobile Symbols */}
-      <div className="absolute top-[15%] left-[10%] opacity-20 rotate-12 pointer-events-none">
-          <Mail size={80} className="text-blue-400" />
-      </div>
-      <div className="absolute bottom-[10%] right-[15%] opacity-20 -rotate-12 pointer-events-none">
-          <Bell size={100} className="text-purple-400" />
-      </div>
+    <div className="min-h-screen bg-[#070F1E] relative overflow-hidden flex flex-col items-center justify-center px-4 py-10 selection:bg-amber-400 selection:text-slate-900">
+      {/* Ambient background glow */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-sky-500/10 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-10 left-1/3 w-[400px] h-[300px] bg-amber-500/10 rounded-full blur-[100px] pointer-events-none" />
 
-      {/* Decoration Strip */}
-      <div className="absolute top-[100px] left-[-40px] w-[120px] h-[12px] bg-slate-100 -rotate-45 pointer-events-none" />
-      <div className="absolute top-[15%] right-[40px] w-[40px] h-[40px] bg-indigo-200 rounded-lg opacity-40 rotate-[30deg] pointer-events-none" />
-
-      <div className="w-full max-w-[480px] relative z-10">
-        <div className="mb-8">
-            <div className="w-16 h-16 rounded-2xl bg-white shadow-sm border border-slate-100 flex items-center justify-center p-2 mb-4 overflow-hidden">
-                <img 
-                    src={settings?.logo_url || "/logo.png"} 
-                    alt="Abu Mafhal" 
-                    className="w-full h-full object-contain"
-                />
+      <div className="w-full max-w-[440px] relative z-10">
+        {/* Brand Header */}
+        <div className="text-center mb-8">
+          <Link to="/" className="inline-flex items-center gap-3 mb-4 group">
+            <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 p-2 flex items-center justify-center backdrop-blur-md shadow-lg group-hover:border-amber-400/40 transition-colors">
+              <img
+                src={settings?.logo_url || "/logo.png"}
+                alt="Abu Mafhal"
+                className="w-full h-full object-contain"
+                onError={(e) => { e.target.src = "/logo.png"; }}
+              />
             </div>
-            <h1 className="text-4xl font-black text-slate-800 leading-[1.1] tracking-tight">
-              Welcome<br/>Back
-            </h1>
+            <div className="text-left">
+              <h2 className="text-xl font-black text-white tracking-wide">
+                ABU <span className="text-[#00D2FF]">MAFHAL</span>
+              </h2>
+              <p className="text-[9px] font-bold text-slate-400 tracking-widest uppercase">
+                Your Marketplace, Your Choice.
+              </p>
+            </div>
+          </Link>
+
+          <h1 className="text-2xl font-black text-white mt-2">
+            Welcome Back 👋
+          </h1>
+          <p className="text-slate-400 text-xs mt-1">
+            Sign in to access your orders, wishlist, and vendor stores
+          </p>
         </div>
 
-        <div className="bg-white rounded-3xl p-6 md:p-8 shadow-[0_10px_30px_rgba(0,0,0,0.05)] border border-slate-100">
+        {/* Card Container */}
+        <div className="bg-[#0D1A30]/80 backdrop-blur-xl border border-slate-700/60 rounded-3xl p-6 sm:p-8 shadow-2xl shadow-black/40">
+          {/* Segmented Switch */}
+          <div className="flex bg-[#070F1E] rounded-2xl p-1.5 mb-6 border border-slate-700/50">
+            <button
+              type="button"
+              className="flex-1 py-2 text-xs font-black rounded-xl bg-amber-400 text-slate-950 shadow-md transition-all"
+            >
+              Sign In
+            </button>
+            <Link
+              to="/register"
+              className="flex-1 py-2 text-xs font-bold text-center text-slate-400 hover:text-white rounded-xl transition-all"
+            >
+              Create Account
+            </Link>
+          </div>
+
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-sm font-medium">
-              {error}
+            <div className="mb-5 p-3.5 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-400 text-xs font-medium flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-red-400 flex-shrink-0" />
+              <span>{error}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            {/* Email Field */}
             <div>
-              <label className="block text-sm font-semibold text-slate-500 mb-2 ml-1">
+              <label className="block text-xs font-bold text-slate-300 mb-1.5 ml-1">
                 Email Address
               </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full bg-slate-100 rounded-xl px-4 py-3.5 text-slate-800 font-semibold placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300 transition-all font-medium"
-                placeholder="user@example.com"
-              />
+              <div className="relative flex items-center">
+                <Mail className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                  placeholder="user@example.com"
+                  className="w-full bg-[#070F1E] border border-slate-700/70 focus:border-amber-400 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-400/20 transition-all font-medium"
+                />
+              </div>
             </div>
 
+            {/* Password Field */}
             <div>
-              <label className="block text-sm font-semibold text-slate-500 mb-2 ml-1">
-                Password
-              </label>
-              <div className="relative">
+              <div className="flex items-center justify-between mb-1.5 ml-1">
+                <label className="block text-xs font-bold text-slate-300">
+                  Password
+                </label>
+                <Link
+                  to="/forgot-password"
+                  className="text-xs font-bold text-[#00D2FF] hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+              <div className="relative flex items-center">
+                <Lock className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full bg-slate-100 rounded-xl pl-4 pr-12 py-3.5 text-slate-800 font-semibold placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300 transition-all font-medium"
+                  autoComplete="current-password"
                   placeholder="••••••••"
+                  className="w-full bg-[#070F1E] border border-slate-700/70 focus:border-amber-400 rounded-xl pl-10 pr-12 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-400/20 transition-all font-medium"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 px-4 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
+                  className="absolute right-3 p-1 text-slate-400 hover:text-white focus:outline-none"
                 >
                   {showPassword ? (
-                    <EyeOff className="h-5 w-5" />
+                    <EyeOff className="w-4 h-4" />
                   ) : (
-                    <Eye className="h-5 w-5" />
+                    <Eye className="w-4 h-4" />
                   )}
                 </button>
               </div>
             </div>
 
-            <div className="flex items-center justify-end">
-              <Link to="/forgot-password" size="sm" className="text-sm font-bold text-slate-900 hover:underline">
-                Forgot password?
-              </Link>
-            </div>
-
+            {/* Sign In Button */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-4 flex items-center justify-center bg-slate-900 hover:bg-slate-800 text-white font-bold py-4 rounded-xl transition-all shadow-[0_4px_12_rgba(15,23,42,0.3)] disabled:opacity-75 disabled:cursor-not-allowed transform active:scale-95"
+              className="w-full mt-3 flex items-center justify-center gap-2 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black py-3.5 rounded-xl transition-all shadow-lg shadow-amber-500/20 disabled:opacity-60 disabled:cursor-not-allowed transform active:scale-[0.98]"
             >
               {loading ? (
-                <Loader2 className="animate-spin h-5 w-5 mr-3 text-white" />
+                <Loader2 className="animate-spin h-5 w-5" />
               ) : (
-                'Sign In'
+                <>
+                  <span>Sign In to Marketplace</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
               )}
             </button>
-
-            <div className="flex items-center justify-center gap-2 mt-4 text-[13px]">
-              <span className="text-slate-500 font-medium">Don't have an account?</span>
-              <Link to="/register" className="text-slate-900 font-extrabold hover:underline">
-                Create Account
-              </Link>
-            </div>
           </form>
+
+          {/* Security note */}
+          <div className="mt-6 pt-5 border-t border-slate-800/80 flex items-center justify-center gap-2 text-[11px] text-slate-400 font-semibold">
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <span>256-Bit SSL Encrypted • Trusted Across Nigeria</span>
+          </div>
+        </div>
+
+        {/* Back to Home Link */}
+        <div className="text-center mt-6">
+          <Link
+            to="/"
+            className="text-xs font-bold text-slate-400 hover:text-white transition-colors"
+          >
+            ← Return to Marketplace Homepage
+          </Link>
         </div>
       </div>
     </div>

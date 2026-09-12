@@ -1,10 +1,13 @@
-import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import React, { useState, useEffect } from 'react';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../config/supabase';
 import { triggerWelcomeEmail } from '../../utils/emailTriggers';
 import { sendOtpEmail } from '../../services/emailService';
-import { User, Mail, Phone, Lock, Eye, EyeOff, Building2, Loader2, Bell, MessageSquare } from 'lucide-react';
+import {
+  User, Mail, Phone, Lock, Eye, EyeOff,
+  Loader2, ArrowRight, ShieldCheck, Gift, CheckCircle2, RotateCcw
+} from 'lucide-react';
 
 const Register = () => {
   const [searchParams] = useSearchParams();
@@ -24,7 +27,7 @@ const Register = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [settings, setSettings] = useState(null);
-  
+
   // OTP States
   const [isOtpSent, setIsOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState('');
@@ -40,14 +43,12 @@ const Register = () => {
 
   const fetchSettings = async () => {
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('app_settings')
         .select('*')
         .single();
       if (data) setSettings(data);
-    } catch (err) {
-      console.error('Error fetching settings:', err);
-    }
+    } catch (_) {}
   };
 
   useEffect(() => {
@@ -69,31 +70,37 @@ const Register = () => {
 
   const handleSendOtp = async () => {
     setError('');
-    setLoading(true);
+    const cleanEmail = (formData.email || '').trim().toLowerCase();
+    const cleanName = (formData.name || '').trim();
+    const cleanPhone = (formData.phone || '').trim();
 
-    // Basic validation before OTP
-    if (!formData.name || !formData.email || !formData.password) {
-        setError('Please fill in all required fields');
-        setLoading(false);
-        return;
+    if (!cleanName || !cleanEmail || !formData.password) {
+      setError('Please fill in all required fields.');
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-        setError('Passwords do not match');
-        setLoading(false);
-        return;
+      setError('Passwords do not match.');
+      return;
     }
 
+    setLoading(true);
+
     try {
-      // 1. Check if email already exists
+      // 1. Check if email already exists in profiles
       const { data: existingUser } = await supabase
         .from('profiles')
         .select('id')
-        .eq('email', formData.email)
-        .single();
+        .eq('email', cleanEmail)
+        .maybeSingle();
 
       if (existingUser) {
-        setError('An account with this email already exists');
+        setError('An account with this email address already exists. Please sign in.');
         setLoading(false);
         return;
       }
@@ -103,11 +110,10 @@ const Register = () => {
       setOtpCode(code);
 
       // 3. Send OTP Email
-      await sendOtpEmail(formData.email, code);
-      
+      await sendOtpEmail(cleanEmail, code);
+
       setIsOtpSent(true);
       setCountdown(60);
-      console.log('OTP Sent successfully');
     } catch (err) {
       setError('Failed to send verification code. Please try again.');
       console.error(err);
@@ -126,29 +132,31 @@ const Register = () => {
     }
 
     // Verify OTP
-    if (userEnteredOtp !== otpCode) {
-      setError('Invalid verification code');
+    if (userEnteredOtp.trim() !== otpCode.trim()) {
+      setError('Invalid verification code. Please check and try again.');
       return;
     }
 
     setLoading(true);
 
     try {
-      const userCredential = await register(formData.email, formData.password, {
-        name: formData.name,
-        phone: formData.phone,
+      const cleanEmail = (formData.email || '').trim().toLowerCase();
+      const cleanName = (formData.name || '').trim();
+      const cleanPhone = (formData.phone || '').trim();
+
+      const userCredential = await register(cleanEmail, formData.password, {
+        name: cleanName,
+        phone: cleanPhone,
         role: formData.role
       });
 
       // Send welcome email
       try {
         await triggerWelcomeEmail({
-          name: formData.name,
-          email: formData.email
+          name: cleanName,
+          email: cleanEmail
         });
-      } catch (emailError) {
-        console.error('Error sending welcome email:', emailError);
-      }
+      } catch (_) {}
 
       // Handle referral code if present
       if (formData.referralCode) {
@@ -157,7 +165,7 @@ const Register = () => {
             .from('profiles')
             .select('id')
             .eq('referral_code', formData.referralCode.trim().toUpperCase())
-            .single();
+            .maybeSingle();
 
           if (referrer && referrer.id !== userCredential.id) {
             await supabase.rpc('process_referral_reward', {
@@ -165,271 +173,308 @@ const Register = () => {
               p_referrer_id: referrer.id
             });
           }
-        } catch (error) {
-          console.error('Error processing referral:', error.message);
-        }
+        } catch (_) {}
       }
 
-      // Redirect based on role
-      if (formData.role === 'vendor') {
-        navigate('/vendor-application');
-      } else {
-        navigate('/buyer');
-      }
+      // Redirect to home/marketplace
+      navigate('/', { replace: true });
     } catch (error) {
-      setError(error.message || 'Failed to create account');
+      setError(error.message || 'Failed to create account. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen relative bg-slate-50 overflow-hidden flex flex-col md:flex-row">
-      {/* MOBILE-STYLE DECORATIONS (Copied exactly from theme.js authContainer circles) */}
-      <div className="absolute top-[-100px] left-[-60px] w-[300px] h-[300px] rounded-full bg-blue-100 opacity-60 pointer-events-none" />
-      <div className="absolute bottom-[-50px] right-[-60px] w-[250px] h-[250px] rounded-full bg-purple-100 opacity-60 pointer-events-none" />
-      <div className="absolute top-[40%] right-[-40px] w-[100px] h-[100px] rounded-full bg-amber-100 opacity-50 pointer-events-none" />
-      <div className="absolute bottom-[20%] left-[-30px] w-[80px] h-[80px] rounded-full bg-red-200 opacity-50 pointer-events-none" />
-      
-      {/* Dynamic Mobile Symbols (Mail & Notification Icons) */}
-      <div className="absolute top-[15%] left-[10%] opacity-20 rotate-12 pointer-events-none">
-          <Mail size={80} className="text-blue-400" />
-      </div>
-      <div className="absolute bottom-[10%] right-[15%] opacity-20 -rotate-12 pointer-events-none">
-          <Bell size={100} className="text-purple-400" />
-      </div>
+    <div className="min-h-screen bg-[#070F1E] relative overflow-hidden flex flex-col items-center justify-center px-4 py-10 selection:bg-amber-400 selection:text-slate-900">
+      {/* Ambient background glow */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-sky-500/10 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-10 left-1/3 w-[400px] h-[300px] bg-amber-500/10 rounded-full blur-[100px] pointer-events-none" />
 
-      {/* Decoration Strip */}
-      <div className="absolute top-[100px] left-[-40px] w-[120px] h-[12px] bg-slate-100 -rotate-45 pointer-events-none" />
-      <div className="absolute top-[15%] right-[40px] w-[40px] h-[40px] bg-indigo-200 rounded-lg opacity-40 rotate-[30deg] pointer-events-none" />
-
-      {/* Main Content Scroll Area */}
-      <div className="flex-1 overflow-y-auto px-6 py-12 md:py-24 flex items-center justify-center relative z-10 w-full">
-        <div className="w-full max-w-[480px]">
-          
-          {/* Back Button (Mobile Header style) */}
-          <div className="mb-8">
-             <Link to="/" className="inline-flex p-3 -ml-3 rounded-full hover:bg-slate-200/50 transition-colors">
-                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0F172A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                     <path d="M19 12H5M12 19l-7-7 7-7"/>
-                 </svg>
-             </Link>
-          </div>
-
-          {/* Auth Header */}
-          <div className="mb-8">
-            <div className="w-16 h-16 rounded-2xl bg-white shadow-sm border border-slate-100 flex items-center justify-center p-2 mb-4 overflow-hidden">
-                <img 
-                src={settings?.logo_url || "/logo.png"} 
-                alt="Abu Mafhal" 
+      <div className="w-full max-w-[460px] relative z-10">
+        {/* Brand Header */}
+        <div className="text-center mb-8">
+          <Link to="/" className="inline-flex items-center gap-3 mb-4 group">
+            <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 p-2 flex items-center justify-center backdrop-blur-md shadow-lg group-hover:border-amber-400/40 transition-colors">
+              <img
+                src={settings?.logo_url || "/logo.png"}
+                alt="Abu Mafhal"
                 className="w-full h-full object-contain"
-                />
+                onError={(e) => { e.target.src = "/logo.png"; }}
+              />
             </div>
-            <h1 className="text-4xl font-black text-slate-800 leading-[1.1] tracking-tight">
-              {isOtpSent ? 'Verify\nEmail' : 'Create\nAccount'}
-            </h1>
-          </div>
+            <div className="text-left">
+              <h2 className="text-xl font-black text-white tracking-wide">
+                ABU <span className="text-[#00D2FF]">MAFHAL</span>
+              </h2>
+              <p className="text-[9px] font-bold text-slate-400 tracking-widest uppercase">
+                Your Marketplace, Your Choice.
+              </p>
+            </div>
+          </Link>
 
-          {/* Main Auth Card */}
-          <div className="bg-white rounded-3xl p-6 md:p-8 shadow-[0_10px_30px_rgba(0,0,0,0.05)] border border-slate-100">
+          <h1 className="text-2xl font-black text-white mt-2">
+            {isOtpSent ? 'Verify Email' : 'Create Account 🚀'}
+          </h1>
+          <p className="text-slate-400 text-xs mt-1">
+            {isOtpSent
+              ? `Enter the 6-digit code sent to ${formData.email}`
+              : 'Join thousands of buyers & sellers on Abu Mafhal'}
+          </p>
+        </div>
 
-            {urlRefCode && (
-              <div className="mb-6 flex items-center gap-3 bg-emerald-50 p-3 rounded-2xl border border-emerald-400">
-                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                  <svg className="w-4 h-4 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
-                     <path fillRule="evenodd" d="M10 2a4 4 0 00-4 4v1H5a1 1 0 00-.994.89l-1 9A1 1 0 004 18h12a1 1 0 00.994-1.11l-1-9A1 1 0 0015 7h-1V6a4 4 0 00-4-4zm2 5V6a2 2 0 10-4 0v1h4zm-6 3a1 1 0 112 0 1 1 0 01-2 0zm7-1a1 1 0 100 2 1 1 0 000-2z" clipRule="evenodd"></path>
-                  </svg>
-                </div>
-                <p className="text-sm font-bold text-emerald-800">
-                  🎉 You've been referred! You'll get bonus rewards.
-                </p>
-              </div>
-            )}
+        {/* Card Container */}
+        <div className="bg-[#0D1A30]/80 backdrop-blur-xl border border-slate-700/60 rounded-3xl p-6 sm:p-8 shadow-2xl shadow-black/40">
+          {!isOtpSent && (
+            <div className="flex bg-[#070F1E] rounded-2xl p-1.5 mb-6 border border-slate-700/50">
+              <Link
+                to="/login"
+                className="flex-1 py-2 text-xs font-bold text-center text-slate-400 hover:text-white rounded-xl transition-all"
+              >
+                Sign In
+              </Link>
+              <button
+                type="button"
+                className="flex-1 py-2 text-xs font-black rounded-xl bg-amber-400 text-slate-950 shadow-md transition-all"
+              >
+                Create Account
+              </button>
+            </div>
+          )}
 
-            {error && (
-              <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-sm font-medium">
-                {error}
-              </div>
-            )}
+          {urlRefCode && !isOtpSent && (
+            <div className="mb-5 flex items-center gap-3 bg-emerald-500/10 p-3 rounded-2xl border border-emerald-500/30 text-emerald-300 text-xs font-semibold">
+              <Gift className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+              <span>You were invited with a referral code! Welcome bonus applies upon signup.</span>
+            </div>
+          )}
 
-            <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-              
-              {!isOtpSent ? (
-                <>
-                  {/* Full Name */}
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-500 mb-2">Full Name</label>
+          {error && (
+            <div className="mb-5 p-3.5 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-400 text-xs font-medium flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-red-400 flex-shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            {!isOtpSent ? (
+              <>
+                {/* Full Name */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5 ml-1">
+                    Full Name
+                  </label>
+                  <div className="relative flex items-center">
+                    <User className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
                     <input
                       type="text"
                       name="name"
                       value={formData.name}
                       onChange={handleChange}
                       required
-                      placeholder="John Doe"
-                      className="w-full bg-slate-100 rounded-xl px-4 py-3.5 text-slate-800 font-semibold placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300 transition-all"
+                      placeholder="e.g. Aminu Bello"
+                      className="w-full bg-[#070F1E] border border-slate-700/70 focus:border-amber-400 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-400/20 transition-all font-medium"
                     />
                   </div>
+                </div>
 
-                  {/* Phone Number */}
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-500 mb-2">Phone Number</label>
-                    <input
-                      type="tel"
-                      name="phone"
-                      value={formData.phone}
-                      onChange={handleChange}
-                      required
-                      placeholder="08012345678"
-                      className="w-full bg-slate-100 rounded-xl px-4 py-3.5 text-slate-800 font-semibold placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300 transition-all"
-                    />
-                  </div>
-
-                  {/* Email Address */}
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-500 mb-2">Email Address</label>
+                {/* Email Address */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5 ml-1">
+                    Email Address
+                  </label>
+                  <div className="relative flex items-center">
+                    <Mail className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
                     <input
                       type="email"
                       name="email"
                       value={formData.email}
                       onChange={handleChange}
                       required
+                      autoComplete="email"
                       placeholder="user@example.com"
-                      className="w-full bg-slate-100 rounded-xl px-4 py-3.5 text-slate-800 font-semibold placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300 transition-all"
+                      className="w-full bg-[#070F1E] border border-slate-700/70 focus:border-amber-400 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-400/20 transition-all font-medium"
                     />
                   </div>
+                </div>
 
-                  {/* Referral Code (Optional) */}
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-500 mb-2">Referral Code (Optional)</label>
+                {/* Phone Number */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5 ml-1">
+                    Phone Number
+                  </label>
+                  <div className="relative flex items-center">
+                    <Phone className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
+                    <input
+                      type="tel"
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleChange}
+                      placeholder="08012345678"
+                      className="w-full bg-[#070F1E] border border-slate-700/70 focus:border-amber-400 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-400/20 transition-all font-medium"
+                    />
+                  </div>
+                </div>
+
+                {/* Password */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5 ml-1">
+                    Password
+                  </label>
+                  <div className="relative flex items-center">
+                    <Lock className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      name="password"
+                      value={formData.password}
+                      onChange={handleChange}
+                      required
+                      placeholder="At least 6 characters"
+                      className="w-full bg-[#070F1E] border border-slate-700/70 focus:border-amber-400 rounded-xl pl-10 pr-12 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-400/20 transition-all font-medium"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 p-1 text-slate-400 hover:text-white focus:outline-none"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Confirm Password */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5 ml-1">
+                    Confirm Password
+                  </label>
+                  <div className="relative flex items-center">
+                    <Lock className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
+                    <input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      name="confirmPassword"
+                      value={formData.confirmPassword}
+                      onChange={handleChange}
+                      required
+                      placeholder="Repeat password"
+                      className="w-full bg-[#070F1E] border border-slate-700/70 focus:border-amber-400 rounded-xl pl-10 pr-12 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-400/20 transition-all font-medium"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 p-1 text-slate-400 hover:text-white focus:outline-none"
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Referral Code */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5 ml-1">
+                    Referral Code (Optional)
+                  </label>
+                  <div className="relative flex items-center">
+                    <Gift className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
                     <input
                       type="text"
                       name="referralCode"
                       value={formData.referralCode}
                       onChange={handleChange}
-                      placeholder="ABU-XXXXXX"
-                      className="w-full bg-slate-100 rounded-xl px-4 py-3.5 text-slate-800 font-semibold uppercase placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300 transition-all"
+                      placeholder="e.g. ABU-12345"
+                      className="w-full bg-[#070F1E] border border-slate-700/70 focus:border-amber-400 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-400/20 transition-all font-medium uppercase"
                     />
                   </div>
-
-                  {/* Password */}
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-500 mb-2">Password</label>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        name="password"
-                        value={formData.password}
-                        onChange={handleChange}
-                        required
-                        placeholder="••••••••"
-                        className="w-full bg-slate-100 rounded-xl pl-4 pr-12 py-3.5 text-slate-800 font-semibold placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300 transition-all"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute inset-y-0 right-0 px-4 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
-                      >
-                        {showPassword ? (
-                          <EyeOff className="w-5 h-5" />
-                        ) : (
-                          <Eye className="w-5 h-5" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Confirm Password */}
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-500 mb-2">Confirm Password</label>
-                    <div className="relative">
-                      <input
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        name="confirmPassword"
-                        value={formData.confirmPassword}
-                        onChange={handleChange}
-                        required
-                        placeholder="••••••••"
-                        className="w-full bg-slate-100 rounded-xl pl-4 pr-12 py-3.5 text-slate-800 font-semibold placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300 transition-all"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute inset-y-0 right-0 px-4 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
-                      >
-                        {showConfirmPassword ? (
-                          <EyeOff className="w-5 h-5" />
-                        ) : (
-                          <Eye className="w-5 h-5" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div className="py-4">
-                  <p className="text-slate-600 font-medium mb-6 text-center">
-                    Enter the 6-digit code sent to <br/>
-                    <span className="text-slate-900 font-bold">{formData.email}</span>
-                  </p>
-                  
-                  <div className="flex gap-2 justify-center mb-8">
-                     <input
-                        type="text"
-                        maxLength="6"
-                        value={userEnteredOtp}
-                        onChange={(e) => setUserEnteredOtp(e.target.value.replace(/\D/g, ''))}
-                        placeholder="000000"
-                        className="w-full max-w-[200px] bg-slate-100 rounded-2xl px-6 py-4 text-center text-3xl font-black tracking-[10px] text-slate-900 focus:outline-none focus:ring-4 focus:ring-slate-200 transition-all"
-                        autoFocus
-                     />
-                  </div>
-
-                  <div className="text-center">
-                      {countdown > 0 ? (
-                        <p className="text-slate-400 text-sm font-medium">
-                            Resend code in <span className="text-slate-600">{countdown}s</span>
-                        </p>
-                      ) : (
-                        <button 
-                            type="button"
-                            onClick={handleSendOtp}
-                            className="text-slate-900 font-extrabold text-sm hover:underline"
-                        >
-                            Resend Verification Code
-                        </button>
-                      )}
-                  </div>
                 </div>
-              )}
 
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full mt-4 flex items-center justify-center bg-slate-900 hover:bg-slate-800 text-white font-bold py-4 rounded-xl transition-all shadow-[0_4px_12px_rgba(15,23,42,0.3)] disabled:opacity-75 disabled:cursor-not-allowed transform active:scale-95"
-              >
-                {loading ? (
-                  <Loader2 className="animate-spin h-5 w-5 mr-3 text-white" />
-                ) : (
-                  isOtpSent ? 'Verify & Sign Up' : 'Continue'
-                )}
-              </button>
-
-              <div className="flex items-center justify-center gap-2 mt-4 text-[13px]">
-                <span className="text-slate-500 font-medium">
-                    {isOtpSent ? "Wrong email?" : "Already have an account?"}
-                </span>
-                <button 
-                  type="button"
-                  onClick={() => isOtpSent ? setIsOtpSent(false) : navigate('/login')}
-                  className="text-slate-900 font-extrabold hover:underline"
+                {/* Send OTP Button */}
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full mt-3 flex items-center justify-center gap-2 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black py-3.5 rounded-xl transition-all shadow-lg shadow-amber-500/20 disabled:opacity-60 disabled:cursor-not-allowed transform active:scale-[0.98]"
                 >
-                  {isOtpSent ? "Change Email" : "Login"}
+                  {loading ? (
+                    <Loader2 className="animate-spin h-5 w-5" />
+                  ) : (
+                    <>
+                      <span>Continue to Verification</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
                 </button>
-              </div>
+              </>
+            ) : (
+              /* OTP Code Input Step */
+              <div className="flex flex-col gap-4 text-center">
+                <div className="w-16 h-16 rounded-full bg-sky-500/10 border border-sky-400/30 flex items-center justify-center mx-auto mb-2 text-sky-400">
+                  <Mail className="w-8 h-8" />
+                </div>
 
-            </form>
+                <div className="relative">
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={userEnteredOtp}
+                    onChange={(e) => setUserEnteredOtp(e.target.value.replace(/\D/g, ''))}
+                    placeholder="000000"
+                    autoFocus
+                    className="w-full bg-[#070F1E] border-2 border-sky-400 rounded-2xl py-4 text-center text-3xl tracking-[14px] text-white font-black placeholder-slate-700 focus:outline-none focus:ring-4 focus:ring-sky-400/20 transition-all"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading || userEnteredOtp.length !== 6}
+                  className="w-full mt-2 flex items-center justify-center gap-2 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black py-3.5 rounded-xl transition-all shadow-lg shadow-amber-500/20 disabled:opacity-60 disabled:cursor-not-allowed transform active:scale-[0.98]"
+                >
+                  {loading ? (
+                    <Loader2 className="animate-spin h-5 w-5" />
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Verify & Create Account</span>
+                    </>
+                  )}
+                </button>
+
+                {/* Resend & Back */}
+                <div className="flex flex-col items-center gap-2 mt-3 text-xs">
+                  <button
+                    type="button"
+                    onClick={handleSendOtp}
+                    disabled={countdown > 0 || loading}
+                    className="inline-flex items-center gap-1.5 text-sky-400 hover:underline font-bold disabled:text-slate-500 disabled:no-underline"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    {countdown > 0 ? `Resend Code in ${countdown}s` : 'Resend Verification Code'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setIsOtpSent(false); setUserEnteredOtp(''); }}
+                    className="text-slate-400 hover:text-white transition-colors"
+                  >
+                    Wrong email address? Edit Details
+                  </button>
+                </div>
+              </div>
+            )}
+          </form>
+
+          {/* Security badge */}
+          <div className="mt-6 pt-5 border-t border-slate-800/80 flex items-center justify-center gap-2 text-[11px] text-slate-400 font-semibold">
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <span>Buyer Protection & Verified Sellers Guaranteed</span>
           </div>
+        </div>
+
+        {/* Back to Home Link */}
+        <div className="text-center mt-6">
+          <Link
+            to="/"
+            className="text-xs font-bold text-slate-400 hover:text-white transition-colors"
+          >
+            ← Return to Marketplace Homepage
+          </Link>
         </div>
       </div>
     </div>

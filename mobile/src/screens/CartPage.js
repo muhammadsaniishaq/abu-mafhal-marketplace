@@ -1,44 +1,47 @@
-import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity, UIManager, FlatList, Image, StatusBar, Platform, Alert, LayoutAnimation, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import {
+    View, Text, TouchableOpacity, ScrollView, Image, StatusBar,
+    Platform, Alert, StyleSheet
+} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
-
-try {
-    if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-        UIManager.setLayoutAnimationEnabledExperimental(true);
-    }
-} catch (_) {}
-
 import { parsePrice } from '../utils/helpers';
 
-export const CartPage = ({ cart, onUpdateQty, onRemove, onBack, onClear }) => {
-    const navigation = useNavigation();
-    const insets = useSafeAreaInsets();
+const AM_LOGO = require('../../assets/am_logo.png');
 
-    const total = cart.reduce((sum, item) => {
+const PAYMENT_METHODS = [
+    { id: 'paystack', name: 'Paystack', icon: 'card-outline', color: '#00C3F8' },
+    { id: 'flutterwave', name: 'Flutterwave', icon: 'wallet-outline', color: '#F5A623' },
+    { id: 'wallet', name: 'Wallet', icon: 'cash-outline', color: '#10B981' },
+    { id: 'crypto', name: 'Crypto', icon: 'logo-bitcoin', color: '#8B5CF6' },
+    { id: 'pod', name: 'Pay on Delivery', icon: 'car-outline', color: '#F97316' },
+];
+
+export const CartPage = ({ cart = [], onUpdateQty, onRemove, onBack, onClear }) => {
+    const navigation = useNavigation();
+    const [selectedPayment, setSelectedPayment] = useState('paystack');
+
+    const subtotal = cart.reduce((sum, item) => {
         const price = parsePrice(item.price);
         const qty = parseInt(item.qty || item.quantity || 1) || 1;
         return sum + (price * qty);
     }, 0);
 
-    const handleRemove = (id) => {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        onRemove(id);
-    };
+    const deliveryFee = cart.length > 0 ? 2500 : 0;
+    const discount = cart.length > 0 ? Math.min(5000, Math.floor(subtotal * 0.05)) : 0;
+    const total = Math.max(0, subtotal + deliveryFee - discount);
 
     const handleClearCart = () => {
         Alert.alert(
             'Clear Cart',
-            'Are you sure you want to remove all items?',
+            'Are you sure you want to remove all items from your cart?',
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
                     text: 'Clear All',
                     style: 'destructive',
                     onPress: () => {
-                        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
                         if (onClear) onClear();
                     }
                 }
@@ -46,226 +49,405 @@ export const CartPage = ({ cart, onUpdateQty, onRemove, onBack, onClear }) => {
         );
     };
 
-    const handleCheckout = async () => {
-        if (cart.length === 0) return;
+    const handleProceedToCheckout = async () => {
+        if (cart.length === 0) {
+            Alert.alert('Cart Empty', 'Please add items to your cart before proceeding to checkout.');
+            return;
+        }
 
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) {
-                Alert.alert('Login Required', 'Please login to checkout');
+                Alert.alert('Login Required', 'Please login to checkout.', [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Login', onPress: () => navigation.navigate('Auth', { redirectTo: 'CheckoutPage' }) }
+                ]);
                 return;
             }
 
-            navigation.navigate('CheckoutPage', { cart, total });
+            navigation.navigate('CheckoutPage', {
+                cart,
+                total,
+                subtotal,
+                deliveryFee,
+                discount,
+                paymentMethod: selectedPayment
+            });
         } catch (e) {
-            console.log(e);
+            console.error('Checkout error:', e);
         }
     };
 
-    const renderItem = ({ item }) => {
-        if (!item) return null;
-        const imageUrl = item?.images?.[0] || (item?.img || 'https://placehold.co/100x100?text=No+Image');
-        const qty = item.qty || item.quantity || 1;
+    return (
+        <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+            <StatusBar backgroundColor="#0A192F" barStyle="light-content" />
 
-        return (
-            <View style={styles.card}>
-                <Image
-                    source={{ uri: imageUrl }}
-                    style={styles.image}
-                />
+            {/* Top Dark Navy Header */}
+            <View style={{
+                backgroundColor: '#0A192F',
+                paddingTop: 48,
+                paddingHorizontal: 16,
+                paddingBottom: 16,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+            }}>
+                <TouchableOpacity onPress={onBack || (() => navigation.goBack())} style={{ padding: 6 }}>
+                    <Ionicons name="arrow-back" size={24} color="white" />
+                </TouchableOpacity>
 
-                <View style={styles.content}>
-                    <View style={styles.cardHeader}>
-                        <Text style={styles.name} numberOfLines={2}>
-                            {item.name}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Image source={AM_LOGO} style={{ width: 34, height: 34, resizeMode: 'contain' }} />
+                    <View>
+                        <Text style={{ color: '#00D2FF', fontSize: 16, fontWeight: '900', letterSpacing: 0.6 }}>
+                            ABU <Text style={{ color: '#38BDF8' }}>MAFHAL</Text>
                         </Text>
-                        <TouchableOpacity onPress={() => handleRemove(item.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                            <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                        <Text style={{ color: '#94A3B8', fontSize: 7, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                            Your Marketplace, Your Choice.
+                        </Text>
+                    </View>
+                </View>
+
+                <View style={{ position: 'relative', padding: 6 }}>
+                    <Ionicons name="cart" size={24} color="white" />
+                    {cart.length > 0 && (
+                        <View style={{
+                            position: 'absolute',
+                            top: 2,
+                            right: 0,
+                            backgroundColor: '#F59E0B',
+                            borderRadius: 9,
+                            minWidth: 18,
+                            height: 18,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            paddingHorizontal: 3,
+                            borderWidth: 1.5,
+                            borderColor: '#0A192F'
+                        }}>
+                            <Text style={{ color: '#0A192F', fontSize: 10, fontWeight: '900' }}>{cart.length}</Text>
+                        </View>
+                    )}
+                </View>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 18, paddingBottom: 130 }}>
+                {/* Header Title: My Cart & Clear Cart link */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <Text style={{ fontSize: 22, fontWeight: '900', color: '#0A192F', letterSpacing: -0.4 }}>
+                        My Cart <Text style={{ color: '#64748B', fontSize: 16, fontWeight: '700' }}>({cart.length} {cart.length === 1 ? 'item' : 'items'})</Text>
+                    </Text>
+
+                    {cart.length > 0 && (
+                        <TouchableOpacity onPress={handleClearCart} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Ionicons name="trash-outline" size={15} color="#EF4444" />
+                            <Text style={{ color: '#EF4444', fontSize: 12.5, fontWeight: '800' }}>
+                                Clear Cart
+                            </Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
+
+                {/* Cart Items List */}
+                {cart.length === 0 ? (
+                    <View style={{ backgroundColor: 'white', borderRadius: 24, padding: 32, alignItems: 'center', marginVertical: 20 }}>
+                        <Ionicons name="cart-outline" size={60} color="#CBD5E1" />
+                        <Text style={{ fontSize: 17, fontWeight: '800', color: '#0A192F', marginTop: 12 }}>Your Cart is Empty</Text>
+                        <Text style={{ fontSize: 13, color: '#64748B', marginTop: 4, textAlign: 'center' }}>Explore our top deals and add items to your cart!</Text>
+                        <TouchableOpacity
+                            onPress={onBack || (() => navigation.navigate('Shop'))}
+                            style={{ marginTop: 20, backgroundColor: '#0A192F', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 14 }}
+                        >
+                            <Text style={{ color: 'white', fontWeight: '800', fontSize: 13 }}>Start Shopping</Text>
                         </TouchableOpacity>
                     </View>
+                ) : (
+                    <View style={{ gap: 12, marginBottom: 20 }}>
+                        {cart.map((item, idx) => {
+                            const imgUrl = item?.images?.[0] || item?.image || item?.image_url || 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?q=80&w=300&auto=format&fit=crop';
+                            const qty = item.qty || item.quantity || 1;
+                            const price = parsePrice(item.price);
+                            const vendorName = item.vendor_name || item.brand || 'TrendZone Store';
 
-                    <Text style={styles.meta}>
-                        {item.brand || 'Generic'}
-                        {item.variants && item.variants.length > 0 ? ` • ${item.variants[0].name}` : ''}
-                    </Text>
+                            return (
+                                <View
+                                    key={item.id || idx}
+                                    style={{
+                                        backgroundColor: 'white',
+                                        borderRadius: 20,
+                                        padding: 14,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        borderWidth: 1,
+                                        borderColor: '#F1F5F9',
+                                        shadowColor: '#0F172A',
+                                        shadowOffset: { width: 0, height: 3 },
+                                        shadowOpacity: 0.03,
+                                        shadowRadius: 8,
+                                        elevation: 1.5,
+                                    }}
+                                >
+                                    <Image
+                                        source={{ uri: imgUrl }}
+                                        style={{ width: 76, height: 76, borderRadius: 16, backgroundColor: '#F8FAFC', marginRight: 12, resizeMode: 'cover' }}
+                                    />
 
-                    <View style={styles.footerRow}>
-                        <Text style={styles.price}>
-                            ₦{parsePrice(item.price).toLocaleString()}
+                                    <View style={{ flex: 1 }}>
+                                        <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>
+                                            {item.name || 'Product Item'}
+                                        </Text>
+                                        <Text numberOfLines={1} style={{ fontSize: 11, color: '#64748B', fontWeight: '600', marginTop: 1 }}>
+                                            By {vendorName}
+                                        </Text>
+
+                                        <Text style={{ fontSize: 14.5, fontWeight: '900', color: '#0A192F', marginTop: 4 }}>
+                                            ₦{price.toLocaleString()}
+                                        </Text>
+
+                                        <Text style={{ fontSize: 10.5, color: '#94A3B8', fontWeight: '600', marginTop: 2 }}>
+                                            Size: {item.selectedSize || '42'} | Color: {item.selectedColor || 'White'}
+                                        </Text>
+                                    </View>
+
+                                    {/* Stepper + Delete Icon */}
+                                    <View style={{ alignItems: 'flex-end', gap: 10 }}>
+                                        <View style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            backgroundColor: '#F8FAFC',
+                                            borderRadius: 12,
+                                            borderWidth: 1,
+                                            borderColor: '#E2E8F0',
+                                            paddingHorizontal: 4,
+                                            paddingVertical: 2,
+                                        }}>
+                                            <TouchableOpacity
+                                                onPress={() => onUpdateQty && onUpdateQty(item.id, -1)}
+                                                style={{ width: 26, height: 26, alignItems: 'center', justifyContent: 'center' }}
+                                            >
+                                                <Ionicons name="remove" size={15} color="#0A192F" />
+                                            </TouchableOpacity>
+
+                                            <Text style={{ fontSize: 13, fontWeight: '900', color: '#0A192F', paddingHorizontal: 6 }}>
+                                                {qty}
+                                            </Text>
+
+                                            <TouchableOpacity
+                                                onPress={() => onUpdateQty && onUpdateQty(item.id, 1)}
+                                                style={{ width: 26, height: 26, alignItems: 'center', justifyContent: 'center' }}
+                                            >
+                                                <Ionicons name="add" size={15} color="#0A192F" />
+                                            </TouchableOpacity>
+                                        </View>
+
+                                        <TouchableOpacity
+                                            onPress={() => onRemove && onRemove(item.id)}
+                                            style={{ padding: 4 }}
+                                        >
+                                            <Ionicons name="trash-outline" size={17} color="#94A3B8" />
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            );
+                        })}
+                    </View>
+                )}
+
+                {/* Order Summary Card */}
+                {cart.length > 0 && (
+                    <View style={{
+                        backgroundColor: 'white',
+                        borderRadius: 22,
+                        padding: 18,
+                        marginBottom: 16,
+                        borderWidth: 1,
+                        borderColor: '#F1F5F9',
+                    }}>
+                        <Text style={{ fontSize: 16, fontWeight: '900', color: '#0A192F', marginBottom: 14 }}>
+                            Order Summary
                         </Text>
 
-                        <View style={styles.qtyContainer}>
-                            <TouchableOpacity
-                                onPress={() => onUpdateQty(item?.id, -1)}
-                                style={styles.qtyBtn}
-                            >
-                                <Ionicons name="remove" size={16} color="#0F172A" />
-                            </TouchableOpacity>
-                            <Text style={styles.qtyText}>
-                                {qty}
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+                            <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '500' }}>
+                                Subtotal ({cart.length} {cart.length === 1 ? 'item' : 'items'})
                             </Text>
-                            <TouchableOpacity
-                                onPress={() => onUpdateQty(item?.id, 1)}
-                                style={styles.qtyBtn}
-                            >
-                                <Ionicons name="add" size={16} color="#0F172A" />
-                            </TouchableOpacity>
+                            <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
+                                ₦{subtotal.toLocaleString()}
+                            </Text>
+                        </View>
+
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+                            <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '500' }}>Delivery Fee</Text>
+                            <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
+                                ₦{deliveryFee.toLocaleString()}
+                            </Text>
+                        </View>
+
+                        {discount > 0 && (
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+                                <Text style={{ fontSize: 13, color: '#10B981', fontWeight: '600' }}>Discount</Text>
+                                <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#10B981' }}>
+                                    - ₦{discount.toLocaleString()}
+                                </Text>
+                            </View>
+                        )}
+
+                        <View style={{ height: 1, backgroundColor: '#F1F5F9', marginVertical: 8 }} />
+
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text style={{ fontSize: 16, fontWeight: '900', color: '#0A192F' }}>Total</Text>
+                            <Text style={{ fontSize: 20, fontWeight: '900', color: '#0A192F' }}>
+                                ₦{total.toLocaleString()}
+                            </Text>
                         </View>
                     </View>
-                </View>
-            </View>
-        );
-    };
-
-    return (
-        <View style={styles.container}>
-            <StatusBar barStyle="dark-content" backgroundColor="white" />
-
-            <View style={[styles.header, { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 10 : insets.top + 10 }]}>
-                <View style={styles.headerLeft}>
-                    <TouchableOpacity onPress={onBack} style={styles.backBtn}>
-                        <Ionicons name="arrow-back" size={24} color="#0F172A" />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>My Cart</Text>
-                </View>
-
-                {cart.length > 0 && (
-                    <TouchableOpacity onPress={handleClearCart} style={styles.clearBtn}>
-                        <Text style={styles.clearText}>Clear</Text>
-                        <Ionicons name="trash-bin-outline" size={18} color="#EF4444" />
-                    </TouchableOpacity>
                 )}
-            </View>
 
-            {cart.length > 0 ? (
-                <FlatList
-                    data={cart}
-                    keyExtractor={item => item.id.toString()}
-                    renderItem={renderItem}
-                    contentContainerStyle={styles.listContent}
-                    showsVerticalScrollIndicator={false}
-                />
-            ) : (
-                <View style={styles.emptyContainer}>
-                    <View style={styles.emptyIconBox}>
-                        <Ionicons name="cart-outline" size={60} color="#94A3B8" />
-                    </View>
-                    <Text style={styles.emptyTitle}>Your cart is empty</Text>
-                    <Text style={styles.emptySub}>
-                        Looks like you haven't added anything to your cart yet.
-                    </Text>
-                    <TouchableOpacity onPress={onBack} style={styles.shopBtn}>
-                        <Text style={styles.shopBtnText}>Start Shopping</Text>
-                    </TouchableOpacity>
-                </View>
-            )}
+                {/* Delivery Address Card */}
+                {cart.length > 0 && (
+                    <View style={{
+                        backgroundColor: 'white',
+                        borderRadius: 22,
+                        padding: 16,
+                        marginBottom: 16,
+                        borderWidth: 1,
+                        borderColor: '#F1F5F9',
+                        flexDirection: 'row',
+                        alignItems: 'flex-start',
+                        gap: 12
+                    }}>
+                        <View style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 18,
+                            backgroundColor: '#EFF6FF',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginTop: 2
+                        }}>
+                            <Ionicons name="location" size={19} color="#0284C7" />
+                        </View>
 
-            {cart.length > 0 && (
-                <View style={[styles.checkoutBar, { paddingBottom: insets.bottom + 20 }]}>
-                    <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Subtotal</Text>
-                        <Text style={styles.summaryValue}>₦{total.toLocaleString()}</Text>
-                    </View>
-                    <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Shipping</Text>
-                        <Text style={styles.shippingLabel}>Calculated at checkout</Text>
-                    </View>
+                        <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Text style={{ fontSize: 14, fontWeight: '800', color: '#0A192F' }}>
+                                    Delivery Address
+                                </Text>
+                                <TouchableOpacity onPress={() => navigation.navigate('AddressPage')}>
+                                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#0284C7' }}>Edit</Text>
+                                </TouchableOpacity>
+                            </View>
 
-                    <TouchableOpacity onPress={handleCheckout} style={styles.checkoutBtn}>
-                        <Text style={styles.checkoutBtnText}>Checkout</Text>
-                        <Text style={styles.checkoutBtnDot}>•</Text>
-                        <Text style={styles.checkoutBtnAmount}>₦{total.toLocaleString()}</Text>
-                        <Ionicons name="arrow-forward" size={20} color="white" style={styles.checkoutIcon} />
-                    </TouchableOpacity>
-                </View>
-            )}
+                            <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#0F172A', marginTop: 4 }}>
+                                Muhammad Sani Isyaku
+                            </Text>
+                            <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>
+                                No. 12, Gashua Road, Gashua, Yobe State, Nigeria
+                            </Text>
+                            <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 1 }}>
+                                +234 810 123 4567
+                            </Text>
+                        </View>
+                    </View>
+                )}
+
+                {/* Payment Method Selector */}
+                {cart.length > 0 && (
+                    <View style={{ marginBottom: 20 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                            <Text style={{ fontSize: 15, fontWeight: '800', color: '#0A192F' }}>
+                                Payment Method
+                            </Text>
+                            <TouchableOpacity>
+                                <Text style={{ fontSize: 12, fontWeight: '800', color: '#0284C7' }}>See all</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+                            {PAYMENT_METHODS.map(m => {
+                                const isSelected = selectedPayment === m.id;
+                                return (
+                                    <TouchableOpacity
+                                        key={m.id}
+                                        onPress={() => setSelectedPayment(m.id)}
+                                        style={{
+                                            width: 105,
+                                            backgroundColor: isSelected ? '#F0F9FF' : 'white',
+                                            borderRadius: 18,
+                                            paddingVertical: 14,
+                                            paddingHorizontal: 8,
+                                            alignItems: 'center',
+                                            borderWidth: 1.5,
+                                            borderColor: isSelected ? '#0284C7' : '#E2E8F0',
+                                            position: 'relative'
+                                        }}
+                                    >
+                                        {isSelected && (
+                                            <View style={{
+                                                position: 'absolute',
+                                                top: 6,
+                                                right: 6,
+                                                width: 16,
+                                                height: 16,
+                                                borderRadius: 8,
+                                                backgroundColor: '#0284C7',
+                                                alignItems: 'center',
+                                                justifyContent: 'center'
+                                            }}>
+                                                <Ionicons name="checkmark" size={10} color="white" />
+                                            </View>
+                                        )}
+
+                                        <Ionicons name={m.icon} size={24} color={m.color} style={{ marginBottom: 6 }} />
+                                        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: isSelected ? '900' : '700', color: '#0A192F', textAlign: 'center' }}>
+                                            {m.name}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </ScrollView>
+                    </View>
+                )}
+
+                {/* Main CTA Proceed to Checkout */}
+                {cart.length > 0 && (
+                    <View style={{ gap: 8 }}>
+                        <TouchableOpacity
+                            activeOpacity={0.9}
+                            onPress={handleProceedToCheckout}
+                            style={{
+                                backgroundColor: '#F59E0B',
+                                borderRadius: 20,
+                                paddingVertical: 16,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 8,
+                                shadowColor: '#F59E0B',
+                                shadowOffset: { width: 0, height: 6 },
+                                shadowOpacity: 0.3,
+                                shadowRadius: 12,
+                                elevation: 4
+                            }}
+                        >
+                            <Ionicons name="lock-closed" size={18} color="#0A192F" />
+                            <Text style={{ color: '#0A192F', fontSize: 16, fontWeight: '900', letterSpacing: 0.2 }}>
+                                Proceed to Checkout
+                            </Text>
+                            <Ionicons name="arrow-forward" size={18} color="#0A192F" />
+                        </TouchableOpacity>
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 4 }}>
+                            <Ionicons name="shield-checkmark" size={14} color="#64748B" />
+                            <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600' }}>
+                                Your payment information is secure
+                            </Text>
+                        </View>
+                    </View>
+                )}
+            </ScrollView>
         </View>
     );
 };
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F8FAFC' },
-    header: {
-        paddingBottom: 16,
-        paddingHorizontal: 20,
-        backgroundColor: 'white',
-        borderBottomWidth: 1,
-        borderColor: '#F1F5F9',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        ...Platform.select({
-            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10 },
-            android: { elevation: 4 }
-        }),
-        zIndex: 10
-    },
-    headerLeft: { flexDirection: 'row', alignItems: 'center' },
-    backBtn: { marginRight: 16 },
-    headerTitle: { fontSize: 20, fontWeight: '800', color: '#0F172A' },
-    clearBtn: { flexDirection: 'row', alignItems: 'center', padding: 8 },
-    clearText: { color: '#EF4444', fontWeight: '600', marginRight: 4 },
-    listContent: { padding: 20, paddingBottom: 180 },
-    card: {
-        flexDirection: 'row',
-        backgroundColor: 'white',
-        borderRadius: 20,
-        padding: 12,
-        marginBottom: 16,
-        alignItems: 'center',
-        ...Platform.select({
-            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10 },
-            android: { elevation: 3 }
-        })
-    },
-    image: { width: 90, height: 90, borderRadius: 16, backgroundColor: '#F1F5F9' },
-    content: { flex: 1, marginLeft: 16 },
-    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-    name: { fontSize: 16, fontWeight: '700', color: '#0F172A', flex: 1, marginRight: 8 },
-    meta: { fontSize: 13, color: '#64748B', marginTop: 4 },
-    footerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
-    price: { fontSize: 17, fontWeight: '800', color: '#0F172A' },
-    qtyContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 12, padding: 2, borderWidth: 1, borderColor: '#E2E8F0' },
-    qtyBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
-    qtyText: { width: 34, textAlign: 'center', fontSize: 15, fontWeight: '700', color: '#0F172A' },
-    emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
-    emptyIconBox: { width: 120, height: 120, backgroundColor: '#F1F5F9', borderRadius: 60, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
-    emptyTitle: { fontSize: 22, fontWeight: '800', color: '#0F172A', marginBottom: 8 },
-    emptySub: { fontSize: 15, color: '#64748B', textAlign: 'center', marginBottom: 32, lineHeight: 22 },
-    shopBtn: { backgroundColor: '#0F172A', paddingHorizontal: 32, paddingVertical: 18, borderRadius: 30 },
-    shopBtnText: { color: 'white', fontWeight: '800', fontSize: 16 },
-    checkoutBar: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        backgroundColor: 'white',
-        padding: 20,
-        borderTopWidth: 1,
-        borderColor: '#F1F5F9',
-        ...Platform.select({
-            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.1, shadowRadius: 15 },
-            android: { elevation: 20 }
-        })
-    },
-    summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-    summaryLabel: { color: '#64748B', fontSize: 15, fontWeight: '500' },
-    summaryValue: { color: '#0F172A', fontSize: 17, fontWeight: '700' },
-    shippingLabel: { color: '#64748B', fontSize: 13, fontWeight: '600', fontStyle: 'italic' },
-    checkoutBtn: {
-        backgroundColor: '#0F172A',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: 64,
-        borderRadius: 20,
-        ...Platform.select({
-            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 15 },
-            android: { elevation: 8 }
-        })
-    },
-    checkoutBtnText: { color: 'white', fontSize: 17, fontWeight: '800', marginRight: 8 },
-    checkoutBtnDot: { color: 'rgba(255,255,255,0.4)', fontSize: 17, fontWeight: '600' },
-    checkoutBtnAmount: { color: 'white', fontSize: 17, fontWeight: '800', marginLeft: 8 },
-    checkoutIcon: { position: 'absolute', right: 20 }
-});
+const styles = StyleSheet.create({});

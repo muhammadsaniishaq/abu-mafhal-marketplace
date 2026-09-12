@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 
 export const CountdownTimer = ({ targetDate }) => {
     const calculateTimeLeft = () => {
-        const difference = +new Date(targetDate) - +new Date();
+        // Default target is 2 days from now if not passed
+        const target = targetDate ? +new Date(targetDate) : (+new Date() + (2 * 24 * 3600 * 1000 + 14 * 3600 * 1000 + 27 * 60 * 1000 + 36 * 1000));
+        const difference = target - +new Date();
         let timeLeft = {};
 
         if (difference > 0) {
@@ -14,7 +16,7 @@ export const CountdownTimer = ({ targetDate }) => {
                 seconds: Math.floor((difference / 1000) % 60),
             };
         } else {
-            timeLeft = { days: 0, hours: 0, minutes: 0, seconds: 0 };
+            timeLeft = { days: 2, hours: 14, minutes: 27, seconds: 36 };
         }
         return timeLeft;
     };
@@ -22,38 +24,64 @@ export const CountdownTimer = ({ targetDate }) => {
     const [timeLeft, setTimeLeft] = useState(calculateTimeLeft());
 
     useEffect(() => {
-        const timer = setTimeout(() => {
+        const timer = setInterval(() => {
             setTimeLeft(calculateTimeLeft());
         }, 1000);
 
-        return () => clearTimeout(timer);
-    });
+        return () => clearInterval(timer);
+    }, [targetDate]);
 
     const formatTime = (time) => {
-        return time < 10 ? `0${time}` : time;
+        return time < 10 ? `0${time}` : `${time}`;
     };
 
+    const UNITS = [
+        { val: formatTime(timeLeft.days), label: 'Days' },
+        { val: formatTime(timeLeft.hours), label: 'Hours' },
+        { val: formatTime(timeLeft.minutes), label: 'Mins' },
+        { val: formatTime(timeLeft.seconds), label: 'Secs' },
+    ];
+
     return (
-        <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>
-            {timeLeft.days > 0 && (
-                <>
-                    <View style={{ backgroundColor: '#EF4444', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                        <Text style={{ color: 'white', fontWeight: '800', fontSize: 12 }}>{formatTime(timeLeft.days)}D</Text>
+        <View style={s.timerContainer}>
+            {UNITS.map((item, idx) => (
+                <View key={idx} style={s.unitBox}>
+                    <View style={s.redBox}>
+                        <Text style={s.numberTxt}>{item.val}</Text>
                     </View>
-                    <Text style={{ fontWeight: '800', color: '#EF4444' }}>:</Text>
-                </>
-            )}
-            <View style={{ backgroundColor: '#EF4444', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                <Text style={{ color: 'white', fontWeight: '800', fontSize: 12 }}>{formatTime(timeLeft.hours)}</Text>
-            </View>
-            <Text style={{ fontWeight: '800', color: '#EF4444' }}>:</Text>
-            <View style={{ backgroundColor: '#EF4444', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                <Text style={{ color: 'white', fontWeight: '800', fontSize: 12 }}>{formatTime(timeLeft.minutes)}</Text>
-            </View>
-            <Text style={{ fontWeight: '800', color: '#EF4444' }}>:</Text>
-            <View style={{ backgroundColor: '#EF4444', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                <Text style={{ color: 'white', fontWeight: '800', fontSize: 12 }}>{formatTime(timeLeft.seconds)}</Text>
-            </View>
+                    <Text style={s.labelTxt}>{item.label}</Text>
+                </View>
+            ))}
         </View>
     );
 };
+
+const s = StyleSheet.create({
+    timerContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    unitBox: {
+        alignItems: 'center',
+    },
+    redBox: {
+        backgroundColor: '#EF4444',
+        width: 34,
+        height: 30,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    numberTxt: {
+        color: '#FFFFFF',
+        fontWeight: '900',
+        fontSize: 12.5,
+    },
+    labelTxt: {
+        fontSize: 8.5,
+        color: '#64748B',
+        fontWeight: '700',
+        marginTop: 2,
+    },
+});

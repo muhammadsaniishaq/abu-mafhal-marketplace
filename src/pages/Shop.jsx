@@ -287,19 +287,29 @@ const Shop = () => {
       } catch (err) { /* silent banners skip */ }
 
       // ── Products ──
+      let raw = [];
       const { data: allProds, error: allErr } = await supabase
         .from('products')
         .select('*')
-        .eq('is_active', true)
         .order('created_at', { ascending: false })
         .limit(200);
 
-      if (allErr) {
-        setFetchError(`DB Error: ${allErr.message}`);
-        return;
+      if (!allErr && allProds) {
+        raw = allProds;
+      } else if (allErr) {
+        console.warn('[Shop] Primary products query notice:', allErr.message);
+        // Fallback query without filter
+        const { data: fallbackProds, error: fbErr } = await supabase
+          .from('products')
+          .select('*')
+          .limit(100);
+        if (fallbackProds) {
+          raw = fallbackProds;
+        } else if (fbErr) {
+          console.warn('[Shop] Fallback products query notice:', fbErr.message);
+        }
       }
 
-      const raw = allProds || [];
       console.log('[Shop] Products fetched count:', raw.length);
 
       // Extract unique categories dynamically

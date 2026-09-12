@@ -103,9 +103,12 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem('auth_user');
       localStorage.removeItem('auth_role');
 
+      const cleanEmail = (email || '').trim().toLowerCase();
+      const cleanPassword = (password || '').trim();
+
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
+        email: cleanEmail,
+        password: cleanPassword
       });
 
       if (error) throw error;

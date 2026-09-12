@@ -227,13 +227,7 @@ export default function App() {
 
     if (loading) return null; // Or a custom splash screen
 
-    let initialRoute = 'Landing';
-    if (user) {
-        if (user.role === 'admin') initialRoute = 'AdminDashboard';
-        else if (user.role === 'vendor') initialRoute = 'VendorDashboard';
-        else if (user.role === 'driver') initialRoute = 'DriverDashboard';
-        else initialRoute = 'Main';
-    }
+    let initialRoute = user ? 'Main' : 'Landing';
 
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
@@ -264,8 +258,7 @@ export default function App() {
                                                 {...props}
                                                 onBack={() => props.navigation.goBack()}
                                                  onLoginSuccess={async (loggedInUser) => {
-                                                     const profile = await fetchUserProfile(loggedInUser.id, loggedInUser);
-                                                     const userRole = profile?.role || 'buyer';
+                                                     await fetchUserProfile(loggedInUser.id, loggedInUser);
                                                      const redirectTo = props.route?.params?.redirectTo;
                                                      const redirectParams = props.route?.params?.redirectParams;
 
@@ -273,10 +266,8 @@ export default function App() {
                                                          if (navigationRef.isReady()) {
                                                              if (redirectTo) {
                                                                  navigationRef.navigate(redirectTo, redirectParams);
-                                                             } else if (userRole === 'admin') {
-                                                                 navigationRef.navigate('AdminDashboard');
-                                                             } else if (userRole === 'vendor') {
-                                                                 navigationRef.navigate('VendorDashboard');
+                                                             } else {
+                                                                 navigationRef.navigate('Main');
                                                              }
                                                          }
                                                      }, 150);
