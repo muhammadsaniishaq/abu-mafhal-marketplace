@@ -2,45 +2,33 @@ import React, { useEffect } from 'react';
 
 const MobileLoader = () => {
     useEffect(() => {
-        const checkAndRedirect = () => {
-            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            const isForcedWeb = window.location.search.indexOf('force=web') !== -1;
-
-            if (isMobile && !isForcedWeb) {
-                console.log("MobileLoader: Redirecting to /mobile...");
-                window.location.replace('/mobile');
-            }
-        };
-
-        const interval = setInterval(checkAndRedirect, 1000);
-        checkAndRedirect();
-
-        return () => clearInterval(interval);
+        window.location.replace('/mobile');
     }, []);
 
     return (
         <div style={{
             position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            backgroundColor: '#fff',
+            inset: 0,
+            backgroundColor: '#0A192F',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'center',
             alignItems: 'center',
-            zIndex: 9999
+            zIndex: 99999,
+            color: '#FFFFFF',
+            fontFamily: 'system-ui, -apple-system, sans-serif'
         }}>
             <div style={{
-                width: '50px',
-                height: '50px',
-                border: '5px solid #f3f3f3',
-                borderTop: '5px solid #3498db',
+                width: '46px',
+                height: '46px',
+                border: '3.5px solid rgba(255,255,255,0.12)',
+                borderTop: '3.5px solid #F59E0B',
                 borderRadius: '50%',
-                animation: 'spin 1s linear infinite'
+                animation: 'spin 0.75s linear infinite'
             }} />
-            <h2 style={{ fontFamily: 'sans-serif', marginTop: '20px' }}>Loading Mobile Experience...</h2>
+            <p style={{ marginTop: '16px', fontSize: '13px', fontWeight: '700', letterSpacing: '0.4px', color: '#F1F5F9' }}>
+                Opening Abu Mafhal Mobile...
+            </p>
             <style>{`
                 @keyframes spin {
                     0% { transform: rotate(0deg); }

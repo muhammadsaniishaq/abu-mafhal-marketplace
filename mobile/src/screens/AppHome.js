@@ -24,10 +24,83 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const { width } = Dimensions.get('window');
 const AM_LOGO = require('../../assets/am_logo.png');
 
-const FALLBACK_FLASH_PRODUCTS = [];
+const FALLBACK_FLASH_PRODUCTS = [
+    {
+        id: 'fs1',
+        name: 'Oraimo FreePods 4',
+        subtitle: 'Wireless Earbuds',
+        category: 'Electronics',
+        price: 25000,
+        compare_at_price: 38500,
+        discount: 35,
+        rating: 4.7,
+        reviews: '1.2k',
+        image: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?q=80&w=400&auto=format&fit=crop',
+    },
+    {
+        id: 'fs2',
+        name: 'Samsung Galaxy A55',
+        subtitle: '5G Smartphone',
+        category: 'Electronics',
+        price: 420000,
+        compare_at_price: 580000,
+        discount: 28,
+        rating: 4.8,
+        reviews: '856',
+        image: 'https://images.unsplash.com/photo-1598327105666-5b89351aff97?q=80&w=400&auto=format&fit=crop',
+    },
+    {
+        id: 'fs3',
+        name: 'Nike Air Force 1',
+        subtitle: "Men's Sneakers",
+        category: 'Fashion',
+        price: 60000,
+        compare_at_price: 100000,
+        discount: 40,
+        rating: 4.6,
+        reviews: '2.1k',
+        image: 'https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?q=80&w=400&auto=format&fit=crop',
+    },
+    {
+        id: 'fs4',
+        name: 'Oraimo Watch 4 Plus',
+        subtitle: 'Smart Watch',
+        category: 'Electronics',
+        price: 28000,
+        compare_at_price: 40000,
+        discount: 30,
+        rating: 4.5,
+        reviews: '934',
+        image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=400&auto=format&fit=crop',
+    },
+    {
+        id: 'fs5',
+        name: 'Classy Handbag',
+        subtitle: "Women's Fashion",
+        category: 'Fashion',
+        price: 18500,
+        compare_at_price: 25000,
+        discount: 25,
+        rating: 4.7,
+        reviews: '1.3k',
+        image: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?q=80&w=400&auto=format&fit=crop',
+    },
+    {
+        id: 'fs6',
+        name: 'Buchymix Blender',
+        subtitle: 'Kitchen Appliance',
+        category: 'Home',
+        price: 78000,
+        compare_at_price: 98000,
+        discount: 20,
+        rating: 4.6,
+        reviews: '780',
+        image: 'https://images.unsplash.com/photo-1570222094114-d054a817e56b?q=80&w=400&auto=format&fit=crop',
+    },
+];
 
 
-export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigate, onProductClick, user, cartCount = 0, onAddToCart }) => {
+export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigate, onProductClick, user, cartCount: initialCartCount = 0, onAddToCart }) => {
     const insets = useSafeAreaInsets();
     const [activeCategoryFilter, setActiveCategoryFilter] = useState('All');
     const [banners, setBanners] = useState([]);
@@ -54,7 +127,11 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
     const [recentOrders, setRecentOrders] = useState([]);
     const [mostRated, setMostRated] = useState([]);
     const [dealOfDay, setDealOfDay] = useState(null);
-    const [cartCount, setCartCount] = useState(0);
+    const [cartCount, setCartCount] = useState(initialCartCount);
+
+    useEffect(() => {
+        if (initialCartCount !== undefined) setCartCount(initialCartCount);
+    }, [initialCartCount]);
     const [liveCount] = useState(Math.floor(Math.random() * 80) + 40);
     const [recentlyViewed, setRecentlyViewed] = useState([]);
     const [limitedStock, setLimitedStock] = useState([]);
@@ -478,11 +555,16 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
         );
     }
 
-    const displayFlashProducts = (flashSale && flashSale.length > 0 ? flashSale : (recommended && recommended.length > 0 ? recommended : newArrivals)).filter(p => {
+    const combinedFlash = (flashSale && flashSale.length >= 3)
+        ? flashSale
+        : [...(flashSale || []), ...FALLBACK_FLASH_PRODUCTS.filter(fb => !(flashSale || []).some(fs => fs.id === fb.id))].slice(0, 6);
+
+    const displayFlashProducts = combinedFlash.filter(p => {
         if (activeCategoryFilter === 'All') return true;
         const cat = (p.category || p.subtitle || '').toLowerCase();
         return cat.includes(activeCategoryFilter.toLowerCase());
     });
+
 
     return (
         <View style={styles.container}>
