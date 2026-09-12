@@ -1,5 +1,5 @@
 import 'react-native-gesture-handler';
-import { LogBox, Text, TextInput, ScrollView } from 'react-native';
+import { LogBox, Text, TextInput, ScrollView, FlatList, SectionList } from 'react-native';
 import React, { useState, useEffect } from 'react';
 
 // Kwata-kwata kange zoom da canza girman rubutu a dukkan manhajar mobile
@@ -15,6 +15,16 @@ if (ScrollView.defaultProps == null) ScrollView.defaultProps = {};
 ScrollView.defaultProps.maximumZoomScale = 1;
 ScrollView.defaultProps.minimumZoomScale = 1;
 ScrollView.defaultProps.bouncesZoom = false;
+
+if (FlatList.defaultProps == null) FlatList.defaultProps = {};
+FlatList.defaultProps.maximumZoomScale = 1;
+FlatList.defaultProps.minimumZoomScale = 1;
+FlatList.defaultProps.bouncesZoom = false;
+
+if (SectionList.defaultProps == null) SectionList.defaultProps = {};
+SectionList.defaultProps.maximumZoomScale = 1;
+SectionList.defaultProps.minimumZoomScale = 1;
+SectionList.defaultProps.bouncesZoom = false;
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { AppSettingsProvider } from './src/context/AppSettingsContext';
