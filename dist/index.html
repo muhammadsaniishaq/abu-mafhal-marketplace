@@ -8,13 +8,15 @@
   <title>Abu Mafhal Marketplace</title>
 
   <style>
-    html, body, #root {
+    *, *::before, *::after, html, body, #root {
       touch-action: pan-x pan-y !important;
+      -webkit-touch-callout: none !important;
+    }
+    html, body {
       -webkit-text-size-adjust: 100% !important;
       -moz-text-size-adjust: 100% !important;
            text-size-adjust: 100% !important;
       overflow-x: hidden !important;
-      -webkit-touch-callout: none;
     }
     @media screen and (max-width: 768px) {
       input, select, textarea, [role="textbox"], [contenteditable="true"] {
@@ -24,45 +26,54 @@
   </style>
 
   <script>
-    // 1. Hana Pinch Zoom a iOS da Android (Gesture Prevention)
-    document.addEventListener('gesturestart', function (e) {
-      e.preventDefault();
-    }, { passive: false });
-    document.addEventListener('gesturechange', function (e) {
-      e.preventDefault();
-    }, { passive: false });
-    document.addEventListener('gestureend', function (e) {
-      e.preventDefault();
-    }, { passive: false });
-
-    // 2. Hana Multi-touch Pinch a touchmove
-    document.addEventListener('touchmove', function (e) {
-      if (e.touches.length > 1) {
-        e.preventDefault();
+    (function () {
+      // 1. Hana multi-touch a touchstart (Kafin ma browser ya fara gesture)
+      function preventMultiTouch(e) {
+        if (e.touches && e.touches.length > 1) {
+          e.preventDefault();
+        }
       }
-    }, { passive: false });
+      window.addEventListener('touchstart', preventMultiTouch, { passive: false });
+      document.addEventListener('touchstart', preventMultiTouch, { passive: false });
 
-    // 3. Hana Double-Tap Zoom
-    let lastTouchEnd = 0;
-    document.addEventListener('touchend', function (e) {
-      const now = Date.now();
-      if (now - lastTouchEnd <= 300) {
-        e.preventDefault();
+      // 2. Hana multi-touch a touchmove
+      window.addEventListener('touchmove', preventMultiTouch, { passive: false });
+      document.addEventListener('touchmove', preventMultiTouch, { passive: false });
+
+      // 3. Hana iOS Safari Gesture events (pinch zoom)
+      ['gesturestart', 'gesturechange', 'gestureend'].forEach(function (eventName) {
+        window.addEventListener(eventName, function (e) {
+          e.preventDefault();
+        }, { passive: false });
+        document.addEventListener(eventName, function (e) {
+          e.preventDefault();
+        }, { passive: false });
+      });
+
+      // 4. Hana Double-Tap Zoom a wayoyin hannu
+      var lastTouchEnd = 0;
+      function preventDoubleTap(e) {
+        var now = Date.now();
+        if (now - lastTouchEnd <= 300) {
+          e.preventDefault();
+        }
+        lastTouchEnd = now;
       }
-      lastTouchEnd = now;
-    }, { passive: false });
+      window.addEventListener('touchend', preventDoubleTap, { passive: false });
+      document.addEventListener('touchend', preventDoubleTap, { passive: false });
 
-    // 4. Hana dblclick
-    document.addEventListener('dblclick', function (e) {
-      e.preventDefault();
-    }, { passive: false });
-
-    // 5. Hana Ctrl + Wheel Zoom (Trackpad pinch)
-    document.addEventListener('wheel', function (e) {
-      if (e.ctrlKey) {
+      // 5. Hana dblclick
+      window.addEventListener('dblclick', function (e) {
         e.preventDefault();
-      }
-    }, { passive: false });
+      }, { passive: false });
+
+      // 6. Hana Ctrl + Wheel / Trackpad pinch zoom
+      window.addEventListener('wheel', function (e) {
+        if (e.ctrlKey) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+    })();
   </script>
   
   <!-- Premium Fonts -->
@@ -70,8 +81,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Montserrat:wght@400;500;600;700;800;900&family=Poppins:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
 
-  <script type="module" crossorigin src="/assets/index-BPLoNSal.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-DDOuVJ0d.css">
+  <script type="module" crossorigin src="/assets/index-BRLUBvLQ.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-B_snzTz5.css">
 </head>
 
 <body>

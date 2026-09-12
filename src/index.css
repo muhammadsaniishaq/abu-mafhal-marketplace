@@ -17,17 +17,22 @@
     --slate-950: #020617;
   }
   
+  *, *::before, *::after {
+    touch-action: pan-x pan-y !important;
+  }
+  
   body {
     @apply font-sans bg-slate-50 text-slate-900 antialiased selection:bg-indigo-500/20 transition-colors duration-300;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    touch-action: manipulation;
-    -webkit-text-size-adjust: 100%;
+    touch-action: pan-x pan-y !important;
+    -webkit-text-size-adjust: 100% !important;
+    text-size-adjust: 100% !important;
     overflow-x: hidden;
   }
   
   /* Prevent mobile Safari & Chrome auto-zooming on input focus */
   @media screen and (max-width: 768px) {
-    input, select, textarea {
+    input, select, textarea, [role="textbox"], [contenteditable="true"] {
       font-size: 16px !important;
     }
   }
