@@ -4,7 +4,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 import { supabase } from './supabase';
 
-const RESEND_KEY = 're_jog5a7d6_5uofEsHm57R6re2SJX5stpAR';
+const RESEND_KEY = process.env.RESEND_API_KEY || process.env.EXPO_PUBLIC_RESEND_API_KEY || '';
 
 // Helper to generate HTML (Shared with Admin Preview)
 export function generateInvoiceHTML(invoice, business = {}) {

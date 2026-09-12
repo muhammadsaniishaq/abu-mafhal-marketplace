@@ -55,11 +55,17 @@ const Stack = createNativeStackNavigator();
 const navigationRef = createNavigationContainerRef();
 
 const linking = {
-    prefixes: ['abumafhal://', 'https://abumafhal.com', 'http://abumafhal.com'],
+    prefixes: [
+        'abumafhal://',
+        'https://abumafhal.com',
+        'http://abumafhal.com',
+        'https://www.abumafhal.com',
+        'http://www.abumafhal.com',
+    ],
     config: {
         screens: {
-            Auth: 'join/:code',
             Landing: '',
+            Auth: 'auth',
             Main: 'main',
         },
     },

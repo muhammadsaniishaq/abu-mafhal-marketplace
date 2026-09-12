@@ -68,8 +68,10 @@ const Register = () => {
     });
   };
 
-  const handleSendOtp = async () => {
+  const handleSubmit = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
     setError('');
+
     const cleanEmail = (formData.email || '').trim().toLowerCase();
     const cleanName = (formData.name || '').trim();
     const cleanPhone = (formData.phone || '').trim();
@@ -105,52 +107,14 @@ const Register = () => {
         return;
       }
 
-      // 2. Generate 6-digit OTP
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
-      setOtpCode(code);
-
-      // 3. Send OTP Email
-      await sendOtpEmail(cleanEmail, code);
-
-      setIsOtpSent(true);
-      setCountdown(60);
-    } catch (err) {
-      setError('Failed to send verification code. Please try again.');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-
-    if (!isOtpSent) {
-      handleSendOtp();
-      return;
-    }
-
-    // Verify OTP
-    if (userEnteredOtp.trim() !== otpCode.trim()) {
-      setError('Invalid verification code. Please check and try again.');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const cleanEmail = (formData.email || '').trim().toLowerCase();
-      const cleanName = (formData.name || '').trim();
-      const cleanPhone = (formData.phone || '').trim();
-
+      // 2. Direct account creation via Supabase Auth
       const userCredential = await register(cleanEmail, formData.password, {
         name: cleanName,
         phone: cleanPhone,
         role: formData.role
       });
 
-      // Send welcome email
+      // 3. Send welcome email in background (non-blocking)
       try {
         await triggerWelcomeEmail({
           name: cleanName,
@@ -158,7 +122,7 @@ const Register = () => {
         });
       } catch (_) {}
 
-      // Handle referral code if present
+      // 4. Process referral code if provided
       if (formData.referralCode) {
         try {
           const { data: referrer } = await supabase
@@ -176,13 +140,18 @@ const Register = () => {
         } catch (_) {}
       }
 
-      // Redirect to home/marketplace
+      // 5. Successful registration - redirect to home page
       navigate('/', { replace: true });
     } catch (error) {
+      console.error('Registration failed:', error);
       setError(error.message || 'Failed to create account. Please try again.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSendOtp = () => {
+    handleSubmit();
   };
 
   return (
@@ -386,7 +355,7 @@ const Register = () => {
                   </div>
                 </div>
 
-                {/* Send OTP Button */}
+                {/* Create Account Button */}
                 <button
                   type="submit"
                   disabled={loading}
@@ -396,7 +365,7 @@ const Register = () => {
                     <Loader2 className="animate-spin h-5 w-5" />
                   ) : (
                     <>
-                      <span>Continue to Verification</span>
+                      <span>Create Account</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
@@ -423,7 +392,7 @@ const Register = () => {
 
                 <button
                   type="submit"
-                  disabled={loading || userEnteredOtp.length !== 6}
+                  disabled={loading}
                   className="w-full mt-2 flex items-center justify-center gap-2 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black py-3.5 rounded-xl transition-all shadow-lg shadow-amber-500/20 disabled:opacity-60 disabled:cursor-not-allowed transform active:scale-[0.98]"
                 >
                   {loading ? (
@@ -431,7 +400,7 @@ const Register = () => {
                   ) : (
                     <>
                       <CheckCircle2 className="w-4 h-4" />
-                      <span>Verify & Create Account</span>
+                      <span>Complete Account Creation Directly</span>
                     </>
                   )}
                 </button>

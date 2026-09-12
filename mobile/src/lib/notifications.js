@@ -1,10 +1,8 @@
 import { supabase } from './supabase';
 import { Alert } from 'react-native';
 
-// REPLACE WITH YOUR FULL RESEND API KEY
-// You can get this from https://resend.com/api-keys
-// [IMPORTANT] Ensure this key starts with 're_' and is active.
-export const RESEND_API_KEY = 're_jog5a7d6_5uofEsHm57R6re2SJX5stpAR';
+// Resend API key loaded from environment if configured
+export const RESEND_API_KEY = process.env.RESEND_API_KEY || process.env.EXPO_PUBLIC_RESEND_API_KEY || '';
 
 export const NotificationService = {
 

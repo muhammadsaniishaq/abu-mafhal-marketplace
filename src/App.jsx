@@ -251,27 +251,17 @@ function App() {
                   <Route path="loyalty" element={<LoyaltyRewards />} />
                 </Route>
 
-                {/* ==================== 404 NOT FOUND ==================== */}
+                {/* ==================== MOBILE & ALIAS ROUTES (NEVER 404) ==================== */}
+                <Route path="/mobile" element={<Navigate to="/" replace />} />
+                <Route path="/mobile/*" element={<Navigate to="/" replace />} />
+                <Route path="/join" element={<Navigate to="/register" replace />} />
+                <Route path="/join/*" element={<Navigate to="/register" replace />} />
+                <Route path="/auth" element={<Navigate to="/login" replace />} />
+
+                {/* ==================== 404 NOT FOUND / SAFE FALLBACK ==================== */}
                 <Route
                   path="*"
-                  element={
-                    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-                      <div className="text-center">
-                        <h1 className="text-9xl font-bold text-gray-900 dark:text-white mb-4">404</h1>
-                        <p className="text-2xl text-gray-600 dark:text-gray-400 mb-2">Page Not Found</p>
-                        <p className="text-gray-500 dark:text-gray-500 mb-8">
-                          The page you're looking for doesn't exist.
-                        </p>
-                        <a
-                          href="/"
-                          className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors inline-flex items-center gap-2 font-medium shadow-lg"
-                        >
-                          <span>🏠</span>
-                          <span>Go to Home</span>
-                        </a>
-                      </div>
-                    </div>
-                  }
+                  element={<Navigate to="/" replace />}
                 />
               </Routes>
 

@@ -14,20 +14,9 @@
     ],
     "redirects": [
         {
-            "source": "/",
-            "has": [
-                {
-                    "type": "header",
-                    "key": "User-Agent",
-                    "value": "(?i).*(android|iphone|ipad|ipod|opera mini|iemobile|mobile).*"
-                }
-            ],
-            "destination": "/mobile/",
+            "source": "/mobile/",
+            "destination": "/mobile",
             "permanent": false
-        },
-        {
-            "source": "/mobile",
-            "destination": "/mobile/"
         }
     ],
     "rewrites": [
@@ -44,12 +33,20 @@
             "destination": "/mobile/_expo/$1"
         },
         {
-            "source": "/mobile/(.*)",
+            "source": "/mobile/:path*",
             "destination": "/mobile/index.html"
         },
         {
             "source": "/mobile",
             "destination": "/mobile/index.html"
+        },
+        {
+            "source": "/join/:path*",
+            "destination": "/index.html"
+        },
+        {
+            "source": "/auth",
+            "destination": "/index.html"
         },
         {
             "source": "/(.*)",

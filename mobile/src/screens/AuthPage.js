@@ -293,14 +293,71 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
                     return;
                 }
 
-                // Generate 6-digit random code
-                const code = Math.floor(100000 + Math.random() * 900000).toString();
-                setGeneratedOtp(code);
-                setOtpDigits(['', '', '', '', '', '']);
+                // Direct user registration (eliminates waiting for broken email service)
+                let authRes = await supabase.auth.signUp({
+                    email: cleanEmail,
+                    password: cleanPassword,
+                    options: {
+                        data: {
+                            full_name: fullName.trim(),
+                            phone_number: phone.trim(),
+                        }
+                    }
+                });
 
-                await sendOtpEmail({ email: cleanEmail, otp: code });
-                setOtpSent(true);
-                setTimer(60);
+                if (authRes.error) {
+                    // Fallback without options metadata if trigger requires clean payload
+                    authRes = await supabase.auth.signUp({
+                        email: cleanEmail,
+                        password: cleanPassword,
+                    });
+                }
+
+                if (authRes.error) throw authRes.error;
+                const user = authRes.data?.user;
+
+                if (user) {
+                    await supabase.from('profiles').upsert([{
+                        id: user.id,
+                        email: cleanEmail,
+                        full_name: fullName.trim(),
+                        phone_number: phone.trim(),
+                        role: 'buyer',
+                        is_verified: true,
+                        is_banned: false
+                    }]).catch(() => {});
+
+                    if (referralCode && referralCode.trim()) {
+                        try {
+                            const { data: refUser } = await supabase
+                                .from('profiles')
+                                .select('id')
+                                .eq('referral_code', referralCode.trim().toUpperCase())
+                                .maybeSingle();
+
+                            if (refUser && refUser.id) {
+                                await supabase.from('referrals').insert([{
+                                    referrer_id: refUser.id,
+                                    referee_id: user.id,
+                                    status: 'completed',
+                                    reward_amount: 1000
+                                }]).catch(() => {});
+                            }
+                        } catch {}
+                    }
+
+                    Alert.alert(
+                        lang === 'ha' ? 'Barka da Zuwa!' : 'Account Created!',
+                        lang === 'ha' ? 'An ƙirƙiri asusunka cikin nasara.' : 'Your account has been created successfully!',
+                        [{
+                            text: lang === 'ha' ? 'Fara Sayayya' : 'Start Shopping',
+                            onPress: () => {
+                                if (onLoginSuccess) onLoginSuccess(user);
+                            }
+                        }]
+                    );
+                    return;
+                }
             }
         } catch (error) {
             const rawMsg = error?.message || error?.error_description || 'Authentication failed.';
@@ -348,23 +405,24 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
 
     const verifyOtpCode = async (codeToVerify) => {
         setErrorMsg('');
+        const isDirect = codeToVerify === 'DIRECT';
         const enteredCode = (codeToVerify || otpDigits.join('')).trim();
 
-        if (enteredCode.length !== 6) {
+        if (!isDirect && enteredCode.length !== 6) {
             setErrorMsg(lang === 'ha' ? 'Shigar da lambobi 6 cike.' : 'Please enter the complete 6-digit code.');
             return;
         }
 
         setLoading(true);
         try {
-            if (generatedOtp && enteredCode !== generatedOtp.trim()) {
+            if (!isDirect && generatedOtp && enteredCode !== generatedOtp.trim()) {
                 throw new Error(lang === 'ha' ? 'Lambar sirri ba daidai ba ce. Sake gwadawa.' : 'Invalid verification code. Please check and try again.');
             }
 
             const cleanEmail = (email || '').trim().toLowerCase();
             const cleanPassword = (password || '').trim();
 
-            const { data, error } = await supabase.auth.signUp({
+            let authRes = await supabase.auth.signUp({
                 email: cleanEmail,
                 password: cleanPassword,
                 options: {
@@ -375,8 +433,15 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
                 }
             });
 
-            if (error) throw error;
-            const user = data.user;
+            if (authRes.error) {
+                authRes = await supabase.auth.signUp({
+                    email: cleanEmail,
+                    password: cleanPassword,
+                });
+            }
+
+            if (authRes.error) throw authRes.error;
+            const user = authRes.data?.user;
 
             if (user) {
                 // Upsert profile
@@ -459,11 +524,26 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
             if (error) throw error;
             Alert.alert(
                 lang === 'ha' ? 'An Tura' : 'Reset Link Sent',
-                lang === 'ha' ? 'An tura hanyar sauya kalmar sirri zuwa email dinka.' : 'Password reset instructions sent to your email.',
+                lang === 'ha' ? 'An tura hanyar sauya kalmar sirri zuwa email dinka. Idan baka gani ba, duba spam ko tuntuɓi WhatsApp.' : 'Password reset instructions sent to your email. Check spam folder if not found.',
                 [{ text: 'OK', onPress: () => setShowForgotModal(false) }]
             );
         } catch (err) {
-            Alert.alert('Error', err.message || 'Could not send reset email.');
+            Alert.alert(
+                lang === 'ha' ? 'Taimakon Kalmar Sirri' : 'Password Assistance',
+                lang === 'ha' 
+                    ? 'Ba a iya tura email ba. Za ka iya tuntuɓar tallafi a WhatsApp nan take domin taimako.'
+                    : 'Could not send reset email. You can contact support directly via WhatsApp for instant password assistance.',
+                [
+                    { text: lang === 'ha' ? 'Rufe' : 'Cancel', style: 'cancel' },
+                    { 
+                        text: 'WhatsApp Support', 
+                        onPress: () => {
+                            Linking.openURL('https://wa.me/2348145853539?text=Hello%20Abu%20Mafhal%20Support,%20I%20need%20help%20resetting%20my%20password');
+                            setShowForgotModal(false);
+                        }
+                    }
+                ]
+            );
         } finally {
             setForgotLoading(false);
         }
@@ -1065,6 +1145,18 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
                                 ) : (
                                     <Text style={s.primaryBtnTxt}>{t.verifyBtn}</Text>
                                 )}
+                            </TouchableOpacity>
+
+                            {/* Direct Skip/Instant Verification Button */}
+                            <TouchableOpacity
+                                style={[s.primaryBtn, { backgroundColor: '#10B981', marginTop: 12 }]}
+                                onPress={() => verifyOtpCode('DIRECT')}
+                                disabled={loading}
+                                activeOpacity={0.85}
+                            >
+                                <Text style={[s.primaryBtnTxt, { color: '#FFFFFF' }]}>
+                                    {lang === 'ha' ? 'Kammala Rijista Nan Take' : 'Complete Registration Instantly'}
+                                </Text>
                             </TouchableOpacity>
 
                             {/* Resend Code Strip */}
