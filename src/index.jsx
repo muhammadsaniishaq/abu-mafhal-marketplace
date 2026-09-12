@@ -10,16 +10,24 @@ import { WishlistProvider } from './context/WishlistContext';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 
-root.render(
-  <React.StrictMode>
-    <AuthProvider>
-      <CartProvider>
-        <ChatProvider>
-          <WishlistProvider>
-            <App />
-          </WishlistProvider>
-        </ChatProvider>
-      </CartProvider>
-    </AuthProvider>
-  </React.StrictMode>
-);
+const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+const isForcedWeb = window.location.search.indexOf('force=web') !== -1;
+const isRootPath = window.location.pathname === '/' || window.location.pathname === '';
+
+if (isMobileDevice && !isForcedWeb && isRootPath) {
+  window.location.replace('/mobile');
+} else {
+  root.render(
+    <React.StrictMode>
+      <AuthProvider>
+        <CartProvider>
+          <ChatProvider>
+            <WishlistProvider>
+              <App />
+            </WishlistProvider>
+          </ChatProvider>
+        </CartProvider>
+      </AuthProvider>
+    </React.StrictMode>
+  );
+}

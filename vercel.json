@@ -1,7 +1,52 @@
 {
-    "buildCommand": "npm run build",
+    "buildCommand": "npm run build && mkdir -p dist/mobile && cp -R mobile/dist/* dist/mobile/ && mkdir -p dist/_expo && cp -R mobile/dist/_expo/* dist/_expo/ && mkdir -p dist/assets && cp -R mobile/dist/assets/* dist/assets/",
     "outputDirectory": "dist",
+    "headers": [
+        {
+            "source": "/",
+            "headers": [
+                {
+                    "key": "Vary",
+                    "value": "User-Agent"
+                }
+            ]
+        }
+    ],
+    "redirects": [
+        {
+            "source": "/",
+            "has": [
+                {
+                    "type": "header",
+                    "key": "User-Agent",
+                    "value": "(?i).*(android|iphone|ipad|ipod|opera mini|iemobile|mobile).*"
+                }
+            ],
+            "destination": "/mobile",
+            "permanent": false
+        }
+    ],
     "rewrites": [
+        {
+            "source": "/assets/node_modules/(.*)",
+            "destination": "/mobile/assets/node_modules/$1"
+        },
+        {
+            "source": "/assets/assets/(.*)",
+            "destination": "/mobile/assets/assets/$1"
+        },
+        {
+            "source": "/_expo/(.*)",
+            "destination": "/mobile/_expo/$1"
+        },
+        {
+            "source": "/mobile/(.*)",
+            "destination": "/mobile/index.html"
+        },
+        {
+            "source": "/mobile",
+            "destination": "/mobile/index.html"
+        },
         {
             "source": "/(.*)",
             "destination": "/index.html"

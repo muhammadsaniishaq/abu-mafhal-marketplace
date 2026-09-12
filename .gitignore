@@ -13,8 +13,8 @@ mobile/.env
 # Build outputs
 .next
 .out
-dist
-mobile/dist
+/dist
+!mobile/dist
 
 # Expo
 mobile/.expo
