@@ -140,7 +140,7 @@ html {
 
 /* ── STRICT ZERO MOBILE ZOOM RULES (OVERRIDING ALL UTILITIES) ── */
 html, body, #root {
-  touch-action: pan-y manipulation !important;
+  touch-action: pan-x pan-y !important;
   -webkit-text-size-adjust: 100% !important;
   -moz-text-size-adjust: 100% !important;
   text-size-adjust: 100% !important;
@@ -150,7 +150,7 @@ html, body, #root {
 }
 
 *, *::before, *::after {
-  touch-action: manipulation !important;
+  touch-action: pan-x pan-y !important;
 }
 
 /* Force minimum 16px font size on every single input to stop iOS Safari and Android Chrome focus-zoom */

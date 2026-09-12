@@ -74,6 +74,97 @@ export default function App() {
     const CART_STORAGE_KEY = '@abumafhal_cart_v1';
     const USER_STORAGE_KEY = '@abumafhal_user_v1';
 
+    // Kange kowane irin pinch-zoom, multi-touch drag zoom, da double-tap zoom a React Native Web
+    useEffect(() => {
+        if (typeof window === 'undefined' || typeof document === 'undefined') return;
+
+        try {
+            // Viewport enforcement
+            let meta = document.querySelector('meta[name="viewport"]');
+            if (!meta) {
+                meta = document.createElement('meta');
+                meta.name = 'viewport';
+                document.head.appendChild(meta);
+            }
+            meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, shrink-to-fit=no, viewport-fit=cover';
+
+            // Anti-zoom stylesheet
+            const styleId = 'abu-mafhal-anti-zoom';
+            if (!document.getElementById(styleId)) {
+                const style = document.createElement('style');
+                style.id = styleId;
+                style.innerHTML = `
+                    html, body, #root, #root * {
+                        touch-action: pan-x pan-y !important;
+                        -webkit-text-size-adjust: 100% !important;
+                        -moz-text-size-adjust: 100% !important;
+                        text-size-adjust: 100% !important;
+                    }
+                    *, *::before, *::after {
+                        touch-action: pan-x pan-y !important;
+                        -webkit-touch-callout: none !important;
+                    }
+                    input, select, textarea, [role="textbox"] {
+                        font-size: 16px !important;
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            // Multi-touch pinch-zoom killer
+            const killPinch = (e) => {
+                if (e.touches && e.touches.length > 1) {
+                    e.preventDefault();
+                }
+            };
+
+            ['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach((type) => {
+                window.addEventListener(type, killPinch, { passive: false, capture: true });
+                document.addEventListener(type, killPinch, { passive: false, capture: true });
+            });
+
+            const handleTouchMove = (e) => {
+                if ((e.scale !== undefined && e.scale !== 1) || (e.touches && e.touches.length > 1)) {
+                    e.preventDefault();
+                }
+            };
+            document.addEventListener('touchmove', handleTouchMove, { passive: false, capture: true });
+
+            const prevent = (e) => e.preventDefault();
+            ['gesturestart', 'gesturechange', 'gestureend'].forEach((name) => {
+                window.addEventListener(name, prevent, { passive: false, capture: true });
+                document.addEventListener(name, prevent, { passive: false, capture: true });
+            });
+
+            let lastTouchEnd = 0;
+            const handleTouchEnd = (e) => {
+                const now = Date.now();
+                if (now - lastTouchEnd <= 300) {
+                    e.preventDefault();
+                }
+                lastTouchEnd = now;
+            };
+            document.addEventListener('touchend', handleTouchEnd, { passive: false, capture: true });
+
+            const handleWheel = (e) => {
+                if (e.ctrlKey) e.preventDefault();
+            };
+            window.addEventListener('wheel', handleWheel, { passive: false });
+
+            if (window.visualViewport) {
+                const resetScale = () => {
+                    if (window.visualViewport.scale !== 1 && meta) {
+                        meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, shrink-to-fit=no, viewport-fit=cover';
+                    }
+                };
+                window.visualViewport.addEventListener('resize', resetScale);
+                window.visualViewport.addEventListener('scroll', resetScale);
+            }
+        } catch (err) {
+            console.log('Zero zoom init note:', err);
+        }
+    }, []);
+
     useEffect(() => {
         // Fast instant boot from local cache, then background session verification
         const init = async () => {

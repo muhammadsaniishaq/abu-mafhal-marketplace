@@ -12,7 +12,7 @@
   <style>
     /* ── STRICT ZERO ZOOM CONFIGURATION ── */
     html, body, #root {
-      touch-action: pan-y manipulation !important;
+      touch-action: pan-x pan-y !important;
       -webkit-text-size-adjust: 100% !important;
       -moz-text-size-adjust: 100% !important;
       text-size-adjust: 100% !important;
@@ -23,7 +23,7 @@
     }
 
     *, *::before, *::after {
-      touch-action: manipulation !important;
+      touch-action: pan-x pan-y !important;
       -webkit-touch-callout: none !important;
     }
 
@@ -35,59 +35,64 @@
 
   <script>
     (function () {
-      // 1. Hana Multi-touch Pinch Zoom a Touchstart da Touchmove (Capture phase)
-      function preventPinch(e) {
+      // 1. Hana Multi-touch Pinch Zoom a Touchstart, Touchmove, Touchend (Capture phase)
+      function killPinch(e) {
         if (e.touches && e.touches.length > 1) {
-          if (e.cancelable) e.preventDefault();
+          e.preventDefault();
         }
       }
-      window.addEventListener('touchstart', preventPinch, { passive: false, capture: true });
-      document.addEventListener('touchstart', preventPinch, { passive: false, capture: true });
-      window.addEventListener('touchmove', preventPinch, { passive: false, capture: true });
-      document.addEventListener('touchmove', preventPinch, { passive: false, capture: true });
-
-      // 2. Hana iOS Safari native gesture events (pinch zoom)
-      ['gesturestart', 'gesturechange', 'gestureend'].forEach(function (eventName) {
-        window.addEventListener(eventName, function (e) {
-          if (e.cancelable) e.preventDefault();
-        }, { passive: false, capture: true });
-        document.addEventListener(eventName, function (e) {
-          if (e.cancelable) e.preventDefault();
-        }, { passive: false, capture: true });
+      ['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach(function (type) {
+        window.addEventListener(type, killPinch, { passive: false, capture: true });
+        document.addEventListener(type, killPinch, { passive: false, capture: true });
       });
 
-      // 3. Hana Double-Tap Zoom a Touchend
-      var lastTouchEnd = 0;
-      function preventDoubleTap(e) {
-        var now = Date.now();
-        if (now - lastTouchEnd <= 300) {
-          if (e.cancelable) e.preventDefault();
-        }
-        lastTouchEnd = now;
-      }
-      window.addEventListener('touchend', preventDoubleTap, { passive: false, capture: true });
-      document.addEventListener('touchend', preventDoubleTap, { passive: false, capture: true });
-
-      // 4. Hana dblclick
-      window.addEventListener('dblclick', function (e) {
-        if (e.cancelable) e.preventDefault();
-      }, { passive: false, capture: true });
-
-      // 5. Hana Ctrl + Wheel / Trackpad pinch zoom
-      window.addEventListener('wheel', function (e) {
-        if (e.ctrlKey && e.cancelable) {
+      // 2. Kange iOS WebKit touchmove e.scale da touches > 1
+      document.addEventListener('touchmove', function (e) {
+        if ((e.scale !== undefined && e.scale !== 1) || (e.touches && e.touches.length > 1)) {
           e.preventDefault();
         }
       }, { passive: false, capture: true });
 
-      // 6. Hana keyboard zoom (Ctrl + '+' / Ctrl + '-')
+      // 3. Hana iOS Safari native gesture events (pinch zoom)
+      ['gesturestart', 'gesturechange', 'gestureend'].forEach(function (eventName) {
+        window.addEventListener(eventName, function (e) {
+          e.preventDefault();
+        }, { passive: false, capture: true });
+        document.addEventListener(eventName, function (e) {
+          e.preventDefault();
+        }, { passive: false, capture: true });
+      });
+
+      // 4. Hana Double-Tap Zoom a Touchend
+      var lastTouchEnd = 0;
+      document.addEventListener('touchend', function (e) {
+        var now = Date.now();
+        if (now - lastTouchEnd <= 300) {
+          e.preventDefault();
+        }
+        lastTouchEnd = now;
+      }, { passive: false, capture: true });
+
+      // 5. Hana dblclick
+      window.addEventListener('dblclick', function (e) {
+        e.preventDefault();
+      }, { passive: false, capture: true });
+
+      // 6. Hana Ctrl + Wheel / Trackpad pinch zoom
+      window.addEventListener('wheel', function (e) {
+        if (e.ctrlKey) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+
+      // 7. Hana keyboard zoom (Ctrl + '+' / Ctrl + '-')
       window.addEventListener('keydown', function (e) {
         if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '-' || e.key === '=' || e.key === '0')) {
           e.preventDefault();
         }
       }, { capture: true });
 
-      // 7. Visual Viewport Reset: Idan browser ya canza scale, mayar da shi 1.0 nan take
+      // 8. Visual Viewport Reset: Idan browser ya canza scale, mayar da shi 1.0 nan take
       if (window.visualViewport) {
         var resetScale = function () {
           if (window.visualViewport.scale !== 1) {
@@ -101,7 +106,7 @@
         window.visualViewport.addEventListener('scroll', resetScale);
       }
 
-      // 8. Tabbatar da font-size 16px a kowane input lokacin da aka taba shi don hana focus-zoom
+      // 9. Tabbatar da font-size 16px a kowane input lokacin da aka taba shi don hana focus-zoom
       document.addEventListener('focusin', function (e) {
         if (e.target && /^(INPUT|SELECT|TEXTAREA)$/i.test(e.target.tagName)) {
           e.target.style.fontSize = '16px';
@@ -115,8 +120,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Montserrat:wght@400;500;600;700;800;900&family=Poppins:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
 
-  <script type="module" crossorigin src="/assets/index-BI1jUpeK.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-WJ0bbwlI.css">
+  <script type="module" crossorigin src="/assets/index-4JWbeRER.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-UybZAhry.css">
 </head>
 
 <body>

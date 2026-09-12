@@ -1,5 +1,6 @@
 {
-    "buildCommand": "npm install && npm run build && (cd mobile && npm install && npx expo export --platform web && cd .. && mkdir -p dist/mobile && cp -R mobile/dist/* dist/mobile/) || echo 'Mobile build skipped'",
+    "buildCommand": "npm install && npm run build && (cd mobile && npm install && npx expo export --platform web && node patch-html.js && cd .. && mkdir -p dist/mobile && cp -R mobile/dist/* dist/mobile/) || echo 'Mobile build skipped'",
+
     "outputDirectory": "dist",
     "headers": [
         {
