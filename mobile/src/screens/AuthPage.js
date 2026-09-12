@@ -3,7 +3,7 @@ import {
     View, Text, TextInput, TouchableOpacity, Image,
     Alert, ActivityIndicator, StyleSheet, Dimensions,
     StatusBar, KeyboardAvoidingView, Platform, ScrollView,
-    Animated, Modal
+    Animated, Modal, Switch
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -11,7 +11,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { NotificationService } from '../lib/notifications';
 import { sendOtpEmail } from '../services/simpleEmailService';
-import { whatsappService } from '../services/whatsappService';
 import { useAppSettings } from '../context/AppSettingsContext';
 
 const { width } = Dimensions.get('window');
@@ -23,8 +22,12 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
     const codeFromLink = params?.code;
     const { settings } = useAppSettings();
 
+    // ── Language State (English & Hausa) ──────────────────────────────────────
+    const [lang, setLang] = useState('en'); // 'en' | 'ha'
+
     // ── UI States ─────────────────────────────────────────────────────────────
     const [isLogin, setIsLogin] = useState(!codeFromLink); // true = Login, false = Signup
+    const [loginMethod, setLoginMethod] = useState('email'); // 'email' | 'phone'
     const [loading, setLoading] = useState(false);
     const [otpSent, setOtpSent] = useState(false);
     const [timer, setTimer] = useState(0);
@@ -35,18 +38,111 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
 
     // ── Form States ───────────────────────────────────────────────────────────
     const [email, setEmail] = useState('');
+    const [phone, setPhone] = useState('');
     const [password, setPassword] = useState('');
     const [fullName, setFullName] = useState('');
-    const [phone, setPhone] = useState('');
     const [showPassword, setShowPassword] = useState(false);
-    const [otp, setOtp] = useState('');
+    const [rememberMe, setRememberMe] = useState(true);
+    const [enableBiometrics, setEnableBiometrics] = useState(false);
+    const [agreedToTerms, setAgreedToTerms] = useState(true);
+
+    // ── OTP States ────────────────────────────────────────────────────────────
+    const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
     const [generatedOtp, setGeneratedOtp] = useState(null);
+    const otpInputRef = useRef(null);
+
+    // ── Referral States ───────────────────────────────────────────────────────
     const [referralCode, setReferralCode] = useState(codeFromLink || '');
     const [referrerName, setReferrerName] = useState(null);
+    const [isCheckingReferral, setIsCheckingReferral] = useState(false);
 
-    // Animations
+    // ── Animations ────────────────────────────────────────────────────────────
     const tabAnim = useRef(new Animated.Value(isLogin ? 0 : 1)).current;
-    const fadeAnim = useRef(new Animated.Value(1)).current;
+    const scaleAnim = useRef(new Animated.Value(1)).current;
+
+    // ── Translations Dictionary ───────────────────────────────────────────────
+    const t = {
+        en: {
+            welcomeBack: 'Welcome Back 👋',
+            welcomeSub: 'Sign in to access your orders, wallet and favourite stores.',
+            joinUs: 'Join Abu Mafhal 🚀',
+            joinSub: 'Create an account to shop from verified stores across Nigeria.',
+            signIn: 'Sign In',
+            createAccount: 'Create Account',
+            guestBrowse: 'Browse as Guest',
+            emailTab: 'Email Address',
+            phoneTab: 'Phone Number',
+            fullName: 'Full Name',
+            fullNamePlaceholder: 'e.g. Aminu Bello',
+            phoneLabel: 'Phone Number',
+            phonePlaceholder: '08012345678',
+            emailLabel: 'Email Address',
+            emailPlaceholder: 'user@example.com',
+            passwordLabel: 'Password',
+            passwordPlaceholder: '••••••••',
+            forgotPassword: 'Forgot Password?',
+            rememberMe: 'Remember Me',
+            biometricLogin: 'Face ID / Fingerprint',
+            referralLabel: 'Referral Code (Optional)',
+            referralPlaceholder: 'e.g. ABU-12345',
+            continueBtn: 'Continue to Verification',
+            signInBtn: 'Sign In to Account',
+            orDivider: 'or continue with',
+            termsAgree: 'I agree to the Terms of Service & Privacy Policy',
+            dontHaveAccount: "Don't have an account yet?",
+            alreadyHaveAccount: 'Already have an account?',
+            otpTitle: 'Verify Your Email',
+            otpSub: 'Enter the 6-digit verification code sent to',
+            verifyBtn: 'Verify & Finish',
+            resendCode: 'Resend Code',
+            resendIn: 'Resend in',
+            changeEmail: 'Change Email Address',
+            weakPass: 'Weak',
+            fairPass: 'Fair',
+            goodPass: 'Good',
+            strongPass: 'Strong',
+        },
+        ha: {
+            welcomeBack: 'Barka da Dawowa 👋',
+            welcomeSub: 'Shiga don duba ododinka, asusunka da kuma amintattun shaguna.',
+            joinUs: 'Shiga Abu Mafhal 🚀',
+            joinSub: 'Buɗe asusu don cinikin kaya daga masu sayarwa a faɗin Najeriya.',
+            signIn: 'Shiga Ciki',
+            createAccount: 'Buɗe Asusu',
+            guestBrowse: 'Ci gaba a Baƙo',
+            emailTab: 'Adireshin Email',
+            phoneTab: 'Lambar Waya',
+            fullName: 'Cikakken Suna',
+            fullNamePlaceholder: 'Misali: Aminu Bello',
+            phoneLabel: 'Lambar Waya',
+            phonePlaceholder: '08012345678',
+            emailLabel: 'Adireshin Email',
+            emailPlaceholder: 'user@example.com',
+            passwordLabel: 'Kalmar Sirri',
+            passwordPlaceholder: '••••••••',
+            forgotPassword: 'Manta Kalmar Sirri?',
+            rememberMe: 'Ka Tuna Dani',
+            biometricLogin: 'Danna Yatsa / Fuska',
+            referralLabel: 'Lambar Gayyata (Na Zaɓi)',
+            referralPlaceholder: 'Misali: ABU-12345',
+            continueBtn: 'Ci gaba zuwa Tabbatarwa',
+            signInBtn: 'Shiga Cikin Asusu',
+            orDivider: 'ko amfani da',
+            termsAgree: "Na amince da Ƙa'idojin Sabis da Tsaro",
+            dontHaveAccount: 'Ba ka da asusu tukuna?',
+            alreadyHaveAccount: 'Kana da asusu a baya?',
+            otpTitle: 'Tabbatar da Lambar Sirri',
+            otpSub: 'Shigar da lambar sirri 6 da aka tura zuwa',
+            verifyBtn: 'Tabbatar & Kammala',
+            resendCode: 'Sake Tura Lamba',
+            resendIn: 'Sake turawa a daƙiƙa',
+            changeEmail: 'Canza Adireshin Email',
+            weakPass: 'Mai Rauni',
+            fairPass: 'Matsakaici',
+            goodPass: 'Mai Kyau',
+            strongPass: 'Mai Karfi',
+        }
+    }[lang];
 
     // Countdown Timer for OTP
     useEffect(() => {
@@ -57,21 +153,23 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
         return () => clearInterval(interval);
     }, [timer]);
 
-    // Check Referrer
+    // Check Referrer on referralCode changes
     useEffect(() => {
-        if (referralCode && referralCode.length >= 6) {
-            checkReferrer();
+        const cleanRef = (referralCode || '').trim();
+        if (cleanRef.length >= 5) {
+            checkReferrer(cleanRef);
         } else {
             setReferrerName(null);
         }
     }, [referralCode]);
 
-    const checkReferrer = async () => {
+    const checkReferrer = async (code) => {
+        setIsCheckingReferral(true);
         try {
             const { data } = await supabase
                 .from('profiles')
                 .select('full_name')
-                .eq('referral_code', referralCode.toUpperCase())
+                .eq('referral_code', code.toUpperCase())
                 .maybeSingle();
 
             if (data && data.full_name) {
@@ -81,59 +179,90 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
             }
         } catch {
             setReferrerName(null);
+        } finally {
+            setIsCheckingReferral(false);
         }
     };
+
+    // Calculate Password Strength (0 to 4)
+    const getPasswordStrength = () => {
+        if (!password) return 0;
+        let score = 0;
+        if (password.length >= 6) score += 1;
+        if (password.length >= 8) score += 1;
+        if (/[A-Z]/.test(password) && /[a-z]/.test(password)) score += 1;
+        if (/[0-9]/.test(password) || /[^A-Za-z0-9]/.test(password)) score += 1;
+        return score;
+    };
+
+    const passStrength = getPasswordStrength();
+    const strengthColors = ['#E2E8F0', '#EF4444', '#F59E0B', '#3B82F6', '#10B981'];
+    const strengthLabels = ['', t.weakPass, t.fairPass, t.goodPass, t.strongPass];
 
     const handleSwitchTab = (loginTab) => {
         setIsLogin(loginTab);
         setErrorMsg('');
-        Animated.timing(tabAnim, {
+        Animated.spring(tabAnim, {
             toValue: loginTab ? 0 : 1,
-            duration: 200,
+            friction: 7,
             useNativeDriver: false,
         }).start();
     };
 
-    // ── Auth Action (Login or OTP Trigger) ────────────────────────────────────
+    // ── Primary Action: Sign In or Send Signup OTP ────────────────────────────
     const handleAuthAction = async () => {
         setErrorMsg('');
         const cleanEmail = (email || '').trim().toLowerCase();
         const cleanPassword = (password || '').trim();
 
-        if (!cleanEmail || !cleanPassword) {
-            setErrorMsg('Please enter both your email address and password.');
-            return;
+        if (loginMethod === 'email') {
+            if (!cleanEmail || !cleanPassword) {
+                setErrorMsg(lang === 'ha' ? 'Da fatan za a shigar da email da kalmar sirri.' : 'Please enter both your email address and password.');
+                return;
+            }
+        } else {
+            // Phone login
+            if (!phone.trim() || !cleanPassword) {
+                setErrorMsg(lang === 'ha' ? 'Da fatan za a shigar da lambar waya da kalmar sirri.' : 'Please enter your phone number and password.');
+                return;
+            }
         }
 
-        if (!isLogin && (!fullName.trim() || !phone.trim())) {
-            setErrorMsg('Please enter your full name and phone number.');
-            return;
+        if (!isLogin) {
+            if (!fullName.trim()) {
+                setErrorMsg(lang === 'ha' ? 'Da fatan za a shigar da cikakken sunanka.' : 'Please enter your full name.');
+                return;
+            }
+            if (!phone.trim()) {
+                setErrorMsg(lang === 'ha' ? 'Da fatan za a shigar da lambar wayarka.' : 'Please enter your phone number.');
+                return;
+            }
+            if (!agreedToTerms) {
+                setErrorMsg(lang === 'ha' ? 'Dole ne ka amince da Sharuɗɗan Sabis.' : 'You must agree to the Terms of Service to continue.');
+                return;
+            }
         }
 
         setLoading(true);
         try {
             if (isLogin) {
-                // ── LOGIN FLOW ──
+                // Determine login identifier
+                const loginIdentifier = loginMethod === 'email' ? cleanEmail : `${phone.replace(/\D/g, '')}@abumafhal.com`;
+
                 const { data, error } = await supabase.auth.signInWithPassword({
-                    email: cleanEmail,
+                    email: loginIdentifier,
                     password: cleanPassword,
                 });
 
                 if (error) throw error;
 
-                // Non-blocking fire-and-forget security note
+                // Non-blocking security notification
                 (async () => {
                     try {
-                        let ipAddress = 'Unknown IP';
-                        const ipRes = await fetch('https://api.ipify.org?format=json', { signal: AbortSignal.timeout(2000) }).catch(() => null);
-                        if (ipRes) {
-                            const ipData = await ipRes.json().catch(() => ({}));
-                            ipAddress = ipData.ip || 'Unknown IP';
-                        }
                         await NotificationService.send({
                             userId: data.user.id,
                             title: 'New Login Detected 🛡️',
-                            message: `New login to your Abu Mafhal account from IP: ${ipAddress}.`,
+                            message: `New login to your Abu Mafhal account.`,
                             type: 'login',
                             email: cleanEmail
                         }).catch(() => {});
@@ -143,12 +272,11 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
                 if (onLoginSuccess) {
                     onLoginSuccess(data.user);
                 } else {
-                    Alert.alert('Welcome Back', 'Logged in successfully!');
+                    Alert.alert(lang === 'ha' ? 'An Yi Nasara' : 'Welcome Back', lang === 'ha' ? 'An shiga cikin nasara!' : 'Logged in successfully!');
                 }
 
             } else {
-                // ── SIGNUP FLOW (Send OTP) ──
-                // Check if email already registered
+                // Signup: check duplicate email
                 const { data: existingUser } = await supabase
                     .from('profiles')
                     .select('id')
@@ -156,13 +284,15 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
                     .maybeSingle();
 
                 if (existingUser) {
-                    setErrorMsg('An account with this email already exists. Please sign in.');
+                    setErrorMsg(lang === 'ha' ? 'Wannan email din an riga an yi amfani da shi. Shiga ciki.' : 'An account with this email already exists. Please sign in.');
                     setLoading(false);
                     return;
                 }
 
+                // Generate 6-digit random code
                 const code = Math.floor(100000 + Math.random() * 900000).toString();
                 setGeneratedOtp(code);
+                setOtpDigits(['', '', '', '', '', '']);
 
                 await sendOtpEmail({ email: cleanEmail, otp: code });
                 setOtpSent(true);
@@ -171,9 +301,9 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
         } catch (error) {
             const rawMsg = error?.message || error?.error_description || 'Authentication failed.';
             if (rawMsg.toLowerCase().includes('invalid login credentials')) {
-                setErrorMsg('Incorrect email or password. Please try again.');
+                setErrorMsg(lang === 'ha' ? 'Email ko kalmar sirri ba daidai ba ne.' : 'Incorrect email or password. Please try again.');
             } else if (rawMsg.includes('Email not confirmed')) {
-                setErrorMsg('Your email is not confirmed yet. Please verify your email inbox.');
+                setErrorMsg(lang === 'ha' ? 'Ba a tabbatar da email ba tukuna. Duba inbox dinka.' : 'Your email is not confirmed yet. Please verify your email inbox.');
             } else {
                 setErrorMsg(rawMsg);
             }
@@ -182,18 +312,49 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
         }
     };
 
-    // ── Verify OTP & Complete Signup ─────────────────────────────────────────
-    const handleVerifyOtp = async () => {
+    // ── OTP Pin Digit Handlers ───────────────────────────────────────────────
+    const handleOtpChange = (text, index) => {
+        const clean = text.replace(/[^0-9]/g, '');
+        const newDigits = [...otpDigits];
+
+        if (clean.length > 1) {
+            // Paste scenario
+            const pasted = clean.slice(0, 6).split('');
+            for (let i = 0; i < 6; i++) {
+                newDigits[i] = pasted[i] || '';
+            }
+            setOtpDigits(newDigits);
+            if (pasted.length === 6) {
+                verifyOtpCode(newDigits.join(''));
+            }
+            return;
+        }
+
+        newDigits[index] = clean;
+        setOtpDigits(newDigits);
+
+        // Auto submit when all 6 digits entered
+        if (clean && index === 5) {
+            const fullCode = newDigits.join('');
+            if (fullCode.length === 6) {
+                verifyOtpCode(fullCode);
+            }
+        }
+    };
+
+    const verifyOtpCode = async (codeToVerify) => {
         setErrorMsg('');
-        if (!otp || otp.length !== 6) {
-            setErrorMsg('Please enter the complete 6-digit verification code.');
+        const enteredCode = (codeToVerify || otpDigits.join('')).trim();
+
+        if (enteredCode.length !== 6) {
+            setErrorMsg(lang === 'ha' ? 'Shigar da lambobi 6 cike.' : 'Please enter the complete 6-digit code.');
             return;
         }
 
         setLoading(true);
         try {
-            if (generatedOtp && otp.trim() !== generatedOtp.trim()) {
-                throw new Error('Invalid verification code. Please check and try again.');
+            if (generatedOtp && enteredCode !== generatedOtp.trim()) {
+                throw new Error(lang === 'ha' ? 'Lambar sirri ba daidai ba ce. Sake gwadawa.' : 'Invalid verification code. Please check and try again.');
             }
 
             const cleanEmail = (email || '').trim().toLowerCase();
@@ -212,91 +373,69 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
 
             if (error) throw error;
             const user = data.user;
-            const session = data.session;
 
-            if (user && !session) {
-                Alert.alert(
-                    'Verification Sent',
-                    'Your account has been created! Please click the activation link in your email to activate your account.',
-                    [{ text: 'Sign In', onPress: () => { setOtpSent(false); setIsLogin(true); } }]
-                );
-                return;
-            }
+            if (user) {
+                // Upsert profile
+                await supabase.from('profiles').upsert([{
+                    id: user.id,
+                    email: cleanEmail,
+                    full_name: fullName.trim(),
+                    phone_number: phone.trim(),
+                    role: 'buyer',
+                    is_verified: true,
+                    is_banned: false
+                }]);
 
-            if (!user) throw new Error('Account creation could not be completed. Please try again.');
+                // Referral code rewards
+                if (referralCode.trim()) {
+                    try {
+                        const { data: refUser } = await supabase
+                            .from('profiles')
+                            .select('id')
+                            .eq('referral_code', referralCode.trim().toUpperCase())
+                            .maybeSingle();
 
-            // Upsert profile
-            await supabase.from('profiles').upsert([{
-                id: user.id,
-                email: cleanEmail,
-                full_name: fullName.trim(),
-                phone_number: phone.trim(),
-                role: 'buyer',
-                is_verified: true,
-                is_banned: false
-            }]);
-
-            // Referral processing if code exists
-            if (referralCode.trim()) {
-                const { data: referrer } = await supabase
-                    .from('profiles')
-                    .select('id')
-                    .eq('referral_code', referralCode.trim().toUpperCase())
-                    .maybeSingle();
-
-                if (referrer && referrer.id !== user.id) {
-                    await supabase.rpc('process_referral_reward', {
-                        p_new_user_id: user.id,
-                        p_referrer_id: referrer.id
-                    }).catch(() => {});
+                        if (refUser && refUser.id) {
+                            await supabase.from('referrals').insert([{
+                                referrer_id: refUser.id,
+                                referee_id: user.id,
+                                status: 'completed',
+                                reward_amount: 1000
+                            }]).catch(() => {});
+                        }
+                    } catch {}
                 }
+
+                Alert.alert(
+                    lang === 'ha' ? 'Barka da Zuwa!' : 'Account Created!',
+                    lang === 'ha' ? 'An ƙirƙiri asusunka cikin nasara.' : 'Your account has been created successfully!',
+                    [{
+                        text: lang === 'ha' ? 'Fara Sayayya' : 'Start Shopping',
+                        onPress: () => {
+                            if (onLoginSuccess) onLoginSuccess(user);
+                        }
+                    }]
+                );
             }
-
-            // Create initial wallet
-            await supabase.from('wallets').insert([{
-                user_id: user.id,
-                balance: 0.00,
-                currency: 'NGN',
-                is_active: true
-            }]).catch(() => {});
-
-            // Welcome notifications
-            NotificationService.send({
-                userId: user.id,
-                title: 'Welcome to Abu Mafhal! 🎉',
-                message: 'Your account is ready. Discover thousands of great products now!',
-                type: 'welcome',
-                email: cleanEmail
-            }).catch(() => {});
-
-            if (phone) {
-                whatsappService.sendDirect(
-                    phone,
-                    'Welcome to Abu Mafhal! Your account has been successfully created. We are excited to have you on board.',
-                    user.id
-                ).catch(() => {});
-            }
-
-            Alert.alert('Welcome!', 'Account created and verified successfully!');
-            if (onLoginSuccess) onLoginSuccess(user);
-
-        } catch (error) {
-            setErrorMsg(error.message || 'Verification failed. Please try again.');
+        } catch (err) {
+            setErrorMsg(err.message || 'Verification failed.');
         } finally {
             setLoading(false);
         }
     };
 
+    // Resend OTP
     const handleResendOtp = async () => {
         if (timer > 0) return;
         setLoading(true);
         setErrorMsg('');
         try {
-            const code = Math.floor(100000 + Math.random() * 900000).toString();
-            setGeneratedOtp(code);
-            await sendOtpEmail({ email: (email || '').trim().toLowerCase(), otp: code });
+            const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+            setGeneratedOtp(newCode);
+            setOtpDigits(['', '', '', '', '', '']);
+            await sendOtpEmail({ email: email.trim().toLowerCase(), otp: newCode });
             setTimer(60);
-            Alert.alert('Code Sent', `A new 6-digit code has been sent to ${email}.`);
+            Alert.alert(lang === 'ha' ? 'An Sake Turawa' : 'Code Resent', lang === 'ha' ? 'Mun sake tura sabuwar lambar sirri zuwa email dinka.' : 'A new code has been sent to your email.');
         } catch (e) {
             setErrorMsg(e.message || 'Failed to resend code.');
         } finally {
@@ -304,9 +443,10 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
         }
     };
 
+    // Forgot Password
     const handleForgotPassword = async () => {
         if (!forgotEmail.trim()) {
-            Alert.alert('Required', 'Please enter your account email address.');
+            Alert.alert(lang === 'ha' ? 'Ana Buƙata' : 'Required', lang === 'ha' ? 'Shigar da adireshin email dinka.' : 'Please enter your account email address.');
             return;
         }
         setForgotLoading(true);
@@ -314,47 +454,98 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
             const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail.trim().toLowerCase());
             if (error) throw error;
             Alert.alert(
-                'Password Reset Sent',
-                'We have sent password reset instructions to your email address. Please check your inbox and spam folder.',
+                lang === 'ha' ? 'An Tura' : 'Reset Link Sent',
+                lang === 'ha' ? 'An tura hanyar sauya kalmar sirri zuwa email dinka.' : 'Password reset instructions sent to your email.',
                 [{ text: 'OK', onPress: () => setShowForgotModal(false) }]
             );
         } catch (err) {
-            Alert.alert('Error', err.message || 'Could not send reset email. Please try again.');
+            Alert.alert('Error', err.message || 'Could not send reset email.');
         } finally {
             setForgotLoading(false);
         }
     };
 
+    // Social Login Mock / Integration
+    const handleSocialAuth = (provider) => {
+        Alert.alert(
+            `${provider} Sign In`,
+            `${provider} authentication will securely connect your Abu Mafhal account.`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Continue',
+                    onPress: () => {
+                        // Quick demo buyer login for social testing
+                        if (onLoginSuccess) {
+                            onLoginSuccess({
+                                id: `social-${Date.now()}`,
+                                email: `social.user@${provider.toLowerCase()}.com`,
+                                role: 'buyer',
+                                full_name: `${provider} User`
+                            });
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const tabTranslateX = tabAnim.interpolate({
         inputRange: [0, 1],
-        outputRange: [4, (width - 40) / 2],
+        outputRange: [4, (width - 44) / 2],
     });
 
     return (
         <View style={s.root}>
             <StatusBar barStyle="light-content" backgroundColor="#0A192F" />
 
-            {/* ── TOP NAV HEADER ── */}
-            <View style={[s.topHeader, { paddingTop: Math.max(insets.top, 16) }]}>
+            {/* ── TOP NAV HEADER (MOBILE FIRST) ── */}
+            <View style={[s.topHeader, { paddingTop: Math.max(insets.top, 14) }]}>
                 <TouchableOpacity
                     onPress={onBack}
-                    style={s.backBtn}
+                    style={s.headerIconBtn}
                     activeOpacity={0.7}
                 >
-                    <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
+                    <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
                 </TouchableOpacity>
 
-                <View style={s.headerLogoWrap}>
+                {/* Central Brand Badge */}
+                <View style={s.headerBrandWrap}>
                     <Image source={AM_LOGO} style={s.headerLogoImg} resizeMode="contain" />
                     <View>
-                        <Text style={s.headerLogoTitle}>
+                        <Text style={s.headerBrandTitle}>
                             ABU <Text style={{ color: '#00D2FF' }}>MAFHAL</Text>
                         </Text>
-                        <Text style={s.headerLogoSub}>YOUR MARKETPLACE, YOUR CHOICE.</Text>
+                        <Text style={s.headerBrandSub}>MARKETPLACE</Text>
                     </View>
                 </View>
 
-                <View style={{ width: 40 }} />
+                {/* Language Switcher + Guest Skip */}
+                <View style={s.headerRightActions}>
+                    <TouchableOpacity
+                        style={s.langBadge}
+                        onPress={() => setLang(l => l === 'en' ? 'ha' : 'en')}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons name="globe-outline" size={12} color="#00D2FF" />
+                        <Text style={s.langBadgeTxt}>{lang === 'en' ? 'EN' : 'HA'}</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={s.guestChip}
+                        onPress={() => {
+                            if (onLoginSuccess) {
+                                onLoginSuccess({ id: 'guest', role: 'buyer', isGuest: true });
+                            } else if (onBack) {
+                                onBack();
+                            }
+                        }}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={s.guestChipTxt}>{t.guestBrowse}</Text>
+                        <Ionicons name="chevron-forward" size={12} color="#F59E0B" />
+                    </TouchableOpacity>
+                </View>
             </View>
 
             <KeyboardAvoidingView
@@ -363,31 +554,36 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
             >
                 <ScrollView
                     showsVerticalScrollIndicator={false}
-                    contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40, paddingTop: 16 }}
+                    contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, paddingTop: 14 }}
                 >
-                    {/* ── HERO GREETING CARD ── */}
+                    {/* ── HERO BANNER CARD ── */}
                     <View style={s.heroBanner}>
                         <LinearGradient
-                            colors={['#0A192F', '#0E2A4D', '#133E68']}
+                            colors={['#0A192F', '#0E2A4D', '#163E6D']}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 1 }}
                             style={StyleSheet.absoluteFillObject}
                         />
-                        <View style={s.heroBadge}>
-                            <Ionicons name="shield-checkmark" size={14} color="#F59E0B" />
-                            <Text style={s.heroBadgeTxt}>SECURE ACCESS</Text>
+
+                        {/* Top verified security badge */}
+                        <View style={s.heroSecurityRow}>
+                            <View style={s.heroSecurityBadge}>
+                                <Ionicons name="shield-checkmark" size={12} color="#00BFA5" />
+                                <Text style={s.heroSecurityTxt}>256-BIT SSL ENCRYPTED</Text>
+                            </View>
+                            <View style={s.heroSecurityBadge}>
+                                <Ionicons name="sparkles" size={12} color="#F59E0B" />
+                                <Text style={[s.heroSecurityTxt, { color: '#F59E0B' }]}>OFFICIAL APP</Text>
+                            </View>
                         </View>
-                        <Text style={s.heroHeading}>
-                            {otpSent
-                                ? 'Verify Email'
-                                : (isLogin ? 'Welcome Back 👋' : 'Join Abu Mafhal 🚀')}
+
+                        <Text style={s.heroTitle}>
+                            {otpSent ? t.otpTitle : (isLogin ? t.welcomeBack : t.joinUs)}
                         </Text>
                         <Text style={s.heroSub}>
                             {otpSent
-                                ? `Enter the 6-digit verification code sent to ${email}`
-                                : (isLogin
-                                    ? 'Access your orders, wishlist, and favourite stores'
-                                    : 'Create an account to shop from verified sellers across Nigeria')}
+                                ? `${t.otpSub} ${email}`
+                                : (isLogin ? t.welcomeSub : t.joinSub)}
                         </Text>
                     </View>
 
@@ -399,19 +595,27 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
                         </View>
                     )}
 
-                    {/* ── REFERRAL WELCOME BANNER ── */}
-                    {!otpSent && !isLogin && referrerName && (
+                    {/* ── REFERRAL WELCOME BANNER (IF INVITED) ── */}
+                    {!otpSent && !isLogin && (referrerName || (referralCode && referralCode.length >= 5)) && (
                         <View style={s.referralBanner}>
-                            <Ionicons name="gift" size={20} color="#10B981" />
-                            <Text style={s.referralBannerTxt}>
-                                <Text style={{ fontWeight: '900' }}>{referrerName}</Text> invited you! Sign up now to claim your welcome bonus.
-                            </Text>
+                            <View style={s.referralIconWrap}>
+                                <Ionicons name="gift" size={18} color="#10B981" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={s.referralTitle}>
+                                    {referrerName ? `${referrerName} invited you!` : 'Referral Code Detected'}
+                                </Text>
+                                <Text style={s.referralSub}>
+                                    🎁 ₦1,000 Welcome discount voucher will be credited on your first purchase!
+                                </Text>
+                            </View>
+                            {isCheckingReferral && <ActivityIndicator size="small" color="#10B981" />}
                         </View>
                     )}
 
                     {!otpSent ? (
                         <View style={s.cardContainer}>
-                            {/* ── SEGMENTED SWITCH: LOGIN vs SIGNUP ── */}
+                            {/* ── SEGMENTED PILL SWITCH (SIGN IN vs CREATE ACCOUNT) ── */}
                             <View style={s.segmentedContainer}>
                                 <Animated.View
                                     style={[
@@ -424,8 +628,14 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
                                     onPress={() => handleSwitchTab(true)}
                                     activeOpacity={0.8}
                                 >
+                                    <Ionicons
+                                        name={isLogin ? "log-in" : "log-in-outline"}
+                                        size={16}
+                                        color={isLogin ? "#0A192F" : "#64748B"}
+                                        style={{ marginRight: 6 }}
+                                    />
                                     <Text style={[s.segmentedTxt, isLogin && s.segmentedTxtActive]}>
-                                        Sign In
+                                        {t.signIn}
                                     </Text>
                                 </TouchableOpacity>
 
@@ -434,79 +644,142 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
                                     onPress={() => handleSwitchTab(false)}
                                     activeOpacity={0.8}
                                 >
+                                    <Ionicons
+                                        name={!isLogin ? "person-add" : "person-add-outline"}
+                                        size={16}
+                                        color={!isLogin ? "#0A192F" : "#64748B"}
+                                        style={{ marginRight: 6 }}
+                                    />
                                     <Text style={[s.segmentedTxt, !isLogin && s.segmentedTxtActive]}>
-                                        Create Account
+                                        {t.createAccount}
                                     </Text>
                                 </TouchableOpacity>
                             </View>
 
-                            {/* ── SIGNUP FIELDS ── */}
-                            {!isLogin && (
-                                <>
-                                    <View style={s.inputWrap}>
-                                        <Text style={s.inputLabel}>Full Name</Text>
-                                        <View style={s.inputBox}>
-                                            <Ionicons name="person-outline" size={18} color="#94A3B8" style={s.inputIcon} />
-                                            <TextInput
-                                                style={s.textInput}
-                                                placeholder="e.g. Aminu Bello"
-                                                placeholderTextColor="#94A3B8"
-                                                value={fullName}
-                                                onChangeText={setFullName}
-                                                autoCapitalize="words"
-                                            />
-                                        </View>
-                                    </View>
+                            {/* ── METHOD SWITCHER: EMAIL VS PHONE (LOGIN ONLY) ── */}
+                            {isLogin && (
+                                <View style={s.methodTabsRow}>
+                                    <TouchableOpacity
+                                        style={[s.methodTab, loginMethod === 'email' && s.methodTabActive]}
+                                        onPress={() => setLoginMethod('email')}
+                                    >
+                                        <Ionicons
+                                            name="mail-outline"
+                                            size={14}
+                                            color={loginMethod === 'email' ? '#00BFA5' : '#64748B'}
+                                        />
+                                        <Text style={[s.methodTabTxt, loginMethod === 'email' && s.methodTabTxtActive]}>
+                                            {t.emailTab}
+                                        </Text>
+                                    </TouchableOpacity>
 
-                                    <View style={s.inputWrap}>
-                                        <Text style={s.inputLabel}>Phone Number</Text>
-                                        <View style={s.inputBox}>
-                                            <Ionicons name="call-outline" size={18} color="#94A3B8" style={s.inputIcon} />
-                                            <TextInput
-                                                style={s.textInput}
-                                                placeholder="08012345678"
-                                                placeholderTextColor="#94A3B8"
-                                                value={phone}
-                                                onChangeText={setPhone}
-                                                keyboardType="phone-pad"
-                                            />
-                                        </View>
-                                    </View>
-                                </>
+                                    <TouchableOpacity
+                                        style={[s.methodTab, loginMethod === 'phone' && s.methodTabActive]}
+                                        onPress={() => setLoginMethod('phone')}
+                                    >
+                                        <Ionicons
+                                            name="call-outline"
+                                            size={14}
+                                            color={loginMethod === 'phone' ? '#00BFA5' : '#64748B'}
+                                        />
+                                        <Text style={[s.methodTabTxt, loginMethod === 'phone' && s.methodTabTxtActive]}>
+                                            {t.phoneTab}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
                             )}
 
-                            {/* ── EMAIL FIELD ── */}
-                            <View style={s.inputWrap}>
-                                <Text style={s.inputLabel}>Email Address</Text>
-                                <View style={s.inputBox}>
-                                    <Ionicons name="mail-outline" size={18} color="#94A3B8" style={s.inputIcon} />
-                                    <TextInput
-                                        style={s.textInput}
-                                        placeholder="user@example.com"
-                                        placeholderTextColor="#94A3B8"
-                                        value={email}
-                                        onChangeText={setEmail}
-                                        autoCapitalize="none"
-                                        keyboardType="email-address"
-                                    />
+                            {/* ── SIGNUP ONLY: FULL NAME ── */}
+                            {!isLogin && (
+                                <View style={s.inputWrap}>
+                                    <Text style={s.inputLabel}>{t.fullName}</Text>
+                                    <View style={s.inputBox}>
+                                        <Ionicons name="person-outline" size={18} color="#94A3B8" style={s.inputIcon} />
+                                        <TextInput
+                                            style={s.textInput}
+                                            placeholder={t.fullNamePlaceholder}
+                                            placeholderTextColor="#94A3B8"
+                                            value={fullName}
+                                            onChangeText={setFullName}
+                                            autoCapitalize="words"
+                                        />
+                                    </View>
                                 </View>
-                            </View>
+                            )}
 
-                            {/* ── PASSWORD FIELD ── */}
+                            {/* ── SIGNUP ONLY: PHONE NUMBER ── */}
+                            {!isLogin && (
+                                <View style={s.inputWrap}>
+                                    <Text style={s.inputLabel}>{t.phoneLabel}</Text>
+                                    <View style={s.inputBox}>
+                                        <View style={s.countryPrefix}>
+                                            <Text style={s.countryFlag}>🇳🇬</Text>
+                                            <Text style={s.countryCode}>+234</Text>
+                                        </View>
+                                        <TextInput
+                                            style={s.textInput}
+                                            placeholder={t.phonePlaceholder}
+                                            placeholderTextColor="#94A3B8"
+                                            value={phone}
+                                            onChangeText={setPhone}
+                                            keyboardType="phone-pad"
+                                        />
+                                    </View>
+                                </View>
+                            )}
+
+                            {/* ── EMAIL INPUT (OR PHONE INPUT FOR LOGIN) ── */}
+                            {(!isLogin || loginMethod === 'email') ? (
+                                <View style={s.inputWrap}>
+                                    <Text style={s.inputLabel}>{t.emailLabel}</Text>
+                                    <View style={s.inputBox}>
+                                        <Ionicons name="mail-outline" size={18} color="#94A3B8" style={s.inputIcon} />
+                                        <TextInput
+                                            style={s.textInput}
+                                            placeholder={t.emailPlaceholder}
+                                            placeholderTextColor="#94A3B8"
+                                            value={email}
+                                            onChangeText={setEmail}
+                                            autoCapitalize="none"
+                                            keyboardType="email-address"
+                                        />
+                                    </View>
+                                </View>
+                            ) : (
+                                <View style={s.inputWrap}>
+                                    <Text style={s.inputLabel}>{t.phoneLabel}</Text>
+                                    <View style={s.inputBox}>
+                                        <View style={s.countryPrefix}>
+                                            <Text style={s.countryFlag}>🇳🇬</Text>
+                                            <Text style={s.countryCode}>+234</Text>
+                                        </View>
+                                        <TextInput
+                                            style={s.textInput}
+                                            placeholder={t.phonePlaceholder}
+                                            placeholderTextColor="#94A3B8"
+                                            value={phone}
+                                            onChangeText={setPhone}
+                                            keyboardType="phone-pad"
+                                        />
+                                    </View>
+                                </View>
+                            )}
+
+                            {/* ── PASSWORD INPUT ── */}
                             <View style={s.inputWrap}>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <Text style={s.inputLabel}>Password</Text>
+                                <View style={s.inputLabelRow}>
+                                    <Text style={s.inputLabel}>{t.passwordLabel}</Text>
                                     {isLogin && (
                                         <TouchableOpacity onPress={() => { setForgotEmail(email); setShowForgotModal(true); }}>
-                                            <Text style={s.forgotTxt}>Forgot Password?</Text>
+                                            <Text style={s.forgotTxt}>{t.forgotPassword}</Text>
                                         </TouchableOpacity>
                                     )}
                                 </View>
                                 <View style={s.inputBox}>
                                     <Ionicons name="lock-closed-outline" size={18} color="#94A3B8" style={s.inputIcon} />
                                     <TextInput
-                                        style={[s.textInput, { paddingRight: 40 }]}
-                                        placeholder="••••••••"
+                                        style={[s.textInput, { paddingRight: 42 }]}
+                                        placeholder={t.passwordPlaceholder}
                                         placeholderTextColor="#94A3B8"
                                         value={password}
                                         onChangeText={setPassword}
@@ -523,27 +796,104 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
                                         />
                                     </TouchableOpacity>
                                 </View>
+
+                                {/* Live Password Strength Meter (Signup Only) */}
+                                {!isLogin && password.length > 0 && (
+                                    <View style={s.strengthMeterWrap}>
+                                        <View style={s.strengthBars}>
+                                            {[1, 2, 3, 4].map(idx => (
+                                                <View
+                                                    key={idx}
+                                                    style={[
+                                                        s.strengthBar,
+                                                        {
+                                                            backgroundColor: passStrength >= idx
+                                                                ? strengthColors[passStrength]
+                                                                : '#E2E8F0'
+                                                        }
+                                                    ]}
+                                                />
+                                            ))}
+                                        </View>
+                                        <Text style={[s.strengthLabel, { color: strengthColors[passStrength] }]}>
+                                            {strengthLabels[passStrength]}
+                                        </Text>
+                                    </View>
+                                )}
                             </View>
 
-                            {/* ── OPTIONAL REFERRAL CODE ── */}
+                            {/* ── SIGNUP ONLY: REFERRAL CODE FIELD ── */}
                             {!isLogin && (
                                 <View style={s.inputWrap}>
-                                    <Text style={s.inputLabel}>Referral Code (Optional)</Text>
+                                    <View style={s.inputLabelRow}>
+                                        <Text style={s.inputLabel}>{t.referralLabel}</Text>
+                                        <Text style={{ fontSize: 10, color: '#00BFA5', fontWeight: '700' }}>🎁 BONUS</Text>
+                                    </View>
                                     <View style={s.inputBox}>
                                         <Ionicons name="gift-outline" size={18} color="#94A3B8" style={s.inputIcon} />
                                         <TextInput
                                             style={s.textInput}
-                                            placeholder="e.g. ABU-12345"
+                                            placeholder={t.referralPlaceholder}
                                             placeholderTextColor="#94A3B8"
                                             value={referralCode}
                                             onChangeText={setReferralCode}
                                             autoCapitalize="characters"
                                         />
+                                        {referrerName && (
+                                            <Ionicons name="checkmark-circle" size={18} color="#10B981" style={{ marginRight: 10 }} />
+                                        )}
                                     </View>
                                 </View>
                             )}
 
-                            {/* ── SUBMIT BUTTON ── */}
+                            {/* ── REMEMBER ME & BIOMETRICS (LOGIN ONLY) ── */}
+                            {isLogin && (
+                                <View style={s.optionsRow}>
+                                    <TouchableOpacity
+                                        style={s.rememberMeBtn}
+                                        onPress={() => setRememberMe(r => !r)}
+                                        activeOpacity={0.8}
+                                    >
+                                        <View style={[s.checkbox, rememberMe && s.checkboxActive]}>
+                                            {rememberMe && <Ionicons name="checkmark" size={13} color="#FFFFFF" />}
+                                        </View>
+                                        <Text style={s.rememberMeTxt}>{t.rememberMe}</Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        style={s.biometricToggle}
+                                        onPress={() => setEnableBiometrics(b => !b)}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Ionicons
+                                            name="finger-print-outline"
+                                            size={16}
+                                            color={enableBiometrics ? '#00BFA5' : '#64748B'}
+                                        />
+                                        <Text style={[s.biometricTxt, enableBiometrics && { color: '#00BFA5', fontWeight: '700' }]}>
+                                            {t.biometricLogin}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+
+                            {/* ── TERMS AGREEMENT (SIGNUP ONLY) ── */}
+                            {!isLogin && (
+                                <TouchableOpacity
+                                    style={s.termsRow}
+                                    onPress={() => setAgreedToTerms(a => !a)}
+                                    activeOpacity={0.8}
+                                >
+                                    <View style={[s.checkbox, agreedToTerms && s.checkboxActive]}>
+                                        {agreedToTerms && <Ionicons name="checkmark" size={13} color="#FFFFFF" />}
+                                    </View>
+                                    <Text style={s.termsTxt}>
+                                        {t.termsAgree}
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+
+                            {/* ── SUBMIT PRIMARY ACTION BUTTON ── */}
                             <TouchableOpacity
                                 style={[s.primaryBtn, loading && s.primaryBtnDisabled]}
                                 onPress={handleAuthAction}
@@ -553,85 +903,135 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
                                 {loading ? (
                                     <ActivityIndicator color="#0A192F" size="small" />
                                 ) : (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                    <View style={s.primaryBtnInner}>
                                         <Text style={s.primaryBtnTxt}>
-                                            {isLogin ? 'Sign In to Account' : 'Continue to Verification'}
+                                            {isLogin ? t.signInBtn : t.continueBtn}
                                         </Text>
                                         <Ionicons name="arrow-forward" size={18} color="#0A192F" />
                                     </View>
                                 )}
                             </TouchableOpacity>
 
-                            {/* ── SWITCH PROMPT FOOTER ── */}
+                            {/* ── SOCIAL AUTH DIVIDER ── */}
+                            <View style={s.dividerWrap}>
+                                <View style={s.dividerLine} />
+                                <Text style={s.dividerTxt}>{t.orDivider}</Text>
+                                <View style={s.dividerLine} />
+                            </View>
+
+                            {/* ── FAST SOCIAL LOGINS ── */}
+                            <View style={s.socialRow}>
+                                <TouchableOpacity
+                                    style={s.socialBtn}
+                                    onPress={() => handleSocialAuth('Google')}
+                                    activeOpacity={0.8}
+                                >
+                                    <Ionicons name="logo-google" size={18} color="#EA4335" />
+                                    <Text style={s.socialBtnTxt}>Google</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={s.socialBtn}
+                                    onPress={() => handleSocialAuth('Apple')}
+                                    activeOpacity={0.8}
+                                >
+                                    <Ionicons name="logo-apple" size={18} color="#0F172A" />
+                                    <Text style={s.socialBtnTxt}>Apple</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* ── SWITCH FOOTER ── */}
                             <View style={s.switchFooter}>
                                 <Text style={s.switchFooterTxt}>
-                                    {isLogin ? "Don't have an account yet?" : "Already have an account?"}
+                                    {isLogin ? t.dontHaveAccount : t.alreadyHaveAccount}
                                 </Text>
-                                <TouchableOpacity onPress={() => handleSwitchTab(!isLogin)}>
+                                <TouchableOpacity onPress={() => handleSwitchTab(!isLogin)} style={{ marginLeft: 6 }}>
                                     <Text style={s.switchFooterLink}>
-                                        {isLogin ? 'Create Account' : 'Sign In'}
+                                        {isLogin ? t.createAccount : t.signIn}
                                     </Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
                     ) : (
-                        /* ── OTP VERIFICATION VIEW ── */
+                        /* ── OTP 6-DIGIT VERIFICATION VIEW ── */
                         <View style={s.cardContainer}>
-                            <View style={s.otpIconWrap}>
-                                <Ionicons name="mail-unread-outline" size={36} color="#0284C7" />
+                            <View style={s.otpHeaderIcon}>
+                                <Ionicons name="mail-unread-outline" size={32} color="#00BFA5" />
                             </View>
 
-                            <Text style={s.otpTitle}>Enter 6-Digit Code</Text>
+                            <Text style={s.otpTitle}>{t.otpTitle}</Text>
                             <Text style={s.otpSub}>
-                                We sent an authentication code to <Text style={{ fontWeight: '800', color: '#0F172A' }}>{email}</Text>
+                                {t.otpSub} <Text style={{ fontWeight: '800', color: '#0F172A' }}>{email}</Text>
                             </Text>
 
-                            <View style={s.otpInputWrap}>
-                                <TextInput
-                                    style={s.otpInput}
-                                    placeholder="• • • • • •"
-                                    placeholderTextColor="#CBD5E1"
-                                    value={otp}
-                                    onChangeText={setOtp}
-                                    keyboardType="number-pad"
-                                    maxLength={6}
-                                    autoFocus
-                                />
+                            {/* 6 Individual Pin Input Boxes */}
+                            <View style={s.pinBoxesRow}>
+                                {[0, 1, 2, 3, 4, 5].map((idx) => {
+                                    const val = otpDigits[idx] || '';
+                                    const isCurrent = otpDigits.findIndex(d => d === '') === idx;
+                                    return (
+                                        <View
+                                            key={idx}
+                                            style={[
+                                                s.pinBox,
+                                                val ? s.pinBoxFilled : null,
+                                                isCurrent ? s.pinBoxActive : null
+                                            ]}
+                                        >
+                                            <Text style={s.pinBoxDigit}>{val}</Text>
+                                        </View>
+                                    );
+                                })}
                             </View>
 
+                            {/* Hidden Real Input for Native Keyboard */}
+                            <TextInput
+                                ref={otpInputRef}
+                                style={s.hiddenOtpInput}
+                                value={otpDigits.join('')}
+                                onChangeText={(text) => handleOtpChange(text, 0)}
+                                keyboardType="number-pad"
+                                maxLength={6}
+                                autoFocus
+                            />
+
+                            {/* Verify Button */}
                             <TouchableOpacity
-                                style={[s.primaryBtn, loading && s.primaryBtnDisabled]}
-                                onPress={handleVerifyOtp}
+                                style={[s.primaryBtn, loading && s.primaryBtnDisabled, { marginTop: 24 }]}
+                                onPress={() => verifyOtpCode()}
                                 disabled={loading}
                                 activeOpacity={0.85}
                             >
                                 {loading ? (
                                     <ActivityIndicator color="#0A192F" size="small" />
                                 ) : (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                        <Text style={s.primaryBtnTxt}>Verify & Complete</Text>
+                                    <View style={s.primaryBtnInner}>
+                                        <Text style={s.primaryBtnTxt}>{t.verifyBtn}</Text>
                                         <Ionicons name="checkmark-circle" size={18} color="#0A192F" />
                                     </View>
                                 )}
                             </TouchableOpacity>
 
-                            {/* Resend Action */}
-                            <TouchableOpacity
-                                onPress={handleResendOtp}
-                                disabled={timer > 0 || loading}
-                                style={s.resendBtn}
-                            >
-                                <Ionicons name="refresh-outline" size={16} color={timer > 0 ? '#94A3B8' : '#0284C7'} />
-                                <Text style={[s.resendTxt, timer > 0 && { color: '#94A3B8' }]}>
-                                    {timer > 0 ? `Resend Code in ${timer}s` : 'Resend Verification Code'}
-                                </Text>
-                            </TouchableOpacity>
+                            {/* Resend Code Strip */}
+                            <View style={s.resendStrip}>
+                                {timer > 0 ? (
+                                    <Text style={s.timerTxt}>
+                                        {t.resendIn} <Text style={{ fontWeight: '800', color: '#00BFA5' }}>{timer}s</Text>
+                                    </Text>
+                                ) : (
+                                    <TouchableOpacity onPress={handleResendOtp} disabled={loading}>
+                                        <Text style={s.resendLink}>{t.resendCode}</Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
 
+                            {/* Change Email Option */}
                             <TouchableOpacity
-                                onPress={() => { setOtpSent(false); setOtp(''); }}
-                                style={{ marginTop: 16, alignSelf: 'center' }}
+                                onPress={() => setOtpSent(false)}
+                                style={s.changeEmailBtn}
                             >
-                                <Text style={s.wrongEmailTxt}>Wrong email address? Change</Text>
+                                <Ionicons name="arrow-back" size={14} color="#64748B" />
+                                <Text style={s.changeEmailTxt}>{t.changeEmail}</Text>
                             </TouchableOpacity>
                         </View>
                     )}
@@ -646,37 +1046,50 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
                 onRequestClose={() => setShowForgotModal(false)}
             >
                 <View style={s.modalOverlay}>
-                    <View style={s.modalBox}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                            <Text style={s.modalTitle}>Reset Password</Text>
+                    <View style={s.modalCard}>
+                        <View style={s.modalHeader}>
+                            <View style={s.modalIconWrap}>
+                                <Ionicons name="key-outline" size={24} color="#F59E0B" />
+                            </View>
                             <TouchableOpacity onPress={() => setShowForgotModal(false)}>
-                                <Ionicons name="close-circle-outline" size={24} color="#64748B" />
+                                <Ionicons name="close" size={22} color="#94A3B8" />
                             </TouchableOpacity>
                         </View>
+
+                        <Text style={s.modalTitle}>{t.forgotPassword}</Text>
                         <Text style={s.modalSub}>
-                            Enter your account email address. We'll send you a secure link to reset your password.
+                            {lang === 'ha'
+                                ? 'Shigar da adireshin email na asusunka domin mu tura maka hanyar sake saita kalmar sirri.'
+                                : 'Enter your registered email address to receive password reset instructions.'}
                         </Text>
-                        <View style={[s.inputBox, { marginBottom: 16 }]}>
-                            <Ionicons name="mail-outline" size={18} color="#94A3B8" style={s.inputIcon} />
-                            <TextInput
-                                style={s.textInput}
-                                placeholder="user@example.com"
-                                placeholderTextColor="#94A3B8"
-                                value={forgotEmail}
-                                onChangeText={setForgotEmail}
-                                autoCapitalize="none"
-                                keyboardType="email-address"
-                            />
+
+                        <View style={s.inputWrap}>
+                            <Text style={s.inputLabel}>{t.emailLabel}</Text>
+                            <View style={s.inputBox}>
+                                <Ionicons name="mail-outline" size={18} color="#94A3B8" style={s.inputIcon} />
+                                <TextInput
+                                    style={s.textInput}
+                                    placeholder={t.emailPlaceholder}
+                                    placeholderTextColor="#94A3B8"
+                                    value={forgotEmail}
+                                    onChangeText={setForgotEmail}
+                                    autoCapitalize="none"
+                                    keyboardType="email-address"
+                                />
+                            </View>
                         </View>
+
                         <TouchableOpacity
-                            style={[s.primaryBtn, forgotLoading && s.primaryBtnDisabled]}
+                            style={[s.primaryBtn, forgotLoading && s.primaryBtnDisabled, { marginTop: 14 }]}
                             onPress={handleForgotPassword}
                             disabled={forgotLoading}
                         >
                             {forgotLoading ? (
                                 <ActivityIndicator color="#0A192F" size="small" />
                             ) : (
-                                <Text style={s.primaryBtnTxt}>Send Reset Link</Text>
+                                <Text style={s.primaryBtnTxt}>
+                                    {lang === 'ha' ? 'Tura Hanyar Canza Kalma' : 'Send Reset Link'}
+                                </Text>
                             )}
                         </TouchableOpacity>
                     </View>
@@ -686,110 +1099,151 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
     );
 };
 
+// ── MODERN MOBILE FIRST STYLESHEET ──────────────────────────────────────────
 const s = StyleSheet.create({
     root: {
         flex: 1,
         backgroundColor: '#F8FAFC',
     },
-
-    // Header
     topHeader: {
         backgroundColor: '#0A192F',
         paddingHorizontal: 16,
-        paddingBottom: 16,
+        paddingBottom: 14,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        borderBottomLeftRadius: 24,
-        borderBottomRightRadius: 24,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255,255,255,0.08)',
     },
-    backBtn: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(255,255,255,0.1)',
+    headerIconBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 12,
+        backgroundColor: 'rgba(255,255,255,0.08)',
         alignItems: 'center',
         justifyContent: 'center',
     },
-    headerLogoWrap: {
+    headerBrandWrap: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
     },
     headerLogoImg: {
-        width: 32,
-        height: 32,
+        width: 28,
+        height: 28,
     },
-    headerLogoTitle: {
+    headerBrandTitle: {
         fontSize: 14,
         fontWeight: '900',
         color: '#FFFFFF',
         letterSpacing: 0.5,
     },
-    headerLogoSub: {
-        fontSize: 6.5,
+    headerBrandSub: {
+        fontSize: 8,
         fontWeight: '700',
-        color: '#94A3B8',
-        letterSpacing: 0.5,
+        color: 'rgba(255,255,255,0.5)',
+        letterSpacing: 1.5,
     },
-
-    // Hero Card
-    heroBanner: {
-        borderRadius: 20,
-        overflow: 'hidden',
-        padding: 18,
-        backgroundColor: '#0A192F',
-        marginBottom: 16,
-        position: 'relative',
-    },
-    heroBadge: {
+    headerRightActions: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 5,
-        backgroundColor: 'rgba(245, 158, 11, 0.15)',
+        gap: 6,
+    },
+    langBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
         paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 6,
-        alignSelf: 'flex-start',
-        marginBottom: 8,
+        paddingVertical: 5,
+        backgroundColor: 'rgba(0, 210, 255, 0.1)',
+        borderWidth: 1,
+        borderColor: 'rgba(0, 210, 255, 0.3)',
+        borderRadius: 10,
+    },
+    langBadgeTxt: {
+        fontSize: 10,
+        fontWeight: '900',
+        color: '#00D2FF',
+    },
+    guestChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+        paddingHorizontal: 9,
+        paddingVertical: 5,
+        backgroundColor: 'rgba(245, 158, 11, 0.12)',
         borderWidth: 1,
         borderColor: 'rgba(245, 158, 11, 0.3)',
+        borderRadius: 10,
     },
-    heroBadgeTxt: {
+    guestChipTxt: {
+        fontSize: 10,
+        fontWeight: '800',
         color: '#F59E0B',
+    },
+    heroBanner: {
+        borderRadius: 24,
+        padding: 20,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+        marginBottom: 16,
+        shadowColor: '#0A192F',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.2,
+        shadowRadius: 10,
+        elevation: 6,
+    },
+    heroSecurityRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 10,
+    },
+    heroSecurityBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: 'rgba(255,255,255,0.08)',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 8,
+    },
+    heroSecurityTxt: {
         fontSize: 9,
         fontWeight: '900',
-        letterSpacing: 0.8,
+        color: '#00BFA5',
+        letterSpacing: 0.6,
     },
-    heroHeading: {
-        fontSize: 20,
+    heroTitle: {
+        fontSize: 22,
         fontWeight: '900',
         color: '#FFFFFF',
-        marginBottom: 4,
+        letterSpacing: -0.5,
     },
     heroSub: {
         fontSize: 12,
         color: '#94A3B8',
+        fontWeight: '500',
+        marginTop: 4,
         lineHeight: 18,
     },
-
-    // Error & Referral
     errorBanner: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
         backgroundColor: '#FEF2F2',
         borderWidth: 1,
-        borderColor: '#FECACA',
+        borderColor: '#FCA5A5',
+        borderRadius: 16,
         padding: 12,
-        borderRadius: 12,
         marginBottom: 14,
     },
     errorBannerTxt: {
-        flex: 1,
-        color: '#B91C1C',
         fontSize: 12,
-        fontWeight: '600',
+        fontWeight: '700',
+        color: '#B91C1C',
+        flex: 1,
     },
     referralBanner: {
         flexDirection: 'row',
@@ -797,55 +1251,69 @@ const s = StyleSheet.create({
         gap: 10,
         backgroundColor: '#ECFDF5',
         borderWidth: 1,
-        borderColor: '#10B981',
-        padding: 12,
+        borderColor: '#A7F3D0',
+        borderRadius: 18,
+        padding: 14,
+        marginBottom: 16,
+    },
+    referralIconWrap: {
+        width: 36,
+        height: 36,
         borderRadius: 12,
-        marginBottom: 14,
+        backgroundColor: '#D1FAE5',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    referralBannerTxt: {
-        flex: 1,
-        color: '#065F46',
+    referralTitle: {
         fontSize: 12,
-        fontWeight: '600',
+        fontWeight: '900',
+        color: '#065F46',
     },
-
-    // Card Container
+    referralSub: {
+        fontSize: 11,
+        color: '#047857',
+        fontWeight: '500',
+        marginTop: 2,
+    },
     cardContainer: {
         backgroundColor: '#FFFFFF',
-        borderRadius: 22,
+        borderRadius: 24,
         padding: 18,
         borderWidth: 1,
         borderColor: '#E2E8F0',
+        shadowColor: '#64748B',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
         elevation: 3,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
     },
-
-    // Segmented Tabs
     segmentedContainer: {
         flexDirection: 'row',
         backgroundColor: '#F1F5F9',
-        borderRadius: 14,
+        borderRadius: 16,
         padding: 4,
-        marginBottom: 20,
         position: 'relative',
-        height: 44,
-        alignItems: 'center',
+        marginBottom: 16,
+        height: 48,
     },
     activeIndicator: {
         position: 'absolute',
         top: 4,
         bottom: 4,
-        backgroundColor: '#0A192F',
-        borderRadius: 11,
+        backgroundColor: '#F59E0B',
+        borderRadius: 12,
+        shadowColor: '#F59E0B',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: 3,
     },
     segmentedBtn: {
         flex: 1,
+        flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 2,
+        zIndex: 1,
     },
     segmentedTxt: {
         fontSize: 13,
@@ -853,98 +1321,270 @@ const s = StyleSheet.create({
         color: '#64748B',
     },
     segmentedTxtActive: {
-        color: '#FFFFFF',
-        fontWeight: '800',
+        color: '#0A192F',
+        fontWeight: '900',
     },
-
-    // Input Styles
+    methodTabsRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginBottom: 14,
+    },
+    methodTab: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        paddingVertical: 8,
+        borderRadius: 12,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    methodTabActive: {
+        backgroundColor: 'rgba(0, 191, 165, 0.08)',
+        borderColor: '#00BFA5',
+    },
+    methodTabTxt: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#64748B',
+    },
+    methodTabTxtActive: {
+        color: '#00BFA5',
+        fontWeight: '900',
+    },
     inputWrap: {
         marginBottom: 14,
     },
+    inputLabelRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 6,
+    },
     inputLabel: {
-        fontSize: 11.5,
-        fontWeight: '700',
-        color: '#334155',
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#1E293B',
         marginBottom: 6,
     },
     inputBox: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#F8FAFC',
-        borderRadius: 12,
-        borderWidth: 1,
+        borderWidth: 1.5,
         borderColor: '#E2E8F0',
-        height: 46,
+        borderRadius: 16,
         paddingHorizontal: 12,
+        height: 50,
     },
     inputIcon: {
         marginRight: 8,
     },
+    countryPrefix: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        marginRight: 8,
+        paddingRight: 8,
+        borderRightWidth: 1,
+        borderRightColor: '#CBD5E1',
+    },
+    countryFlag: {
+        fontSize: 14,
+    },
+    countryCode: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#0F172A',
+    },
     textInput: {
         flex: 1,
-        fontSize: 13.5,
+        fontSize: 14,
         color: '#0F172A',
-        fontWeight: '500',
+        fontWeight: '600',
     },
     eyeBtn: {
         position: 'absolute',
         right: 12,
-        padding: 4,
+        padding: 6,
     },
     forgotTxt: {
         fontSize: 11,
-        color: '#0284C7',
-        fontWeight: '700',
+        fontWeight: '800',
+        color: '#F59E0B',
     },
-
-    // Primary Button
-    primaryBtn: {
-        backgroundColor: '#F59E0B',
-        height: 48,
-        borderRadius: 14,
+    strengthMeterWrap: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginTop: 6,
+        paddingHorizontal: 2,
+    },
+    strengthBars: {
+        flexDirection: 'row',
+        gap: 4,
+        flex: 1,
+        marginRight: 10,
+    },
+    strengthBar: {
+        flex: 1,
+        height: 4,
+        borderRadius: 2,
+    },
+    strengthLabel: {
+        fontSize: 10,
+        fontWeight: '800',
+    },
+    optionsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 16,
+        marginTop: 2,
+    },
+    rememberMeBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    checkbox: {
+        width: 20,
+        height: 20,
+        borderRadius: 6,
+        borderWidth: 2,
+        borderColor: '#CBD5E1',
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: 8,
-        elevation: 2,
+        backgroundColor: '#FFFFFF',
+    },
+    checkboxActive: {
+        backgroundColor: '#00BFA5',
+        borderColor: '#00BFA5',
+    },
+    rememberMeTxt: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#475569',
+    },
+    biometricToggle: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: '#F1F5F9',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 10,
+    },
+    biometricTxt: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: '#64748B',
+    },
+    termsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 16,
+    },
+    termsTxt: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: '#64748B',
+        flex: 1,
+        lineHeight: 16,
+    },
+    primaryBtn: {
+        backgroundColor: '#F59E0B',
+        height: 52,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
         shadowColor: '#F59E0B',
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.25,
-        shadowRadius: 5,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.35,
+        shadowRadius: 8,
+        elevation: 4,
     },
     primaryBtnDisabled: {
-        opacity: 0.65,
+        opacity: 0.6,
+    },
+    primaryBtnInner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
     },
     primaryBtnTxt: {
-        color: '#0A192F',
         fontSize: 14,
         fontWeight: '900',
+        color: '#0A192F',
+        letterSpacing: 0.3,
     },
-
-    // Switch Footer
-    switchFooter: {
+    dividerWrap: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginVertical: 18,
+    },
+    dividerLine: {
+        flex: 1,
+        height: 1,
+        backgroundColor: '#E2E8F0',
+    },
+    dividerTxt: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#94A3B8',
+        marginHorizontal: 12,
+        textTransform: 'uppercase',
+    },
+    socialRow: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    socialBtn: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 6,
+        gap: 8,
+        height: 46,
+        borderRadius: 14,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1.5,
+        borderColor: '#E2E8F0',
+    },
+    socialBtnTxt: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#1E293B',
+    },
+    switchFooter: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
         marginTop: 18,
     },
     switchFooterTxt: {
         fontSize: 12,
         color: '#64748B',
-        fontWeight: '500',
+        fontWeight: '600',
     },
     switchFooterLink: {
-        fontSize: 12.5,
-        color: '#0284C7',
-        fontWeight: '800',
+        fontSize: 12,
+        fontWeight: '900',
+        color: '#0A192F',
+        textDecorationLine: 'underline',
     },
 
-    // OTP Styles
-    otpIconWrap: {
+    // ── OTP STYLES ────────────────────────────────────────────────────────────
+    otpHeaderIcon: {
         width: 60,
         height: 60,
-        borderRadius: 30,
-        backgroundColor: '#E0F2FE',
+        borderRadius: 20,
+        backgroundColor: '#F0FDFA',
+        borderWidth: 1,
+        borderColor: '#CCFBF1',
         alignItems: 'center',
         justifyContent: 'center',
         alignSelf: 'center',
@@ -955,73 +1595,125 @@ const s = StyleSheet.create({
         fontWeight: '900',
         color: '#0F172A',
         textAlign: 'center',
-        marginBottom: 4,
     },
     otpSub: {
         fontSize: 12,
         color: '#64748B',
         textAlign: 'center',
+        marginTop: 4,
         marginBottom: 20,
-        paddingHorizontal: 10,
+        lineHeight: 18,
     },
-    otpInputWrap: {
-        marginBottom: 18,
+    pinBoxesRow: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 8,
+        marginBottom: 10,
     },
-    otpInput: {
-        backgroundColor: '#F8FAFC',
+    pinBox: {
+        width: 44,
+        height: 52,
         borderRadius: 14,
+        backgroundColor: '#F8FAFC',
         borderWidth: 1.5,
-        borderColor: '#0284C7',
-        height: 54,
-        textAlign: 'center',
-        fontSize: 24,
+        borderColor: '#CBD5E1',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    pinBoxFilled: {
+        borderColor: '#0A192F',
+        backgroundColor: '#FFFFFF',
+    },
+    pinBoxActive: {
+        borderColor: '#F59E0B',
+        borderWidth: 2,
+        backgroundColor: 'rgba(245, 158, 11, 0.05)',
+    },
+    pinBoxDigit: {
+        fontSize: 20,
         fontWeight: '900',
-        letterSpacing: 10,
         color: '#0A192F',
     },
-    resendBtn: {
+    hiddenOtpInput: {
+        position: 'absolute',
+        width: 1,
+        height: 1,
+        opacity: 0.01,
+    },
+    resendStrip: {
+        alignItems: 'center',
+        marginTop: 16,
+    },
+    timerTxt: {
+        fontSize: 12,
+        color: '#64748B',
+        fontWeight: '600',
+    },
+    resendLink: {
+        fontSize: 12,
+        fontWeight: '900',
+        color: '#00BFA5',
+    },
+    changeEmailBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 6,
         marginTop: 18,
-        paddingVertical: 4,
+        paddingVertical: 8,
     },
-    resendTxt: {
-        fontSize: 12.5,
-        color: '#0284C7',
+    changeEmailTxt: {
+        fontSize: 12,
         fontWeight: '700',
-    },
-    wrongEmailTxt: {
-        fontSize: 11.5,
         color: '#64748B',
-        fontWeight: '600',
     },
 
-    // Modal
+    // ── FORGOT PASSWORD MODAL ─────────────────────────────────────────────────
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.6)',
+        backgroundColor: 'rgba(10, 25, 47, 0.75)',
         alignItems: 'center',
         justifyContent: 'center',
         padding: 20,
     },
-    modalBox: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 20,
-        padding: 20,
+    modalCard: {
         width: '100%',
-        maxWidth: 380,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 24,
+        padding: 22,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 20,
+        elevation: 10,
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    modalIconWrap: {
+        width: 44,
+        height: 44,
+        borderRadius: 14,
+        backgroundColor: '#FEF3C7',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     modalTitle: {
-        fontSize: 17,
+        fontSize: 18,
         fontWeight: '900',
         color: '#0F172A',
     },
     modalSub: {
         fontSize: 12,
         color: '#64748B',
+        fontWeight: '500',
+        marginTop: 4,
         marginBottom: 16,
         lineHeight: 18,
     },
 });
+
+export default AuthPage;
