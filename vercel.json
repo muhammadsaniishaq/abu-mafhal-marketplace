@@ -1,27 +1,7 @@
 {
-    "buildCommand": "npm install && npm run build && (cd mobile && npm install && npx expo export -p web && node patch-html.js && cd .. && mkdir -p dist/mobile && cp -R mobile/dist/* dist/mobile/ && mkdir -p dist/assets && cp -R mobile/dist/assets/* dist/assets/ && cp -R mobile/dist/_expo dist/) || echo 'Mobile build completed'",
+    "buildCommand": "npm run build",
     "outputDirectory": "dist",
     "rewrites": [
-        {
-            "source": "/assets/node_modules/(.*)",
-            "destination": "/mobile/assets/node_modules/$1"
-        },
-        {
-            "source": "/assets/assets/(.*)",
-            "destination": "/mobile/assets/assets/$1"
-        },
-        {
-            "source": "/_expo/(.*)",
-            "destination": "/mobile/_expo/$1"
-        },
-        {
-            "source": "/mobile/(.*)",
-            "destination": "/mobile/index.html"
-        },
-        {
-            "source": "/mobile",
-            "destination": "/mobile/index.html"
-        },
         {
             "source": "/(.*)",
             "destination": "/index.html"
