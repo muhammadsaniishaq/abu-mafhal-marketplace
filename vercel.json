@@ -1,24 +1,6 @@
 {
     "buildCommand": "npm install && npm run build && (cd mobile && npm install && npx expo export -p web && node patch-html.js && cd .. && mkdir -p dist/mobile && cp -R mobile/dist/* dist/mobile/ && mkdir -p dist/assets && cp -R mobile/dist/assets/* dist/assets/ && cp -R mobile/dist/_expo dist/) || echo 'Mobile build completed'",
     "outputDirectory": "dist",
-    "headers": [
-        {
-            "source": "/",
-            "headers": [
-                {
-                    "key": "Vary",
-                    "value": "User-Agent"
-                }
-            ]
-        }
-    ],
-    "redirects": [
-        {
-            "source": "/mobile/",
-            "destination": "/mobile",
-            "permanent": false
-        }
-    ],
     "rewrites": [
         {
             "source": "/assets/node_modules/(.*)",
@@ -33,20 +15,12 @@
             "destination": "/mobile/_expo/$1"
         },
         {
-            "source": "/mobile/:path*",
+            "source": "/mobile/(.*)",
             "destination": "/mobile/index.html"
         },
         {
             "source": "/mobile",
             "destination": "/mobile/index.html"
-        },
-        {
-            "source": "/join/:path*",
-            "destination": "/index.html"
-        },
-        {
-            "source": "/auth",
-            "destination": "/index.html"
         },
         {
             "source": "/(.*)",
