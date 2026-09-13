@@ -182098,18 +182098,34 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
             style: {
               flexDirection: 'row',
               alignItems: 'center',
-              gap: 12
+              gap: 8
             },
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
+            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
               onPress: onGoToShop,
               style: {
-                padding: 4
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                backgroundColor: '#E0F2FE',
+                paddingHorizontal: 10,
+                paddingVertical: 5,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: '#BAE6FD'
               },
-              children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                name: "search-outline",
-                size: 22,
-                color: "#0F172A"
-              })
+              activeOpacity: 0.8,
+              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+                name: "bag-handle",
+                size: 13,
+                color: "#0284C7"
+              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                style: {
+                  fontSize: 11,
+                  fontWeight: '800',
+                  color: '#0284C7'
+                },
+                children: "Shop"
+              })]
             }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
               onPress: onGoToCart,
               style: {
@@ -195721,7 +195737,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
             }],
             children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
               name: "git-compare-outline",
-              size: 20,
+              size: 19,
               color: "#0F172A"
             }), comparisonCount > 0 && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
               style: styles.compareBadge,
@@ -195732,6 +195748,37 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
                   fontWeight: '800'
                 },
                 children: comparisonCount
+              })
+            })]
+          }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
+            onPress: onGoToCart,
+            style: [styles.iconCircle, {
+              position: 'relative'
+            }],
+            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+              name: "cart-outline",
+              size: 20,
+              color: "#0F172A"
+            }), cartCount > 0 && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+              style: {
+                position: 'absolute',
+                top: -2,
+                right: -2,
+                backgroundColor: '#10B981',
+                borderRadius: 8,
+                minWidth: 16,
+                height: 16,
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingHorizontal: 2
+              },
+              children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                style: {
+                  color: 'white',
+                  fontSize: 9,
+                  fontWeight: '800'
+                },
+                children: cartCount > 99 ? '99+' : cartCount
               })
             })]
           })]
@@ -195902,7 +195949,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   const styles = StyleSheet.default.create({
     container: {
       flex: 1,
-      backgroundColor: '#F0F3FA'
+      backgroundColor: '#F8FAFC'
     },
     safe: {
       backgroundColor: 'white',
@@ -195921,17 +195968,17 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       width: 38,
       height: 38,
       borderRadius: 19,
-      backgroundColor: '#F4F6FB',
+      backgroundColor: '#F1F5F9',
       alignItems: 'center',
       justifyContent: 'center',
       borderWidth: 1,
-      borderColor: '#E9EDF5'
+      borderColor: '#E2E8F0'
     },
     compareBadge: {
       position: 'absolute',
       top: -2,
       right: -2,
-      backgroundColor: '#6366F1',
+      backgroundColor: '#0284C7',
       borderRadius: 8,
       minWidth: 16,
       height: 16,
@@ -195942,30 +195989,30 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     searchBar: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: '#F4F6FB',
+      backgroundColor: '#F1F5F9',
       borderRadius: 22,
       paddingHorizontal: 12,
       height: 40,
       borderWidth: 1,
-      borderColor: '#E9EDF5',
+      borderColor: '#E2E8F0',
       gap: 6
     },
     searchInput: {
       flex: 1,
       fontSize: 13,
-      color: '#1E293B',
+      color: '#0F172A',
       paddingVertical: 0
     },
     // ── Gradient accent strip ──────────────────────────────────────────────────
     accentStrip: {
       height: 3,
-      backgroundColor: '#EEF2F8',
+      backgroundColor: '#E2E8F0',
       overflow: 'hidden'
     },
     accentInner: {
       height: 3,
       width: '35%',
-      backgroundColor: '#6366F1',
+      backgroundColor: '#0284C7',
       borderRadius: 2
     },
     // ── Chips ─────────────────────────────────────────────────────────────────
@@ -195978,19 +196025,19 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       borderRadius: 22,
       backgroundColor: '#F1F5F9',
       borderWidth: 1,
-      borderColor: '#E9EDF5'
+      borderColor: '#E2E8F0'
     },
     chipActive: {
-      backgroundColor: '#6366F1',
-      borderColor: '#6366F1',
-      elevation: 5,
-      shadowColor: '#6366F1',
+      backgroundColor: '#0284C7',
+      borderColor: '#0284C7',
+      elevation: 4,
+      shadowColor: '#0284C7',
       shadowOffset: {
         width: 0,
-        height: 4
+        height: 3
       },
-      shadowOpacity: 0.35,
-      shadowRadius: 8
+      shadowOpacity: 0.25,
+      shadowRadius: 6
     },
     chipTxt: {
       fontSize: 12,
@@ -196021,7 +196068,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       width: 4,
       height: 18,
       borderRadius: 2,
-      backgroundColor: '#6366F1'
+      backgroundColor: '#0284C7'
     },
     sectionTitle: {
       fontSize: 15,
@@ -196031,11 +196078,11 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     seeAll: {
       fontSize: 12,
       fontWeight: '700',
-      color: '#6366F1'
+      color: '#0284C7'
     },
     // Product count bubble
     countBubble: {
-      backgroundColor: '#EEF2FF',
+      backgroundColor: '#E0F2FE',
       paddingHorizontal: 7,
       paddingVertical: 2,
       borderRadius: 10,
@@ -196044,7 +196091,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     countBubbleTxt: {
       fontSize: 11,
       fontWeight: '800',
-      color: '#6366F1'
+      color: '#0284C7'
     },
     // ── Sub header ────────────────────────────────────────────────────────────
     subHeader: {
@@ -196087,15 +196134,15 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       borderRadius: 16,
       overflow: 'hidden',
       borderWidth: 1,
-      borderColor: '#E8EDF5',
+      borderColor: '#F1F5F9',
       elevation: 3,
-      shadowColor: '#6366F1',
+      shadowColor: '#0F172A',
       shadowOffset: {
         width: 0,
-        height: 4
+        height: 3
       },
-      shadowOpacity: 0.08,
-      shadowRadius: 8
+      shadowOpacity: 0.06,
+      shadowRadius: 6
     },
     dealImg: {
       width: '100%',
@@ -196121,17 +196168,17 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     dealName: {
       fontSize: 11,
       fontWeight: '700',
-      color: '#1E293B',
+      color: '#0F172A',
       marginBottom: 4
     },
     dealPrice: {
       fontSize: 13,
       fontWeight: '900',
-      color: '#6366F1'
+      color: '#0284C7'
     },
     dealOld: {
       fontSize: 10,
-      color: '#CBD5E1',
+      color: '#94A3B8',
       textDecorationLine: 'line-through'
     },
     // ── Product card ──────────────────────────────────────────────────────────
@@ -196142,21 +196189,21 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       borderRadius: 18,
       overflow: 'hidden',
       borderWidth: 1,
-      borderColor: '#E8EDF5',
-      elevation: 4,
-      shadowColor: '#6366F1',
+      borderColor: '#F1F5F9',
+      elevation: 3,
+      shadowColor: '#0F172A',
       shadowOffset: {
         width: 0,
-        height: 5
+        height: 4
       },
-      shadowOpacity: 0.09,
-      shadowRadius: 12
+      shadowOpacity: 0.06,
+      shadowRadius: 10
     },
     imgBox: {
       height: 140,
       position: 'relative',
       overflow: 'hidden',
-      backgroundColor: '#EBF0F8'
+      backgroundColor: '#F8FAFC'
     },
     imgFull: {
       width: '100%',
@@ -196214,7 +196261,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       backgroundColor: 'rgba(239,68,68,0.1)'
     },
     iconBtnCompare: {
-      backgroundColor: 'rgba(99,102,241,0.1)'
+      backgroundColor: 'rgba(2,132,199,0.1)'
     },
     freeTag: {
       position: 'absolute',
@@ -196263,7 +196310,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     cardTitle: {
       fontSize: 12,
       fontWeight: '700',
-      color: '#1E293B',
+      color: '#0F172A',
       lineHeight: 16,
       marginBottom: 5
     },
@@ -196303,12 +196350,12 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     price: {
       fontSize: 14,
       fontWeight: '900',
-      color: '#6366F1',
+      color: '#0284C7',
       lineHeight: 18
     },
     oldPrice: {
       fontSize: 10,
-      color: '#CBD5E1',
+      color: '#94A3B8',
       textDecorationLine: 'line-through',
       marginTop: 1
     },
@@ -196338,13 +196385,13 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       width: 80,
       height: 80,
       borderRadius: 40,
-      backgroundColor: '#EEF2FF',
+      backgroundColor: '#E0F2FE',
       alignItems: 'center',
       justifyContent: 'center',
       marginBottom: 16
     },
     emptyTitle: {
-      color: '#1E293B',
+      color: '#0F172A',
       fontSize: 16,
       fontWeight: '800'
     },
@@ -196357,7 +196404,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     },
     clearBtn: {
       marginTop: 18,
-      backgroundColor: '#6366F1',
+      backgroundColor: '#0284C7',
       paddingHorizontal: 22,
       paddingVertical: 10,
       borderRadius: 22,
@@ -196419,10 +196466,10 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       width: 40,
       height: 40,
       borderRadius: 20,
-      backgroundColor: '#6366F1',
+      backgroundColor: '#0A192F',
       alignItems: 'center',
       justifyContent: 'center',
-      shadowColor: '#6366F1',
+      shadowColor: '#0A192F',
       shadowOffset: {
         width: 0,
         height: 4
@@ -196448,7 +196495,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       width: 76,
       height: 76,
       borderRadius: 38,
-      backgroundColor: '#6366F1',
+      backgroundColor: '#0284C7',
       alignItems: 'center',
       justifyContent: 'center'
     },
@@ -204081,9 +204128,9 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       icon: 'home',
       label: 'Home'
     }, {
-      id: 'categories',
-      icon: 'grid',
-      label: 'Categories'
+      id: 'shop',
+      icon: 'bag-handle',
+      label: 'Shop'
     }, {
       id: 'stores',
       icon: 'storefront',

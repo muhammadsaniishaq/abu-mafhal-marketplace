@@ -615,9 +615,24 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                         </View>
                     </View>
 
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                        <TouchableOpacity onPress={onGoToShop} style={{ padding: 4 }}>
-                            <Ionicons name="search-outline" size={22} color="#0F172A" />
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <TouchableOpacity
+                            onPress={onGoToShop}
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 4,
+                                backgroundColor: '#E0F2FE',
+                                paddingHorizontal: 10,
+                                paddingVertical: 5,
+                                borderRadius: 12,
+                                borderWidth: 1,
+                                borderColor: '#BAE6FD'
+                            }}
+                            activeOpacity={0.8}
+                        >
+                            <Ionicons name="bag-handle" size={13} color="#0284C7" />
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#0284C7' }}>Shop</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity onPress={onGoToCart} style={{ position: 'relative', padding: 4 }}>

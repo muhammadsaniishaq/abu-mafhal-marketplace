@@ -1,252 +1,267 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
-  Store, CheckCircle, Star, Heart, Search, Bell, ShoppingCart, User,
+  Store, CheckCircle, Star, Heart, Search, Bell, ShoppingCart,
   MapPin, ChevronRight, ArrowRight, ExternalLink, ShieldCheck, Plus,
-  Shirt, Laptop, Sparkles, Home, ShoppingBasket, Headphones,
-  Activity, Trophy, BookOpen, Car, MoreHorizontal, Check
+  Sparkles, Phone, MessageSquare, Share2, X, Check, Eye
 } from 'lucide-react';
+import { supabase } from '../config/supabase';
+import { useCart } from '../context/CartContext';
+import { useWishlist } from '../context/WishlistContext';
+import Navbar from '../components/common/Navbar';
+
+const FOLLOWED_STORES_KEY = 'abumafhal_followed_stores_web_v2';
+const FALLBACK_IMG = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=400&auto=format&fit=crop';
+const AM_LOGO = '/logo.png';
+
+const getImg = (product) => {
+  if (product?.image_url) return product.image_url;
+  if (Array.isArray(product?.images) && product.images.length > 0) return product.images[0];
+  if (typeof product?.images === 'string') {
+    try {
+      const parsed = JSON.parse(product.images);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+    } catch (_) {}
+    return product.images;
+  }
+  return FALLBACK_IMG;
+};
 
 const Stores = () => {
   const navigate = useNavigate();
+  const { cart, addToCart } = useCart();
+  const { wishlist, toggleWishlist } = useWishlist();
+
   const [activeTab, setActiveTab] = useState('popular');
   const [activeCategory, setActiveCategory] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [stores, setStores] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [followedStores, setFollowedStores] = useState({});
+  const [loading, setLoading] = useState(true);
 
-  const toggleFollow = (storeId) => {
-    setFollowedStores(prev => ({
-      ...prev,
-      [storeId]: !prev[storeId]
-    }));
+  // Dedicated Store Modal View
+  const [selectedStore, setSelectedStore] = useState(null);
+  const [storeSearch, setStoreSearch] = useState('');
+  const [storeCategoryFilter, setStoreCategoryFilter] = useState('all');
+  const [toastMsg, setToastMsg] = useState('');
+
+  const showToast = (msg) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(''), 2500);
   };
 
-  const categories = [
-    { id: 'all', label: 'All Stores', icon: Store },
-    { id: 'fashion', label: 'Fashion', icon: Shirt },
-    { id: 'electronics', label: 'Electronics', icon: Laptop },
-    { id: 'beauty', label: 'Beauty', icon: Sparkles },
-    { id: 'home', label: 'Home & Living', icon: Home },
-    { id: 'groceries', label: 'Groceries', icon: ShoppingBasket },
-    { id: 'accessories', label: 'Mobile Accessories', icon: Headphones },
-    { id: 'health', label: 'Health & Wellness', icon: Activity },
-    { id: 'sports', label: 'Sports', icon: Trophy },
-    { id: 'books', label: 'Books & Stationery', icon: BookOpen },
-    { id: 'auto', label: 'Automotive', icon: Car },
-    { id: 'more', label: 'More', icon: MoreHorizontal },
-  ];
+  useEffect(() => {
+    // Load followed state from localStorage
+    try {
+      const raw = localStorage.getItem(FOLLOWED_STORES_KEY);
+      if (raw) setFollowedStores(JSON.parse(raw));
+    } catch (_) {}
 
-  const featuredStores = [
-    {
-      id: 'store-elson',
-      name: 'ELSON Boutique',
-      tagline: 'Fashion for Every You',
-      rating: 4.8,
-      reviews: '2.1K',
-      productsCount: 356,
-      avatar: 'https://images.unsplash.com/photo-1544441893-675973e31985?w=150&q=80',
-      banner: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=500&q=80',
-      category: 'fashion',
-      verified: true,
-    },
-    {
-      id: 'store-techhub',
-      name: 'TechHUB',
-      tagline: 'Smart Choices, Better Life',
-      rating: 4.7,
-      reviews: '1.9K',
-      productsCount: 482,
-      avatar: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=150&q=80',
-      banner: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=500&q=80',
-      category: 'electronics',
-      verified: true,
-    },
-    {
-      id: 'store-freshmart',
-      name: 'FreshMart',
-      tagline: 'Groceries & More',
-      rating: 4.6,
-      reviews: '1.5K',
-      productsCount: 620,
-      avatar: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=150&q=80',
-      banner: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=500&q=80',
-      category: 'groceries',
-      verified: true,
-    },
-    {
-      id: 'store-glowville',
-      name: 'GlowVille Beauty',
-      tagline: 'Beauty Redefined',
-      rating: 4.8,
-      reviews: '2.3K',
-      productsCount: 410,
-      avatar: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=150&q=80',
-      banner: 'https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=500&q=80',
-      category: 'beauty',
-      verified: true,
-    },
-  ];
+    fetchStoresAndData();
+  }, []);
 
-  const popularProducts = [
-    {
-      id: 'prod-infinix',
-      name: 'Infinix Note 40 Pro',
-      store: 'TechHub Store',
-      price: 389000,
-      oldPrice: null,
-      rating: 4.8,
-      reviews: 320,
-      image: 'https://images.unsplash.com/photo-1591337676887-a217a6970a8a?w=300&q=80',
-    },
-    {
-      id: 'prod-sneakers',
-      name: 'Men Sport Sneakers',
-      store: 'ELSON Boutique',
-      price: 24500,
-      oldPrice: 29000,
-      discount: '-15%',
-      rating: 4.6,
-      reviews: 210,
-      image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=300&q=80',
-    },
-    {
-      id: 'prod-airfryer',
-      name: 'Binatone Air Fryer 5.5L',
-      store: 'HomeSmart',
-      price: 78000,
-      oldPrice: null,
-      rating: 4.7,
-      reviews: 95,
-      image: 'https://images.unsplash.com/photo-1585659722983-3a675dabf23d?w=300&q=80',
-    },
-    {
-      id: 'prod-handbag',
-      name: 'Ladies Handbag',
-      store: 'ELSON Boutique',
-      price: 16000,
-      oldPrice: 20000,
-      discount: '-20%',
-      rating: 4.8,
-      reviews: 180,
-      image: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=300&q=80',
-    },
-    {
-      id: 'prod-rice',
-      name: 'Mama Gold Parboiled Rice 5kg',
-      store: 'FreshMart',
-      price: 8500,
-      oldPrice: null,
-      rating: 4.6,
-      reviews: 410,
-      image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=300&q=80',
-    },
-    {
-      id: 'prod-smartwatch',
-      name: 'Oraimo Smart Watch',
-      store: 'TechHub Store',
-      price: 42000,
-      oldPrice: null,
-      rating: 4.5,
-      reviews: 260,
-      image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300&q=80',
-    },
-  ];
+  const toggleFollow = (storeId, storeName) => {
+    setFollowedStores(prev => {
+      const isFollowed = !prev[storeId];
+      const updated = { ...prev, [storeId]: isFollowed };
+      try {
+        localStorage.setItem(FOLLOWED_STORES_KEY, JSON.stringify(updated));
+      } catch (_) {}
+      showToast(isFollowed ? `Now following ${storeName}` : `Unfollowed ${storeName}`);
+      return updated;
+    });
+  };
+
+  const fetchStoresAndData = async () => {
+    setLoading(true);
+    try {
+      const [profilesRes, productsRes, categoriesRes] = await Promise.allSettled([
+        supabase
+          .from('profiles')
+          .select('id, full_name, username, business_name, avatar_url, role, phone, created_at')
+          .or('role.eq.vendor,role.eq.seller,business_name.not.is.null')
+          .limit(50),
+        supabase
+          .from('products')
+          .select('id, name, description, price, compare_at_price, image_url, images, category, rating, reviews, stock, total_sales, is_active, status, vendor_id, created_at')
+          .eq('status', 'approved')
+          .order('created_at', { ascending: false })
+          .limit(100),
+        supabase
+          .from('categories')
+          .select('id, name, slug, icon, is_active')
+          .eq('is_active', true)
+          .order('display_order', { ascending: true })
+      ]);
+
+      const realProducts = (productsRes.status === 'fulfilled' && productsRes.value?.data) ? productsRes.value.data : [];
+      const realCategories = (categoriesRes.status === 'fulfilled' && categoriesRes.value?.data) ? categoriesRes.value.data : [];
+      setProducts(realProducts);
+      setCategories(realCategories);
+
+      // Official Flagship Store
+      const officialProds = realProducts.filter(p => !p.vendor_id || p.vendor_id === 'official-abumafhal');
+      const officialStore = {
+        id: 'official-abumafhal',
+        name: 'Abu Mafhal Official Store',
+        tagline: 'Your Marketplace, Your Choice — Verified Mall',
+        category: 'Official Mall & Flagship',
+        rating: 5.0,
+        reviews: '3.8K',
+        baseFollowers: 1420,
+        products: officialProds.length > 0 ? officialProds : realProducts,
+        productsCount: officialProds.length > 0 ? officialProds.length : realProducts.length,
+        avatar: AM_LOGO,
+        banner: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&q=80',
+        verified: true,
+        isOfficial: true,
+        phone: '2349021486162',
+        address: 'Main Commercial Plaza, Gashua, Yobe State, Nigeria',
+        bio: 'The official verified flagship mall of Abu Mafhal Marketplace. Genuine brand warranty, authentic products, and 100% buyer protection across Nigeria.',
+        memberSince: '2023'
+      };
+
+      const vendorProfiles = (profilesRes.status === 'fulfilled' && profilesRes.value?.data) ? profilesRes.value.data : [];
+      const mappedVendors = vendorProfiles.map(vp => {
+        const storeProds = realProducts.filter(p => p.vendor_id === vp.id);
+        const year = vp.created_at ? new Date(vp.created_at).getFullYear() : '2024';
+        return {
+          id: vp.id,
+          name: vp.business_name || vp.full_name || vp.username || 'Verified Merchant',
+          tagline: 'Authentic Goods & Fast Delivery',
+          category: vp.role === 'vendor' ? 'Verified Seller' : 'Registered Merchant',
+          rating: 4.9,
+          reviews: '120+',
+          baseFollowers: 165,
+          products: storeProds,
+          productsCount: storeProds.length,
+          avatar: vp.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(vp.business_name || vp.full_name || 'Vendor')}&background=0A192F&color=38BDF8`,
+          banner: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=800&q=80',
+          verified: true,
+          isOfficial: false,
+          phone: vp.phone || '2349021486162',
+          address: 'Verified Merchant Center, Nigeria',
+          bio: `Authentic merchant verified on Abu Mafhal Marketplace since ${year}. Dedicated to high quality products and reliable customer support.`,
+          memberSince: year
+        };
+      });
+
+      setStores([officialStore, ...mappedVendors]);
+    } catch (err) {
+      console.error('[Stores] Error loading stores:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleWhatsAppContact = (store) => {
+    const phone = store.phone ? store.phone.replace(/[^0-9]/g, '') : '2349021486162';
+    const msg = encodeURIComponent(`Hello ${store.name}, I am contacting you from Abu Mafhal Marketplace regarding your products.`);
+    window.open(`https://wa.me/${phone}?text=${msg}`, '_blank');
+  };
+
+  const handleAddToCart = (product, e) => {
+    if (e) e.stopPropagation();
+    if (addToCart) {
+      addToCart(product);
+      showToast(`Added "${product.name}" to cart!`);
+    }
+  };
+
+  // Filter stores
+  const filteredStores = stores.filter(store => {
+    const matchesSearch = !searchQuery || 
+      store.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      store.category.toLowerCase().includes(searchQuery.toLowerCase());
+    if (!matchesSearch) return false;
+
+    if (activeTab === 'top_rated') return Number(store.rating) >= 4.9;
+    if (activeTab === 'official') return store.isOfficial;
+    return true;
+  });
+
+  // Filter store modal products
+  const currentStoreProducts = selectedStore?.products || [];
+  const modalFilteredProducts = currentStoreProducts.filter(p => {
+    const matchesSearch = !storeSearch || 
+      p.name.toLowerCase().includes(storeSearch.toLowerCase()) ||
+      (p.category && p.category.toLowerCase().includes(storeSearch.toLowerCase()));
+
+    const matchesCat = storeCategoryFilter === 'all' || 
+      (p.category && p.category.toLowerCase() === storeCategoryFilter.toLowerCase());
+
+    return matchesSearch && matchesCat;
+  });
+
+  const modalCategories = ['all', ...new Set(currentStoreProducts.map(p => p.category).filter(Boolean))];
 
   return (
-    <div className="min-h-screen bg-[#F4F7FB] font-sans text-slate-800 antialiased selection:bg-[#00BFA5] selection:text-white">
-      {/* Top Header */}
-      <header className="bg-white border-b border-slate-200/80 sticky top-0 z-40 px-4 lg:px-8 py-2.5 shadow-sm">
-        <div className="max-w-[1600px] mx-auto flex items-center justify-between gap-4">
-          {/* Brand Logo */}
-          <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-[#0A192F] to-[#1E3A8A] flex items-center justify-center p-0.5 shadow-md shadow-slate-900/10 border border-amber-400/40">
-              <span className="font-black text-[#F59E0B] text-base tracking-tighter">AM</span>
-            </div>
-            <div>
-              <h1 className="text-base font-black tracking-tight text-[#0A192F] leading-none uppercase">Abu Mafhal</h1>
-              <p className="text-[10px] text-slate-500 font-medium">Your Marketplace, Your Choice.</p>
-            </div>
-          </Link>
-
-          {/* Search Bar */}
-          <div className="hidden md:flex flex-1 max-w-xl mx-6">
-            <div className="w-full flex items-center bg-slate-100/90 border border-slate-200/90 rounded-xl overflow-hidden focus-within:border-[#00BFA5] focus-within:ring-2 focus-within:ring-[#00BFA5]/20 transition-all">
-              <input
-                type="text"
-                placeholder="Search for products, brands, or stores..."
-                className="w-full bg-transparent px-3.5 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none"
-              />
-              <button className="bg-[#0A192F] hover:bg-[#112240] text-white p-2.5 px-4 transition-colors">
-                <Search className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* Location & Quick Actions */}
-          <div className="flex items-center gap-3">
-            <div className="hidden lg:flex items-center gap-1.5 text-xs text-slate-700 bg-slate-100/80 px-3 py-1.5 rounded-xl border border-slate-200/80">
-              <MapPin className="w-3.5 h-3.5 text-[#00BFA5]" />
-              <span>Deliver to <strong>Gashua, Yobe</strong></span>
-            </div>
-
-            <Link to="/cart" className="relative p-2 text-slate-700 hover:bg-slate-100 rounded-xl">
-              <ShoppingCart className="w-5 h-5" />
-              <span className="absolute top-1 right-1 w-4 h-4 bg-rose-500 text-white font-black text-[10px] rounded-full flex items-center justify-center">
-                2
-              </span>
-            </Link>
-
-            <Link to="/notifications" className="relative p-2 text-slate-700 hover:bg-slate-100 rounded-xl">
-              <Bell className="w-5 h-5" />
-            </Link>
-
-            <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
-              <div className="w-8 h-8 rounded-full bg-[#00BFA5] text-white flex items-center justify-center text-xs font-bold">
-                <User className="w-4 h-4" />
-              </div>
-              <div className="hidden sm:block text-left leading-tight">
-                <p className="text-xs font-bold text-slate-900">Muhammad Sani</p>
-                <p className="text-[10px] text-slate-400">Customer</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-800 antialiased">
+      {/* Site Navbar */}
+      <Navbar />
 
       {/* Main Content Area */}
-      <main className="max-w-[1600px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+      <main className="max-w-[1500px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Top Header Title & Become a Seller CTA */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Top Stores</h1>
-            <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
-              Discover trusted stores and shop from verified sellers on ABU MAFHAL.
+            <div className="flex items-center gap-2 mb-1">
+              <span className="px-3 py-1 bg-sky-100 text-sky-700 text-[11px] font-black uppercase tracking-wider rounded-full flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-sky-600" /> Verified Directory
+              </span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black text-[#0A192F] tracking-tight">
+              Abu Mafhal Verified Stores
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
+              Shop authentic goods directly from vetted Nigerian merchants with buyer protection.
             </p>
           </div>
 
-          <Link
-            to="/vendor/register"
-            className="self-start sm:self-auto px-5 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 font-bold text-xs rounded-xl shadow-sm flex items-center gap-2 transition-all active:scale-95"
-          >
-            <Store className="w-4 h-4" />
-            <span>Become a Seller</span>
-          </Link>
+          <div className="flex items-center gap-3">
+            {/* Search input in header */}
+            <div className="relative w-full sm:w-72">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search verified stores..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-10 pr-4 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all font-medium"
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <Link
+              to="/vendor/register"
+              className="shrink-0 px-5 py-2.5 bg-[#0284C7] hover:bg-sky-700 text-white font-black text-xs rounded-2xl shadow-lg shadow-sky-600/20 flex items-center gap-2 transition-all hover:-translate-y-0.5"
+            >
+              <Store className="w-4 h-4" />
+              <span>Open a Store / Buɗe Shago</span>
+            </Link>
+          </div>
         </div>
 
-        {/* Sub-Tabs: Popular Stores, Top Rated, New Stores, Official Stores */}
+        {/* Sub-Tabs: Popular Stores, Top Rated, Official Stores */}
         <div className="flex items-center justify-between gap-4 border-b border-slate-200/80 pb-4 overflow-x-auto">
           <div className="flex items-center gap-2 shrink-0">
             {[
-              { id: 'popular', label: 'Popular Stores' },
-              { id: 'top_rated', label: 'Top Rated' },
-              { id: 'new_stores', label: 'New Stores' },
-              { id: 'official', label: 'Official Stores' },
+              { id: 'popular', label: 'All Verified Stores' },
+              { id: 'official', label: 'Official Flagship Mall' },
+              { id: 'top_rated', label: 'Top Rated Sellers' },
             ].map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                   activeTab === tab.id
-                    ? 'bg-[#00BFA5] text-white shadow-md shadow-[#00BFA5]/25'
+                    ? 'bg-[#0284C7] text-white shadow-md shadow-sky-600/25'
                     : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
                 }`}
               >
@@ -255,187 +270,360 @@ const Stores = () => {
             ))}
           </div>
 
-          <Link to="/shop" className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1 shrink-0">
-            <span>View All Stores</span>
+          <Link to="/shop" className="text-xs font-bold text-sky-600 hover:underline flex items-center gap-1 shrink-0">
+            <span>Explore All Marketplace Products</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </Link>
         </div>
 
-        {/* Horizontal Category Selector Icons */}
-        <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-12 gap-2.5">
-          {categories.map((cat) => {
-            const Icon = cat.icon;
-            const isSelected = activeCategory === cat.id;
-            return (
-              <button
-                key={cat.id}
-                onClick={() => setActiveCategory(cat.id)}
-                className={`flex flex-col items-center justify-center p-3 rounded-2xl border text-center transition-all ${
-                  isSelected
-                    ? 'bg-white border-[#00BFA5] ring-2 ring-[#00BFA5]/20 shadow-sm'
-                    : 'bg-white border-slate-200/80 hover:border-slate-300 text-slate-600'
-                }`}
-              >
-                <div className={`w-8 h-8 rounded-xl flex items-center justify-center mb-1.5 ${
-                  isSelected ? 'bg-[#00BFA5]/10 text-[#00BFA5]' : 'bg-slate-100 text-slate-600'
-                }`}>
-                  <Icon className="w-4 h-4" />
-                </div>
-                <span className={`text-[11px] truncate w-full font-bold ${
-                  isSelected ? 'text-[#00BFA5]' : 'text-slate-700'
-                }`}>
-                  {cat.label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        {/* Loading State */}
+        {loading && (
+          <div className="py-20 text-center space-y-3">
+            <div className="w-8 h-8 border-3 border-sky-600 border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="text-xs font-bold text-slate-500">Loading verified stores & live catalog...</p>
+          </div>
+        )}
 
-        {/* 4 Featured Store Cards (Row of 4) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {featuredStores.map((store) => {
-            const isFollowed = followedStores[store.id];
-            return (
-              <div
-                key={store.id}
-                className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col justify-between group"
-              >
-                <div>
-                  {/* Banner Image */}
-                  <div className="h-32 w-full relative overflow-hidden bg-slate-100">
-                    <img
-                      src={store.banner}
-                      alt={store.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
-                  </div>
+        {/* 4 Featured Store Cards */}
+        {!loading && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {filteredStores.map((store) => {
+              const isFollowed = !!followedStores[store.id];
+              const followers = (store.baseFollowers || 100) + (isFollowed ? 1 : 0);
 
-                  {/* Avatar & Store Info */}
-                  <div className="p-4 pt-0 relative">
-                    <div className="relative -mt-9 mb-2 flex items-end justify-between">
-                      <div className="w-16 h-16 rounded-2xl overflow-hidden border-4 border-white shadow-md bg-white">
-                        <img src={store.avatar} alt={store.name} className="w-full h-full object-cover" />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      <h3 className="text-sm sm:text-base font-black text-slate-900 truncate">
-                        {store.name}
-                      </h3>
-                      {store.verified && (
-                        <CheckCircle className="w-4 h-4 fill-blue-500 text-white shrink-0" />
+              return (
+                <div
+                  key={store.id}
+                  className="bg-white rounded-3xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-xl hover:shadow-slate-200/50 transition-all flex flex-col justify-between group hover:-translate-y-1"
+                >
+                  <div>
+                    {/* Banner Image */}
+                    <div className="h-32 w-full relative overflow-hidden bg-slate-900">
+                      <img
+                        src={store.banner}
+                        alt={store.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 opacity-80"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                      
+                      {store.isOfficial && (
+                        <span className="absolute top-3 right-3 bg-amber-500 text-white text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md shadow-md">
+                          OFFICIAL MALL
+                        </span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-500 font-medium truncate mt-0.5">{store.tagline}</p>
 
-                    <div className="flex items-center gap-3 text-xs text-slate-600 mt-2 font-semibold">
-                      <div className="flex items-center gap-1 text-amber-500 font-bold">
-                        <Star className="w-3.5 h-3.5 fill-amber-500" />
-                        <span>{store.rating}</span>
-                        <span className="text-slate-400 font-normal">({store.reviews})</span>
+                    {/* Avatar & Store Info */}
+                    <div className="p-5 pt-0 relative">
+                      <div className="relative -mt-10 mb-3 flex items-end justify-between">
+                        <div className="w-16 h-16 rounded-2xl overflow-hidden border-4 border-white shadow-md bg-white flex items-center justify-center">
+                          {store.avatar ? (
+                            <img src={store.avatar} alt={store.name} className="w-full h-full object-contain p-1" />
+                          ) : (
+                            <Store className="w-8 h-8 text-sky-600" />
+                          )}
+                        </div>
+
+                        <button
+                          onClick={() => toggleFollow(store.id, store.name)}
+                          className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border flex items-center gap-1 transition-all ${
+                            isFollowed
+                              ? 'bg-sky-50 text-sky-700 border-sky-300'
+                              : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200 shadow-sm'
+                          }`}
+                        >
+                          <Heart className={`w-3.5 h-3.5 ${isFollowed ? 'fill-sky-600 text-sky-600' : ''}`} />
+                          <span>{isFollowed ? 'Following' : 'Follow'}</span>
+                        </button>
                       </div>
-                      <span className="text-slate-300">|</span>
-                      <span>{store.productsCount} Products</span>
+
+                      <div className="flex items-center gap-1.5">
+                        <h3 className="text-base font-black text-slate-900 truncate">
+                          {store.name}
+                        </h3>
+                        {store.verified && (
+                          <CheckCircle className="w-4 h-4 fill-sky-600 text-white shrink-0" />
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500 font-medium truncate mt-0.5">{store.tagline}</p>
+
+                      <div className="flex items-center gap-3 text-xs text-slate-600 mt-3 font-semibold">
+                        <div className="flex items-center gap-1 text-amber-500 font-bold">
+                          <Star className="w-3.5 h-3.5 fill-amber-500" />
+                          <span>{store.rating}</span>
+                          <span className="text-slate-400 font-normal">({store.reviews})</span>
+                        </div>
+                        <span className="text-slate-200">|</span>
+                        <span>{store.productsCount} Products</span>
+                        <span className="text-slate-200">|</span>
+                        <span>{followers} Fans</span>
+                      </div>
                     </div>
                   </div>
+
+                  {/* Actions Row */}
+                  <div className="p-5 pt-0 grid grid-cols-2 gap-2 mt-2 border-t border-slate-50 pt-3">
+                    <button
+                      onClick={() => handleWhatsAppContact(store)}
+                      className="py-2.5 px-3 rounded-xl text-xs font-bold border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 flex items-center justify-center gap-1.5 transition-all"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>WhatsApp</span>
+                    </button>
+
+                    <button
+                      onClick={() => setSelectedStore(store)}
+                      className="py-2.5 px-3 bg-[#0A192F] hover:bg-sky-700 text-white text-xs font-bold rounded-xl text-center shadow-md transition-all flex items-center justify-center gap-1"
+                    >
+                      <span>View Store</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Section: Live Popular Products from Stores */}
+        {!loading && products.length > 0 && (
+          <div className="space-y-4 pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl sm:text-2xl font-black text-slate-900">
+                  Live Products from Verified Stores
+                </h2>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">
+                  Real products with warranty directly from registered marketplace sellers
+                </p>
+              </div>
+              <Link to="/shop" className="text-xs font-bold text-sky-600 hover:underline flex items-center gap-1">
+                <span>View All Products</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+              {products.map((prod) => {
+                const hasDiscount = Number(prod.compare_at_price) > Number(prod.price);
+                const discount = hasDiscount
+                  ? Math.round(((Number(prod.compare_at_price) - Number(prod.price)) / Number(prod.compare_at_price)) * 100)
+                  : null;
+                const inWishlist = wishlist?.some ? wishlist.some(w => w.id === prod.id) : false;
+
+                return (
+                  <div
+                    key={prod.id}
+                    onClick={() => navigate(`/product/${prod.id}`)}
+                    className="bg-white rounded-2xl border border-slate-100 p-3.5 shadow-sm hover:shadow-xl hover:shadow-slate-200/50 transition-all flex flex-col justify-between relative group cursor-pointer hover:-translate-y-1"
+                  >
+                    {/* Wishlist Heart */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleWishlist && toggleWishlist(prod); }}
+                      className="absolute top-2.5 right-2.5 p-1.5 text-slate-300 hover:text-rose-500 rounded-full bg-white/90 backdrop-blur-sm z-10 transition-colors shadow-sm"
+                    >
+                      <Heart className={`w-3.5 h-3.5 ${inWishlist ? 'fill-rose-500 text-rose-500' : ''}`} />
+                    </button>
+
+                    {/* Discount badge if present */}
+                    {discount && (
+                      <span className="absolute top-2.5 left-2.5 px-2 py-0.5 bg-rose-500 text-white font-black text-[9px] rounded-lg z-10 shadow-sm">
+                        -{discount}%
+                      </span>
+                    )}
+
+                    <div>
+                      {/* Image */}
+                      <div className="w-full aspect-square rounded-xl overflow-hidden bg-slate-50 mb-2.5 flex items-center justify-center p-2">
+                        <img
+                          src={getImg(prod)}
+                          alt={prod.name}
+                          className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500"
+                        />
+                      </div>
+
+                      <span className="text-[9px] font-black text-sky-600 uppercase tracking-wider block mb-1">
+                        {prod.category || 'General'}
+                      </span>
+                      <h3 className="text-xs font-black text-slate-900 line-clamp-2 leading-snug">
+                        {prod.name}
+                      </h3>
+                    </div>
+
+                    <div className="mt-3 pt-2.5 border-t border-slate-50 flex items-center justify-between">
+                      <div>
+                        <p className="text-xs sm:text-sm font-black text-slate-900">
+                          ₦{Number(prod.price).toLocaleString()}
+                        </p>
+                        {hasDiscount && (
+                          <p className="text-[10px] text-slate-400 line-through">
+                            ₦{Number(prod.compare_at_price).toLocaleString()}
+                          </p>
+                        )}
+                      </div>
+
+                      <button
+                        onClick={(e) => handleAddToCart(prod, e)}
+                        className="p-2 rounded-xl bg-[#0A192F] hover:bg-sky-600 text-white transition-colors shadow-sm"
+                        title="Add to Cart"
+                      >
+                        <ShoppingCart className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* ══════════════════════════════════════════════════
+          DEDICATED STORE DETAIL MODAL (WEB)
+      ══════════════════════════════════════════════════ */}
+      {selectedStore && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border border-slate-100">
+            {/* Modal Header Cover */}
+            <div className="relative h-44 bg-slate-900 overflow-hidden">
+              <img
+                src={selectedStore.banner}
+                alt={selectedStore.name}
+                className="w-full h-full object-cover opacity-70"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+
+              <button
+                onClick={() => setSelectedStore(null)}
+                className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/40 text-white hover:bg-black/60 flex items-center justify-center transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="absolute bottom-4 left-6 flex items-end gap-4">
+                <div className="w-20 h-20 rounded-2xl bg-white p-1 shadow-xl overflow-hidden border-2 border-white">
+                  {selectedStore.avatar ? (
+                    <img src={selectedStore.avatar} alt={selectedStore.name} className="w-full h-full object-contain" />
+                  ) : (
+                    <Store className="w-full h-full text-sky-600 p-3" />
+                  )}
                 </div>
 
-                {/* Follow & View Store Buttons */}
-                <div className="p-4 pt-0 grid grid-cols-2 gap-2 mt-2">
-                  <button
-                    onClick={() => toggleFollow(store.id)}
-                    className={`py-2 px-3 rounded-xl text-xs font-bold border flex items-center justify-center gap-1.5 transition-all ${
-                      isFollowed
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
-                        : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
-                    }`}
-                  >
-                    <Heart className={`w-3.5 h-3.5 ${isFollowed ? 'fill-emerald-600 text-emerald-600' : ''}`} />
-                    <span>{isFollowed ? 'Following' : 'Follow'}</span>
-                  </button>
-
-                  <Link
-                    to="/shop"
-                    className="py-2 px-3 bg-[#0A192F] hover:bg-[#112240] text-white text-xs font-bold rounded-xl text-center shadow-sm transition-all"
-                  >
-                    View Store
-                  </Link>
+                <div className="text-white pb-1">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-xl font-black">{selectedStore.name}</h2>
+                    {selectedStore.verified && (
+                      <CheckCircle className="w-4 h-4 fill-sky-500 text-white" />
+                    )}
+                  </div>
+                  <p className="text-xs text-sky-300 font-semibold">{selectedStore.category}</p>
                 </div>
               </div>
-            );
-          })}
-        </div>
-
-        {/* Section: Popular Products from Top Stores */}
-        <div className="space-y-4 pt-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg sm:text-xl font-black text-slate-900">Popular Products from Top Stores</h2>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">Handpicked products from our verified stores</p>
             </div>
-            <Link to="/shop" className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1">
-              <span>View All Products</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
-            {popularProducts.map((prod) => (
-              <div
-                key={prod.id}
-                className="bg-white rounded-2xl border border-slate-200/80 p-3 shadow-sm hover:shadow-md transition-all flex flex-col justify-between relative group"
-              >
-                {/* Wishlist Heart */}
-                <button className="absolute top-2.5 right-2.5 p-1 text-slate-300 hover:text-rose-500 rounded-full bg-white/85 backdrop-blur-sm z-10 transition-colors">
-                  <Heart className="w-3.5 h-3.5" />
+            {/* Modal Subheader & Actions */}
+            <div className="p-6 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4 bg-slate-50/50">
+              <div className="flex items-center gap-6 text-xs font-bold text-slate-700">
+                <div>
+                  <span className="text-slate-400 font-normal block text-[10px]">Rating</span>
+                  <span className="text-amber-500 font-black">★ {selectedStore.rating}</span> ({selectedStore.reviews})
+                </div>
+                <div>
+                  <span className="text-slate-400 font-normal block text-[10px]">Followers</span>
+                  <span>{(selectedStore.baseFollowers || 100) + (followedStores[selectedStore.id] ? 1 : 0)}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 font-normal block text-[10px]">Catalog Items</span>
+                  <span>{selectedStore.productsCount}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => toggleFollow(selectedStore.id, selectedStore.name)}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
+                    followedStores[selectedStore.id]
+                      ? 'bg-sky-100 text-sky-700 border-sky-300'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  {followedStores[selectedStore.id] ? 'Following' : '+ Follow Store'}
                 </button>
 
-                {/* Discount badge if present */}
-                {prod.discount && (
-                  <span className="absolute top-2.5 left-2.5 px-1.5 py-0.5 bg-rose-500 text-white font-black text-[9px] rounded z-10">
-                    {prod.discount}
-                  </span>
-                )}
-
-                <div>
-                  {/* Image */}
-                  <div className="w-full aspect-square rounded-xl overflow-hidden bg-slate-50 mb-2 flex items-center justify-center p-2">
-                    <img
-                      src={prod.image}
-                      alt={prod.name}
-                      className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
-                    />
-                  </div>
-
-                  <h3 className="text-xs font-black text-slate-900 truncate leading-snug">{prod.name}</h3>
-                  <p className="text-[11px] text-slate-400 font-medium truncate mt-0.5">{prod.store}</p>
-                </div>
-
-                <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs sm:text-sm font-black text-slate-900">₦{prod.price.toLocaleString()}</p>
-                    {prod.oldPrice && (
-                      <p className="text-[10px] text-slate-400 line-through">₦{prod.oldPrice.toLocaleString()}</p>
-                    )}
-                    <div className="flex items-center gap-1 text-[10px] font-bold text-amber-500 mt-0.5">
-                      <span>★ {prod.rating}</span>
-                      <span className="text-slate-400 font-normal">({prod.reviews})</span>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => navigate('/cart')}
-                    className="p-2 rounded-xl bg-[#0A192F] hover:bg-[#112240] text-white transition-colors shadow-sm"
-                  >
-                    <ShoppingCart className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                <button
+                  onClick={() => handleWhatsAppContact(selectedStore)}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-md shadow-emerald-600/20"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>Chat on WhatsApp</span>
+                </button>
               </div>
-            ))}
+            </div>
+
+            {/* Modal Catalog Body */}
+            <div className="p-6 overflow-y-auto space-y-4 flex-1">
+              <div className="bg-sky-50/60 p-4 rounded-2xl border border-sky-100 text-xs text-slate-700 leading-relaxed">
+                <span className="font-bold text-sky-900 block mb-1">About Store</span>
+                {selectedStore.bio}
+              </div>
+
+              <div className="flex items-center justify-between gap-4 pt-2">
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">
+                  Store Products ({modalFilteredProducts.length})
+                </h3>
+
+                <input
+                  type="text"
+                  placeholder={`Search in ${selectedStore.name}...`}
+                  value={storeSearch}
+                  onChange={e => setStoreSearch(e.target.value)}
+                  className="bg-slate-100 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 w-64 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                />
+              </div>
+
+              {/* Product Grid inside Modal */}
+              {modalFilteredProducts.length === 0 ? (
+                <div className="py-12 text-center text-slate-400 space-y-2">
+                  <Store className="w-8 h-8 mx-auto text-slate-300" />
+                  <p className="text-xs font-bold">No products match this filter in {selectedStore.name}.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                  {modalFilteredProducts.map(prod => (
+                    <div
+                      key={prod.id}
+                      onClick={() => { setSelectedStore(null); navigate(`/product/${prod.id}`); }}
+                      className="bg-white border border-slate-100 rounded-2xl p-3 hover:shadow-lg transition-all cursor-pointer flex flex-col justify-between"
+                    >
+                      <div className="w-full aspect-square rounded-xl bg-slate-50 overflow-hidden mb-2 p-2">
+                        <img src={getImg(prod)} alt={prod.name} className="w-full h-full object-contain" />
+                      </div>
+                      <h4 className="text-xs font-black text-slate-900 line-clamp-1">{prod.name}</h4>
+                      <div className="mt-2 pt-2 border-t border-slate-50 flex items-center justify-between">
+                        <span className="text-xs font-black text-sky-600">₦{Number(prod.price).toLocaleString()}</span>
+                        <button
+                          onClick={(e) => handleAddToCart(prod, e)}
+                          className="p-1.5 bg-[#0A192F] hover:bg-sky-600 text-white rounded-lg transition-colors"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </main>
+      )}
+
+      {/* Floating Toast */}
+      {toastMsg && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[999] bg-[#0A192F] text-white text-xs font-bold px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-2">
+          <Check className="w-4 h-4 text-emerald-400" />
+          <span>{toastMsg}</span>
+        </div>
+      )}
     </div>
   );
 };

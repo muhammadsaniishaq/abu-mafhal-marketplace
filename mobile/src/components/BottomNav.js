@@ -8,7 +8,7 @@ export const BottomNav = ({ activeTab, onTabChange, cartCount = 0 }) => {
 
     const TABS = [
         { id: 'home',       icon: 'home',       label: 'Home' },
-        { id: 'categories', icon: 'grid',       label: 'Categories' },
+        { id: 'shop',       icon: 'bag-handle', label: 'Shop' },
         { id: 'stores',     icon: 'storefront', label: 'Stores' },
         { id: 'cart',       icon: 'cart',       label: 'Cart', badge: cartCount },
         { id: 'profile',    icon: 'person',     label: 'Account' },

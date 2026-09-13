@@ -712,10 +712,25 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
 
                     {/* Compare */}
                     <TouchableOpacity onPress={onCompareClick} style={[styles.iconCircle, { position: 'relative' }]}>
-                        <Ionicons name="git-compare-outline" size={20} color="#0F172A" />
+                        <Ionicons name="git-compare-outline" size={19} color="#0F172A" />
                         {comparisonCount > 0 && (
                             <View style={styles.compareBadge}>
                                 <Text style={{ color: 'white', fontSize: 9, fontWeight: '800' }}>{comparisonCount}</Text>
+                            </View>
+                        )}
+                    </TouchableOpacity>
+
+                    {/* Cart */}
+                    <TouchableOpacity onPress={onGoToCart} style={[styles.iconCircle, { position: 'relative' }]}>
+                        <Ionicons name="cart-outline" size={20} color="#0F172A" />
+                        {cartCount > 0 && (
+                            <View style={{
+                                position: 'absolute', top: -2, right: -2,
+                                backgroundColor: '#10B981', borderRadius: 8,
+                                minWidth: 16, height: 16,
+                                alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2,
+                            }}>
+                                <Text style={{ color: 'white', fontSize: 9, fontWeight: '800' }}>{cartCount > 99 ? '99+' : cartCount}</Text>
                             </View>
                         )}
                     </TouchableOpacity>
@@ -842,7 +857,7 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
 
 // ═══════════════════════════════════════════════════════════════════════════════
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F0F3FA' },
+    container: { flex: 1, backgroundColor: '#F8FAFC' },
     safe: {
         backgroundColor: 'white',
         paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 40) : 0,
@@ -857,29 +872,29 @@ const styles = StyleSheet.create({
     },
     iconCircle: {
         width: 38, height: 38, borderRadius: 19,
-        backgroundColor: '#F4F6FB',
+        backgroundColor: '#F1F5F9',
         alignItems: 'center', justifyContent: 'center',
-        borderWidth: 1, borderColor: '#E9EDF5',
+        borderWidth: 1, borderColor: '#E2E8F0',
     },
     compareBadge: {
         position: 'absolute', top: -2, right: -2,
-        backgroundColor: '#6366F1', borderRadius: 8,
+        backgroundColor: '#0284C7', borderRadius: 8,
         minWidth: 16, height: 16,
         alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2,
     },
     searchBar: {
         flexDirection: 'row', alignItems: 'center',
-        backgroundColor: '#F4F6FB', borderRadius: 22,
+        backgroundColor: '#F1F5F9', borderRadius: 22,
         paddingHorizontal: 12, height: 40,
-        borderWidth: 1, borderColor: '#E9EDF5', gap: 6,
+        borderWidth: 1, borderColor: '#E2E8F0', gap: 6,
     },
-    searchInput: { flex: 1, fontSize: 13, color: '#1E293B', paddingVertical: 0 },
+    searchInput: { flex: 1, fontSize: 13, color: '#0F172A', paddingVertical: 0 },
 
     // ── Gradient accent strip ──────────────────────────────────────────────────
-    accentStrip: { height: 3, backgroundColor: '#EEF2F8', overflow: 'hidden' },
+    accentStrip: { height: 3, backgroundColor: '#E2E8F0', overflow: 'hidden' },
     accentInner: {
         height: 3, width: '35%',
-        backgroundColor: '#6366F1',
+        backgroundColor: '#0284C7',
         borderRadius: 2,
     },
 
@@ -888,12 +903,12 @@ const styles = StyleSheet.create({
         flexDirection: 'row', alignItems: 'center', gap: 5,
         paddingHorizontal: 12, paddingVertical: 7,
         borderRadius: 22, backgroundColor: '#F1F5F9',
-        borderWidth: 1, borderColor: '#E9EDF5',
+        borderWidth: 1, borderColor: '#E2E8F0',
     },
     chipActive: {
-        backgroundColor: '#6366F1', borderColor: '#6366F1',
-        elevation: 5, shadowColor: '#6366F1',
-        shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 8,
+        backgroundColor: '#0284C7', borderColor: '#0284C7',
+        elevation: 4, shadowColor: '#0284C7',
+        shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 6,
     },
     chipTxt:       { fontSize: 12, fontWeight: '700', color: '#64748B' },
     chipTxtActive: { color: 'white' },
@@ -908,18 +923,18 @@ const styles = StyleSheet.create({
     sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
     sectionAccent: {
         width: 4, height: 18, borderRadius: 2,
-        backgroundColor: '#6366F1',
+        backgroundColor: '#0284C7',
     },
     sectionTitle: { fontSize: 15, fontWeight: '900', color: '#0F172A' },
-    seeAll: { fontSize: 12, fontWeight: '700', color: '#6366F1' },
+    seeAll: { fontSize: 12, fontWeight: '700', color: '#0284C7' },
 
     // Product count bubble
     countBubble: {
-        backgroundColor: '#EEF2FF',
+        backgroundColor: '#E0F2FE',
         paddingHorizontal: 7, paddingVertical: 2,
         borderRadius: 10, marginLeft: 4,
     },
-    countBubbleTxt: { fontSize: 11, fontWeight: '800', color: '#6366F1' },
+    countBubbleTxt: { fontSize: 11, fontWeight: '800', color: '#0284C7' },
 
     // ── Sub header ────────────────────────────────────────────────────────────
     subHeader: {
@@ -944,9 +959,9 @@ const styles = StyleSheet.create({
         backgroundColor: 'white',
         borderRadius: 16,
         overflow: 'hidden',
-        borderWidth: 1, borderColor: '#E8EDF5',
-        elevation: 3, shadowColor: '#6366F1',
-        shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 8,
+        borderWidth: 1, borderColor: '#F1F5F9',
+        elevation: 3, shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.06, shadowRadius: 6,
     },
     dealImg:   { width: '100%', height: 100 },
     dealBadge: {
@@ -957,9 +972,9 @@ const styles = StyleSheet.create({
     },
     dealBadgeTxt: { color: 'white', fontSize: 9, fontWeight: '900' },
     dealInfo:  { padding: 9 },
-    dealName:  { fontSize: 11, fontWeight: '700', color: '#1E293B', marginBottom: 4 },
-    dealPrice: { fontSize: 13, fontWeight: '900', color: '#6366F1' },
-    dealOld:   { fontSize: 10, color: '#CBD5E1', textDecorationLine: 'line-through' },
+    dealName:  { fontSize: 11, fontWeight: '700', color: '#0F172A', marginBottom: 4 },
+    dealPrice: { fontSize: 13, fontWeight: '900', color: '#0284C7' },
+    dealOld:   { fontSize: 10, color: '#94A3B8', textDecorationLine: 'line-through' },
 
     // ── Product card ──────────────────────────────────────────────────────────
     card: {
@@ -968,12 +983,12 @@ const styles = StyleSheet.create({
         marginBottom: 12,
         borderRadius: 18,
         overflow: 'hidden',
-        borderWidth: 1, borderColor: '#E8EDF5',
-        elevation: 4,
-        shadowColor: '#6366F1',
-        shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.09, shadowRadius: 12,
+        borderWidth: 1, borderColor: '#F1F5F9',
+        elevation: 3,
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 10,
     },
-    imgBox:       { height: 140, position: 'relative', overflow: 'hidden', backgroundColor: '#EBF0F8' },
+    imgBox:       { height: 140, position: 'relative', overflow: 'hidden', backgroundColor: '#F8FAFC' },
     imgFull:      { width: '100%', height: '100%' },
     imgBottomFade:{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 45, backgroundColor: 'rgba(255,255,255,0.15)' },
 
@@ -983,7 +998,7 @@ const styles = StyleSheet.create({
     iconStack:    { position: 'absolute', top: 8, right: 8, flexDirection: 'column', gap: 5, zIndex: 10 },
     iconBtn:      { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.92)', alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.12, shadowRadius: 3 },
     iconBtnHeart: { backgroundColor: 'rgba(239,68,68,0.1)' },
-    iconBtnCompare: { backgroundColor: 'rgba(99,102,241,0.1)' },
+    iconBtnCompare: { backgroundColor: 'rgba(2,132,199,0.1)' },
 
     freeTag: { position: 'absolute', bottom: 8, left: 8, flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(16,185,129,0.15)', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(16,185,129,0.25)' },
     freeTxt: { fontSize: 8, fontWeight: '800', color: '#059669' },
@@ -993,7 +1008,7 @@ const styles = StyleSheet.create({
     outTxt:     { color: 'white', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
 
     info:      { paddingHorizontal: 10, paddingTop: 10, paddingBottom: 12 },
-    cardTitle: { fontSize: 12, fontWeight: '700', color: '#1E293B', lineHeight: 16, marginBottom: 5 },
+    cardTitle: { fontSize: 12, fontWeight: '700', color: '#0F172A', lineHeight: 16, marginBottom: 5 },
 
     ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: 8 },
     ratingVal: { fontSize: 10, fontWeight: '800', color: '#F59E0B', marginLeft: 2 },
@@ -1002,8 +1017,8 @@ const styles = StyleSheet.create({
     stockWarn: { fontSize: 9, color: '#DC2626', fontWeight: '700' },
 
     priceCartRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
-    price:        { fontSize: 14, fontWeight: '900', color: '#6366F1', lineHeight: 18 },
-    oldPrice:     { fontSize: 10, color: '#CBD5E1', textDecorationLine: 'line-through', marginTop: 1 },
+    price:        { fontSize: 14, fontWeight: '900', color: '#0284C7', lineHeight: 18 },
+    oldPrice:     { fontSize: 10, color: '#94A3B8', textDecorationLine: 'line-through', marginTop: 1 },
 
     cartBtn: {
         width: 32, height: 32, borderRadius: 16,
@@ -1015,10 +1030,10 @@ const styles = StyleSheet.create({
 
     // ── Empty ─────────────────────────────────────────────────────────────────
     emptyBox:   { alignItems: 'center', padding: 44, marginTop: 20 },
-    emptyIcon:  { width: 80, height: 80, borderRadius: 40, backgroundColor: '#EEF2FF', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-    emptyTitle: { color: '#1E293B', fontSize: 16, fontWeight: '800' },
+    emptyIcon:  { width: 80, height: 80, borderRadius: 40, backgroundColor: '#E0F2FE', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+    emptyTitle: { color: '#0F172A', fontSize: 16, fontWeight: '800' },
     emptySub:   { color: '#94A3B8', fontSize: 12, textAlign: 'center', marginTop: 6, lineHeight: 18 },
-    clearBtn:   { marginTop: 18, backgroundColor: '#6366F1', paddingHorizontal: 22, paddingVertical: 10, borderRadius: 22, flexDirection: 'row', alignItems: 'center', gap: 6 },
+    clearBtn:   { marginTop: 18, backgroundColor: '#0284C7', paddingHorizontal: 22, paddingVertical: 10, borderRadius: 22, flexDirection: 'row', alignItems: 'center', gap: 6 },
 
     // ── Floating Cart FAB ────────────────────────────────────────────────────
     fabCart: {
@@ -1047,15 +1062,15 @@ const styles = StyleSheet.create({
     },
     scrollTopInner: {
         width: 40, height: 40, borderRadius: 20,
-        backgroundColor: '#6366F1',
+        backgroundColor: '#0A192F',
         alignItems: 'center', justifyContent: 'center',
-        shadowColor: '#6366F1', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8,
+        shadowColor: '#0A192F', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8,
     },
 
     // ── Voice ─────────────────────────────────────────────────────────────────
     voiceOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.65)', alignItems: 'center', justifyContent: 'center', zIndex: 50 },
     voiceCard:    { backgroundColor: 'white', padding: 30, borderRadius: 26, alignItems: 'center', width: 230 },
-    voicePulse:   { width: 76, height: 76, borderRadius: 38, backgroundColor: '#6366F1', alignItems: 'center', justifyContent: 'center' },
+    voicePulse:   { width: 76, height: 76, borderRadius: 38, backgroundColor: '#0284C7', alignItems: 'center', justifyContent: 'center' },
 
     // ── Toast ─────────────────────────────────────────────────────────────────
     toast: {
