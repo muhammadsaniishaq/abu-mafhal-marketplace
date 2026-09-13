@@ -182091,7 +182091,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
                   letterSpacing: 0.5,
                   textTransform: 'uppercase'
                 },
-                children: settings?.tagline || 'YOUR MARKETPLACE, YOUR CHOICE.'
+                children: settings?.tagline ? (settings.tagline.length > 22 ? settings.tagline.slice(0, 22) + '...' : settings.tagline) : 'VERIFIED MARKETPLACE'
               })]
             })]
           }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
@@ -182101,30 +182101,31 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
               gap: 8
             },
             children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
-              onPress: onGoToShop,
+              onPress: () => onNavigate ? onNavigate('categories') : onGoToShop(),
               style: {
                 flexDirection: 'row',
                 alignItems: 'center',
-                gap: 4,
+                gap: 3,
                 backgroundColor: '#E0F2FE',
-                paddingHorizontal: 10,
-                paddingVertical: 5,
-                borderRadius: 12,
+                paddingHorizontal: 7,
+                paddingVertical: 4,
+                borderRadius: 9,
                 borderWidth: 1,
-                borderColor: '#BAE6FD'
+                borderColor: '#BAE6FD',
+                flexShrink: 0
               },
               activeOpacity: 0.8,
               children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                name: "bag-handle",
-                size: 13,
+                name: "grid-outline",
+                size: 12,
                 color: "#0284C7"
               }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
                 style: {
-                  fontSize: 11,
+                  fontSize: 10,
                   fontWeight: '800',
                   color: '#0284C7'
                 },
-                children: "Shop"
+                children: "Category"
               })]
             }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
               onPress: onGoToCart,

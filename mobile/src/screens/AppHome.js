@@ -597,35 +597,37 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
             }}>
                 <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" translucent={true} />
 
-                {/* Top row: logo + actions (100% mobile-first, no overflow) */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, minWidth: 0 }}>
-                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 7, minWidth: 0, marginRight: 8 }}>
+                {/* Top row: logo + actions (Strict First-Mobile Layout, 0% overflow) */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9, minWidth: 0, width: '100%' }}>
+                    {/* Brand Identity */}
+                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0, marginRight: 6 }}>
                         <Image
                             source={settings?.logo_url ? { uri: settings.logo_url } : AM_LOGO}
-                            style={{ width: 30, height: 30, borderRadius: 6, flexShrink: 0 }}
+                            style={{ width: 28, height: 28, borderRadius: 6, flexShrink: 0 }}
                             resizeMode="contain"
                         />
                         <View style={{ flex: 1, minWidth: 0 }}>
-                            <Text numberOfLines={1} ellipsizeMode="tail" style={{ fontSize: 13.5, fontWeight: '900', color: '#0A192F', letterSpacing: 0.3 }}>
+                            <Text numberOfLines={1} ellipsizeMode="tail" style={{ fontSize: 13, fontWeight: '900', color: '#0A192F', letterSpacing: 0.2 }}>
                                 {settings?.app_name ? settings.app_name.toUpperCase() : 'ABU MAFHAL'}
                             </Text>
-                            <Text numberOfLines={1} ellipsizeMode="tail" style={{ fontSize: 7.5, fontWeight: '700', color: '#64748B', letterSpacing: 0.3, textTransform: 'uppercase' }}>
-                                {settings?.tagline || 'YOUR MARKETPLACE, YOUR CHOICE.'}
+                            <Text numberOfLines={1} ellipsizeMode="tail" style={{ fontSize: 7.5, fontWeight: '700', color: '#64748B', letterSpacing: 0.2, textTransform: 'uppercase' }}>
+                                {settings?.tagline ? (settings.tagline.length > 22 ? settings.tagline.slice(0, 22) + '...' : settings.tagline) : 'VERIFIED MARKETPLACE'}
                             </Text>
                         </View>
                     </View>
 
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, flexShrink: 0 }}>
+                    {/* Right Actions: Category Pill + Cart + Notifications */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                         <TouchableOpacity
                             onPress={() => onNavigate ? onNavigate('categories') : onGoToShop()}
                             style={{
                                 flexDirection: 'row',
                                 alignItems: 'center',
-                                gap: 3.5,
+                                gap: 3,
                                 backgroundColor: '#E0F2FE',
-                                paddingHorizontal: 8,
-                                paddingVertical: 4.5,
-                                borderRadius: 10,
+                                paddingHorizontal: 7,
+                                paddingVertical: 4,
+                                borderRadius: 9,
                                 borderWidth: 1,
                                 borderColor: '#BAE6FD',
                                 flexShrink: 0
@@ -633,21 +635,21 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                             activeOpacity={0.8}
                         >
                             <Ionicons name="grid-outline" size={12} color="#0284C7" />
-                            <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#0284C7' }}>Category</Text>
+                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#0284C7' }}>Category</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity onPress={onGoToCart} style={{ position: 'relative', padding: 3, flexShrink: 0 }}>
-                            <Ionicons name="cart-outline" size={21} color="#0F172A" />
+                        <TouchableOpacity onPress={onGoToCart} style={{ position: 'relative', padding: 2.5, flexShrink: 0 }}>
+                            <Ionicons name="cart-outline" size={20} color="#0F172A" />
                             {cartCount > 0 ? (
-                                <View style={{ position: 'absolute', top: -1, right: -1, minWidth: 15, height: 15, borderRadius: 7.5, backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 }}>
-                                    <Text style={{ color: 'white', fontSize: 8.5, fontWeight: '900' }}>{cartCount > 99 ? '99+' : cartCount}</Text>
+                                <View style={{ position: 'absolute', top: -1, right: -1, minWidth: 14, height: 14, borderRadius: 7, backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 }}>
+                                    <Text style={{ color: 'white', fontSize: 8, fontWeight: '900' }}>{cartCount > 99 ? '99+' : cartCount}</Text>
                                 </View>
                             ) : null}
                         </TouchableOpacity>
 
-                        <TouchableOpacity onPress={onGoToNotifications} style={{ position: 'relative', padding: 3, flexShrink: 0 }}>
-                            <Ionicons name="notifications-outline" size={21} color="#0F172A" />
-                            <View style={{ position: 'absolute', top: 2, right: 2, width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444' }} />
+                        <TouchableOpacity onPress={onGoToNotifications} style={{ position: 'relative', padding: 2.5, flexShrink: 0 }}>
+                            <Ionicons name="notifications-outline" size={20} color="#0F172A" />
+                            <View style={{ position: 'absolute', top: 2, right: 2, width: 5.5, height: 5.5, borderRadius: 3, backgroundColor: '#EF4444' }} />
                         </TouchableOpacity>
                     </View>
                 </View>
