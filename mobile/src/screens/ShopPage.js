@@ -24,14 +24,10 @@ const fmtPrice = (n) => {
     return `₦${num}`;
 };
 
-const CATS = [
-    { label: 'All',     icon: 'apps-outline' },
-    { label: 'Phones',  icon: 'phone-portrait-outline' },
-    { label: 'Fashion', icon: 'shirt-outline' },
-    { label: 'Shoes',   icon: 'footsteps-outline' },
-    { label: 'Gaming',  icon: 'game-controller-outline' },
-    { label: 'Home',    icon: 'home-outline' },
+const DEFAULT_CATS = [
+    { label: 'All',     icon: 'apps-outline', slug: 'All' },
 ];
+
 
 // ─── Shimmer Skeleton ──────────────────────────────────────────────────────────
 const SkeletonCard = () => {
@@ -68,6 +64,7 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
 
     const [products,         setProducts]         = useState([]);
     const [filteredProducts, setFilteredProducts] = useState([]);
+    const [categories,       setCategories]       = useState(DEFAULT_CATS);
     const [loading,          setLoading]          = useState(true);
     const [refreshing,       setRefreshing]       = useState(false);
     const [activeCategory,   setActiveCategory]   = useState(initialCategory || 'All');
@@ -136,8 +133,8 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
         }
     }, [initialCategory]);
 
-    const SHOP_CACHE_KEY = '@abumafhal_shop_cache_v2';
-    const PROD_FIELDS = 'id, name, price, original_price, images, category, rating, reviews, status, discount, stock, is_featured, brand, isNew';
+    const SHOP_CACHE_KEY = '@abumafhal_shop_cache_v3';
+    const PROD_FIELDS = 'id, name, price, original_price, compare_at_price, image_url, images, category, rating, reviews, status, discount, stock, stock_quantity, is_featured, is_new, brand, isNew, total_sales';
 
     useEffect(() => {
         // 1. Instant cache load
@@ -170,14 +167,32 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
         }
     };
 
+    // ── Realtime Listener ───────────────────────────────────────────────────
+    useEffect(() => {
+        const channel = supabase
+            .channel('shop-screen-realtime')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
+                fetchData(true);
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, () => {
+                fetchData(true);
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, []);
+
     // ── Data ──────────────────────────────────────────────────────────────────
     const fetchData = async (isRefresh = false) => {
         if (!isRefresh && products.length === 0) setLoading(true);
         try {
-            const [bannersRes, promoRes, prodRes, userRes] = await Promise.allSettled([
+            const [bannersRes, promoRes, prodRes, catRes, userRes] = await Promise.allSettled([
                 supabase.from('banners').select('*').eq('is_active', true).order('display_order'),
                 supabase.from('banners').select('*').eq('section', 'promo').eq('is_active', true).order('created_at', { ascending: false }),
                 supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').order('created_at', { ascending: false }).limit(80),
+                supabase.from('categories').select('*').eq('is_active', true).order('display_order', { ascending: true }),
                 supabase.auth.getUser()
             ]);
 
@@ -211,6 +226,18 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
                 setProducts(newProducts);
             }
 
+            if (catRes.status === 'fulfilled' && catRes.value?.data && catRes.value.data.length > 0) {
+                const liveCats = [
+                    { label: 'All', icon: 'apps-outline', slug: 'All' },
+                    ...catRes.value.data.map(c => ({
+                        label: c.name,
+                        slug: c.slug || c.name,
+                        icon: c.icon || 'pricetag-outline'
+                    }))
+                ];
+                setCategories(liveCats);
+            }
+
             // Save to local cache for instant reload next time
             AsyncStorage.setItem(SHOP_CACHE_KEY, JSON.stringify({
                 products: newProducts,
@@ -238,19 +265,51 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
 
     const filterProducts = () => {
         let r = [...products];
-        if (activeCategory !== 'All') r = r.filter(p => p.category === activeCategory || p.name?.includes(activeCategory));
-        if (searchQuery) r = r.filter(p => p.name?.toLowerCase().includes(searchQuery.toLowerCase()));
-        if (sortBy === 'priceLow')  r.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
-        if (sortBy === 'priceHigh') r.sort((a, b) => parseFloat(b.price) - parseFloat(a.price));
-        if (sortBy === 'reviews')   r.sort((a, b) => b.reviews - a.reviews);
+        if (activeCategory && activeCategory !== 'All') {
+            const needle = activeCategory.toLowerCase().trim();
+            r = r.filter(p => {
+                const cat = (p.category || '').toLowerCase().trim();
+                const nm = (p.name || '').toLowerCase();
+                return cat === needle || cat.includes(needle) || needle.includes(cat) || nm.includes(needle);
+            });
+        }
+        if (searchQuery) {
+            const sq = searchQuery.toLowerCase().trim();
+            r = r.filter(p =>
+                (p.name || '').toLowerCase().includes(sq) ||
+                (p.category || '').toLowerCase().includes(sq)
+            );
+        }
+        if (sortBy === 'priceLow')  r.sort((a, b) => parseFloat(a.price || 0) - parseFloat(b.price || 0));
+        if (sortBy === 'priceHigh') r.sort((a, b) => parseFloat(b.price || 0) - parseFloat(a.price || 0));
+        if (sortBy === 'reviews')   r.sort((a, b) => (b.reviews || 0) - (a.reviews || 0));
         setFilteredProducts(r);
     };
 
-    const getImageUrl = (images) => {
-        if (!images) return null;
-        if (typeof images === 'string') { try { const p = JSON.parse(images); return Array.isArray(p) && p.length > 0 ? p[0] : p; } catch { return images; } }
+    const getImageUrl = (item) => {
+        if (!item) return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=400&auto=format&fit=crop';
+        if (typeof item === 'string') {
+            if (item.startsWith('http')) return item;
+            try {
+                const parsed = JSON.parse(item);
+                if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+                if (typeof parsed === 'string' && parsed.startsWith('http')) return parsed;
+            } catch (_) {}
+            return item;
+        }
+        if (item.image_url) return item.image_url;
+        const images = item.images;
         if (Array.isArray(images) && images.length > 0) return images[0];
-        return null;
+        if (typeof images === 'string') {
+            try {
+                const p = JSON.parse(images);
+                if (Array.isArray(p) && p.length > 0) return p[0];
+                if (typeof p === 'string' && p.startsWith('http')) return p;
+            } catch (_) {
+                return images;
+            }
+        }
+        return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=400&auto=format&fit=crop';
     };
 
     // ── Toast ─────────────────────────────────────────────────────────────────
@@ -338,7 +397,7 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
     const SORT_LABELS = { default: 'Default', priceLow: 'Price ↑', priceHigh: 'Price ↓', reviews: 'Top Rated' };
     const nextSort = () => setSortBy(p => p === 'default' ? 'priceLow' : p === 'priceLow' ? 'priceHigh' : p === 'priceHigh' ? 'reviews' : 'default');
 
-    const hotDeals = products.filter(p => Number(p.discount) > 0).slice(0, 10);
+    const hotDeals = products.filter(p => (Number(p.compare_at_price) > Number(p.price)) || Number(p.discount) > 0).slice(0, 10);
 
     const renderPromoDots = () => {
         if (promoBanners.length <= 1) return null;
@@ -370,27 +429,39 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
                 </View>
 
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 14, gap: 10 }}>
-                    {hotDeals.map(item => (
-                        <TouchableOpacity key={item.id} style={styles.dealCard} activeOpacity={0.84} onPress={() => onProductClick(item)}>
-                            <Image
-                                source={{ uri: getImageUrl(item.images) || 'https://placehold.co/200x160' }}
-                                style={styles.dealImg}
-                                resizeMode="cover"
-                            />
-                            {/* Discount badge */}
-                            <View style={styles.dealBadge}>
-                                <Text style={styles.dealBadgeTxt}>-{item.discount}%</Text>
-                            </View>
-                            {/* Info */}
-                            <View style={styles.dealInfo}>
-                                <Text style={styles.dealName} numberOfLines={1}>{item.name}</Text>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                                    <Text style={styles.dealPrice}>{fmtPrice(item.price)}</Text>
-                                    <Text style={styles.dealOld}>{fmtPrice(Number(item.price) * (1 + Number(item.discount) / 100))}</Text>
+                    {hotDeals.map(item => {
+                        const dealHasDiscount = Number(item.compare_at_price) > Number(item.price);
+                        const dealDiscountVal = dealHasDiscount
+                            ? Math.round(((Number(item.compare_at_price) - Number(item.price)) / Number(item.compare_at_price)) * 100)
+                            : (item.discount || 15);
+                        const dealOldPriceVal = dealHasDiscount
+                            ? item.compare_at_price
+                            : (item.original_price || (item.discount > 0 ? Number(item.price) * (1 + Number(item.discount) / 100) : null));
+
+                        return (
+                            <TouchableOpacity key={item.id} style={styles.dealCard} activeOpacity={0.84} onPress={() => onProductClick(item)}>
+                                <Image
+                                    source={{ uri: getImageUrl(item) }}
+                                    style={styles.dealImg}
+                                    resizeMode="cover"
+                                />
+                                {/* Discount badge */}
+                                <View style={styles.dealBadge}>
+                                    <Text style={styles.dealBadgeTxt}>-{dealDiscountVal}%</Text>
                                 </View>
-                            </View>
-                        </TouchableOpacity>
-                    ))}
+                                {/* Info */}
+                                <View style={styles.dealInfo}>
+                                    <Text style={styles.dealName} numberOfLines={1}>{item.name}</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                        <Text style={styles.dealPrice}>{fmtPrice(item.price)}</Text>
+                                        {dealOldPriceVal && (
+                                            <Text style={styles.dealOld}>{fmtPrice(dealOldPriceVal)}</Text>
+                                        )}
+                                    </View>
+                                </View>
+                            </TouchableOpacity>
+                        );
+                    })}
                 </ScrollView>
             </View>
         );
@@ -405,12 +476,20 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
         const isLowStock = item.stock != null && item.stock > 0 && item.stock <= 5;
         const isOutStock = item.stock != null && item.stock === 0;
 
+        const hasCompare = Number(item.compare_at_price) > Number(item.price);
+        const discountPercent = hasCompare
+            ? Math.round(((Number(item.compare_at_price) - Number(item.price)) / Number(item.compare_at_price)) * 100)
+            : (item.discount > 0 ? item.discount : null);
+        const oldPrice = hasCompare
+            ? item.compare_at_price
+            : (item.original_price || (item.discount > 0 ? Number(item.price) * (1 + Number(item.discount) / 100) : null));
+
         return (
             <TouchableOpacity style={styles.card} activeOpacity={0.84} onPress={() => onProductClick(item)}>
                 {/* IMAGE */}
                 <View style={styles.imgBox}>
                     <Image
-                        source={{ uri: getImageUrl(item?.images) || 'https://placehold.co/400x300' }}
+                        source={{ uri: getImageUrl(item) }}
                         style={styles.imgFull}
                         resizeMode="cover"
                     />
@@ -422,9 +501,9 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
                         </View>
                     )}
 
-                    {item.discount > 0 ? (
-                        <View style={styles.badge}><Text style={styles.badgeTxt}>-{item.discount}%</Text></View>
-                    ) : item.isNew ? (
+                    {discountPercent ? (
+                        <View style={styles.badge}><Text style={styles.badgeTxt}>-{discountPercent}%</Text></View>
+                    ) : (item.isNew || item.is_new) ? (
                         <View style={[styles.badge, { backgroundColor: '#6366F1' }]}><Text style={styles.badgeTxt}>NEW</Text></View>
                     ) : null}
 
@@ -462,7 +541,7 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
                     <View style={styles.priceCartRow}>
                         <View>
                             <Text style={styles.price}>{fmtPrice(item.price)}</Text>
-                            {item.discount > 0 && <Text style={styles.oldPrice}>{fmtPrice(Number(item.price) * (1 + Number(item.discount) / 100))}</Text>}
+                            {oldPrice && <Text style={styles.oldPrice}>{fmtPrice(oldPrice)}</Text>}
                         </View>
                         {!isOutStock && (
                             <TouchableOpacity style={styles.cartBtn} onPress={() => handleAddToCart(item)}>
@@ -649,14 +728,19 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
 
                 {/* ── Category Chips ── */}
                 <FlatList
-                    horizontal data={CATS} keyExtractor={i => i.label}
+                    horizontal
+                    data={categories}
+                    keyExtractor={(i, idx) => (i.slug || i.label || idx.toString())}
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={{ paddingHorizontal: 14, paddingVertical: 9, gap: 7 }}
                     renderItem={({ item: cat }) => {
-                        const active = activeCategory === cat.label;
+                        const active = activeCategory === cat.label || activeCategory === cat.slug;
                         return (
-                            <TouchableOpacity style={[styles.chip, active && styles.chipActive]} onPress={() => setActiveCategory(cat.label)}>
-                                <Ionicons name={cat.icon} size={12} color={active ? 'white' : '#64748B'} />
+                            <TouchableOpacity
+                                style={[styles.chip, active && styles.chipActive]}
+                                onPress={() => setActiveCategory(cat.label)}
+                            >
+                                <Ionicons name={cat.icon || 'pricetag-outline'} size={12} color={active ? 'white' : '#64748B'} />
                                 <Text style={[styles.chipTxt, active && styles.chipTxtActive]}>{cat.label}</Text>
                             </TouchableOpacity>
                         );

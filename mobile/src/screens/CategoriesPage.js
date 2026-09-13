@@ -1,93 +1,81 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, ScrollView,
-    Image, SafeAreaView, Dimensions, StatusBar
+    Image, SafeAreaView, Dimensions, StatusBar, ActivityIndicator,
+    RefreshControl
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { supabase } from '../lib/supabase';
 
 const { width } = Dimensions.get('window');
 const COLUMN_WIDTH = (width - 48) / 3;
 const AM_LOGO = require('../../assets/am_logo.png');
 
-const CATEGORIES_DATA = [
-    {
-        id: 'electronics',
-        name: 'Electronics',
-        slug: 'electronics',
-        image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-        id: 'fashion',
-        name: 'Fashion',
-        slug: 'fashion',
-        image: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-        id: 'home-living',
-        name: 'Home & Living',
-        slug: 'home',
-        image: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-        id: 'beauty',
-        name: 'Beauty',
-        slug: 'beauty',
-        image: 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-        id: 'groceries',
-        name: 'Groceries',
-        slug: 'groceries',
-        image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-        id: 'mobile-accessories',
-        name: 'Mobile Accessories',
-        slug: 'phones',
-        image: 'https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-        id: 'health-fitness',
-        name: 'Health & Fitness',
-        slug: 'health',
-        image: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-        id: 'toys-games',
-        name: 'Toys & Games',
-        slug: 'gaming',
-        image: 'https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-        id: 'automotive',
-        name: 'Automotive',
-        slug: 'automotive',
-        image: 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-        id: 'books-stationery',
-        name: 'Books & Stationery',
-        slug: 'books',
-        image: 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-        id: 'sports-outdoors',
-        name: 'Sports & Outdoors',
-        slug: 'sports',
-        image: 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?q=80&w=400&auto=format&fit=crop',
-    },
-    {
-        id: 'more',
-        name: 'More Categories',
-        slug: 'all',
-        isMore: true,
+const DEFAULT_CATEGORY_IMAGES = {
+    'phones & tablets': 'https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?q=80&w=400&auto=format&fit=crop',
+    'fashion & apparel': 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=400&auto=format&fit=crop',
+    'electronics & gadgets': 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=400&auto=format&fit=crop',
+    'shoes & footwear': 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=400&auto=format&fit=crop',
+    'beauty & health': 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=400&auto=format&fit=crop',
+    'home & living': 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?q=80&w=400&auto=format&fit=crop',
+};
+
+const getCategoryImage = (cat) => {
+    if (cat.image_url) return cat.image_url;
+    const key = (cat.name || '').toLowerCase().trim();
+    for (const [k, img] of Object.entries(DEFAULT_CATEGORY_IMAGES)) {
+        if (key.includes(k) || k.includes(key)) return img;
     }
-];
+    return 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?q=80&w=400&auto=format&fit=crop';
+};
 
 export const CategoriesPage = ({ onSelectCategory, onGoToCart, cartCount = 0 }) => {
     const [searchQuery, setSearchQuery] = useState('');
+    const [categories, setCategories] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
 
-    const filteredCategories = CATEGORIES_DATA.filter(cat =>
+    useEffect(() => {
+        fetchCategories();
+
+        const channel = supabase
+            .channel('categories-page-realtime')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, () => {
+                fetchCategories(true);
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, []);
+
+    const fetchCategories = async (isSilent = false) => {
+        if (!isSilent) setLoading(true);
+        try {
+            const { data, error } = await supabase
+                .from('categories')
+                .select('*')
+                .eq('is_active', true)
+                .order('display_order', { ascending: true });
+
+            if (!error && data && data.length > 0) {
+                setCategories(data);
+            }
+        } catch (err) {
+            console.log('CategoriesPage fetch error:', err);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    };
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        fetchCategories(true);
+    };
+
+    const filteredCategories = categories.filter(cat =>
         cat.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
@@ -139,44 +127,43 @@ export const CategoriesPage = ({ onSelectCategory, onGoToCart, cartCount = 0 }) 
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     paddingHorizontal: 4,
-                                    borderWidth: 1.5,
-                                    borderColor: '#0A192F'
                                 }}>
                                     <Text style={{ color: '#0A192F', fontSize: 10, fontWeight: '900' }}>
-                                        {cartCount}
+                                        {cartCount > 99 ? '99+' : cartCount}
                                     </Text>
                                 </View>
                             )}
                         </TouchableOpacity>
-
-                        <TouchableOpacity style={{ padding: 4 }}>
-                            <Ionicons name="search-outline" size={24} color="white" />
-                        </TouchableOpacity>
                     </View>
                 </View>
 
-                {/* Title */}
-                <Text style={{ fontSize: 28, fontWeight: '900', color: 'white', letterSpacing: -0.5, marginBottom: 16 }}>
-                    Categories
-                </Text>
+                {/* Page Title & Subtitle */}
+                <View style={{ marginBottom: 14 }}>
+                    <Text style={{ color: 'white', fontSize: 21, fontWeight: '900', letterSpacing: -0.4 }}>
+                        Explore All Categories
+                    </Text>
+                    <Text style={{ color: '#94A3B8', fontSize: 12, fontWeight: '500', marginTop: 2 }}>
+                        Live catalog updated directly from our marketplace
+                    </Text>
+                </View>
 
                 {/* Search Bar */}
                 <View style={{
                     flexDirection: 'row',
                     alignItems: 'center',
                     backgroundColor: 'white',
-                    borderRadius: 24,
-                    paddingHorizontal: 16,
+                    borderRadius: 16,
+                    paddingHorizontal: 14,
                     height: 46,
                     shadowColor: '#000',
                     shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.1,
-                    shadowRadius: 8,
-                    elevation: 3
+                    shadowOpacity: 0.08,
+                    shadowRadius: 10,
+                    elevation: 3,
                 }}>
-                    <Ionicons name="search-outline" size={20} color="#64748B" style={{ marginRight: 10 }} />
+                    <Ionicons name="search-outline" size={19} color="#64748B" style={{ marginRight: 8 }} />
                     <TextInput
-                        placeholder="Search for products, brands and more..."
+                        placeholder="Search for categories..."
                         placeholderTextColor="#94A3B8"
                         value={searchQuery}
                         onChangeText={setSearchQuery}
@@ -190,60 +177,51 @@ export const CategoriesPage = ({ onSelectCategory, onGoToCart, cartCount = 0 }) 
                 </View>
             </View>
 
-            {/* 3-Column Categories Grid */}
+            {/* Categories Content */}
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{
                     paddingHorizontal: 16,
                     paddingTop: 18,
-                    paddingBottom: 110,
+                    paddingBottom: 120,
                 }}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0284C7']} />
+                }
             >
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'space-between' }}>
-                    {filteredCategories.map((cat) => (
-                        <TouchableOpacity
-                            key={cat.id}
-                            activeOpacity={0.85}
-                            onPress={() => onSelectCategory && onSelectCategory(cat.slug || cat.name)}
-                            style={{
-                                width: COLUMN_WIDTH,
-                                backgroundColor: 'white',
-                                borderRadius: 20,
-                                paddingVertical: 14,
-                                paddingHorizontal: 8,
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                minHeight: 128,
-                                shadowColor: '#0F172A',
-                                shadowOffset: { width: 0, height: 3 },
-                                shadowOpacity: 0.04,
-                                shadowRadius: 8,
-                                elevation: 1.5,
-                                borderWidth: 1,
-                                borderColor: '#F1F5F9',
-                                marginBottom: 8,
-                            }}
-                        >
-                            {cat.isMore ? (
-                                <View style={{
-                                    width: 54,
-                                    height: 54,
-                                    borderRadius: 16,
-                                    backgroundColor: '#F8FAFC',
+                {loading ? (
+                    <View style={{ paddingVertical: 50, alignItems: 'center' }}>
+                        <ActivityIndicator size="large" color="#0284C7" />
+                        <Text style={{ color: '#64748B', fontSize: 12, marginTop: 10, fontWeight: '600' }}>
+                            Loading categories...
+                        </Text>
+                    </View>
+                ) : (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'space-between' }}>
+                        {filteredCategories.map((cat) => (
+                            <TouchableOpacity
+                                key={cat.id}
+                                activeOpacity={0.85}
+                                onPress={() => onSelectCategory && onSelectCategory(cat.name)}
+                                style={{
+                                    width: COLUMN_WIDTH,
+                                    backgroundColor: 'white',
+                                    borderRadius: 20,
+                                    paddingVertical: 14,
+                                    paddingHorizontal: 8,
                                     alignItems: 'center',
-                                    justifyContent: 'center',
+                                    justifyContent: 'space-between',
+                                    minHeight: 128,
+                                    shadowColor: '#0F172A',
+                                    shadowOffset: { width: 0, height: 3 },
+                                    shadowOpacity: 0.04,
+                                    shadowRadius: 8,
+                                    elevation: 1.5,
+                                    borderWidth: 1,
+                                    borderColor: '#F1F5F9',
                                     marginBottom: 8,
-                                    flexDirection: 'row',
-                                    flexWrap: 'wrap',
-                                    padding: 8,
-                                    gap: 5
-                                }}>
-                                    <View style={{ width: 16, height: 16, borderRadius: 5, backgroundColor: '#0A192F' }} />
-                                    <View style={{ width: 16, height: 16, borderRadius: 5, backgroundColor: '#06B6D4' }} />
-                                    <View style={{ width: 16, height: 16, borderRadius: 5, backgroundColor: '#F59E0B' }} />
-                                    <View style={{ width: 16, height: 16, borderRadius: 5, backgroundColor: '#CBD5E1' }} />
-                                </View>
-                            ) : (
+                                }}
+                            >
                                 <View style={{
                                     width: 64,
                                     height: 64,
@@ -255,27 +233,27 @@ export const CategoriesPage = ({ onSelectCategory, onGoToCart, cartCount = 0 }) 
                                     marginBottom: 8,
                                 }}>
                                     <Image
-                                        source={{ uri: cat.image }}
+                                        source={{ uri: getCategoryImage(cat) }}
                                         style={{ width: '100%', height: '100%', resizeMode: 'cover' }}
                                     />
                                 </View>
-                            )}
 
-                            <Text
-                                numberOfLines={2}
-                                style={{
-                                    fontSize: 11.5,
-                                    fontWeight: '800',
-                                    color: '#0F172A',
-                                    textAlign: 'center',
-                                    lineHeight: 15,
-                                }}
-                            >
-                                {cat.name}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
+                                <Text
+                                    numberOfLines={2}
+                                    style={{
+                                        fontSize: 11.5,
+                                        fontWeight: '800',
+                                        color: '#0F172A',
+                                        textAlign: 'center',
+                                        lineHeight: 15,
+                                    }}
+                                >
+                                    {cat.name}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                )}
             </ScrollView>
         </View>
     );

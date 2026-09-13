@@ -181354,7 +181354,12 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
           cartCount: cartLines.length,
           onProductClick: product => handleNavigate('ProductDetails', {
             product
-          })
+          }),
+          onAddToCart: onAddToCart,
+          onGoToShop: category => handleNavigate('shop', {
+            category
+          }),
+          onNavigate: handleNavigate
         }), !['home', 'shop', 'cart', 'wishlist', 'categories', 'stores', 'profile', 'orders', 'settings', 'editProfile', 'changePassword', 'address', 'paymentMethods', 'notifications', 'productDetails', 'wallet', 'referral', 'ReferAndEarn', 'support', 'about'].includes(activeTab) && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_InfoPage.InfoPage, {
           title: activeTab,
           content: _dataPageContent.PAGE_CONTENT[activeTab] || `Content for ${activeTab} is coming soon.`,
@@ -194598,24 +194603,10 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     if (num >= 1_000) return `₦${(num / 1_000).toFixed(0)}K`;
     return `₦${num}`;
   };
-  const CATS = [{
+  const DEFAULT_CATS = [{
     label: 'All',
-    icon: 'apps-outline'
-  }, {
-    label: 'Phones',
-    icon: 'phone-portrait-outline'
-  }, {
-    label: 'Fashion',
-    icon: 'shirt-outline'
-  }, {
-    label: 'Shoes',
-    icon: 'footsteps-outline'
-  }, {
-    label: 'Gaming',
-    icon: 'game-controller-outline'
-  }, {
-    label: 'Home',
-    icon: 'home-outline'
+    icon: 'apps-outline',
+    slug: 'All'
   }];
 
   // ─── Shimmer Skeleton ──────────────────────────────────────────────────────────
@@ -194702,6 +194693,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     } = (0, _contextComparisonContext.useComparison)();
     const [products, setProducts] = (0, _react.useState)([]);
     const [filteredProducts, setFilteredProducts] = (0, _react.useState)([]);
+    const [categories, setCategories] = (0, _react.useState)(DEFAULT_CATS);
     const [loading, setLoading] = (0, _react.useState)(true);
     const [refreshing, setRefreshing] = (0, _react.useState)(false);
     const [activeCategory, setActiveCategory] = (0, _react.useState)(initialCategory || 'All');
@@ -194778,8 +194770,8 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
         setActiveCategory(initialCategory || 'All');
       }
     }, [initialCategory]);
-    const SHOP_CACHE_KEY = '@abumafhal_shop_cache_v2';
-    const PROD_FIELDS = 'id, name, price, original_price, images, category, rating, reviews, status, discount, stock, is_featured, brand, isNew';
+    const SHOP_CACHE_KEY = '@abumafhal_shop_cache_v3';
+    const PROD_FIELDS = 'id, name, price, original_price, compare_at_price, image_url, images, category, rating, reviews, status, discount, stock, stock_quantity, is_featured, is_new, brand, isNew, total_sales';
     (0, _react.useEffect)(() => {
       // 1. Instant cache load
       (async () => {
@@ -194815,15 +194807,37 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       }
     };
 
+    // ── Realtime Listener ───────────────────────────────────────────────────
+    (0, _react.useEffect)(() => {
+      const channel = _libSupabase.supabase.channel('shop-screen-realtime').on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'products'
+      }, () => {
+        fetchData(true);
+      }).on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'categories'
+      }, () => {
+        fetchData(true);
+      }).subscribe();
+      return () => {
+        _libSupabase.supabase.removeChannel(channel);
+      };
+    }, []);
+
     // ── Data ──────────────────────────────────────────────────────────────────
     const fetchData = async (isRefresh = false) => {
       if (!isRefresh && products.length === 0) setLoading(true);
       try {
-        const [bannersRes, promoRes, prodRes, userRes] = await Promise.allSettled([_libSupabase.supabase.from('banners').select('*').eq('is_active', true).order('display_order'), _libSupabase.supabase.from('banners').select('*').eq('section', 'promo').eq('is_active', true).order('created_at', {
+        const [bannersRes, promoRes, prodRes, catRes, userRes] = await Promise.allSettled([_libSupabase.supabase.from('banners').select('*').eq('is_active', true).order('display_order'), _libSupabase.supabase.from('banners').select('*').eq('section', 'promo').eq('is_active', true).order('created_at', {
           ascending: false
         }), _libSupabase.supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').order('created_at', {
           ascending: false
-        }).limit(80), _libSupabase.supabase.auth.getUser()]);
+        }).limit(80), _libSupabase.supabase.from('categories').select('*').eq('is_active', true).order('display_order', {
+          ascending: true
+        }), _libSupabase.supabase.auth.getUser()]);
         let newBanners = banners;
         if (bannersRes.status === 'fulfilled' && bannersRes.value?.data) {
           newBanners = bannersRes.value.data.filter(b => !b.section || b.section === 'shop' || b.section === 'all' || b.section === '');
@@ -194858,6 +194872,18 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
           }));
           setProducts(newProducts);
         }
+        if (catRes.status === 'fulfilled' && catRes.value?.data && catRes.value.data.length > 0) {
+          const liveCats = [{
+            label: 'All',
+            icon: 'apps-outline',
+            slug: 'All'
+          }, ...catRes.value.data.map(c => ({
+            label: c.name,
+            slug: c.slug || c.name,
+            icon: c.icon || 'pricetag-outline'
+          }))];
+          setCategories(liveCats);
+        }
 
         // Save to local cache for instant reload next time
         AsyncStorage.default.setItem(SHOP_CACHE_KEY, JSON.stringify({
@@ -194889,25 +194915,47 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     };
     const filterProducts = () => {
       let r = [...products];
-      if (activeCategory !== 'All') r = r.filter(p => p.category === activeCategory || p.name?.includes(activeCategory));
-      if (searchQuery) r = r.filter(p => p.name?.toLowerCase().includes(searchQuery.toLowerCase()));
-      if (sortBy === 'priceLow') r.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
-      if (sortBy === 'priceHigh') r.sort((a, b) => parseFloat(b.price) - parseFloat(a.price));
-      if (sortBy === 'reviews') r.sort((a, b) => b.reviews - a.reviews);
+      if (activeCategory && activeCategory !== 'All') {
+        const needle = activeCategory.toLowerCase().trim();
+        r = r.filter(p => {
+          const cat = (p.category || '').toLowerCase().trim();
+          const nm = (p.name || '').toLowerCase();
+          return cat === needle || cat.includes(needle) || needle.includes(cat) || nm.includes(needle);
+        });
+      }
+      if (searchQuery) {
+        const sq = searchQuery.toLowerCase().trim();
+        r = r.filter(p => (p.name || '').toLowerCase().includes(sq) || (p.category || '').toLowerCase().includes(sq));
+      }
+      if (sortBy === 'priceLow') r.sort((a, b) => parseFloat(a.price || 0) - parseFloat(b.price || 0));
+      if (sortBy === 'priceHigh') r.sort((a, b) => parseFloat(b.price || 0) - parseFloat(a.price || 0));
+      if (sortBy === 'reviews') r.sort((a, b) => (b.reviews || 0) - (a.reviews || 0));
       setFilteredProducts(r);
     };
-    const getImageUrl = images => {
-      if (!images) return null;
+    const getImageUrl = item => {
+      if (!item) return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=400&auto=format&fit=crop';
+      if (typeof item === 'string') {
+        if (item.startsWith('http')) return item;
+        try {
+          const parsed = JSON.parse(item);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+          if (typeof parsed === 'string' && parsed.startsWith('http')) return parsed;
+        } catch (_) {}
+        return item;
+      }
+      if (item.image_url) return item.image_url;
+      const images = item.images;
+      if (Array.isArray(images) && images.length > 0) return images[0];
       if (typeof images === 'string') {
         try {
           const p = JSON.parse(images);
-          return Array.isArray(p) && p.length > 0 ? p[0] : p;
-        } catch {
+          if (Array.isArray(p) && p.length > 0) return p[0];
+          if (typeof p === 'string' && p.startsWith('http')) return p;
+        } catch (_) {
           return images;
         }
       }
-      if (Array.isArray(images) && images.length > 0) return images[0];
-      return null;
+      return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=400&auto=format&fit=crop';
     };
 
     // ── Toast ─────────────────────────────────────────────────────────────────
@@ -195049,7 +195097,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       reviews: 'Top Rated'
     };
     const nextSort = () => setSortBy(p => p === 'default' ? 'priceLow' : p === 'priceLow' ? 'priceHigh' : p === 'priceHigh' ? 'reviews' : 'default');
-    const hotDeals = products.filter(p => Number(p.discount) > 0).slice(0, 10);
+    const hotDeals = products.filter(p => Number(p.compare_at_price) > Number(p.price) || Number(p.discount) > 0).slice(0, 10);
     const renderPromoDots = () => {
       if (promoBanners.length <= 1) return null;
       return /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
@@ -195112,44 +195160,49 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
             paddingHorizontal: 14,
             gap: 10
           },
-          children: hotDeals.map(item => /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
-            style: styles.dealCard,
-            activeOpacity: 0.84,
-            onPress: () => onProductClick(item),
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
-              source: {
-                uri: getImageUrl(item.images) || 'https://placehold.co/200x160'
-              },
-              style: styles.dealImg,
-              resizeMode: "cover"
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-              style: styles.dealBadge,
-              children: /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
-                style: styles.dealBadgeTxt,
-                children: ["-", item.discount, "%"]
-              })
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              style: styles.dealInfo,
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: styles.dealName,
-                numberOfLines: 1,
-                children: item.name
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-                style: {
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 5
+          children: hotDeals.map(item => {
+            const dealHasDiscount = Number(item.compare_at_price) > Number(item.price);
+            const dealDiscountVal = dealHasDiscount ? Math.round((Number(item.compare_at_price) - Number(item.price)) / Number(item.compare_at_price) * 100) : item.discount || 15;
+            const dealOldPriceVal = dealHasDiscount ? item.compare_at_price : item.original_price || (item.discount > 0 ? Number(item.price) * (1 + Number(item.discount) / 100) : null);
+            return /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
+              style: styles.dealCard,
+              activeOpacity: 0.84,
+              onPress: () => onProductClick(item),
+              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
+                source: {
+                  uri: getImageUrl(item)
                 },
+                style: styles.dealImg,
+                resizeMode: "cover"
+              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+                style: styles.dealBadge,
+                children: /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
+                  style: styles.dealBadgeTxt,
+                  children: ["-", dealDiscountVal, "%"]
+                })
+              }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+                style: styles.dealInfo,
                 children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: styles.dealPrice,
-                  children: fmtPrice(item.price)
-                }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: styles.dealOld,
-                  children: fmtPrice(Number(item.price) * (1 + Number(item.discount) / 100))
+                  style: styles.dealName,
+                  numberOfLines: 1,
+                  children: item.name
+                }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+                  style: {
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 5
+                  },
+                  children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                    style: styles.dealPrice,
+                    children: fmtPrice(item.price)
+                  }), dealOldPriceVal && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                    style: styles.dealOld,
+                    children: fmtPrice(dealOldPriceVal)
+                  })]
                 })]
               })]
-            })]
-          }, item.id))
+            }, item.id);
+          })
         })]
       });
     };
@@ -195164,6 +195217,9 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       const isFreeShip = Number(item.price) >= 50000;
       const isLowStock = item.stock != null && item.stock > 0 && item.stock <= 5;
       const isOutStock = item.stock != null && item.stock === 0;
+      const hasCompare = Number(item.compare_at_price) > Number(item.price);
+      const discountPercent = hasCompare ? Math.round((Number(item.compare_at_price) - Number(item.price)) / Number(item.compare_at_price) * 100) : item.discount > 0 ? item.discount : null;
+      const oldPrice = hasCompare ? item.compare_at_price : item.original_price || (item.discount > 0 ? Number(item.price) * (1 + Number(item.discount) / 100) : null);
       return /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
         style: styles.card,
         activeOpacity: 0.84,
@@ -195172,7 +195228,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
           style: styles.imgBox,
           children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
             source: {
-              uri: getImageUrl(item?.images) || 'https://placehold.co/400x300'
+              uri: getImageUrl(item)
             },
             style: styles.imgFull,
             resizeMode: "cover"
@@ -195187,13 +195243,13 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
                 children: "OUT OF STOCK"
               })
             })
-          }), item.discount > 0 ? /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+          }), discountPercent ? /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
             style: styles.badge,
             children: /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
               style: styles.badgeTxt,
-              children: ["-", item.discount, "%"]
+              children: ["-", discountPercent, "%"]
             })
-          }) : item.isNew ? /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+          }) : item.isNew || item.is_new ? /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
             style: [styles.badge, {
               backgroundColor: '#6366F1'
             }],
@@ -195262,9 +195318,9 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
               children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
                 style: styles.price,
                 children: fmtPrice(item.price)
-              }), item.discount > 0 && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+              }), oldPrice && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
                 style: styles.oldPrice,
-                children: fmtPrice(Number(item.price) * (1 + Number(item.discount) / 100))
+                children: fmtPrice(oldPrice)
               })]
             }), !isOutStock && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
               style: styles.cartBtn,
@@ -195686,8 +195742,8 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
           })
         }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(FlatList.default, {
           horizontal: true,
-          data: CATS,
-          keyExtractor: i => i.label,
+          data: categories,
+          keyExtractor: (i, idx) => i.slug || i.label || idx.toString(),
           showsHorizontalScrollIndicator: false,
           contentContainerStyle: {
             paddingHorizontal: 14,
@@ -195697,12 +195753,12 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
           renderItem: ({
             item: cat
           }) => {
-            const active = activeCategory === cat.label;
+            const active = activeCategory === cat.label || activeCategory === cat.slug;
             return /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
               style: [styles.chip, active && styles.chipActive],
               onPress: () => setActiveCategory(cat.label),
               children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                name: cat.icon,
+                name: cat.icon || 'pricetag-outline',
                 size: 12,
                 color: active ? 'white' : '#64748B'
               }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
@@ -220072,81 +220128,80 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   var Dimensions = _interopDefault(_reactNativeWebDistExportsDimensions);
   var _reactNativeWebDistExportsStatusBar = require(_dependencyMap[9]);
   var StatusBar = _interopDefault(_reactNativeWebDistExportsStatusBar);
-  var _expoVectorIcons = require(_dependencyMap[10]);
-  var _reactJsxRuntime = require(_dependencyMap[11]);
+  var _reactNativeWebDistExportsActivityIndicator = require(_dependencyMap[10]);
+  var ActivityIndicator = _interopDefault(_reactNativeWebDistExportsActivityIndicator);
+  var _reactNativeWebDistExportsRefreshControl = require(_dependencyMap[11]);
+  var RefreshControl = _interopDefault(_reactNativeWebDistExportsRefreshControl);
+  var _expoVectorIcons = require(_dependencyMap[12]);
+  var _libSupabase = require(_dependencyMap[13]);
+  var _reactJsxRuntime = require(_dependencyMap[14]);
   const {
     width
   } = Dimensions.default.get('window');
   const COLUMN_WIDTH = (width - 48) / 3;
-  const AM_LOGO = require(_dependencyMap[12]);
-  const CATEGORIES_DATA = [{
-    id: 'electronics',
-    name: 'Electronics',
-    slug: 'electronics',
-    image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=400&auto=format&fit=crop'
-  }, {
-    id: 'fashion',
-    name: 'Fashion',
-    slug: 'fashion',
-    image: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=400&auto=format&fit=crop'
-  }, {
-    id: 'home-living',
-    name: 'Home & Living',
-    slug: 'home',
-    image: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?q=80&w=400&auto=format&fit=crop'
-  }, {
-    id: 'beauty',
-    name: 'Beauty',
-    slug: 'beauty',
-    image: 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=400&auto=format&fit=crop'
-  }, {
-    id: 'groceries',
-    name: 'Groceries',
-    slug: 'groceries',
-    image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=400&auto=format&fit=crop'
-  }, {
-    id: 'mobile-accessories',
-    name: 'Mobile Accessories',
-    slug: 'phones',
-    image: 'https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?q=80&w=400&auto=format&fit=crop'
-  }, {
-    id: 'health-fitness',
-    name: 'Health & Fitness',
-    slug: 'health',
-    image: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=400&auto=format&fit=crop'
-  }, {
-    id: 'toys-games',
-    name: 'Toys & Games',
-    slug: 'gaming',
-    image: 'https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?q=80&w=400&auto=format&fit=crop'
-  }, {
-    id: 'automotive',
-    name: 'Automotive',
-    slug: 'automotive',
-    image: 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?q=80&w=400&auto=format&fit=crop'
-  }, {
-    id: 'books-stationery',
-    name: 'Books & Stationery',
-    slug: 'books',
-    image: 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?q=80&w=400&auto=format&fit=crop'
-  }, {
-    id: 'sports-outdoors',
-    name: 'Sports & Outdoors',
-    slug: 'sports',
-    image: 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?q=80&w=400&auto=format&fit=crop'
-  }, {
-    id: 'more',
-    name: 'More Categories',
-    slug: 'all',
-    isMore: true
-  }];
+  const AM_LOGO = require(_dependencyMap[15]);
+  const DEFAULT_CATEGORY_IMAGES = {
+    'phones & tablets': 'https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?q=80&w=400&auto=format&fit=crop',
+    'fashion & apparel': 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=400&auto=format&fit=crop',
+    'electronics & gadgets': 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=400&auto=format&fit=crop',
+    'shoes & footwear': 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=400&auto=format&fit=crop',
+    'beauty & health': 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=400&auto=format&fit=crop',
+    'home & living': 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?q=80&w=400&auto=format&fit=crop'
+  };
+  const getCategoryImage = cat => {
+    if (cat.image_url) return cat.image_url;
+    const key = (cat.name || '').toLowerCase().trim();
+    for (const [k, img] of Object.entries(DEFAULT_CATEGORY_IMAGES)) {
+      if (key.includes(k) || k.includes(key)) return img;
+    }
+    return 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?q=80&w=400&auto=format&fit=crop';
+  };
   const CategoriesPage = ({
     onSelectCategory,
     onGoToCart,
     cartCount = 0
   }) => {
     const [searchQuery, setSearchQuery] = (0, _react.useState)('');
-    const filteredCategories = CATEGORIES_DATA.filter(cat => cat.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    const [categories, setCategories] = (0, _react.useState)([]);
+    const [loading, setLoading] = (0, _react.useState)(true);
+    const [refreshing, setRefreshing] = (0, _react.useState)(false);
+    (0, _react.useEffect)(() => {
+      fetchCategories();
+      const channel = _libSupabase.supabase.channel('categories-page-realtime').on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'categories'
+      }, () => {
+        fetchCategories(true);
+      }).subscribe();
+      return () => {
+        _libSupabase.supabase.removeChannel(channel);
+      };
+    }, []);
+    const fetchCategories = async (isSilent = false) => {
+      if (!isSilent) setLoading(true);
+      try {
+        const {
+          data,
+          error
+        } = await _libSupabase.supabase.from('categories').select('*').eq('is_active', true).order('display_order', {
+          ascending: true
+        });
+        if (!error && data && data.length > 0) {
+          setCategories(data);
+        }
+      } catch (err) {
+        console.log('CategoriesPage fetch error:', err);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    };
+    const onRefresh = () => {
+      setRefreshing(true);
+      fetchCategories(true);
+    };
+    const filteredCategories = categories.filter(cat => cat.name.toLowerCase().includes(searchQuery.toLowerCase()));
     return /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
       style: {
         flex: 1,
@@ -220209,13 +220264,13 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
                 children: "Your Marketplace, Your Choice."
               })]
             })]
-          }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+          }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
             style: {
               flexDirection: 'row',
               alignItems: 'center',
               gap: 14
             },
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
+            children: /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
               onPress: onGoToCart,
               style: {
                 position: 'relative',
@@ -220236,9 +220291,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
                   height: 18,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  paddingHorizontal: 4,
-                  borderWidth: 1.5,
-                  borderColor: '#0A192F'
+                  paddingHorizontal: 4
                 },
                 children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
                   style: {
@@ -220246,55 +220299,58 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
                     fontSize: 10,
                     fontWeight: '900'
                   },
-                  children: cartCount
+                  children: cartCount > 99 ? '99+' : cartCount
                 })
               })]
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-              style: {
-                padding: 4
-              },
-              children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                name: "search-outline",
-                size: 24,
-                color: "white"
-              })
-            })]
+            })
           })]
-        }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+        }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
           style: {
-            fontSize: 28,
-            fontWeight: '900',
-            color: 'white',
-            letterSpacing: -0.5,
-            marginBottom: 16
+            marginBottom: 14
           },
-          children: "Categories"
+          children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+            style: {
+              color: 'white',
+              fontSize: 21,
+              fontWeight: '900',
+              letterSpacing: -0.4
+            },
+            children: "Explore All Categories"
+          }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+            style: {
+              color: '#94A3B8',
+              fontSize: 12,
+              fontWeight: '500',
+              marginTop: 2
+            },
+            children: "Live catalog updated directly from our marketplace"
+          })]
         }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
           style: {
             flexDirection: 'row',
             alignItems: 'center',
             backgroundColor: 'white',
-            borderRadius: 24,
-            paddingHorizontal: 16,
+            borderRadius: 16,
+            paddingHorizontal: 14,
             height: 46,
             shadowColor: '#000',
             shadowOffset: {
               width: 0,
               height: 4
             },
-            shadowOpacity: 0.1,
-            shadowRadius: 8,
+            shadowOpacity: 0.08,
+            shadowRadius: 10,
             elevation: 3
           },
           children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
             name: "search-outline",
-            size: 20,
+            size: 19,
             color: "#64748B",
             style: {
-              marginRight: 10
+              marginRight: 8
             }
           }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TextInput.default, {
-            placeholder: "Search for products, brands and more...",
+            placeholder: "Search for categories...",
             placeholderTextColor: "#94A3B8",
             value: searchQuery,
             onChangeText: setSearchQuery,
@@ -220318,9 +220374,31 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
         contentContainerStyle: {
           paddingHorizontal: 16,
           paddingTop: 18,
-          paddingBottom: 110
+          paddingBottom: 120
         },
-        children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+        refreshControl: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(RefreshControl.default, {
+          refreshing: refreshing,
+          onRefresh: onRefresh,
+          colors: ['#0284C7']
+        }),
+        children: loading ? /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+          style: {
+            paddingVertical: 50,
+            alignItems: 'center'
+          },
+          children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(ActivityIndicator.default, {
+            size: "large",
+            color: "#0284C7"
+          }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+            style: {
+              color: '#64748B',
+              fontSize: 12,
+              marginTop: 10,
+              fontWeight: '600'
+            },
+            children: "Loading categories..."
+          })]
+        }) : /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
           style: {
             flexDirection: 'row',
             flexWrap: 'wrap',
@@ -220329,7 +220407,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
           },
           children: filteredCategories.map(cat => /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
             activeOpacity: 0.85,
-            onPress: () => onSelectCategory && onSelectCategory(cat.slug || cat.name),
+            onPress: () => onSelectCategory && onSelectCategory(cat.name),
             style: {
               width: COLUMN_WIDTH,
               backgroundColor: 'white',
@@ -220351,50 +220429,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
               borderColor: '#F1F5F9',
               marginBottom: 8
             },
-            children: [cat.isMore ? /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              style: {
-                width: 54,
-                height: 54,
-                borderRadius: 16,
-                backgroundColor: '#F8FAFC',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: 8,
-                flexDirection: 'row',
-                flexWrap: 'wrap',
-                padding: 8,
-                gap: 5
-              },
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                style: {
-                  width: 16,
-                  height: 16,
-                  borderRadius: 5,
-                  backgroundColor: '#0A192F'
-                }
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                style: {
-                  width: 16,
-                  height: 16,
-                  borderRadius: 5,
-                  backgroundColor: '#06B6D4'
-                }
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                style: {
-                  width: 16,
-                  height: 16,
-                  borderRadius: 5,
-                  backgroundColor: '#F59E0B'
-                }
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                style: {
-                  width: 16,
-                  height: 16,
-                  borderRadius: 5,
-                  backgroundColor: '#CBD5E1'
-                }
-              })]
-            }) : /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
               style: {
                 width: 64,
                 height: 64,
@@ -220407,7 +220442,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
               },
               children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
                 source: {
-                  uri: cat.image
+                  uri: getCategoryImage(cat)
                 },
                 style: {
                   width: '100%',
@@ -220431,7 +220466,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       })]
     });
   };
-},1215,[58,232,583,586,990,268,559,1098,220,731,997,127,1091]);
+},1215,[58,232,583,586,990,268,559,1098,220,731,991,267,997,925,127,1091]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 
@@ -220464,703 +220499,545 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
   var Image = _interopDefault(_reactNativeWebDistExportsImage);
   var _reactNativeWebDistExportsDimensions = require(_dependencyMap[7]);
   var Dimensions = _interopDefault(_reactNativeWebDistExportsDimensions);
-  require(_dependencyMap[8]);
-  var _reactNativeWebDistExportsStatusBar = require(_dependencyMap[9]);
+  var _reactNativeWebDistExportsStatusBar = require(_dependencyMap[8]);
   var StatusBar = _interopDefault(_reactNativeWebDistExportsStatusBar);
-  require(_dependencyMap[10]);
-  var _expoVectorIcons = require(_dependencyMap[11]);
-  var _libSupabase = require(_dependencyMap[12]);
-  var _reactJsxRuntime = require(_dependencyMap[13]);
+  var _reactNativeWebDistExportsAlert = require(_dependencyMap[9]);
+  var Alert = _interopDefault(_reactNativeWebDistExportsAlert);
+  var _reactNativeWebDistExportsRefreshControl = require(_dependencyMap[10]);
+  var RefreshControl = _interopDefault(_reactNativeWebDistExportsRefreshControl);
+  var _reactNativeWebDistExportsLinking = require(_dependencyMap[11]);
+  var Linking = _interopDefault(_reactNativeWebDistExportsLinking);
+  var _reactNativeWebDistExportsActivityIndicator = require(_dependencyMap[12]);
+  var ActivityIndicator = _interopDefault(_reactNativeWebDistExportsActivityIndicator);
+  var _reactNativeWebDistExportsStyleSheet = require(_dependencyMap[13]);
+  var StyleSheet = _interopDefault(_reactNativeWebDistExportsStyleSheet);
+  var _expoVectorIcons = require(_dependencyMap[14]);
+  var _reactNativeAsyncStorageAsyncStorage = require(_dependencyMap[15]);
+  var AsyncStorage = _interopDefault(_reactNativeAsyncStorageAsyncStorage);
+  var _libSupabase = require(_dependencyMap[16]);
+  var _reactJsxRuntime = require(_dependencyMap[17]);
   const {
     width
   } = Dimensions.default.get('window');
-  const AM_LOGO = require(_dependencyMap[14]);
-  const MOCK_TOP_STORES = [{
-    id: '1',
-    name: 'ELSON Boutique',
-    category: 'Fashion & Accessories',
-    rating: 4.8,
-    reviews: '1.2K',
-    productsCount: 256,
-    logo: 'https://images.unsplash.com/photo-1544441893-675973e31985?q=80&w=300&auto=format&fit=crop',
-    isVerified: true,
-    followed: false
-  }, {
-    id: '2',
-    name: 'Tech Gadgets NG',
-    category: 'Electronics',
-    rating: 4.7,
-    reviews: '980',
-    productsCount: 412,
-    logo: 'https://images.unsplash.com/photo-1550009158-9ebf69173e03?q=80&w=300&auto=format&fit=crop',
-    isVerified: true,
-    followed: true
-  }, {
-    id: '3',
-    name: 'FreshMart NG',
-    category: 'Groceries & Essentials',
-    rating: 4.9,
-    reviews: '2.1K',
-    productsCount: 589,
-    logo: 'https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=300&auto=format&fit=crop',
-    isVerified: true,
-    followed: false
-  }, {
-    id: '4',
-    name: 'Royal Fragrances',
-    category: 'Beauty & Perfumes',
-    rating: 4.9,
-    reviews: '840',
-    productsCount: 148,
-    logo: 'https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?q=80&w=300&auto=format&fit=crop',
-    isVerified: true,
-    followed: false
-  }];
-  const MOCK_POPULAR_PRODUCTS = [{
-    id: 'p1',
-    name: 'iPhone 14 Pro Max',
-    price: 980000,
-    image: 'https://images.unsplash.com/photo-1695048133142-1a20484d2569?q=80&w=400&auto=format&fit=crop'
-  }, {
-    id: 'p2',
-    name: 'Nike Air Force 1 White',
-    price: 60000,
-    image: 'https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?q=80&w=400&auto=format&fit=crop'
-  }, {
-    id: 'p3',
-    name: 'YSL Luxury Leather Bag',
-    price: 240000,
-    image: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?q=80&w=400&auto=format&fit=crop'
-  }, {
-    id: 'p4',
-    name: 'Dior Sauvage Eau de Parfum',
-    price: 115000,
-    image: 'https://images.unsplash.com/photo-1523293182086-7651a899d37f?q=80&w=400&auto=format&fit=crop'
-  }];
+  const AM_LOGO = require(_dependencyMap[18]);
+  const FOLLOWED_STORES_KEY = '@abumafhal_followed_stores_v1';
+  const fmtPrice = n => {
+    const num = Number(n);
+    if (!num) return '₦0';
+    return `₦${num.toLocaleString()}`;
+  };
   const StoresPage = ({
     onGoToCart,
     onGoToNotifications,
     cartCount = 0,
-    onProductClick
+    onProductClick,
+    onAddToCart,
+    onGoToShop,
+    onNavigate
   }) => {
     const [searchQuery, setSearchQuery] = (0, _react.useState)('');
-    const [activeSubTab, setActiveSubTab] = (0, _react.useState)('top_stores');
-    const [stores, setStores] = (0, _react.useState)(MOCK_TOP_STORES);
-    const [popularProducts, setPopularProducts] = (0, _react.useState)(MOCK_POPULAR_PRODUCTS);
+    const [activeSubTab, setActiveSubTab] = (0, _react.useState)('all_stores');
+    const [stores, setStores] = (0, _react.useState)([]);
+    const [popularProducts, setPopularProducts] = (0, _react.useState)([]);
+    const [categories, setCategories] = (0, _react.useState)([]);
+    const [followedStores, setFollowedStores] = (0, _react.useState)({});
+    const [loading, setLoading] = (0, _react.useState)(true);
+    const [refreshing, setRefreshing] = (0, _react.useState)(false);
     (0, _react.useEffect)(() => {
-      fetchStoresFromSupabase();
+      loadFollowedState();
+      fetchStoresAndProducts();
+
+      // Subscribe to real-time changes
+      const channel = _libSupabase.supabase.channel('stores-realtime-sync').on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'products'
+      }, () => {
+        fetchStoresAndProducts(true);
+      }).on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'profiles'
+      }, () => {
+        fetchStoresAndProducts(true);
+      }).subscribe();
+      return () => {
+        _libSupabase.supabase.removeChannel(channel);
+      };
     }, []);
-    const fetchStoresFromSupabase = async () => {
+    const loadFollowedState = async () => {
       try {
-        const {
-          data,
-          error
-        } = await _libSupabase.supabase.from('vendors').select('*').limit(10);
-        if (!error && data && data.length > 0) {
-          const mapped = data.map(v => ({
-            id: v.id,
-            name: v.business_name || v.store_name || 'Verified Vendor',
-            category: v.category || 'General Store',
-            rating: v.rating || 4.8,
-            reviews: `${v.review_count || 120}`,
-            productsCount: v.total_sales || 85,
-            logo: v.logo_url || 'https://images.unsplash.com/photo-1544441893-675973e31985?q=80&w=300&auto=format&fit=crop',
-            isVerified: true,
-            followed: false
-          }));
-          setStores(mapped);
-        }
+        const raw = await AsyncStorage.default.getItem(FOLLOWED_STORES_KEY);
+        if (raw) setFollowedStores(JSON.parse(raw));
       } catch (_) {}
     };
-    const toggleFollow = id => {
-      setStores(prev => prev.map(s => s.id === id ? Object.assign({}, s, {
-        followed: !s.followed
-      }) : s));
+    const toggleFollow = async storeId => {
+      setFollowedStores(prev => {
+        const updated = Object.assign({}, prev, {
+          [storeId]: !prev[storeId]
+        });
+        AsyncStorage.default.setItem(FOLLOWED_STORES_KEY, JSON.stringify(updated)).catch(() => {});
+        return updated;
+      });
+    };
+    const fetchStoresAndProducts = async (isSilent = false) => {
+      if (!isSilent) setLoading(true);
+      try {
+        const [profilesRes, productsRes, categoriesRes] = await Promise.allSettled([_libSupabase.supabase.from('profiles').select('id, full_name, username, business_name, avatar_url, role, phone, created_at').or('role.eq.vendor,business_name.not.is.null').limit(20), _libSupabase.supabase.from('products').select('id, name, price, compare_at_price, image_url, images, category, rating, reviews, stock, total_sales, is_active, status').eq('status', 'approved').order('created_at', {
+          ascending: false
+        }).limit(30), _libSupabase.supabase.from('categories').select('id, name, slug, icon, is_active').eq('is_active', true).order('display_order', {
+          ascending: true
+        })]);
+        const realProducts = productsRes.status === 'fulfilled' && productsRes.value?.data ? productsRes.value.data : [];
+        const realCategories = categoriesRes.status === 'fulfilled' && categoriesRes.value?.data ? categoriesRes.value.data : [];
+        setCategories(realCategories);
+        setPopularProducts(realProducts);
+
+        // Official Flagship Store (Always Verified and Active)
+        const officialStore = {
+          id: 'official-abumafhal',
+          name: 'Abu Mafhal Official Store',
+          category: 'Official Mall & Flagship Store',
+          rating: 5.0,
+          reviews: '3.8K',
+          productsCount: realProducts.length,
+          logo: null,
+          isVerified: true,
+          isOfficial: true,
+          phone: '2349021486162',
+          bio: 'Official direct verified flagship store for Abu Mafhal Marketplace.'
+        };
+        const vendorProfiles = profilesRes.status === 'fulfilled' && profilesRes.value?.data ? profilesRes.value.data : [];
+        const mappedVendors = vendorProfiles.map(vp => {
+          const storeProds = realProducts.filter(p => p.vendor_id === vp.id);
+          return {
+            id: vp.id,
+            name: vp.business_name || vp.full_name || vp.username || 'Verified Seller',
+            category: vp.role === 'vendor' ? 'Verified Seller' : 'Registered Merchant',
+            rating: 4.9,
+            reviews: '120+',
+            productsCount: storeProds.length > 0 ? storeProds.length : 'Multiple',
+            logo: vp.avatar_url || null,
+            isVerified: true,
+            isOfficial: false,
+            phone: vp.phone || '2349021486162',
+            bio: `Trusted vendor verified on Abu Mafhal since ${new Date(vp.created_at || Date.now()).getFullYear()}`
+          };
+        });
+        setStores([officialStore, ...mappedVendors]);
+      } catch (err) {
+        console.log('StoresPage Fetch Error:', err);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    };
+    const onRefresh = () => {
+      setRefreshing(true);
+      fetchStoresAndProducts(true);
+    };
+    const handleContactStore = store => {
+      const phone = store.phone ? store.phone.replace(/[^0-9]/g, '') : '2349021486162';
+      const msg = encodeURIComponent(`Hello ${store.name}, I am contacting you from Abu Mafhal Marketplace regarding your products.`);
+      Linking.default.openURL(`https://wa.me/${phone}?text=${msg}`).catch(() => {
+        Alert.default.alert('Contact Store', `Store Phone: ${store.phone || '+234 902 148 6162'}`);
+      });
+    };
+    const handleViewStore = store => {
+      if (onGoToShop) {
+        onGoToShop(store.isOfficial ? '' : store.category);
+      } else if (onNavigate) {
+        onNavigate('shop', {
+          category: store.isOfficial ? '' : store.category
+        });
+      }
+    };
+
+    // Filter stores & products by search query
+    const filteredStores = stores.filter(st => {
+      const matchSearch = st.name.toLowerCase().includes(searchQuery.toLowerCase()) || st.category.toLowerCase().includes(searchQuery.toLowerCase());
+      if (!matchSearch) return false;
+      if (activeSubTab === 'top_rated') return Number(st.rating) >= 4.9;
+      return true;
+    });
+    const filteredPopular = popularProducts.filter(p => {
+      if (!searchQuery) return true;
+      return p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.category && p.category.toLowerCase().includes(searchQuery.toLowerCase());
+    });
+    const getProductImage = item => {
+      if (item?.image_url) return item.image_url;
+      if (Array.isArray(item?.images) && item.images.length > 0) return item.images[0];
+      if (typeof item?.images === 'string') {
+        try {
+          const parsed = JSON.parse(item.images);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+        } catch (_) {}
+        return item.images;
+      }
+      return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=400&auto=format&fit=crop';
     };
     return /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-      style: {
-        flex: 1,
-        backgroundColor: '#F8FAFC'
-      },
+      style: s.container,
       children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(StatusBar.default, {
         barStyle: "dark-content",
         backgroundColor: "white"
       }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-        style: {
-          backgroundColor: 'white',
-          paddingTop: 46,
-          paddingHorizontal: 16,
-          paddingBottom: 14,
-          borderBottomWidth: 1,
-          borderBottomColor: '#F1F5F9'
-        },
+        style: s.header,
         children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-          style: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: 14
-          },
+          style: s.headerTop,
           children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-            style: {
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 10
-            },
+            style: s.brandGroup,
             children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
               source: AM_LOGO,
-              style: {
-                width: 38,
-                height: 38,
-                resizeMode: 'contain'
-              }
+              style: s.logo
             }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
               children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
-                style: {
-                  color: '#0A192F',
-                  fontSize: 17,
-                  fontWeight: '900',
-                  letterSpacing: 0.8
-                },
+                style: s.brandTitle,
                 children: ["ABU ", /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: {
-                    color: '#0284C7'
-                  },
+                  style: s.brandTitleAccent,
                   children: "MAFHAL"
                 })]
               }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: {
-                  color: '#64748B',
-                  fontSize: 7.5,
-                  fontWeight: '700',
-                  letterSpacing: 0.6,
-                  textTransform: 'uppercase'
-                },
-                children: "Your Marketplace, Your Choice."
+                style: s.brandSubtitle,
+                children: "Verified Stores Directory"
               })]
             })]
           }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-            style: {
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 12
-            },
+            style: s.actionRow,
             children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
               onPress: onGoToNotifications,
-              style: {
-                position: 'relative',
-                padding: 6
-              },
+              style: s.iconBtn,
               children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
                 name: "notifications-outline",
-                size: 24,
+                size: 23,
                 color: "#0F172A"
               }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                style: {
-                  position: 'absolute',
-                  top: 6,
-                  right: 6,
-                  width: 8,
-                  height: 8,
-                  borderRadius: 4,
-                  backgroundColor: '#EF4444'
-                }
+                style: s.notifBadge
               })]
             }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
               onPress: onGoToCart,
-              style: {
-                position: 'relative',
-                padding: 6
-              },
+              style: s.iconBtn,
               children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
                 name: "cart-outline",
-                size: 25,
+                size: 24,
                 color: "#0F172A"
               }), cartCount > 0 && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                style: {
-                  position: 'absolute',
-                  top: 3,
-                  right: 2,
-                  backgroundColor: '#10B981',
-                  borderRadius: 9,
-                  minWidth: 18,
-                  height: 18,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  paddingHorizontal: 3
-                },
+                style: s.cartBadge,
                 children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: {
-                    color: 'white',
-                    fontSize: 10,
-                    fontWeight: '900'
-                  },
-                  children: cartCount
+                  style: s.cartBadgeTxt,
+                  children: cartCount > 99 ? '99+' : cartCount
                 })
               })]
             })]
           })]
         }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-          style: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: '#F1F5F9',
-            borderRadius: 16,
-            paddingHorizontal: 14,
-            height: 44
-          },
+          style: s.searchBar,
           children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
             name: "search-outline",
-            size: 19,
+            size: 18,
             color: "#64748B",
             style: {
               marginRight: 8
             }
           }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TextInput.default, {
-            placeholder: "Search for products, stores and more...",
+            placeholder: "Search verified stores, sellers or items...",
             placeholderTextColor: "#94A3B8",
             value: searchQuery,
             onChangeText: setSearchQuery,
-            style: {
-              flex: 1,
-              fontSize: 13,
-              color: '#0F172A',
-              fontWeight: '500'
-            }
-          }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
+            style: s.searchInput
+          }), searchQuery.length > 0 && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
+            onPress: () => setSearchQuery(''),
             style: {
               padding: 4
             },
             children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-              name: "scan-outline",
-              size: 20,
-              color: "#0A192F"
+              name: "close-circle",
+              size: 18,
+              color: "#94A3B8"
             })
           })]
         })]
       }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(ScrollView.default, {
         showsVerticalScrollIndicator: false,
         contentContainerStyle: {
-          paddingBottom: 120
+          paddingBottom: 130
         },
+        refreshControl: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(RefreshControl.default, {
+          refreshing: refreshing,
+          onRefresh: onRefresh,
+          colors: ['#0284C7']
+        }),
         children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-          style: {
-            paddingHorizontal: 16,
-            paddingTop: 14
-          },
+          style: s.heroWrapper,
           children: /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-            style: {
-              backgroundColor: '#0E1F3D',
-              borderRadius: 24,
-              padding: 20,
-              overflow: 'hidden',
-              position: 'relative',
-              minHeight: 140,
-              justifyContent: 'center'
-            },
+            style: s.heroCard,
             children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              style: {
-                width: '60%',
-                zIndex: 2
-              },
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: {
-                  fontSize: 12,
-                  fontWeight: '700',
-                  color: '#94A3B8',
-                  textTransform: 'uppercase',
-                  letterSpacing: 0.5
-                },
-                children: "Shop from"
+              style: s.heroContent,
+              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+                style: s.verifiedPill,
+                children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+                  name: "shield-checkmark",
+                  size: 12,
+                  color: "#10B981"
+                }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                  style: s.verifiedPillTxt,
+                  children: "100% VERIFIED SELLERS"
+                })]
               }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: {
-                  fontSize: 24,
-                  fontWeight: '900',
-                  color: '#F59E0B',
-                  letterSpacing: -0.5,
-                  marginBottom: 4
-                },
-                children: "Top Stores"
+                style: s.heroTitle,
+                children: "Top Marketplace Stores"
               }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: {
-                  fontSize: 11,
-                  color: '#CBD5E1',
-                  fontWeight: '500',
-                  marginBottom: 12
-                },
-                children: "Trusted Sellers. Quality Products."
+                style: s.heroDesc,
+                children: "Buy directly from authentic, approved merchants with buyer protection."
               }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
-                style: {
-                  backgroundColor: '#F59E0B',
-                  paddingHorizontal: 14,
-                  paddingVertical: 7,
-                  borderRadius: 12,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  alignSelf: 'flex-start',
-                  gap: 6
-                },
+                style: s.heroBtn,
+                activeOpacity: 0.85,
+                onPress: () => onGoToShop && onGoToShop(''),
                 children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: {
-                    color: '#0A192F',
-                    fontWeight: '900',
-                    fontSize: 11.5
-                  },
-                  children: "Explore Stores"
+                  style: s.heroBtnTxt,
+                  children: "Explore All Products"
                 }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
                   name: "arrow-forward",
                   size: 13,
-                  color: "#0A192F"
+                  color: "#0F172A"
                 })]
               })]
             }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
               source: {
                 uri: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?q=80&w=400&auto=format&fit=crop'
               },
-              style: {
-                position: 'absolute',
-                right: -15,
-                bottom: -10,
-                width: 155,
-                height: 155,
-                borderRadius: 20,
-                opacity: 0.85
-              }
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              style: {
-                flexDirection: 'row',
-                gap: 5,
-                position: 'absolute',
-                bottom: 10,
-                alignSelf: 'center'
-              },
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                style: {
-                  width: 14,
-                  height: 4,
-                  borderRadius: 2,
-                  backgroundColor: '#F59E0B'
-                }
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                style: {
-                  width: 4,
-                  height: 4,
-                  borderRadius: 2,
-                  backgroundColor: 'rgba(255,255,255,0.3)'
-                }
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                style: {
-                  width: 4,
-                  height: 4,
-                  borderRadius: 2,
-                  backgroundColor: 'rgba(255,255,255,0.3)'
-                }
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                style: {
-                  width: 4,
-                  height: 4,
-                  borderRadius: 2,
-                  backgroundColor: 'rgba(255,255,255,0.3)'
-                }
-              })]
+              style: s.heroImg
             })]
           })
         }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(ScrollView.default, {
           horizontal: true,
           showsHorizontalScrollIndicator: false,
-          contentContainerStyle: {
-            paddingHorizontal: 16,
-            paddingVertical: 14,
-            gap: 16
-          },
+          contentContainerStyle: s.subTabsScroll,
           children: [{
-            key: 'popular',
-            label: 'Popular',
-            icon: 'flame-outline'
-          }, {
-            key: 'top_stores',
-            label: 'Top Stores',
-            icon: 'storefront-outline'
-          }, {
             key: 'all_stores',
             label: 'All Stores',
-            icon: 'pricetag-outline'
+            icon: 'storefront-outline'
           }, {
             key: 'top_rated',
             label: 'Top Rated',
             icon: 'star-outline'
           }, {
+            key: 'popular_products',
+            label: 'Popular Products',
+            icon: 'flame-outline'
+          }, {
             key: 'categories',
-            label: 'Categories',
+            label: 'Browse Categories',
             icon: 'grid-outline'
           }].map(tab => {
             const active = activeSubTab === tab.key;
             return /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
               onPress: () => setActiveSubTab(tab.key),
-              style: {
-                alignItems: 'center',
-                paddingBottom: 6
-              },
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-                style: {
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 5
-                },
-                children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                  name: tab.icon,
-                  size: 16,
-                  color: active ? '#06B6D4' : '#64748B'
-                }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: {
-                    fontSize: 13,
-                    fontWeight: active ? '900' : '600',
-                    color: active ? '#0A192F' : '#64748B'
-                  },
-                  children: tab.label
-                })]
-              }), active && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                style: {
-                  width: '80%',
-                  height: 3,
-                  borderRadius: 2,
-                  backgroundColor: '#06B6D4',
-                  marginTop: 4
-                }
+              style: [s.subTabBtn, active && s.subTabBtnActive],
+              activeOpacity: 0.7,
+              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+                name: tab.icon,
+                size: 15,
+                color: active ? '#0284C7' : '#64748B'
+              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                style: [s.subTabTxt, active && s.subTabTxtActive],
+                children: tab.label
               })]
             }, tab.key);
           })
-        }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+        }), loading && /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
           style: {
-            paddingHorizontal: 16,
-            marginBottom: 12
+            paddingVertical: 40,
+            alignItems: 'center'
           },
-          children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-            style: {
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: 2
-            },
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-              style: {
-                fontSize: 18,
-                fontWeight: '900',
-                color: '#0F172A',
-                letterSpacing: -0.3
-              },
-              children: "Top Stores"
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
-              style: {
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 2
-              },
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: {
-                  fontSize: 12,
-                  fontWeight: '800',
-                  color: '#0284C7'
-                },
-                children: "See All"
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                name: "chevron-forward",
-                size: 13,
-                color: "#0284C7"
-              })]
-            })]
+          children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(ActivityIndicator.default, {
+            size: "large",
+            color: "#0284C7"
           }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
             style: {
-              fontSize: 11.5,
               color: '#64748B',
-              fontWeight: '500'
+              fontSize: 12,
+              marginTop: 10,
+              fontWeight: '600'
             },
-            children: "Discover trusted stores and shop your favourite products"
+            children: "Loading live stores and products..."
           })]
-        }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(ScrollView.default, {
-          horizontal: true,
-          showsHorizontalScrollIndicator: false,
-          contentContainerStyle: {
-            paddingHorizontal: 16,
-            gap: 12,
-            paddingBottom: 18
-          },
-          children: stores.map(store => /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-            style: {
-              width: 175,
-              backgroundColor: 'white',
-              borderRadius: 20,
-              padding: 14,
-              alignItems: 'center',
-              borderWidth: 1,
-              borderColor: '#F1F5F9',
-              shadowColor: '#0F172A',
-              shadowOffset: {
-                width: 0,
-                height: 4
-              },
-              shadowOpacity: 0.05,
-              shadowRadius: 10,
-              elevation: 2
-            },
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              style: {
-                position: 'relative',
-                marginBottom: 10
-              },
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
-                source: {
-                  uri: store.logo
-                },
-                style: {
-                  width: 62,
-                  height: 62,
-                  borderRadius: 31,
-                  backgroundColor: '#F1F5F9'
-                }
-              }), store.isVerified && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-                style: {
-                  position: 'absolute',
-                  top: 0,
-                  right: -2,
-                  backgroundColor: '#10B981',
-                  borderRadius: 9,
-                  width: 18,
-                  height: 18,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderWidth: 2,
-                  borderColor: 'white'
-                },
-                children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                  name: "checkmark",
-                  size: 11,
-                  color: "white"
-                })
-              })]
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-              numberOfLines: 1,
-              style: {
-                fontSize: 13.5,
-                fontWeight: '900',
-                color: '#0F172A',
-                textAlign: 'center',
-                marginBottom: 2
-              },
-              children: store.name
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-              numberOfLines: 1,
-              style: {
-                fontSize: 10.5,
-                color: '#64748B',
-                fontWeight: '600',
-                marginBottom: 6,
-                textAlign: 'center'
-              },
-              children: store.category
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              style: {
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 4,
-                marginBottom: 4
-              },
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                name: "star",
-                size: 13,
-                color: "#F59E0B"
-              }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
-                style: {
-                  fontSize: 11.5,
-                  fontWeight: '800',
-                  color: '#0F172A'
-                },
-                children: [store.rating, " ", /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
-                  style: {
-                    color: '#94A3B8',
-                    fontWeight: '500'
-                  },
-                  children: ["(", store.reviews, ")"]
-                })]
-              })]
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
-              style: {
-                fontSize: 10.5,
-                fontWeight: '700',
-                color: '#64748B',
-                marginBottom: 12
-              },
-              children: [store.productsCount, " Products"]
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-              onPress: () => toggleFollow(store.id),
-              style: {
-                width: '100%',
-                backgroundColor: store.followed ? '#F1F5F9' : '#0A192F',
-                paddingVertical: 7,
-                borderRadius: 12,
-                alignItems: 'center',
-                marginBottom: 6
-              },
-              children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: {
-                  color: store.followed ? '#0F172A' : 'white',
-                  fontSize: 11,
-                  fontWeight: '800'
-                },
-                children: store.followed ? 'Following' : '+ Follow'
-              })
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-              style: {
-                width: '100%',
-                backgroundColor: 'white',
-                borderWidth: 1,
-                borderColor: '#E2E8F0',
-                paddingVertical: 6,
-                borderRadius: 12,
-                alignItems: 'center'
-              },
-              children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: {
-                  color: '#0F172A',
-                  fontSize: 10.5,
-                  fontWeight: '800'
-                },
-                children: "View Store"
-              })
-            })]
-          }, store.id))
-        }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+        }), !loading && activeSubTab !== 'popular_products' && /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
           style: {
-            paddingHorizontal: 16,
-            marginBottom: 10,
-            marginTop: 6
+            marginTop: 8
           },
-          children: /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-            style: {
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            },
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-              style: {
-                fontSize: 18,
-                fontWeight: '900',
-                color: '#0F172A',
-                letterSpacing: -0.3
-              },
-              children: "Popular Products"
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
-              style: {
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 2
-              },
+          children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+            style: s.sectionHead,
+            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
               children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                style: {
-                  fontSize: 12,
-                  fontWeight: '800',
-                  color: '#0284C7'
-                },
+                style: s.sectionTitle,
+                children: activeSubTab === 'top_rated' ? 'Highest Rated Stores' : 'Verified Stores & Sellers'
+              }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
+                style: s.sectionSub,
+                children: [filteredStores.length, " registered and verified seller", filteredStores.length !== 1 ? 's' : '']
+              })]
+            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
+              onPress: () => onGoToShop && onGoToShop(''),
+              style: s.seeAllRow,
+              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                style: s.seeAllTxt,
+                children: "Shop Catalog"
+              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+                name: "chevron-forward",
+                size: 13,
+                color: "#0284C7"
+              })]
+            })]
+          }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+            style: s.storesGrid,
+            children: filteredStores.map(store => {
+              const isFollowed = !!followedStores[store.id];
+              return /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+                style: s.storeCard,
+                children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+                  style: s.storeTopRow,
+                  children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+                    style: s.avatarBox,
+                    children: [store.logo ? /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
+                      source: {
+                        uri: store.logo
+                      },
+                      style: s.storeAvatar
+                    }) : store.isOfficial ? /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
+                      source: AM_LOGO,
+                      style: s.storeAvatar,
+                      resizeMode: "contain"
+                    }) : /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+                      style: s.avatarPlaceholder,
+                      children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+                        name: "storefront",
+                        size: 26,
+                        color: "#0284C7"
+                      })
+                    }), store.isVerified && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+                      style: s.verifiedIconBadge,
+                      children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+                        name: "checkmark-sharp",
+                        size: 10,
+                        color: "white"
+                      })
+                    })]
+                  }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+                    style: s.storeDetails,
+                    children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+                      style: {
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 5
+                      },
+                      children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                        numberOfLines: 1,
+                        style: s.storeName,
+                        children: store.name
+                      }), store.isOfficial && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+                        style: s.officialPill,
+                        children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                          style: s.officialPillTxt,
+                          children: "OFFICIAL"
+                        })
+                      })]
+                    }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                      numberOfLines: 1,
+                      style: s.storeCategory,
+                      children: store.category
+                    }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+                      style: s.storeMetaRow,
+                      children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+                        style: s.metaItem,
+                        children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+                          name: "star",
+                          size: 12,
+                          color: "#F59E0B"
+                        }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                          style: s.metaTxtBold,
+                          children: store.rating
+                        }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
+                          style: s.metaTxtDim,
+                          children: ["(", store.reviews, ")"]
+                        })]
+                      }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                        style: s.metaDot,
+                        children: "\u2022"
+                      }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+                        style: s.metaItem,
+                        children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+                          name: "cube-outline",
+                          size: 12,
+                          color: "#64748B"
+                        }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
+                          style: s.metaTxtDim,
+                          children: [store.productsCount, " Items"]
+                        })]
+                      })]
+                    })]
+                  })]
+                }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+                  style: s.storeActionRow,
+                  children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
+                    onPress: () => toggleFollow(store.id),
+                    style: [s.btnFollow, isFollowed && s.btnFollowing],
+                    activeOpacity: 0.8,
+                    children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+                      name: isFollowed ? "checkmark-circle" : "add",
+                      size: 14,
+                      color: isFollowed ? "#0284C7" : "#0F172A"
+                    }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                      style: [s.btnFollowTxt, isFollowed && s.btnFollowingTxt],
+                      children: isFollowed ? 'Following' : 'Follow'
+                    })]
+                  }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
+                    onPress: () => handleContactStore(store),
+                    style: s.btnContact,
+                    activeOpacity: 0.8,
+                    children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+                      name: "logo-whatsapp",
+                      size: 14,
+                      color: "#10B981"
+                    }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                      style: s.btnContactTxt,
+                      children: "Chat"
+                    })]
+                  }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
+                    onPress: () => handleViewStore(store),
+                    style: s.btnViewStore,
+                    activeOpacity: 0.8,
+                    children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                      style: s.btnViewStoreTxt,
+                      children: "Shop Store"
+                    }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+                      name: "chevron-forward",
+                      size: 12,
+                      color: "white"
+                    })]
+                  })]
+                })]
+              }, store.id);
+            })
+          })]
+        }), !loading && /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+          style: {
+            marginTop: 24
+          },
+          children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+            style: s.sectionHead,
+            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                style: s.sectionTitle,
+                children: "Popular Products in Store"
+              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                style: s.sectionSub,
+                children: "Live products available from verified sellers"
+              })]
+            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
+              onPress: () => onGoToShop && onGoToShop(''),
+              style: s.seeAllRow,
+              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                style: s.seeAllTxt,
                 children: "See All"
               }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
                 name: "chevron-forward",
@@ -221168,80 +221045,633 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
                 color: "#0284C7"
               })]
             })]
-          })
-        }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(ScrollView.default, {
-          horizontal: true,
-          showsHorizontalScrollIndicator: false,
-          contentContainerStyle: {
-            paddingHorizontal: 16,
-            gap: 10
-          },
-          children: popularProducts.map(prod => /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
-            activeOpacity: 0.85,
-            onPress: () => onProductClick && onProductClick(prod),
-            style: {
-              width: 110,
-              backgroundColor: 'white',
-              borderRadius: 16,
-              padding: 8,
-              borderWidth: 1,
-              borderColor: '#F1F5F9',
-              shadowColor: '#0F172A',
-              shadowOffset: {
-                width: 0,
-                height: 2
-              },
-              shadowOpacity: 0.04,
-              shadowRadius: 6,
-              elevation: 1,
-              position: 'relative'
-            },
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-              style: {
-                position: 'absolute',
-                top: 6,
-                right: 6,
-                zIndex: 2
-              },
-              children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                name: "heart-outline",
-                size: 16,
-                color: "#94A3B8"
-              })
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
-              source: {
-                uri: prod.image
-              },
-              style: {
-                width: '100%',
-                height: 90,
-                borderRadius: 12,
-                resizeMode: 'cover',
-                marginBottom: 6
-              }
+          }), filteredPopular.length === 0 ? /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+            style: s.emptyBox,
+            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+              name: "bag-remove-outline",
+              size: 38,
+              color: "#94A3B8"
             }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-              numberOfLines: 1,
-              style: {
-                fontSize: 11,
-                fontWeight: '700',
-                color: '#0F172A'
-              },
-              children: prod.name
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
-              style: {
-                fontSize: 11.5,
-                fontWeight: '900',
-                color: '#0F172A',
-                marginTop: 2
-              },
-              children: ["\u20A6", prod.price.toLocaleString()]
+              style: s.emptyTxt,
+              children: "No products match your search"
             })]
-          }, prod.id))
+          }) : /*#__PURE__*/(0, _reactJsxRuntime.jsx)(ScrollView.default, {
+            horizontal: true,
+            showsHorizontalScrollIndicator: false,
+            contentContainerStyle: s.productsScroll,
+            children: filteredPopular.map(prod => {
+              const hasDiscount = Number(prod.compare_at_price) > Number(prod.price);
+              const discountPercent = hasDiscount ? Math.round((Number(prod.compare_at_price) - Number(prod.price)) / Number(prod.compare_at_price) * 100) : null;
+              return /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
+                activeOpacity: 0.88,
+                onPress: () => onProductClick && onProductClick(prod),
+                style: s.prodCard,
+                children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+                  style: s.prodImgBox,
+                  children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
+                    source: {
+                      uri: getProductImage(prod)
+                    },
+                    style: s.prodImg,
+                    resizeMode: "cover"
+                  }), discountPercent && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+                    style: s.discountBadge,
+                    children: /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
+                      style: s.discountBadgeTxt,
+                      children: ["-", discountPercent, "%"]
+                    })
+                  })]
+                }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+                  style: s.prodInfo,
+                  children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                    style: s.prodCategory,
+                    numberOfLines: 1,
+                    children: prod.category || 'General'
+                  }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                    style: s.prodName,
+                    numberOfLines: 2,
+                    children: prod.name
+                  }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+                    style: s.prodPriceRow,
+                    children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                      style: s.prodPrice,
+                      children: fmtPrice(prod.price)
+                    }), hasDiscount && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                      style: s.prodOldPrice,
+                      children: fmtPrice(prod.compare_at_price)
+                    })]
+                  }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
+                    style: s.quickCartBtn,
+                    activeOpacity: 0.8,
+                    onPress: () => {
+                      if (onAddToCart) {
+                        onAddToCart(prod);
+                        Alert.default.alert('Success', `${prod.name} added to cart!`);
+                      }
+                    },
+                    children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+                      name: "cart-outline",
+                      size: 13,
+                      color: "white"
+                    }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                      style: s.quickCartBtnTxt,
+                      children: "+ Add to Cart"
+                    })]
+                  })]
+                })]
+              }, prod.id);
+            })
+          })]
+        }), !loading && categories.length > 0 && /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+          style: {
+            marginTop: 24,
+            paddingHorizontal: 16
+          },
+          children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+            style: s.sectionTitle,
+            children: "Shop by Category"
+          }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+            style: [s.sectionSub, {
+              marginBottom: 12
+            }],
+            children: "Browse full collections in verified departments"
+          }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
+            style: s.catPillGrid,
+            children: categories.map(cat => /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
+              style: s.catPill,
+              activeOpacity: 0.8,
+              onPress: () => onGoToShop && onGoToShop(cat.name),
+              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+                name: cat.icon || 'pricetag-outline',
+                size: 14,
+                color: "#0284C7"
+              }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                style: s.catPillTxt,
+                children: cat.name
+              })]
+            }, cat.id))
+          })]
         })]
       })]
     });
   };
-},1216,[58,232,583,586,990,268,559,220,230,731,988,997,925,127,1091]);
+  const s = StyleSheet.default.create({
+    container: {
+      flex: 1,
+      backgroundColor: '#F8FAFC'
+    },
+    header: {
+      backgroundColor: 'white',
+      paddingTop: 46,
+      paddingHorizontal: 16,
+      paddingBottom: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: '#F1F5F9'
+    },
+    headerTop: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 12
+    },
+    brandGroup: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10
+    },
+    logo: {
+      width: 36,
+      height: 36,
+      resizeMode: 'contain'
+    },
+    brandTitle: {
+      color: '#0A192F',
+      fontSize: 16.5,
+      fontWeight: '900',
+      letterSpacing: 0.5
+    },
+    brandTitleAccent: {
+      color: '#0284C7'
+    },
+    brandSubtitle: {
+      color: '#64748B',
+      fontSize: 8.5,
+      fontWeight: '700',
+      letterSpacing: 0.4,
+      textTransform: 'uppercase'
+    },
+    actionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8
+    },
+    iconBtn: {
+      padding: 6,
+      position: 'relative'
+    },
+    notifBadge: {
+      position: 'absolute',
+      top: 6,
+      right: 6,
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: '#EF4444'
+    },
+    cartBadge: {
+      position: 'absolute',
+      top: 2,
+      right: 2,
+      backgroundColor: '#10B981',
+      borderRadius: 9,
+      minWidth: 18,
+      height: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 3
+    },
+    cartBadgeTxt: {
+      color: 'white',
+      fontSize: 9.5,
+      fontWeight: '900'
+    },
+    searchBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#F1F5F9',
+      borderRadius: 14,
+      paddingHorizontal: 12,
+      height: 42
+    },
+    searchInput: {
+      flex: 1,
+      fontSize: 13,
+      color: '#0F172A',
+      fontWeight: '500'
+    },
+    heroWrapper: {
+      paddingHorizontal: 16,
+      paddingTop: 14
+    },
+    heroCard: {
+      backgroundColor: '#0A192F',
+      borderRadius: 22,
+      padding: 18,
+      overflow: 'hidden',
+      position: 'relative',
+      minHeight: 140,
+      justifyContent: 'center'
+    },
+    heroContent: {
+      width: '64%',
+      zIndex: 2
+    },
+    verifiedPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      backgroundColor: 'rgba(16, 185, 129, 0.15)',
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 8,
+      alignSelf: 'flex-start',
+      marginBottom: 6
+    },
+    verifiedPillTxt: {
+      color: '#34D399',
+      fontSize: 9,
+      fontWeight: '800',
+      letterSpacing: 0.5
+    },
+    heroTitle: {
+      fontSize: 20,
+      fontWeight: '900',
+      color: '#F8FAFC',
+      letterSpacing: -0.4,
+      marginBottom: 4
+    },
+    heroDesc: {
+      fontSize: 11,
+      color: '#CBD5E1',
+      fontWeight: '500',
+      lineHeight: 15,
+      marginBottom: 12
+    },
+    heroBtn: {
+      backgroundColor: '#0284C7',
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      gap: 5
+    },
+    heroBtnTxt: {
+      color: 'white',
+      fontWeight: '900',
+      fontSize: 11
+    },
+    heroImg: {
+      position: 'absolute',
+      right: -10,
+      bottom: -10,
+      width: 140,
+      height: 140,
+      borderRadius: 18,
+      opacity: 0.8
+    },
+    subTabsScroll: {
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      gap: 8
+    },
+    subTabBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 20,
+      backgroundColor: 'white',
+      borderWidth: 1,
+      borderColor: '#E2E8F0'
+    },
+    subTabBtnActive: {
+      backgroundColor: '#E0F2FE',
+      borderColor: '#0284C7'
+    },
+    subTabTxt: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: '#64748B'
+    },
+    subTabTxtActive: {
+      color: '#0284C7',
+      fontWeight: '900'
+    },
+    sectionHead: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      marginBottom: 12
+    },
+    sectionTitle: {
+      fontSize: 17,
+      fontWeight: '900',
+      color: '#0F172A',
+      letterSpacing: -0.3
+    },
+    sectionSub: {
+      fontSize: 11.5,
+      color: '#64748B',
+      fontWeight: '500',
+      marginTop: 2
+    },
+    seeAllRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2
+    },
+    seeAllTxt: {
+      fontSize: 12,
+      fontWeight: '800',
+      color: '#0284C7'
+    },
+    storesGrid: {
+      paddingHorizontal: 16,
+      gap: 12
+    },
+    storeCard: {
+      backgroundColor: 'white',
+      borderRadius: 20,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: '#F1F5F9',
+      shadowColor: '#0F172A',
+      shadowOffset: {
+        width: 0,
+        height: 3
+      },
+      shadowOpacity: 0.04,
+      shadowRadius: 8,
+      elevation: 2
+    },
+    storeTopRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      marginBottom: 12
+    },
+    avatarBox: {
+      position: 'relative'
+    },
+    storeAvatar: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      backgroundColor: '#F8FAFC'
+    },
+    avatarPlaceholder: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      backgroundColor: '#E0F2FE',
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    verifiedIconBadge: {
+      position: 'absolute',
+      bottom: 0,
+      right: -2,
+      backgroundColor: '#10B981',
+      borderRadius: 8,
+      width: 16,
+      height: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: 'white'
+    },
+    storeDetails: {
+      flex: 1
+    },
+    storeName: {
+      fontSize: 14.5,
+      fontWeight: '900',
+      color: '#0F172A'
+    },
+    officialPill: {
+      backgroundColor: '#FEF3C7',
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      borderRadius: 6
+    },
+    officialPillTxt: {
+      color: '#D97706',
+      fontSize: 8.5,
+      fontWeight: '900'
+    },
+    storeCategory: {
+      fontSize: 11,
+      color: '#64748B',
+      fontWeight: '600',
+      marginTop: 1
+    },
+    storeMetaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 4
+    },
+    metaItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3
+    },
+    metaTxtBold: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: '#0F172A'
+    },
+    metaTxtDim: {
+      fontSize: 10.5,
+      color: '#94A3B8',
+      fontWeight: '500'
+    },
+    metaDot: {
+      color: '#CBD5E1',
+      fontSize: 10
+    },
+    storeActionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      borderTopWidth: 1,
+      borderTopColor: '#F8FAFC',
+      paddingTop: 10
+    },
+    btnFollow: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 4,
+      backgroundColor: '#F1F5F9',
+      paddingVertical: 7,
+      borderRadius: 12
+    },
+    btnFollowing: {
+      backgroundColor: '#E0F2FE'
+    },
+    btnFollowTxt: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: '#0F172A'
+    },
+    btnFollowingTxt: {
+      color: '#0284C7'
+    },
+    btnContact: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 4,
+      backgroundColor: '#ECFDF5',
+      borderWidth: 1,
+      borderColor: '#A7F3D0',
+      paddingVertical: 7,
+      borderRadius: 12
+    },
+    btnContactTxt: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: '#065F46'
+    },
+    btnViewStore: {
+      flex: 1.4,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 4,
+      backgroundColor: '#0F172A',
+      paddingVertical: 7,
+      borderRadius: 12
+    },
+    btnViewStoreTxt: {
+      fontSize: 11,
+      fontWeight: '900',
+      color: 'white'
+    },
+    productsScroll: {
+      paddingHorizontal: 16,
+      gap: 12
+    },
+    prodCard: {
+      width: 145,
+      backgroundColor: 'white',
+      borderRadius: 18,
+      padding: 8,
+      borderWidth: 1,
+      borderColor: '#F1F5F9',
+      shadowColor: '#0F172A',
+      shadowOffset: {
+        width: 0,
+        height: 2
+      },
+      shadowOpacity: 0.04,
+      shadowRadius: 6,
+      elevation: 2
+    },
+    prodImgBox: {
+      width: '100%',
+      height: 120,
+      borderRadius: 14,
+      overflow: 'hidden',
+      position: 'relative',
+      backgroundColor: '#F8FAFC'
+    },
+    prodImg: {
+      width: '100%',
+      height: '100%'
+    },
+    discountBadge: {
+      position: 'absolute',
+      top: 6,
+      left: 6,
+      backgroundColor: '#EF4444',
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 6
+    },
+    discountBadgeTxt: {
+      color: 'white',
+      fontSize: 9,
+      fontWeight: '900'
+    },
+    prodInfo: {
+      paddingTop: 8,
+      gap: 2
+    },
+    prodCategory: {
+      fontSize: 9.5,
+      color: '#94A3B8',
+      fontWeight: '700',
+      textTransform: 'uppercase'
+    },
+    prodName: {
+      fontSize: 12,
+      fontWeight: '800',
+      color: '#0F172A',
+      lineHeight: 16,
+      minHeight: 32
+    },
+    prodPriceRow: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: 5,
+      marginTop: 3,
+      marginBottom: 6
+    },
+    prodPrice: {
+      fontSize: 13,
+      fontWeight: '900',
+      color: '#0284C7'
+    },
+    prodOldPrice: {
+      fontSize: 10,
+      color: '#94A3B8',
+      textDecorationLine: 'line-through'
+    },
+    quickCartBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 4,
+      backgroundColor: '#0F172A',
+      paddingVertical: 6,
+      borderRadius: 10
+    },
+    quickCartBtnTxt: {
+      color: 'white',
+      fontSize: 10,
+      fontWeight: '900'
+    },
+    catPillGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8
+    },
+    catPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: 'white',
+      borderWidth: 1,
+      borderColor: '#E2E8F0',
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 14
+    },
+    catPillTxt: {
+      fontSize: 11.5,
+      fontWeight: '700',
+      color: '#334155'
+    },
+    emptyBox: {
+      paddingVertical: 32,
+      alignItems: 'center',
+      gap: 8
+    },
+    emptyTxt: {
+      fontSize: 12,
+      color: '#94A3B8',
+      fontWeight: '600'
+    }
+  });
+},1216,[58,232,583,586,990,268,559,220,731,988,267,1089,991,69,997,919,925,127,1091]);
 __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, exports, _dependencyMap) {
   "use strict";
 

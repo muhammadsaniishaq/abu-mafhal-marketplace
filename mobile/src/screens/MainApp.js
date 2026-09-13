@@ -132,6 +132,9 @@ export const MainApp = ({ route, navigation, user, onLogout, cartLines, onUpdate
                         onGoToNotifications={() => setActiveTab('notifications')}
                         cartCount={cartLines.length}
                         onProductClick={(product) => handleNavigate('ProductDetails', { product })}
+                        onAddToCart={onAddToCart}
+                        onGoToShop={(category) => handleNavigate('shop', { category })}
+                        onNavigate={handleNavigate}
                     />
                 )}
                 {/* Fallback for Footer Pages */}
