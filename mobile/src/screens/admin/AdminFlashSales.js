@@ -113,15 +113,15 @@ export const AdminFlashSales = () => {
             if (result.error) throw result.error;
 
             Alert.alert(
-                'An Yi Nasara!',
+                'Success!',
                 isActive 
-                    ? `An kunna Flash Sale mai saukin ${discount}% akan kaya guda ${selectedProductIds.length}.`
-                    : 'An kashe Flash Sale cikin nasara.'
+                    ? `Flash Sale activated with ${discount}% discount on ${selectedProductIds.length} products.`
+                    : 'Flash Sale deactivated successfully.'
             );
 
             fetchSale();
         } catch (e) {
-            Alert.alert('Kuskure', e.message || 'An kasa adana saitunan Flash Sale.');
+            Alert.alert('Error', e.message || 'Failed to save Flash Sale settings.');
         } finally {
             setSaving(false);
         }
@@ -168,7 +168,7 @@ export const AdminFlashSales = () => {
                             </Text>
                         </View>
                         <Text style={{ fontSize: 11, color: '#94A3B8', fontWeight: '600', marginTop: 4 }}>
-                            Sanya rangwame na musamman mai kayyade lokaci
+                            Configure limited-time promotions with live countdown timers
                         </Text>
                     </View>
 
@@ -181,7 +181,7 @@ export const AdminFlashSales = () => {
                         borderColor: isActive ? '#10B981' : '#EF4444'
                     }}>
                         <Text style={{ fontSize: 10, fontWeight: '800', color: isActive ? '#10B981' : '#EF4444' }}>
-                            {isActive ? 'A KUNNE (ACTIVE)' : 'A KASHE'}
+                            {isActive ? 'ACTIVE' : 'INACTIVE'}
                         </Text>
                     </View>
                 </View>
@@ -190,7 +190,7 @@ export const AdminFlashSales = () => {
             {loading ? (
                 <View style={{ padding: 40, alignItems: 'center' }}>
                     <ActivityIndicator size="large" color={GOLD} />
-                    <Text style={{ marginTop: 12, fontSize: 12, fontWeight: '700', color: '#64748B' }}>Ana loda bayanan Flash Sale...</Text>
+                    <Text style={{ marginTop: 12, fontSize: 12, fontWeight: '700', color: '#64748B' }}>Loading Flash Sale settings...</Text>
                 </View>
             ) : (
                 <View style={{ gap: 14 }}>
@@ -199,8 +199,8 @@ export const AdminFlashSales = () => {
                         {/* Status Switch */}
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
                             <View>
-                                <Text style={{ fontWeight: '800', fontSize: 14, color: NAVY }}>Kunna Flash Sale</Text>
-                                <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>Zai fito a shafin farko da agogon countdown</Text>
+                                <Text style={{ fontWeight: '800', fontSize: 14, color: NAVY }}>Enable Flash Sale</Text>
+                                <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>Displays on homepage with live countdown timer</Text>
                             </View>
                             <Switch
                                 value={isActive}
@@ -212,19 +212,19 @@ export const AdminFlashSales = () => {
 
                         {/* Title */}
                         <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B', textTransform: 'uppercase', marginBottom: 6 }}>
-                            Sunan Talla (Title)
+                            Campaign Title
                         </Text>
                         <TextInput
                             style={{ backgroundColor: '#F8FAFC', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 14, fontSize: 13, color: NAVY, fontWeight: '700' }}
                             value={title}
                             onChangeText={setTitle}
-                            placeholder="Misali: Flash Sale Na Musamman"
+                            placeholder="e.g. Mega Weekend Flash Sale"
                             placeholderTextColor="#94A3B8"
                         />
 
                         {/* Discount Percent */}
                         <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B', textTransform: 'uppercase', marginBottom: 6 }}>
-                            Kason Rangwame (Discount %)
+                            Discount Percentage (%)
                         </Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 }}>
                             <TextInput
@@ -257,15 +257,15 @@ export const AdminFlashSales = () => {
 
                         {/* Duration Preset Buttons */}
                         <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B', textTransform: 'uppercase', marginBottom: 6 }}>
-                            Tsawon Lokaci (Duration)
+                            Campaign Duration
                         </Text>
                         <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
                             {[
-                                { label: 'Awa 6', h: 6 },
-                                { label: 'Awa 12', h: 12 },
-                                { label: 'Wuni 1 (24h)', h: 24 },
-                                { label: 'Kwana 3', h: 72 },
-                                { label: 'Mako 1', h: 168 }
+                                { label: '6 Hours', h: 6 },
+                                { label: '12 Hours', h: 12 },
+                                { label: '24 Hours', h: 24 },
+                                { label: '3 Days', h: 72 },
+                                { label: '1 Week', h: 168 }
                             ].map(item => (
                                 <TouchableOpacity
                                     key={item.label}
@@ -285,7 +285,7 @@ export const AdminFlashSales = () => {
                         </View>
 
                         <Text style={{ fontSize: 10, color: '#64748B', marginBottom: 6 }}>
-                            Karshen Lokaci: {endTime ? new Date(endTime).toLocaleString() : 'Babu'}
+                            Ends At: {endTime ? new Date(endTime).toLocaleString() : 'None'}
                         </Text>
                     </View>
 
@@ -294,7 +294,7 @@ export const AdminFlashSales = () => {
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                             <View>
                                 <Text style={{ fontWeight: '800', fontSize: 14, color: NAVY }}>
-                                    Kayayyakin Cikin Flash Sale
+                                    Flash Sale Included Products
                                 </Text>
                                 <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>
                                     An zabi kaya {selectedProductIds.length}
@@ -316,7 +316,7 @@ export const AdminFlashSales = () => {
                                 }}
                             >
                                 <Ionicons name="add-circle-outline" size={15} color={GOLD} />
-                                <Text style={{ fontSize: 11, fontWeight: '800', color: GOLD }}>Zaɓi Kayan Sale</Text>
+                                <Text style={{ fontSize: 11, fontWeight: '800', color: GOLD }}>Select Sale Products</Text>
                             </TouchableOpacity>
                         </View>
 
@@ -324,7 +324,7 @@ export const AdminFlashSales = () => {
                             <View style={{ padding: 20, alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 12 }}>
                                 <Ionicons name="cube-outline" size={32} color="#CBD5E1" />
                                 <Text style={{ fontSize: 11, color: '#64748B', marginTop: 6, fontWeight: '600' }}>
-                                    Ba a zaɓi ko wanne kaya ba tukuna. Latsa "Zaɓi Kayan Sale" a sama.
+                                    Ba a zaɓi ko wanne kaya ba tukuna. Latsa "Select Sale Products" a sama.
                                 </Text>
                             </View>
                         ) : (
@@ -382,7 +382,7 @@ export const AdminFlashSales = () => {
                             <ActivityIndicator color={GOLD} />
                         ) : (
                             <Text style={{ color: GOLD, fontWeight: '900', fontSize: 14, letterSpacing: 0.3 }}>
-                                ADANA SAITUNAN FLASH SALE
+                                SAVE FLASH SALE SETTINGS
                             </Text>
                         )}
                     </TouchableOpacity>
@@ -398,14 +398,14 @@ export const AdminFlashSales = () => {
                 <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
                     <View style={{ padding: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                         <View>
-                            <Text style={{ fontSize: 16, fontWeight: '900', color: NAVY }}>Zaɓi Kayan Flash Sale</Text>
-                            <Text style={{ fontSize: 11, color: '#64748B' }}>An zaɓi guda {selectedProductIds.length}</Text>
+                            <Text style={{ fontSize: 16, fontWeight: '900', color: NAVY }}>Select Flash Sale Products</Text>
+                            <Text style={{ fontSize: 11, color: '#64748B' }}>Selected: {selectedProductIds.length}</Text>
                         </View>
                         <TouchableOpacity
                             onPress={() => setShowPicker(false)}
                             style={{ backgroundColor: NAVY, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: GOLD }}
                         >
-                            <Text style={{ color: GOLD, fontWeight: '800', fontSize: 12 }}>An Gama (Done)</Text>
+                            <Text style={{ color: GOLD, fontWeight: '800', fontSize: 12 }}>Done</Text>
                         </TouchableOpacity>
                     </View>
 
@@ -414,7 +414,7 @@ export const AdminFlashSales = () => {
                         <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
                             <Ionicons name="search" size={16} color="#94A3B8" />
                             <TextInput
-                                placeholder="Nemi kaya ta suna ko rukuni..."
+                                placeholder="Search products by name or category..."
                                 value={pickerSearch}
                                 onChangeText={setPickerSearch}
                                 style={{ flex: 1, marginLeft: 8, fontSize: 13, color: NAVY }}
@@ -453,7 +453,7 @@ export const AdminFlashSales = () => {
                                         <Image source={{ uri: img }} style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: '#F8FAFC', marginRight: 12 }} />
                                         <View style={{ flex: 1 }}>
                                             <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '800', color: NAVY }}>{item.name}</Text>
-                                            <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>{item.category || 'Kayan Kasuwa'}</Text>
+                                            <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>{item.category || 'General Product'}</Text>
                                             <Text style={{ fontSize: 12, fontWeight: '900', color: NAVY, marginTop: 2 }}>
                                                 ₦{Number(item.price || 0).toLocaleString()}
                                             </Text>

@@ -22,11 +22,11 @@ const usagePercent = (c) => {
 };
 const isExpired = (c) => c.expires_at && new Date(c.expires_at) < new Date();
 const couponStatus = (c) => {
-    if (!c.is_active) return { label: 'A Boye', color: '#64748B', bg: '#F1F5F9' };
-    if (isExpired(c)) return { label: 'Ya Kare', color: '#EF4444', bg: '#FEF2F2' };
+    if (!c.is_active) return { label: 'Inactive', color: '#64748B', bg: '#F1F5F9' };
+    if (isExpired(c)) return { label: 'Expired', color: '#EF4444', bg: '#FEF2F2' };
     const pct = usagePercent(c);
-    if (pct === 100) return { label: 'An Gama', color: '#F59E0B', bg: '#FFFBEB' };
-    return { label: 'A Kasuwa', color: '#059669', bg: '#ECFDF5' };
+    if (pct === 100) return { label: 'Depleted', color: '#F59E0B', bg: '#FFFBEB' };
+    return { label: 'Active', color: '#059669', bg: '#ECFDF5' };
 };
 const genCode = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -106,10 +106,10 @@ const MiniCalendar = ({ value, onSelect, onClose }) => {
             {/* Actions */}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 14 }}>
                 <TouchableOpacity onPress={() => onSelect(null)} style={CS.calClearBtn}>
-                    <Text style={CS.calClearTxt}>Goge (Clear)</Text>
+                    <Text style={CS.calClearTxt}>Clear</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={onClose} style={CS.calDoneBtn}>
-                    <Text style={CS.calDoneTxt}>Kammala (Done)</Text>
+                    <Text style={CS.calDoneTxt}>Done</Text>
                 </TouchableOpacity>
             </View>
         </View>
@@ -122,7 +122,7 @@ const DatePickerBtn = ({ label, value, active, onPress }) => (
         <Ionicons name="calendar" size={16} color={active ? GOLD : value ? NAVY : '#CBD5E1'} />
         <View style={{ flex: 1 }}>
             <Text style={[CS.dateBtnLbl, active && { color: NAVY }]}>{label}</Text>
-            <Text style={[CS.dateBtnVal, !value && { color: '#94A3B8' }]}>{value ? fmtDate(value) : 'Zaɓi Rana'}</Text>
+            <Text style={[CS.dateBtnVal, !value && { color: '#94A3B8' }]}>{value ? fmtDate(value) : 'Select Date'}</Text>
         </View>
         <Ionicons name={active ? 'chevron-up' : 'chevron-down'} size={13} color={active ? GOLD : '#CBD5E1'} />
     </TouchableOpacity>
@@ -145,11 +145,11 @@ const EmptyState = ({ onAdd }) => (
         <View style={S.emptyIcon}>
             <Ionicons name="pricetag" size={40} color={GOLD} />
         </View>
-        <Text style={S.emptyTitle}>Babu Wata Lambar Rangwame</Text>
-        <Text style={S.emptyTxt}>Ƙirƙiri sabon promo code don bawa abokan ciniki rangwame na musamman a kasuwa.</Text>
+        <Text style={S.emptyTitle}>No Discount Coupons Found</Text>
+        <Text style={S.emptyTxt}>Create a new promotional code to offer customers special discounts across the marketplace.</Text>
         <TouchableOpacity onPress={onAdd} style={S.emptyBtn}>
             <Ionicons name="add-circle" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-            <Text style={S.emptyBtnTxt}>Ƙirƙiri Coupon Yanzu</Text>
+            <Text style={S.emptyBtnTxt}>Create Coupon Now</Text>
         </TouchableOpacity>
     </View>
 );
@@ -210,12 +210,12 @@ const CouponFormModal = ({ visible, editTarget, duplicateTarget, onClose, onSucc
     }, [visible, editTarget, duplicateTarget]);
 
     const handleSave = async () => {
-        if (!form.code.trim()) return Alert.alert('Kuskure', 'Lambar coupon (Code) wajibi ne');
-        if (!form.discount_value) return Alert.alert('Kuskure', 'Adadin rangwame wajibi ne');
+        if (!form.code.trim()) return Alert.alert('Error', 'Coupon code is required');
+        if (!form.discount_value) return Alert.alert('Error', 'Discount amount is required');
         const dVal = parseFloat(form.discount_value);
-        if (isNaN(dVal) || dVal <= 0) return Alert.alert('Kuskure', 'Sanya adadin rangwame mai inganci');
+        if (isNaN(dVal) || dVal <= 0) return Alert.alert('Error', 'Please enter a valid discount amount');
         if (form.discount_type === 'percentage' && dVal > 100)
-            return Alert.alert('Kuskure', 'Kashi cikin dari ba zai wuce 100% ba');
+            return Alert.alert('Error', 'Percentage discount cannot exceed 100%');
 
         setSaving(true);
         try {
@@ -245,7 +245,7 @@ const CouponFormModal = ({ visible, editTarget, duplicateTarget, onClose, onSucc
             onSuccess(payload);
         } catch (err) {
             console.error('Save coupon error:', err);
-            Alert.alert('Kuskure', err.message || 'An samu matsala wajen adana coupon.');
+            Alert.alert('Error', err.message || 'Failed to save coupon.');
         } finally {
             setSaving(false);
         }
@@ -257,8 +257,8 @@ const CouponFormModal = ({ visible, editTarget, duplicateTarget, onClose, onSucc
                 <View style={[S.modalCard, { paddingBottom: insets.bottom + 20 }]}>
                     <View style={S.modalHeader}>
                         <View>
-                            <Text style={S.modalTitle}>{editTarget ? 'Gyara Coupon' : 'Sabuwar Lambar Rangwame'}</Text>
-                            <Text style={S.modalSub}>Sanya bayanan rangwame da dokokin amfani</Text>
+                            <Text style={S.modalTitle}>{editTarget ? 'Edit Coupon' : 'New Discount Coupon'}</Text>
+                            <Text style={S.modalSub}>Configure discount details and usage rules</Text>
                         </View>
                         <TouchableOpacity onPress={onClose} style={S.closeModalBtn}>
                             <Ionicons name="close" size={20} color={NAVY} />
@@ -267,11 +267,11 @@ const CouponFormModal = ({ visible, editTarget, duplicateTarget, onClose, onSucc
 
                     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingBottom: 20 }}>
                         <View>
-                            <Text style={S.fieldLabel}>Lambar Rangwame (Promo Code) *</Text>
+                            <Text style={S.fieldLabel}>Coupon Code (Promo Code) *</Text>
                             <View style={S.codeInputRow}>
                                 <TextInput
                                     style={[S.input, { flex: 1 }]}
-                                    placeholder="Misali: SALLAH50"
+                                    placeholder="e.g. SUMMER50"
                                     placeholderTextColor="#94A3B8"
                                     value={form.code}
                                     onChangeText={v => setF('code', v.toUpperCase())}
@@ -285,10 +285,10 @@ const CouponFormModal = ({ visible, editTarget, duplicateTarget, onClose, onSucc
                         </View>
 
                         <View>
-                            <Text style={S.fieldLabel}>Bayanin Coupon (Na Zabi)</Text>
+                            <Text style={S.fieldLabel}>Coupon Description (Optional)</Text>
                             <TextInput 
                                 style={S.input} 
-                                placeholder="Misali: Rangwamen 20% ga sabbin masu sayayya" 
+                                placeholder="e.g. 20% off for new shoppers" 
                                 placeholderTextColor="#94A3B8"
                                 value={form.description} 
                                 onChangeText={v => setF('description', v)} 
@@ -296,11 +296,11 @@ const CouponFormModal = ({ visible, editTarget, duplicateTarget, onClose, onSucc
                         </View>
 
                         <View>
-                            <Text style={S.fieldLabel}>Nau'in Rangwame (Discount Type)</Text>
+                            <Text style={S.fieldLabel}>Discount Type</Text>
                             <View style={S.segRow}>
                                 {[
-                                    { k: 'percentage', l: '% Kaso (Percentage)', icon: 'trending-down' }, 
-                                    { k: 'fixed', l: '₦ Kudi Tsaye (Fixed)', icon: 'cash' }
+                                    { k: 'percentage', l: 'Percentage (%)', icon: 'trending-down' }, 
+                                    { k: 'fixed', l: 'Fixed Amount (₦)', icon: 'cash' }
                                 ].map(t => (
                                     <TouchableOpacity 
                                         key={t.k} 
@@ -317,7 +317,7 @@ const CouponFormModal = ({ visible, editTarget, duplicateTarget, onClose, onSucc
 
                         <View style={{ flexDirection: 'row', gap: 10 }}>
                             <View style={{ flex: 1 }}>
-                                <Text style={S.fieldLabel}>{form.discount_type === 'percentage' ? 'Kashi (%) *' : 'Adadin Kudi (₦) *'}</Text>
+                                <Text style={S.fieldLabel}>{form.discount_type === 'percentage' ? 'Percentage (%) *' : 'Fixed Amount (₦) *'}</Text>
                                 <TextInput 
                                     style={S.input} 
                                     placeholder={form.discount_type === 'percentage' ? '0–100' : 'e.g. 500'} 
@@ -329,10 +329,10 @@ const CouponFormModal = ({ visible, editTarget, duplicateTarget, onClose, onSucc
                             </View>
                             {form.discount_type === 'percentage' && (
                                 <View style={{ flex: 1 }}>
-                                    <Text style={S.fieldLabel}>Iyakar Rangwame (₦ Max)</Text>
+                                    <Text style={S.fieldLabel}>Max Discount (₦ Cap)</Text>
                                     <TextInput 
                                         style={S.input} 
-                                        placeholder="Kudin da ba zai wuce ba" 
+                                        placeholder="Maximum discount limit" 
                                         placeholderTextColor="#94A3B8"
                                         value={form.max_discount} 
                                         onChangeText={v => setF('max_discount', v)} 
@@ -344,10 +344,10 @@ const CouponFormModal = ({ visible, editTarget, duplicateTarget, onClose, onSucc
 
                         <View style={{ flexDirection: 'row', gap: 10 }}>
                             <View style={{ flex: 1 }}>
-                                <Text style={S.fieldLabel}>Karancin Saye (₦ Min Order)</Text>
+                                <Text style={S.fieldLabel}>Minimum Order (₦ Min)</Text>
                                 <TextInput 
                                     style={S.input} 
-                                    placeholder="Misali: 2000" 
+                                    placeholder="e.g. 2000" 
                                     placeholderTextColor="#94A3B8"
                                     value={form.min_order_amount} 
                                     onChangeText={v => setF('min_order_amount', v)} 
@@ -355,10 +355,10 @@ const CouponFormModal = ({ visible, editTarget, duplicateTarget, onClose, onSucc
                                 />
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Text style={S.fieldLabel}>Adadin Masu Amfani (Limit)</Text>
+                                <Text style={S.fieldLabel}>Usage Limit</Text>
                                 <TextInput 
                                     style={S.input} 
-                                    placeholder="∞ Ba Iyaka" 
+                                    placeholder="∞ Unlimited" 
                                     placeholderTextColor="#94A3B8"
                                     value={form.usage_limit} 
                                     onChangeText={v => setF('usage_limit', v)} 
@@ -369,7 +369,7 @@ const CouponFormModal = ({ visible, editTarget, duplicateTarget, onClose, onSucc
 
                         <View style={{ flexDirection: 'row', gap: 10 }}>
                             <View style={{ flex: 1 }}>
-                                <Text style={S.fieldLabel}>Amfanin Mutum Daya</Text>
+                                <Text style={S.fieldLabel}>Per User Limit</Text>
                                 <TextInput 
                                     style={S.input} 
                                     placeholder="1" 
@@ -380,7 +380,7 @@ const CouponFormModal = ({ visible, editTarget, duplicateTarget, onClose, onSucc
                                 />
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Text style={S.fieldLabel}>Wa Zai Yi Amfani</Text>
+                                <Text style={S.fieldLabel}>Applicable To</Text>
                                 <View style={S.pickerWrap}>
                                     {['all', 'first_order'].map(opt => (
                                         <TouchableOpacity 
@@ -389,7 +389,7 @@ const CouponFormModal = ({ visible, editTarget, duplicateTarget, onClose, onSucc
                                             style={[S.pickerBtn, form.applicable_to === opt && { backgroundColor: '#FFFBEB', borderColor: GOLD }]}
                                         >
                                             <Text style={{ fontSize: 11, fontWeight: '700', color: form.applicable_to === opt ? NAVY : '#64748B', textTransform: 'capitalize' }}>
-                                                {opt === 'all' ? 'Kowa (All)' : 'Saye Na 1'}
+                                                {opt === 'all' ? 'All Customers' : 'First Order Only'}
                                             </Text>
                                         </TouchableOpacity>
                                     ))}
@@ -399,13 +399,13 @@ const CouponFormModal = ({ visible, editTarget, duplicateTarget, onClose, onSucc
 
                         <View style={{ flexDirection: 'row', gap: 10 }}>
                             <DatePickerBtn
-                                label="Farkon Aiki"
+                                label="Start Date"
                                 value={form.valid_from}
                                 active={calPicker.field === 'valid_from' && calPicker.visible}
                                 onPress={() => setCalPicker({ field: 'valid_from', visible: true })}
                             />
                             <DatePickerBtn
-                                label="Karshen Aiki"
+                                label="Expiry Date"
                                 value={form.expires_at}
                                 active={calPicker.field === 'expires_at' && calPicker.visible}
                                 onPress={() => setCalPicker({ field: 'expires_at', visible: true })}
@@ -414,8 +414,8 @@ const CouponFormModal = ({ visible, editTarget, duplicateTarget, onClose, onSucc
 
                         <View style={S.toggleRow}>
                             <View>
-                                <Text style={S.fieldLabel}>Kunnawa A Kasuwa (Active)</Text>
-                                <Text style={{ fontSize: 11, color: '#94A3B8' }}>Bada damar amfani da wannan coupon</Text>
+                                <Text style={S.fieldLabel}>Active Status</Text>
+                                <Text style={{ fontSize: 11, color: '#94A3B8' }}>Enable customers to redeem this coupon</Text>
                             </View>
                             <Switch 
                                 value={form.is_active} 
@@ -429,7 +429,7 @@ const CouponFormModal = ({ visible, editTarget, duplicateTarget, onClose, onSucc
                             {saving ? <ActivityIndicator color={NAVY} /> : (
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                     <Ionicons name={editTarget ? 'checkmark-circle' : 'add-circle'} size={18} color={NAVY} />
-                                    <Text style={S.submitBtnTxt}>{editTarget ? 'Adana Canje-canje' : 'Ƙirƙiri Coupon Yanzu'}</Text>
+                                    <Text style={S.submitBtnTxt}>{editTarget ? 'Save Changes' : 'Create Coupon Now'}</Text>
                                 </View>
                             )}
                         </TouchableOpacity>
@@ -548,10 +548,10 @@ export const AdminCoupons = () => {
 
     // ── Delete ──────────────────────────────────────────────────────────────────
     const deleteCoupon = (c) => {
-        Alert.alert('Goge Coupon', `Kana son goge "${c.code}"? Ba za a iya dawo da shi ba.`, [
-            { text: 'A\'a', style: 'cancel' },
+        Alert.alert('Delete Coupon', `Are you sure you want to delete "${c.code}"? This action cannot be undone.`, [
+            { text: 'Cancel', style: 'cancel' },
             {
-                text: 'Eh, Goge', style: 'destructive',
+                text: 'Delete', style: 'destructive',
                 onPress: async () => {
                     await supabase.from('coupons').delete().eq('id', c.id);
                     setCoupons(prev => prev.filter(x => x.id !== c.id));
@@ -569,9 +569,9 @@ export const AdminCoupons = () => {
             } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
                 navigator.clipboard.writeText(code);
             }
-            Alert.alert('An Kwafa!', `"${code}" an saka a clipboard.`);
+            Alert.alert('Copied!', `"${code}" copied to clipboard.`);
         } catch (e) {
-            Alert.alert('Lambar Coupon', code);
+            Alert.alert('Coupon Code', code);
         }
     };
 
@@ -599,7 +599,7 @@ export const AdminCoupons = () => {
                     </View>
 
                     <Text style={S.discountTxt}>
-                        {c.discount_type === 'percentage' ? `${c.discount_value}% RANGWAME` : `₦${Number(c.discount_value).toLocaleString()} RANGWAME`}
+                        {c.discount_type === 'percentage' ? `${c.discount_value}% OFF` : `₦${Number(c.discount_value).toLocaleString()} OFF`}
                         {c.max_discount ? <Text style={S.maxTxt}> (Max ₦{Number(c.max_discount).toLocaleString()})</Text> : null}
                     </Text>
 
@@ -662,7 +662,7 @@ export const AdminCoupons = () => {
                     <View style={S.detailModalCard}>
                         <View style={S.modalHeader}>
                             <View>
-                                <Text style={S.modalTitle}>Cikakken Bayanin Coupon</Text>
+                                <Text style={S.modalTitle}>Coupon Details</Text>
                                 <Text style={S.modalSub}>{c.code}</Text>
                             </View>
                             <TouchableOpacity onPress={() => setDetailCoupon(null)} style={S.closeModalBtn}>
@@ -680,12 +680,12 @@ export const AdminCoupons = () => {
 
                             <View style={S.detailGrid}>
                                 {[
-                                    { label: 'Matsayi', value: st.label, color: st.color },
-                                    { label: 'An Yi Amfani', value: `${fmtNum(c.usage_count)} / ${fmtNum(c.usage_limit)}` },
-                                    { label: 'Min Order', value: c.min_order_amount ? `₦${Number(c.min_order_amount).toLocaleString()}` : 'Babu' },
-                                    { label: 'Max Discount', value: c.max_discount ? `₦${Number(c.max_discount).toLocaleString()}` : 'Babu' },
-                                    { label: 'Farkon Aiki', value: fmtDate(c.valid_from) },
-                                    { label: 'Karshen Aiki', value: fmtDate(c.expires_at) },
+                                    { label: 'Status', value: st.label, color: st.color },
+                                    { label: 'Usage', value: `${fmtNum(c.usage_count)} / ${fmtNum(c.usage_limit)}` },
+                                    { label: 'Min Order', value: c.min_order_amount ? `₦${Number(c.min_order_amount).toLocaleString()}` : 'None' },
+                                    { label: 'Max Discount', value: c.max_discount ? `₦${Number(c.max_discount).toLocaleString()}` : 'None' },
+                                    { label: 'Start Date', value: fmtDate(c.valid_from) },
+                                    { label: 'Expiry Date', value: fmtDate(c.expires_at) },
                                 ].map((g, i) => (
                                     <View key={i} style={S.detailGridCell}>
                                         <Text style={S.detailLabel}>{g.label}</Text>
@@ -696,7 +696,7 @@ export const AdminCoupons = () => {
 
                             {c.description ? (
                                 <View style={S.detailDescBox}>
-                                    <Text style={S.detailLabel}>Bayani:</Text>
+                                    <Text style={S.detailLabel}>Description:</Text>
                                     <Text style={S.detailDescVal}>{c.description}</Text>
                                 </View>
                             ) : null}
@@ -705,15 +705,15 @@ export const AdminCoupons = () => {
                             <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
                                 <TouchableOpacity onPress={() => { setDetailCoupon(null); openEdit(c); }} style={[S.actionBtn, { backgroundColor: '#F1F5F9', flex: 1 }]}>
                                     <Ionicons name="pencil" size={15} color={NAVY} />
-                                    <Text style={[S.actionBtnTxt, { color: NAVY }]}>Gyara</Text>
+                                    <Text style={[S.actionBtnTxt, { color: NAVY }]}>Edit</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity onPress={() => { setDetailCoupon(null); duplicateCoupon(c); }} style={[S.actionBtn, { backgroundColor: '#FFFBEB', flex: 1, borderColor: GOLD, borderWidth: 1 }]}>
                                     <Ionicons name="copy-outline" size={15} color={NAVY} />
-                                    <Text style={[S.actionBtnTxt, { color: NAVY }]}>Kwafa (Duplicate)</Text>
+                                    <Text style={[S.actionBtnTxt, { color: NAVY }]}>Duplicate</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity onPress={() => { setDetailCoupon(null); deleteCoupon(c); }} style={[S.actionBtn, { backgroundColor: '#FEF2F2', flex: 1 }]}>
                                     <Ionicons name="trash" size={15} color="#EF4444" />
-                                    <Text style={[S.actionBtnTxt, { color: '#EF4444' }]}>Goge</Text>
+                                    <Text style={[S.actionBtnTxt, { color: '#EF4444' }]}>Delete</Text>
                                 </TouchableOpacity>
                             </View>
                         </ScrollView>
@@ -734,9 +734,9 @@ export const AdminCoupons = () => {
                     <View style={S.hdrTitleWrap}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                             <Ionicons name="ticket" size={22} color={GOLD} />
-                            <Text style={S.hdrTitle}>Lambobin Rangwame</Text>
+                            <Text style={S.hdrTitle}>Discount Coupons</Text>
                         </View>
-                        <Text style={S.hdrSub}>{stats.total} coupons gaba daya · {stats.active} suna aiki</Text>
+                        <Text style={S.hdrSub}>{stats.total} total coupons · {stats.active} active</Text>
                     </View>
                     <TouchableOpacity
                         onPress={() => { setEditTarget(null); setDuplicateTarget(null); setShowForm(true); }}
@@ -744,16 +744,16 @@ export const AdminCoupons = () => {
                         activeOpacity={0.8}
                     >
                         <Ionicons name="add" size={18} color="#FFFFFF" />
-                        <Text style={S.addBtnTxt}>Sabo</Text>
+                        <Text style={S.addBtnTxt}>New Coupon</Text>
                     </TouchableOpacity>
                 </View>
 
                 {/* Stat row */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 14 }} contentContainerStyle={{ gap: 8, paddingBottom: 2 }}>
-                    <StatCard icon="pricetag" label="Duka" value={stats.total} color={NAVY} bg="#FFFFFF" />
-                    <StatCard icon="checkmark-circle" label="A Kasuwa" value={stats.active} color="#059669" bg="#ECFDF5" />
-                    <StatCard icon="time-outline" label="Sun Kare" value={stats.expired} color="#EF4444" bg="#FEF2F2" />
-                    <StatCard icon="repeat" label="Amfani" value={stats.uses} color={GOLD} bg="#FFFBEB" />
+                    <StatCard icon="pricetag" label="Total" value={stats.total} color={NAVY} bg="#FFFFFF" />
+                    <StatCard icon="checkmark-circle" label="Active" value={stats.active} color="#059669" bg="#ECFDF5" />
+                    <StatCard icon="time-outline" label="Expired" value={stats.expired} color="#EF4444" bg="#FEF2F2" />
+                    <StatCard icon="repeat" label="Redeemed" value={stats.uses} color={GOLD} bg="#FFFBEB" />
                 </ScrollView>
             </View>
 
@@ -764,7 +764,7 @@ export const AdminCoupons = () => {
                 </View>
                 <TextInput
                     style={S.searchIn}
-                    placeholder="Bincika lamba ko bayani…"
+                    placeholder="Search coupons by code or description…"
                     placeholderTextColor="#94A3B8"
                     value={search}
                     onChangeText={setSearch}
@@ -783,10 +783,10 @@ export const AdminCoupons = () => {
                     contentContainerStyle={{ paddingHorizontal: 14, gap: 8 }}
                 >
                     {[
-                        { id: 'all', label: 'Duka (All)', count: stats.total },
-                        { id: 'active', label: 'A Kasuwa', count: stats.active },
-                        { id: 'inactive', label: 'A Boye' },
-                        { id: 'expired', label: 'Sun Kare', count: stats.expired },
+                        { id: 'all', label: 'All', count: stats.total },
+                        { id: 'active', label: 'Active', count: stats.active },
+                        { id: 'inactive', label: 'Inactive' },
+                        { id: 'expired', label: 'Expired', count: stats.expired },
                     ].map(f => (
                         <TouchableOpacity key={f.id} onPress={() => setFilter(f.id)} style={[S.pill, filter === f.id && S.pillOn]}>
                             <Text style={[S.pillTxt, filter === f.id && S.pillTxtActive]}>{f.label}</Text>
@@ -804,7 +804,7 @@ export const AdminCoupons = () => {
             {loading ? (
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
                     <ActivityIndicator size="large" color={GOLD} />
-                    <Text style={{ color: '#64748B', marginTop: 10, fontWeight: '600' }}>Ana loda lambobin rangwame…</Text>
+                    <Text style={{ color: '#64748B', marginTop: 10, fontWeight: '600' }}>Loading discount coupons…</Text>
                 </View>
             ) : (
                 <FlatList

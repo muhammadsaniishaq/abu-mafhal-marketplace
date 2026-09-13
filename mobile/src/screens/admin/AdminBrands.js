@@ -58,7 +58,7 @@ export const AdminBrands = () => {
 
     const handleAddBrand = async () => {
         if (!newBrandName.trim()) {
-            return Alert.alert('Kuskure', 'Da fatan a saka sunan babban shago / brand');
+            return Alert.alert('Error', 'Please enter brand name');
         }
 
         try {
@@ -89,13 +89,13 @@ export const AdminBrands = () => {
 
             if (insertError) throw insertError;
 
-            Alert.alert('An Yi Nasara', `An yi nasarar ƙara brand din "${newBrandName.trim()}"`);
+            Alert.alert('Success', `Brand "${newBrandName.trim()}" added successfully`);
             setNewBrandName('');
             setNewBrandLogo(null);
             fetchBrands();
 
         } catch (error) {
-            Alert.alert('Kuskure', error.message || 'An kasa ƙara brand');
+            Alert.alert('Error', error.message || 'Failed to add brand');
         } finally {
             setUploading(false);
         }
@@ -103,19 +103,19 @@ export const AdminBrands = () => {
 
     const handleDeleteBrand = (brand) => {
         Alert.alert(
-            'Goge Brand',
-            `Kana da tabbacin kana son goge brand din "${brand.name}"?`,
+            'Delete Brand',
+            `Are you sure you want to delete brand "${brand.name}"?`,
             [
-                { text: 'A\'a (Cancel)', style: 'cancel' },
+                { text: 'Cancel', style: 'cancel' },
                 {
-                    text: 'Goge (Delete)',
+                    text: 'Delete',
                     style: 'destructive',
                     onPress: async () => {
                         const { error } = await supabase.from('brands').delete().eq('id', brand.id);
                         if (!error) {
                             setBrands(prev => prev.filter(b => b.id !== brand.id));
                         } else {
-                            Alert.alert('Kuskure', error.message);
+                            Alert.alert('Error', error.message);
                         }
                     }
                 }
@@ -182,10 +182,10 @@ export const AdminBrands = () => {
             {/* Header Area */}
             <View style={{ padding: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderColor: '#E2E8F0' }}>
                 <Text style={{ fontSize: 18, fontWeight: '900', color: NAVY }}>
-                    Manyan Brands (Official Stores)
+                    Brand Management (Official Stores)
                 </Text>
                 <Text style={{ color: '#64748B', fontSize: 11.5, marginTop: 2 }}>
-                    Kula da tambari da shahararrun brands na kasuwar Abu Mafhal
+                    Manage official partner brands for Abu Mafhal Marketplace
                 </Text>
 
                 {/* Add Brand Form Card */}
@@ -198,7 +198,7 @@ export const AdminBrands = () => {
                     borderColor: '#E2E8F0'
                 }}>
                     <Text style={{ fontSize: 12, fontWeight: '800', color: NAVY, marginBottom: 10 }}>
-                        Ƙara Sabon Brand
+                        Add New Brand
                     </Text>
 
                     <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', marginBottom: 12 }}>
@@ -224,7 +224,7 @@ export const AdminBrands = () => {
                         </TouchableOpacity>
 
                         <TextInput
-                            placeholder="Sunan Brand (Misali: Apple, Nike, Samsung)"
+                            placeholder="Brand Name (e.g. Apple, Nike, Samsung)"
                             style={{
                                 flex: 1,
                                 backgroundColor: '#FFFFFF',
@@ -258,7 +258,7 @@ export const AdminBrands = () => {
                         {uploading ? (
                             <ActivityIndicator color={GOLD} />
                         ) : (
-                            <Text style={{ color: GOLD, fontWeight: '900', fontSize: 12.5 }}>Ƙara Brand</Text>
+                            <Text style={{ color: GOLD, fontWeight: '900', fontSize: 12.5 }}>Add Brand</Text>
                         )}
                     </TouchableOpacity>
                 </View>
@@ -277,7 +277,7 @@ export const AdminBrands = () => {
                 }}>
                     <Ionicons name="search" size={16} color="#94A3B8" />
                     <TextInput
-                        placeholder="Nemi brand..."
+                        placeholder="Search brands..."
                         value={searchQuery}
                         onChangeText={setSearchQuery}
                         style={{ flex: 1, marginLeft: 8, fontSize: 12.5, color: NAVY }}
@@ -290,7 +290,7 @@ export const AdminBrands = () => {
             {loading && !refreshing ? (
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                     <ActivityIndicator size="large" color={GOLD} />
-                    <Text style={{ marginTop: 12, fontSize: 12, fontWeight: '700', color: '#64748B' }}>Ana loda brands...</Text>
+                    <Text style={{ marginTop: 12, fontSize: 12, fontWeight: '700', color: '#64748B' }}>Loading brands...</Text>
                 </View>
             ) : (
                 <FlatList
@@ -305,7 +305,7 @@ export const AdminBrands = () => {
                         <View style={{ alignItems: 'center', marginTop: 40, opacity: 0.7 }}>
                             <Ionicons name="pricetag-outline" size={48} color="#94A3B8" />
                             <Text style={{ color: '#64748B', marginTop: 10, fontWeight: '700', fontSize: 13 }}>
-                                Babu wani brand a halin yanzu.
+                                No brands found.
                             </Text>
                         </View>
                     }

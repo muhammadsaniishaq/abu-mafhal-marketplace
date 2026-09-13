@@ -939,22 +939,29 @@ const ProfilePageInner = ({ user, onLogout, onBack, onOpenVendorRegister, onOpen
                                 borderColor: '#FEE2E2'
                             }}
                             onPress={() => {
-                                Alert.alert(
-                                    'Log Out',
-                                    'Are you sure you want to log out of Abu Mafhal?',
-                                    [
-                                        { text: 'Cancel', style: 'cancel' },
-                                        {
-                                            text: 'Log Out',
-                                            style: 'destructive',
-                                            onPress: async () => {
-                                                if (typeof onLogout === 'function') {
-                                                    await onLogout();
+                                if (Platform.OS === 'web') {
+                                    const confirmed = typeof window !== 'undefined' ? window.confirm('Are you sure you want to log out of Abu Mafhal?') : true;
+                                    if (confirmed && typeof onLogout === 'function') {
+                                        onLogout();
+                                    }
+                                } else {
+                                    Alert.alert(
+                                        'Log Out',
+                                        'Are you sure you want to log out of Abu Mafhal?',
+                                        [
+                                            { text: 'Cancel', style: 'cancel' },
+                                            {
+                                                text: 'Log Out',
+                                                style: 'destructive',
+                                                onPress: async () => {
+                                                    if (typeof onLogout === 'function') {
+                                                        await onLogout();
+                                                    }
                                                 }
                                             }
-                                        }
-                                    ]
-                                );
+                                        ]
+                                    );
+                                }
                             }}
                         >
                             <Text style={{ color: '#EF4444', fontWeight: '800', fontSize: 13.5, letterSpacing: 0.5 }}>LOG OUT ACCOUNT</Text>

@@ -87,10 +87,10 @@ export const AdminDisputes = () => {
                 setMessageText('');
                 fetchMessages(selectedDispute.id);
             } else {
-                Alert.alert('Kuskure', error.message || 'An kasa tura sako.');
+                Alert.alert('Error', error.message || 'Failed to send message.');
             }
         } catch (e) {
-            Alert.alert('Kuskure', 'An samu matsala wajen tura sako.');
+            Alert.alert('Error', 'Failed to send message.');
         } finally {
             setSendingMsg(false);
         }
@@ -107,11 +107,11 @@ export const AdminDisputes = () => {
                     onPress: async () => {
                         const { error } = await supabase.from('disputes').update({ status: 'resolved' }).eq('id', selectedDispute.id);
                         if (!error) {
-                            Alert.alert('Nasara', 'An warware matsalar.');
+                            Alert.alert('Success', 'Dispute marked as resolved.');
                             setModalVisible(false);
                             fetchDisputes();
                         } else {
-                            Alert.alert('Kuskure', error.message);
+                            Alert.alert('Error', error.message);
                         }
                     }
                 }
@@ -181,7 +181,7 @@ export const AdminDisputes = () => {
                         {new Date(item.created_at).toLocaleDateString()}
                     </Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <Text style={{ fontSize: 11, fontWeight: '800', color: GOLD }}>Duba & Amsa →</Text>
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: GOLD }}>Review & Reply →</Text>
                     </View>
                 </View>
             </TouchableOpacity>
@@ -193,17 +193,17 @@ export const AdminDisputes = () => {
             {/* Header */}
             <View style={{ padding: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderColor: '#E2E8F0' }}>
                 <Text style={{ fontSize: 18, fontWeight: '900', color: NAVY }}>
-                    Korafe-korafe Da Rikicin Sayayya (Disputes)
+                    Customer Disputes & Inquiries
                 </Text>
                 <Text style={{ color: '#64748B', fontSize: 11.5, marginTop: 2 }}>
-                    Sasanta korafe-korafe tsakanin masu sayayya da yan kasuwa
+                    Mediate and resolve disputes between buyers and sellers
                 </Text>
             </View>
 
             {loading && !refreshing ? (
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                     <ActivityIndicator size="large" color={GOLD} />
-                    <Text style={{ marginTop: 12, fontSize: 12, fontWeight: '700', color: '#64748B' }}>Ana loda korafe-korafe...</Text>
+                    <Text style={{ marginTop: 12, fontSize: 12, fontWeight: '700', color: '#64748B' }}>Loading disputes...</Text>
                 </View>
             ) : (
                 <FlatList
@@ -218,7 +218,7 @@ export const AdminDisputes = () => {
                         <View style={{ alignItems: 'center', marginTop: 50, opacity: 0.7 }}>
                             <Ionicons name="chatbubbles-outline" size={48} color="#94A3B8" />
                             <Text style={{ color: '#64748B', marginTop: 10, fontWeight: '700', fontSize: 13 }}>
-                                Babu wani korafi da aka shigar a halin yanzu.
+                                No active customer disputes reported.
                             </Text>
                         </View>
                     }
@@ -231,9 +231,9 @@ export const AdminDisputes = () => {
                     {/* Modal Header */}
                     <View style={{ padding: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                         <View>
-                            <Text style={{ fontSize: 16, fontWeight: '900', color: NAVY }}>Bayanin Korafi</Text>
+                            <Text style={{ fontSize: 16, fontWeight: '900', color: NAVY }}>Dispute Details</Text>
                             <Text style={{ fontSize: 11, color: '#64748B' }}>
-                                Oda #{selectedDispute?.order_id ? selectedDispute.order_id.slice(0, 8) : 'N/A'}
+                                Order #{selectedDispute?.order_id ? selectedDispute.order_id.slice(0, 8) : 'N/A'}
                             </Text>
                         </View>
                         <TouchableOpacity 
@@ -249,7 +249,7 @@ export const AdminDisputes = () => {
                         <View style={{ backgroundColor: '#FFFFFF', padding: 16, borderRadius: 18, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                                 <Text style={{ fontSize: 11, color: GOLD, fontWeight: '800', textTransform: 'uppercase' }}>
-                                    Dalilin Korafi:
+                                    Dispute Reason:
                                 </Text>
                                 {(selectedDispute?.profiles?.phone || selectedDispute?.profiles?.phone_number) && (
                                     <TouchableOpacity
@@ -271,18 +271,18 @@ export const AdminDisputes = () => {
                                 {selectedDispute?.reason}
                             </Text>
                             <Text style={{ color: '#475569', fontSize: 13, lineHeight: 18 }}>
-                                {selectedDispute?.description || 'Babu cikakken bayani.'}
+                                {selectedDispute?.description || 'No detailed explanation provided.'}
                             </Text>
                         </View>
 
                         {/* Messages List */}
                         <Text style={{ fontSize: 12, fontWeight: '800', marginBottom: 10, color: '#64748B', textTransform: 'uppercase' }}>
-                            Tattaunawar Sasanta Korafi:
+                            Resolution Discussion:
                         </Text>
 
                         {chatMessages.length === 0 ? (
                             <Text style={{ color: '#94A3B8', fontSize: 12, textAlign: 'center', marginVertical: 14 }}>
-                                Babu sakonni tukuna. Rubuta amsar ka a kasa.
+                                No messages yet. Type your admin response below.
                             </Text>
                         ) : (
                             chatMessages.map((msg, i) => (
@@ -325,7 +325,7 @@ export const AdminDisputes = () => {
                                     fontSize: 13,
                                     color: NAVY
                                 }}
-                                placeholder="Rubuta amsar admin anan..."
+                                placeholder="Type admin response here..."
                                 placeholderTextColor="#94A3B8"
                                 value={messageText}
                                 onChangeText={setMessageText}
@@ -358,7 +358,7 @@ export const AdminDisputes = () => {
                                 }}
                             >
                                 <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>
-                                    An Warware Matsalar (Mark as Resolved)
+                                    Mark as Resolved
                                 </Text>
                             </TouchableOpacity>
                         )}

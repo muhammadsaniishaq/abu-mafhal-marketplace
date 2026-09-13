@@ -177,7 +177,7 @@ export const AdminAnalytics = () => {
             const activeProductsCount = prods.filter(p => p.is_active !== false && p.status !== 'archived').length;
 
             const catMap = prods.reduce((acc, p) => {
-                const c = p.category || 'Kayan Kasuwa';
+                const c = p.category || 'General Category';
                 acc[c] = (acc[c] || 0) + 1;
                 return acc;
             }, {});
@@ -296,12 +296,12 @@ export const AdminAnalytics = () => {
                     <View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                             <Text style={{ fontSize: 24, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.5 }}>
-                                Kasuwa Intelligence
+                                Marketplace Intelligence
                             </Text>
                             <Animated.View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981', opacity: pulseAnim }} />
                         </View>
                         <Text style={{ fontSize: 11, color: GOLD, fontWeight: '700', letterSpacing: 0.5, marginTop: 2 }}>
-                            KULAWA DA BIBIYAR KASUWA A KOWANE LOKACI
+                            REAL-TIME PLATFORM TELEMETRY & ANALYTICS
                         </Text>
                     </View>
                     <TouchableOpacity 
@@ -324,10 +324,10 @@ export const AdminAnalytics = () => {
                 {/* RECENT LIVE PULSE BAR */}
                 <View style={{ marginTop: 18, backgroundColor: 'rgba(255, 255, 255, 0.07)', borderRadius: 14, padding: 12 }}>
                     <Text style={{ fontSize: 9.5, fontWeight: '900', color: GOLD, letterSpacing: 1, marginBottom: 8 }}>
-                        AYYUKAN KWANAN NAN (LIVE PULSE)
+                        RECENT SYSTEM ACTIVITY (LIVE PULSE)
                     </Text>
                     {stats.recentActivity.length === 0 ? (
-                        <Text style={{ color: '#94A3B8', fontSize: 11 }}>Babu wani aiki da aka yi kwanan nan.</Text>
+                        <Text style={{ color: '#94A3B8', fontSize: 11 }}>No recent activity recorded.</Text>
                     ) : (
                         stats.recentActivity.map((log, i) => (
                             <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: i === stats.recentActivity.length - 1 ? 0 : 6 }}>
@@ -347,34 +347,34 @@ export const AdminAnalytics = () => {
             {/* 4 CORE KPI METRICS */}
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
                 <EliteStatCard
-                    label="Kudin Shiga (Gross)"
+                    label="Gross Revenue"
                     value={formatNaira(stats.revenue)}
-                    subValue="Dukkan cinikin kasuwa"
+                    subValue="Total marketplace volume"
                     icon="cash-outline"
                     isGold={false}
                     trend={10}
                     pulse={true}
                 />
                 <EliteStatCard
-                    label="Kason Kasuwa"
+                    label="Platform Commission"
                     value={formatNaira(stats.commission)}
-                    subValue="5% na ribar dandamali"
+                    subValue="5% platform revenue"
                     icon="pie-chart-outline"
                     isGold={true}
                     trend={5}
                 />
                 <EliteStatCard
-                    label="Masu Sayayya"
+                    label="Registered Users"
                     value={stats.customersCount.toString()}
-                    subValue="Masu asusu a kasuwa"
+                    subValue="Total user accounts"
                     icon="people-outline"
                     isGold={false}
                     trend={15}
                 />
                 <EliteStatCard
-                    label="Saurin Ciniki"
+                    label="Sales Velocity"
                     value={`${stats.velocity} oda/hr`}
-                    subValue="Ododin awa 1 da ya wuce"
+                    subValue="Orders placed in past hour"
                     icon="flash-outline"
                     isGold={true}
                     pulse={stats.velocity > 0}
@@ -396,7 +396,7 @@ export const AdminAnalytics = () => {
                 elevation: 1
             }}>
                 <Text style={{ fontSize: 14, fontWeight: '900', color: NAVY, marginBottom: 14 }}>
-                    Biyan Kudi Ga Masu Shaguna & Direbobi
+                    Vendor & Driver Payouts
                 </Text>
                 <View style={{ height: 16, flexDirection: 'row', borderRadius: 8, overflow: 'hidden', backgroundColor: '#F1F5F9', marginBottom: 12 }}>
                     <View style={{ flex: Math.max(stats.payoutStatus.paid, 1), backgroundColor: '#10B981' }} />
@@ -434,7 +434,7 @@ export const AdminAnalytics = () => {
             }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                     <Text style={{ fontSize: 14, fontWeight: '900', color: NAVY }}>
-                        Kayan Da Aka Fi Samu a Kasuwa
+                        Top Product Categories
                     </Text>
                     <Ionicons name="trophy" size={18} color={GOLD} />
                 </View>
@@ -464,7 +464,7 @@ export const AdminAnalytics = () => {
                         <Ionicons name="checkmark-circle-outline" color={NAVY} size={18} />
                     </View>
                     <Text style={{ fontSize: 20, fontWeight: '900', color: NAVY }}>{orderSuccessRate}%</Text>
-                    <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '800', marginTop: 2 }}>ODAR DA AKA ISAR</Text>
+                    <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '800', marginTop: 2 }}>DELIVERED ORDERS</Text>
                 </View>
 
                 <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: 'rgba(217, 167, 58, 0.4)' }}>
@@ -472,7 +472,7 @@ export const AdminAnalytics = () => {
                         <Ionicons name="cube-outline" color={GOLD} size={18} />
                     </View>
                     <Text style={{ fontSize: 20, fontWeight: '900', color: NAVY }}>{activeProductRate}%</Text>
-                    <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '800', marginTop: 2 }}>KAYAN DA KE KASUWA</Text>
+                    <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '800', marginTop: 2 }}>ACTIVE PRODUCTS</Text>
                 </View>
             </View>
         </ScrollView>

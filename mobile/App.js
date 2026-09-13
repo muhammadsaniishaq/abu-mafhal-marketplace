@@ -64,17 +64,46 @@ const linking = {
     ],
     config: {
         screens: {
+            AdminDashboard: 'admin',
+            VendorDashboard: 'vendor',
+            DriverDashboard: 'driver',
             Main: '',
             Landing: 'landing',
             Auth: 'auth',
+            ProductDetails: 'product/:id',
+            ConversationsScreen: 'conversations',
+            TrackOrder: 'track',
+            Invoice: 'invoice',
+            CheckoutPage: 'checkout',
+            AddressPage: 'address',
         },
     },
 };
 
+const getStoredUserSync = () => {
+    try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+            const raw = window.localStorage.getItem('@abumafhal_user_v1');
+            if (raw) return JSON.parse(raw);
+        }
+    } catch (_) {}
+    return null;
+};
+
+const getStoredCartSync = () => {
+    try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+            const raw = window.localStorage.getItem('@abumafhal_cart_v1');
+            if (raw) return JSON.parse(raw);
+        }
+    } catch (_) {}
+    return [];
+};
+
 export default function App() {
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [cartLines, setCartLines] = useState([]);
+    const [user, setUser] = useState(getStoredUserSync);
+    const [loading, setLoading] = useState(() => !getStoredUserSync());
+    const [cartLines, setCartLines] = useState(getStoredCartSync);
     const [lastHeartbeat, setLastHeartbeat] = useState(0);
 
     const CART_STORAGE_KEY = '@abumafhal_cart_v1';
@@ -215,6 +244,14 @@ export default function App() {
             } else if (event === 'SIGNED_OUT') {
                 setUser(null);
                 AsyncStorage.removeItem(USER_STORAGE_KEY).catch(() => {});
+                AsyncStorage.removeItem('@abumafhal_last_screen').catch(() => {});
+                if (typeof window !== 'undefined') {
+                    try {
+                        window.localStorage.removeItem(USER_STORAGE_KEY);
+                        window.localStorage.removeItem('@abumafhal_last_screen');
+                        window.location.hash = '';
+                    } catch (_) {}
+                }
             }
         });
 
@@ -314,12 +351,43 @@ export default function App() {
 
     const handleLogout = async () => {
         try {
-            await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+            await supabase.auth.signOut().catch(() => {});
         } catch (e) {
             console.error('Logout error:', e);
         } finally {
             setUser(null);
             await AsyncStorage.removeItem(USER_STORAGE_KEY).catch(() => {});
+            await AsyncStorage.removeItem('@abumafhal_last_screen').catch(() => {});
+
+            if (typeof window !== 'undefined') {
+                try {
+                    window.localStorage.removeItem(USER_STORAGE_KEY);
+                    window.localStorage.removeItem('@abumafhal_last_screen');
+                    // Purge all Supabase auth storage keys from localStorage
+                    Object.keys(window.localStorage).forEach(key => {
+                        if (key.startsWith('sb-') || key.includes('auth-token') || key.includes('supabase')) {
+                            window.localStorage.removeItem(key);
+                        }
+                    });
+                    if (window.sessionStorage) {
+                        window.sessionStorage.clear();
+                    }
+                    if (window.history && window.history.replaceState) {
+                        window.history.replaceState(null, '', window.location.pathname || '/');
+                    }
+                    window.location.hash = '';
+                } catch (_) {}
+
+                // On Web, redirect/reload to guarantee 100% clean guest state on Landing
+                setTimeout(() => {
+                    try {
+                        if (window.location) {
+                            window.location.replace(window.location.pathname || '/');
+                        }
+                    } catch (_) {}
+                }, 80);
+            }
+
             setTimeout(() => {
                 if (navigationRef.isReady()) {
                     navigationRef.reset({
@@ -346,135 +414,149 @@ export default function App() {
     };
     const handleClearCart = () => setCartLines([]);
 
-    if (loading) return null; // Or a custom splash screen
+    const getInitialRoute = () => {
+        try {
+            if (!user) {
+                return 'Landing';
+            }
+            if (typeof window !== 'undefined') {
+                const path = window.location.pathname || '';
+                const hash = window.location.hash || '';
+                const last = window.localStorage?.getItem('@abumafhal_last_screen');
+                if (user?.role === 'admin' && (path.includes('admin') || hash.includes('admin') || last === 'AdminDashboard')) {
+                    return 'AdminDashboard';
+                }
+                if (user?.role === 'vendor' && (path.includes('vendor') || hash.includes('vendor') || last === 'VendorDashboard')) {
+                    return 'VendorDashboard';
+                }
+                if (user?.role === 'driver' && (path.includes('driver') || hash.includes('driver') || last === 'DriverDashboard')) {
+                    return 'DriverDashboard';
+                }
+                if (last && ['AdminDashboard', 'VendorDashboard', 'DriverDashboard', 'Main'].includes(last)) {
+                    return last;
+                }
+            }
+        } catch (_) {}
+        return user ? 'Main' : 'Landing';
+    };
 
-    let initialRoute = 'Main';
+    let initialRoute = getInitialRoute();
 
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
             <SafeAreaProvider style={{ flex: 1 }}>
                 <AppSettingsProvider>
                     <ComparisonProvider>
-                        <NavigationContainer ref={navigationRef} linking={linking}>
+                        <NavigationContainer 
+                            ref={navigationRef} 
+                            linking={linking}
+                            onStateChange={() => {
+                                try {
+                                    const currentRoute = navigationRef.getCurrentRoute();
+                                    if (currentRoute?.name) {
+                                        AsyncStorage.setItem('@abumafhal_last_screen', currentRoute.name).catch(() => {});
+                                        if (typeof window !== 'undefined' && window.localStorage) {
+                                            window.localStorage.setItem('@abumafhal_last_screen', currentRoute.name);
+                                            if (currentRoute.name === 'AdminDashboard') {
+                                                if (window.location.hash !== '#admin') window.location.hash = 'admin';
+                                            } else if (currentRoute.name === 'VendorDashboard') {
+                                                if (window.location.hash !== '#vendor') window.location.hash = 'vendor';
+                                            } else if (currentRoute.name === 'DriverDashboard') {
+                                                if (window.location.hash !== '#driver') window.location.hash = 'driver';
+                                            }
+                                        }
+                                    }
+                                } catch (_) {}
+                            }}
+                        >
                         <Stack.Navigator
                             key={user ? `user-${user.id}-${user.role}` : 'guest'}
                             initialRouteName={initialRoute}
                             screenOptions={{ headerShown: false, detachInactiveScreens: false }}
                         >
-                            {!user ? (
-                                <>
-                                    <Stack.Screen name="Landing">
-                                        {props => (
-                                            <LandingPage
-                                                {...props}
-                                                user={user}
-                                                cartCount={cartLines?.length || 0}
-                                                cartLines={cartLines}
-                                                onAddToCart={handleAddToCart}
-                                                onEnterShop={(tab = 'shop', params = {}) => {
-                                                    props.navigation.navigate('Main', { screen: tab, ...params });
-                                                }}
-                                                onLogin={() => props.navigation.navigate('Auth')}
-                                                onNavigate={(screen, params) => props.navigation.navigate(screen, params)}
-                                            />
-                                        )}
-                                    </Stack.Screen>
-                                    <Stack.Screen name="Auth">
-                                        {props => (
-                                            <AuthPage
-                                                {...props}
-                                                onBack={() => props.navigation.goBack()}
-                                                 onLoginSuccess={async (loggedInUser) => {
-                                                     await fetchUserProfile(loggedInUser.id, loggedInUser);
-                                                     const redirectTo = props.route?.params?.redirectTo;
-                                                     const redirectParams = props.route?.params?.redirectParams;
+                            <Stack.Screen name="Landing">
+                                {props => (
+                                    <LandingPage
+                                        {...props}
+                                        user={user}
+                                        cartCount={cartLines?.length || 0}
+                                        cartLines={cartLines}
+                                        onAddToCart={handleAddToCart}
+                                        onEnterShop={(tab = 'shop', params = {}) => {
+                                            props.navigation.navigate('Main', { screen: tab, ...params });
+                                        }}
+                                        onLogin={() => props.navigation.navigate('Auth')}
+                                        onNavigate={(screen, params) => props.navigation.navigate(screen, params)}
+                                    />
+                                )}
+                            </Stack.Screen>
+                            <Stack.Screen name="Auth">
+                                {props => (
+                                    <AuthPage
+                                        {...props}
+                                        onBack={() => props.navigation.goBack()}
+                                        onLoginSuccess={async (loggedInUser) => {
+                                            await fetchUserProfile(loggedInUser.id, loggedInUser);
+                                            const redirectTo = props.route?.params?.redirectTo;
+                                            const redirectParams = props.route?.params?.redirectParams;
 
-                                                     setTimeout(() => {
-                                                         if (navigationRef.isReady()) {
-                                                             if (redirectTo) {
-                                                                 navigationRef.navigate(redirectTo, redirectParams);
-                                                             } else {
-                                                                 navigationRef.navigate('Main');
-                                                             }
-                                                         }
-                                                     }, 150);
-                                                 }}
-                                            />
-                                        )}
-                                    </Stack.Screen>
-                                    <Stack.Screen name="Main">
-                                        {props => (
-                                            <MainApp
-                                                {...props}
-                                                user={null}
-                                                onUpdateUser={setUser}
-                                                onLogout={handleLogout}
-                                                cartLines={cartLines}
-                                                onUpdateQty={handleUpdateQty}
-                                                onRemoveCart={handleRemoveCart}
-                                                onAddToCart={handleAddToCart}
-                                                onClearCart={handleClearCart}
-                                                onOpenVendorRegister={() => props.navigation.navigate('Auth')}
-                                                onOpenAdmin={() => props.navigation.navigate('Auth')}
-                                                onOpenVendor={() => props.navigation.navigate('Auth')}
-                                            />
-                                        )}
-                                    </Stack.Screen>
-                                    <Stack.Screen name="ProductDetails">
-                                        {props => <ProductDetails {...props} addToCart={handleAddToCart} />}
-                                    </Stack.Screen>
-                                    <Stack.Screen name="ProductComparison">
-                                        {props => <ProductComparison {...props} addToCart={handleAddToCart} />}
-                                    </Stack.Screen>
-                                </>
-                            ) : (
-                                <>
-                                    <Stack.Screen name="Main">
-                                        {props => (
-                                            <MainApp
-                                                {...props}
-                                                user={user}
-                                                onUpdateUser={setUser}
-                                                onLogout={handleLogout}
-                                                cartLines={cartLines}
-                                                onUpdateQty={handleUpdateQty}
-                                                onRemoveCart={handleRemoveCart}
-                                                onAddToCart={handleAddToCart}
-                                                onClearCart={handleClearCart}
-                                                onOpenVendorRegister={() => props.navigation.navigate('VendorRegister')}
-                                                onOpenAdmin={() => props.navigation.navigate('AdminDashboard')}
-                                                onOpenVendor={() => props.navigation.navigate('VendorDashboard')}
-                                            />
-                                        )}
-                                    </Stack.Screen>
-                                    <Stack.Screen name="AdminDashboard">
-                                        {props => <AdminDashboard {...props} user={user} onLogout={handleLogout} />}
-                                    </Stack.Screen>
-                                    <Stack.Screen name="VendorDashboard">
-                                        {props => <VendorDashboard {...props} user={user} onLogout={handleLogout} />}
-                                    </Stack.Screen>
-                                    <Stack.Screen name="DriverDashboard">
-                                        {props => <DriverDashboard {...props} user={user} onLogout={handleLogout} />}
-                                    </Stack.Screen>
-                                    <Stack.Screen name="ProductDetails">
-                                        {props => <ProductDetails {...props} addToCart={handleAddToCart} />}
-                                    </Stack.Screen>
-                                    <Stack.Screen name="VendorRegister">
-                                        {props => <VendorRegister {...props} user={user} onBack={() => props.navigation.goBack()} />}
-                                    </Stack.Screen>
-                                    <Stack.Screen name="ChatScreen" component={ChatScreen} />
-                                    <Stack.Screen name="ConversationsScreen" component={ConversationsScreen} />
-                                    <Stack.Screen name="TrackOrder" component={TrackOrderPage} />
-                                    <Stack.Screen name="Invoice" component={InvoicePage} />
-                                    <Stack.Screen name="CheckoutPage">
-                                        {props => <CheckoutPage {...props} onClearCart={handleClearCart} />}
-                                    </Stack.Screen>
-                                    <Stack.Screen name="AddressPage" component={AddressPage} />
-                                    <Stack.Screen name="ProductComparison">
-                                        {props => <ProductComparison {...props} addToCart={handleAddToCart} />}
-                                    </Stack.Screen>
-                                </>
-                            )}
+                                            setTimeout(() => {
+                                                if (navigationRef.isReady()) {
+                                                    if (redirectTo) {
+                                                        navigationRef.navigate(redirectTo, redirectParams);
+                                                    } else {
+                                                        navigationRef.navigate('Main');
+                                                    }
+                                                }
+                                            }, 150);
+                                        }}
+                                    />
+                                )}
+                            </Stack.Screen>
+                            <Stack.Screen name="Main">
+                                {props => (
+                                    <MainApp
+                                        {...props}
+                                        user={user}
+                                        onUpdateUser={setUser}
+                                        onLogout={handleLogout}
+                                        cartLines={cartLines}
+                                        onUpdateQty={handleUpdateQty}
+                                        onRemoveCart={handleRemoveCart}
+                                        onAddToCart={handleAddToCart}
+                                        onClearCart={handleClearCart}
+                                        onOpenVendorRegister={() => props.navigation.navigate(user ? 'VendorRegister' : 'Auth')}
+                                        onOpenAdmin={() => props.navigation.navigate(user ? 'AdminDashboard' : 'Auth')}
+                                        onOpenVendor={() => props.navigation.navigate(user ? 'VendorDashboard' : 'Auth')}
+                                    />
+                                )}
+                            </Stack.Screen>
+                            <Stack.Screen name="AdminDashboard">
+                                {props => <AdminDashboard {...props} user={user} onLogout={handleLogout} />}
+                            </Stack.Screen>
+                            <Stack.Screen name="VendorDashboard">
+                                {props => <VendorDashboard {...props} user={user} onLogout={handleLogout} />}
+                            </Stack.Screen>
+                            <Stack.Screen name="DriverDashboard">
+                                {props => <DriverDashboard {...props} user={user} onLogout={handleLogout} />}
+                            </Stack.Screen>
+                            <Stack.Screen name="ProductDetails">
+                                {props => <ProductDetails {...props} addToCart={handleAddToCart} />}
+                            </Stack.Screen>
+                            <Stack.Screen name="VendorRegister">
+                                {props => <VendorRegister {...props} user={user} onBack={() => props.navigation.goBack()} />}
+                            </Stack.Screen>
+                            <Stack.Screen name="ChatScreen" component={ChatScreen} />
+                            <Stack.Screen name="ConversationsScreen" component={ConversationsScreen} />
+                            <Stack.Screen name="TrackOrder" component={TrackOrderPage} />
+                            <Stack.Screen name="Invoice" component={InvoicePage} />
+                            <Stack.Screen name="CheckoutPage">
+                                {props => <CheckoutPage {...props} onClearCart={handleClearCart} />}
+                            </Stack.Screen>
+                            <Stack.Screen name="AddressPage" component={AddressPage} />
+                            <Stack.Screen name="ProductComparison">
+                                {props => <ProductComparison {...props} addToCart={handleAddToCart} />}
+                            </Stack.Screen>
                         </Stack.Navigator>
                     </NavigationContainer>
                     </ComparisonProvider>

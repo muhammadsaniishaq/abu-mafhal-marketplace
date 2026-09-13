@@ -43,13 +43,13 @@ export const AdminReviews = () => {
 
             if (error) {
                 console.error("Fetch Reviews Error:", error.message);
-                Alert.alert('Kuskure', 'An gaza loda reviews: ' + error.message);
+                Alert.alert('Error', 'Failed to load reviews: ' + error.message);
             } else {
                 setReviews(data || []);
             }
         } catch (err) {
             console.error("Fetch Reviews Crash:", err);
-            Alert.alert('Hanyar Sadarwa', 'Ba a samu nasarar haduwa da tsarin reviews ba.');
+            Alert.alert('Network Error', 'Unable to connect to reviews service.');
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -68,25 +68,25 @@ export const AdminReviews = () => {
     const handleAction = async (id, status) => {
         const { error } = await supabase.from('reviews').update({ status }).eq('id', id);
         if (!error) {
-            Alert.alert('An Sabunta', `An canza matsayin review zuwa "${status.toUpperCase()}".`);
+            Alert.alert('Updated', `Review status has been changed to "${status.toUpperCase()}".`);
             setReviews(prev => prev.filter(r => r.id !== id));
         } else {
-            Alert.alert('Kuskure', error.message);
+            Alert.alert('Error', error.message);
         }
     };
 
     const handleDelete = (id) => {
-        Alert.alert('Goge Review', 'Shin kana son goge wannan ra\'ayin gaba daya?', [
-            { text: 'A\'a', style: 'cancel' },
+        Alert.alert('Delete Review', 'Are you sure you want to delete this review permanently?', [
+            { text: 'Cancel', style: 'cancel' },
             {
-                text: 'Eh, Goge',
+                text: 'Delete',
                 style: 'destructive',
                 onPress: async () => {
                     const { error } = await supabase.from('reviews').delete().eq('id', id);
                     if (!error) {
                         setReviews(prev => prev.filter(r => r.id !== id));
                     } else {
-                        Alert.alert('Kuskure', error.message);
+                        Alert.alert('Error', error.message);
                     }
                 }
             }
@@ -107,10 +107,10 @@ export const AdminReviews = () => {
     );
 
     const renderItem = ({ item }) => {
-        const userName = item.profiles?.full_name || item.profiles?.username || item.profiles?.email || 'Bako (Anonymous)';
+        const userName = item.profiles?.full_name || item.profiles?.username || item.profiles?.email || 'Anonymous User';
         const targetName = item.review_type === 'driver'
-            ? (item.drivers?.name || 'Direban Isar da Kaya')
-            : (item.products?.name || 'Kayan Kasuwa');
+            ? (item.drivers?.name || 'Delivery Driver')
+            : (item.products?.name || 'Store Product');
 
         return (
             <View style={s.card}>
@@ -120,12 +120,12 @@ export const AdminReviews = () => {
                             <Text style={s.userName} numberOfLines={1}>{userName}</Text>
                             <View style={[s.typeBadge, { backgroundColor: item.review_type === 'driver' ? '#FFFBEB' : '#EFF6FF' }]}>
                                 <Text style={[s.typeBadgeText, { color: item.review_type === 'driver' ? '#D97706' : '#2563EB' }]}>
-                                    {item.review_type === 'driver' ? 'DIREBA' : 'KAYA'}
+                                    {item.review_type === 'driver' ? 'DRIVER' : 'PRODUCT'}
                                 </Text>
                             </View>
                         </View>
                         <Text numberOfLines={1} style={s.targetInfo}>
-                            Ga: <Text style={{ color: NAVY, fontWeight: '700' }}>{targetName}</Text>
+                            For: <Text style={{ color: NAVY, fontWeight: '700' }}>{targetName}</Text>
                         </Text>
                     </View>
                     {renderStars(item.rating || 5)}
@@ -156,7 +156,7 @@ export const AdminReviews = () => {
                         activeOpacity={0.8}
                     >
                         <Ionicons name="trash-outline" size={15} color="#EF4444" />
-                        <Text style={s.deleteBtnText}>Goge</Text>
+                        <Text style={s.deleteBtnText}>Delete</Text>
                     </TouchableOpacity>
 
                     {item.status !== 'rejected' && (
@@ -166,7 +166,7 @@ export const AdminReviews = () => {
                             activeOpacity={0.8}
                         >
                             <Ionicons name="close-circle-outline" size={15} color="#EF4444" />
-                            <Text style={s.rejectBtnText}>Kin Karba</Text>
+                            <Text style={s.rejectBtnText}>Reject</Text>
                         </TouchableOpacity>
                     )}
 
@@ -177,7 +177,7 @@ export const AdminReviews = () => {
                             activeOpacity={0.8}
                         >
                             <Ionicons name="checkmark-circle" size={15} color={NAVY} />
-                            <Text style={s.approveBtnText}>Karba (Approve)</Text>
+                            <Text style={s.approveBtnText}>Approve</Text>
                         </TouchableOpacity>
                     )}
                 </View>
@@ -192,17 +192,17 @@ export const AdminReviews = () => {
                 <View style={{ marginBottom: 12 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         <Ionicons name="star" size={22} color={GOLD} />
-                        <Text style={s.headerTitle}>Bitar Kayan Kasuwa (Reviews)</Text>
+                        <Text style={s.headerTitle}>Reviews & Ratings</Text>
                     </View>
-                    <Text style={s.headerSubtitle}>Tace ra'ayoyin abokan ciniki kan kaya da direbobi</Text>
+                    <Text style={s.headerSubtitle}>Moderate customer feedback on products and drivers</Text>
                 </View>
 
                 {/* Type Filter */}
                 <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
                     {[
-                        { id: 'all', label: 'Duka Nau\'i' },
-                        { id: 'product', label: 'Kayan Kasuwa' },
-                        { id: 'driver', label: 'Direbobi' }
+                        { id: 'all', label: 'All Types' },
+                        { id: 'product', label: 'Products' },
+                        { id: 'driver', label: 'Drivers' }
                     ].map(t => (
                         <TouchableOpacity
                             key={t.id}
@@ -220,9 +220,9 @@ export const AdminReviews = () => {
                 {/* Status Filter */}
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                     {[
-                        { id: 'pending', label: 'Jiran Taciya (Pending)' },
-                        { id: 'approved', label: 'Wadanda Aka Karba' },
-                        { id: 'rejected', label: 'Wadanda Aka Ki' }
+                        { id: 'pending', label: 'Pending' },
+                        { id: 'approved', label: 'Approved' },
+                        { id: 'rejected', label: 'Rejected' }
                     ].map(f => (
                         <TouchableOpacity
                             key={f.id}
@@ -241,7 +241,7 @@ export const AdminReviews = () => {
             {loading ? (
                 <View style={s.centered}>
                     <ActivityIndicator size="large" color={GOLD} />
-                    <Text style={s.loadingText}>Ana binciko reviews...</Text>
+                    <Text style={s.loadingText}>Loading reviews...</Text>
                 </View>
             ) : (
                 <FlatList
@@ -255,9 +255,9 @@ export const AdminReviews = () => {
                             <View style={s.emptyIconCircle}>
                                 <Ionicons name="chatbox-outline" size={40} color={GOLD} />
                             </View>
-                            <Text style={s.emptyTitle}>Babu Ra'ayi A Yanzu</Text>
+                            <Text style={s.emptyTitle}>No Reviews Found</Text>
                             <Text style={s.emptySub}>
-                                Babu wani review na {typeFilter.toUpperCase()} a matsayin {statusFilter.toUpperCase()} a wannan lokacin.
+                                No {typeFilter.toUpperCase()} reviews currently marked as {statusFilter.toUpperCase()}.
                             </Text>
                         </View>
                     }

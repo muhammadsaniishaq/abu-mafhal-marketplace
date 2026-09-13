@@ -43,70 +43,70 @@ const GOLD = '#D9A73A';
 // Top Quick Pill Tabs
 const QUICK_TABS = [
     { id: 'overview', label: 'Dashboard', icon: 'grid-outline', activeIcon: 'grid' },
-    { id: 'orders', label: 'Ododi', icon: 'cart-outline', activeIcon: 'cart' },
-    { id: 'products', label: 'Kayayyaki', icon: 'cube-outline', activeIcon: 'cube' },
-    { id: 'vendors', label: 'Yan Kasuwa', icon: 'storefront-outline', activeIcon: 'storefront' },
-    { id: 'users', label: 'Masu Saye', icon: 'people-outline', activeIcon: 'people' },
-    { id: 'financials', label: 'Kudi', icon: 'cash-outline', activeIcon: 'cash' },
-    { id: 'analytics', label: 'Intelligence', icon: 'stats-chart-outline', activeIcon: 'stats-chart' },
-    { id: 'banners', label: 'Tallace', icon: 'images-outline', activeIcon: 'images' },
-    { id: 'settings', label: 'Saituna', icon: 'settings-outline', activeIcon: 'settings' },
+    { id: 'orders', label: 'Orders', icon: 'cart-outline', activeIcon: 'cart' },
+    { id: 'products', label: 'Products', icon: 'cube-outline', activeIcon: 'cube' },
+    { id: 'vendors', label: 'Vendors', icon: 'storefront-outline', activeIcon: 'storefront' },
+    { id: 'users', label: 'Customers', icon: 'people-outline', activeIcon: 'people' },
+    { id: 'financials', label: 'Financials', icon: 'cash-outline', activeIcon: 'cash' },
+    { id: 'analytics', label: 'Analytics', icon: 'stats-chart-outline', activeIcon: 'stats-chart' },
+    { id: 'banners', label: 'Banners', icon: 'images-outline', activeIcon: 'images' },
+    { id: 'settings', label: 'Settings', icon: 'settings-outline', activeIcon: 'settings' },
 ];
 
 // All Admin Modules Organized into Logical Categories
 const MODULE_SECTIONS = [
     {
-        title: 'Kasuwanci Da Kayayyaki (Commerce & Catalog)',
+        title: 'Commerce & Catalog',
         items: [
-            { id: 'products', title: 'Kayayyaki', desc: 'Duba & sarrafa kayan kasuwa', icon: 'cube-outline', color: '#9333EA', bg: '#F3E8FF' },
-            { id: 'orders', title: 'Umarnin Sayayya', desc: 'Bibiyar ododi da isar da kaya', icon: 'cart-outline', color: '#2563EB', bg: '#EFF6FF' },
-            { id: 'categories', title: 'Rukunoni', desc: 'Nau\'o\'in kayayyakin kasuwa', icon: 'grid-outline', color: '#059669', bg: '#ECFDF5' },
-            { id: 'brands', title: 'Official Brands', desc: 'Manyan shagunan kamfanoni', icon: 'pricetag-outline', color: '#D97706', bg: '#FFFBEB' },
-            { id: 'invoices', title: 'Invoices & Rasitai', desc: 'Duba rasitai & aika email', icon: 'receipt-outline', color: '#4F46E5', bg: '#EEF2FF' },
-            { id: 'abandoned_carts', title: 'Kwandunan Sayayya', desc: 'Taimaka wa masu kwandon kaya', icon: 'basket-outline', color: '#DC2626', bg: '#FEF2F2' },
+            { id: 'products', title: 'Products', desc: 'Manage inventory & catalog', icon: 'cube-outline', color: '#9333EA', bg: '#F3E8FF' },
+            { id: 'orders', title: 'Orders', desc: 'Track sales & fulfillments', icon: 'cart-outline', color: '#2563EB', bg: '#EFF6FF' },
+            { id: 'categories', title: 'Categories', desc: 'Store product taxonomy', icon: 'grid-outline', color: '#059669', bg: '#ECFDF5' },
+            { id: 'brands', title: 'Official Brands', desc: 'Verified partner stores', icon: 'pricetag-outline', color: '#D97706', bg: '#FFFBEB' },
+            { id: 'invoices', title: 'Invoices & Receipts', desc: 'Generate & email receipts', icon: 'receipt-outline', color: '#4F46E5', bg: '#EEF2FF' },
+            { id: 'abandoned_carts', title: 'Abandoned Carts', desc: 'Recover lost checkouts', icon: 'basket-outline', color: '#DC2626', bg: '#FEF2F2' },
         ]
     },
     {
-        title: 'Masu Ruwa Da Tsaki (Stakeholders & Users)',
+        title: 'Stakeholders & Users',
         items: [
-            { id: 'users', title: 'Masu Sayayya', desc: 'Bibiyar asusu, tiers & wallet', icon: 'people-outline', color: '#059669', bg: '#ECFDF5' },
-            { id: 'vendors', title: 'Yan Kasuwa', desc: 'Aikace-aikace & amincewa da shago', icon: 'storefront-outline', color: '#2563EB', bg: '#EFF6FF' },
-            { id: 'payouts', title: 'Biyan Kudi (Payouts)', desc: 'Biyan dillalai da direbobi', icon: 'wallet-outline', color: '#D97706', bg: '#FFFBEB' },
-            { id: 'referrals', title: 'Gayyato Abokai', desc: 'Mafhal coins & shirin lada', icon: 'gift-outline', color: '#7C3AED', bg: '#F5F3FF' },
+            { id: 'users', title: 'Customers', desc: 'Accounts, tiers & wallets', icon: 'people-outline', color: '#059669', bg: '#ECFDF5' },
+            { id: 'vendors', title: 'Vendors', desc: 'Merchant stores & approvals', icon: 'storefront-outline', color: '#2563EB', bg: '#EFF6FF' },
+            { id: 'payouts', title: 'Payouts', desc: 'Vendor & driver payouts', icon: 'wallet-outline', color: '#D97706', bg: '#FFFBEB' },
+            { id: 'referrals', title: 'Referrals & Rewards', desc: 'Ambassadors & loyalty coins', icon: 'gift-outline', color: '#7C3AED', bg: '#F5F3FF' },
         ]
     },
     {
-        title: 'Talla Da Rangwame (Marketing & Promotions)',
+        title: 'Marketing & Promotions',
         items: [
-            { id: 'banners', title: 'Tallan Gida (Banners)', desc: 'Hero banners & hotunan talla', icon: 'images-outline', color: '#D97706', bg: '#FFFBEB' },
-            { id: 'promo_banners', title: 'Promos & AI Talla', desc: 'Rubuta talla ta Gemini AI', icon: 'sparkles-outline', color: '#9333EA', bg: '#F3E8FF' },
-            { id: 'flash_sales', title: 'Flash Sales', desc: 'Kasuwar sauki mai agogo', icon: 'flash-outline', color: '#DC2626', bg: '#FEF2F2' },
-            { id: 'coupons', title: 'Lambobin Coupon', desc: 'Sanya kudaden rangwame', icon: 'ticket-outline', color: '#059669', bg: '#ECFDF5' },
-            { id: 'broadcast', title: 'Sanarwar Gaggawa', desc: 'Aika push ga jama\'a', icon: 'megaphone-outline', color: '#2563EB', bg: '#EFF6FF' },
+            { id: 'banners', title: 'Home Banners', desc: 'Hero carousel & promo cards', icon: 'images-outline', color: '#D97706', bg: '#FFFBEB' },
+            { id: 'promo_banners', title: 'AI Promo Banners', desc: 'Generate copy with Gemini AI', icon: 'sparkles-outline', color: '#9333EA', bg: '#F3E8FF' },
+            { id: 'flash_sales', title: 'Flash Sales', desc: 'Timed discount campaigns', icon: 'flash-outline', color: '#DC2626', bg: '#FEF2F2' },
+            { id: 'coupons', title: 'Coupons', desc: 'Discount codes & promotions', icon: 'ticket-outline', color: '#059669', bg: '#ECFDF5' },
+            { id: 'broadcast', title: 'Broadcast Alerts', desc: 'Send global push alerts', icon: 'megaphone-outline', color: '#2563EB', bg: '#EFF6FF' },
         ]
     },
     {
-        title: 'Kudi Da Bincike (Finance & Intelligence)',
+        title: 'Finance & Intelligence',
         items: [
-            { id: 'analytics', title: 'Intelligence HUD', desc: 'Cikakken binciken kasuwa live', icon: 'stats-chart-outline', color: '#2563EB', bg: '#EFF6FF' },
-            { id: 'financials', title: 'Bayanin Kudi', desc: 'Rabon kasuwa da kudin shiga', icon: 'cash-outline', color: '#16A34A', bg: '#DCFCE7' },
-            { id: 'audit_logs', title: 'Ayyukan Tsaro (Audit)', desc: 'Forensic logs & CSV export', icon: 'shield-checkmark-outline', color: '#475569', bg: '#F1F5F9' },
+            { id: 'analytics', title: 'Intelligence HUD', desc: 'Real-time analytics & KPIs', icon: 'stats-chart-outline', color: '#2563EB', bg: '#EFF6FF' },
+            { id: 'financials', title: 'Financials', desc: 'Revenue breakdown & profits', icon: 'cash-outline', color: '#16A34A', bg: '#DCFCE7' },
+            { id: 'audit_logs', title: 'Audit Logs', desc: 'Security records & CSV export', icon: 'shield-checkmark-outline', color: '#475569', bg: '#F1F5F9' },
         ]
     },
     {
-        title: 'Kula Da Masu Sayayya (Care & Moderation)',
+        title: 'Care & Moderation',
         items: [
-            { id: 'support', title: 'Tikitin Agaji (Support)', desc: 'Amsa korafe-korafe & WhatsApp', icon: 'chatbubbles-outline', color: '#2563EB', bg: '#EFF6FF' },
-            { id: 'disputes', title: 'Sasanta Rikici', desc: 'Rikicin kaya tsakanin abokan ciniki', icon: 'warning-outline', color: '#D97706', bg: '#FFFBEB' },
-            { id: 'reviews', title: 'Bitar Kayan Kasuwa', desc: 'Tace reviews & ratings', icon: 'star-outline', color: '#F59E0B', bg: '#FEF3C7' },
+            { id: 'support', title: 'Helpdesk & Support', desc: 'Customer tickets & WhatsApp', icon: 'chatbubbles-outline', color: '#2563EB', bg: '#EFF6FF' },
+            { id: 'disputes', title: 'Disputes', desc: 'Mediate customer disputes', icon: 'warning-outline', color: '#D97706', bg: '#FFFBEB' },
+            { id: 'reviews', title: 'Reviews & Ratings', desc: 'Product & driver feedback', icon: 'star-outline', color: '#F59E0B', bg: '#FEF3C7' },
         ]
     },
     {
-        title: 'Saituna Da Bayanai (Platform & Appearance)',
+        title: 'Platform & Settings',
         items: [
-            { id: 'home_settings', title: 'Tsarin Fuskar Gida', desc: 'Kayan shafin farko na manhaja', icon: 'home-outline', color: '#4F46E5', bg: '#EEF2FF' },
-            { id: 'cms', title: 'Shafukan Dokoki (CMS)', desc: 'About, Terms, Privacy, FAQ', icon: 'document-text-outline', color: '#475569', bg: '#F1F5F9' },
-            { id: 'settings', title: 'Saitunan Dandamali', desc: 'Kudin aika kaya, APIs, gateways', icon: 'settings-outline', color: '#0E1A2E', bg: '#F8FAFC' },
+            { id: 'home_settings', title: 'Home Customizer', desc: 'Configure mobile home screen', icon: 'home-outline', color: '#4F46E5', bg: '#EEF2FF' },
+            { id: 'cms', title: 'Content Pages (CMS)', desc: 'About, Terms, Privacy, FAQ', icon: 'document-text-outline', color: '#475569', bg: '#F1F5F9' },
+            { id: 'settings', title: 'Platform Settings', desc: 'Shipping, APIs, gateways', icon: 'settings-outline', color: '#0E1A2E', bg: '#F8FAFC' },
         ]
     }
 ];
@@ -134,6 +134,14 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
 
     useEffect(() => {
         fetchAdminData();
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.setItem('@abumafhal_last_screen', 'AdminDashboard');
+                if (window.location.hash !== '#admin') {
+                    window.location.hash = 'admin';
+                }
+            }
+        } catch (_) {}
     }, []);
 
     const fetchAdminData = async () => {
@@ -207,20 +215,27 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
     };
 
     const handleLogoutPrompt = () => {
-        Alert.alert(
-            'Fita Daga Asusu',
-            'Kana da tabbacin kana son fita daga sashen sarrafa kasuwa (Admin)?',
-            [
-                { text: 'A\'a (Cancel)', style: 'cancel' },
-                { 
-                    text: 'Fita (Logout)', 
-                    style: 'destructive',
-                    onPress: () => {
-                        if (typeof onLogout === 'function') onLogout();
+        if (Platform.OS === 'web') {
+            const confirmed = typeof window !== 'undefined' ? window.confirm('Are you sure you want to log out of the Admin Console?') : true;
+            if (confirmed && typeof onLogout === 'function') {
+                onLogout();
+            }
+        } else {
+            Alert.alert(
+                'Log Out',
+                'Are you sure you want to log out of the Admin Console?',
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    { 
+                        text: 'Log Out', 
+                        style: 'destructive',
+                        onPress: () => {
+                            if (typeof onLogout === 'function') onLogout();
+                        }
                     }
-                }
-            ]
-        );
+                ]
+            );
+        }
     };
 
     const formatNaira = (amount) => {
@@ -236,7 +251,7 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 }}>
                     <ActivityIndicator size="large" color={GOLD} />
                     <Text style={{ marginTop: 12, fontSize: 13, fontWeight: '700', color: '#64748B' }}>
-                        Ana loda bayanan Admin live...
+                        Loading live admin data...
                     </Text>
                 </View>
             );
@@ -283,16 +298,16 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                             }}>
                                 <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' }} />
                                 <Text style={{ color: '#10B981', fontSize: 9.5, fontWeight: '800' }}>
-                                    KASUWA TANA TAFIA LAFIYA (LIVE)
+                                    STORE OPERATIONAL (LIVE)
                                 </Text>
                             </View>
 
                             <Text style={{ color: '#FFFFFF', fontSize: 19, fontWeight: '900', letterSpacing: -0.3 }}>
-                                Barka da Aiki, {adminName}! 👋
+                                Welcome back, {adminName}! 👋
                             </Text>
 
                             <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '600', marginTop: 4 }}>
-                                Babban sashen sarrafa kasuwar Abu Mafhal a wayar hannu.
+                                Abu Mafhal Mobile Command Center.
                             </Text>
                         </View>
 
@@ -342,7 +357,7 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                         alignItems: 'center'
                     }}>
                         <View>
-                            <Text style={{ color: '#94A3B8', fontSize: 10, fontWeight: '700' }}>Cikakken Kudin Shiga (Gross)</Text>
+                            <Text style={{ color: '#94A3B8', fontSize: 10, fontWeight: '700' }}>Total Gross Revenue</Text>
                             <Text style={{ color: GOLD, fontSize: 18, fontWeight: '900', marginTop: 1 }}>{formatNaira(stats.totalRevenue)}</Text>
                         </View>
 
@@ -357,7 +372,7 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                                 borderColor: 'rgba(217, 167, 58, 0.3)'
                             }}
                         >
-                            <Text style={{ color: GOLD, fontSize: 10.5, fontWeight: '800' }}>Bayanin Kudi →</Text>
+                            <Text style={{ color: GOLD, fontSize: 10.5, fontWeight: '800' }}>Financials →</Text>
                         </TouchableOpacity>
                     </View>
                 </LinearGradient>
@@ -383,14 +398,14 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                         }}
                     >
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>Ododin Sayayya</Text>
+                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>Orders</Text>
                             <View style={{ width: 28, height: 28, borderRadius: 9, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' }}>
                                 <Ionicons name="cart" size={15} color="#2563EB" />
                             </View>
                         </View>
                         <Text style={{ fontSize: 22, fontWeight: '900', color: NAVY }}>{stats.totalOrders}</Text>
                         <Text style={{ fontSize: 10, fontWeight: '700', color: '#D97706', marginTop: 2 }}>
-                            {stats.pendingOrders} Ke Jira
+                            {stats.pendingOrders} Pending
                         </Text>
                     </TouchableOpacity>
 
@@ -413,14 +428,14 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                         }}
                     >
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>Kayan Kasuwa</Text>
+                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>Products</Text>
                             <View style={{ width: 28, height: 28, borderRadius: 9, backgroundColor: '#F3E8FF', alignItems: 'center', justifyContent: 'center' }}>
                                 <Ionicons name="cube" size={15} color="#9333EA" />
                             </View>
                         </View>
                         <Text style={{ fontSize: 22, fontWeight: '900', color: NAVY }}>{stats.totalProducts}</Text>
                         <Text style={{ fontSize: 10, fontWeight: '700', color: '#16A34A', marginTop: 2 }}>
-                            {stats.activeProducts} Masu Aiki
+                            {stats.activeProducts} Active
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -445,14 +460,14 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                         }}
                     >
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>Yan Kasuwa</Text>
+                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>Vendors</Text>
                             <View style={{ width: 28, height: 28, borderRadius: 9, backgroundColor: '#FFFBEB', alignItems: 'center', justifyContent: 'center' }}>
                                 <Ionicons name="storefront" size={15} color={GOLD} />
                             </View>
                         </View>
                         <Text style={{ fontSize: 22, fontWeight: '900', color: NAVY }}>{stats.totalVendors}</Text>
                         <Text style={{ fontSize: 10, fontWeight: '700', color: GOLD, marginTop: 2 }}>
-                            Shagunan Kasuwa
+                            Active Stores
                         </Text>
                     </TouchableOpacity>
 
@@ -475,14 +490,14 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                         }}
                     >
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>Masu Sayayya</Text>
+                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>Customers</Text>
                             <View style={{ width: 28, height: 28, borderRadius: 9, backgroundColor: '#ECFDF5', alignItems: 'center', justifyContent: 'center' }}>
                                 <Ionicons name="people" size={15} color="#059669" />
                             </View>
                         </View>
                         <Text style={{ fontSize: 22, fontWeight: '900', color: NAVY }}>{stats.totalUsers}</Text>
                         <Text style={{ fontSize: 10, fontWeight: '700', color: '#059669', marginTop: 2 }}>
-                            Masu Asusu
+                            Registered Users
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -533,7 +548,7 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                                         }}
                                     >
                                         <View style={{
-                                            width: 38,
+                                             width: 38,
                                             height: 38,
                                             borderRadius: 11,
                                             backgroundColor: item.bg,
@@ -561,16 +576,16 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                 <View style={{ backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                         <Text style={{ fontSize: 13, fontWeight: '900', color: NAVY }}>
-                            Ododin Da Aka Yi Kwanan Nan
+                            Recent Orders
                         </Text>
                         <TouchableOpacity onPress={() => setActiveTab('orders')}>
-                            <Text style={{ fontSize: 11, fontWeight: '800', color: GOLD }}>Duba Duka →</Text>
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: GOLD }}>View All →</Text>
                         </TouchableOpacity>
                     </View>
 
                     {recentOrders.length === 0 ? (
                         <Text style={{ color: '#94A3B8', fontSize: 11, textAlign: 'center', paddingVertical: 14 }}>
-                            Babu ododi a halin yanzu.
+                            No orders placed yet.
                         </Text>
                     ) : (
                         recentOrders.map((ord) => (
@@ -623,16 +638,16 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                 <View style={{ backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                         <Text style={{ fontSize: 13, fontWeight: '900', color: NAVY }}>
-                            Kayan Da Aka Saka Kwanan Nan
+                            Recently Added Products
                         </Text>
                         <TouchableOpacity onPress={() => setActiveTab('products')}>
-                            <Text style={{ fontSize: 11, fontWeight: '800', color: GOLD }}>Duba Duka →</Text>
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: GOLD }}>View All →</Text>
                         </TouchableOpacity>
                     </View>
 
                     {recentProducts.length === 0 ? (
                         <Text style={{ color: '#94A3B8', fontSize: 11, textAlign: 'center', paddingVertical: 14 }}>
-                            Babu wani kaya a halin yanzu.
+                            No products in store yet.
                         </Text>
                     ) : (
                         recentProducts.map((prod) => {
@@ -839,7 +854,7 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                                 borderWidth: 1,
                                 borderColor: 'rgba(239, 68, 68, 0.25)'
                             }}
-                            title="Fita"
+                            title="Log Out"
                         >
                             <Ionicons name="log-out-outline" size={16} color="#F87171" />
                         </TouchableOpacity>
@@ -910,7 +925,7 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                             <Ionicons name="chevron-back" size={16} color={NAVY} />
                         </View>
                         <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY }}>
-                            Komawa Babban Dashboard
+                            Back to Dashboard
                         </Text>
                     </TouchableOpacity>
 

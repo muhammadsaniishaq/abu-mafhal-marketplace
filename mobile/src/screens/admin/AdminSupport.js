@@ -64,7 +64,7 @@ const TicketDetailsModal = ({ visible, ticket, onClose, onSuccess, onDelete, onR
     }, [visible, ticket]);
 
     const handleReply = async () => {
-        if (!reply.trim()) return Alert.alert('Kula', 'Da fatan za a rubuta amsa kafin aika wa.');
+        if (!reply.trim()) return Alert.alert('Error', 'Please write a reply before sending.');
         setSending(true);
 
         try {
@@ -74,7 +74,7 @@ const TicketDetailsModal = ({ visible, ticket, onClose, onSuccess, onDelete, onR
                 .eq('id', ticket.id);
 
             if (error) {
-                Alert.alert('Kuskure', error.message);
+                Alert.alert('Error', error.message);
                 setSending(false);
                 return;
             }
@@ -83,8 +83,8 @@ const TicketDetailsModal = ({ visible, ticket, onClose, onSuccess, onDelete, onR
             if (ticket.user_id) {
                 await supabase.from('notifications').insert([{
                     user_id: ticket.user_id,
-                    title: 'An Amsa Tikitin Ku (Ticket Resolved)',
-                    body: `Admin ya amsa bukatarku kan "${ticket.subject}": ${reply.trim().substring(0, 80)}...`,
+                    title: 'Ticket Resolved',
+                    body: `Admin resolved your inquiry regarding "${ticket.subject}": ${reply.trim().substring(0, 80)}...`,
                     is_read: false,
                     data: {
                         type: 'support',
@@ -95,29 +95,29 @@ const TicketDetailsModal = ({ visible, ticket, onClose, onSuccess, onDelete, onR
 
             // WhatsApp Notification if available
             if (ticket.user?.phone) {
-                const supportMsg = `Barka! An amsa korafin ku a Abu-Mafhal Marketplace dangane da "${ticket.subject}". Amsa: ${reply.trim().substring(0, 80)}... Da fatan za a duba manhaja don ganin cikakken bayani.`;
+                const supportMsg = `Hello! Your inquiry regarding "${ticket.subject}" has been resolved on Abu-Mafhal Marketplace. Response: ${reply.trim().substring(0, 80)}... Please check the app for details.`;
                 whatsappService.sendDirect(ticket.user.phone, supportMsg, ticket.user_id)
                     .catch(e => console.log('Support Reply WhatsApp Error:', e));
             }
 
-            Alert.alert('Nasarar Aikawa', 'An aika amsa kuma an rufe wannan tikitin cikin nasara.');
+            Alert.alert('Reply Sent', 'Your reply has been sent and this ticket has been marked as resolved.');
             setSending(false);
             onSuccess();
         } catch (e) {
             console.error('Reply catch:', e);
-            Alert.alert('Kuskure', e.message);
+            Alert.alert('Error', e.message);
             setSending(false);
         }
     };
 
     const handleOpenWhatsApp = () => {
         if (!ticket.user?.phone) {
-            Alert.alert('Babu Lambar Waya', 'Wannan mai amfani bashi da lambar waya a account dinsa.');
+            Alert.alert('No Phone Number', 'This user does not have a phone number registered on their account.');
             return;
         }
         let cleanPhone = ticket.user.phone.replace(/[^0-9]/g, '');
         if (cleanPhone.startsWith('0')) cleanPhone = '234' + cleanPhone.slice(1);
-        const text = encodeURIComponent(`Barka ${ticket.user.full_name || ''}, daga Abu-Mafhal Customer Support dangane da tikitin ku: "${ticket.subject}".`);
+        const text = encodeURIComponent(`Hello ${ticket.user.full_name || ''}, from Abu-Mafhal Customer Support regarding your ticket: "${ticket.subject}".`);
         Linking.openURL(`https://wa.me/${cleanPhone}?text=${text}`);
     };
 
@@ -135,7 +135,7 @@ const TicketDetailsModal = ({ visible, ticket, onClose, onSuccess, onDelete, onR
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                                 <View style={[s.badgePill, { backgroundColor: isOpen ? '#FEF3C7' : '#DCFCE7' }]}>
                                     <Text style={[s.badgePillText, { color: isOpen ? '#D97706' : '#059669' }]}>
-                                        {isOpen ? 'A BUDE (PENDING)' : 'AN WARWARE (RESOLVED)'}
+                                        {isOpen ? 'PENDING' : 'RESOLVED'}
                                     </Text>
                                 </View>
                                 <View style={s.catBadge}>
@@ -159,12 +159,12 @@ const TicketDetailsModal = ({ visible, ticket, onClose, onSuccess, onDelete, onR
                                     {!isOpen && (
                                         <TouchableOpacity onPress={() => onReopen(ticket.id)} style={s.reopenBtn}>
                                             <Ionicons name="refresh" size={14} color={NAVY} />
-                                            <Text style={s.reopenBtnText}>Sake Budewa</Text>
+                                            <Text style={s.reopenBtnText}>Reopen</Text>
                                         </TouchableOpacity>
                                     )}
                                     <TouchableOpacity onPress={() => onDelete(ticket.id)} style={s.deleteBtn}>
                                         <Ionicons name="trash" size={14} color="#EF4444" />
-                                        <Text style={s.deleteBtnText}>Goge</Text>
+                                        <Text style={s.deleteBtnText}>Delete</Text>
                                     </TouchableOpacity>
                                 </View>
                             </View>
@@ -177,8 +177,8 @@ const TicketDetailsModal = ({ visible, ticket, onClose, onSuccess, onDelete, onR
                                     </Text>
                                 </View>
                                 <View style={{ flex: 1 }}>
-                                    <Text style={s.userNameText}>{ticket.user?.full_name || 'Bako (Unknown User)'}</Text>
-                                    <Text style={s.userEmailText}>{ticket.user?.email || ticket.user?.phone || 'Babu lamba/email'}</Text>
+                                    <Text style={s.userNameText}>{ticket.user?.full_name || 'Guest User'}</Text>
+                                    <Text style={s.userEmailText}>{ticket.user?.email || ticket.user?.phone || 'No contact info'}</Text>
                                 </View>
                                 {ticket.user?.phone && (
                                     <TouchableOpacity 
@@ -193,7 +193,7 @@ const TicketDetailsModal = ({ visible, ticket, onClose, onSuccess, onDelete, onR
                             </View>
 
                             {/* User Message Bubble */}
-                            <Text style={s.bubbleLabel}>SAKON MAI SAYAYYA (USER INQUIRY)</Text>
+                            <Text style={s.bubbleLabel}>CUSTOMER INQUIRY</Text>
                             <View style={s.userMessageBubble}>
                                 <Text style={s.userMessageText}>{ticket.message}</Text>
                             </View>
@@ -201,7 +201,7 @@ const TicketDetailsModal = ({ visible, ticket, onClose, onSuccess, onDelete, onR
                             {/* Admin Reply or Action */}
                             {ticket.admin_reply ? (
                                 <View style={{ alignItems: 'flex-end', marginBottom: 24 }}>
-                                    <Text style={[s.bubbleLabel, { color: '#059669', marginRight: 8 }]}>AMSAR ADMIN (RESOLVED)</Text>
+                                    <Text style={[s.bubbleLabel, { color: '#059669', marginRight: 8 }]}>ADMIN RESOLUTION</Text>
                                     <View style={s.adminReplyBubble}>
                                         <Text style={s.adminReplyText}>{ticket.admin_reply}</Text>
                                     </View>
@@ -210,11 +210,11 @@ const TicketDetailsModal = ({ visible, ticket, onClose, onSuccess, onDelete, onR
                                 <View style={s.replyBox}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                                         <Ionicons name="chatbox-ellipses" size={18} color={NAVY} />
-                                        <Text style={s.replyBoxTitle}>Amsa Tikiti & Warware Matsala</Text>
+                                        <Text style={s.replyBoxTitle}>Reply to Ticket & Resolve</Text>
                                     </View>
                                     <TextInput
                                         style={s.replyInput}
-                                        placeholder="Rubuta amsar ka ga wannan mai sayayya a nan..."
+                                        placeholder="Type your reply to this customer here..."
                                         placeholderTextColor="#94A3B8"
                                         multiline
                                         value={reply}
@@ -231,7 +231,7 @@ const TicketDetailsModal = ({ visible, ticket, onClose, onSuccess, onDelete, onR
                                         ) : (
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                                 <Ionicons name="checkmark-done-circle" size={18} color={NAVY} />
-                                                <Text style={s.sendReplyBtnText}>Aika Amsa & Warwarewa</Text>
+                                                <Text style={s.sendReplyBtnText}>Send Reply & Resolve</Text>
                                             </View>
                                         )}
                                     </TouchableOpacity>
@@ -287,13 +287,13 @@ export const AdminSupport = () => {
 
     // ─── Actions ────────────────────────────────────────────────────────────
     const handleDelete = (id) => {
-        Alert.alert('Goge Tikiti', 'Shin da gaske kana son goge wannan tikitin gaba daya?', [
-            { text: 'A\'a', style: 'cancel' },
+        Alert.alert('Delete Ticket', 'Are you sure you want to delete this ticket permanently?', [
+            { text: 'Cancel', style: 'cancel' },
             {
-                text: 'Eh, Goge', style: 'destructive', onPress: async () => {
+                text: 'Delete', style: 'destructive', onPress: async () => {
                     const { error } = await supabase.from('support_tickets').delete().eq('id', id);
                     if (error) {
-                        Alert.alert('Kuskure', error.message);
+                        Alert.alert('Error', error.message);
                     } else {
                         setTickets(prev => prev.filter(t => t.id !== id));
                         if (selectedTicket?.id === id) setSelectedTicket(null);
@@ -304,13 +304,13 @@ export const AdminSupport = () => {
     };
 
     const handleReopen = (id) => {
-        Alert.alert('Sake Bude Tikiti', 'Wannan zai maida tikitin a matsayin wanda yake jiran amsa (Pending).', [
-            { text: 'A\'a', style: 'cancel' },
+        Alert.alert('Reopen Ticket', 'This will reopen the ticket back to Pending status.', [
+            { text: 'Cancel', style: 'cancel' },
             {
-                text: 'Eh, Bude', onPress: async () => {
+                text: 'Reopen', onPress: async () => {
                     const { error } = await supabase.from('support_tickets').update({ status: 'open', admin_reply: null }).eq('id', id);
                     if (error) {
-                        Alert.alert('Kuskure', error.message);
+                        Alert.alert('Error', error.message);
                     } else {
                         setTickets(prev => prev.map(t => t.id === id ? { ...t, status: 'open', admin_reply: null } : t));
                         setSelectedTicket(null);
@@ -345,10 +345,10 @@ export const AdminSupport = () => {
                 <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         <Ionicons name="chatbubbles" size={22} color={GOLD} />
-                        <Text style={s.headerTitle}>Tikitin Agaji (Support)</Text>
+                        <Text style={s.headerTitle}>Customer Support</Text>
                     </View>
                     <Text style={s.headerSubtitle}>
-                        {tickets.filter(t => t.status === 'open').length} suna jiran amsa a yanzu
+                        {tickets.filter(t => t.status === 'open').length} inquiries pending response
                     </Text>
                 </View>
             </View>
@@ -358,7 +358,7 @@ export const AdminSupport = () => {
                 <Ionicons name="search" size={16} color={GOLD} />
                 <TextInput
                     style={s.searchInput}
-                    placeholder="Bincika saƙo, suna ko rukuni..."
+                    placeholder="Search by subject, name or category..."
                     placeholderTextColor="#94A3B8"
                     value={search}
                     onChangeText={setSearch}
@@ -373,9 +373,9 @@ export const AdminSupport = () => {
             {/* Filter Tabs */}
             <View style={s.filterRow}>
                 {[
-                    { id: 'all', label: 'Duka Tikiti', count: tickets.length },
-                    { id: 'open', label: 'Jiran Amsa', count: tickets.filter(t => t.status === 'open').length },
-                    { id: 'resolved', label: 'An Warware', count: tickets.filter(t => t.status === 'resolved').length },
+                    { id: 'all', label: 'All Tickets', count: tickets.length },
+                    { id: 'open', label: 'Pending', count: tickets.filter(t => t.status === 'open').length },
+                    { id: 'resolved', label: 'Resolved', count: tickets.filter(t => t.status === 'resolved').length },
                 ].map(f => {
                     const active = filter === f.id;
                     return (
@@ -425,7 +425,7 @@ export const AdminSupport = () => {
                     </View>
                     <View style={[s.statusTag, { backgroundColor: isOpen ? '#FEF3C7' : '#ECFDF5' }]}>
                         <Text style={[s.statusTagText, { color: isOpen ? '#D97706' : '#059669' }]}>
-                            {isOpen ? 'A BUDE' : 'AN RUFE'}
+                            {isOpen ? 'OPEN' : 'RESOLVED'}
                         </Text>
                     </View>
                 </View>
@@ -441,17 +441,17 @@ export const AdminSupport = () => {
                         </Text>
                     </View>
                     <Text style={s.footerUserName} numberOfLines={1}>
-                        {item.user?.full_name || 'Bako (Guest User)'}
+                        {item.user?.full_name || 'Guest User'}
                     </Text>
                     {item.admin_reply ? (
                         <View style={s.repliedBadge}>
                             <Ionicons name="return-down-forward" size={13} color="#059669" />
-                            <Text style={s.repliedBadgeText}>An Amsa</Text>
+                            <Text style={s.repliedBadgeText}>Replied</Text>
                         </View>
                     ) : (
                         <View style={s.pendingBadge}>
                             <Ionicons name="time-outline" size={13} color="#D97706" />
-                            <Text style={s.pendingBadgeText}>Yana Jira</Text>
+                            <Text style={s.pendingBadgeText}>Pending</Text>
                         </View>
                     )}
                 </View>
@@ -478,11 +478,11 @@ export const AdminSupport = () => {
                             <View style={s.emptyIconCircle}>
                                 <Ionicons name="chatbubbles-outline" size={36} color={GOLD} />
                             </View>
-                            <Text style={s.emptyTitle}>Babu Tikitin Agaji</Text>
+                            <Text style={s.emptyTitle}>No Support Tickets</Text>
                             <Text style={s.emptySub}>
                                 {search 
-                                    ? `Babu wani korafi da ya dace da "${search}"` 
-                                    : "Babu wani tikitin neman agaji ko korafi da aka aiko a yanzu."}
+                                    ? `No support inquiries matching "${search}"` 
+                                    : "No customer support inquiries submitted yet."}
                             </Text>
                         </View>
                     }

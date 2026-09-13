@@ -102,7 +102,7 @@ export const AdminCategories = () => {
 
     const handleSave = async () => {
         if (!formName.trim()) {
-            return Alert.alert('Kuskure', 'Da fatan a saka sunan rukuni (Category Name)');
+            return Alert.alert('Error', 'Please enter category name');
         }
 
         const slug = formName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
@@ -122,7 +122,7 @@ export const AdminCategories = () => {
                     .eq('id', editingCategory.id);
 
                 if (error) throw error;
-                Alert.alert('An Sabunta', 'An sabunta rukunin kaya cikin nasara.');
+                Alert.alert('Updated', 'Category updated successfully.');
             } else {
                 // Insert
                 const { error } = await supabase
@@ -135,13 +135,13 @@ export const AdminCategories = () => {
                     }]);
 
                 if (error) throw error;
-                Alert.alert('An Ƙara', 'An ƙara sabon rukunin kaya.');
+                Alert.alert('Success', 'New category created successfully.');
             }
 
             setModalVisible(false);
             fetchCategories();
         } catch (err) {
-            Alert.alert('Kuskure', err.message || 'An samu matsala wajen adana rukuni.');
+            Alert.alert('Error', err.message || 'Failed to save category.');
         } finally {
             setUploading(false);
         }
@@ -149,19 +149,19 @@ export const AdminCategories = () => {
 
     const deleteCat = (cat) => {
         Alert.alert(
-            'Goge Rukuni',
-            `Kana da tabbacin kana son goge rukunin "${cat.name}"?`,
+            'Delete Category',
+            `Are you sure you want to delete category "${cat.name}"?`,
             [
-                { text: 'A\'a (Cancel)', style: 'cancel' },
+                { text: 'Cancel', style: 'cancel' },
                 {
-                    text: 'Goge (Delete)',
+                    text: 'Delete',
                     style: 'destructive',
                     onPress: async () => {
                         const { error } = await supabase.from('categories').delete().eq('id', cat.id);
                         if (!error) {
                             setCategories(prev => prev.filter(c => c.id !== cat.id));
                         } else {
-                            Alert.alert('Kuskure', error.message);
+                            Alert.alert('Error', error.message);
                         }
                     }
                 }
@@ -181,10 +181,10 @@ export const AdminCategories = () => {
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                     <View>
                         <Text style={{ fontSize: 18, fontWeight: '900', color: NAVY }}>
-                            Rukunonin Kasuwa (Categories)
+                            Categories Management
                         </Text>
                         <Text style={{ color: '#64748B', fontSize: 11.5, marginTop: 2 }}>
-                            Kula da rukunoni da nau'o'in kayan dake kasuwar Abu Mafhal
+                            Manage product categories and catalog structure for Abu Mafhal Marketplace
                         </Text>
                     </View>
 
@@ -302,7 +302,7 @@ export const AdminCategories = () => {
                                     }}
                                 >
                                     <Ionicons name="create-outline" size={13} color={NAVY} />
-                                    <Text style={{ fontSize: 10.5, fontWeight: '700', color: NAVY }}>Gyara</Text>
+                                    <Text style={{ fontSize: 10.5, fontWeight: '700', color: NAVY }}>Edit</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
@@ -323,7 +323,7 @@ export const AdminCategories = () => {
                         <View style={{ alignItems: 'center', marginTop: 40, opacity: 0.7 }}>
                             <Ionicons name="folder-open-outline" size={48} color="#94A3B8" />
                             <Text style={{ color: '#64748B', marginTop: 10, fontWeight: '700', fontSize: 13 }}>
-                                Babu rukuni da ya dace da wannan binciken.
+                                No categories match your search.
                             </Text>
                         </View>
                     }
@@ -335,7 +335,7 @@ export const AdminCategories = () => {
                 <View style={{ flex: 1, backgroundColor: 'rgba(14, 26, 46, 0.6)', justifyContent: 'center', padding: 20 }}>
                     <View style={{ backgroundColor: '#FFFFFF', padding: 20, borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0' }}>
                         <Text style={{ fontSize: 17, fontWeight: '900', color: NAVY, marginBottom: 14 }}>
-                            {editingCategory ? 'Gyara Rukunin Kaya' : 'Ƙara Sabon Rukunin Kaya'}
+                            {editingCategory ? 'Edit Category' : 'Add New Category'}
                         </Text>
 
                         {/* Image picker preview */}
@@ -360,26 +360,26 @@ export const AdminCategories = () => {
                                 ) : (
                                     <View style={{ alignItems: 'center' }}>
                                         <Ionicons name="camera" size={24} color={GOLD} />
-                                        <Text style={{ fontSize: 8.5, color: '#64748B', fontWeight: '700', marginTop: 2 }}>Zaɓi Hoto</Text>
+                                        <Text style={{ fontSize: 8.5, color: '#64748B', fontWeight: '700', marginTop: 2 }}>Select Image</Text>
                                     </View>
                                 )}
                             </TouchableOpacity>
-                            {uploading && <Text style={{ fontSize: 10, color: GOLD, fontWeight: '700', marginTop: 4 }}>Ana loda hoto...</Text>}
+                            {uploading && <Text style={{ fontSize: 10, color: GOLD, fontWeight: '700', marginTop: 4 }}>Uploading image...</Text>}
                         </View>
 
                         <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B', textTransform: 'uppercase', marginBottom: 6 }}>
-                            Sunan Rukuni (Category Name)
+                            Category Name
                         </Text>
                         <TextInput
                             style={{ borderWidth: 1, borderColor: '#E2E8F0', padding: 12, borderRadius: 12, marginBottom: 14, backgroundColor: '#F8FAFC', fontSize: 13, color: NAVY, fontWeight: '700' }}
-                            placeholder="Misali: Fashion, Wayoyi, Kayan Abinci"
+                            placeholder="e.g. Electronics, Fashion, Groceries"
                             placeholderTextColor="#94A3B8"
                             value={formName}
                             onChangeText={setFormName}
                         />
 
                         <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B', textTransform: 'uppercase', marginBottom: 6 }}>
-                            Link Na Hoto (URL ko Zaɓa Ta Kyamara)
+                            Image URL (or pick from library)
                         </Text>
                         <TextInput
                             style={{ borderWidth: 1, borderColor: '#E2E8F0', padding: 12, borderRadius: 12, marginBottom: 20, backgroundColor: '#F8FAFC', fontSize: 12, color: NAVY }}
@@ -394,7 +394,7 @@ export const AdminCategories = () => {
                                 onPress={() => setModalVisible(false)}
                                 style={{ flex: 1, padding: 12, alignItems: 'center', backgroundColor: '#F1F5F9', borderRadius: 12 }}
                             >
-                                <Text style={{ color: '#64748B', fontWeight: '700' }}>A'a (Cancel)</Text>
+                                <Text style={{ color: '#64748B', fontWeight: '700' }}>Cancel</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity
@@ -405,7 +405,7 @@ export const AdminCategories = () => {
                                 {uploading ? (
                                     <ActivityIndicator color={GOLD} />
                                 ) : (
-                                    <Text style={{ color: GOLD, fontWeight: '900' }}>Adana (Save)</Text>
+                                    <Text style={{ color: GOLD, fontWeight: '900' }}>Save Category</Text>
                                 )}
                             </TouchableOpacity>
                         </View>

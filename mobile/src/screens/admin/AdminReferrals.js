@@ -142,9 +142,9 @@ export const AdminReferrals = () => {
                 .upsert(payload);
 
             if (error) throw error;
-            Alert.alert('An Sabunta', 'An yi nasarar adana sabbin saitunan gayyatar abokai.');
+            Alert.alert('Updated', 'Referral settings have been saved successfully.');
         } catch (error) {
-            Alert.alert('Kuskure', error.message);
+            Alert.alert('Error', error.message);
         } finally {
             setLoading(false);
         }
@@ -159,7 +159,8 @@ export const AdminReferrals = () => {
         const q = text.toLowerCase();
         const filtered = activities.filter(act =>
             act.referrer?.full_name?.toLowerCase().includes(q) ||
-            act.referred?.full_name?.toLowerCase().includes(q)
+            act.referred?.full_name?.toLowerCase().includes(q) ||
+            act.referrer?.username?.toLowerCase().includes(q)
         );
         setFilteredActivities(filtered);
     };
@@ -172,7 +173,7 @@ export const AdminReferrals = () => {
                 style={[s.tabPill, isActive && s.tabPillActive]}
                 activeOpacity={0.8}
             >
-                <Ionicons name={icon} size={16} color={isActive ? GOLD : '#64748B'} />
+                <Ionicons name={icon} size={15} color={isActive ? NAVY : '#64748B'} />
                 <Text style={[s.tabPillText, isActive && s.tabPillTextActive]}>{label}</Text>
             </TouchableOpacity>
         );
@@ -186,9 +187,9 @@ export const AdminReferrals = () => {
                     <View style={{ flex: 1 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                             <Ionicons name="gift" size={22} color={GOLD} />
-                            <Text style={s.headerTitle}>Gayyato Abokai (Referrals)</Text>
+                            <Text style={s.headerTitle}>Referrals & Rewards</Text>
                         </View>
-                        <Text style={s.headerSubtitle}>Sarrafa Mafhal Coins, jakadu da shirin lada na kasuwa</Text>
+                        <Text style={s.headerSubtitle}>Manage Mafhal Coins, ambassadors and reward campaigns</Text>
                     </View>
                     <TouchableOpacity onPress={onRefresh} style={s.refreshBtn} activeOpacity={0.8}>
                         <Ionicons name="refresh" size={18} color={NAVY} />
@@ -197,17 +198,17 @@ export const AdminReferrals = () => {
 
                 {/* Navigation Pills */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-                    <TabButton id="overview" label="Bayanai (Overview)" icon="analytics-outline" />
-                    <TabButton id="activity" label="Bibiyar Aiki (Stream)" icon="list-outline" />
-                    <TabButton id="rankings" label="Gwaraza (Ambassadors)" icon="trophy-outline" />
-                    <TabButton id="settings" label="Saituna (Config)" icon="settings-outline" />
+                    <TabButton id="overview" label="Overview" icon="analytics-outline" />
+                    <TabButton id="activity" label="Activity Stream" icon="list-outline" />
+                    <TabButton id="rankings" label="Ambassadors" icon="trophy-outline" />
+                    <TabButton id="settings" label="Settings" icon="settings-outline" />
                 </ScrollView>
             </View>
 
             {loading && !refreshing ? (
                 <View style={s.centered}>
                     <ActivityIndicator size="large" color={GOLD} />
-                    <Text style={s.loadingText}>Ana loda bayanan shirin lada...</Text>
+                    <Text style={s.loadingText}>Loading referral campaign data...</Text>
                 </View>
             ) : (
                 <ScrollView 
@@ -219,12 +220,12 @@ export const AdminReferrals = () => {
                         <View>
                             {/* Main Hero Card */}
                             <View style={s.heroCard}>
-                                <Text style={s.heroCardLabel}>JIMILLAR GAYYATA DA AKA YI (CONVERSIONS)</Text>
+                                <Text style={s.heroCardLabel}>TOTAL REFERRALS (CONVERSIONS)</Text>
                                 <View style={s.heroStatsRow}>
                                     <Text style={s.heroNumber}>{stats.totalRefs}</Text>
                                     <View style={s.recentPill}>
                                         <Ionicons name="flash" size={12} color="#059669" />
-                                        <Text style={s.recentPillText}>+{stats.recentCount} a wannan makon</Text>
+                                        <Text style={s.recentPillText}>+{stats.recentCount} this week</Text>
                                     </View>
                                 </View>
                             </View>
@@ -234,19 +235,19 @@ export const AdminReferrals = () => {
                                 <View style={s.statBox}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                         <Ionicons name="wallet-outline" size={16} color={GOLD} />
-                                        <Text style={s.statBoxLabel}>KUDIN LADA (COINS)</Text>
+                                        <Text style={s.statBoxLabel}>REWARD COINS CIRCULATING</Text>
                                     </View>
                                     <Text style={s.statBoxValue}>{stats.liability.toLocaleString()} <Text style={{ fontSize: 11, color: '#64748B' }}>AMC</Text></Text>
-                                    <Text style={s.statBoxSub}>Adadin coins a hannun masu sayayya</Text>
+                                    <Text style={s.statBoxSub}>Total coins held by customers</Text>
                                 </View>
 
                                 <View style={s.statBox}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                         <Ionicons name="people-outline" size={16} color={NAVY} />
-                                        <Text style={s.statBoxLabel}>JAKADUN KASUWA</Text>
+                                        <Text style={s.statBoxLabel}>ACTIVE AMBASSADORS</Text>
                                     </View>
                                     <Text style={s.statBoxValue}>{stats.totalAmbassadors}</Text>
-                                    <Text style={s.statBoxSub}>Masu kudaden Mafhal coins</Text>
+                                    <Text style={s.statBoxSub}>Users holding reward coins</Text>
                                 </View>
                             </View>
 
@@ -254,11 +255,11 @@ export const AdminReferrals = () => {
                             <View style={s.intelligenceCard}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                                     <Ionicons name="bulb-outline" size={18} color={NAVY} />
-                                    <Text style={s.intelligenceTitle}>Hanyar Bunkasa Shirin Lada</Text>
+                                    <Text style={s.intelligenceTitle}>Campaign Optimization Insights</Text>
                                 </View>
                                 <Text style={s.intelligenceText}>
-                                    A yanzu haka akwai mutane {stats.totalAmbassadors} da ke da Mafhal coins {stats.liability.toLocaleString()}. 
-                                    Idan ka kara ladan gayyata a sashin 'Saituna', zai kara kwadaitar da masu sayayya su gayyato sabbin abokan ciniki.
+                                    Currently {stats.totalAmbassadors} ambassadors hold {stats.liability.toLocaleString()} AMC. 
+                                    Increasing the referral reward in Settings can accelerate new customer acquisition.
                                 </Text>
                             </View>
                         </View>
@@ -269,7 +270,7 @@ export const AdminReferrals = () => {
                             <View style={s.searchBar}>
                                 <Ionicons name="search" size={16} color={GOLD} />
                                 <TextInput
-                                    placeholder="Bincika sunan mai gayyata ko wanda aka gayyato..."
+                                    placeholder="Search by referrer or referee name..."
                                     placeholderTextColor="#94A3B8"
                                     style={s.searchInput}
                                     value={activitySearch}
@@ -301,8 +302,8 @@ export const AdminReferrals = () => {
                             {filteredActivities.length === 0 && (
                                 <View style={s.emptyBox}>
                                     <Ionicons name="list-outline" size={36} color="#CBD5E1" />
-                                    <Text style={s.emptyTitle}>Babu Wani Aiki A Yanzu</Text>
-                                    <Text style={s.emptySub}>Babu bayanan sabon gayyata a wannan sashin.</Text>
+                                    <Text style={s.emptyTitle}>No Activity Yet</Text>
+                                    <Text style={s.emptySub}>No new referrals recorded in this period.</Text>
                                 </View>
                             )}
                         </View>
@@ -313,7 +314,7 @@ export const AdminReferrals = () => {
                             <View style={s.searchBar}>
                                 <Ionicons name="search" size={16} color={GOLD} />
                                 <TextInput
-                                    placeholder="Bincika gwarzon mai gayyata..."
+                                    placeholder="Search top ambassadors..."
                                     placeholderTextColor="#94A3B8"
                                     style={s.searchInput}
                                     value={searchQuery}
@@ -337,8 +338,8 @@ export const AdminReferrals = () => {
                                         )}
                                     </View>
                                     <View style={{ flex: 1 }}>
-                                        <Text style={s.ambassadorName}>{u.full_name || 'Jakadan Kasuwa'}</Text>
-                                        <Text style={s.referralCodeText}>Code: {u.referral_code || 'Babu'}</Text>
+                                        <Text style={s.ambassadorName}>{u.full_name || 'Brand Ambassador'}</Text>
+                                        <Text style={s.referralCodeText}>Code: {u.referral_code || 'None'}</Text>
                                     </View>
                                     <View style={{ alignItems: 'flex-end' }}>
                                         <Text style={s.coinsAmountText}>{(u.mafhal_coins || 0).toLocaleString()}</Text>
@@ -350,8 +351,8 @@ export const AdminReferrals = () => {
                             {rankings.length === 0 && (
                                 <View style={s.emptyBox}>
                                     <Ionicons name="trophy-outline" size={36} color="#CBD5E1" />
-                                    <Text style={s.emptyTitle}>Babu Gwarazan Jakadu</Text>
-                                    <Text style={s.emptySub}>Babu masu amfani da ke da coins a halin yanzu.</Text>
+                                    <Text style={s.emptyTitle}>No Ambassadors Found</Text>
+                                    <Text style={s.emptySub}>No users with coins found matching your query.</Text>
                                 </View>
                             )}
                         </View>
@@ -359,34 +360,34 @@ export const AdminReferrals = () => {
 
                     {activeTab === 'settings' && (
                         <View style={s.settingsCard}>
-                            <Text style={s.settingsTitle}>Saitunan Shirin Lada (Campaign Engine)</Text>
+                            <Text style={s.settingsTitle}>Referral Campaign Settings</Text>
 
                             <View style={{ marginBottom: 18 }}>
-                                <Text style={s.fieldLabel}>LADAN MAI GAYYATA (REFERRER BOUNTY IN AMC)</Text>
+                                <Text style={s.fieldLabel}>REFERRER BOUNTY (AMC)</Text>
                                 <TextInput
                                     style={s.fieldInput}
                                     value={(referralSettings.reward_per_referral ?? 0).toString()}
                                     onChangeText={(val) => setReferralSettings({ ...referralSettings, reward_per_referral: val })}
                                     keyboardType="numeric"
                                 />
-                                <Text style={s.fieldHelp}>Adadin Mafhal Coins da mai gayyato aboki zai samu a kowane mutum daya.</Text>
+                                <Text style={s.fieldHelp}>Amount of Mafhal Coins the referrer receives per successful invite.</Text>
                             </View>
 
                             <View style={{ marginBottom: 20 }}>
-                                <Text style={s.fieldLabel}>LADAN SABON SHIGA (NEW USER GIFT IN AMC)</Text>
+                                <Text style={s.fieldLabel}>NEW USER WELCOME GIFT (AMC)</Text>
                                 <TextInput
                                     style={s.fieldInput}
                                     value={(referralSettings.new_user_reward ?? 0).toString()}
                                     onChangeText={(val) => setReferralSettings({ ...referralSettings, new_user_reward: val })}
                                     keyboardType="numeric"
                                 />
-                                <Text style={s.fieldHelp}>Kyautar coins ga sabon mutumin da ya yi rajista ta link din abokinsa.</Text>
+                                <Text style={s.fieldHelp}>Welcome bonus coins credited to newly registered users.</Text>
                             </View>
 
                             <View style={s.switchRow}>
                                 <View style={{ flex: 1, marginRight: 10 }}>
-                                    <Text style={s.switchTitle}>Kunna Shirin Gayyatar (Campaign Status)</Text>
-                                    <Text style={s.switchSub}>Bada damar samun Mafhal coins yayin gayyato sabbin mutane</Text>
+                                    <Text style={s.switchTitle}>Enable Referral Campaign</Text>
+                                    <Text style={s.switchSub}>Allow customers to earn and redeem coins via referral invites</Text>
                                 </View>
                                 <Switch
                                     value={referralSettings.is_campaign_active}
@@ -401,7 +402,7 @@ export const AdminReferrals = () => {
                                 style={s.saveSettingsBtn}
                                 activeOpacity={0.85}
                             >
-                                <Text style={s.saveSettingsBtnText}>Ajiye Saitunan Lada</Text>
+                                <Text style={s.saveSettingsBtnText}>Save Campaign Settings</Text>
                             </TouchableOpacity>
                         </View>
                     )}
@@ -417,7 +418,7 @@ export const AdminReferrals = () => {
                                 <View style={s.drillModalHeader}>
                                     <View>
                                         <Text style={s.drillModalTitle}>{selectedAmbassador.full_name}</Text>
-                                        <Text style={s.drillModalSub}>Bayanin Gayyatar Jakada</Text>
+                                        <Text style={s.drillModalSub}>Ambassador Referral Details</Text>
                                     </View>
                                     <TouchableOpacity onPress={() => setSelectedAmbassador(null)} style={s.closeCircleBtn}>
                                         <Ionicons name="close" size={20} color={NAVY} />
@@ -426,16 +427,16 @@ export const AdminReferrals = () => {
 
                                 <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
                                     <View style={s.drillStatBox}>
-                                        <Text style={s.drillStatLabel}>JIMILLAR COINS</Text>
+                                        <Text style={s.drillStatLabel}>TOTAL COINS</Text>
                                         <Text style={s.drillStatValue}>{(selectedAmbassador.mafhal_coins || 0).toLocaleString()} AMC</Text>
                                     </View>
                                     <View style={s.drillStatBox}>
-                                        <Text style={s.drillStatLabel}>MUTANEN DA YA GAYYATA</Text>
+                                        <Text style={s.drillStatLabel}>TOTAL REFERRED</Text>
                                         <Text style={s.drillStatValue}>{ambassadorRefs.length}</Text>
                                     </View>
                                 </View>
 
-                                <Text style={s.networkMapTitle}>Mutanen Da Ya Gayyato (Network Map)</Text>
+                                <Text style={s.networkMapTitle}>Referred Network (Network Map)</Text>
                                 {loadingDrill ? (
                                     <ActivityIndicator color={GOLD} style={{ marginTop: 30 }} />
                                 ) : (
@@ -447,7 +448,7 @@ export const AdminReferrals = () => {
                                             <View style={s.networkRow}>
                                                 <UserAvatar user={item.referred} size={38} />
                                                 <View style={{ flex: 1, marginLeft: 12 }}>
-                                                    <Text style={s.networkName}>{item.referred?.full_name || 'Aboki'}</Text>
+                                                    <Text style={s.networkName}>{item.referred?.full_name || 'Referee'}</Text>
                                                     <Text style={s.networkDate}>{new Date(item.created_at).toLocaleDateString()}</Text>
                                                 </View>
                                                 <Text style={s.networkReward}>+{item.reward_amount} AMC</Text>
@@ -455,7 +456,7 @@ export const AdminReferrals = () => {
                                         )}
                                         ListEmptyComponent={
                                             <View style={{ padding: 30, alignItems: 'center' }}>
-                                                <Text style={{ color: '#94A3B8', fontSize: 13, fontWeight: '600' }}>Babu wani wanda ya shiga ta link din wannan jakadan ba tukuna.</Text>
+                                                <Text style={{ color: '#94A3B8', fontSize: 13, fontWeight: '600' }}>No users have registered with this ambassador's link yet.</Text>
                                             </View>
                                         }
                                     />
@@ -467,7 +468,7 @@ export const AdminReferrals = () => {
                             style={s.closeDrillBtn}
                             activeOpacity={0.85}
                         >
-                            <Text style={s.closeDrillBtnText}>Rufe Dubawa</Text>
+                            <Text style={s.closeDrillBtnText}>Close</Text>
                         </TouchableOpacity>
                     </View>
                 </View>

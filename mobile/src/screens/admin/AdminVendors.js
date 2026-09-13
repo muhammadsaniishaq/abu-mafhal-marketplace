@@ -54,7 +54,7 @@ export const AdminVendors = () => {
                         id: p.id,
                         user_id: p.id,
                         business_name: p.business_name || p.full_name || 'Vendor Store',
-                        business_category: 'Shagon Kasuwa',
+                        business_category: 'General Merchant',
                         business_address: p.address || p.state || 'Nigeria',
                         phone: p.phone || p.phone_number,
                         status: p.suspended ? 'rejected' : 'approved',
@@ -81,10 +81,10 @@ export const AdminVendors = () => {
     };
 
     const handleApprove = async (app) => {
-        Alert.alert('Amince Da Mai Kasuwa', `Kana son amincewa da shagon "${app.business_name}"?`, [
-            { text: 'A\'a (Cancel)', style: 'cancel' },
+        Alert.alert('Approve Vendor', `Are you sure you want to approve store "${app.business_name}"?`, [
+            { text: 'Cancel', style: 'cancel' },
             {
-                text: 'Amince (Approve)',
+                text: 'Approve',
                 onPress: async () => {
                     setLoading(true);
                     try {
@@ -134,18 +134,18 @@ export const AdminVendors = () => {
                         const vendorEmail = app.profiles?.email;
                         await NotificationService.send({
                             userId: app.user_id,
-                            title: 'An Amince Da Shagon Ka! 🎉',
-                            message: `Murna! An amince da shagon kasuwancin ka na "${app.business_name}". Yanzu zaka iya shiga shagon ka ka fara sayar da kaya.`,
+                            title: 'Vendor Application Approved! 🎉',
+                            message: `Congratulations! Your store application for "${app.business_name}" has been approved. You can now access your vendor dashboard to start selling.`,
                             type: 'system',
                             email: vendorEmail
                         }).catch(() => {});
 
                         // 6. Refresh List
-                        Alert.alert('An Amince!', 'An amince da shagon dan kasuwa kuma an daukaka asusun sa.');
+                        Alert.alert('Approved!', 'Vendor store has been approved and account upgraded successfully.');
                         setView('list');
                         fetchApplications();
                     } catch (err) {
-                        Alert.alert('Kuskure', err.message);
+                        Alert.alert('Error', err.message);
                     } finally {
                         setLoading(false);
                     }
@@ -176,17 +176,17 @@ export const AdminVendors = () => {
             const vendorEmail = appToReject.profiles?.email;
             await NotificationService.send({
                 userId: appToReject.user_id,
-                title: 'Bayanin Neman Shago',
-                message: `Ba a amince da aikace-aikacen shagon ka ba a halin yanzu. Dalili: ${rejectionReason || 'Ba a cika dukkan sharudda ba.'}`,
+                title: 'Vendor Application Update',
+                message: `Your store application could not be approved at this time. Reason: ${rejectionReason || 'Requirements not fulfilled.'}`,
                 type: 'system',
                 email: vendorEmail
             }).catch(() => {});
 
-            Alert.alert('An Ƙi', 'An ki amincewa da aikace-aikacen kuma an tura sanarwa.');
+            Alert.alert('Rejected', 'Vendor application rejected and notification sent.');
             setView('list');
             fetchApplications();
         } catch (err) {
-            Alert.alert('Kuskure', err.message || 'An samu matsala wajen kin amincewa.');
+            Alert.alert('Error', err.message || 'Failed to reject application.');
         } finally {
             setLoading(false);
             setRejectionModalVisible(false);
@@ -220,7 +220,7 @@ export const AdminVendors = () => {
     const InfoRow = ({ label, value }) => (
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' }}>
             <Text style={{ color: '#64748B', fontSize: 12.5, fontWeight: '600' }}>{label}</Text>
-            <Text style={{ fontWeight: '700', color: NAVY, fontSize: 13 }}>{value || 'Babu'}</Text>
+            <Text style={{ fontWeight: '700', color: NAVY, fontSize: 13 }}>{value || 'None'}</Text>
         </View>
     );
 
@@ -242,7 +242,7 @@ export const AdminVendors = () => {
         >
             <Ionicons name={icon} size={22} color={color} />
             <Text style={{ fontSize: 11, fontWeight: '700', marginTop: 6, color: NAVY }}>{label}</Text>
-            <Text style={{ fontSize: 9.5, color: GOLD, fontWeight: '700', marginTop: 2 }}>Duba Shafi →</Text>
+            <Text style={{ fontSize: 9.5, color: GOLD, fontWeight: '700', marginTop: 2 }}>View Document →</Text>
         </TouchableOpacity>
     );
 
@@ -253,7 +253,7 @@ export const AdminVendors = () => {
                 style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 8, alignSelf: 'flex-start', backgroundColor: '#FFFFFF', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' }}
             >
                 <Ionicons name="arrow-back" size={18} color={NAVY} />
-                <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY }}>Komawa Jerin Yan Kasuwa</Text>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY }}>Back to Vendors List</Text>
             </TouchableOpacity>
 
             {/* Business Profile Card */}
@@ -283,14 +283,14 @@ export const AdminVendors = () => {
             </View>
 
             {/* Detail Sections */}
-            <Section title="Bayanin Mai Asusu (Owner Info)">
-                <InfoRow label="Cikakken Suna" value={selectedApp.profiles?.full_name} />
+            <Section title="Owner Information">
+                <InfoRow label="Full Name" value={selectedApp.profiles?.full_name} />
                 <InfoRow label="Email" value={selectedApp.profiles?.email} />
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 }}>
-                    <Text style={{ color: '#64748B', fontSize: 12.5, fontWeight: '600' }}>Lambar Waya</Text>
+                    <Text style={{ color: '#64748B', fontSize: 12.5, fontWeight: '600' }}>Phone Number</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         <Text style={{ fontWeight: '700', color: NAVY, fontSize: 13 }}>
-                            {selectedApp.phone || selectedApp.profiles?.phone || 'Babu'}
+                            {selectedApp.phone || selectedApp.profiles?.phone || 'None'}
                         </Text>
                         {(selectedApp.phone || selectedApp.profiles?.phone) ? (
                             <TouchableOpacity 
@@ -313,26 +313,26 @@ export const AdminVendors = () => {
                 <InfoRow label="BVN" value={selectedApp.bvn} />
             </Section>
 
-            <Section title="Bayanin Kasuwanci (Business Details)">
+            <Section title="Business Details">
                 <Text style={{ fontSize: 13, color: '#475569', lineHeight: 18, marginBottom: 12 }}>
-                    {selectedApp.business_description || 'Babu karin bayani da aka rubuta.'}
+                    {selectedApp.business_description || 'No business description provided.'}
                 </Text>
-                <InfoRow label="Adireshi" value={selectedApp.business_address} />
+                <InfoRow label="Business Address" value={selectedApp.business_address} />
                 <InfoRow label="CAC Number" value={selectedApp.cac_number} />
                 <InfoRow label="TIN Number" value={selectedApp.tin_number} />
             </Section>
 
-            <Section title="Asusun Banki (Bank Details)">
-                <InfoRow label="Sunan Banki" value={selectedApp.bank_name} />
-                <InfoRow label="Lambar Asusu" value={selectedApp.account_number} />
-                <InfoRow label="Sunan Asusu" value={selectedApp.account_name} />
+            <Section title="Bank Details">
+                <InfoRow label="Bank Name" value={selectedApp.bank_name} />
+                <InfoRow label="Account Number" value={selectedApp.account_number} />
+                <InfoRow label="Account Name" value={selectedApp.account_name} />
             </Section>
 
-            <Section title="Takardun Shaida (Documents)">
+            <Section title="Verification Documents">
                 <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
-                    {selectedApp.nin_url && <DocCard label="NIN Doc" url={selectedApp.nin_url} icon="card-outline" />}
-                    {selectedApp.cac_url && <DocCard label="CAC Doc" url={selectedApp.cac_url} icon="business-outline" />}
-                    {selectedApp.video_url && <DocCard label="Bidiyon Shago" url={selectedApp.video_url} icon="videocam-outline" color={GOLD} />}
+                    {selectedApp.nin_url && <DocCard label="NIN Document" url={selectedApp.nin_url} icon="card-outline" />}
+                    {selectedApp.cac_url && <DocCard label="CAC Certificate" url={selectedApp.cac_url} icon="business-outline" />}
+                    {selectedApp.video_url && <DocCard label="Store Video" url={selectedApp.video_url} icon="videocam-outline" color={GOLD} />}
                 </View>
             </Section>
 
@@ -343,13 +343,13 @@ export const AdminVendors = () => {
                         onPress={() => openRejectModal(selectedApp)}
                         style={{ flex: 1, backgroundColor: '#FEE2E2', padding: 14, borderRadius: 14, alignItems: 'center', borderWidth: 1, borderColor: '#FECACA' }}
                     >
-                        <Text style={{ color: '#EF4444', fontWeight: '800', fontSize: 13 }}>Kin Amincewa (Reject)</Text>
+                        <Text style={{ color: '#EF4444', fontWeight: '800', fontSize: 13 }}>Reject Application</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                         onPress={() => handleApprove(selectedApp)}
                         style={{ flex: 2, backgroundColor: NAVY, padding: 14, borderRadius: 14, alignItems: 'center', borderWidth: 1, borderColor: GOLD }}
                     >
-                        <Text style={{ color: GOLD, fontWeight: '900', fontSize: 13 }}>Amince Da Shago (Approve)</Text>
+                        <Text style={{ color: GOLD, fontWeight: '900', fontSize: 13 }}>Approve Vendor</Text>
                     </TouchableOpacity>
                 </View>
             )}
@@ -385,7 +385,7 @@ export const AdminVendors = () => {
                 </Text>
                 <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>{item.business_category}</Text>
                 <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>
-                    An nemi shiga: {new Date(item.created_at).toLocaleDateString()}
+                    Applied on: {new Date(item.created_at).toLocaleDateString()}
                 </Text>
             </View>
             <StatusBadge status={item.status} />
@@ -401,10 +401,10 @@ export const AdminVendors = () => {
                     {/* Header & Filter Area */}
                     <View style={{ padding: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderColor: '#E2E8F0' }}>
                         <Text style={{ fontSize: 18, fontWeight: '900', color: NAVY }}>
-                            Yan Kasuwa (Vendors Console)
+                            Vendors Console
                         </Text>
                         <Text style={{ color: '#64748B', fontSize: 11.5, marginTop: 2 }}>
-                            Duba da sarrafa masu shagunan dake kasuwar Abu Mafhal
+                            Review and manage merchant applications and live stores
                         </Text>
 
                         {/* Search Bar */}
@@ -421,7 +421,7 @@ export const AdminVendors = () => {
                         }}>
                             <Ionicons name="search" size={16} color="#94A3B8" />
                             <TextInput
-                                placeholder="Nemi dan kasuwa ta suna, email ko waya..."
+                                placeholder="Search vendor by name, email or phone..."
                                 value={searchQuery}
                                 onChangeText={setSearchQuery}
                                 style={{ flex: 1, marginLeft: 8, fontSize: 12.5, color: NAVY }}
@@ -457,7 +457,7 @@ export const AdminVendors = () => {
                                             color: active ? GOLD : '#64748B',
                                             textTransform: 'capitalize'
                                         }}>
-                                            {st === 'all' ? 'Duka' : st}
+                                            {st === 'all' ? 'All' : st}
                                         </Text>
                                     </TouchableOpacity>
                                 );
@@ -468,7 +468,7 @@ export const AdminVendors = () => {
                     {loading && !refreshing ? (
                         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
                             <ActivityIndicator size="large" color={GOLD} />
-                            <Text style={{ marginTop: 12, fontSize: 12, fontWeight: '700', color: '#64748B' }}>Ana loda yan kasuwa...</Text>
+                            <Text style={{ marginTop: 12, fontSize: 12, fontWeight: '700', color: '#64748B' }}>Loading vendor applications...</Text>
                         </View>
                     ) : (
                         <FlatList
@@ -483,7 +483,7 @@ export const AdminVendors = () => {
                                 <View style={{ alignItems: 'center', marginTop: 40, opacity: 0.7 }}>
                                     <Ionicons name="storefront-outline" size={48} color="#94A3B8" />
                                     <Text style={{ color: '#64748B', marginTop: 10, fontWeight: '700', fontSize: 13 }}>
-                                        Babu dan kasuwa da ya dace da wannan binciken.
+                                        No vendors found matching this filter or search.
                                     </Text>
                                 </View>
                             }
@@ -501,12 +501,12 @@ export const AdminVendors = () => {
             >
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(14, 26, 46, 0.6)', padding: 20 }}>
                     <View style={{ width: '100%', backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                        <Text style={{ fontSize: 16, fontWeight: '900', marginBottom: 6, color: NAVY }}>Kin Amincewa Da Shago</Text>
-                        <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 14 }}>Rubuta dalilin da yasa ba a amince da wannan shagon ba domin sanar da dan kasuwan.</Text>
+                        <Text style={{ fontSize: 16, fontWeight: '900', marginBottom: 6, color: NAVY }}>Reject Vendor Application</Text>
+                        <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 14 }}>Provide a reason for rejection to notify the vendor.</Text>
 
                         <TextInput
                             style={{ borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, padding: 12, height: 90, textAlignVertical: 'top', marginBottom: 16, backgroundColor: '#F8FAFC', fontSize: 13, color: NAVY }}
-                            placeholder="Misali: Takardun shaida ba su bayyana sarai ba..."
+                            placeholder="e.g. Identity documents not clear or expired..."
                             placeholderTextColor="#94A3B8"
                             multiline
                             value={rejectionReason}
@@ -518,13 +518,13 @@ export const AdminVendors = () => {
                                 onPress={() => setRejectionModalVisible(false)}
                                 style={{ flex: 1, padding: 12, borderRadius: 12, backgroundColor: '#F1F5F9', alignItems: 'center' }}
                             >
-                                <Text style={{ color: '#64748B', fontWeight: '700' }}>A'a (Cancel)</Text>
+                                <Text style={{ color: '#64748B', fontWeight: '700' }}>Cancel</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={confirmReject}
                                 style={{ flex: 1, padding: 12, borderRadius: 12, backgroundColor: '#EF4444', alignItems: 'center' }}
                             >
-                                <Text style={{ color: 'white', fontWeight: '800' }}>Tabbatar da Ƙi</Text>
+                                <Text style={{ color: 'white', fontWeight: '800' }}>Confirm Rejection</Text>
                             </TouchableOpacity>
                         </View>
                     </View>

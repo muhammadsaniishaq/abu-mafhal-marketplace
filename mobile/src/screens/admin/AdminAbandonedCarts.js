@@ -52,15 +52,15 @@ export const AdminAbandonedCarts = () => {
 
     const sendReminder = async (cart) => {
         try {
-            const userName = cart.profiles?.full_name || 'Abokin Ciniki';
+            const userName = cart.profiles?.full_name || 'Customer';
             const totalAmount = Number(cart.total || 0).toLocaleString();
 
             // 1. Insert real live in-app notification if user_id exists
             if (cart.user_id) {
                 await supabase.from('notifications').insert([{
                     user_id: cart.user_id,
-                    title: 'Kwandunka Yana Jira! 🛒',
-                    message: `Sannu ${userName}, ka bar kayan ₦${totalAmount} a kwandunka na Abu Mafhal. Shiga yanzu ka kammala sayayya kafin su kare!`,
+                    title: 'Your Cart is Waiting! 🛒',
+                    message: `Hello ${userName}, you left items worth ₦${totalAmount} in your Abu Mafhal cart. Complete your checkout now before stock runs out!`,
                     type: 'system'
                 }]);
             }
@@ -73,13 +73,13 @@ export const AdminAbandonedCarts = () => {
             }).eq('id', cart.id);
 
             if (!updateError) {
-                Alert.alert('An Aika!', `An aika sanarwa ga ${userName} cikin nasara.`);
+                Alert.alert('Reminder Sent!', `Cart reminder sent to ${userName} successfully.`);
                 fetchCarts();
             } else {
-                Alert.alert('Kuskure', updateError.message);
+                Alert.alert('Error', updateError.message);
             }
         } catch (e) {
-            Alert.alert('Kuskure', 'An samu matsala wajen aika sanarwa.');
+            Alert.alert('Error', 'Failed to send cart reminder.');
         }
     };
 
@@ -91,7 +91,7 @@ export const AdminAbandonedCarts = () => {
             }).eq('id', cartId);
 
             if (!error) {
-                Alert.alert('Nasara', 'An yi nasarar maida wannan kwando a matsayin wanda aka kammala (Recovered).');
+                Alert.alert('Success', 'Cart marked as recovered successfully.');
                 setCarts(prev => prev.filter(c => c.id !== cartId));
             }
         } catch (e) {
@@ -114,7 +114,7 @@ export const AdminAbandonedCarts = () => {
 
     const renderItem = ({ item }) => {
         const phone = item.profiles?.phone || item.profiles?.phone_number;
-        const name = item.profiles?.full_name || item.profiles?.email || 'Bakon Kasuwa';
+        const name = item.profiles?.full_name || item.profiles?.email || 'Guest Shopper';
 
         return (
             <View style={{
@@ -136,10 +136,10 @@ export const AdminAbandonedCarts = () => {
                             {name}
                         </Text>
                         <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>
-                            {item.profiles?.email || 'Babu email'}
+                            {item.profiles?.email || 'No email'}
                         </Text>
                         <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>
-                            An kirkira: {new Date(item.created_at).toLocaleDateString()} {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            Created: {new Date(item.created_at).toLocaleDateString()} {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </Text>
                     </View>
 
@@ -149,7 +149,7 @@ export const AdminAbandonedCarts = () => {
                         </Text>
                         <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, marginTop: 4 }}>
                             <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B' }}>
-                                Kaya {item.cart_items?.[0]?.count || 1} a kwando
+                                {item.cart_items?.[0]?.count || 1} item(s) in cart
                             </Text>
                         </View>
                     </View>
@@ -168,7 +168,7 @@ export const AdminAbandonedCarts = () => {
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                         <Ionicons name="notifications" size={14} color={item.reminders_sent > 0 ? GOLD : '#CBD5E1'} />
                         <Text style={{ fontSize: 11, fontWeight: '700', color: item.reminders_sent > 0 ? NAVY : '#64748B' }}>
-                            An tunatar sau {item.reminders_sent || 0}
+                            {item.reminders_sent || 0} reminder(s) sent
                         </Text>
                     </View>
 
@@ -211,7 +211,7 @@ export const AdminAbandonedCarts = () => {
                             }}
                         >
                             <Ionicons name="paper-plane-outline" color={GOLD} size={12} />
-                            <Text style={{ color: GOLD, fontWeight: '800', fontSize: 11 }}>Tunatar (Notify)</Text>
+                            <Text style={{ color: GOLD, fontWeight: '800', fontSize: 11 }}>Remind</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -224,7 +224,7 @@ export const AdminAbandonedCarts = () => {
                                 alignItems: 'center',
                                 justifyContent: 'center'
                             }}
-                            title="An sayi kaya"
+                            title="Mark as purchased"
                         >
                             <Ionicons name="checkmark-done" size={15} color="#10B981" />
                         </TouchableOpacity>
@@ -239,10 +239,10 @@ export const AdminAbandonedCarts = () => {
             {/* Header */}
             <View style={{ padding: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderColor: '#E2E8F0' }}>
                 <Text style={{ fontSize: 18, fontWeight: '900', color: NAVY }}>
-                    Kwandunan Da Aka Bari (Abandoned Carts)
+                    Abandoned Carts Management
                 </Text>
                 <Text style={{ color: '#64748B', fontSize: 11.5, marginTop: 2 }}>
-                    Taimaka wa abokan ciniki su kammala sayen kayan da suka tara a kwando
+                    Re-engage customers and help them complete their pending checkouts
                 </Text>
 
                 {/* Search */}
@@ -259,7 +259,7 @@ export const AdminAbandonedCarts = () => {
                 }}>
                     <Ionicons name="search" size={16} color="#94A3B8" />
                     <TextInput
-                        placeholder="Nemi mai kwando ta suna ko lamba..."
+                        placeholder="Search cart by customer name or phone..."
                         value={searchQuery}
                         onChangeText={setSearchQuery}
                         style={{ flex: 1, marginLeft: 8, fontSize: 12.5, color: NAVY }}
@@ -271,7 +271,7 @@ export const AdminAbandonedCarts = () => {
             {loading && !refreshing ? (
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                     <ActivityIndicator size="large" color={GOLD} />
-                    <Text style={{ marginTop: 12, fontSize: 12, fontWeight: '700', color: '#64748B' }}>Ana duba kwandunan da aka bari...</Text>
+                    <Text style={{ marginTop: 12, fontSize: 12, fontWeight: '700', color: '#64748B' }}>Loading abandoned carts...</Text>
                 </View>
             ) : (
                 <FlatList
@@ -286,7 +286,7 @@ export const AdminAbandonedCarts = () => {
                         <View style={{ alignItems: 'center', marginTop: 50, opacity: 0.7 }}>
                             <Ionicons name="cart-outline" size={48} color="#94A3B8" />
                             <Text style={{ marginTop: 10, color: '#64748B', fontWeight: '700', fontSize: 13 }}>
-                                Babu kwandunan da aka bari a halin yanzu.
+                                No abandoned carts found.
                             </Text>
                         </View>
                     }

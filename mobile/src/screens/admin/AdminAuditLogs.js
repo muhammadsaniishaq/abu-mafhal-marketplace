@@ -402,10 +402,10 @@ export const AdminAuditLogs = () => {
                 {/* Filter Presets */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
                     {[
-                        { id: null, label: 'Duka (Default)' },
-                        { id: 'security', label: 'Tsaro (Security)' },
-                        { id: 'finance', label: 'Kudi (Finance)' },
-                        { id: 'infra', label: 'Sarrafa (Infra)' }
+                        { id: null, label: 'All (Default)' },
+                        { id: 'security', label: 'Security' },
+                        { id: 'finance', label: 'Finance' },
+                        { id: 'infra', label: 'System & Infra' }
                     ].map(p => (
                         <TouchableOpacity 
                             key={p.label} 

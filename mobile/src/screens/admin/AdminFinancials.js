@@ -142,7 +142,7 @@ export const AdminFinancials = () => {
             });
         } catch (err) {
             console.error("Admin Financials Fetch Error:", err);
-            Alert.alert('Bayanin Kudi', 'Ba a iya loda cikakkun bayanan kudi ba. Duba layin sadarwa.');
+            Alert.alert('Financial Overview', 'Could not load complete financial records. Please check connection.');
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -190,7 +190,7 @@ export const AdminFinancials = () => {
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' }} />
                         <Text style={{ color: GOLD, fontSize: 10.5, fontWeight: '800', letterSpacing: 1 }}>
-                            KUDADEN KASUWA (LIVE)
+                            STORE FINANCIALS (LIVE)
                         </Text>
                     </View>
                     <TouchableOpacity 
@@ -210,19 +210,19 @@ export const AdminFinancials = () => {
                     </TouchableOpacity>
                 </View>
 
-                <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '700' }}>Cikakkun Kudaden Shiga (Gross Revenue)</Text>
+                <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '700' }}>Gross Platform Revenue</Text>
                 <Text style={{ color: '#FFFFFF', fontSize: 32, fontWeight: '900', letterSpacing: -1, marginTop: 4 }}>
                     {formatNaira(data.totalRevenue)}
                 </Text>
 
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: 'rgba(255, 255, 255, 0.1)' }}>
                     <View style={{ flex: 1 }}>
-                        <Text style={{ color: '#94A3B8', fontSize: 10, fontWeight: '700' }}>Rabon Kasuwa (Commission)</Text>
+                        <Text style={{ color: '#94A3B8', fontSize: 10, fontWeight: '700' }}>Platform Commission</Text>
                         <Text style={{ color: GOLD, fontSize: 16, fontWeight: '900', marginTop: 2 }}>{formatNaira(data.platformCommission)}</Text>
                     </View>
                     <View style={{ width: 1, height: 28, backgroundColor: 'rgba(255, 255, 255, 0.1)' }} />
                     <View style={{ flex: 1 }}>
-                        <Text style={{ color: '#94A3B8', fontSize: 10, fontWeight: '700' }}>Kudin Dillalai (Vendor Share)</Text>
+                        <Text style={{ color: '#94A3B8', fontSize: 10, fontWeight: '700' }}>Vendor Payout Share</Text>
                         <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '900', marginTop: 2 }}>{formatNaira(data.vendorEarnings)}</Text>
                     </View>
                 </View>
@@ -231,44 +231,44 @@ export const AdminFinancials = () => {
             {loading ? (
                 <View style={{ padding: 40, alignItems: 'center' }}>
                     <ActivityIndicator size="large" color={GOLD} />
-                    <Text style={{ marginTop: 12, fontSize: 12, fontWeight: '700', color: '#64748B' }}>Ana lissafa kudaden kasuwa...</Text>
+                    <Text style={{ marginTop: 12, fontSize: 12, fontWeight: '700', color: '#64748B' }}>Calculating financial summaries...</Text>
                 </View>
             ) : (
                 <View style={{ gap: 12 }}>
                     {/* STAT CARDS 2x2 */}
                     <View style={{ flexDirection: 'row', gap: 12 }}>
                         <StatCard 
-                            label="Kudin Shiga" 
+                            label="Gross Revenue" 
                             value={formatNaira(data.totalRevenue)} 
                             icon="cash-outline" 
                             isGold={false} 
-                            sub="Duka cinikin da aka yi"
+                            sub="Total marketplace volume"
                         />
                         <StatCard 
-                            label="Kason Kasuwa" 
+                            label="Platform Share" 
                             value={formatNaira(data.platformCommission)} 
                             icon="pie-chart-outline" 
                             isGold={true} 
-                            tag="5% Take"
-                            sub="Ribar dandamali"
+                            tag="Commission"
+                            sub="Platform revenue"
                         />
                     </View>
 
                     <View style={{ flexDirection: 'row', gap: 12 }}>
                         <StatCard 
-                            label="Kudin Yan Kasuwa" 
+                            label="Vendor Earnings" 
                             value={formatNaira(data.vendorEarnings)} 
                             icon="wallet-outline" 
                             isGold={false} 
-                            sub="Hakkin masu shaguna"
+                            sub="Merchant balances"
                         />
                         <StatCard 
-                            label="Biyan da ke Jira" 
+                            label="Pending Payouts" 
                             value={formatNaira(data.pendingPayouts)} 
                             icon="hourglass-outline" 
                             isGold={true} 
                             tag="Pending"
-                            sub="Bukatar amincewa"
+                            sub="Awaiting settlement"
                         />
                     </View>
 
@@ -288,10 +288,10 @@ export const AdminFinancials = () => {
                     }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                             <Text style={{ fontSize: 13, fontWeight: '900', color: NAVY }}>
-                                Matsayin Biyan Kudade (Payout Ratio)
+                                Merchant Payout Ratio
                             </Text>
                             <Text style={{ fontSize: 11, fontWeight: '800', color: GOLD }}>
-                                {completedPct}% An Biya
+                                {completedPct}% Settled
                             </Text>
                         </View>
 
@@ -305,14 +305,14 @@ export const AdminFinancials = () => {
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                 <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#10B981' }} />
                                 <View>
-                                    <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '700' }}>Wadanda Aka Biya</Text>
+                                    <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '700' }}>Settled Payouts</Text>
                                     <Text style={{ fontSize: 13, color: NAVY, fontWeight: '900', marginTop: 1 }}>{formatNaira(data.completedPayouts)}</Text>
                                 </View>
                             </View>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                 <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: GOLD }} />
                                 <View style={{ alignItems: 'flex-end' }}>
-                                    <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '700' }}>Wadanda Ke Jira</Text>
+                                    <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '700' }}>Pending Approvals</Text>
                                     <Text style={{ fontSize: 13, color: GOLD, fontWeight: '900', marginTop: 1 }}>{formatNaira(data.pendingPayouts)}</Text>
                                 </View>
                             </View>

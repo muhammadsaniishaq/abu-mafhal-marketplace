@@ -79,10 +79,10 @@ export const AdminInvoices = () => {
         try {
             const { error } = await supabase.from('business_settings').upsert({ id: 'default', ...settings });
             if (error) throw error;
-            Alert.alert('An Sabunta', 'An yi nasarar sabunta saitunan takardar rasiti (Invoices)!');
+            Alert.alert('Updated', 'Invoice settings updated successfully!');
             setShowSettings(false);
         } catch (e) {
-            Alert.alert('Kuskure', e.message);
+            Alert.alert('Error', e.message);
         } finally {
             setUploading(false);
         }
@@ -124,9 +124,9 @@ export const AdminInvoices = () => {
 
             const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(fileName);
             setSettings(prev => ({ ...prev, [field]: publicUrl }));
-            Alert.alert('Nasarar Loda Hoto', 'An sa hoton cikin nasara!');
+            Alert.alert('Upload Successful', 'Branding asset uploaded successfully!');
         } catch (e) {
-            Alert.alert('Kuskuren Loda Hoto', e.message);
+            Alert.alert('Upload Error', e.message);
         } finally {
             setUploading(false);
         }
@@ -135,10 +135,10 @@ export const AdminInvoices = () => {
     const handleShareInvoice = async () => {
         if (!selectedOrder) return;
         try {
-            const message = `Rasitin Sayayya #${selectedOrder.id.slice(0, 8).toUpperCase()}\nRana: ${new Date(selectedOrder.created_at).toDateString()}\nJimillar Kudi: ₦${Number(selectedOrder.total_amount || 0).toLocaleString()}\nMai Sayayya: ${selectedOrder.user?.full_name || 'Customer'}\n\nMungode da kasuwanci tare da Abu Mafhal!`;
+            const message = `Purchase Receipt #${selectedOrder.id.slice(0, 8).toUpperCase()}\nDate: ${new Date(selectedOrder.created_at).toDateString()}\nTotal Amount: ₦${Number(selectedOrder.total_amount || 0).toLocaleString()}\nCustomer: ${selectedOrder.user?.full_name || 'Customer'}\n\nThank you for shopping with Abu Mafhal!`;
             await Share.share({ message });
         } catch (error) {
-            Alert.alert('Kuskure', error.message);
+            Alert.alert('Error', error.message);
         }
     };
 
@@ -176,7 +176,7 @@ export const AdminInvoices = () => {
                         </View>
                     </View>
                     <Text style={s.customerNameText} numberOfLines={1}>
-                        {item.user?.full_name || 'Abokin Ciniki'} · {new Date(item.created_at).toLocaleDateString()}
+                        {item.user?.full_name || 'Customer'} · {new Date(item.created_at).toLocaleDateString()}
                     </Text>
                 </View>
 
@@ -195,9 +195,9 @@ export const AdminInvoices = () => {
                 <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         <Ionicons name="receipt" size={22} color={GOLD} />
-                        <Text style={s.headerTitle}>Rasitai (Invoice Manager)</Text>
+                        <Text style={s.headerTitle}>Invoices</Text>
                     </View>
-                    <Text style={s.headerSubtitle}>Duba rasitai, buga PDF, ko tura wa mai sayayya ta email</Text>
+                    <Text style={s.headerSubtitle}>View receipts, print PDF invoices, or share with customers</Text>
                 </View>
                 <TouchableOpacity 
                     onPress={() => setShowSettings(true)} 
@@ -205,7 +205,7 @@ export const AdminInvoices = () => {
                     activeOpacity={0.8}
                 >
                     <Ionicons name="settings-outline" size={18} color={NAVY} />
-                    <Text style={s.settingsBtnText}>Saituna</Text>
+                    <Text style={s.settingsBtnText}>Settings</Text>
                 </TouchableOpacity>
             </View>
 
@@ -214,7 +214,7 @@ export const AdminInvoices = () => {
                 <Ionicons name="search" size={16} color={GOLD} />
                 <TextInput
                     style={s.searchInput}
-                    placeholder="Bincika lambar rasiti ko sunan mai sayayya..."
+                    placeholder="Search by invoice ID or customer name..."
                     placeholderTextColor="#94A3B8"
                     value={search}
                     onChangeText={setSearch}
@@ -229,7 +229,7 @@ export const AdminInvoices = () => {
             {loading ? (
                 <View style={s.centered}>
                     <ActivityIndicator size="large" color={GOLD} />
-                    <Text style={s.loadingText}>Ana loda rasitai...</Text>
+                    <Text style={s.loadingText}>Loading invoices...</Text>
                 </View>
             ) : (
                 <FlatList
@@ -243,9 +243,9 @@ export const AdminInvoices = () => {
                             <View style={s.emptyIconCircle}>
                                 <Ionicons name="receipt-outline" size={38} color={GOLD} />
                             </View>
-                            <Text style={s.emptyTitle}>Babu Rasiti</Text>
+                            <Text style={s.emptyTitle}>No Invoices Found</Text>
                             <Text style={s.emptySub}>
-                                {search ? `Babu rasitin da ya dace da "${search}"` : "Babu wani odar da aka samu da ke da rasiti a yanzu."}
+                                {search ? `No invoices match "${search}"` : "No order invoices found in store records."}
                             </Text>
                         </View>
                     }
@@ -257,7 +257,7 @@ export const AdminInvoices = () => {
                 <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
                     <View style={s.modalHeaderBar}>
                         <View>
-                            <Text style={s.modalHeaderTitle}>Duba Rasiti (Invoice Preview)</Text>
+                            <Text style={s.modalHeaderTitle}>Invoice Preview</Text>
                             <Text style={s.modalHeaderSub}>{selectedOrder ? `INV-${selectedOrder.id.slice(0, 8).toUpperCase()}` : ''}</Text>
                         </View>
                         <TouchableOpacity onPress={() => setSelectedOrder(null)} style={s.closeCircleBtn}>
@@ -330,17 +330,17 @@ export const AdminInvoices = () => {
                                     activeOpacity={0.8}
                                 >
                                     <Ionicons name="share-social-outline" color={NAVY} size={18} />
-                                    <Text style={s.shareBtnText}>Raba (Share)</Text>
+                                    <Text style={s.shareBtnText}>Share</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
                                     onPress={async () => {
                                         try {
                                             if (!selectedOrder.user?.email) {
-                                                Alert.alert('Babu Email', 'Wannan mai sayayya bashi da adireshin email.');
+                                                Alert.alert('No Email', 'This customer does not have an email address.');
                                                 return;
                                             }
-                                            Alert.alert('Ana Aikawa...', 'Ana tura rasitin zuwa ' + selectedOrder.user.email);
+                                            Alert.alert('Sending...', 'Sending invoice to ' + selectedOrder.user.email);
 
                                             const invoiceData = {
                                                 id: `INV-${selectedOrder.id.slice(0, 8).toUpperCase()}`,
@@ -362,16 +362,16 @@ export const AdminInvoices = () => {
                                                     : [{ description: "Order Items", quantity: 1, price: selectedOrder.total_amount }]
                                             };
                                             await sendInvoiceEmail({ ...invoiceData }, selectedOrder.user.email, settings);
-                                            Alert.alert('Nasarar Aikawa! ✉️', 'An tura rasiti zuwa ga abokin ciniki cikin nasara.');
+                                            Alert.alert('Sent Successfully! ✉️', 'Invoice sent to customer successfully.');
                                         } catch (e) {
-                                            Alert.alert('Kuskure', e.message);
+                                            Alert.alert('Error', e.message);
                                         }
                                     }}
                                     style={s.emailBtn}
                                     activeOpacity={0.85}
                                 >
                                     <Ionicons name="mail" color={NAVY} size={18} />
-                                    <Text style={s.emailBtnText}>Tura Ta Email</Text>
+                                    <Text style={s.emailBtnText}>Send Email</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
@@ -384,8 +384,8 @@ export const AdminInvoices = () => {
                 <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
                     <View style={s.modalHeaderBar}>
                         <View>
-                            <Text style={s.modalHeaderTitle}>Saitunan Rasiti (Invoice Settings)</Text>
-                            <Text style={s.modalHeaderSub}>Sunan kamfani, adireshi da hotunan hatimi</Text>
+                            <Text style={s.modalHeaderTitle}>Invoice Settings</Text>
+                            <Text style={s.modalHeaderSub}>Company details, address, and branding assets</Text>
                         </View>
                         <TouchableOpacity onPress={() => setShowSettings(false)} style={s.closeCircleBtn}>
                             <Ionicons name="close" size={20} color={NAVY} />
@@ -393,28 +393,28 @@ export const AdminInvoices = () => {
                     </View>
 
                     <ScrollView style={{ padding: 20 }}>
-                        <Text style={s.inputLabel}>Sunan Kamfani (Business Name)</Text>
+                        <Text style={s.inputLabel}>Business Name</Text>
                         <TextInput 
                             style={s.settingsInput} 
                             value={settings.name} 
                             onChangeText={t => setSettings({ ...settings, name: t })} 
                         />
 
-                        <Text style={s.inputLabel}>Adireshi (Address)</Text>
+                        <Text style={s.inputLabel}>Business Address</Text>
                         <TextInput 
                             style={s.settingsInput} 
                             value={settings.address} 
                             onChangeText={t => setSettings({ ...settings, address: t })} 
                         />
 
-                        <Text style={s.inputLabel}>Lambar Waya (Phone Number)</Text>
+                        <Text style={s.inputLabel}>Phone Number</Text>
                         <TextInput 
                             style={s.settingsInput} 
                             value={settings.phone} 
                             onChangeText={t => setSettings({ ...settings, phone: t })} 
                         />
 
-                        <Text style={s.inputLabel}>Email Na Musamman (Verified Sender Email)</Text>
+                        <Text style={s.inputLabel}>Verified Sender Email</Text>
                         <TextInput
                             style={s.settingsInput}
                             value={settings.sender_email}
@@ -423,7 +423,7 @@ export const AdminInvoices = () => {
                             onChangeText={t => setSettings({ ...settings, sender_email: t })}
                         />
 
-                        <Text style={s.brandingSectionTitle}>Hotunan Alamar Kamfani (Branding Assets)</Text>
+                        <Text style={s.brandingSectionTitle}>Branding & Official Assets</Text>
                         <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
                             <TouchableOpacity onPress={() => pickImage('logo_url')} style={s.assetBox} activeOpacity={0.8}>
                                 {settings.logo_url ? (
@@ -442,7 +442,7 @@ export const AdminInvoices = () => {
                                 ) : (
                                     <View style={{ alignItems: 'center' }}>
                                         <Ionicons name="shield-checkmark-outline" size={24} color={GOLD} />
-                                        <Text style={s.assetLabel}>Hatimi (Stamp)</Text>
+                                        <Text style={s.assetLabel}>Official Stamp</Text>
                                     </View>
                                 )}
                             </TouchableOpacity>
@@ -453,7 +453,7 @@ export const AdminInvoices = () => {
                                 ) : (
                                     <View style={{ alignItems: 'center' }}>
                                         <Ionicons name="pencil-outline" size={24} color={GOLD} />
-                                        <Text style={s.assetLabel}>Sa Hannu (Sig)</Text>
+                                        <Text style={s.assetLabel}>Authorized Sig</Text>
                                     </View>
                                 )}
                             </TouchableOpacity>
@@ -468,7 +468,7 @@ export const AdminInvoices = () => {
                             {uploading ? (
                                 <ActivityIndicator color={NAVY} />
                             ) : (
-                                <Text style={s.saveSettingsBtnText}>Adana Saitunan Rasiti</Text>
+                                <Text style={s.saveSettingsBtnText}>Save Invoice Settings</Text>
                             )}
                         </TouchableOpacity>
 

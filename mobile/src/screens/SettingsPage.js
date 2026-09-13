@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, SafeAreaView, Switch, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, SafeAreaView, Switch, Alert, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { styles } from '../styles/theme';
 
@@ -20,17 +20,15 @@ export const SettingsPage = ({ onBack, onLogout, onNavigate }) => {
             <ScrollView contentContainerStyle={{ padding: 20 }}>
                 <Text style={[styles.sectionTitle, { marginLeft: 0, marginTop: 10 }]}>Account</Text>
                 <SettingItem label="Edit Profile" icon="person-outline" onPress={() => onNavigate('editProfile')} />
-                <SettingItem label="Change Password" icon="lock-closed-outline" onPress={() => onNavigate('changePassword')} />
-                <SettingItem label="Shipping Address" icon="location-outline" onPress={() => onNavigate('address')} />
-                <SettingItem label="Payment Methods" icon="card-outline" onPress={() => onNavigate('paymentMethods')} />
-                <SettingItem label="About the Founder" icon="information-circle-outline" onPress={() => onNavigate('about')} />
+                <SettingItem label="Shipping Addresses" icon="location-outline" onPress={() => onNavigate('address')} />
+                <SettingItem label="Order History" icon="receipt-outline" onPress={() => onNavigate('orders')} />
 
-                <Text style={[styles.sectionTitle, { marginLeft: 0 }]}>Preferences</Text>
+                <Text style={[styles.sectionTitle, { marginLeft: 0, marginTop: 24 }]}>Preferences</Text>
                 <View style={[styles.menuItem, { justifyContent: 'space-between' }]}>
-                    <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center' }} onPress={() => onNavigate('notifications')}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <View style={styles.menuIconBox}><Ionicons name="notifications-outline" size={20} color="#0F172A" /></View>
-                        <Text style={styles.menuLabel}>Notifications</Text>
-                    </TouchableOpacity>
+                        <Text style={styles.menuLabel}>Push Notifications</Text>
+                    </View>
                     <Switch value={true} trackColor={{ false: '#E2E8F0', true: '#0F172A' }} />
                 </View>
                 <View style={[styles.menuItem, { justifyContent: 'space-between' }]}>
@@ -44,14 +42,21 @@ export const SettingsPage = ({ onBack, onLogout, onNavigate }) => {
                 <TouchableOpacity
                     style={[styles.modernBtn, { backgroundColor: '#EF4444', marginTop: 40 }]}
                     onPress={() => {
-                        Alert.alert(
-                            'Log Out',
-                            'Are you sure you want to log out of Abu Mafhal?',
-                            [
-                                { text: 'Cancel', style: 'cancel' },
-                                { text: 'Log Out', style: 'destructive', onPress: onLogout }
-                            ]
-                        );
+                        if (Platform.OS === 'web') {
+                            const confirmed = typeof window !== 'undefined' ? window.confirm('Are you sure you want to log out of Abu Mafhal?') : true;
+                            if (confirmed && typeof onLogout === 'function') {
+                                onLogout();
+                            }
+                        } else {
+                            Alert.alert(
+                                'Log Out',
+                                'Are you sure you want to log out of Abu Mafhal?',
+                                [
+                                    { text: 'Cancel', style: 'cancel' },
+                                    { text: 'Log Out', style: 'destructive', onPress: onLogout }
+                                ]
+                            );
+                        }
                     }}
                 >
                     <Text style={{ color: 'white', fontWeight: '700' }}>Log Out</Text>

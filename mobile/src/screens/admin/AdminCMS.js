@@ -81,9 +81,9 @@ export const AdminCMS = () => {
             }
 
             if (result.error) throw result.error;
-            Alert.alert('An Yi Nasara', `An sabunta shafin "${title}" cikin nasara.`);
+            Alert.alert('Success', `Page "${title}" updated successfully.`);
         } catch (err) {
-            Alert.alert('Kuskure', err.message || 'An kasa adana shafi.');
+            Alert.alert('Error', err.message || 'Failed to save page.');
         } finally {
             setSaving(false);
         }
@@ -98,10 +98,10 @@ export const AdminCMS = () => {
             {/* Header */}
             <View style={{ marginBottom: 16 }}>
                 <Text style={{ fontSize: 18, fontWeight: '900', color: NAVY }}>
-                    Kula Da Shafukan Manhaja (CMS Manager)
+                    Content Management System (CMS)
                 </Text>
                 <Text style={{ color: '#64748B', fontSize: 11.5, marginTop: 2 }}>
-                    Gyara rubutu da bayanai a shafukan About, Terms, Privacy, FAQ da dai sauransu
+                    Manage and update pages including About, Terms, Privacy, FAQ and more
                 </Text>
             </View>
 
@@ -185,7 +185,7 @@ export const AdminCMS = () => {
                         >
                             <Ionicons name={previewMode ? "eye" : "eye-outline"} size={14} color={previewMode ? GOLD : NAVY} />
                             <Text style={{ fontSize: 11, fontWeight: '800', color: previewMode ? GOLD : NAVY }}>
-                                {previewMode ? 'Duba Rubutu (Edit)' : 'Duban Gani (Preview)'}
+                                {previewMode ? 'Edit Content' : 'Preview'}
                             </Text>
                         </TouchableOpacity>
                     </View>
@@ -204,12 +204,12 @@ export const AdminCMS = () => {
                         }}
                         value={title}
                         onChangeText={setTitle}
-                        placeholder="Taken Shafi"
+                        placeholder="Page Title"
                         placeholderTextColor="#94A3B8"
                     />
 
                     <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B', textTransform: 'uppercase', marginBottom: 8 }}>
-                        {previewMode ? 'Yadda Zai Fito Ga Abokin Ciniki:' : 'Rubutun Ciki (Content):'}
+                        {previewMode ? 'Customer View Preview:' : 'Page Content:'}
                     </Text>
 
                     {previewMode ? (
@@ -223,7 +223,7 @@ export const AdminCMS = () => {
                         }}>
                             <Text style={{ fontSize: 16, fontWeight: '900', color: NAVY, marginBottom: 8 }}>{title}</Text>
                             <Text style={{ fontSize: 13, color: '#334155', lineHeight: 20 }}>
-                                {content || 'Babu wani rubutu da aka saka tukuna.'}
+                                {content || 'No content has been entered yet.'}
                             </Text>
                         </View>
                     ) : (
@@ -238,7 +238,7 @@ export const AdminCMS = () => {
                             <TextInput
                                 style={{ flex: 1, textAlignVertical: 'top', fontSize: 13.5, color: NAVY, lineHeight: 20 }}
                                 multiline
-                                placeholder="Rubuta bayanin shafi a nan..."
+                                placeholder="Write page content here..."
                                 placeholderTextColor="#94A3B8"
                                 value={content}
                                 onChangeText={setContent}
@@ -264,7 +264,7 @@ export const AdminCMS = () => {
                             <ActivityIndicator color={GOLD} />
                         ) : (
                             <Text style={{ color: GOLD, fontWeight: '900', fontSize: 13.5, letterSpacing: 0.3 }}>
-                                ADANA SHAFI (SAVE CONTENT)
+                                SAVE PAGE CONTENT
                             </Text>
                         )}
                     </TouchableOpacity>

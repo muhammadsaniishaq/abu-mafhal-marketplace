@@ -111,10 +111,10 @@ export const AdminBroadcast = () => {
             if (parsed.message) setMessage(parsed.message);
 
             setAiPrompt('');
-            showAlert('Nasarar AI! ✨', 'Gemini AI ta rubuta sanarwar cikin nasara. Zaka iya dubawa da gyarawa kafin aika wa.', 'success');
+            showAlert('AI Success! ✨', 'Gemini AI generated the broadcast announcement. You can review and edit before sending.', 'success');
         } catch (error) {
             console.error('Gemini error:', error);
-            showAlert('Kuskuren AI', error.message || 'An gaza rubuta sanarwa ta AI a yanzu.', 'error');
+            showAlert('AI Error', error.message || 'Failed to generate announcement via AI.', 'error');
         } finally {
             setIsGenerating(false);
         }
@@ -124,7 +124,7 @@ export const AdminBroadcast = () => {
         try {
             const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (!permission.granted) {
-                showAlert('Izini', 'Ana bukatar izinin gallery don loda hoto.', 'info');
+                showAlert('Permission Required', 'Gallery access is required to upload an image.', 'info');
                 return;
             }
 
@@ -165,7 +165,7 @@ export const AdminBroadcast = () => {
                     setImageUrl(publicUrlData.publicUrl);
                 } catch (err) {
                     console.log('Upload error:', err);
-                    showAlert('Kuskuren Loda Hoto', 'An gaza loda hoton a tsari. ' + err.message, 'error');
+                    showAlert('Upload Error', 'Failed to upload image. ' + err.message, 'error');
                 } finally {
                     setUploadingImage(false);
                 }
@@ -177,13 +177,13 @@ export const AdminBroadcast = () => {
 
     const handleSend = async () => {
         if (!title.trim() || !message.trim()) {
-            showAlert('Bayanai Basu Cika Ba', 'Da fatan za a rubuta Babban Take (Title) da Sakon Sanarwa (Message).', 'info');
+            showAlert('Incomplete Form', 'Please provide both Title and Message for the broadcast.', 'info');
             return;
         }
 
         showAlert(
-            'Tabbatar Da Aika Sanarwa',
-            `Shin da gaske kana son aika wannan sanarwar ga bangaren ${target.toUpperCase()}?`,
+            'Confirm Broadcast',
+            `Are you sure you want to send this broadcast to ${target.toUpperCase()}?`,
             'confirm',
             async () => {
                 setModalVisible(false);
@@ -197,8 +197,8 @@ export const AdminBroadcast = () => {
                     else if (target === 'drivers') query = query.eq('role', 'driver');
 
                     const { data: users, error } = await query;
-                    if (error) throw new Error('An gaza binciko masu amfani: ' + error.message);
-                    if (!users || users.length === 0) throw new Error(`Babu masu amfani a sashin '${target}'.`);
+                    if (error) throw new Error('Failed to query audience users: ' + error.message);
+                    if (!users || users.length === 0) throw new Error(`No active users found in target group '${target}'.`);
 
                     // 2. Prepare in-app Notifications with exact table schema (user_id, title, body, data, is_read)
                     const notifications = users.map(u => ({
@@ -223,7 +223,7 @@ export const AdminBroadcast = () => {
                         if (notifError) console.error("Notif Error:", notifError);
                     }
 
-                    showAlert('Nasarar Aikawa! 🎉', `An yi nasarar isar da sanarwar ga mutane ${users.length} a cikin manhaja.`, 'success');
+                    showAlert('Broadcast Sent! 🎉', `Successfully delivered notification to ${users.length} users.`, 'success');
                     setTitle('');
                     setMessage('');
                     setActionLink('');
@@ -234,7 +234,7 @@ export const AdminBroadcast = () => {
                     fetchHistory();
 
                 } catch (e) {
-                    showAlert('Kuskure', e.message, 'error');
+                    showAlert('Error', e.message, 'error');
                 } finally {
                     setSending(false);
                 }
@@ -264,7 +264,7 @@ export const AdminBroadcast = () => {
                                 style={s.modalCancelBtn} 
                                 onPress={() => setModalVisible(false)}
                             >
-                                <Text style={s.modalCancelText}>A'a (Cancel)</Text>
+                                <Text style={s.modalCancelText}>Cancel</Text>
                             </TouchableOpacity>
                         )}
                         <TouchableOpacity
@@ -278,7 +278,7 @@ export const AdminBroadcast = () => {
                             }}
                         >
                             <Text style={[s.modalConfirmText, { color: modalConfig.type === 'confirm' ? NAVY : '#FFFFFF' }]}>
-                                {modalConfig.type === 'confirm' ? 'Eh, Aika Yanzu' : 'Na Gane'}
+                                {modalConfig.type === 'confirm' ? 'Send Broadcast' : 'Got It'}
                             </Text>
                         </TouchableOpacity>
                     </View>
@@ -294,9 +294,9 @@ export const AdminBroadcast = () => {
                 <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         <Ionicons name="megaphone" size={22} color={GOLD} />
-                        <Text style={s.headerTitle}>Sanarwar Gaggawa (Broadcast)</Text>
+                        <Text style={s.headerTitle}>Broadcast Notifications</Text>
                     </View>
-                    <Text style={s.headerSubtitle}>Aika saƙon faɗakarwa kai tsaye ga masu sayayya, direbobi da yan kasuwa</Text>
+                    <Text style={s.headerSubtitle}>Send real-time broadcast announcements to customers, drivers, and vendors</Text>
                 </View>
             </View>
 
@@ -307,14 +307,14 @@ export const AdminBroadcast = () => {
             >
                 {/* Compose Card */}
                 <View style={s.composeCard}>
-                    <Text style={s.label}>Bangaren Da Ake Sanarwa (Target Audience)</Text>
+                    <Text style={s.label}>Target Audience</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 18 }}>
                         <View style={{ flexDirection: 'row', gap: 8 }}>
                             {[
-                                { id: 'all', label: 'Duka (Kowa)', icon: 'globe-outline' },
-                                { id: 'customers', label: 'Masu Sayayya', icon: 'people-outline' },
-                                { id: 'vendors', label: 'Yan Kasuwa', icon: 'storefront-outline' },
-                                { id: 'drivers', label: 'Direbobi', icon: 'car-outline' }
+                                { id: 'all', label: 'Everyone', icon: 'globe-outline' },
+                                { id: 'customers', label: 'Customers', icon: 'people-outline' },
+                                { id: 'vendors', label: 'Vendors', icon: 'storefront-outline' },
+                                { id: 'drivers', label: 'Drivers', icon: 'car-outline' }
                             ].map(t => (
                                 <TouchableOpacity
                                     key={t.id}
@@ -394,26 +394,26 @@ export const AdminBroadcast = () => {
                         </View>
                     </View>
 
-                    <Text style={s.label}>Babban Take (Title) *</Text>
+                    <Text style={s.label}>Broadcast Title *</Text>
                     <TextInput
                         style={s.textInput}
-                        placeholder="Misali: Sabon Rangwame a Kasuwa"
+                        placeholder="e.g. Special Weekend Flash Sale"
                         placeholderTextColor="#94A3B8"
                         value={title}
                         onChangeText={setTitle}
                     />
 
-                    <Text style={s.label}>Sakon Sanarwa (Message) *</Text>
+                    <Text style={s.label}>Broadcast Message *</Text>
                     <TextInput
                         style={[s.textInput, { height: 110, textAlignVertical: 'top' }]}
-                        placeholder="Rubuta cikakken bayanin sanarwar a nan..."
+                        placeholder="Write broadcast announcement message here..."
                         placeholderTextColor="#94A3B8"
                         value={message}
                         onChangeText={setMessage}
                         multiline
                     />
 
-                    <Text style={s.label}>Adireshin Shiga / Link (Na Zabi)</Text>
+                    <Text style={s.label}>Action URL / Link (Optional)</Text>
                     <TextInput
                         style={s.textInput}
                         placeholder="Misali: /shop/category ko https://abumafhal.com"
@@ -426,10 +426,10 @@ export const AdminBroadcast = () => {
 
                     {actionLink.length > 0 && (
                         <>
-                            <Text style={s.label}>Rubutun Maballi (Button Text)</Text>
+                            <Text style={s.label}>Button Text (Optional)</Text>
                             <TextInput
                                 style={s.textInput}
-                                placeholder="Misali: Shiga Kasuwa Yanzu"
+                                placeholder="e.g. Shop Now"
                                 placeholderTextColor="#94A3B8"
                                 value={actionText}
                                 onChangeText={setActionText}

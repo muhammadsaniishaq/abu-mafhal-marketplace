@@ -41,7 +41,7 @@ const SearchModal = ({ visible, onClose, onSearch, results, onSelect }) => {
                 <View style={s.searchBar}>
                     <Ionicons name="search" size={20} color="#94A3B8" />
                     <TextInput
-                        placeholder="Nemi suna ko lambar kaya..."
+                        placeholder="Search product by name or ID..."
                         placeholderTextColor="#94A3B8"
                         value={query}
                         onChangeText={(t) => { setQuery(t); onSearch(t); }}
@@ -55,7 +55,7 @@ const SearchModal = ({ visible, onClose, onSearch, results, onSelect }) => {
                         <View style={{ padding: 30, alignItems: 'center' }}>
                             <Ionicons name="cube-outline" size={40} color="#CBD5E1" />
                             <Text style={{ textAlign: 'center', color: '#94A3B8', marginTop: 10, fontSize: 13, fontWeight: '600' }}>
-                                Babu kayan da aka samu. Rubuta kalmar nema a sama.
+                                No products found. Type a search query above.
                             </Text>
                         </View>
                     ) : (
@@ -170,7 +170,7 @@ export const AdminPromoBanners = () => {
 
     const handleSavePromo = async () => {
         if (!promoBanner.image_url) {
-            Alert.alert('Kuskure', 'Dole ne a sa hoton banner.');
+            Alert.alert('Error', 'Banner image is required.');
             return;
         }
 
@@ -200,24 +200,24 @@ export const AdminPromoBanners = () => {
         if (error) {
             showToast(error.message, 'error');
         } else {
-            showToast('An yi nasarar adana Promo Banner!', 'success');
+            showToast('Promo banner saved successfully!', 'success');
             setIsEditing(false);
             fetchData();
         }
     };
 
     const handleDelete = (id) => {
-        Alert.alert('Goge Promo Banner', 'Shin da gaske kana son goge wannan tallan? Ba za a iya dawo da shi ba.', [
-            { text: 'A\'a', style: 'cancel' },
+        Alert.alert('Delete Promo Banner', 'Are you sure you want to delete this promo banner? This action cannot be undone.', [
+            { text: 'Cancel', style: 'cancel' },
             {
-                text: 'Eh, Goge',
+                text: 'Delete',
                 style: 'destructive',
                 onPress: async () => {
                     const { error } = await supabase.from('banners').delete().eq('id', id);
                     if (error) {
                         showToast(error.message, 'error');
                     } else {
-                        showToast('An goge banner cikin nasara', 'success');
+                        showToast('Banner deleted successfully', 'success');
                         fetchData();
                     }
                 }
@@ -288,10 +288,10 @@ export const AdminPromoBanners = () => {
 
                 setPromoBanner(prev => ({ ...prev, image_url: publicUrl, tempBase64: asset.base64 }));
                 setUploadingBanner(false);
-                showToast('An loda hoto cikin nasara!', 'success');
+                showToast('Image uploaded successfully!', 'success');
             }
         } catch (error) {
-            showToast('Kuskuren zaben hoto', 'error');
+            showToast('Error selecting image', 'error');
             setUploadingBanner(false);
         }
     };
@@ -313,7 +313,7 @@ export const AdminPromoBanners = () => {
             
             setSearchResults(formatted);
         } catch (e) {
-            showToast('Kuskuren bincike', 'error');
+            showToast('Search error', 'error');
         }
     };
 
@@ -366,7 +366,7 @@ export const AdminPromoBanners = () => {
             }
         } catch (e) {
             console.error("AI Error:", e);
-            showToast('Kuskuren AI: ' + e.message, 'error');
+            showToast('AI Error: ' + e.message, 'error');
         } finally {
             setGeneratingAI(false);
         }
@@ -424,7 +424,7 @@ export const AdminPromoBanners = () => {
                         <View style={s.discountTag}>
                             <Ionicons name="pricetag" size={12} color="#16A34A" />
                             <Text style={s.discountTagText}>
-                                {item.linkData.discountValue}{item.linkData.discountType === 'percent' ? '%' : '₦'} RANGWAME
+                                {item.linkData.discountValue}{item.linkData.discountType === 'percent' ? '%' : '₦'} OFF
                             </Text>
                         </View>
                     ) : null}
@@ -437,7 +437,7 @@ export const AdminPromoBanners = () => {
                         activeOpacity={0.8}
                     >
                         <Ionicons name="create-outline" size={16} color={NAVY} />
-                        <Text style={s.editActionText}>Gyara</Text>
+                        <Text style={s.editActionText}>Edit</Text>
                     </TouchableOpacity>
                     <TouchableOpacity 
                         onPress={() => handleDelete(item.id)} 
@@ -445,7 +445,7 @@ export const AdminPromoBanners = () => {
                         activeOpacity={0.8}
                     >
                         <Ionicons name="trash-outline" size={16} color="#EF4444" />
-                        <Text style={s.deleteActionText}>Goge</Text>
+                        <Text style={s.deleteActionText}>Delete</Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -460,8 +460,8 @@ export const AdminPromoBanners = () => {
                 {/* Edit Header */}
                 <View style={s.editHeader}>
                     <View style={{ flex: 1 }}>
-                        <Text style={s.editTitle}>{promoBanner.id ? 'Gyara Promo Banner' : 'Sabuwar Promo Banner'}</Text>
-                        <Text style={s.editSub}>Sanya cikakken tallan countdown da kayan da za a saya</Text>
+                        <Text style={s.editTitle}>{promoBanner.id ? 'Edit Promo Banner' : 'New Promo Banner'}</Text>
+                        <Text style={s.editSub}>Configure countdown timer, banner copy, and linked product</Text>
                     </View>
                     <View style={{ flexDirection: 'row', gap: 10 }}>
                         <TouchableOpacity
@@ -475,7 +475,7 @@ export const AdminPromoBanners = () => {
                             ) : (
                                 <>
                                     <Ionicons name="sparkles" size={16} color={GOLD} />
-                                    <Text style={s.aiButtonText}>AI Rubutu</Text>
+                                    <Text style={s.aiButtonText}>AI Copy</Text>
                                 </>
                             )}
                         </TouchableOpacity>
@@ -488,7 +488,7 @@ export const AdminPromoBanners = () => {
                 <View style={s.formCard}>
                     {/* Status Toggle */}
                     <View style={s.statusToggleRow}>
-                        <Text style={s.formSectionTitle}>Matsayin Banner (Status)</Text>
+                        <Text style={s.formSectionTitle}>Banner Status</Text>
                         <TouchableOpacity
                             onPress={() => setPromoBanner(prev => ({ ...prev, is_active: !prev.is_active }))}
                             style={[
@@ -498,14 +498,14 @@ export const AdminPromoBanners = () => {
                         >
                             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: promoBanner.is_active ? '#10B981' : '#94A3B8' }} />
                             <Text style={{ fontSize: 12, fontWeight: '800', color: promoBanner.is_active ? '#059669' : '#64748B' }}>
-                                {promoBanner.is_active ? 'A KASUWA (Active)' : 'A BOYE (Hidden)'}
+                                {promoBanner.is_active ? 'ACTIVE' : 'HIDDEN'}
                             </Text>
                         </TouchableOpacity>
                     </View>
 
                     {/* Display Locations Checkboxes */}
                     <View style={{ marginBottom: 20 }}>
-                        <Text style={s.inputLabel}>SHAFUKAN DA ZAI FITO (DISPLAY LOCATIONS)</Text>
+                        <Text style={s.inputLabel}>DISPLAY LOCATIONS</Text>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                             {['home', 'shop', 'landing'].map(loc => {
                                 const isSelected = promoBanner.linkData?.locations?.includes(loc);
@@ -522,7 +522,7 @@ export const AdminPromoBanners = () => {
                                             {isSelected && <Ionicons name="checkmark" size={12} color={NAVY} />}
                                         </View>
                                         <Text style={[s.locationChipText, isSelected && s.locationChipTextActive]}>
-                                            {loc === 'home' ? 'Fuskar Gida (Home)' : loc === 'landing' ? 'Landing Page' : 'Kasuwa (Shop)'}
+                                            {loc === 'home' ? 'Home' : loc === 'landing' ? 'Landing Page' : 'Shop'}
                                         </Text>
                                     </TouchableOpacity>
                                 );
@@ -532,7 +532,7 @@ export const AdminPromoBanners = () => {
 
                     {/* Background Image Upload */}
                     <View style={{ marginBottom: 20 }}>
-                        <Text style={s.inputLabel}>HOTON BANNER (BACKGROUND IMAGE)</Text>
+                        <Text style={s.inputLabel}>BACKGROUND IMAGE</Text>
                         {promoBanner.image_url ? (
                             <View style={s.imagePreviewBox}>
                                 <Image source={{ uri: promoBanner.image_url }} style={s.imagePreview} />
@@ -546,7 +546,7 @@ export const AdminPromoBanners = () => {
                                     ) : (
                                         <>
                                             <Ionicons name="camera" size={16} color="#FFF" />
-                                            <Text style={s.imageChangeText}>Canza Hoto</Text>
+                                            <Text style={s.imageChangeText}>Change Image</Text>
                                         </>
                                     )}
                                 </TouchableOpacity>
@@ -565,8 +565,8 @@ export const AdminPromoBanners = () => {
                                         <View style={s.uploadIconBg}>
                                             <Ionicons name="cloud-upload" size={28} color={GOLD} />
                                         </View>
-                                        <Text style={s.uploadPrimaryText}>Loda Hoton Banner</Text>
-                                        <Text style={s.uploadSubText}>Hoton mai fadi (21:9 ko 16:9)</Text>
+                                        <Text style={s.uploadPrimaryText}>Upload Banner Image</Text>
+                                        <Text style={s.uploadSubText}>Wide banner format (21:9 or 16:9)</Text>
                                     </>
                                 )}
                             </TouchableOpacity>
@@ -576,9 +576,9 @@ export const AdminPromoBanners = () => {
                     {/* Textiles */}
                     <View style={{ gap: 16 }}>
                         <View>
-                            <Text style={s.inputLabel}>BABBAN TAKE (MAIN HEADLINE)</Text>
+                            <Text style={s.inputLabel}>MAIN HEADLINE</Text>
                             <TextInput
-                                placeholder="Misali: Sabon Rangwamen Karshen Wata 50% Kasuwanci"
+                                placeholder="e.g. End of Month Mega Sale 50% Off"
                                 placeholderTextColor="#94A3B8"
                                 value={promoBanner.title}
                                 onChangeText={t => setPromoBanner(p => ({ ...p, title: t }))}
@@ -590,9 +590,9 @@ export const AdminPromoBanners = () => {
                         </View>
 
                         <View>
-                            <Text style={s.inputLabel}>KARAMIN TAKE (RED BADGE NOTIFICATION)</Text>
+                            <Text style={s.inputLabel}>BADGE TEXT (HIGHLIGHT)</Text>
                             <TextInput
-                                placeholder="Misali: FLASH SALE ko LIMITED OFFER"
+                                placeholder="e.g. FLASH SALE or LIMITED OFFER"
                                 placeholderTextColor="#94A3B8"
                                 value={promoBanner.subtitle}
                                 onChangeText={t => setPromoBanner(p => ({ ...p, subtitle: t }))}
@@ -604,9 +604,9 @@ export const AdminPromoBanners = () => {
                         </View>
 
                         <View>
-                            <Text style={s.inputLabel}>RUBUTUN MABALLI (BUTTON CALL-TO-ACTION)</Text>
+                            <Text style={s.inputLabel}>BUTTON CALL-TO-ACTION</Text>
                             <TextInput
-                                placeholder="Misali: SAYE YANZU KAFIN YA KARE"
+                                placeholder="e.g. SHOP NOW BEFORE IT EXPIRES"
                                 placeholderTextColor="#94A3B8"
                                 value={promoBanner.linkData?.text}
                                 onChangeText={t => setPromoBanner(p => ({ ...p, linkData: { ...Object(p.linkData), text: t } }))}
@@ -619,7 +619,7 @@ export const AdminPromoBanners = () => {
 
                         {aiSuggestions?.notification && (
                             <View style={s.aiNotifCard}>
-                                <Text style={s.aiNotifTitle}>AI SANARWAR KWADAITARWA:</Text>
+                                <Text style={s.aiNotifTitle}>AI COPY RECOMMENDATION:</Text>
                                 <Text style={s.aiNotifText}>{aiSuggestions.notification}</Text>
                             </View>
                         )}
@@ -628,7 +628,7 @@ export const AdminPromoBanners = () => {
                         <View style={{ flexDirection: 'row', gap: 12 }}>
                             {/* Date Picker */}
                             <View style={{ flex: 1 }}>
-                                <Text style={s.inputLabel}>KARSHE (COUNTDOWN DATE)</Text>
+                                <Text style={s.inputLabel}>COUNTDOWN EXPIRY DATE</Text>
                                 <TouchableOpacity
                                     onPress={() => setShowDatePicker(true)}
                                     style={[s.formPickerButton, promoBanner.linkData?.timerEnd && s.formPickerButtonActive]}
@@ -636,7 +636,7 @@ export const AdminPromoBanners = () => {
                                     <Text style={[s.formPickerText, promoBanner.linkData?.timerEnd && s.formPickerTextActive]}>
                                         {promoBanner.linkData?.timerEnd 
                                             ? new Date(promoBanner.linkData.timerEnd).toLocaleDateString() 
-                                            : 'Zabi Rana...'}
+                                            : 'Select Date...'}
                                     </Text>
                                     {promoBanner.linkData?.timerEnd ? (
                                         <TouchableOpacity 
@@ -689,13 +689,13 @@ export const AdminPromoBanners = () => {
 
                             {/* Product Search */}
                             <View style={{ flex: 1 }}>
-                                <Text style={s.inputLabel}>KAYAN DA AKA HADA (LINK)</Text>
+                                <Text style={s.inputLabel}>LINKED PRODUCT</Text>
                                 <TouchableOpacity
                                     onPress={() => setSearchModalVisible(true)}
                                     style={[s.formPickerButton, promoBanner.linkData?.productId && s.formPickerButtonActive]}
                                 >
                                     <Text style={[s.formPickerText, promoBanner.linkData?.productId && s.formPickerTextActive]} numberOfLines={1}>
-                                        {promoBanner.linkData?.productName || 'Zaɓi Kaya...'}
+                                        {promoBanner.linkData?.productName || 'Select Product...'}
                                     </Text>
                                     {promoBanner.linkData?.productId ? (
                                         <TouchableOpacity 
@@ -712,7 +712,7 @@ export const AdminPromoBanners = () => {
 
                         {/* Discount Settings */}
                         <View style={s.discountBox}>
-                            <Text style={s.discountBoxTitle}>RANGWAME (PROMO DISCOUNT)</Text>
+                            <Text style={s.discountBoxTitle}>PROMOTIONAL DISCOUNT</Text>
 
                             <View style={{ flexDirection: 'row', gap: 12, marginBottom: 14 }}>
                                 <TouchableOpacity
@@ -724,7 +724,7 @@ export const AdminPromoBanners = () => {
                                         size={18} 
                                         color={promoBanner.linkData?.discountType === 'percent' ? NAVY : '#94A3B8'} 
                                     />
-                                    <Text style={s.discountTypeLabel}>Kaso (Percentage %)</Text>
+                                    <Text style={s.discountTypeLabel}>Percentage (%)</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
@@ -736,13 +736,13 @@ export const AdminPromoBanners = () => {
                                         size={18} 
                                         color={promoBanner.linkData?.discountType === 'amount' ? NAVY : '#94A3B8'} 
                                     />
-                                    <Text style={s.discountTypeLabel}>Kudi Tsaye (Fixed ₦)</Text>
+                                    <Text style={s.discountTypeLabel}>Fixed Amount (₦)</Text>
                                 </TouchableOpacity>
                             </View>
 
-                            <Text style={s.inputLabel}>ADADIN RANGWAME</Text>
+                            <Text style={s.inputLabel}>DISCOUNT VALUE</Text>
                             <TextInput
-                                placeholder={promoBanner.linkData?.discountType === 'percent' ? "Misali: 25" : "Misali: 2000"}
+                                placeholder={promoBanner.linkData?.discountType === 'percent' ? "e.g. 25" : "e.g. 2000"}
                                 placeholderTextColor="#94A3B8"
                                 value={promoBanner.linkData?.discountValue?.toString()}
                                 onChangeText={t => setPromoBanner(p => ({ ...p, linkData: { ...Object(p.linkData), discountValue: t } }))}
@@ -763,7 +763,7 @@ export const AdminPromoBanners = () => {
                             ) : (
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                     <Ionicons name="checkmark-circle" size={20} color={NAVY} />
-                                    <Text style={s.savePromoBtnText}>Adana Promo Banner</Text>
+                                    <Text style={s.savePromoBtnText}>Save Promo Banner</Text>
                                 </View>
                             )}
                         </TouchableOpacity>
@@ -790,20 +790,20 @@ export const AdminPromoBanners = () => {
                 <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         <Ionicons name="sparkles" size={22} color={GOLD} />
-                        <Text style={s.headerTitle}>Promos & AI Talla</Text>
+                        <Text style={s.headerTitle}>Promos & AI Campaigns</Text>
                     </View>
-                    <Text style={s.headerSubtitle}>Tallace-tallacen countdown, rangwame da AI copy</Text>
+                    <Text style={s.headerSubtitle}>Manage countdown banners, discounts, and AI promotional copy</Text>
                 </View>
                 <TouchableOpacity onPress={handleAddNew} style={s.addBtn} activeOpacity={0.8}>
                     <Ionicons name="add" size={18} color="#FFFFFF" />
-                    <Text style={s.addBtnText}>Sabo</Text>
+                    <Text style={s.addBtnText}>New Promo</Text>
                 </TouchableOpacity>
             </View>
 
             {loading ? (
                 <View style={s.centered}>
                     <ActivityIndicator size="large" color={GOLD} />
-                    <Text style={s.loadingText}>Ana binciko promo banners...</Text>
+                    <Text style={s.loadingText}>Loading promo banners...</Text>
                 </View>
             ) : (
                 <FlatList
@@ -817,13 +817,13 @@ export const AdminPromoBanners = () => {
                             <View style={s.emptyIconCircle}>
                                 <Ionicons name="megaphone-outline" size={40} color={GOLD} />
                             </View>
-                            <Text style={s.emptyTitle}>Babu Promo Banners a Yanzu</Text>
+                            <Text style={s.emptyTitle}>No Promo Banners Found</Text>
                             <Text style={s.emptySub}>
-                                Danna maɓallin '+ Sabo' domin ƙirƙirar sabon countdown banner tare da rangwame da taimakon Gemini AI.
+                                Tap '+ New Promo' to create an interactive countdown banner with discounts powered by AI.
                             </Text>
                             <TouchableOpacity onPress={handleAddNew} style={s.emptyCreateBtn}>
                                 <Ionicons name="sparkles" size={16} color={NAVY} />
-                                <Text style={s.emptyCreateBtnText}>Ƙirƙiri Talla Da AI</Text>
+                                <Text style={s.emptyCreateBtnText}>Create Promo with AI</Text>
                             </TouchableOpacity>
                         </View>
                     }

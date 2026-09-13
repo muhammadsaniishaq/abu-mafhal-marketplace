@@ -48,7 +48,7 @@ export const AdminBanners = () => {
 
             if (error) {
                 console.warn('Error fetching banners:', error.message);
-                Alert.alert('Kuskure', error.message);
+                Alert.alert('Error', error.message);
             } else {
                 setBanners(data || []);
             }
@@ -86,7 +86,7 @@ export const AdminBanners = () => {
                 await uploadImageToSupabase(asset);
             }
         } catch (e) {
-            Alert.alert('Kuskure', 'An samu matsala wajen zaben hoto.');
+            Alert.alert('Error', 'Failed to pick image.');
         }
     };
 
@@ -117,7 +117,7 @@ export const AdminBanners = () => {
             const { data: publicUrlData } = supabase.storage.from(finalBucket).getPublicUrl(fileName);
             if (publicUrlData?.publicUrl) {
                 setForm(prev => ({ ...prev, image_url: publicUrlData.publicUrl }));
-                Alert.alert('Nasarar Loda Hoto', 'An sa hoton banner cikin nasara!');
+                Alert.alert('Success', 'Banner image uploaded successfully!');
             }
         } catch (error) {
             Alert.alert('Upload Error', error.message || 'An gaza loda hoto a tsarin');
@@ -141,15 +141,15 @@ export const AdminBanners = () => {
     };
 
     const handleDelete = async (id) => {
-        Alert.alert('Goge Banner', 'Shin da gaske kana son goge wannan banner din?', [
-            { text: 'A\'a', style: 'cancel' },
+        Alert.alert('Delete Banner', 'Are you sure you want to delete this promotional banner?', [
+            { text: 'Cancel', style: 'cancel' },
             {
-                text: 'Eh, Goge',
+                text: 'Delete',
                 style: 'destructive',
                 onPress: async () => {
                     const { error } = await supabase.from('banners').delete().eq('id', id);
                     if (error) {
-                        Alert.alert('Kuskure', error.message);
+                        Alert.alert('Error', error.message);
                     } else {
                         fetchBanners();
                     }
@@ -160,7 +160,7 @@ export const AdminBanners = () => {
 
     const handleSave = async () => {
         if (!form.image_url) {
-            Alert.alert('Kuskure', 'Hoton banner ya zama dole (Banner image is required).');
+            Alert.alert('Error', 'Banner image is required.');
             return;
         }
 
@@ -191,7 +191,7 @@ export const AdminBanners = () => {
 
         setUploading(false);
         if (error) {
-            Alert.alert('Kuskure', error.message);
+            Alert.alert('Error', error.message);
         } else {
             setShowForm(false);
             resetForm();
@@ -222,7 +222,7 @@ export const AdminBanners = () => {
         if (!error) {
             setBanners(prev => prev.map(b => b.id === banner.id ? { ...b, is_active: nextState } : b));
         } else {
-            Alert.alert('Kuskure', error.message);
+            Alert.alert('Error', error.message);
         }
     };
 
@@ -361,7 +361,7 @@ export const AdminBanners = () => {
                                                 color={item.is_active ? '#059669' : '#64748B'} 
                                             />
                                             <Text style={[s.statusBtnText, { color: item.is_active ? '#059669' : '#64748B' }]}>
-                                                {item.is_active ? 'A Kasuwa' : 'A Boye'}
+                                                {item.is_active ? 'Active' : 'Hidden'}
                                             </Text>
                                         </TouchableOpacity>
 
@@ -400,8 +400,8 @@ export const AdminBanners = () => {
                         {/* Modal Header */}
                         <View style={s.modalHeader}>
                             <View>
-                                <Text style={s.modalTitle}>{editingId ? 'Gyara Hoton Talla' : 'Sabuwar Banner'}</Text>
-                                <Text style={s.modalSubtitle}>Sanya hoton tallace-tallace da links</Text>
+                                <Text style={s.modalTitle}>{editingId ? 'Edit Banner' : 'New Promotional Banner'}</Text>
+                                <Text style={s.modalSubtitle}>Upload banner image and configure action links</Text>
                             </View>
                             <TouchableOpacity onPress={() => setShowForm(false)} style={s.closeBtn}>
                                 <Ionicons name="close" size={22} color={NAVY} />
@@ -410,7 +410,7 @@ export const AdminBanners = () => {
 
                         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20 }}>
                             {/* Section Picker */}
-                            <Text style={s.inputLabel}>Sashin Da Zai Fito (Target Section)</Text>
+                            <Text style={s.inputLabel}>Target Section</Text>
                             <View style={s.segmentRow}>
                                 {SECTIONS.map(sec => {
                                     const isSel = form.section === sec;
@@ -429,14 +429,14 @@ export const AdminBanners = () => {
                             </View>
 
                             {/* Banner Image Upload Box */}
-                            <Text style={s.inputLabel}>Hoton Banner (Dole Ne)</Text>
+                            <Text style={s.inputLabel}>Banner Image (Required)</Text>
                             <TouchableOpacity onPress={pickImage} style={s.imageUploadArea} activeOpacity={0.8}>
                                 {form.image_url ? (
                                     <View style={s.uploadedImageContainer}>
                                         <Image source={{ uri: form.image_url }} style={s.uploadedImage} resizeMode="cover" />
                                         <View style={s.imageOverlayPill}>
                                             <Ionicons name="camera" size={16} color="#FFFFFF" />
-                                            <Text style={s.imageOverlayPillText}>Canza Hoto</Text>
+                                            <Text style={s.imageOverlayPillText}>Change Image</Text>
                                         </View>
                                     </View>
                                 ) : (
@@ -448,8 +448,8 @@ export const AdminBanners = () => {
                                                 <View style={s.cameraIconBg}>
                                                     <Ionicons name="cloud-upload" size={28} color={GOLD} />
                                                 </View>
-                                                <Text style={s.uploadTextPrimary}>Zabi Hoto Daga Gallery</Text>
-                                                <Text style={s.uploadTextSub}>HD landscape (16:9 ko 2:1)</Text>
+                                                <Text style={s.uploadTextPrimary}>Select Image from Gallery</Text>
+                                                <Text style={s.uploadTextSub}>HD landscape (16:9 or 2:1)</Text>
                                             </>
                                         )}
                                     </View>
@@ -457,37 +457,37 @@ export const AdminBanners = () => {
                             </TouchableOpacity>
 
                             {/* Title (Optional) */}
-                            <Text style={s.inputLabel}>Babban Take (Title - Na Zabi)</Text>
+                            <Text style={s.inputLabel}>Main Title (Optional)</Text>
                             <TextInput
                                 style={s.textInput}
-                                placeholder="Misali: Sabbin Kayan Fashion Da Rangwame"
+                                placeholder="e.g. New Fashion Arrivals & Discounts"
                                 placeholderTextColor="#94A3B8"
                                 value={form.title}
                                 onChangeText={t => setForm({ ...form, title: t })}
                             />
 
                             {/* Subtitle (Optional) */}
-                            <Text style={s.inputLabel}>Karamin Take (Subtitle - Na Zabi)</Text>
+                            <Text style={s.inputLabel}>Subtitle (Optional)</Text>
                             <TextInput
                                 style={s.textInput}
-                                placeholder="Misali: Samun rangwamen har 30% a wannan makon"
+                                placeholder="e.g. Up to 30% discount this week"
                                 placeholderTextColor="#94A3B8"
                                 value={form.subtitle}
                                 onChangeText={t => setForm({ ...form, subtitle: t })}
                             />
 
                             {/* Action Link / Deep Link */}
-                            <Text style={s.inputLabel}>Adireshin Shiga / Deep Link (Na Zabi)</Text>
+                            <Text style={s.inputLabel}>Action Link / Deep Link (Optional)</Text>
                             <TextInput
                                 style={s.textInput}
-                                placeholder="Misali: /shop/category ko ID na kaya"
+                                placeholder="e.g. /shop/category or product ID"
                                 placeholderTextColor="#94A3B8"
                                 value={form.action_link}
                                 onChangeText={t => setForm({ ...form, action_link: t })}
                             />
 
                             {/* Display Order */}
-                            <Text style={s.inputLabel}>Lamban Tsari (Display Order)</Text>
+                            <Text style={s.inputLabel}>Display Order</Text>
                             <TextInput
                                 style={s.textInput}
                                 placeholder="0"
@@ -510,7 +510,7 @@ export const AdminBanners = () => {
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                         <Ionicons name="checkmark-circle" size={20} color={NAVY} />
                                         <Text style={s.saveButtonText}>
-                                            {editingId ? 'Ajiye Gyaran Banner' : 'Wallafa Sabon Banner'}
+                                            {editingId ? 'Save Changes' : 'Publish Banner'}
                                         </Text>
                                     </View>
                                 )}
