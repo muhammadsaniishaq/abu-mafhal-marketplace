@@ -1,31 +1,51 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, FlatList, TextInput, Alert, Modal, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, FlatList, TextInput, Alert, Modal, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
-import { styles } from '../../styles/theme';
+import { WhatsAppActionModal } from '../../components/WhatsAppActionModal';
+
+const NAVY = '#0E1A2E';
+const GOLD = '#D9A73A';
 
 export const AdminDisputes = () => {
     const [disputes, setDisputes] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [selectedDispute, setSelectedDispute] = useState(null);
     const [modalVisible, setModalVisible] = useState(false);
     const [messageText, setMessageText] = useState('');
     const [chatMessages, setChatMessages] = useState([]);
+    const [sendingMsg, setSendingMsg] = useState(false);
+
+    // WhatsApp Action Modal
+    const [whatsappVisible, setWhatsappVisible] = useState(false);
+    const [whatsappPhone, setWhatsappPhone] = useState('');
+    const [whatsappUserId, setWhatsappUserId] = useState(null);
+    const [whatsappRecipientName, setWhatsappRecipientName] = useState('Abokin Ciniki');
 
     useEffect(() => {
         fetchDisputes();
     }, []);
 
     const fetchDisputes = async () => {
-        setLoading(true);
-        const { data, error } = await supabase
-            .from('disputes')
-            .select('*, profiles:user_id(full_name, email)')
-            .order('created_at', { ascending: false });
+        try {
+            setLoading(true);
+            const { data, error } = await supabase
+                .from('disputes')
+                .select('*, profiles:user_id(full_name, email, phone, phone_number)')
+                .order('created_at', { ascending: false });
 
-        if (error) console.log(error);
-        setDisputes(data || []);
-        setLoading(false);
+            if (error) {
+                console.error('Fetch disputes error:', error);
+            } else {
+                setDisputes(data || []);
+            }
+        } catch (e) {
+            console.error('Disputes crash:', e);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
     };
 
     const openDispute = async (dispute) => {
@@ -35,106 +55,324 @@ export const AdminDisputes = () => {
     };
 
     const fetchMessages = async (disputeId) => {
-        const { data } = await supabase.from('dispute_messages').select('*').eq('dispute_id', disputeId).order('created_at', { ascending: true });
-        setChatMessages(data || []);
+        try {
+            const { data } = await supabase
+                .from('dispute_messages')
+                .select('*')
+                .eq('dispute_id', disputeId)
+                .order('created_at', { ascending: true });
+
+            setChatMessages(data || []);
+        } catch (e) {
+            console.error('Fetch messages error:', e);
+        }
     };
 
     const sendMessage = async () => {
         if (!messageText.trim()) return;
-        const { error } = await supabase.from('dispute_messages').insert({
-            dispute_id: selectedDispute.id,
-            sender_id: (await supabase.auth.getUser()).data.user?.id,
-            message: messageText,
-            is_admin: true
-        });
+        setSendingMsg(true);
 
-        if (!error) {
-            setMessageText('');
-            fetchMessages(selectedDispute.id);
-        } else {
-            Alert.alert('Error', 'Failed to send');
+        try {
+            const { data: authData } = await supabase.auth.getUser();
+            const currentUserId = authData?.user?.id || null;
+
+            const { error } = await supabase.from('dispute_messages').insert({
+                dispute_id: selectedDispute.id,
+                sender_id: currentUserId,
+                message: messageText.trim(),
+                is_admin: true
+            });
+
+            if (!error) {
+                setMessageText('');
+                fetchMessages(selectedDispute.id);
+            } else {
+                Alert.alert('Kuskure', error.message || 'An kasa tura sako.');
+            }
+        } catch (e) {
+            Alert.alert('Kuskure', 'An samu matsala wajen tura sako.');
+        } finally {
+            setSendingMsg(false);
         }
     };
 
     const resolveDispute = async () => {
-        const { error } = await supabase.from('disputes').update({ status: 'resolved' }).eq('id', selectedDispute.id);
-        if (!error) {
-            Alert.alert('Success', 'Dispute Resolved');
-            setModalVisible(false);
-            fetchDisputes();
-        }
+        Alert.alert(
+            'Kammala Sasantawa',
+            'Kana da tabbacin an warware wannan matsala (Mark as Resolved)?',
+            [
+                { text: 'A\'a (Cancel)', style: 'cancel' },
+                {
+                    text: 'Tabbatar',
+                    onPress: async () => {
+                        const { error } = await supabase.from('disputes').update({ status: 'resolved' }).eq('id', selectedDispute.id);
+                        if (!error) {
+                            Alert.alert('Nasara', 'An warware matsalar.');
+                            setModalVisible(false);
+                            fetchDisputes();
+                        } else {
+                            Alert.alert('Kuskure', error.message);
+                        }
+                    }
+                }
+            ]
+        );
     };
 
-    const renderItem = ({ item }) => (
-        <TouchableOpacity onPress={() => openDispute(item)} style={{ backgroundColor: 'white', padding: 16, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9' }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                <Text style={{ fontWeight: '700', color: '#0F172A' }}>#{item.id.slice(0, 6)}</Text>
-                <View style={{ backgroundColor: item.status === 'resolved' ? '#DCFCE7' : '#FEF3C7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
-                    <Text style={{ fontSize: 10, fontWeight: '700', color: item.status === 'resolved' ? '#166534' : '#B45309', textTransform: 'uppercase' }}>{item.status}</Text>
+    const renderItem = ({ item }) => {
+        const isResolved = item.status === 'resolved';
+        const userName = item.profiles?.full_name || item.profiles?.email || 'Abokin Ciniki';
+        const phone = item.profiles?.phone || item.profiles?.phone_number;
+
+        return (
+            <TouchableOpacity
+                onPress={() => openDispute(item)}
+                activeOpacity={0.7}
+                style={{
+                    backgroundColor: '#FFFFFF',
+                    padding: 16,
+                    borderRadius: 20,
+                    marginBottom: 12,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                    shadowColor: NAVY,
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.04,
+                    shadowRadius: 6,
+                    elevation: 1
+                }}
+            >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                    <View>
+                        <Text style={{ fontWeight: '900', color: NAVY, fontSize: 14 }}>
+                            Korafe-korafe #{item.id.slice(0, 8)}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>
+                            Daga: <Text style={{ fontWeight: '700', color: NAVY }}>{userName}</Text>
+                        </Text>
+                    </View>
+
+                    <View style={{
+                        backgroundColor: isResolved ? '#DCFCE7' : 'rgba(217, 167, 58, 0.15)',
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: isResolved ? '#10B981' : GOLD
+                    }}>
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: isResolved ? '#166534' : GOLD, textTransform: 'uppercase' }}>
+                            {isResolved ? 'AN WARWARE' : 'KORAFI NA JIRA'}
+                        </Text>
+                    </View>
                 </View>
-            </View>
-            <Text style={{ fontSize: 12, color: '#64748B' }}>User: {item.profiles?.full_name || 'User'}</Text>
-            <Text style={{ fontSize: 14, fontWeight: '600', color: '#334155', marginTop: 4 }}>{item.reason}</Text>
-        </TouchableOpacity>
-    );
+
+                <Text style={{ fontSize: 13, fontWeight: '700', color: NAVY, marginTop: 4 }}>
+                    Dalili: {item.reason || 'Babu dalili'}
+                </Text>
+
+                {item.description ? (
+                    <Text numberOfLines={2} style={{ fontSize: 11.5, color: '#64748B', marginTop: 3, lineHeight: 16 }}>
+                        {item.description}
+                    </Text>
+                ) : null}
+
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F8FAFC' }}>
+                    <Text style={{ fontSize: 10, color: '#94A3B8' }}>
+                        {new Date(item.created_at).toLocaleDateString()}
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: GOLD }}>Duba & Amsa →</Text>
+                    </View>
+                </View>
+            </TouchableOpacity>
+        );
+    };
 
     return (
-        <View style={{ flex: 1, backgroundColor: 'white' }}>
-            <View style={{ padding: 20 }}>
-                <Text style={styles.sectionTitle}>Disputes</Text>
+        <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+            {/* Header */}
+            <View style={{ padding: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderColor: '#E2E8F0' }}>
+                <Text style={{ fontSize: 18, fontWeight: '900', color: NAVY }}>
+                    Korafe-korafe Da Rikicin Sayayya (Disputes)
+                </Text>
+                <Text style={{ color: '#64748B', fontSize: 11.5, marginTop: 2 }}>
+                    Sasanta korafe-korafe tsakanin masu sayayya da yan kasuwa
+                </Text>
             </View>
-            {loading ? <ActivityIndicator color="#0F172A" /> : (
+
+            {loading && !refreshing ? (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color={GOLD} />
+                    <Text style={{ marginTop: 12, fontSize: 12, fontWeight: '700', color: '#64748B' }}>Ana loda korafe-korafe...</Text>
+                </View>
+            ) : (
                 <FlatList
                     data={disputes}
                     renderItem={renderItem}
                     keyExtractor={item => item.id}
-                    contentContainerStyle={{ padding: 20 }}
-                    ListEmptyComponent={<Text style={{ textAlign: 'center', color: '#94A3B8', marginTop: 20 }}>No disputes found.</Text>}
+                    contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
+                    refreshControl={
+                        <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchDisputes(); }} colors={[GOLD, NAVY]} />
+                    }
+                    ListEmptyComponent={
+                        <View style={{ alignItems: 'center', marginTop: 50, opacity: 0.7 }}>
+                            <Ionicons name="chatbubbles-outline" size={48} color="#94A3B8" />
+                            <Text style={{ color: '#64748B', marginTop: 10, fontWeight: '700', fontSize: 13 }}>
+                                Babu wani korafi da aka shigar a halin yanzu.
+                            </Text>
+                        </View>
+                    }
                 />
             )}
 
+            {/* Dispute Detail Modal */}
             <Modal visible={modalVisible} animationType="slide" onRequestClose={() => setModalVisible(false)}>
                 <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
-                    <View style={{ padding: 20, backgroundColor: 'white', borderBottomWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <Text style={{ fontSize: 18, fontWeight: '800' }}>Dispute Details</Text>
-                        <TouchableOpacity onPress={() => setModalVisible(false)}><Ionicons name="close" size={24} /></TouchableOpacity>
+                    {/* Modal Header */}
+                    <View style={{ padding: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <View>
+                            <Text style={{ fontSize: 16, fontWeight: '900', color: NAVY }}>Bayanin Korafi</Text>
+                            <Text style={{ fontSize: 11, color: '#64748B' }}>
+                                Oda #{selectedDispute?.order_id ? selectedDispute.order_id.slice(0, 8) : 'N/A'}
+                            </Text>
+                        </View>
+                        <TouchableOpacity 
+                            onPress={() => setModalVisible(false)}
+                            style={{ padding: 6, backgroundColor: '#F1F5F9', borderRadius: 10 }}
+                        >
+                            <Ionicons name="close" size={20} color={NAVY} />
+                        </TouchableOpacity>
                     </View>
 
-                    <ScrollView style={{ flex: 1, padding: 20 }}>
-                        <View style={{ backgroundColor: 'white', padding: 16, borderRadius: 12, marginBottom: 20 }}>
-                            <Text style={{ fontSize: 12, color: '#64748B', textTransform: 'uppercase', fontWeight: '700' }}>Order #{selectedDispute?.order_id?.slice(0, 8)}</Text>
-                            <Text style={{ fontSize: 16, fontWeight: '700', marginVertical: 4 }}>{selectedDispute?.reason}</Text>
-                            <Text style={{ color: '#334155' }}>{selectedDispute?.description}</Text>
+                    <ScrollView style={{ flex: 1, padding: 16 }}>
+                        {/* Info Card */}
+                        <View style={{ backgroundColor: '#FFFFFF', padding: 16, borderRadius: 18, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                <Text style={{ fontSize: 11, color: GOLD, fontWeight: '800', textTransform: 'uppercase' }}>
+                                    Dalilin Korafi:
+                                </Text>
+                                {(selectedDispute?.profiles?.phone || selectedDispute?.profiles?.phone_number) && (
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            setWhatsappPhone(selectedDispute.profiles?.phone || selectedDispute.profiles?.phone_number);
+                                            setWhatsappUserId(selectedDispute.user_id);
+                                            setWhatsappRecipientName(selectedDispute.profiles?.full_name || 'Customer');
+                                            setWhatsappVisible(true);
+                                        }}
+                                        style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                                    >
+                                        <Ionicons name="logo-whatsapp" size={13} color="#16A34A" />
+                                        <Text style={{ fontSize: 11, fontWeight: '800', color: '#16A34A' }}>WhatsApp</Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+
+                            <Text style={{ fontSize: 15, fontWeight: '800', color: NAVY, marginBottom: 4 }}>
+                                {selectedDispute?.reason}
+                            </Text>
+                            <Text style={{ color: '#475569', fontSize: 13, lineHeight: 18 }}>
+                                {selectedDispute?.description || 'Babu cikakken bayani.'}
+                            </Text>
                         </View>
 
-                        <Text style={{ fontSize: 14, fontWeight: '700', marginBottom: 10, color: '#475569' }}>Messages</Text>
-                        {chatMessages.map((msg, i) => (
-                            <View key={i} style={{ alignSelf: msg.is_admin ? 'flex-end' : 'flex-start', backgroundColor: msg.is_admin ? '#0F172A' : 'white', padding: 12, borderRadius: 12, maxWidth: '80%', marginBottom: 8 }}>
-                                <Text style={{ color: msg.is_admin ? 'white' : '#1E293B' }}>{msg.message}</Text>
-                            </View>
-                        ))}
+                        {/* Messages List */}
+                        <Text style={{ fontSize: 12, fontWeight: '800', marginBottom: 10, color: '#64748B', textTransform: 'uppercase' }}>
+                            Tattaunawar Sasanta Korafi:
+                        </Text>
+
+                        {chatMessages.length === 0 ? (
+                            <Text style={{ color: '#94A3B8', fontSize: 12, textAlign: 'center', marginVertical: 14 }}>
+                                Babu sakonni tukuna. Rubuta amsar ka a kasa.
+                            </Text>
+                        ) : (
+                            chatMessages.map((msg, i) => (
+                                <View
+                                    key={i}
+                                    style={{
+                                        alignSelf: msg.is_admin ? 'flex-end' : 'flex-start',
+                                        backgroundColor: msg.is_admin ? NAVY : '#FFFFFF',
+                                        padding: 12,
+                                        borderRadius: 14,
+                                        maxWidth: '82%',
+                                        marginBottom: 8,
+                                        borderWidth: 1,
+                                        borderColor: msg.is_admin ? GOLD : '#E2E8F0'
+                                    }}
+                                >
+                                    <Text style={{ color: msg.is_admin ? '#FFFFFF' : NAVY, fontSize: 13 }}>
+                                        {msg.message}
+                                    </Text>
+                                    <Text style={{ color: msg.is_admin ? 'rgba(217, 167, 58, 0.8)' : '#94A3B8', fontSize: 9.5, marginTop: 4, alignSelf: 'flex-end' }}>
+                                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </Text>
+                                </View>
+                            ))
+                        )}
                     </ScrollView>
 
-                    <View style={{ padding: 20, backgroundColor: 'white', borderTopWidth: 1, borderColor: '#E2E8F0' }}>
-                        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+                    {/* Bottom Message Input & Resolve */}
+                    <View style={{ padding: 16, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderColor: '#E2E8F0' }}>
+                        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
                             <TextInput
-                                style={{ flex: 1, backgroundColor: '#F1F5F9', borderRadius: 8, padding: 10 }}
-                                placeholder="Type a reply..."
+                                style={{
+                                    flex: 1,
+                                    backgroundColor: '#F8FAFC',
+                                    borderRadius: 12,
+                                    paddingHorizontal: 12,
+                                    paddingVertical: 10,
+                                    borderWidth: 1,
+                                    borderColor: '#E2E8F0',
+                                    fontSize: 13,
+                                    color: NAVY
+                                }}
+                                placeholder="Rubuta amsar admin anan..."
+                                placeholderTextColor="#94A3B8"
                                 value={messageText}
                                 onChangeText={setMessageText}
                             />
-                            <TouchableOpacity onPress={sendMessage} style={{ backgroundColor: '#0F172A', padding: 10, borderRadius: 8, justifyContent: 'center' }}>
-                                <Ionicons name="send" color="white" size={20} />
+                            <TouchableOpacity
+                                onPress={sendMessage}
+                                disabled={sendingMsg}
+                                style={{
+                                    backgroundColor: NAVY,
+                                    paddingHorizontal: 14,
+                                    borderRadius: 12,
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    borderWidth: 1,
+                                    borderColor: GOLD
+                                }}
+                            >
+                                {sendingMsg ? <ActivityIndicator size="small" color={GOLD} /> : <Ionicons name="send" color={GOLD} size={18} />}
                             </TouchableOpacity>
                         </View>
+
                         {selectedDispute?.status !== 'resolved' && (
-                            <TouchableOpacity onPress={resolveDispute} style={{ backgroundColor: '#10B981', padding: 14, borderRadius: 10, alignItems: 'center' }}>
-                                <Text style={{ color: 'white', fontWeight: '700' }}>Mark Resolved</Text>
+                            <TouchableOpacity
+                                onPress={resolveDispute}
+                                style={{
+                                    backgroundColor: '#10B981',
+                                    paddingVertical: 12,
+                                    borderRadius: 12,
+                                    alignItems: 'center'
+                                }}
+                            >
+                                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>
+                                    An Warware Matsalar (Mark as Resolved)
+                                </Text>
                             </TouchableOpacity>
                         )}
                     </View>
                 </View>
             </Modal>
+
+            <WhatsAppActionModal
+                visible={whatsappVisible}
+                phone={whatsappPhone}
+                userId={whatsappUserId}
+                recipientName={whatsappRecipientName}
+                onClose={() => setWhatsappVisible(false)}
+            />
         </View>
     );
 };

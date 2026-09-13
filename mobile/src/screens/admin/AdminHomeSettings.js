@@ -14,45 +14,45 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 const SectionHeader = ({ title, count, onAdd, icon }) => (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, marginTop: 24, paddingHorizontal: 4 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            {icon && <Ionicons name={icon} size={20} color="#0F172A" />}
-            <Text style={{ fontSize: 20, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 }}>{title}</Text>
+            {icon && <Ionicons name={icon} size={20} color="#0E1A2E" />}
+            <Text style={{ fontSize: 18, fontWeight: '900', color: '#0E1A2E', letterSpacing: -0.5 }}>{title}</Text>
             {count !== undefined && (
-                <View style={{ backgroundColor: '#E2E8F0', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
-                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#475569' }}>{count}</Text>
+                <View style={{ backgroundColor: '#FFFBEB', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: '#FDE68A' }}>
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#D9A73A' }}>{count}</Text>
                 </View>
             )}
         </View>
         {onAdd && (
-            <TouchableOpacity onPress={onAdd} style={{ backgroundColor: '#0F172A', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 24, boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', }}>
-                <Ionicons name="add" size={18} color="white" />
-                <Text style={{ color: 'white', fontWeight: '700', fontSize: 13 }}>Add New</Text>
+            <TouchableOpacity onPress={onAdd} style={{ backgroundColor: '#0E1A2E', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#D9A73A', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 }}>
+                <Ionicons name="add" size={18} color="#D9A73A" />
+                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>Add New</Text>
             </TouchableOpacity>
         )}
     </View>
 );
 
 const FeatureCard = ({ image, title, subtitle, isActive, onToggle, activeLabel = "Active", inactiveLabel = "Inactive", activeColor = "#10B981" }) => (
-    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', padding: 16, borderRadius: 20, marginBottom: 16, borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', padding: 16, borderRadius: 20, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 6, elevation: 1 }}>
         <Image
             source={{ uri: image || 'https://placehold.co/100' }}
-            style={{ width: 56, height: 56, borderRadius: 28, marginRight: 16, backgroundColor: '#F1F5F9' }}
+            style={{ width: 56, height: 56, borderRadius: 28, marginRight: 16, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#F1F5F9' }}
         />
         <View style={{ flex: 1 }}>
-            <Text style={{ fontWeight: '800', color: '#0F172A', fontSize: 16, marginBottom: 4 }} numberOfLines={1}>{title}</Text>
+            <Text style={{ fontWeight: '800', color: '#0E1A2E', fontSize: 15, marginBottom: 4 }} numberOfLines={1}>{title}</Text>
             {subtitle && <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '500' }} numberOfLines={1}>{subtitle}</Text>}
         </View>
         <TouchableOpacity
             onPress={onToggle}
             activeOpacity={0.7}
             style={{
-                paddingHorizontal: 14, paddingVertical: 8, borderRadius: 24,
-                backgroundColor: isActive ? `${activeColor} 15` : '#F1F5F9',
+                paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+                backgroundColor: isActive ? `${activeColor}15` : '#F1F5F9',
                 borderWidth: 1, borderColor: isActive ? activeColor : '#E2E8F0',
                 flexDirection: 'row', alignItems: 'center', gap: 6
             }}
         >
             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: isActive ? activeColor : '#94A3B8' }} />
-            <Text style={{ fontSize: 13, fontWeight: '700', color: isActive ? activeColor : '#64748B' }}>
+            <Text style={{ fontSize: 12, fontWeight: '800', color: isActive ? activeColor : '#64748B' }}>
                 {isActive ? activeLabel : inactiveLabel}
             </Text>
         </TouchableOpacity>
@@ -62,14 +62,14 @@ const FeatureCard = ({ image, title, subtitle, isActive, onToggle, activeLabel =
 const StatsRail = ({ stats }) => (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 12, paddingBottom: 20 }}>
         {stats.map((stat, i) => (
-            <View key={i} style={{ backgroundColor: 'white', padding: 16, borderRadius: 20, minWidth: 150, borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', }}>
+            <View key={i} style={{ backgroundColor: '#FFFFFF', padding: 16, borderRadius: 20, minWidth: 150, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 6, elevation: 1 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                    <View style={{ padding: 10, backgroundColor: `${stat.color} 15`, borderRadius: 12 }}>
+                    <View style={{ padding: 10, backgroundColor: `${stat.color}15`, borderRadius: 12 }}>
                         <Ionicons name={stat.icon} size={20} color={stat.color} />
                     </View>
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748B', letterSpacing: 0.5 }}>{stat.label.toUpperCase()}</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B', letterSpacing: 0.5 }}>{stat.label.toUpperCase()}</Text>
                 </View>
-                <Text style={{ fontSize: 26, fontWeight: '900', color: '#0F172A' }}>{stat.value}</Text>
+                <Text style={{ fontSize: 24, fontWeight: '900', color: '#0E1A2E' }}>{stat.value}</Text>
             </View>
         ))}
     </ScrollView>
@@ -116,31 +116,31 @@ const SearchModal = ({ visible, onClose, title, onSearch, results, onSelect, pla
                             <TouchableOpacity
                                 key={i}
                                 onPress={() => { onSelect(item); onClose(); }}
-                                style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', padding: 16, borderRadius: 20, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', shadowRadius: 4 }}
+                                style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', padding: 16, borderRadius: 20, marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 }}
                             >
-                                <Image source={{ uri: item.image || 'https://placehold.co/100' }} style={{ width: 56, height: 56, borderRadius: 28, marginRight: 16, backgroundColor: '#F1F5F9' }} />
+                                <Image source={{ uri: item.image || 'https://placehold.co/100' }} style={{ width: 56, height: 56, borderRadius: 28, marginRight: 16, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#F1F5F9' }} />
                                 <View style={{ flex: 1 }}>
-                                    <Text style={{ fontWeight: '800', color: '#0F172A', fontSize: 17 }}>{item.title}</Text>
-                                    {item.subtitle && <Text style={{ fontSize: 14, color: '#64748B', marginTop: 4, fontWeight: '500' }}>{item.subtitle}</Text>}
+                                    <Text style={{ fontWeight: '800', color: '#0E1A2E', fontSize: 16 }}>{item.title}</Text>
+                                    {item.subtitle && <Text style={{ fontSize: 13, color: '#64748B', marginTop: 3, fontWeight: '500' }}>{item.subtitle}</Text>}
                                 </View>
-                                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Ionicons name="add" size={22} color="#3B82F6" />
+                                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#FFFBEB', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#FDE68A' }}>
+                                    <Ionicons name="add" size={20} color="#D9A73A" />
                                 </View>
                             </TouchableOpacity>
                         ))}
 
                         {!loading && results.length === 0 && query.length > 2 && (
                             <View style={{ alignItems: 'center', marginTop: 60 }}>
-                                <View style={{ width: 100, height: 100, borderRadius: 50, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
-                                    <Ionicons name="search-outline" size={48} color="#94A3B8" />
+                                <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                                    <Ionicons name="search-outline" size={40} color="#94A3B8" />
                                 </View>
-                                <Text style={{ color: '#0F172A', fontWeight: '800', fontSize: 18, marginBottom: 8 }}>No results found</Text>
-                                <Text style={{ color: '#64748B', fontSize: 15, textAlign: 'center' }}>We couldn't find anything matching "{query}"</Text>
+                                <Text style={{ color: '#0E1A2E', fontWeight: '800', fontSize: 17, marginBottom: 6 }}>No results found</Text>
+                                <Text style={{ color: '#64748B', fontSize: 14, textAlign: 'center' }}>We couldn't find anything matching "{query}"</Text>
 
                                 {onCreate && (
-                                    <TouchableOpacity onPress={() => { onCreate(query); onClose(); }} style={{ marginTop: 32, backgroundColor: '#0F172A', paddingHorizontal: 32, paddingVertical: 16, borderRadius: 32, flexDirection: 'row', alignItems: 'center', gap: 10, boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', shadowRadius: 10 }}>
-                                        <Ionicons name="add-circle" size={22} color="white" />
-                                        <Text style={{ color: 'white', fontWeight: '800', fontSize: 16 }}>Create "{query}"</Text>
+                                    <TouchableOpacity onPress={() => { onCreate(query); onClose(); }} style={{ marginTop: 24, backgroundColor: '#0E1A2E', paddingHorizontal: 26, paddingVertical: 14, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: '#D9A73A' }}>
+                                        <Ionicons name="add-circle" size={20} color="#D9A73A" />
+                                        <Text style={{ color: 'white', fontWeight: '800', fontSize: 15 }}>Create "{query}"</Text>
                                     </TouchableOpacity>
                                 )}
                             </View>
@@ -154,7 +154,7 @@ const SearchModal = ({ visible, onClose, title, onSearch, results, onSelect, pla
 
 // --- MAIN SCREEN ---
 
-export const AdminHomeSettings = () => {
+export const AdminHomeSettings = ({ navigation, onBack }) => {
     const [activeTab, setActiveTab] = useState('marketplace');
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -166,6 +166,7 @@ export const AdminHomeSettings = () => {
     const [brands, setBrands] = useState([]);
     const [services, setServices] = useState([]);
     const [editingService, setEditingService] = useState(null);
+    const [totalRevenue, setTotalRevenue] = useState(0);
 
     const [searchResults, setSearchResults] = useState([]);
     const [modalConfig, setModalConfig] = useState({ visible: false, type: null });
@@ -191,13 +192,12 @@ export const AdminHomeSettings = () => {
             const { data: cData } = await supabase.from('profiles').select('*').eq('is_featured', true);
             setTopCustomers(cData || []);
 
-            // 3. Reviews
             // 3. Reviews (Fetch ALL so admin can choose)
             const { data: rData } = await supabase
                 .from('reviews')
                 .select('*, user:user_id(full_name, avatar_url)')
-                .order('is_displayed', { ascending: false }) // Active first
-                .order('rating', { ascending: false })       // Then 5 stars
+                .order('is_displayed', { ascending: false })
+                .order('rating', { ascending: false })
                 .order('created_at', { ascending: false })
                 .limit(20);
             setReviews(rData || []);
@@ -209,6 +209,11 @@ export const AdminHomeSettings = () => {
             // 5. Services
             const { data: sData } = await supabase.from('home_services').select('*').order('display_order');
             setServices(sData || []);
+
+            // 6. Live Total Revenue (Delivered / Completed)
+            const { data: revData } = await supabase.from('orders').select('total_amount').or('status.eq.delivered,status.eq.completed');
+            const rev = (revData || []).reduce((sum, item) => sum + (Number(item.total_amount) || 0), 0);
+            setTotalRevenue(rev);
 
         } catch (e) {
             console.error('Fetch Error:', e);
@@ -365,9 +370,9 @@ export const AdminHomeSettings = () => {
     const renderMarketplace = () => (
         <View style={{ paddingBottom: 100 }}>
             <StatsRail stats={[
-                { label: 'Verified Sellers', value: vendors.length, icon: 'shield-checkmark', color: '#3B82F6' },
-                { label: 'Featured Brands', value: brands.length, icon: 'pricetag', color: '#8B5CF6' },
-                { label: 'Total Revenue', value: '₦4.2M', icon: 'wallet', color: '#10B981' }
+                { label: 'Verified Sellers', value: vendors.length, icon: 'shield-checkmark', color: '#0E1A2E' },
+                { label: 'Featured Brands', value: brands.length, icon: 'pricetag', color: '#D9A73A' },
+                { label: 'Total Revenue', value: `₦${totalRevenue >= 1000000 ? (totalRevenue / 1000000).toFixed(1) + 'M' : totalRevenue.toLocaleString()}`, icon: 'wallet', color: '#10B981' }
             ]} />
 
             <View style={{ padding: 20 }}>
@@ -380,7 +385,7 @@ export const AdminHomeSettings = () => {
                         image={vendor.logo_url}
                         isActive={true}
                         activeLabel="Verified"
-                        activeColor="#3B82F6"
+                        activeColor="#0E1A2E"
                         onToggle={() => toggleStatus('vendors', vendor.id, 'is_verified', true)}
                     />
                 ))}
@@ -393,7 +398,7 @@ export const AdminHomeSettings = () => {
                         image={brand.logo_url}
                         isActive={true}
                         activeLabel="Featured"
-                        activeColor="#8B5CF6"
+                        activeColor="#D9A73A"
                         onToggle={() => toggleStatus('brands', brand.id, 'is_featured', true)}
                     />
                 ))}
@@ -404,8 +409,8 @@ export const AdminHomeSettings = () => {
     const renderEngagement = () => (
         <View style={{ paddingBottom: 100 }}>
             <StatsRail stats={[
-                { label: 'Elite Members', value: topCustomers.length, icon: 'star', color: '#F59E0B' },
-                { label: 'Reviews', value: reviews.length, icon: 'chatbox-ellipses', color: '#EC4899' },
+                { label: 'Elite Members', value: topCustomers.length, icon: 'star', color: '#D9A73A' },
+                { label: 'Reviews', value: reviews.length, icon: 'chatbox-ellipses', color: '#0E1A2E' },
             ]} />
 
             <View style={{ padding: 20 }}>
@@ -414,44 +419,44 @@ export const AdminHomeSettings = () => {
                     <FeatureCard
                         key={customer.id}
                         title={customer.full_name || 'Anonymous User'}
-                        subtitle={`Total Spend: ₦${(customer.total_spend || 0).toLocaleString()} `}
+                        subtitle={`Total Spend: ₦${(customer.total_spend || 0).toLocaleString()}`}
                         image={customer.avatar_url}
                         isActive={true}
                         activeLabel="VIP Status"
-                        activeColor="#F59E0B"
+                        activeColor="#D9A73A"
                         onToggle={() => toggleStatus('profiles', customer.id, 'is_featured', true)}
                     />
                 ))}
 
                 <SectionHeader title="Customer Testimonials" count={reviews.length} />
                 {reviews.map(review => (
-                    <View key={review.id} style={{ backgroundColor: 'white', padding: 20, borderRadius: 24, marginBottom: 16, borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
+                    <View key={review.id} style={{ backgroundColor: '#FFFFFF', padding: 20, borderRadius: 20, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 6, elevation: 1 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                                <Image source={{ uri: review.user?.avatar_url || 'https://placehold.co/50' }} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#F1F5F9' }} />
+                                <Image source={{ uri: review.user?.avatar_url || 'https://placehold.co/50' }} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#F1F5F9' }} />
                                 <View>
-                                    <Text style={{ fontWeight: '800', fontSize: 15, color: '#0F172A' }}>{review.user?.full_name}</Text>
-                                    <View style={{ flexDirection: 'row', gap: 2 }}>
+                                    <Text style={{ fontWeight: '800', fontSize: 15, color: '#0E1A2E' }}>{review.user?.full_name || 'Customer'}</Text>
+                                    <View style={{ flexDirection: 'row', gap: 2, marginTop: 2 }}>
                                         {[1, 2, 3, 4, 5].map(s => (
-                                            <Ionicons key={s} name="star" size={12} color={s <= review.rating ? "#F59E0B" : "#E2E8F0"} />
+                                            <Ionicons key={s} name="star" size={13} color={s <= review.rating ? "#D9A73A" : "#E2E8F0"} />
                                         ))}
                                     </View>
                                 </View>
                             </View>
                         </View>
-                        <Text style={{ fontSize: 16, color: '#334155', lineHeight: 24, marginBottom: 16, fontWeight: '500' }}>"{review.comment}"</Text>
+                        <Text style={{ fontSize: 14, color: '#334155', lineHeight: 22, marginBottom: 14, fontWeight: '500' }}>"{review.comment}"</Text>
                         <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
                             <TouchableOpacity
                                 onPress={() => toggleStatus('reviews', review.id, 'is_displayed', review.is_displayed)}
                                 style={{
                                     flexDirection: 'row', alignItems: 'center', gap: 8,
-                                    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 24,
-                                    backgroundColor: review.is_displayed ? '#DBEAFE' : '#F1F5F9',
-                                    borderWidth: 1, borderColor: review.is_displayed ? '#3B82F6' : '#E2E8F0'
+                                    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+                                    backgroundColor: review.is_displayed ? '#FFFBEB' : '#F1F5F9',
+                                    borderWidth: 1, borderColor: review.is_displayed ? '#D9A73A' : '#E2E8F0'
                                 }}
                             >
-                                <Ionicons name={review.is_displayed ? "eye" : "eye-off"} size={18} color={review.is_displayed ? "#3B82F6" : "#64748B"} />
-                                <Text style={{ fontSize: 13, fontWeight: '700', color: review.is_displayed ? "#1E40AF" : "#64748B" }}>
+                                <Ionicons name={review.is_displayed ? "eye" : "eye-off"} size={16} color={review.is_displayed ? "#D9A73A" : "#64748B"} />
+                                <Text style={{ fontSize: 12, fontWeight: '800', color: review.is_displayed ? "#B45309" : "#64748B" }}>
                                     {review.is_displayed ? "Published on Home" : "Hidden"}
                                 </Text>
                             </TouchableOpacity>
@@ -465,82 +470,86 @@ export const AdminHomeSettings = () => {
     const renderServiceConfig = () => (
         <View style={{ padding: 20, paddingBottom: 100 }}>
             <StatsRail stats={[
-                { label: 'Active Services', value: services.filter(s => s.is_active).length, icon: 'apps', color: '#14B8A6' },
+                { label: 'Active Services', value: services.filter(s => s.is_active).length, icon: 'apps', color: '#0E1A2E' },
             ]} />
 
-            <SectionHeader title="Service Highlights" onAdd={() => setEditingService({ title: '', icon: '', lib: 'mc', bg_color: '#3B82F6', display_order: services.length + 1 })} />
+            <SectionHeader title="Service Highlights" onAdd={() => setEditingService({ title: '', icon: '', lib: 'mc', bg_color: '#0E1A2E', display_order: services.length + 1 })} />
 
             {editingService && (
-                <View style={{ backgroundColor: 'white', padding: 24, borderRadius: 24, marginBottom: 24, borderWidth: 1, borderColor: '#3B82F6', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', }}>
-                    <Text style={{ fontWeight: '900', marginBottom: 24, fontSize: 20, color: '#0F172A' }}>{editingService.id ? 'Edit Service' : 'New Service'}</Text>
+                <View style={{ backgroundColor: '#FFFFFF', padding: 22, borderRadius: 20, marginBottom: 20, borderWidth: 1.5, borderColor: '#D9A73A', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 }}>
+                    <Text style={{ fontWeight: '900', marginBottom: 20, fontSize: 18, color: '#0E1A2E' }}>{editingService.id ? 'Edit Service' : 'New Service'}</Text>
 
-                    <View style={{ gap: 20 }}>
+                    <View style={{ gap: 16 }}>
                         <View>
-                            <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748B', marginBottom: 8, marginLeft: 4, letterSpacing: 0.5 }}>SERVICE TITLE</Text>
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B', marginBottom: 8, marginLeft: 4, letterSpacing: 0.5 }}>SERVICE TITLE</Text>
                             <TextInput
                                 placeholder="e.g. Fast Shipping"
+                                placeholderTextColor="#94A3B8"
                                 value={editingService.title}
                                 onChangeText={t => setEditingService({ ...editingService, title: t })}
-                                style={{ backgroundColor: '#F8FAFC', padding: 18, borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', fontSize: 16, fontWeight: '600', color: '#0F172A' }}
+                                style={{ backgroundColor: '#F8FAFC', padding: 14, borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', fontSize: 15, fontWeight: '600', color: '#0E1A2E' }}
                             />
                         </View>
-                        <View style={{ flexDirection: 'row', gap: 16 }}>
+                        <View style={{ flexDirection: 'row', gap: 12 }}>
                             <View style={{ flex: 2 }}>
-                                <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748B', marginBottom: 8, marginLeft: 4, letterSpacing: 0.5 }}>ICON NAME</Text>
+                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B', marginBottom: 8, marginLeft: 4, letterSpacing: 0.5 }}>ICON NAME</Text>
                                 <TextInput
                                     placeholder="e.g. truck"
+                                    placeholderTextColor="#94A3B8"
                                     value={editingService.icon}
                                     onChangeText={t => setEditingService({ ...editingService, icon: t })}
-                                    style={{ backgroundColor: '#F8FAFC', padding: 18, borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', fontWeight: '600', color: '#0F172A' }}
+                                    style={{ backgroundColor: '#F8FAFC', padding: 14, borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', fontWeight: '600', color: '#0E1A2E' }}
                                 />
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748B', marginBottom: 8, marginLeft: 4, letterSpacing: 0.5 }}>LIB</Text>
+                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B', marginBottom: 8, marginLeft: 4, letterSpacing: 0.5 }}>LIB</Text>
                                 <TextInput
                                     placeholder="mc"
+                                    placeholderTextColor="#94A3B8"
                                     value={editingService.lib}
                                     onChangeText={t => setEditingService({ ...editingService, lib: t })}
-                                    style={{ backgroundColor: '#F8FAFC', padding: 18, borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', fontWeight: '600', color: '#0F172A' }}
+                                    style={{ backgroundColor: '#F8FAFC', padding: 14, borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', fontWeight: '600', color: '#0E1A2E' }}
                                 />
                             </View>
                         </View>
                         <View>
-                            <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748B', marginBottom: 8, marginLeft: 4, letterSpacing: 0.5 }}>BRAND COLOR</Text>
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B', marginBottom: 8, marginLeft: 4, letterSpacing: 0.5 }}>BRAND COLOR</Text>
                             <TextInput
                                 placeholder="#HEX"
+                                placeholderTextColor="#94A3B8"
                                 value={editingService.bg_color}
                                 onChangeText={t => setEditingService({ ...editingService, bg_color: t })}
-                                style={{ backgroundColor: '#F8FAFC', padding: 18, borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', fontWeight: '600', color: '#0F172A' }}
+                                style={{ backgroundColor: '#F8FAFC', padding: 14, borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', fontWeight: '600', color: '#0E1A2E' }}
                             />
                         </View>
                     </View>
 
-                    <View style={{ flexDirection: 'row', gap: 16, marginTop: 32 }}>
-                        <TouchableOpacity onPress={() => setEditingService(null)} style={{ flex: 1, padding: 18, alignItems: 'center', backgroundColor: '#F1F5F9', borderRadius: 16 }}>
-                            <Text style={{ color: '#64748B', fontWeight: '800', fontSize: 15 }}>Discard</Text>
+                    <View style={{ flexDirection: 'row', gap: 14, marginTop: 24 }}>
+                        <TouchableOpacity onPress={() => setEditingService(null)} style={{ flex: 1, padding: 16, alignItems: 'center', backgroundColor: '#F1F5F9', borderRadius: 14 }}>
+                            <Text style={{ color: '#64748B', fontWeight: '800', fontSize: 14 }}>Discard</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={handleSaveService} style={{ flex: 1, backgroundColor: '#0F172A', padding: 18, borderRadius: 16, alignItems: 'center', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', shadowRadius: 10 }}>
-                            <Text style={{ color: 'white', fontWeight: '800', fontSize: 15 }}>Save Changes</Text>
+                        <TouchableOpacity onPress={handleSaveService} style={{ flex: 1, backgroundColor: '#0E1A2E', padding: 16, borderRadius: 14, alignItems: 'center', borderWidth: 1, borderColor: '#D9A73A' }}>
+                            <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>Save Changes</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
             )}
 
             {services.map(svc => (
-                <View key={svc.id} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', padding: 16, borderRadius: 20, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', shadowRadius: 4 }}>
-                    <View style={{ marginRight: 20 }}>
-                        <ServiceIcon icon={svc.icon} label="" color={svc.bg_color || '#3B82F6'} lib={svc.lib} onPress={() => { }} />
+                <View key={svc.id} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', padding: 16, borderRadius: 18, marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 }}>
+                    <View style={{ marginRight: 16 }}>
+                        <ServiceIcon icon={svc.icon} label="" color={svc.bg_color || '#0E1A2E'} lib={svc.lib} onPress={() => { }} />
                     </View>
                     <View style={{ flex: 1 }}>
-                        <Text style={{ fontWeight: '800', color: '#0F172A', fontSize: 17 }}>{svc.title}</Text>
-                        <Text style={{ fontSize: 14, color: '#64748B', fontWeight: '600', marginTop: 2 }}>Order: {svc.display_order}</Text>
+                        <Text style={{ fontWeight: '800', color: '#0E1A2E', fontSize: 15 }}>{svc.title}</Text>
+                        <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '600', marginTop: 2 }}>Order: {svc.display_order}</Text>
                     </View>
                     <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <TouchableOpacity onPress={() => setEditingService(svc)} style={{ width: 44, height: 44, backgroundColor: '#EFF6FF', borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}>
-                            <Ionicons name="pencil" size={20} color="#3B82F6" />
+                        <TouchableOpacity onPress={() => setEditingService(svc)} style={{ width: 40, height: 40, backgroundColor: '#FFFBEB', borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#FDE68A' }}>
+                            <Ionicons name="pencil" size={18} color="#D9A73A" />
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={() => toggleStatus('home_services', svc.id, 'is_active', svc.is_active)} style={{ width: 44, height: 44, backgroundColor: svc.is_active ? '#ECFDF5' : '#F1F5F9', borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}>
-                            <Ionicons name={svc.is_active ? "eye" : "eye-off"} size={20} color={svc.is_active ? "#10B981" : "#94A3B8"} />
+                        <TouchableOpacity onPress={() => toggleStatus('home_services', svc.id, 'is_active', svc.is_active)} style={{ width: 40, height: 40, backgroundColor: svc.is_active ? '#ECFDF5' : '#F1F5F9', borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: svc.is_active ? '#A7F3D0' : '#E2E8F0' }}>
+                            <Ionicons name={svc.is_active ? "eye" : "eye-off"} size={18} color={svc.is_active ? "#10B981" : "#94A3B8"} />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -550,26 +559,26 @@ export const AdminHomeSettings = () => {
 
     const renderSystemStatus = () => (
         <View style={{ padding: 20 }}>
-            <View style={{ backgroundColor: '#0F172A', padding: 28, borderRadius: 28, marginBottom: 24, boxShadow: '0px 4px 10px rgba(0,0,0,0.1)', shadowRadius: 16 }}>
-                <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
-                    <Ionicons name="hardware-chip-outline" size={32} color="white" />
+            <View style={{ backgroundColor: '#0E1A2E', padding: 24, borderRadius: 24, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(217, 167, 58, 0.3)', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 3 }}>
+                <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(217, 167, 58, 0.15)', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                    <Ionicons name="hardware-chip-outline" size={26} color="#D9A73A" />
                 </View>
-                <Text style={{ fontSize: 26, fontWeight: '900', color: 'white', marginBottom: 10 }}>System Health</Text>
-                <Text style={{ color: '#94A3B8', fontSize: 16, lineHeight: 24 }}>Real-time diagnostics of database connections, schema integrity, and API status.</Text>
+                <Text style={{ fontSize: 22, fontWeight: '900', color: 'white', marginBottom: 6 }}>System Diagnostics</Text>
+                <Text style={{ color: '#94A3B8', fontSize: 14, lineHeight: 22 }}>Real-time diagnostics of database connections, schema integrity, and API status.</Text>
             </View>
 
-            <View style={{ gap: 16 }}>
+            <View style={{ gap: 12 }}>
                 {[
                     { label: 'Database Connection', status: systemStatus.dbConnection, activeText: 'Operational', inactiveText: 'Failed' },
                     { label: 'Brand Features Schema', status: systemStatus.columns.is_featured, activeText: 'Active', inactiveText: 'Missing Schema' },
                     { label: 'Review Management Schema', status: systemStatus.columns.is_displayed, activeText: 'Active', inactiveText: 'Missing Schema' }
                 ].map((item, i) => (
-                    <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 24, backgroundColor: 'white', borderRadius: 24, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-                            <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: item.status ? '#10B981' : '#EF4444', shadowColor: item.status ? '#10B981' : '#EF4444', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.5, shadowRadius: 4 }} />
-                            <Text style={{ fontWeight: '700', fontSize: 16, color: '#0F172A' }}>{item.label}</Text>
+                    <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 18, backgroundColor: '#FFFFFF', borderRadius: 18, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 3, elevation: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: item.status ? '#10B981' : '#EF4444' }} />
+                            <Text style={{ fontWeight: '700', fontSize: 15, color: '#0E1A2E' }}>{item.label}</Text>
                         </View>
-                        <Text style={{ color: item.status ? '#10B981' : '#EF4444', fontWeight: '800' }}>
+                        <Text style={{ color: item.status ? '#10B981' : '#EF4444', fontWeight: '800', fontSize: 13 }}>
                             {item.status ? item.activeText : item.inactiveText}
                         </Text>
                     </View>
@@ -577,50 +586,70 @@ export const AdminHomeSettings = () => {
             </View>
 
             {(!systemStatus.columns.is_featured || !systemStatus.columns.is_displayed) && (
-                <View style={{ marginTop: 32, padding: 24, backgroundColor: '#FEF2F2', borderRadius: 24, borderWidth: 1, borderColor: '#FECACA' }}>
-                    <Ionicons name="warning" size={36} color="#EF4444" style={{ marginBottom: 16 }} />
-                    <Text style={{ color: '#7F1D1D', fontWeight: '900', fontSize: 20, marginBottom: 12 }}>Action Required</Text>
-                    <Text style={{ color: '#991B1B', fontSize: 16, lineHeight: 24 }}>
-                        Your database is missing critical columns. Please run the `admin_home_customization.sql` script immediately to prevent app crashes.
+                <View style={{ marginTop: 24, padding: 20, backgroundColor: '#FEF2F2', borderRadius: 20, borderWidth: 1, borderColor: '#FECACA' }}>
+                    <Ionicons name="warning" size={30} color="#EF4444" style={{ marginBottom: 10 }} />
+                    <Text style={{ color: '#7F1D1D', fontWeight: '900', fontSize: 17, marginBottom: 8 }}>Action Required</Text>
+                    <Text style={{ color: '#991B1B', fontSize: 14, lineHeight: 22 }}>
+                        Your database is missing critical columns. Please run the `admin_home_customization.sql` script immediately to ensure smooth operation.
                     </Text>
                 </View>
             )}
         </View>
     );
 
-    const TabButton = ({ id, label, icon }) => (
-        <TouchableOpacity
-            onPress={() => setActiveTab(id)}
-            style={{
-                flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 12,
-                borderRadius: 16,
-                backgroundColor: activeTab === id ? 'white' : 'transparent',
-                shadowColor: activeTab === id ? "#000" : "transparent", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4
-            }}
-        >
-            <Text style={{ fontWeight: '800', color: activeTab === id ? '#0F172A' : '#94A3B8', fontSize: 13 }}>{label}</Text>
-        </TouchableOpacity>
-    );
+    const TabButton = ({ id, label }) => {
+        const active = activeTab === id;
+        return (
+            <TouchableOpacity
+                onPress={() => setActiveTab(id)}
+                style={{
+                    flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 10,
+                    borderRadius: 12,
+                    backgroundColor: active ? '#0E1A2E' : 'transparent',
+                }}
+            >
+                <Text style={{ fontWeight: '800', color: active ? '#D9A73A' : '#64748B', fontSize: 13 }}>{label}</Text>
+            </TouchableOpacity>
+        );
+    };
 
     return (
         <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
             <Toast visible={toast.visible} message={toast.message} type={toast.type} onHide={() => setToast(t => ({ ...t, visible: false }))} />
 
-            {/* Header Tabs */}
-            <View style={{ paddingHorizontal: 12, paddingVertical: 16, backgroundColor: '#F1F5F9', paddingTop: 20 }}>
-                <View style={{ flexDirection: 'row', backgroundColor: '#E2E8F0', padding: 4, borderRadius: 20 }}>
+            {/* Header */}
+            <View style={{ paddingHorizontal: 16, paddingTop: Platform.OS === 'ios' ? 48 : 20, paddingBottom: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderColor: '#E2E8F0' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        {(navigation?.canGoBack?.() || onBack) && (
+                            <TouchableOpacity onPress={onBack || (() => navigation.goBack())} style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
+                                <Ionicons name="arrow-back" size={20} color="#0E1A2E" />
+                            </TouchableOpacity>
+                        )}
+                        <View>
+                            <Text style={{ fontSize: 20, fontWeight: '900', color: '#0E1A2E', letterSpacing: -0.5 }}>Home Settings</Text>
+                            <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '500' }}>Customization & Featured Sections</Text>
+                        </View>
+                    </View>
+                    <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A' }}>
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: '#D9A73A' }}>LIVE</Text>
+                    </View>
+                </View>
+
+                {/* Tabs */}
+                <View style={{ flexDirection: 'row', backgroundColor: '#F1F5F9', padding: 4, borderRadius: 16, marginTop: 16 }}>
                     <TabButton id="marketplace" label="Marketplace" />
                     <TabButton id="engagement" label="Social" />
                     <TabButton id="services" label="Services" />
-                    <TouchableOpacity onPress={() => setActiveTab('system')} style={{ width: 50, alignItems: 'center', justifyContent: 'center' }}>
-                        <Ionicons name="settings-sharp" size={20} color={activeTab === 'system' ? '#0F172A' : '#94A3B8'} />
+                    <TouchableOpacity onPress={() => setActiveTab('system')} style={{ width: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: activeTab === 'system' ? '#0E1A2E' : 'transparent' }}>
+                        <Ionicons name="settings-sharp" size={18} color={activeTab === 'system' ? '#D9A73A' : '#64748B'} />
                     </TouchableOpacity>
                 </View>
             </View>
 
             <ScrollView
                 contentContainerStyle={{ paddingTop: 10, paddingBottom: 40 }}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0E1A2E']} />}
             >
                 {activeTab === 'marketplace' && renderMarketplace()}
                 {activeTab === 'engagement' && renderEngagement()}

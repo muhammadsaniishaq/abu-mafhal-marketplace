@@ -402,15 +402,15 @@ export const AdminUsers = ({ navigation: propNav }) => {
     // ── RENDER ────────────────────────────────────────────────────────────
     return (
         <View style={S.root}>
-            <StatusBar barStyle="light-content" />
+            <StatusBar barStyle="dark-content" />
 
             {/* HEADER */}
-            <LinearGradient colors={['#060612', '#0F0E2E', '#1E1B4B', '#2D2A6E']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[S.hdr, { paddingTop: insets.top + 6 }]}>
+            <View style={[S.hdr, { paddingTop: insets.top + 10 }]}>
 
                 {/* Top row */}
                 <View style={S.hdrRow}>
                     <TouchableOpacity onPress={() => selMode ? (setSelMode(false), setSelIds([])) : nav.goBack()} style={S.iconCircle}>
-                        <Ionicons name={selMode ? 'close' : 'arrow-back'} size={19} color="white" />
+                        <Ionicons name={selMode ? 'close' : 'arrow-back'} size={19} color="#0E1A2E" />
                     </TouchableOpacity>
 
                     <View style={{ flex: 1, paddingHorizontal: 10 }}>
@@ -426,37 +426,37 @@ export const AdminUsers = ({ navigation: propNav }) => {
 
                     {!selMode ? (
                         <View style={{ flexDirection: 'row', gap: 7 }}>
-                            <TouchableOpacity onPress={() => setBcastVis(true)} style={S.iconCircle}><Ionicons name="megaphone" size={17} color="white" /></TouchableOpacity>
-                            <TouchableOpacity onPress={() => Share.share({ message: filtered.map(u => `${u.full_name},${u.email},${u.role}`).join('\n') })} style={S.iconCircle}><Ionicons name="cloud-download-outline" size={17} color="white" /></TouchableOpacity>
-                            <TouchableOpacity onPress={() => setSelMode(true)} style={S.iconCircle}><Ionicons name="checkbox-outline" size={17} color="white" /></TouchableOpacity>
+                            <TouchableOpacity onPress={() => setBcastVis(true)} style={S.iconCircle}><Ionicons name="megaphone" size={17} color="#D9A73A" /></TouchableOpacity>
+                            <TouchableOpacity onPress={() => Share.share({ message: filtered.map(u => `${u.full_name},${u.email},${u.role}`).join('\n') })} style={S.iconCircle}><Ionicons name="cloud-download-outline" size={17} color="#0E1A2E" /></TouchableOpacity>
+                            <TouchableOpacity onPress={() => setSelMode(true)} style={S.iconCircle}><Ionicons name="checkbox-outline" size={17} color="#0E1A2E" /></TouchableOpacity>
                         </View>
                     ) : (
                         <View style={{ flexDirection: 'row', gap: 7 }}>
-                            <TouchableOpacity onPress={() => handleBulk('verify')} style={[S.iconCircle, { backgroundColor: 'rgba(34,197,94,0.25)' }]}><Ionicons name="checkmark-done" size={17} color="#22C55E" /></TouchableOpacity>
-                            <TouchableOpacity onPress={() => handleBulk('ban')} style={[S.iconCircle, { backgroundColor: 'rgba(239,68,68,0.25)' }]}><Ionicons name="ban" size={17} color="#EF4444" /></TouchableOpacity>
-                            <TouchableOpacity onPress={() => handleBulk('unban')} style={[S.iconCircle, { backgroundColor: 'rgba(99,102,241,0.25)' }]}><Ionicons name="shield-checkmark" size={17} color="#6366F1" /></TouchableOpacity>
+                            <TouchableOpacity onPress={() => handleBulk('verify')} style={[S.iconCircle, { backgroundColor: '#ECFDF5', borderColor: '#BBF7D0' }]}><Ionicons name="checkmark-done" size={17} color="#16A34A" /></TouchableOpacity>
+                            <TouchableOpacity onPress={() => handleBulk('ban')} style={[S.iconCircle, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}><Ionicons name="ban" size={17} color="#DC2626" /></TouchableOpacity>
+                            <TouchableOpacity onPress={() => handleBulk('unban')} style={[S.iconCircle, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}><Ionicons name="shield-checkmark" size={17} color="#2563EB" /></TouchableOpacity>
                         </View>
                     )}
                 </View>
 
                 {/* Compact stat pills */}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }} contentContainerStyle={{ gap: 6, paddingBottom: 4 }}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 12 }} contentContainerStyle={{ gap: 6, paddingBottom: 4 }}>
                     {[
-                        { icon: 'people', label: 'Total', val: stats.total, color: '#A78BFA' },
-                        { icon: 'storefront', label: 'Vendors', val: stats.vendors, color: '#FB923C' },
-                        { icon: 'bicycle', label: 'Drivers', val: stats.drivers, color: '#38BDF8' },
-                        { icon: 'person', label: 'Customers', val: stats.customers, color: '#34D399' },
-                        { icon: 'checkmark-circle', label: 'Verified', val: stats.verified, color: '#4ADE80' },
-                        { icon: 'ban', label: 'Banned', val: stats.banned, color: '#F87171' },
+                        { icon: 'people', label: 'Total', val: stats.total, color: '#0E1A2E', bg: '#F1F5F9' },
+                        { icon: 'storefront', label: 'Vendors', val: stats.vendors, color: '#D97706', bg: '#FFFBEB' },
+                        { icon: 'bicycle', label: 'Drivers', val: stats.drivers, color: '#0284C7', bg: '#F0F9FF' },
+                        { icon: 'person', label: 'Customers', val: stats.customers, color: '#059669', bg: '#ECFDF5' },
+                        { icon: 'checkmark-circle', label: 'Verified', val: stats.verified, color: '#16A34A', bg: '#F0FDF4' },
+                        { icon: 'ban', label: 'Banned', val: stats.banned, color: '#DC2626', bg: '#FEF2F2' },
                     ].map(c => (
-                        <View key={c.label} style={[S.statPill, { borderColor: `${c.color}35`, backgroundColor: `${c.color}14` }]}>
+                        <View key={c.label} style={[S.statPill, { borderColor: '#E2E8F0', backgroundColor: c.bg }]}>
                             <Ionicons name={c.icon} size={11} color={c.color} />
                             <Text style={[S.statPillVal, { color: c.color }]}>{c.val}</Text>
                             <Text style={S.statPillLbl}>{c.label}</Text>
                         </View>
                     ))}
                 </ScrollView>
-            </LinearGradient>
+            </View>
 
             {/* SEARCH */}
             <View style={S.searchWrap}>
@@ -699,36 +699,36 @@ export const AdminUsers = ({ navigation: propNav }) => {
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 const S = StyleSheet.create({
-    root: { flex: 1, backgroundColor: '#F1F5F9' },
-    hdr: { paddingHorizontal: 18, paddingBottom: 18 },
+    root: { flex: 1, backgroundColor: '#F8FAFC' },
+    hdr: { paddingHorizontal: 18, paddingBottom: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
     hdrRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    iconCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
-    hdrTitle: { color: 'white', fontSize: 20, fontWeight: '900', letterSpacing: -.5 },
-    hdrSub: { color: 'rgba(255,255,255,0.45)', fontSize: 10, fontWeight: '500', marginTop: 2 },
-    hChip: { alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 12, paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, minWidth: 68 },
+    iconCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center' },
+    hdrTitle: { color: '#0E1A2E', fontSize: 20, fontWeight: '900', letterSpacing: -.5 },
+    hdrSub: { color: '#64748B', fontSize: 11, fontWeight: '600', marginTop: 2 },
+    hChip: { alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 12, paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, minWidth: 68 },
     hChipVal: { fontSize: 15, fontWeight: '900' },
-    hChipLbl: { fontSize: 8, color: 'rgba(255,255,255,0.5)', fontWeight: '600', textTransform: 'uppercase' },
+    hChipLbl: { fontSize: 8, color: '#64748B', fontWeight: '600', textTransform: 'uppercase' },
     statPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
     statPillVal: { fontSize: 13, fontWeight: '900' },
-    statPillLbl: { fontSize: 9, color: 'rgba(255,255,255,0.45)', fontWeight: '600' },
-    searchWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', marginHorizontal: 14, marginTop: 12, marginBottom: 4, borderRadius: 18, paddingHorizontal: 10, paddingVertical: 9, borderWidth: 1.5, borderColor: '#EEF2FF', shadowColor: '#6366F1', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
-    searchIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#EEF2FF', alignItems: 'center', justifyContent: 'center', marginRight: 8 },
-    searchIn: { flex: 1, fontSize: 14, fontWeight: '600', color: '#0F172A' },
+    statPillLbl: { fontSize: 9, color: '#64748B', fontWeight: '600' },
+    searchWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', marginHorizontal: 14, marginTop: 12, marginBottom: 4, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderColor: '#E2E8F0' },
+    searchIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#FFFBEB', alignItems: 'center', justifyContent: 'center', marginRight: 8 },
+    searchIn: { flex: 1, fontSize: 14, fontWeight: '600', color: '#0E1A2E' },
     pill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: 'white', borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center', gap: 5 },
-    pillOn: { backgroundColor: '#6366F1', borderColor: '#6366F1' },
+    pillOn: { backgroundColor: '#0E1A2E', borderColor: '#0E1A2E' },
     pillTxt: { fontSize: 12, fontWeight: '700', color: '#64748B' },
-    pillTxtOn: { color: 'white' },
+    pillTxtOn: { color: '#D9A73A' },
     pillBadge: { backgroundColor: '#F1F5F9', borderRadius: 8, paddingHorizontal: 5, paddingVertical: 1 },
     pillBadgeTxt: { fontSize: 9, fontWeight: '800', color: '#64748B' },
     sortRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 6, gap: 10 },
     sortCount: { fontSize: 11, fontWeight: '700', color: '#94A3B8' },
     sChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, backgroundColor: 'white', borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'center', gap: 4, marginRight: 4 },
-    sChipOn: { borderColor: '#6366F1', backgroundColor: '#EEF2FF' },
+    sChipOn: { borderColor: '#D9A73A', backgroundColor: '#FFFBEB' },
     sChipTxt: { fontSize: 11, fontWeight: '600', color: '#64748B' },
-    card: { backgroundColor: 'white', borderRadius: 20, paddingVertical: 13, paddingRight: 12, paddingLeft: 0, flexDirection: 'row', alignItems: 'center', marginBottom: 10, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: '#1E1B4B', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.07, shadowRadius: 10, elevation: 3, overflow: 'hidden' },
+    card: { backgroundColor: 'white', borderRadius: 16, paddingVertical: 13, paddingRight: 12, paddingLeft: 0, flexDirection: 'row', alignItems: 'center', marginBottom: 10, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden' },
     cardAccent: { width: 4, height: '100%', borderRadius: 2, marginRight: 10 },
     cardBanned: { backgroundColor: '#FEF2F2', borderColor: '#FEE2E2' },
-    cardSel: { borderColor: '#6366F1', borderWidth: 2, backgroundColor: '#EEF2FF' },
+    cardSel: { borderColor: '#0E1A2E', borderWidth: 2, backgroundColor: '#F8FAFC' },
     avWrap: { width: 52, height: 52, marginRight: 11, position: 'relative' },
     avRing: { borderRadius: 26, borderWidth: 2, padding: 1 },
     dot: { position: 'absolute', bottom: 0, right: 0, width: 13, height: 13, borderRadius: 7, borderWidth: 2, borderColor: 'white', alignItems: 'center', justifyContent: 'center' },

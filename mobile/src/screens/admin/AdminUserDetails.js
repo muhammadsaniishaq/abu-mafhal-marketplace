@@ -225,7 +225,7 @@ export const AdminUserDetails = ({ visible, user, onClose, onUpdate, navigation:
                 event: `WALLET_${transactType.toUpperCase()}`,
                 amount: amtVal,
                 note: note,
-                admin: admin.email,
+                admin: admin?.email || 'Admin',
                 timestamp: new Date().toISOString()
             }
         });

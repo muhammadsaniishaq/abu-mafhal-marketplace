@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, FlatList, Animated, ScrollView, Modal } from 'react-native';
+import { 
+    View, Text, TouchableOpacity, TextInput, ActivityIndicator, 
+    FlatList, ScrollView, Modal, StyleSheet, Dimensions, Platform, Image, RefreshControl 
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useAppSettings } from '../../context/AppSettingsContext';
 import * as ImagePicker from 'expo-image-picker';
-import { UploadService } from '../../services/uploadService';
-import { Image } from 'react-native';
+import { decode } from 'base64-arraybuffer';
+
+const NAVY = '#0E1A2E';
+const DEEP_NAVY = '#1E293B';
+const GOLD = '#D9A73A';
 
 export const AdminBroadcast = () => {
     const { settings } = useAppSettings();
@@ -21,6 +25,7 @@ export const AdminBroadcast = () => {
     const [imageMimeType, setImageMimeType] = useState(null);
     const [uploadingImage, setUploadingImage] = useState(false);
     const [sending, setSending] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
     const [history, setHistory] = useState([]);
     const [target, setTarget] = useState('all'); // all, vendors, customers, drivers
     const [aiPrompt, setAiPrompt] = useState('');
@@ -35,8 +40,26 @@ export const AdminBroadcast = () => {
     }, []);
 
     const fetchHistory = async () => {
-        const { data } = await supabase.from('notifications').select('*').eq('type', 'system').limit(15).order('created_at', { ascending: false });
-        if (data) setHistory(data);
+        try {
+            const { data, error } = await supabase
+                .from('notifications')
+                .select('*')
+                .limit(20)
+                .order('created_at', { ascending: false });
+
+            if (data) {
+                setHistory(data);
+            }
+        } catch (e) {
+            console.warn('Error fetching broadcast history:', e);
+        } finally {
+            setRefreshing(false);
+        }
+    };
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        fetchHistory();
     };
 
     const showAlert = (title, message, type = 'info', onConfirm = null) => {
@@ -48,12 +71,12 @@ export const AdminBroadcast = () => {
         const apiKey = settings?.gemini_api_key || process.env.EXPO_PUBLIC_GEMINI_API_KEY;
 
         if (!apiKey) {
-            showAlert('Missing API Key', 'Please add your Gemini API Key in the Admin Settings screen.', 'error');
+            showAlert('Babu API Key', 'Sanya Gemini API Key a saitunan Admin Settings domin amfani da AI.', 'error');
             return;
         }
 
         if (!aiPrompt.trim()) {
-            showAlert('Wait!', 'Please tell the AI briefly what the broadcast is about.', 'info');
+            showAlert('Dakatar!', 'Da fatan za a rubuta dan takaitaccen bayanin abin da kake son sanarwa ga AI.', 'info');
             return;
         }
 
@@ -62,13 +85,13 @@ export const AdminBroadcast = () => {
             const genAI = new GoogleGenerativeAI(apiKey);
             const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-            const prompt = `Act as an expert communications manager for the 'Abu Mafhal Marketplace' app. 
+            const prompt = `Act as an expert communications manager for the 'Abu Mafhal Marketplace' app in Nigeria. 
             I need to send a push notification broadcast to our users targetted at: ${target}. 
             Based on this rough idea: "${aiPrompt}"
-            ${imageBase64 ? "IMPORTANT CHECK: I have attached an image. Please analyze this image and incorporate its context/details to make the title and message extremely relevant to the visual." : ""}
+            ${imageBase64 ? "IMPORTANT: An image is attached. Make the text relevant to this product/announcement visual." : ""}
             
-            Write a professional, engaging title and a concise, clear message body.
-            Format your exact response as a JSON object with two keys: "title" and "message". 
+            Write an engaging, professional title and a concise, clear message body in clear English or Hausa depending on context.
+            Format your response as a JSON object with two keys: "title" and "message". 
             Do NOT include markdown formatting or backticks around the JSON. Return ONLY the raw JSON object.`;
 
             let result;
@@ -88,17 +111,10 @@ export const AdminBroadcast = () => {
             if (parsed.message) setMessage(parsed.message);
 
             setAiPrompt('');
-            setAiPrompt('');
+            showAlert('Nasarar AI! ✨', 'Gemini AI ta rubuta sanarwar cikin nasara. Zaka iya dubawa da gyarawa kafin aika wa.', 'success');
         } catch (error) {
-            console.error('--- GEMINI API EXACT ERROR ---');
-            console.error(error);
-            if (error.response) {
-                console.error('Response details:', JSON.stringify(error.response, null, 2));
-            }
-            if (error.message) {
-                console.error('Error MESSAGE:', error.message);
-            }
-            showAlert('AI Error', 'Could not generate text. Check your terminal logs for the exact reason.', 'error');
+            console.error('Gemini error:', error);
+            showAlert('Kuskuren AI', error.message || 'An gaza rubuta sanarwa ta AI a yanzu.', 'error');
         } finally {
             setIsGenerating(false);
         }
@@ -106,8 +122,14 @@ export const AdminBroadcast = () => {
 
     const handlePickImage = async () => {
         try {
+            const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!permission.granted) {
+                showAlert('Izini', 'Ana bukatar izinin gallery don loda hoto.', 'info');
+                return;
+            }
+
             const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ['images'],
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
                 allowsEditing: true,
                 quality: 0.8,
                 base64: true,
@@ -120,11 +142,30 @@ export const AdminBroadcast = () => {
 
                 setUploadingImage(true);
                 try {
-                    const publicUrl = await UploadService.uploadFile(asset, 'app-assets', 'broadcasts');
-                    setImageUrl(publicUrl);
+                    const fileName = `broadcast_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+                    const fileData = decode(asset.base64);
+
+                    let uploadRes = await supabase.storage.from('banners').upload(fileName, fileData, {
+                        contentType: asset.mimeType || 'image/jpeg',
+                        upsert: true
+                    });
+
+                    let bucket = 'banners';
+                    if (uploadRes.error) {
+                        uploadRes = await supabase.storage.from('products').upload(fileName, fileData, {
+                            contentType: asset.mimeType || 'image/jpeg',
+                            upsert: true
+                        });
+                        bucket = 'products';
+                    }
+
+                    if (uploadRes.error) throw uploadRes.error;
+
+                    const { data: publicUrlData } = supabase.storage.from(bucket).getPublicUrl(fileName);
+                    setImageUrl(publicUrlData.publicUrl);
                 } catch (err) {
                     console.log('Upload error:', err);
-                    showAlert('Upload Failed', 'Could not upload image. Make sure image is not too large.', 'error');
+                    showAlert('Kuskuren Loda Hoto', 'An gaza loda hoton a tsari. ' + err.message, 'error');
                 } finally {
                     setUploadingImage(false);
                 }
@@ -136,106 +177,45 @@ export const AdminBroadcast = () => {
 
     const handleSend = async () => {
         if (!title.trim() || !message.trim()) {
-            showAlert('Incomplete', 'Please provide both a title and a message.', 'info');
+            showAlert('Bayanai Basu Cika Ba', 'Da fatan za a rubuta Babban Take (Title) da Sakon Sanarwa (Message).', 'info');
             return;
         }
 
         showAlert(
-            'Confirm Broadcast',
-            `Are you sure you want to send this alert to ${target.toUpperCase()} users?`,
+            'Tabbatar Da Aika Sanarwa',
+            `Shin da gaske kana son aika wannan sanarwar ga bangaren ${target.toUpperCase()}?`,
             'confirm',
             async () => {
                 setModalVisible(false);
                 setSending(true);
 
                 try {
-                    // 1. Fetch Target Users (Need emails too)
-                    let query = supabase.from('profiles').select('id, email, full_name');
+                    // 1. Fetch Target Users from profiles
+                    let query = supabase.from('profiles').select('id, full_name');
                     if (target === 'vendors') query = query.eq('role', 'vendor');
                     else if (target === 'customers') query = query.eq('role', 'customer');
                     else if (target === 'drivers') query = query.eq('role', 'driver');
 
                     const { data: users, error } = await query;
-                    if (error || !users) throw new Error('Could not fetch target audience.');
-                    if (users.length === 0) throw new Error(`No users found in the '${target}' segment.`);
+                    if (error) throw new Error('An gaza binciko masu amfani: ' + error.message);
+                    if (!users || users.length === 0) throw new Error(`Babu masu amfani a sashin '${target}'.`);
 
-                    // 2. Prepare Notifications & Emails
-                    const notifications = [];
-                    const emails = [];
-
-                    users.forEach(u => {
-                        notifications.push({
-                            userId: u.id,
-                            title: title,
-                            message: message,
-                            type: 'system',
-                            image_url: imageUrl,
-                            is_read: false
-                        });
-
-                        if (u.email) {
-                            const htmlTemplate = `
-                            <!DOCTYPE html>
-                            <html>
-                            <head>
-                                <meta charset="UTF-8">
-                                <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-                            </head>
-                            <body style="font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #F8FAFC; margin: 0; padding: 40px 20px;">
-                                <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); overflow: hidden;">
-                                    
-                                    <!-- Header -->
-                                    <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); text-align: center; padding: 40px 20px;">
-                                        <img src="https://abumafhal.com/logo.png" alt="Abu Mafhal" style="width: 160px; margin-bottom: 25px;" onerror="this.style.display='none'">
-                                        <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.3;">${title}</h1>
-                                    </div>
-                                    
-                                    <!-- Content -->
-                                    <div style="padding: 40px 30px;">
-                                        <p style="font-size: 16px; color: #475569; margin-bottom: 24px; line-height: 1.6;">Hi <strong style="color: #0F172A;">${u.full_name || 'User'}</strong>,</p>
-                                        
-                                        ${imageUrl ? `<img src="${imageUrl}" alt="Announcement Banner" style="width: 100%; border-radius: 12px; margin-bottom: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.06);" />` : ''}
-                                        
-                                        <div style="font-size: 16px; color: #1E293B; line-height: 1.7; white-space: pre-wrap; margin-bottom: 30px;">${message}</div>
-                                        
-                                        <!-- Action Button -->
-                                        ${actionLink && actionText ? `
-                                        <div style="text-align: center; margin-top: 35px; margin-bottom: 10px;">
-                                            <a href="${actionLink}" style="display: inline-block; background-color: #3B82F6; color: #ffffff; text-decoration: none; padding: 16px 36px; border-radius: 12px; font-size: 16px; font-weight: 700; box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);">
-                                                ${actionText}
-                                            </a>
-                                        </div>
-                                        ` : ''}
-                                    </div>
-                                    
-                                    <!-- Footer -->
-                                    <div style="background-color: #F1F5F9; border-top: 1px solid #E2E8F0; padding: 30px 20px; text-align: center;">
-                                        <p style="margin: 0 0 20px 0; color: #64748B; font-size: 14px; font-weight: 600;">Connect with us via our social platforms:</p>
-                                        
-                                        <div style="margin-bottom: 20px;">
-                                            <a href="https://facebook.com/abumafhal" style="display: inline-block; margin: 0 10px;"><img src="https://cdn-icons-png.flaticon.com/512/733/733547.png" width="28" alt="Facebook"></a>
-                                            <a href="https://twitter.com/abumafhal" style="display: inline-block; margin: 0 10px;"><img src="https://cdn-icons-png.flaticon.com/512/733/733590.png" width="28" alt="X (Twitter)"></a>
-                                            <a href="https://instagram.com/abumafhal" style="display: inline-block; margin: 0 10px;"><img src="https://cdn-icons-png.flaticon.com/512/733/733558.png" width="28" alt="Instagram"></a>
-                                        </div>
-                                        
-                                        <p style="margin: 0; color: #94A3B8; font-size: 12px;">This is an automated broadcast from Abu-Mafhal Marketplace.</p>
-                                        <p style="margin: 6px 0 0 0; color: #CBD5E1; font-size: 12px;">&copy; ${new Date().getFullYear()} ABU MAFHAL LTD. All rights reserved.</p>
-                                    </div>
-                                </div>
-                            </body>
-                            </html>`;
-
-                            emails.push({
-                                to_email: u.email,
-                                subject: title,
-                                html: htmlTemplate,
-                                type: 'broadcast',
-                                status: 'pending'
-                            });
+                    // 2. Prepare in-app Notifications with exact table schema (user_id, title, body, data, is_read)
+                    const notifications = users.map(u => ({
+                        user_id: u.id,
+                        title: title.trim(),
+                        body: message.trim(),
+                        is_read: false,
+                        data: {
+                            type: 'broadcast',
+                            image_url: imageUrl || null,
+                            action_text: actionText || null,
+                            action_link: actionLink || null,
+                            target_segment: target
                         }
-                    });
+                    }));
 
-                    // 3. Insert in Chunks
+                    // 3. Insert in Chunks of 100
                     const chunkSize = 100;
                     for (let i = 0; i < notifications.length; i += chunkSize) {
                         const notifChunk = notifications.slice(i, i + chunkSize);
@@ -243,13 +223,7 @@ export const AdminBroadcast = () => {
                         if (notifError) console.error("Notif Error:", notifError);
                     }
 
-                    for (let i = 0; i < emails.length; i += chunkSize) {
-                        const emailChunk = emails.slice(i, i + chunkSize);
-                        const { error: emailError } = await supabase.from('mail').insert(emailChunk);
-                        if (emailError) console.error("Mail Error:", emailError);
-                    }
-
-                    showAlert('Success! 🎉', `Broadcast successfully delivered to ${users.length} users.`, 'success');
+                    showAlert('Nasarar Aikawa! 🎉', `An yi nasarar isar da sanarwar ga mutane ${users.length} a cikin manhaja.`, 'success');
                     setTitle('');
                     setMessage('');
                     setActionLink('');
@@ -260,7 +234,7 @@ export const AdminBroadcast = () => {
                     fetchHistory();
 
                 } catch (e) {
-                    showAlert('Failed', e.message, 'error');
+                    showAlert('Kuskure', e.message, 'error');
                 } finally {
                     setSending(false);
                 }
@@ -270,32 +244,42 @@ export const AdminBroadcast = () => {
 
     const CustomModal = () => (
         <Modal transparent visible={modalVisible} animationType="fade">
-            <View style={{ flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-                <View style={{ backgroundColor: 'white', borderRadius: 24, width: '100%', maxWidth: 400, padding: 24, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 10 }}>
-                    <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: modalConfig.type === 'error' ? '#FEF2F2' : modalConfig.type === 'success' ? '#F0FDF4' : '#EFF6FF', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+            <View style={s.modalOverlay}>
+                <View style={s.modalCard}>
+                    <View style={[s.modalIconBg, {
+                        backgroundColor: modalConfig.type === 'error' ? '#FEF2F2' : modalConfig.type === 'success' ? '#ECFDF5' : '#FFFBEB'
+                    }]}>
                         <Ionicons
                             name={modalConfig.type === 'error' ? 'alert-circle' : modalConfig.type === 'success' ? 'checkmark-circle' : modalConfig.type === 'confirm' ? 'paper-plane' : 'information-circle'}
                             size={32}
-                            color={modalConfig.type === 'error' ? '#EF4444' : modalConfig.type === 'success' ? '#22C55E' : '#3B82F6'}
+                            color={modalConfig.type === 'error' ? '#EF4444' : modalConfig.type === 'success' ? '#059669' : GOLD}
                         />
                     </View>
-                    <Text style={{ fontSize: 20, fontWeight: '800', color: '#0F172A', marginBottom: 8, textAlign: 'center' }}>{modalConfig.title}</Text>
-                    <Text style={{ fontSize: 15, color: '#64748B', textAlign: 'center', marginBottom: 24, lineHeight: 22 }}>{modalConfig.message}</Text>
+                    <Text style={s.modalTitle}>{modalConfig.title}</Text>
+                    <Text style={s.modalMessage}>{modalConfig.message}</Text>
 
                     <View style={{ flexDirection: 'row', gap: 12, width: '100%' }}>
                         {modalConfig.type === 'confirm' && (
-                            <TouchableOpacity style={{ flex: 1, padding: 14, borderRadius: 12, backgroundColor: '#F1F5F9', alignItems: 'center' }} onPress={() => setModalVisible(false)}>
-                                <Text style={{ color: '#475569', fontWeight: '700', fontSize: 16 }}>Cancel</Text>
+                            <TouchableOpacity 
+                                style={s.modalCancelBtn} 
+                                onPress={() => setModalVisible(false)}
+                            >
+                                <Text style={s.modalCancelText}>A'a (Cancel)</Text>
                             </TouchableOpacity>
                         )}
                         <TouchableOpacity
-                            style={{ flex: 1, padding: 14, borderRadius: 12, backgroundColor: modalConfig.type === 'error' ? '#EF4444' : '#3B82F6', alignItems: 'center', shadowColor: modalConfig.type === 'error' ? '#EF4444' : '#3B82F6', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 }}
+                            style={[
+                                s.modalConfirmBtn,
+                                { backgroundColor: modalConfig.type === 'error' ? '#EF4444' : modalConfig.type === 'confirm' ? GOLD : NAVY }
+                            ]}
                             onPress={() => {
                                 if (modalConfig.onConfirm) modalConfig.onConfirm();
                                 else setModalVisible(false);
                             }}
                         >
-                            <Text style={{ color: 'white', fontWeight: '700', fontSize: 16 }}>{modalConfig.type === 'confirm' ? 'Send Now' : 'Got it'}</Text>
+                            <Text style={[s.modalConfirmText, { color: modalConfig.type === 'confirm' ? NAVY : '#FFFFFF' }]}>
+                                {modalConfig.type === 'confirm' ? 'Eh, Aika Yanzu' : 'Na Gane'}
+                            </Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -304,116 +288,135 @@ export const AdminBroadcast = () => {
     );
 
     return (
-        <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
-            <LinearGradient colors={['#0F172A', '#1E293B']} style={{ padding: 24, paddingTop: 40, paddingBottom: 60, borderBottomLeftRadius: 32, borderBottomRightRadius: 32 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-                    <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' }}>
-                        <Ionicons name="megaphone" size={20} color="#60A5FA" />
+        <View style={s.container}>
+            {/* Header */}
+            <View style={s.header}>
+                <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Ionicons name="megaphone" size={22} color={GOLD} />
+                        <Text style={s.headerTitle}>Sanarwar Gaggawa (Broadcast)</Text>
                     </View>
-                    <Text style={{ fontSize: 28, fontWeight: '800', color: 'white' }}>Broadcast Hub</Text>
+                    <Text style={s.headerSubtitle}>Aika saƙon faɗakarwa kai tsaye ga masu sayayya, direbobi da yan kasuwa</Text>
                 </View>
-                <Text style={{ color: '#94A3B8', fontSize: 15, lineHeight: 22 }}>Instantly notify your entire fleet, vendors, or customer base with AI-powered announcements.</Text>
-            </LinearGradient>
+            </View>
 
-            <ScrollView contentContainerStyle={{ padding: 20, marginTop: -40 }} showsVerticalScrollIndicator={false}>
-
+            <ScrollView 
+                contentContainerStyle={{ padding: 16, paddingBottom: 80 }} 
+                showsVerticalScrollIndicator={false}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[GOLD, NAVY]} />}
+            >
                 {/* Compose Card */}
-                <View style={{ backgroundColor: 'white', borderRadius: 24, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.05, shadowRadius: 15, elevation: 4, marginBottom: 20 }}>
-
-                    <Text style={localStyles.label}>Target Audience</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
-                        <View style={{ flexDirection: 'row', gap: 10 }}>
-                            {['all', 'customers', 'vendors', 'drivers'].map(t => (
+                <View style={s.composeCard}>
+                    <Text style={s.label}>Bangaren Da Ake Sanarwa (Target Audience)</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 18 }}>
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                            {[
+                                { id: 'all', label: 'Duka (Kowa)', icon: 'globe-outline' },
+                                { id: 'customers', label: 'Masu Sayayya', icon: 'people-outline' },
+                                { id: 'vendors', label: 'Yan Kasuwa', icon: 'storefront-outline' },
+                                { id: 'drivers', label: 'Direbobi', icon: 'car-outline' }
+                            ].map(t => (
                                 <TouchableOpacity
-                                    key={t}
-                                    onPress={() => setTarget(t)}
-                                    style={[localStyles.chip, target === t && localStyles.activeChip]}
+                                    key={t.id}
+                                    onPress={() => setTarget(t.id)}
+                                    style={[s.targetChip, target === t.id && s.targetChipActive]}
+                                    activeOpacity={0.8}
                                 >
                                     <Ionicons
-                                        name={t === 'all' ? 'globe-outline' : t === 'customers' ? 'people-outline' : t === 'vendors' ? 'storefront-outline' : 'car-outline'}
+                                        name={t.icon}
                                         size={16}
-                                        color={target === t ? 'white' : '#64748B'}
+                                        color={target === t.id ? GOLD : '#64748B'}
                                     />
-                                    <Text style={{ color: target === t ? 'white' : '#64748B', fontWeight: '700', textTransform: 'capitalize', fontSize: 13 }}>{t}</Text>
+                                    <Text style={[s.targetChipText, target === t.id && s.targetChipTextActive]}>
+                                        {t.label}
+                                    </Text>
                                 </TouchableOpacity>
                             ))}
                         </View>
                     </ScrollView>
 
-                    {/* Gemini AI Assist */}
-                    <View style={{ backgroundColor: '#F0FDF4', borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: '#DCFCE7' }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                            <Ionicons name="sparkles" size={18} color="#059669" />
-                            <Text style={{ fontWeight: '700', color: '#065F46', fontSize: 14 }}>Gemini AI Writer</Text>
+                    {/* Gemini AI Assist Box */}
+                    <View style={s.aiBox}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                            <Ionicons name="sparkles" size={18} color={NAVY} />
+                            <Text style={s.aiBoxTitle}>Mataimakin Gemini AI (AI Writer)</Text>
                         </View>
                         <TextInput
-                            style={{ backgroundColor: 'white', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#BBF7D0', marginBottom: 12, fontSize: 14, color: '#064E3B' }}
-                            placeholder="Briefly describe what you want to announce..."
-                            placeholderTextColor="#9CA3AF"
+                            style={s.aiInput}
+                            placeholder="Takaita abin da kake son sanarwa a nan (misali: Rangwamen sallah)..."
+                            placeholderTextColor="#94A3B8"
                             value={aiPrompt}
                             onChangeText={setAiPrompt}
                         />
                         <TouchableOpacity
-                            style={{ backgroundColor: '#10B981', padding: 12, borderRadius: 12, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 }}
+                            style={s.aiGenerateBtn}
                             onPress={handleGenerateAI}
                             disabled={isGenerating}
+                            activeOpacity={0.85}
                         >
-                            {isGenerating ? <ActivityIndicator color="white" size="small" /> : (
-                                <>
-                                    <Ionicons name="color-wand" size={16} color="white" />
-                                    <Text style={{ color: 'white', fontWeight: '700' }}>Generate Message</Text>
-                                </>
+                            {isGenerating ? (
+                                <ActivityIndicator color={NAVY} size="small" />
+                            ) : (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                    <Ionicons name="color-wand" size={16} color={NAVY} />
+                                    <Text style={s.aiGenerateBtnText}>Rubuta Sanarwa Da AI</Text>
+                                </View>
                             )}
                         </TouchableOpacity>
                     </View>
 
-                    {/* Optional Image */}
-                    <Text style={localStyles.label}>Optional Image Attachment</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
+                    {/* Optional Image Upload */}
+                    <Text style={s.label}>Hoton Sanarwa (Na Zabi)</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 18 }}>
                         <TouchableOpacity
-                            style={{ width: 80, height: 80, borderRadius: 16, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', marginRight: 15, overflow: 'hidden' }}
+                            style={s.imageBox}
                             onPress={handlePickImage}
                             disabled={uploadingImage}
+                            activeOpacity={0.8}
                         >
-                            {uploadingImage ? <ActivityIndicator color="#3B82F6" /> : imageUrl ? (
-                                <Image source={{ uri: imageUrl }} style={{ width: '100%', height: '100%' }} />
+                            {uploadingImage ? (
+                                <ActivityIndicator color={GOLD} />
+                            ) : imageUrl ? (
+                                <Image source={{ uri: imageUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
                             ) : (
-                                <Ionicons name="image-outline" size={28} color="#94A3B8" />
+                                <Ionicons name="image-outline" size={26} color="#94A3B8" />
                             )}
                         </TouchableOpacity>
-                        <View style={{ flex: 1 }}>
-                            <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 4 }}>Add a banner or promotional image to make your message stand out.</Text>
+                        <View style={{ flex: 1, marginLeft: 14 }}>
+                            <Text style={{ fontSize: 12, color: '#64748B', lineHeight: 16 }}>
+                                Sanya hoton talla ko na kaya domin sanarwar ta fi jan hankali.
+                            </Text>
                             {imageUrl && (
-                                <TouchableOpacity onPress={() => { setImageUrl(null); setImageBase64(null); setImageMimeType(null); }}>
-                                    <Text style={{ color: '#EF4444', fontWeight: '600', fontSize: 13 }}>Remove Image</Text>
+                                <TouchableOpacity onPress={() => { setImageUrl(null); setImageBase64(null); setImageMimeType(null); }} style={{ marginTop: 6 }}>
+                                    <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 12 }}>Cire Hoton</Text>
                                 </TouchableOpacity>
                             )}
                         </View>
                     </View>
 
-                    <Text style={localStyles.label}>Broadcast Title</Text>
+                    <Text style={s.label}>Babban Take (Title) *</Text>
                     <TextInput
-                        style={localStyles.input}
-                        placeholder="e.g. Important System Update"
+                        style={s.textInput}
+                        placeholder="Misali: Sabon Rangwame a Kasuwa"
                         placeholderTextColor="#94A3B8"
                         value={title}
                         onChangeText={setTitle}
                     />
 
-                    <Text style={localStyles.label}>Broadcast Message</Text>
+                    <Text style={s.label}>Sakon Sanarwa (Message) *</Text>
                     <TextInput
-                        style={[localStyles.input, { height: 120, textAlignVertical: 'top', paddingTop: 16 }]}
-                        placeholder="Type the full announcement here..."
+                        style={[s.textInput, { height: 110, textAlignVertical: 'top' }]}
+                        placeholder="Rubuta cikakken bayanin sanarwar a nan..."
                         placeholderTextColor="#94A3B8"
                         value={message}
                         onChangeText={setMessage}
                         multiline
                     />
 
-                    <Text style={localStyles.label}>Optional Button Link</Text>
+                    <Text style={s.label}>Adireshin Shiga / Link (Na Zabi)</Text>
                     <TextInput
-                        style={localStyles.input}
-                        placeholder="e.g. https://abumafhal.com/promo"
+                        style={s.textInput}
+                        placeholder="Misali: /shop/category ko https://abumafhal.com"
                         placeholderTextColor="#94A3B8"
                         keyboardType="url"
                         autoCapitalize="none"
@@ -423,10 +426,10 @@ export const AdminBroadcast = () => {
 
                     {actionLink.length > 0 && (
                         <>
-                            <Text style={localStyles.label}>Button Text</Text>
+                            <Text style={s.label}>Rubutun Maballi (Button Text)</Text>
                             <TextInput
-                                style={localStyles.input}
-                                placeholder="e.g. Shop Now"
+                                style={s.textInput}
+                                placeholder="Misali: Shiga Kasuwa Yanzu"
                                 placeholderTextColor="#94A3B8"
                                 value={actionText}
                                 onChangeText={setActionText}
@@ -435,59 +438,73 @@ export const AdminBroadcast = () => {
                     )}
 
                     <TouchableOpacity
-                        style={{ backgroundColor: '#3B82F6', padding: 18, borderRadius: 16, alignItems: 'center', marginTop: 8, shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 6 }}
+                        style={[s.sendBroadcastBtn, sending && { opacity: 0.6 }]}
                         onPress={handleSend}
                         disabled={sending}
+                        activeOpacity={0.85}
                     >
-                        {sending ? <ActivityIndicator color="white" /> : (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                <Ionicons name="send" size={20} color="white" />
-                                <Text style={{ color: 'white', fontWeight: '800', fontSize: 16, letterSpacing: 0.5 }}>Broadcast Now</Text>
+                        {sending ? (
+                            <ActivityIndicator color={NAVY} />
+                        ) : (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <Ionicons name="send" size={18} color={NAVY} />
+                                <Text style={s.sendBroadcastBtnText}>Aika Sanarwar Ga Jama'a</Text>
                             </View>
                         )}
                     </TouchableOpacity>
                 </View>
 
                 {/* History Section */}
-                <Text style={{ fontWeight: '800', fontSize: 18, color: '#0F172A', marginBottom: 16, marginLeft: 4 }}>Recent Broadcasts</Text>
+                <View style={s.historyHeader}>
+                    <Text style={s.historyTitle}>Sanarwar Da Aka Aika Kusan Yanzu</Text>
+                    <Text style={s.historySub}>Tarihin sanarwar da aka riga aka fitar</Text>
+                </View>
 
                 {history.map((item, index) => (
-                    <View key={item.id || index} style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9' }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', flex: 1, paddingRight: 10 }}>
-                                <Text style={{ fontWeight: '700', color: '#0F172A', fontSize: 15 }} numberOfLines={1}>{item.title}</Text>
-                            </View>
+                    <View key={item.id || index} style={s.historyCard}>
+                        <View style={s.historyCardTop}>
+                            <Text style={s.historyCardTitle} numberOfLines={1}>
+                                {item.title || 'Sanarwa'}
+                            </Text>
                             <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-                                <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
-                                    <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600' }}>{new Date(item.created_at).toLocaleDateString()}</Text>
+                                <View style={s.dateBadge}>
+                                    <Text style={s.dateBadgeText}>
+                                        {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Yanzu'}
+                                    </Text>
                                 </View>
                                 <TouchableOpacity
-                                    style={{ backgroundColor: '#DBEAFE', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                                    style={s.resendBtn}
                                     onPress={() => {
-                                        setTitle(item.title);
-                                        setMessage(item.message);
-                                        if (item.image_url) setImageUrl(item.image_url);
+                                        setTitle(item.title || '');
+                                        setMessage(item.body || item.message || '');
+                                        if (item.data?.image_url) setImageUrl(item.data.image_url);
                                     }}
+                                    activeOpacity={0.8}
                                 >
-                                    <Ionicons name="reload" size={12} color="#2563EB" />
-                                    <Text style={{ fontSize: 11, color: '#2563EB', fontWeight: '700' }}>Resend</Text>
+                                    <Ionicons name="reload" size={12} color={NAVY} />
+                                    <Text style={s.resendBtnText}>Sake Aikawa</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
-                        <Text style={{ fontSize: 14, color: '#475569', lineHeight: 20 }} numberOfLines={2}>{item.message}</Text>
-                        {item.image_url && (
-                            <Image source={{ uri: item.image_url }} style={{ width: '100%', height: 150, borderRadius: 12, marginTop: 12 }} resizeMode="cover" />
-                        )}
+                        <Text style={s.historyCardBody} numberOfLines={2}>
+                            {item.body || item.message || 'Babu bayani'}
+                        </Text>
+                        {item.data?.image_url ? (
+                            <Image 
+                                source={{ uri: item.data.image_url }} 
+                                style={s.historyImage} 
+                                resizeMode="cover" 
+                            />
+                        ) : null}
                     </View>
                 ))}
 
                 {history.length === 0 && (
-                    <View style={{ alignItems: 'center', padding: 30, opacity: 0.5 }}>
-                        <Ionicons name="chatbubbles-outline" size={40} color="#94A3B8" style={{ marginBottom: 10 }} />
-                        <Text style={{ color: '#64748B', fontWeight: '500' }}>No recent broadcasts</Text>
+                    <View style={s.emptyHistory}>
+                        <Ionicons name="chatbubbles-outline" size={40} color="#CBD5E1" style={{ marginBottom: 10 }} />
+                        <Text style={{ color: '#64748B', fontWeight: '600', fontSize: 13 }}>Babu tarihin sanarwar da aka aika a baya.</Text>
                     </View>
                 )}
-
             </ScrollView>
 
             <CustomModal />
@@ -495,9 +512,299 @@ export const AdminBroadcast = () => {
     );
 };
 
-const localStyles = {
-    label: { fontSize: 13, color: '#475569', fontWeight: '700', marginBottom: 8, marginLeft: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
-    input: { backgroundColor: '#F8FAFC', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 20, fontSize: 15, color: '#0F172A' },
-    chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 18, paddingVertical: 12, borderRadius: 20, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
-    activeChip: { backgroundColor: '#0F172A', borderColor: '#0F172A' }
-};
+const s = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: '#F8FAFC'
+    },
+    header: {
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 20,
+        paddingTop: Platform.OS === 'ios' ? 20 : 16,
+        paddingBottom: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E2E8F0',
+        elevation: 1,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2
+    },
+    headerTitle: {
+        fontSize: 20,
+        fontWeight: '900',
+        color: NAVY
+    },
+    headerSubtitle: {
+        fontSize: 12,
+        color: '#64748B',
+        marginTop: 2
+    },
+    composeCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        padding: 18,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        elevation: 2,
+        shadowColor: NAVY,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.06,
+        shadowRadius: 6,
+        marginBottom: 20
+    },
+    label: {
+        fontSize: 12,
+        color: '#475569',
+        fontWeight: '800',
+        marginBottom: 8,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5
+    },
+    targetChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 14,
+        paddingVertical: 9,
+        borderRadius: 14,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    targetChipActive: {
+        backgroundColor: NAVY,
+        borderColor: NAVY
+    },
+    targetChipText: {
+        color: '#64748B',
+        fontWeight: '700',
+        fontSize: 12
+    },
+    targetChipTextActive: {
+        color: GOLD,
+        fontWeight: '800'
+    },
+    aiBox: {
+        backgroundColor: '#FFFBEB',
+        borderRadius: 16,
+        padding: 14,
+        marginBottom: 18,
+        borderWidth: 1,
+        borderColor: '#FDE68A'
+    },
+    aiBoxTitle: {
+        fontWeight: '800',
+        color: NAVY,
+        fontSize: 13
+    },
+    aiInput: {
+        backgroundColor: '#FFFFFF',
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#FDE68A',
+        marginBottom: 10,
+        fontSize: 13,
+        color: NAVY,
+        fontWeight: '600'
+    },
+    aiGenerateBtn: {
+        backgroundColor: GOLD,
+        padding: 12,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    aiGenerateBtnText: {
+        color: NAVY,
+        fontWeight: '900',
+        fontSize: 13
+    },
+    imageBox: {
+        width: 76,
+        height: 76,
+        borderRadius: 16,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        borderStyle: 'dashed',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden'
+    },
+    textInput: {
+        backgroundColor: '#F8FAFC',
+        padding: 13,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        marginBottom: 16,
+        fontSize: 14,
+        color: NAVY,
+        fontWeight: '600'
+    },
+    sendBroadcastBtn: {
+        backgroundColor: GOLD,
+        paddingVertical: 15,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 6,
+        elevation: 2,
+        shadowColor: GOLD,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 6
+    },
+    sendBroadcastBtnText: {
+        color: NAVY,
+        fontWeight: '900',
+        fontSize: 15
+    },
+    historyHeader: {
+        marginBottom: 12,
+        marginLeft: 2
+    },
+    historyTitle: {
+        fontWeight: '900',
+        fontSize: 16,
+        color: NAVY
+    },
+    historySub: {
+        fontSize: 12,
+        color: '#64748B',
+        marginTop: 2
+    },
+    historyCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 14,
+        marginBottom: 10,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    historyCardTop: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 6
+    },
+    historyCardTitle: {
+        fontWeight: '800',
+        color: NAVY,
+        fontSize: 14,
+        flex: 1,
+        paddingRight: 8
+    },
+    dateBadge: {
+        backgroundColor: '#F1F5F9',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 8
+    },
+    dateBadgeText: {
+        fontSize: 10,
+        color: '#64748B',
+        fontWeight: '700'
+    },
+    resendBtn: {
+        backgroundColor: '#FFFBEB',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        borderWidth: 1,
+        borderColor: '#FDE68A'
+    },
+    resendBtnText: {
+        fontSize: 10,
+        color: NAVY,
+        fontWeight: '800'
+    },
+    historyCardBody: {
+        fontSize: 13,
+        color: '#475569',
+        lineHeight: 18
+    },
+    historyImage: {
+        width: '100%',
+        height: 120,
+        borderRadius: 10,
+        marginTop: 10
+    },
+    emptyHistory: {
+        alignItems: 'center',
+        padding: 30,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(14, 26, 46, 0.65)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20
+    },
+    modalCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 24,
+        width: '100%',
+        maxWidth: 380,
+        padding: 24,
+        alignItems: 'center',
+        elevation: 8,
+        shadowColor: NAVY,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12
+    },
+    modalIconBg: {
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 14
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: '900',
+        color: NAVY,
+        marginBottom: 6,
+        textAlign: 'center'
+    },
+    modalMessage: {
+        fontSize: 13,
+        color: '#64748B',
+        textAlign: 'center',
+        marginBottom: 20,
+        lineHeight: 18
+    },
+    modalCancelBtn: {
+        flex: 1,
+        padding: 13,
+        borderRadius: 14,
+        backgroundColor: '#F1F5F9',
+        alignItems: 'center'
+    },
+    modalCancelText: {
+        color: '#475569',
+        fontWeight: '700',
+        fontSize: 14
+    },
+    modalConfirmBtn: {
+        flex: 1,
+        padding: 13,
+        borderRadius: 14,
+        alignItems: 'center'
+    },
+    modalConfirmText: {
+        fontWeight: '800',
+        fontSize: 14
+    }
+});

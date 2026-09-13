@@ -14,13 +14,13 @@ const { width: W } = Dimensions.get('window');
 const TAB_W = W / 7;
 
 const CATEGORIES = [
-    { id: 'branding',  label: 'Brand',    icon: 'color-palette', color: '#8B5CF6' },
-    { id: 'financial', label: 'Finance',   icon: 'cash',          color: '#10B981' },
+    { id: 'branding',  label: 'Brand',    icon: 'color-palette', color: '#0E1A2E' },
+    { id: 'financial', label: 'Finance',   icon: 'cash',          color: '#D9A73A' },
     { id: 'security',  label: 'Security',  icon: 'shield',        color: '#EF4444' },
     { id: 'vendors',   label: 'Vendors',   icon: 'business',      color: '#F59E0B' },
     { id: 'contact',   label: 'Contact',   icon: 'call',          color: '#0EA5E9' },
-    { id: 'features',  label: 'More',      icon: 'construct',     color: '#3B82F6' },
-    { id: 'advanced',  label: 'Advanced',  icon: 'settings',      color: '#6366F1' },
+    { id: 'features',  label: 'More',      icon: 'construct',     color: '#0E1A2E' },
+    { id: 'advanced',  label: 'Advanced',  icon: 'settings',      color: '#D9A73A' },
 ];
 
 const CURRENCIES = [
@@ -938,7 +938,7 @@ export const AdminSettings = ({ navigation }) => {
 };
 
 // ─── Themes ───────────────────────────────────────────────────
-const LIGHT = { bg: '#F1F5F9', card: '#FFFFFF', text: '#0F172A', muted: '#94A3B8', border: '#E2E8F0', surface: '#F8FAFC' };
+const LIGHT = { bg: '#F8FAFC', card: '#FFFFFF', text: '#0E1A2E', muted: '#64748B', border: '#E2E8F0', surface: '#F1F5F9' };
 const DARK  = { bg: '#0B1120', card: '#1E293B', text: '#F1F5F9', muted: '#64748B', border: '#334155', surface: '#0F172A' };
 
 // ─── Styles ────────────────────────────────────────────────────

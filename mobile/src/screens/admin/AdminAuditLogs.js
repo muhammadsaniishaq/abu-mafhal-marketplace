@@ -1,11 +1,18 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, FlatList, ActivityIndicator, TouchableOpacity, Modal, ScrollView, TextInput, RefreshControl, Share, Animated, Easing, Alert } from 'react-native';
+import { 
+    View, Text, FlatList, ActivityIndicator, TouchableOpacity, 
+    Modal, ScrollView, TextInput, RefreshControl, Share, Animated, 
+    Easing, Alert, StyleSheet, Platform 
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { styles } from '../../styles/theme';
 import { supabase } from '../../lib/supabase';
 import * as Clipboard from 'expo-clipboard';
 
-// High-Performance Forensic CSV Utility (Zero Dependency)
+const NAVY = '#0E1A2E';
+const DEEP_NAVY = '#1E293B';
+const GOLD = '#D9A73A';
+
+// Forensic CSV Utility
 const forensicJSONtoCSV = (data) => {
     if (!data.length) return '';
     const headers = Object.keys(data[0]);
@@ -25,23 +32,23 @@ const forensicJSONtoCSV = (data) => {
     return lines.join('\n');
 };
 
-// Professional Action Configuration with Significance
+// Professional Action Configuration
 const getActionConfig = (action) => {
-    const act = action.toLowerCase();
+    const act = (action || '').toLowerCase();
     const config = { icon: 'information-circle-outline', color: '#64748B', bg: '#F8FAFC', label: 'General', impact: 'low' };
 
     if (act.includes('create') || act.includes('add')) {
-        config.icon = 'add-circle'; config.color = '#10B981'; config.bg = '#F0FDF4'; config.label = 'Create'; config.impact = 'medium';
+        config.icon = 'add-circle'; config.color = '#059669'; config.bg = '#ECFDF5'; config.label = 'Create'; config.impact = 'medium';
     } else if (act.includes('update') || act.includes('edit')) {
-        config.icon = 'sync-circle'; config.color = '#3B82F6'; config.bg = '#EFF6FF'; config.label = 'Update'; config.impact = 'low';
+        config.icon = 'sync-circle'; config.color = '#2563EB'; config.bg = '#EFF6FF'; config.label = 'Update'; config.impact = 'low';
     } else if (act.includes('delete') || act.includes('remove')) {
         config.icon = 'trash-outline'; config.color = '#EF4444'; config.bg = '#FEF2F2'; config.label = 'Delete'; config.impact = 'high';
     } else if (act.includes('login') || act.includes('auth')) {
-        config.icon = 'shield-checkmark'; config.color = '#8B5CF6'; config.bg = '#F5F3FF'; config.label = 'Security'; config.impact = 'medium';
-    } else if (act.includes('wallet') || act.includes('payment') || act.includes('revenue')) {
-        config.icon = 'cash-outline'; config.color = '#F59E0B'; config.bg = '#FFFBEB'; config.label = 'Financial'; config.impact = 'medium';
+        config.icon = 'shield-checkmark'; config.color = GOLD; config.bg = '#FFFBEB'; config.label = 'Security'; config.impact = 'medium';
+    } else if (act.includes('wallet') || act.includes('payment') || act.includes('revenue') || act.includes('payout')) {
+        config.icon = 'cash-outline'; config.color = '#D97706'; config.bg = '#FFFBEB'; config.label = 'Finance'; config.impact = 'high';
     } else if (act.includes('order')) {
-        config.icon = 'cart-outline'; config.color = '#6366F1'; config.bg = '#EEF2FF'; config.label = 'Order'; config.impact = 'low';
+        config.icon = 'cart-outline'; config.color = NAVY; config.bg = '#F1F5F9'; config.label = 'Order'; config.impact = 'low';
     }
 
     if (act.includes('payout') || act.includes('approve_vendor')) config.impact = 'high';
@@ -69,7 +76,7 @@ export const AdminAuditLogs = () => {
         if (isLive) {
             Animated.loop(
                 Animated.sequence([
-                    Animated.timing(pulseAnim, { toValue: 0.4, duration: 1000, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
+                    Animated.timing(pulseAnim, { toValue: 0.3, duration: 1000, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
                     Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true, easing: Easing.inOut(Easing.ease) })
                 ])
             ).start();
@@ -78,15 +85,7 @@ export const AdminAuditLogs = () => {
         }
     }, [isLive]);
 
-    useEffect(() => {
-        fetchLogs();
-        const subscription = subscribeToLogs();
-        return () => {
-            if (subscription) supabase.removeChannel(subscription);
-        };
-    }, [filter, timeRange, discoveryPreset]);
-
-    const fetchLogs = async (isRefresh = false) => {
+    const fetchLogs = useCallback(async (isRefresh = false) => {
         if (!isRefresh) setLoading(true);
         try {
             let query = supabase.from('audit_logs')
@@ -167,11 +166,19 @@ export const AdminAuditLogs = () => {
             setLoading(false);
             setRefreshing(false);
         }
-    };
+    }, [filter, timeRange, discoveryPreset]);
+
+    useEffect(() => {
+        fetchLogs();
+        const subscription = subscribeToLogs();
+        return () => {
+            if (subscription) supabase.removeChannel(subscription);
+        };
+    }, [fetchLogs]);
 
     const subscribeToLogs = () => {
         return supabase
-            .channel('audit-logs-platinum-v3')
+            .channel('audit-logs-platinum-live')
             .on('postgres_changes', { event: 'INSERT', table: 'audit_logs' }, async (payload) => {
                 let userData = null;
                 if (payload.new.user_id) {
@@ -179,7 +186,7 @@ export const AdminAuditLogs = () => {
                         .from('profiles')
                         .select('full_name, email')
                         .eq('id', payload.new.user_id)
-                        .single();
+                        .maybeSingle();
                     userData = data;
                 }
 
@@ -201,12 +208,11 @@ export const AdminAuditLogs = () => {
         const hourAgo = new Date(now.getTime() - 3600000).toISOString();
         const today = now.toISOString().split('T')[0];
 
-        const todayCount = data.filter(l => l.created_at.startsWith(today)).length;
-        const securityCount = data.filter(l => l.action.toLowerCase().includes('login')).length;
-        const highImpactCount = data.filter(l => l.config.impact === 'high').length;
+        const todayCount = data.filter(l => l.created_at?.startsWith(today)).length;
+        const securityCount = data.filter(l => l.action?.toLowerCase().includes('login')).length;
+        const highImpactCount = data.filter(l => l.config?.impact === 'high').length;
         const velocity = data.filter(l => l.created_at >= hourAgo).length;
 
-        // Peak Hour Calculation
         const hourBins = data.reduce((acc, l) => {
             const hour = new Date(l.created_at).getHours();
             acc[hour] = (acc[hour] || 0) + 1;
@@ -233,8 +239,16 @@ export const AdminAuditLogs = () => {
     };
 
     const copyToClipboard = async (text) => {
-        await Clipboard.setStringAsync(text);
-        Alert.alert('Forensics Copied', 'The structured data has been saved to your clipboard.');
+        try {
+            if (Clipboard?.setStringAsync) {
+                await Clipboard.setStringAsync(text);
+            } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                await navigator.clipboard.writeText(text);
+            }
+            Alert.alert('An Kwafa!', 'An saka bayanan bincike a clipboard.');
+        } catch (e) {
+            Alert.alert('Bayani', text);
+        }
     };
 
     const exportToCSV = async () => {
@@ -251,7 +265,7 @@ export const AdminAuditLogs = () => {
             }));
 
             const csvString = forensicJSONtoCSV(csvData);
-            await Share.share({ message: csvString, title: 'Platinum_Audit_Forensics' });
+            await Share.share({ message: csvString, title: 'AbuMafhal_Audit_Logs.csv' });
         } catch (err) {
             console.error('Export Error:', err);
         } finally {
@@ -259,80 +273,56 @@ export const AdminAuditLogs = () => {
         }
     };
 
-    const onRefresh = useCallback(() => {
+    const onRefresh = () => {
         setRefreshing(true);
         fetchLogs(true);
-    }, [filter, timeRange, discoveryPreset]);
+    };
 
     const filteredLogsList = logs.filter(log => {
         const matchesSearch =
-            log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (log.action || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (log.user?.full_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (log.details ? JSON.stringify(log.details).toLowerCase().includes(searchQuery.toLowerCase()) : false);
         return matchesSearch;
     });
 
-    const renderLogItem = ({ item, index }) => {
+    const renderLogItem = ({ item }) => {
         const date = new Date(item.created_at);
         const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-        // Session Intelligence: Detect Burst (same user within 5 mins of next item)
-        const nextItem = logs[index + 1];
-        let isBurst = false;
-        if (nextItem && nextItem.user_id === item.user_id) {
-            const diff = Math.abs(new Date(item.created_at) - new Date(nextItem.created_at));
-            if (diff < 300000) isBurst = true; // 5 mins
-        }
+        const impactColor = item.config.impact === 'high' ? '#EF4444' : item.config.impact === 'medium' ? GOLD : '#CBD5E1';
 
         return (
             <TouchableOpacity
-                activeOpacity={0.8}
+                activeOpacity={0.85}
                 onPress={() => setSelectedLog(item)}
-                style={{
-                    backgroundColor: 'white',
-                    marginHorizontal: 16,
-                    marginBottom: isBurst ? 2 : 12,
-                    borderRadius: isBurst ? 4 : 20,
-                    padding: 16,
-                    flexDirection: 'row',
-                    gap: 12,
-                    borderWidth: 1,
-                    borderColor: '#F1F5F9',
-                    elevation: isBurst ? 0 : 1
-                }}
+                style={s.logCard}
             >
-                {/* Significance Indicator */}
-                <View style={{
-                    position: 'absolute',
-                    left: 0, top: 0, bottom: 0, width: 4,
-                    backgroundColor: item.config.impact === 'high' ? '#EF4444' : item.config.impact === 'medium' ? '#F59E0B' : '#E2E8F0'
-                }} />
+                <View style={[s.significanceBar, { backgroundColor: impactColor }]} />
 
-                <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: item.config.bg, alignItems: 'center', justifyContent: 'center' }}>
+                <View style={[s.actionIconBg, { backgroundColor: item.config.bg }]}>
                     <Ionicons name={item.config.icon} size={22} color={item.config.color} />
                 </View>
 
                 <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A', textTransform: 'uppercase' }}>
-                            {item.action.replace(/_/g, ' ')}
+                    <View style={s.logCardTop}>
+                        <Text style={s.logActionText} numberOfLines={1}>
+                            {(item.action || 'Aiki').replace(/_/g, ' ')}
                         </Text>
-                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#94A3B8' }}>{timeStr}</Text>
+                        <Text style={s.logTimeText}>{timeStr}</Text>
                     </View>
 
-                    <Text style={{ fontSize: 13, color: '#475569', marginBottom: 6 }} numberOfLines={1}>
-                        <Text style={{ fontWeight: '800', color: '#1E293B' }}>{item.user?.full_name || 'System'}</Text>
+                    <Text style={s.logActorText} numberOfLines={1}>
+                        <Text style={{ fontWeight: '800', color: NAVY }}>{item.user?.full_name || 'System Auto'}</Text>
                         {item.details_summary ? ` • ${item.details_summary}` : ''}
                     </Text>
 
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <View style={{ paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#F1F5F9' }}>
-                            <Text style={{ fontSize: 8, fontWeight: '800', color: '#64748B' }}>{item.config.label}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                        <View style={s.categoryBadge}>
+                            <Text style={s.categoryBadgeText}>{item.config.label}</Text>
                         </View>
-                        {isBurst && (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                                <Ionicons name="flash" size={10} color="#6366F1" />
-                                <Text style={{ fontSize: 8, fontWeight: '900', color: '#6366F1' }}>SESSION BURST</Text>
+                        {item.config.impact === 'high' && (
+                            <View style={s.highImpactBadge}>
+                                <Text style={s.highImpactBadgeText}>HIGH IMPACT</Text>
                             </View>
                         )}
                     </View>
@@ -342,142 +332,175 @@ export const AdminAuditLogs = () => {
     };
 
     return (
-        <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
-            {/* Elite Header */}
-            <View style={{ backgroundColor: 'white', paddingBottom: 16, borderBottomWidth: 1, borderColor: '#F1F5F9' }}>
-                <View style={{ paddingHorizontal: 20, paddingTop: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <View style={s.container}>
+            {/* Header */}
+            <View style={s.header}>
+                <View style={s.headerRow}>
                     <View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text style={{ fontSize: 24, fontWeight: '900', color: '#0F172A', letterSpacing: -0.5 }}>Platinum Audit</Text>
-                            <Animated.View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: isLive ? '#10B981' : '#CBD5E1', opacity: pulseAnim }} />
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Ionicons name="shield-checkmark" size={22} color={GOLD} />
+                            <Text style={s.headerTitle}>Ayyukan Tsaro (Audit Logs)</Text>
+                            <Animated.View style={[s.liveDot, { opacity: pulseAnim }]} />
                         </View>
-                        <Text style={{ fontSize: 11, color: '#94A3B8', fontWeight: '700' }}>{isLive ? 'LIVE SYNC ACTIVE' : 'RECONNECTING...'}</Text>
+                        <Text style={s.headerSubtitle}>
+                            {isLive ? 'Binciken ayyuka yana aiki kai tsaye (Live)' : 'Ana kokarin sake hadawa...'}
+                        </Text>
                     </View>
-                    <TouchableOpacity onPress={exportToCSV} disabled={exporting} style={{ padding: 12, backgroundColor: '#0F172A', borderRadius: 14 }}>
-                        {exporting ? <ActivityIndicator size="small" color="white" /> : <Ionicons name="cloud-download" size={20} color="white" />}
+
+                    <TouchableOpacity 
+                        onPress={exportToCSV} 
+                        disabled={exporting} 
+                        style={s.exportBtn}
+                        activeOpacity={0.8}
+                    >
+                        {exporting ? (
+                            <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Ionicons name="download-outline" size={16} color="#FFFFFF" />
+                                <Text style={s.exportBtnText}>CSV</Text>
+                            </View>
+                        )}
                     </TouchableOpacity>
                 </View>
 
-                {/* Discovery & Search */}
-                <View style={{ marginHorizontal: 20, marginTop: 16, flexDirection: 'row', gap: 10 }}>
-                    <View style={{ flex: 1, backgroundColor: '#F8FAFC', borderRadius: 16, paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9' }}>
-                        <Ionicons name="search" size={18} color="#94A3B8" />
-                        <TextInput placeholder="Forensic Discovery..." value={searchQuery} onChangeText={setSearchQuery} style={{ flex: 1, marginLeft: 10, fontSize: 14, fontWeight: '700', color: '#1E293B' }} />
+                {/* Quick Stats Bar */}
+                <View style={s.statsBar}>
+                    <View style={s.statMiniItem}>
+                        <Text style={s.statMiniVal}>{stats.today}</Text>
+                        <Text style={s.statMiniLbl}>Yau (Today)</Text>
+                    </View>
+                    <View style={s.statMiniDivider} />
+                    <View style={s.statMiniItem}>
+                        <Text style={[s.statMiniVal, { color: GOLD }]}>{stats.security}</Text>
+                        <Text style={s.statMiniLbl}>Security</Text>
+                    </View>
+                    <View style={s.statMiniDivider} />
+                    <View style={s.statMiniItem}>
+                        <Text style={[s.statMiniVal, { color: '#EF4444' }]}>{stats.highImpact}</Text>
+                        <Text style={s.statMiniLbl}>High Impact</Text>
+                    </View>
+                    <View style={s.statMiniDivider} />
+                    <View style={s.statMiniItem}>
+                        <Text style={s.statMiniVal}>{stats.peakHour}</Text>
+                        <Text style={s.statMiniLbl}>Peak Hour</Text>
                     </View>
                 </View>
 
-                {/* Platinum Forensic Presets */}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, gap: 10 }}>
-                    <View style={{ flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: 20, padding: 2 }}>
-                        {[
-                            { id: null, label: 'Default' }, { id: 'security', label: 'Security' }, { id: 'finance', label: 'Finance' }, { id: 'infra', label: 'Infra' }
-                        ].map(p => (
-                            <TouchableOpacity key={p.id} onPress={() => setDiscoveryPreset(p.id)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 18, backgroundColor: discoveryPreset === p.id ? 'white' : 'transparent', elevation: discoveryPreset === p.id ? 2 : 0 }}>
-                                <Text style={{ fontSize: 10, color: discoveryPreset === p.id ? '#0F172A' : '#64748B', fontWeight: '800' }}>{p.label}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
+                {/* Search Bar */}
+                <View style={s.searchWrap}>
+                    <Ionicons name="search" size={16} color={GOLD} />
+                    <TextInput 
+                        placeholder="Bincika takamaiman aiki, suna ko cikakken bayani..." 
+                        placeholderTextColor="#94A3B8"
+                        value={searchQuery} 
+                        onChangeText={setSearchQuery} 
+                        style={s.searchInput} 
+                    />
+                </View>
 
-                    {!discoveryPreset && [
-                        { id: 'all', label: 'All Time' }, { id: 'hour', label: '1h Velocity' }, { id: 'today', label: 'Today' }
-                    ].map(t => (
-                        <TouchableOpacity key={t.id} onPress={() => setTimeRange(t.id)} style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderBottomWidth: timeRange === t.id ? 2 : 0, borderBottomColor: '#0F172A' }}>
-                            <Text style={{ fontSize: 11, color: '#0F172A', fontWeight: '800' }}>{t.label}</Text>
+                {/* Filter Presets */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                    {[
+                        { id: null, label: 'Duka (Default)' },
+                        { id: 'security', label: 'Tsaro (Security)' },
+                        { id: 'finance', label: 'Kudi (Finance)' },
+                        { id: 'infra', label: 'Sarrafa (Infra)' }
+                    ].map(p => (
+                        <TouchableOpacity 
+                            key={p.label} 
+                            onPress={() => setDiscoveryPreset(p.id)} 
+                            style={[s.presetPill, discoveryPreset === p.id && s.presetPillActive]}
+                            activeOpacity={0.8}
+                        >
+                            <Text style={[s.presetPillText, discoveryPreset === p.id && s.presetPillTextActive]}>{p.label}</Text>
                         </TouchableOpacity>
                     ))}
                 </ScrollView>
             </View>
 
-            {/* Intensity Metrics HUD */}
-            <View style={{ flexDirection: 'row', padding: 20, gap: 12 }}>
-                <View style={{ flex: 1, backgroundColor: 'white', borderRadius: 24, padding: 18, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: '#000', shadowOpacity: 0.05, elevation: 2 }}>
-                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#94A3B8' }}>VELOCITY (1H)</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                        <Ionicons name="trending-up" size={16} color="#10B981" />
-                        <Text style={{ fontSize: 22, fontWeight: '900', color: '#0F172A' }}>{stats.velocity}</Text>
-                    </View>
-                </View>
-                <View style={{ flex: 1, backgroundColor: 'white', borderRadius: 24, padding: 18, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: '#000', shadowOpacity: 0.05, elevation: 2 }}>
-                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#94A3B8' }}>PEAK ACTIVITY</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                        <Ionicons name="time" size={16} color="#6366F1" />
-                        <Text style={{ fontSize: 20, fontWeight: '900', color: '#0F172A' }}>{stats.peakHour}</Text>
-                    </View>
-                </View>
-            </View>
-
-            {loading ? (
-                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                    <ActivityIndicator size="large" color="#0F172A" />
+            {loading && !refreshing ? (
+                <View style={s.centered}>
+                    <ActivityIndicator size="large" color={GOLD} />
+                    <Text style={s.loadingText}>Ana binciko bayanan tsaro...</Text>
                 </View>
             ) : (
                 <FlatList
                     data={filteredLogsList}
                     renderItem={renderLogItem}
-                    keyExtractor={item => item.id}
-                    contentContainerStyle={{ paddingBottom: 40 }}
-                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0F172A']} />}
+                    keyExtractor={item => item.id ? item.id.toString() : Math.random().toString()}
+                    contentContainerStyle={{ padding: 16, paddingBottom: 80 }}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[GOLD, NAVY]} />}
+                    ListEmptyComponent={
+                        <View style={s.emptyBox}>
+                            <View style={s.emptyIconCircle}>
+                                <Ionicons name="shield-outline" size={38} color={GOLD} />
+                            </View>
+                            <Text style={s.emptyTitle}>Babu Wani Aiki Da Aka Samu</Text>
+                            <Text style={s.emptySub}>
+                                {searchQuery ? `Babu aikin da ya dace da "${searchQuery}"` : "Babu wani aikin da aka yi a wannan lokacin."}
+                            </Text>
+                        </View>
+                    }
                 />
             )}
 
-            {/* Forensic Intelligence Modal */}
-            <Modal visible={!!selectedLog} transparent animationType="slide">
-                <View style={{ flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.7)', justifyContent: 'flex-end' }}>
-                    <View style={{ backgroundColor: 'white', borderTopLeftRadius: 40, borderTopRightRadius: 40, height: '88%', padding: 24 }}>
-                        <View style={{ backgroundColor: '#E2E8F0', width: 40, height: 5, borderRadius: 3, alignSelf: 'center', marginBottom: 20 }} />
-
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                            <View>
-                                <Text style={{ fontSize: 22, fontWeight: '900', color: '#0F172A' }}>Forensic Case</Text>
-                                <Text style={{ fontSize: 12, color: '#94A3B8', fontWeight: '700' }}>ID: {selectedLog?.id.slice(0, 10)}...</Text>
-                            </View>
-                            <TouchableOpacity onPress={() => setSelectedLog(null)} style={{ padding: 8, backgroundColor: '#F8FAFC', borderRadius: 20 }}>
-                                <Ionicons name="close" size={24} color="#64748B" />
-                            </TouchableOpacity>
-                        </View>
-
+            {/* DETAIL MODAL */}
+            <Modal visible={!!selectedLog} animationType="slide" transparent onRequestClose={() => setSelectedLog(null)}>
+                <View style={s.modalOverlay}>
+                    <View style={s.modalCard}>
                         {selectedLog && (
-                            <ScrollView showsVerticalScrollIndicator={false}>
-                                <View style={{ padding: 24, backgroundColor: '#0F172A', borderRadius: 32, marginBottom: 24 }}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-                                        <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' }}>
-                                            <Ionicons name="finger-print" size={32} color="white" />
-                                        </View>
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={{ fontSize: 18, fontWeight: '900', color: 'white' }}>{selectedLog.user?.full_name || 'System Identity'}</Text>
-                                            <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', fontWeight: '700' }}>{selectedLog.user?.email || 'automated-task@platform'}</Text>
-                                        </View>
+                            <>
+                                <View style={s.modalHeader}>
+                                    <View>
+                                        <Text style={s.modalActionTitle}>
+                                            {(selectedLog.action || '').replace(/_/g, ' ').toUpperCase()}
+                                        </Text>
+                                        <Text style={s.modalTimeSub}>
+                                            {new Date(selectedLog.created_at).toLocaleString()}
+                                        </Text>
                                     </View>
+                                    <TouchableOpacity onPress={() => setSelectedLog(null)} style={s.closeCircleBtn}>
+                                        <Ionicons name="close" size={20} color={NAVY} />
+                                    </TouchableOpacity>
                                 </View>
 
-                                <View style={{ backgroundColor: '#F8FAFC', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#F1F5F9', marginBottom: 24 }}>
-                                    <Text style={{ fontSize: 10, fontWeight: '900', color: '#94A3B8', marginBottom: 8 }}>PLATFORM IMPACT</Text>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                        <View style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, backgroundColor: selectedLog.config.bg }}>
-                                            <Text style={{ fontSize: 12, fontWeight: '900', color: selectedLog.config.color }}>{selectedLog.config.label.toUpperCase()}</Text>
+                                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20 }}>
+                                    <View style={s.actorCard}>
+                                        <Ionicons name="person-circle-outline" size={36} color={GOLD} />
+                                        <View style={{ flex: 1, marginLeft: 10 }}>
+                                            <Text style={s.actorName}>{selectedLog.user?.full_name || 'System Automations'}</Text>
+                                            <Text style={s.actorEmail}>{selectedLog.user?.email || selectedLog.user_id || 'Babu User ID'}</Text>
                                         </View>
-                                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#1E293B' }}>{selectedLog.action.replace(/_/g, ' ')}</Text>
                                     </View>
-                                </View>
 
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                                    <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A' }}>Data Laboratory</Text>
-                                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                                        <TouchableOpacity onPress={() => copyToClipboard(JSON.stringify(selectedLog.details, null, 2))} style={{ padding: 10, backgroundColor: '#F1F5F9', borderRadius: 12 }}>
-                                            <Ionicons name="copy-outline" size={18} color="#64748B" />
+                                    <Text style={s.detailsSectionLabel}>CIKAKKEN BAYANIN AIKI (STRUCTURED DATA)</Text>
+                                    <View style={s.jsonBox}>
+                                        <Text style={s.jsonText}>
+                                            {selectedLog.details ? JSON.stringify(selectedLog.details, null, 2) : 'Babu karin bayani (No Extra Payload)'}
+                                        </Text>
+                                    </View>
+
+                                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+                                        <TouchableOpacity
+                                            onPress={() => copyToClipboard(JSON.stringify(selectedLog, null, 2))}
+                                            style={s.copyBtn}
+                                            activeOpacity={0.8}
+                                        >
+                                            <Ionicons name="copy-outline" size={16} color={NAVY} />
+                                            <Text style={s.copyBtnText}>Kwafi Bayani (Copy JSON)</Text>
                                         </TouchableOpacity>
-                                        <TouchableOpacity onPress={() => Share.share({ message: `Audit Forensic Data:\nAction: ${selectedLog.action}\nMeta: ${JSON.stringify(selectedLog.details)}` })} style={{ padding: 10, backgroundColor: '#F1F5F9', borderRadius: 12 }}>
-                                            <Ionicons name="share-outline" size={18} color="#64748B" />
+
+                                        <TouchableOpacity
+                                            onPress={() => setSelectedLog(null)}
+                                            style={s.modalCloseBtn}
+                                            activeOpacity={0.85}
+                                        >
+                                            <Text style={s.modalCloseBtnText}>Kammala</Text>
                                         </TouchableOpacity>
                                     </View>
-                                </View>
-
-                                <View style={{ backgroundColor: '#1E293B', borderRadius: 28, padding: 24, marginBottom: 40 }}>
-                                    <Text style={{ color: '#38BDF8', fontFamily: 'monospace', fontSize: 12, lineHeight: 20 }}>
-                                        {JSON.stringify(selectedLog.details || { forensic: "No metadata found" }, null, 2)}
-                                    </Text>
-                                </View>
-                            </ScrollView>
+                                </ScrollView>
+                            </>
                         )}
                     </View>
                 </View>
@@ -485,3 +508,351 @@ export const AdminAuditLogs = () => {
         </View>
     );
 };
+
+const s = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: '#F8FAFC'
+    },
+    header: {
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 20,
+        paddingTop: Platform.OS === 'ios' ? 20 : 16,
+        paddingBottom: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E2E8F0',
+        elevation: 1,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2
+    },
+    headerRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 14
+    },
+    headerTitle: {
+        fontSize: 19,
+        fontWeight: '900',
+        color: NAVY
+    },
+    headerSubtitle: {
+        fontSize: 11,
+        color: '#64748B',
+        marginTop: 2
+    },
+    liveDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#059669'
+    },
+    exportBtn: {
+        backgroundColor: NAVY,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: GOLD
+    },
+    exportBtnText: {
+        color: '#FFFFFF',
+        fontWeight: '800',
+        fontSize: 12
+    },
+    statsBar: {
+        flexDirection: 'row',
+        backgroundColor: '#F8FAFC',
+        borderRadius: 14,
+        paddingVertical: 10,
+        paddingHorizontal: 8,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        marginBottom: 12
+    },
+    statMiniItem: {
+        flex: 1,
+        alignItems: 'center'
+    },
+    statMiniVal: {
+        fontSize: 14,
+        fontWeight: '900',
+        color: NAVY
+    },
+    statMiniLbl: {
+        fontSize: 9,
+        color: '#64748B',
+        fontWeight: '700',
+        marginTop: 2
+    },
+    statMiniDivider: {
+        width: 1,
+        backgroundColor: '#E2E8F0'
+    },
+    searchWrap: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8FAFC',
+        paddingHorizontal: 12,
+        paddingVertical: 9,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        marginBottom: 12
+    },
+    searchInput: {
+        flex: 1,
+        marginLeft: 8,
+        fontSize: 13,
+        color: NAVY,
+        fontWeight: '600'
+    },
+    presetPill: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 14,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    presetPillActive: {
+        backgroundColor: NAVY,
+        borderColor: NAVY
+    },
+    presetPillText: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#64748B'
+    },
+    presetPillTextActive: {
+        color: GOLD,
+        fontWeight: '800'
+    },
+    centered: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 40
+    },
+    loadingText: {
+        marginTop: 12,
+        color: '#64748B',
+        fontSize: 14,
+        fontWeight: '600'
+    },
+    logCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        marginBottom: 10,
+        padding: 14,
+        flexDirection: 'row',
+        gap: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        position: 'relative',
+        overflow: 'hidden'
+    },
+    significanceBar: {
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        bottom: 0,
+        width: 4
+    },
+    actionIconBg: {
+        width: 42,
+        height: 42,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center'
+    },
+    logCardTop: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 2
+    },
+    logActionText: {
+        fontSize: 13,
+        fontWeight: '800',
+        color: NAVY,
+        flex: 1,
+        marginRight: 8
+    },
+    logTimeText: {
+        fontSize: 10,
+        color: '#94A3B8',
+        fontWeight: '700'
+    },
+    logActorText: {
+        fontSize: 12,
+        color: '#64748B',
+        marginBottom: 4
+    },
+    categoryBadge: {
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    categoryBadgeText: {
+        fontSize: 9,
+        fontWeight: '700',
+        color: '#475569'
+    },
+    highImpactBadge: {
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+        backgroundColor: '#FEF2F2'
+    },
+    highImpactBadgeText: {
+        fontSize: 8,
+        fontWeight: '900',
+        color: '#EF4444'
+    },
+    emptyBox: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 40,
+        marginTop: 40,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    emptyIconCircle: {
+        width: 72,
+        height: 72,
+        borderRadius: 36,
+        backgroundColor: '#FFFBEB',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 14,
+        borderWidth: 1,
+        borderColor: '#FDE68A'
+    },
+    emptyTitle: {
+        fontSize: 17,
+        fontWeight: '900',
+        color: NAVY,
+        marginBottom: 6
+    },
+    emptySub: {
+        fontSize: 13,
+        color: '#64748B',
+        textAlign: 'center',
+        lineHeight: 18
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(14, 26, 46, 0.65)',
+        justifyContent: 'flex-end'
+    },
+    modalCard: {
+        backgroundColor: '#FFFFFF',
+        borderTopLeftRadius: 28,
+        borderTopRightRadius: 28,
+        maxHeight: '85%'
+    },
+    modalHeader: {
+        paddingHorizontal: 20,
+        paddingVertical: 18,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+    },
+    modalActionTitle: {
+        fontSize: 16,
+        fontWeight: '900',
+        color: NAVY
+    },
+    modalTimeSub: {
+        fontSize: 11,
+        color: '#64748B',
+        marginTop: 2
+    },
+    closeCircleBtn: {
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        backgroundColor: '#F1F5F9',
+        justifyContent: 'center',
+        alignItems: 'center'
+    },
+    actorCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8FAFC',
+        padding: 12,
+        borderRadius: 14,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    actorName: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: NAVY
+    },
+    actorEmail: {
+        fontSize: 11,
+        color: '#64748B'
+    },
+    detailsSectionLabel: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: '#64748B',
+        marginBottom: 8,
+        letterSpacing: 0.5
+    },
+    jsonBox: {
+        backgroundColor: '#F8FAFC',
+        padding: 14,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        maxHeight: 220
+    },
+    jsonText: {
+        fontSize: 12,
+        fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+        color: NAVY
+    },
+    copyBtn: {
+        flex: 1,
+        backgroundColor: '#FFFBEB',
+        paddingVertical: 14,
+        borderRadius: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        borderWidth: 1,
+        borderColor: '#FDE68A'
+    },
+    copyBtnText: {
+        color: NAVY,
+        fontWeight: '800',
+        fontSize: 13
+    },
+    modalCloseBtn: {
+        flex: 1,
+        backgroundColor: NAVY,
+        paddingVertical: 14,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    modalCloseBtnText: {
+        color: '#FFFFFF',
+        fontWeight: '800',
+        fontSize: 13
+    }
+});

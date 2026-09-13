@@ -631,7 +631,7 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
             {/* Header */}
             <View style={[SS.header, { paddingTop: insets.top + 8 }]}>
                 <TouchableOpacity onPress={onCancel} style={SS.iconBtn}>
-                    <Ionicons name="close" size={22} color="#0F172A" />
+                    <Ionicons name="close" size={22} color="#0E1A2E" />
                 </TouchableOpacity>
 
                 <View style={{ flex: 1, marginHorizontal: 14 }}>
@@ -644,7 +644,7 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
                         style={[SS.saveBtn, loading && { backgroundColor: '#94A3B8' }]}>
                         {loading
                             ? <ActivityIndicator size="small" color="white" />
-                            : <><Ionicons name="cloud-upload" size={14} color="white" /><Text style={SS.saveBtnTxt}>{isEditing ? 'Update' : 'Publish'}</Text></>
+                            : <><Ionicons name="cloud-upload" size={14} color="#D9A73A" /><Text style={SS.saveBtnTxt}>{isEditing ? 'Update' : 'Publish'}</Text></>
                         }
                     </TouchableOpacity>
                 </Animated.View>
@@ -659,7 +659,7 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
                         return (
                             <TouchableOpacity key={tab.id} onPress={() => setActiveTab(tab.id)}
                                 style={[SS.tabChip, active && SS.tabChipActive]}>
-                                <Ionicons name={tab.icon} size={14} color={active ? '#4F46E5' : '#94A3B8'} />
+                                <Ionicons name={tab.icon} size={14} color={active ? '#D9A73A' : '#94A3B8'} />
                                 <Text style={[SS.tabTxt, active && SS.tabTxtActive]}>{tab.label}</Text>
                             </TouchableOpacity>
                         );
@@ -677,7 +677,7 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
             {loading && (
                 <View style={SS.loadingOverlay}>
                     <View style={SS.loadingBox}>
-                        <ActivityIndicator size="large" color="#6366F1" />
+                        <ActivityIndicator size="large" color="#0E1A2E" />
                         <Text style={SS.loadingTxt}>{isEditing ? 'Updating...' : 'Creating Product...'}</Text>
                     </View>
                 </View>
@@ -692,52 +692,52 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
 const SS = StyleSheet.create({
     header:       { flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1, borderColor: '#F1F5F9' },
     iconBtn:      { width: 40, height: 40, borderRadius: 12, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
-    headerTitle:  { fontSize: 17, fontWeight: '900', color: '#0F172A', letterSpacing: -0.3 },
+    headerTitle:  { fontSize: 17, fontWeight: '900', color: '#0E1A2E', letterSpacing: -0.3 },
     headerSub:    { fontSize: 11, color: '#94A3B8', marginTop: 1 },
-    saveBtn:      { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#4F46E5', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 },
+    saveBtn:      { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#0E1A2E', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: '#D9A73A' },
     saveBtnTxt:   { color: 'white', fontWeight: '800', fontSize: 13 },
     tabChip:      { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, backgroundColor: '#F1F5F9', borderWidth: 1.5, borderColor: 'transparent' },
-    tabChipActive:{ backgroundColor: '#EEF2FF', borderColor: '#6366F1' },
+    tabChipActive:{ backgroundColor: '#0E1A2E', borderColor: '#D9A73A' },
     tabTxt:       { fontSize: 12, fontWeight: '600', color: '#94A3B8' },
-    tabTxtActive: { color: '#4F46E5', fontWeight: '800' },
+    tabTxtActive: { color: '#D9A73A', fontWeight: '800' },
     tabContent:   { padding: 16 },
-    card:         { backgroundColor: 'white', borderRadius: 20, padding: 18, marginBottom: 14, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 8, elevation: 1 },
-    cardTitle:    { fontSize: 14, fontWeight: '900', color: '#0F172A', marginBottom: 14, letterSpacing: -0.2 },
+    card:         { backgroundColor: 'white', borderRadius: 20, padding: 18, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 8, elevation: 1 },
+    cardTitle:    { fontSize: 14, fontWeight: '900', color: '#0E1A2E', marginBottom: 14, letterSpacing: -0.2 },
     cardSub:      { fontSize: 12, color: '#64748B', marginTop: -10, marginBottom: 14 },
     inpWrap:      { marginBottom: 14 },
     inpLabel:     { fontSize: 11, fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: 7 },
-    inpBox:       { backgroundColor: '#F8FAFC', borderRadius: 12, padding: 13, fontSize: 14, fontWeight: '600', color: '#0F172A', borderWidth: 1, borderColor: '#E2E8F0' },
+    inpBox:       { backgroundColor: '#F8FAFC', borderRadius: 12, padding: 13, fontSize: 14, fontWeight: '600', color: '#0E1A2E', borderWidth: 1, borderColor: '#E2E8F0' },
     inpHint:      { fontSize: 11, color: '#94A3B8', marginTop: 5 },
     toggleRow:    { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: '#F1F5F9', backgroundColor: '#F8FAFC', marginBottom: 10 },
     toggleIcon:   { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-    toggleLabel:  { fontSize: 14, fontWeight: '800', color: '#0F172A' },
+    toggleLabel:  { fontSize: 14, fontWeight: '800', color: '#0E1A2E' },
     toggleDesc:   { fontSize: 12, color: '#64748B', marginTop: 2 },
     catChip:      { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F1F5F9', borderWidth: 1.5, borderColor: '#E2E8F0', marginRight: 4 },
     catLabel:     { fontSize: 13, fontWeight: '700', color: '#475569' },
-    aiBtnRow:     { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center', backgroundColor: '#EDE9FE', padding: 12, borderRadius: 12, marginTop: 4 },
-    aiBtnFull:    { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center', backgroundColor: '#EDE9FE', padding: 14, borderRadius: 14, marginBottom: 14 },
-    aiBtnTxt:     { color: '#7C3AED', fontWeight: '800', fontSize: 13 },
-    imagePicker:  { height: 120, borderWidth: 2, borderColor: '#6366F1', borderStyle: 'dashed', borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EEF2FF', gap: 6 },
-    imagePickerTxt:{ color: '#6366F1', fontWeight: '700', fontSize: 14 },
+    aiBtnRow:     { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center', backgroundColor: '#FFFBEB', padding: 12, borderRadius: 12, marginTop: 4, borderWidth: 1, borderColor: '#FDE68A' },
+    aiBtnFull:    { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center', backgroundColor: '#FFFBEB', padding: 14, borderRadius: 14, marginBottom: 14, borderWidth: 1, borderColor: '#FDE68A' },
+    aiBtnTxt:     { color: '#B45309', fontWeight: '800', fontSize: 13 },
+    imagePicker:  { height: 120, borderWidth: 2, borderColor: '#D9A73A', borderStyle: 'dashed', borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFBEB', gap: 6 },
+    imagePickerTxt:{ color: '#B45309', fontWeight: '700', fontSize: 14 },
     imagePickerSub:{ color: '#94A3B8', fontSize: 12 },
     removeImgBtn: { position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 10, padding: 4 },
-    primaryBadge: { position: 'absolute', bottom: 4, left: 4, backgroundColor: '#6366F1', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2 },
+    primaryBadge: { position: 'absolute', bottom: 4, left: 4, backgroundColor: '#0E1A2E', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2, borderWidth: 1, borderColor: '#D9A73A' },
     addRowBtn:    { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10 },
-    addRowTxt:    { color: '#3B82F6', fontWeight: '700', fontSize: 14 },
+    addRowTxt:    { color: '#0E1A2E', fontWeight: '700', fontSize: 14 },
     deleteBtn:    { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FEF2F2', alignItems: 'center', justifyContent: 'center' },
     variantRow:   { borderRadius: 14, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: '#E2E8F0' },
     taxChip:      { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 12, borderWidth: 1.5, borderColor: '#E2E8F0', backgroundColor: '#F8FAFC' },
-    taxChipActive:{ backgroundColor: '#EEF2FF', borderColor: '#6366F1' },
+    taxChipActive:{ backgroundColor: '#FFFBEB', borderColor: '#D9A73A' },
     taxChipTxt:   { fontSize: 13, fontWeight: '700', color: '#64748B', textTransform: 'capitalize' },
-    taxChipTxtActive: { color: '#4F46E5' },
+    taxChipTxtActive: { color: '#B45309' },
     vendorPicker: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#F8FAFC', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#E2E8F0' },
     vendorAvatar: { width: 44, height: 44, borderRadius: 12 },
-    vendorName:   { fontSize: 14, fontWeight: '700', color: '#0F172A' },
+    vendorName:   { fontSize: 14, fontWeight: '700', color: '#0E1A2E' },
     vendorEmail:  { fontSize: 12, color: '#94A3B8', marginTop: 2 },
     vendorSearchRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 14, paddingHorizontal: 14, height: 46, borderWidth: 1, borderColor: '#E2E8F0' },
     vendorItem:   { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 8, borderBottomWidth: 1, borderColor: '#F1F5F9', borderRadius: 12 },
     roleBadge:    { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
     loadingOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,0.88)', alignItems: 'center', justifyContent: 'center' },
     loadingBox:   { alignItems: 'center', gap: 12 },
-    loadingTxt:   { fontSize: 15, fontWeight: '700', color: '#6366F1' },
+    loadingTxt:   { fontSize: 15, fontWeight: '700', color: '#0E1A2E' },
 });

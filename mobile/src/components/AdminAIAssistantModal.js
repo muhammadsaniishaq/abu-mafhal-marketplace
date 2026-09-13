@@ -24,10 +24,11 @@ import { AdminAIService, fetchAdminPlatformContext } from '../services/adminAISe
 const { width: SW } = Dimensions.get('window');
 
 // ── Theme ────────────────────────────────
-const ACCENT = '#3B82F6';
+const ACCENT = '#0E1A2E';
+const GOLD = '#D9A73A';
 const GRAD = ['#FFFFFF', '#F8FAFC'];
 const BORDER = '#E2E8F0';
-const TEXT_MAIN = '#0F172A';
+const TEXT_MAIN = '#0E1A2E';
 const TEXT_MUTED = '#64748B';
 const SK = 'admin_ai_chat_v2'; // Changed key to reset history for new UI
 const MAX_CHARS = 600;

@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, TextInput, ScrollView, Image, ActivityIndicator, Platform, Dimensions, FlatList, Alert } from 'react-native';
+import { 
+    View, Text, TouchableOpacity, TextInput, ScrollView, Image, 
+    ActivityIndicator, Platform, Dimensions, FlatList, Alert, StyleSheet, RefreshControl 
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../../lib/supabase';
@@ -9,6 +12,8 @@ import { Toast } from '../../components/Toast';
 import { geminiService } from '../../services/geminiService';
 
 const { width } = Dimensions.get('window');
+const NAVY = '#0E1A2E';
+const GOLD = '#D9A73A';
 
 // Simple Modal for Product Search
 const SearchModal = ({ visible, onClose, onSearch, results, onSelect }) => {
@@ -21,43 +26,53 @@ const SearchModal = ({ visible, onClose, onSearch, results, onSelect }) => {
     if (!visible) return null;
 
     return (
-        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 100, justifyContent: 'center', padding: 20 }}>
-            <View style={{ backgroundColor: 'white', borderRadius: 24, padding: 20, maxHeight: '80%' }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                    <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A' }}>Select Linked Product</Text>
-                    <TouchableOpacity onPress={onClose}>
-                        <Ionicons name="close" size={24} color="#64748B" />
+        <View style={s.modalOverlay}>
+            <View style={s.modalCard}>
+                <View style={s.modalHeader}>
+                    <View>
+                        <Text style={s.modalTitle}>Zaɓi Kayan Da Ake Talla (Product)</Text>
+                        <Text style={s.modalSub}>Zaɓi kaya domin a danganta shi da wannan banner ɗin</Text>
+                    </View>
+                    <TouchableOpacity onPress={onClose} style={s.iconButton}>
+                        <Ionicons name="close" size={22} color={NAVY} />
                     </TouchableOpacity>
                 </View>
 
-                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 16 }}>
+                <View style={s.searchBar}>
                     <Ionicons name="search" size={20} color="#94A3B8" />
                     <TextInput
-                        placeholder="Search products..."
+                        placeholder="Nemi suna ko lambar kaya..."
+                        placeholderTextColor="#94A3B8"
                         value={query}
                         onChangeText={(t) => { setQuery(t); onSearch(t); }}
-                        style={{ flex: 1, marginLeft: 10, fontSize: 16, color: '#0F172A' }}
+                        style={s.searchInput}
                         autoFocus
                     />
                 </View>
 
-                <ScrollView contentContainerStyle={{ gap: 12 }}>
+                <ScrollView contentContainerStyle={{ gap: 10, paddingBottom: 20 }}>
                     {results.length === 0 ? (
-                        <Text style={{ textAlign: 'center', color: '#94A3B8', marginTop: 20 }}>No products found</Text>
+                        <View style={{ padding: 30, alignItems: 'center' }}>
+                            <Ionicons name="cube-outline" size={40} color="#CBD5E1" />
+                            <Text style={{ textAlign: 'center', color: '#94A3B8', marginTop: 10, fontSize: 13, fontWeight: '600' }}>
+                                Babu kayan da aka samu. Rubuta kalmar nema a sama.
+                            </Text>
+                        </View>
                     ) : (
                         results.map(item => (
                             <TouchableOpacity
                                 key={item.id}
                                 onPress={() => { onSelect(item); onClose(); }}
-                                style={{ flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: '#FFF', borderRadius: 12, borderWidth: 1, borderColor: '#F1F5F9' }}
+                                style={s.searchResultItem}
+                                activeOpacity={0.8}
                             >
-                                <Image source={{ uri: item.image || 'https://placehold.co/100' }} style={{ width: 48, height: 48, borderRadius: 8, marginRight: 12 }} />
+                                <Image source={{ uri: item.image || 'https://placehold.co/100' }} style={s.productThumb} />
                                 <View style={{ flex: 1 }}>
-                                    <Text style={{ fontWeight: '700', color: '#0F172A', fontSize: 15 }} numberOfLines={1}>{item.title}</Text>
-                                    <Text style={{ color: '#64748B', fontSize: 13, marginTop: 2 }}>{item.subtitle}</Text>
+                                    <Text style={s.productTitle} numberOfLines={1}>{item.title}</Text>
+                                    <Text style={s.productPrice}>₦{Number(item.price || 0).toLocaleString()}</Text>
                                 </View>
-                                <View style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 }}>
-                                    <Text style={{ color: '#3B82F6', fontWeight: '700', fontSize: 12 }}>Select</Text>
+                                <View style={s.selectBadge}>
+                                    <Text style={s.selectBadgeText}>Zaɓa</Text>
                                 </View>
                             </TouchableOpacity>
                         ))
@@ -79,11 +94,12 @@ export const AdminPromoBanners = () => {
         image_url: '',
         is_active: true,
         linkData: { text: '', timerEnd: '', productId: '', productName: '', locations: ['home'], discountType: 'percent', discountValue: '' },
-        tempBase64: '' // Added for AI analysis
+        tempBase64: ''
     };
     const [promoBanner, setPromoBanner] = useState(initialPromoState);
 
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [uploadingBanner, setUploadingBanner] = useState(false);
     const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
     const [showDatePicker, setShowDatePicker] = useState(false);
@@ -101,43 +117,77 @@ export const AdminPromoBanners = () => {
 
     const fetchData = useCallback(async () => {
         setLoading(true);
-        const { data: pData } = await supabase.from('banners').select('*').eq('section', 'promo').order('created_at', { ascending: false });
-        if (pData) {
-            const formatted = pData.map(b => {
-                let linkData = { text: '', timerEnd: '', productId: '', productName: '', locations: ['home'] };
-                try {
-                    if (b.action_link) {
-                        const parsed = JSON.parse(b.action_link);
-                        linkData = {
-                            ...linkData,
-                            ...parsed,
-                            locations: parsed.locations || ['home'],
-                            discountType: parsed.discountType || 'percent',
-                            discountValue: parsed.discountValue || ''
-                        };
+        try {
+            const { data: pData, error } = await supabase
+                .from('banners')
+                .select('*')
+                .eq('section', 'promo')
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+
+            if (pData) {
+                const formatted = pData.map(b => {
+                    let linkData = { text: '', timerEnd: '', productId: '', productName: '', locations: ['home'] };
+                    try {
+                        if (b.action_link) {
+                            const parsed = JSON.parse(b.action_link);
+                            linkData = {
+                                ...linkData,
+                                ...parsed,
+                                locations: parsed.locations || ['home'],
+                                discountType: parsed.discountType || 'percent',
+                                discountValue: parsed.discountValue || ''
+                            };
+                        }
+                    } catch (e) {
+                        // Action link was plain text
+                        linkData.text = b.action_link || '';
                     }
-                } catch (e) { console.warn("Failed to parse link data"); }
-                return { ...b, linkData };
-            });
-            setBanners(formatted);
-        } else {
-            setBanners([]);
+                    return { ...b, linkData };
+                });
+                setBanners(formatted);
+            } else {
+                setBanners([]);
+            }
+        } catch (err) {
+            console.warn('Fetch promo banners error:', err.message);
+            showToast(err.message, 'error');
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
         }
-        setLoading(false);
     }, []);
 
     useEffect(() => {
         fetchData();
     }, [fetchData]);
 
+    const onRefresh = () => {
+        setRefreshing(true);
+        fetchData();
+    };
+
     const handleSavePromo = async () => {
+        if (!promoBanner.image_url) {
+            Alert.alert('Kuskure', 'Dole ne a sa hoton banner.');
+            return;
+        }
+
         setLoading(true);
         const linkDataToSave = { ...promoBanner.linkData };
         const stringifiedLink = JSON.stringify(linkDataToSave);
-        const payload = { ...promoBanner, action_link: stringifiedLink, section: 'promo' };
+        const payload = { 
+            ...promoBanner, 
+            action_link: stringifiedLink, 
+            section: 'promo',
+            title: promoBanner.title || '',
+            subtitle: promoBanner.subtitle || '',
+            is_active: promoBanner.is_active ?? true
+        };
 
         delete payload.linkData;
-        delete payload.tempBase64; // Don't save base64 to DB
+        delete payload.tempBase64;
         delete payload.link;
 
         if (!payload.id) {
@@ -150,24 +200,24 @@ export const AdminPromoBanners = () => {
         if (error) {
             showToast(error.message, 'error');
         } else {
-            showToast('Promo banner saved successfully!', 'success');
+            showToast('An yi nasarar adana Promo Banner!', 'success');
             setIsEditing(false);
             fetchData();
         }
     };
 
     const handleDelete = (id) => {
-        Alert.alert('Delete Promo Banner', 'Are you sure you want to delete this promo banner? This action cannot be undone.', [
-            { text: 'Cancel', style: 'cancel' },
+        Alert.alert('Goge Promo Banner', 'Shin da gaske kana son goge wannan tallan? Ba za a iya dawo da shi ba.', [
+            { text: 'A\'a', style: 'cancel' },
             {
-                text: 'Delete',
+                text: 'Eh, Goge',
                 style: 'destructive',
                 onPress: async () => {
                     const { error } = await supabase.from('banners').delete().eq('id', id);
                     if (error) {
                         showToast(error.message, 'error');
                     } else {
-                        showToast('Banner deleted successfully', 'success');
+                        showToast('An goge banner cikin nasara', 'success');
                         fetchData();
                     }
                 }
@@ -187,11 +237,17 @@ export const AdminPromoBanners = () => {
 
     const handlePickBannerImage = async () => {
         try {
+            const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!permission.granted) {
+                Alert.alert('Izini', 'Ana bukatar izini don shiga gallery.');
+                return;
+            }
+
             const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: 'images',
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
                 allowsEditing: true,
                 aspect: [21, 9],
-                quality: 0.8,
+                quality: 0.85,
                 base64: true,
             });
 
@@ -199,52 +255,78 @@ export const AdminPromoBanners = () => {
                 const asset = result.assets[0];
                 setUploadingBanner(true);
 
-                const fileName = `promo_banner_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
-                const filePath = `${fileName}`;
+                const fileName = `promo_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+                const fileData = decode(asset.base64);
 
-                const { error: uploadError } = await supabase.storage
-                    .from('products') // using existing products bucket
-                    .upload(filePath, decode(asset.base64), {
+                let uploadRes = await supabase.storage
+                    .from('banners')
+                    .upload(fileName, fileData, {
                         contentType: 'image/jpeg',
                         upsert: true
                     });
 
-                if (uploadError) {
-                    showToast('Failed to upload image.', 'error');
+                let bucketUsed = 'banners';
+                if (uploadRes.error) {
+                    uploadRes = await supabase.storage
+                        .from('products')
+                        .upload(fileName, fileData, {
+                            contentType: 'image/jpeg',
+                            upsert: true
+                        });
+                    bucketUsed = 'products';
+                }
+
+                if (uploadRes.error) {
+                    showToast('An gaza loda hoto: ' + uploadRes.error.message, 'error');
                     setUploadingBanner(false);
                     return;
                 }
 
                 const { data: { publicUrl } } = supabase.storage
-                    .from('products')
-                    .getPublicUrl(filePath);
+                    .from(bucketUsed)
+                    .getPublicUrl(fileName);
 
                 setPromoBanner(prev => ({ ...prev, image_url: publicUrl, tempBase64: asset.base64 }));
                 setUploadingBanner(false);
-                showToast('Image uploaded successfully! Remember to save.', 'success');
+                showToast('An loda hoto cikin nasara!', 'success');
             }
         } catch (error) {
-            showToast('Error selecting image', 'error');
+            showToast('Kuskuren zaben hoto', 'error');
             setUploadingBanner(false);
         }
     };
 
     const performProductSearch = async (query) => {
         try {
-            const { data } = await supabase.from('products').select('*').eq('status', 'approved').ilike('name', `%${query}%`).limit(10);
-            const formatted = data?.map(p => ({ ...p, title: p.name, subtitle: `₦${p.price}`, image: p.images?.[0] })) || [];
+            const { data } = await supabase
+                .from('products')
+                .select('*')
+                .ilike('name', `%${query}%`)
+                .limit(10);
+                
+            const formatted = data?.map(p => ({ 
+                ...p, 
+                title: p.name, 
+                price: p.price, 
+                image: Array.isArray(p.images) ? p.images[0] : p.images 
+            })) || [];
+            
             setSearchResults(formatted);
         } catch (e) {
-            showToast('Search error', 'error');
+            showToast('Kuskuren bincike', 'error');
         }
     };
 
     const handleSelectProduct = (product) => {
         setPromoBanner(prev => ({
             ...prev,
-            linkData: { ...Object(prev.linkData), productId: product.id, productName: product.title }
+            linkData: { 
+                ...Object(prev.linkData), 
+                productId: product.id, 
+                productName: product.title 
+            }
         }));
-        showToast('Product linked', 'success');
+        showToast('An danganta kaya: ' + product.title, 'success');
     };
 
     const toggleLocation = (loc) => {
@@ -278,68 +360,92 @@ export const AdminPromoBanners = () => {
                         text: result.buttonText || prev.linkData?.text
                     }
                 }));
-                showToast('AI copy generated!', 'success');
+                showToast('Gemini AI ta samar da kyakkyawan take!', 'success');
             } else {
-                showToast('AI failed to generate copy.', 'error');
+                showToast('AI ba ta iya kirkirar take a yanzu ba.', 'error');
             }
         } catch (e) {
             console.error("AI Error:", e);
-            showToast('AI Error', 'error');
+            showToast('Kuskuren AI: ' + e.message, 'error');
         } finally {
             setGeneratingAI(false);
         }
     };
 
     const renderBannerCard = ({ item }) => (
-        <View style={{ backgroundColor: 'white', borderRadius: 20, marginBottom: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.05)' }}>
-            <View style={{ height: 120, backgroundColor: '#0F172A', position: 'relative' }}>
-                <Image source={{ uri: item.image_url || 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?q=80&w=2670&auto=format&fit=crop' }} style={{ width: '100%', height: '100%', opacity: 0.5 }} />
-                <View style={{ position: 'absolute', top: 12, left: 12, backgroundColor: item.is_active ? '#10B981' : '#64748B', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
-                    <Text style={{ color: 'white', fontWeight: '800', fontSize: 10, letterSpacing: 0.5 }}>{item.is_active ? 'ACTIVE' : 'INACTIVE'}</Text>
+        <View style={s.bannerCard}>
+            <View style={s.bannerHero}>
+                <Image 
+                    source={{ uri: item.image_url || 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?q=80&w=2670&auto=format&fit=crop' }} 
+                    style={s.bannerBgImage} 
+                />
+                <View style={s.bannerHeroOverlay} />
+                
+                <View style={[s.statusChip, { backgroundColor: item.is_active ? '#059669' : '#64748B' }]}>
+                    <Text style={s.statusChipText}>{item.is_active ? 'ACTIVE' : 'INACTIVE'}</Text>
                 </View>
-                <View style={{ position: 'absolute', bottom: 12, left: 16 }}>
-                    <Text style={{ color: 'white', fontWeight: '900', fontSize: 20 }} numberOfLines={1}>{item.title || 'Untitled Promo'}</Text>
-                    <Text style={{ color: '#EF4444', fontWeight: '800', fontSize: 12 }}>{item.subtitle || 'NO SUBTITLE'}</Text>
+
+                <View style={s.bannerTitles}>
+                    {item.subtitle ? (
+                        <View style={s.redBadge}>
+                            <Text style={s.redBadgeText}>{item.subtitle.toUpperCase()}</Text>
+                        </View>
+                    ) : null}
+                    <Text style={s.bannerTitleText} numberOfLines={2}>
+                        {item.title || 'Untitled Promo'}
+                    </Text>
                 </View>
             </View>
 
-            <View style={{ padding: 16 }}>
-                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+            <View style={s.bannerDetails}>
+                <View style={s.tagsRow}>
                     {(item.linkData?.locations || []).map(loc => (
-                        <View key={loc} style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
-                            <Text style={{ color: '#3B82F6', fontWeight: '700', fontSize: 10, textTransform: 'uppercase' }}>{loc}</Text>
+                        <View key={loc} style={s.locTag}>
+                            <Text style={s.locTagText}>{loc}</Text>
                         </View>
                     ))}
                     {item.linkData?.productId && (
-                        <View style={{ backgroundColor: '#FCF5FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                            <Ionicons name="link" size={10} color="#9333EA" />
-                            <Text style={{ color: '#9333EA', fontWeight: '700', fontSize: 10 }}>PRODUCT LINKED</Text>
+                        <View style={s.productLinkedTag}>
+                            <Ionicons name="link" size={12} color="#7C3AED" />
+                            <Text style={s.productLinkedText}>
+                                {item.linkData?.productName || 'PRODUCT LINKED'}
+                            </Text>
                         </View>
                     )}
                     {item.linkData?.timerEnd && (
-                        <View style={{ backgroundColor: '#FFFBEB', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                            <Ionicons name="time" size={10} color="#D97706" />
-                            <Text style={{ color: '#D97706', fontWeight: '700', fontSize: 10 }}>TIMER ACTIVE</Text>
+                        <View style={s.timerTag}>
+                            <Ionicons name="time" size={12} color="#D97706" />
+                            <Text style={s.timerTagText}>
+                                {new Date(item.linkData.timerEnd).toLocaleDateString()}
+                            </Text>
                         </View>
                     )}
                     {item.linkData?.discountValue ? (
-                        <View style={{ backgroundColor: '#F0FDF4', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                            <Ionicons name="pricetag" size={10} color="#16A34A" />
-                            <Text style={{ color: '#16A34A', fontWeight: '700', fontSize: 10 }}>
-                                {item.linkData.discountValue}{item.linkData.discountType === 'percent' ? '%' : '₦'} OFF
+                        <View style={s.discountTag}>
+                            <Ionicons name="pricetag" size={12} color="#16A34A" />
+                            <Text style={s.discountTagText}>
+                                {item.linkData.discountValue}{item.linkData.discountType === 'percent' ? '%' : '₦'} RANGWAME
                             </Text>
                         </View>
                     ) : null}
                 </View>
 
-                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 12 }}>
-                    <TouchableOpacity onPress={() => handleEdit(item)} style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Ionicons name="pencil" size={14} color="#0F172A" />
-                        <Text style={{ fontWeight: '700', color: '#0F172A', fontSize: 13 }}>Edit</Text>
+                <View style={s.cardActionsRow}>
+                    <TouchableOpacity 
+                        onPress={() => handleEdit(item)} 
+                        style={s.editActionBtn}
+                        activeOpacity={0.8}
+                    >
+                        <Ionicons name="create-outline" size={16} color={NAVY} />
+                        <Text style={s.editActionText}>Gyara</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => handleDelete(item.id)} style={{ backgroundColor: '#FEF2F2', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Ionicons name="trash" size={14} color="#EF4444" />
-                        <Text style={{ fontWeight: '700', color: '#EF4444', fontSize: 13 }}>Delete</Text>
+                    <TouchableOpacity 
+                        onPress={() => handleDelete(item.id)} 
+                        style={s.deleteActionBtn}
+                        activeOpacity={0.8}
+                    >
+                        <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                        <Text style={s.deleteActionText}>Goge</Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -348,52 +454,58 @@ export const AdminPromoBanners = () => {
 
     if (isEditing) {
         return (
-            <ScrollView style={{ flex: 1, backgroundColor: '#F8FAFC' }} contentContainerStyle={{ padding: 20, paddingBottom: 100 }}>
+            <ScrollView style={s.container} contentContainerStyle={{ padding: 20, paddingBottom: 100 }}>
                 <Toast visible={toast.visible} message={toast.message} type={toast.type} onHide={() => setToast(prev => ({ ...prev, visible: false }))} />
 
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+                {/* Edit Header */}
+                <View style={s.editHeader}>
                     <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 24, fontWeight: '900', color: '#0F172A', marginBottom: 4 }}>{promoBanner.id ? 'Edit Promo' : 'New Promo'}</Text>
-                        <Text style={{ fontSize: 14, color: '#64748B' }}>Configure this promo banner's details.</Text>
+                        <Text style={s.editTitle}>{promoBanner.id ? 'Gyara Promo Banner' : 'Sabuwar Promo Banner'}</Text>
+                        <Text style={s.editSub}>Sanya cikakken tallan countdown da kayan da za a saya</Text>
                     </View>
                     <View style={{ flexDirection: 'row', gap: 10 }}>
                         <TouchableOpacity
                             onPress={handleAIGenerate}
                             disabled={generatingAI}
-                            style={{ backgroundColor: '#F0FDF4', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: '#16A34A' }}
+                            style={s.aiButton}
+                            activeOpacity={0.8}
                         >
-                            {generatingAI ? <ActivityIndicator size="small" color="#16A34A" /> : <Ionicons name="sparkles" size={16} color="#16A34A" />}
-                            <Text style={{ fontWeight: '800', color: '#16A34A', fontSize: 13 }}>AI Copy</Text>
+                            {generatingAI ? (
+                                <ActivityIndicator size="small" color={GOLD} />
+                            ) : (
+                                <>
+                                    <Ionicons name="sparkles" size={16} color={GOLD} />
+                                    <Text style={s.aiButtonText}>AI Rubutu</Text>
+                                </>
+                            )}
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={() => setIsEditing(false)} style={{ backgroundColor: '#F1F5F9', padding: 10, borderRadius: 20 }}>
-                            <Ionicons name="close" size={24} color="#64748B" />
+                        <TouchableOpacity onPress={() => setIsEditing(false)} style={s.closeEditBtn}>
+                            <Ionicons name="close" size={22} color={NAVY} />
                         </TouchableOpacity>
                     </View>
                 </View>
 
-                <View style={{ backgroundColor: 'white', padding: 20, borderRadius: 24, marginBottom: 24, borderWidth: 1, borderColor: '#F1F5F9', boxShadow: '0px 4px 10px rgba(0,0,0,0.05)' }}>
+                <View style={s.formCard}>
                     {/* Status Toggle */}
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                        <Text style={{ fontWeight: '800', fontSize: 16, color: '#0F172A' }}>Banner Status</Text>
+                    <View style={s.statusToggleRow}>
+                        <Text style={s.formSectionTitle}>Matsayin Banner (Status)</Text>
                         <TouchableOpacity
                             onPress={() => setPromoBanner(prev => ({ ...prev, is_active: !prev.is_active }))}
-                            style={{
-                                paddingHorizontal: 16, paddingVertical: 8, borderRadius: 24,
-                                backgroundColor: promoBanner.is_active ? '#ECFDF5' : '#F1F5F9',
-                                borderWidth: 1, borderColor: promoBanner.is_active ? '#10B981' : '#E2E8F0',
-                                flexDirection: 'row', alignItems: 'center', gap: 6
-                            }}
+                            style={[
+                                s.statusToggleButton,
+                                { backgroundColor: promoBanner.is_active ? '#ECFDF5' : '#F1F5F9', borderColor: promoBanner.is_active ? '#10B981' : '#CBD5E1' }
+                            ]}
                         >
                             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: promoBanner.is_active ? '#10B981' : '#94A3B8' }} />
-                            <Text style={{ fontSize: 13, fontWeight: '700', color: promoBanner.is_active ? '#10B981' : '#64748B' }}>
-                                {promoBanner.is_active ? 'Active Globally' : 'Hidden'}
+                            <Text style={{ fontSize: 12, fontWeight: '800', color: promoBanner.is_active ? '#059669' : '#64748B' }}>
+                                {promoBanner.is_active ? 'A KASUWA (Active)' : 'A BOYE (Hidden)'}
                             </Text>
                         </TouchableOpacity>
                     </View>
 
                     {/* Display Locations Checkboxes */}
                     <View style={{ marginBottom: 20 }}>
-                        <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748B', marginBottom: 12, marginLeft: 4 }}>DISPLAY LOCATIONS</Text>
+                        <Text style={s.inputLabel}>SHAFUKAN DA ZAI FITO (DISPLAY LOCATIONS)</Text>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                             {['home', 'shop', 'landing'].map(loc => {
                                 const isSelected = promoBanner.linkData?.locations?.includes(loc);
@@ -401,207 +513,259 @@ export const AdminPromoBanners = () => {
                                     <TouchableOpacity
                                         key={loc}
                                         onPress={() => toggleLocation(loc)}
-                                        style={{
-                                            flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12,
-                                            backgroundColor: isSelected ? '#EFF6FF' : '#F8FAFC',
-                                            borderWidth: 1, borderColor: isSelected ? '#3B82F6' : '#E2E8F0'
-                                        }}
+                                        style={[
+                                            s.locationChip,
+                                            isSelected && s.locationChipActive
+                                        ]}
                                     >
-                                        <View style={{ width: 18, height: 18, borderRadius: 6, backgroundColor: isSelected ? '#3B82F6' : 'white', borderWidth: isSelected ? 0 : 2, borderColor: '#CBD5E1', alignItems: 'center', justifyContent: 'center' }}>
-                                            {isSelected && <Ionicons name="checkmark" size={12} color="white" />}
+                                        <View style={[s.checkboxSquare, isSelected && s.checkboxSquareActive]}>
+                                            {isSelected && <Ionicons name="checkmark" size={12} color={NAVY} />}
                                         </View>
-                                        <Text style={{ fontSize: 13, fontWeight: '700', color: isSelected ? '#1D4ED8' : '#64748B', textTransform: 'capitalize' }}>
-                                            {loc === 'home' ? 'Home Page' : loc === 'landing' ? 'Landing Page' : loc}
+                                        <Text style={[s.locationChipText, isSelected && s.locationChipTextActive]}>
+                                            {loc === 'home' ? 'Fuskar Gida (Home)' : loc === 'landing' ? 'Landing Page' : 'Kasuwa (Shop)'}
                                         </Text>
                                     </TouchableOpacity>
-                                )
+                                );
                             })}
                         </View>
                     </View>
 
-                    <View style={{ gap: 16 }}>
-                        {/* Background Image */}
-                        <View>
-                            <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748B', marginBottom: 8, marginLeft: 4 }}>BANNER BACKGROUND</Text>
-                            {promoBanner.image_url ? (
-                                <View style={{ borderRadius: 16, overflow: 'hidden', height: 140, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#F8FAFC' }}>
-                                    <Image source={{ uri: promoBanner.image_url }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
-                                    <TouchableOpacity
-                                        style={{ position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6 }}
-                                        onPress={handlePickBannerImage}
-                                        disabled={uploadingBanner}
-                                    >
-                                        {uploadingBanner ? <ActivityIndicator size="small" color="#FFF" /> : <Ionicons name="camera" size={16} color="white" />}
-                                        <Text style={{ color: 'white', fontWeight: '800', fontSize: 13 }}>{uploadingBanner ? 'Uploading...' : 'Change'}</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            ) : (
+                    {/* Background Image Upload */}
+                    <View style={{ marginBottom: 20 }}>
+                        <Text style={s.inputLabel}>HOTON BANNER (BACKGROUND IMAGE)</Text>
+                        {promoBanner.image_url ? (
+                            <View style={s.imagePreviewBox}>
+                                <Image source={{ uri: promoBanner.image_url }} style={s.imagePreview} />
                                 <TouchableOpacity
-                                    style={{ height: 140, borderRadius: 16, borderWidth: 2, borderColor: '#E2E8F0', borderStyle: 'dashed', backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center' }}
+                                    style={s.imageChangeOverlay}
                                     onPress={handlePickBannerImage}
                                     disabled={uploadingBanner}
                                 >
                                     {uploadingBanner ? (
-                                        <ActivityIndicator size="large" color="#3B82F6" />
+                                        <ActivityIndicator size="small" color="#FFF" />
                                     ) : (
                                         <>
-                                            <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
-                                                <Ionicons name="cloud-upload" size={24} color="#3B82F6" />
-                                            </View>
-                                            <Text style={{ color: '#0F172A', fontWeight: '800', fontSize: 15 }}>Upload Banner Image</Text>
-                                            <Text style={{ color: '#64748B', fontSize: 13, marginTop: 4 }}>Landscape ratio recommended</Text>
+                                            <Ionicons name="camera" size={16} color="#FFF" />
+                                            <Text style={s.imageChangeText}>Canza Hoto</Text>
                                         </>
                                     )}
                                 </TouchableOpacity>
+                            </View>
+                        ) : (
+                            <TouchableOpacity
+                                style={s.imageUploadDashed}
+                                onPress={handlePickBannerImage}
+                                disabled={uploadingBanner}
+                                activeOpacity={0.8}
+                            >
+                                {uploadingBanner ? (
+                                    <ActivityIndicator size="large" color={GOLD} />
+                                ) : (
+                                    <>
+                                        <View style={s.uploadIconBg}>
+                                            <Ionicons name="cloud-upload" size={28} color={GOLD} />
+                                        </View>
+                                        <Text style={s.uploadPrimaryText}>Loda Hoton Banner</Text>
+                                        <Text style={s.uploadSubText}>Hoton mai fadi (21:9 ko 16:9)</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        )}
+                    </View>
+
+                    {/* Textiles */}
+                    <View style={{ gap: 16 }}>
+                        <View>
+                            <Text style={s.inputLabel}>BABBAN TAKE (MAIN HEADLINE)</Text>
+                            <TextInput
+                                placeholder="Misali: Sabon Rangwamen Karshen Wata 50% Kasuwanci"
+                                placeholderTextColor="#94A3B8"
+                                value={promoBanner.title}
+                                onChangeText={t => setPromoBanner(p => ({ ...p, title: t }))}
+                                style={s.formTextInput}
+                            />
+                            {aiSuggestions?.title && (
+                                <Text style={s.aiSuggestionBadge}>AI Suggestion: {aiSuggestions.title}</Text>
                             )}
                         </View>
 
-                        {/* Textiles */}
                         <View>
-                            <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748B', marginBottom: 8, marginLeft: 4 }}>MAIN TITLE</Text>
+                            <Text style={s.inputLabel}>KARAMIN TAKE (RED BADGE NOTIFICATION)</Text>
                             <TextInput
-                                placeholder="e.g. End of Year Clearance 70% Off"
-                                value={promoBanner.title}
-                                onChangeText={t => setPromoBanner(p => ({ ...p, title: t }))}
-                                style={{ backgroundColor: '#F8FAFC', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', color: '#0F172A', fontWeight: '500' }}
-                            />
-                            {aiSuggestions?.title && (
-                                <Text style={{ fontSize: 11, color: '#10B981', marginTop: 4, marginLeft: 4, fontWeight: '700' }}>AI Suggestion: {aiSuggestions.title}</Text>
-                            )}
-                            <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 4, marginLeft: 4 }}>Wannan shine babban rubutun da zai fito a tsakiyar banner. Misali: "HOT DEALS".</Text>
-                        </View>
-                        <View>
-                            <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748B', marginBottom: 8, marginLeft: 4 }}>SUBTITLE NOTIFICATION (The RED badge)</Text>
-                            <TextInput
-                                placeholder="e.g. FLASH SALE"
+                                placeholder="Misali: FLASH SALE ko LIMITED OFFER"
+                                placeholderTextColor="#94A3B8"
                                 value={promoBanner.subtitle}
                                 onChangeText={t => setPromoBanner(p => ({ ...p, subtitle: t }))}
-                                style={{ backgroundColor: '#F8FAFC', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', color: '#0F172A', fontWeight: '500' }}
+                                style={s.formTextInput}
                             />
                             {aiSuggestions?.subtitle && (
-                                <Text style={{ fontSize: 11, color: '#10B981', marginTop: 4, marginLeft: 4, fontWeight: '700' }}>AI Suggestion: {aiSuggestions.subtitle}</Text>
+                                <Text style={s.aiSuggestionBadge}>AI Suggestion: {aiSuggestions.subtitle}</Text>
                             )}
-                            <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 4, marginLeft: 4 }}>Rubutu ne karami wanda yake fitowa a cikin ja. Misali: "LIMITED OFFER".</Text>
                         </View>
+
                         <View>
-                            <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748B', marginBottom: 8, marginLeft: 4 }}>BUTTON TEXT</Text>
+                            <Text style={s.inputLabel}>RUBUTUN MABALLI (BUTTON CALL-TO-ACTION)</Text>
                             <TextInput
-                                placeholder="e.g. Grab it before it's gone"
+                                placeholder="Misali: SAYE YANZU KAFIN YA KARE"
+                                placeholderTextColor="#94A3B8"
                                 value={promoBanner.linkData?.text}
                                 onChangeText={t => setPromoBanner(p => ({ ...p, linkData: { ...Object(p.linkData), text: t } }))}
-                                style={{ backgroundColor: '#F8FAFC', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', color: '#0F172A', fontWeight: '500' }}
+                                style={s.formTextInput}
                             />
                             {aiSuggestions?.buttonText && (
-                                <Text style={{ fontSize: 11, color: '#10B981', marginTop: 4, marginLeft: 4, fontWeight: '700' }}>AI Suggestion: {aiSuggestions.buttonText}</Text>
+                                <Text style={s.aiSuggestionBadge}>AI Suggestion: {aiSuggestions.buttonText}</Text>
                             )}
-                            <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 4, marginLeft: 4 }}>Rubutun da zai fito a kasan banner domin kwadaitar da mutane su shiga. Misali: "SAYE YANZU".</Text>
                         </View>
+
                         {aiSuggestions?.notification && (
-                            <View style={{ backgroundColor: '#F0FDFA', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#5EEAD4' }}>
-                                <Text style={{ fontSize: 12, color: '#0D9488', fontWeight: '800', marginBottom: 4 }}>AI SUGGESTED NOTIFICATION:</Text>
-                                <Text style={{ fontSize: 13, color: '#115E59' }}>{aiSuggestions.notification}</Text>
+                            <View style={s.aiNotifCard}>
+                                <Text style={s.aiNotifTitle}>AI SANARWAR KWADAITARWA:</Text>
+                                <Text style={s.aiNotifText}>{aiSuggestions.notification}</Text>
                             </View>
                         )}
 
                         {/* Timer & Product Link */}
                         <View style={{ flexDirection: 'row', gap: 12 }}>
+                            {/* Date Picker */}
                             <View style={{ flex: 1 }}>
-                                <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748B', marginBottom: 8, marginLeft: 4 }}>COUNTDOWN END (Optional)</Text>
+                                <Text style={s.inputLabel}>KARSHE (COUNTDOWN DATE)</Text>
                                 <TouchableOpacity
                                     onPress={() => setShowDatePicker(true)}
-                                    style={{ backgroundColor: promoBanner.linkData?.timerEnd ? '#EFF6FF' : '#F8FAFC', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: promoBanner.linkData?.timerEnd ? '#BFE8FF' : '#E2E8F0', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+                                    style={[s.formPickerButton, promoBanner.linkData?.timerEnd && s.formPickerButtonActive]}
                                 >
-                                    <Text style={{ color: promoBanner.linkData?.timerEnd ? '#1D4ED8' : '#94A3B8', fontWeight: '600', fontSize: 14 }}>
-                                        {promoBanner.linkData?.timerEnd ? new Date(promoBanner.linkData.timerEnd).toLocaleDateString() : 'Select Date...'}
+                                    <Text style={[s.formPickerText, promoBanner.linkData?.timerEnd && s.formPickerTextActive]}>
+                                        {promoBanner.linkData?.timerEnd 
+                                            ? new Date(promoBanner.linkData.timerEnd).toLocaleDateString() 
+                                            : 'Zabi Rana...'}
                                     </Text>
                                     {promoBanner.linkData?.timerEnd ? (
-                                        <TouchableOpacity onPress={() => setPromoBanner(p => ({ ...p, linkData: { ...Object(p.linkData), timerEnd: null } }))} style={{ padding: 2 }}>
-                                            <Ionicons name="close-circle" size={18} color="#94A3B8" />
+                                        <TouchableOpacity 
+                                            onPress={() => setPromoBanner(p => ({ ...p, linkData: { ...Object(p.linkData), timerEnd: null } }))}
+                                        >
+                                            <Ionicons name="close-circle" size={18} color="#64748B" />
                                         </TouchableOpacity>
                                     ) : (
-                                        <Ionicons name="calendar" size={16} color="#94A3B8" />
+                                        <Ionicons name="calendar-outline" size={18} color="#64748B" />
                                     )}
                                 </TouchableOpacity>
-                                <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 4, marginLeft: 4 }}>Date timer stops.</Text>
+
+                                {showDatePicker && (
+                                    Platform.OS === 'web' ? (
+                                        <View style={{ marginTop: 8 }}>
+                                            <input 
+                                                type="date"
+                                                value={promoBanner.linkData?.timerEnd || ''}
+                                                onChange={(e) => {
+                                                    setPromoBanner(p => ({ ...p, linkData: { ...Object(p.linkData), timerEnd: e.target.value } }));
+                                                    setShowDatePicker(false);
+                                                }}
+                                                style={{
+                                                    padding: '10px',
+                                                    borderRadius: '8px',
+                                                    border: '1px solid #CBD5E1',
+                                                    backgroundColor: '#FFFFFF',
+                                                    color: '#0E1A2E',
+                                                    width: '100%'
+                                                }}
+                                            />
+                                        </View>
+                                    ) : (
+                                        <DateTimePicker
+                                            value={promoBanner.linkData?.timerEnd ? new Date(promoBanner.linkData.timerEnd) : new Date()}
+                                            mode="date"
+                                            display="default"
+                                            minimumDate={new Date()}
+                                            onChange={(event, selectedDate) => {
+                                                setShowDatePicker(Platform.OS === 'ios');
+                                                if (selectedDate) {
+                                                    const formattedDate = selectedDate.toISOString().split('T')[0];
+                                                    setPromoBanner(p => ({ ...p, linkData: { ...Object(p.linkData), timerEnd: formattedDate } }));
+                                                }
+                                            }}
+                                        />
+                                    )
+                                )}
                             </View>
 
-                            {showDatePicker && (
-                                <DateTimePicker
-                                    value={promoBanner.linkData?.timerEnd ? new Date(promoBanner.linkData.timerEnd) : new Date()}
-                                    mode="date"
-                                    display="default"
-                                    minimumDate={new Date()}
-                                    onChange={(event, selectedDate) => {
-                                        setShowDatePicker(Platform.OS === 'ios');
-                                        if (selectedDate) {
-                                            const formattedDate = selectedDate.toISOString().split('T')[0];
-                                            setPromoBanner(p => ({ ...p, linkData: { ...Object(p.linkData), timerEnd: formattedDate } }));
-                                        }
-                                    }}
-                                />
-                            )}
-
+                            {/* Product Search */}
                             <View style={{ flex: 1 }}>
-                                <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748B', marginBottom: 8, marginLeft: 4 }}>LINKED PRODUCT</Text>
+                                <Text style={s.inputLabel}>KAYAN DA AKA HADA (LINK)</Text>
                                 <TouchableOpacity
                                     onPress={() => setSearchModalVisible(true)}
-                                    style={{ backgroundColor: promoBanner.linkData?.productId ? '#EFF6FF' : '#F8FAFC', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: promoBanner.linkData?.productId ? '#BFE8FF' : '#E2E8F0', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+                                    style={[s.formPickerButton, promoBanner.linkData?.productId && s.formPickerButtonActive]}
                                 >
-                                    <Text style={{ color: promoBanner.linkData?.productId ? '#1D4ED8' : '#94A3B8', fontWeight: '600', fontSize: 14 }} numberOfLines={1}>
-                                        {promoBanner.linkData?.productName ? promoBanner.linkData.productName : promoBanner.linkData?.productId ? 'Product Selected' : 'Select Product'}
+                                    <Text style={[s.formPickerText, promoBanner.linkData?.productId && s.formPickerTextActive]} numberOfLines={1}>
+                                        {promoBanner.linkData?.productName || 'Zaɓi Kaya...'}
                                     </Text>
                                     {promoBanner.linkData?.productId ? (
-                                        <TouchableOpacity onPress={() => setPromoBanner(p => ({ ...p, linkData: { ...Object(p.linkData), productId: null, productName: null } }))} style={{ padding: 2 }}>
-                                            <Ionicons name="close-circle" size={18} color="#94A3B8" />
+                                        <TouchableOpacity 
+                                            onPress={() => setPromoBanner(p => ({ ...p, linkData: { ...Object(p.linkData), productId: null, productName: null } }))}
+                                        >
+                                            <Ionicons name="close-circle" size={18} color="#64748B" />
                                         </TouchableOpacity>
                                     ) : (
-                                        <Ionicons name="search" size={16} color="#94A3B8" />
+                                        <Ionicons name="search-outline" size={18} color="#64748B" />
                                     )}
                                 </TouchableOpacity>
                             </View>
                         </View>
 
                         {/* Discount Settings */}
-                        <View style={{ backgroundColor: '#F8FAFC', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                            <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A', marginBottom: 12 }}>PROMO DISCOUNT</Text>
+                        <View style={s.discountBox}>
+                            <Text style={s.discountBoxTitle}>RANGWAME (PROMO DISCOUNT)</Text>
 
-                            <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', marginBottom: 16 }}>
+                            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 14 }}>
                                 <TouchableOpacity
                                     onPress={() => setPromoBanner(p => ({ ...p, linkData: { ...Object(p.linkData), discountType: 'percent' } }))}
-                                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 12, backgroundColor: promoBanner.linkData?.discountType === 'percent' ? '#FFF' : 'transparent', borderWidth: 1, borderColor: promoBanner.linkData?.discountType === 'percent' ? '#3B82F6' : '#E2E8F0' }}
+                                    style={[s.discountTypeBtn, promoBanner.linkData?.discountType === 'percent' && s.discountTypeBtnActive]}
                                 >
-                                    <View style={{ width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: promoBanner.linkData?.discountType === 'percent' ? '#3B82F6' : '#CBD5E1', alignItems: 'center', justifyContent: 'center' }}>
-                                        {promoBanner.linkData?.discountType === 'percent' && <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#3B82F6' }} />}
-                                    </View>
-                                    <Text style={{ fontWeight: '700', color: '#0F172A' }}>Percentage (%)</Text>
+                                    <Ionicons 
+                                        name={promoBanner.linkData?.discountType === 'percent' ? "radio-button-on" : "radio-button-off"} 
+                                        size={18} 
+                                        color={promoBanner.linkData?.discountType === 'percent' ? NAVY : '#94A3B8'} 
+                                    />
+                                    <Text style={s.discountTypeLabel}>Kaso (Percentage %)</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
                                     onPress={() => setPromoBanner(p => ({ ...p, linkData: { ...Object(p.linkData), discountType: 'amount' } }))}
-                                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 12, backgroundColor: promoBanner.linkData?.discountType === 'amount' ? '#FFF' : 'transparent', borderWidth: 1, borderColor: promoBanner.linkData?.discountType === 'amount' ? '#3B82F6' : '#E2E8F0' }}
+                                    style={[s.discountTypeBtn, promoBanner.linkData?.discountType === 'amount' && s.discountTypeBtnActive]}
                                 >
-                                    <View style={{ width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: promoBanner.linkData?.discountType === 'amount' ? '#3B82F6' : '#CBD5E1', alignItems: 'center', justifyContent: 'center' }}>
-                                        {promoBanner.linkData?.discountType === 'amount' && <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#3B82F6' }} />}
-                                    </View>
-                                    <Text style={{ fontWeight: '700', color: '#0F172A' }}>Fixed (₦)</Text>
+                                    <Ionicons 
+                                        name={promoBanner.linkData?.discountType === 'amount' ? "radio-button-on" : "radio-button-off"} 
+                                        size={18} 
+                                        color={promoBanner.linkData?.discountType === 'amount' ? NAVY : '#94A3B8'} 
+                                    />
+                                    <Text style={s.discountTypeLabel}>Kudi Tsaye (Fixed ₦)</Text>
                                 </TouchableOpacity>
                             </View>
 
-                            <View>
-                                <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748B', marginBottom: 8 }}>DISCOUNT VALUE</Text>
-                                <TextInput
-                                    placeholder={promoBanner.linkData?.discountType === 'percent' ? "e.g. 50" : "e.g. 1000"}
-                                    value={promoBanner.linkData?.discountValue?.toString()}
-                                    onChangeText={t => setPromoBanner(p => ({ ...p, linkData: { ...Object(p.linkData), discountValue: t } }))}
-                                    keyboardType="numeric"
-                                    style={{ backgroundColor: '#FFF', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#3B82F6', color: '#0F172A', fontWeight: '800', fontSize: 16 }}
-                                />
-                                <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>Leave blank for no visual discount.</Text>
-                            </View>
+                            <Text style={s.inputLabel}>ADADIN RANGWAME</Text>
+                            <TextInput
+                                placeholder={promoBanner.linkData?.discountType === 'percent' ? "Misali: 25" : "Misali: 2000"}
+                                placeholderTextColor="#94A3B8"
+                                value={promoBanner.linkData?.discountValue?.toString()}
+                                onChangeText={t => setPromoBanner(p => ({ ...p, linkData: { ...Object(p.linkData), discountValue: t } }))}
+                                keyboardType="numeric"
+                                style={s.discountInput}
+                            />
                         </View>
 
-                        <TouchableOpacity onPress={handleSavePromo} disabled={loading} style={{ backgroundColor: '#3B82F6', padding: 16, borderRadius: 16, alignItems: 'center', marginTop: 10, opacity: loading ? 0.7 : 1 }}>
-                            {loading ? <ActivityIndicator color="#FFF" /> : <Text style={{ color: 'white', fontWeight: '800', fontSize: 15 }}>Save Promo Banner</Text>}
+                        {/* Save Button */}
+                        <TouchableOpacity 
+                            onPress={handleSavePromo} 
+                            disabled={loading} 
+                            style={s.savePromoBtn}
+                            activeOpacity={0.85}
+                        >
+                            {loading ? (
+                                <ActivityIndicator color={NAVY} />
+                            ) : (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                    <Ionicons name="checkmark-circle" size={20} color={NAVY} />
+                                    <Text style={s.savePromoBtnText}>Adana Promo Banner</Text>
+                                </View>
+                            )}
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -618,37 +782,49 @@ export const AdminPromoBanners = () => {
     }
 
     return (
-        <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+        <View style={s.container}>
             <Toast visible={toast.visible} message={toast.message} type={toast.type} onHide={() => setToast(prev => ({ ...prev, visible: false }))} />
 
-            <View style={{ padding: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <View>
-                    <Text style={{ fontSize: 24, fontWeight: '900', color: '#0F172A', marginBottom: 4 }}>Promo Banners</Text>
-                    <Text style={{ fontSize: 14, color: '#64748B' }}>Manage your global promotional campaigns.</Text>
+            {/* List Header */}
+            <View style={s.listHeader}>
+                <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Ionicons name="sparkles" size={22} color={GOLD} />
+                        <Text style={s.headerTitle}>Promos & AI Talla</Text>
+                    </View>
+                    <Text style={s.headerSubtitle}>Tallace-tallacen countdown, rangwame da AI copy</Text>
                 </View>
-                <TouchableOpacity onPress={handleAddNew} style={{ backgroundColor: '#0F172A', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Ionicons name="add" size={18} color="white" />
-                    <Text style={{ color: 'white', fontWeight: '700', fontSize: 14 }}>Add New</Text>
+                <TouchableOpacity onPress={handleAddNew} style={s.addBtn} activeOpacity={0.8}>
+                    <Ionicons name="add" size={18} color="#FFFFFF" />
+                    <Text style={s.addBtnText}>Sabo</Text>
                 </TouchableOpacity>
             </View>
 
             {loading ? (
-                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                    <ActivityIndicator size="large" color="#3B82F6" />
+                <View style={s.centered}>
+                    <ActivityIndicator size="large" color={GOLD} />
+                    <Text style={s.loadingText}>Ana binciko promo banners...</Text>
                 </View>
             ) : (
                 <FlatList
                     data={banners}
                     keyExtractor={(item, idx) => item.id ? item.id.toString() : idx.toString()}
                     renderItem={renderBannerCard}
-                    contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
+                    contentContainerStyle={{ padding: 16, paddingBottom: 80 }}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[GOLD, NAVY]} />}
                     ListEmptyComponent={
-                        <View style={{ alignItems: 'center', justifyContent: 'center', marginTop: 40 }}>
-                            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-                                <Ionicons name="megaphone-outline" size={40} color="#3B82F6" />
+                        <View style={s.emptyStateBox}>
+                            <View style={s.emptyIconCircle}>
+                                <Ionicons name="megaphone-outline" size={40} color={GOLD} />
                             </View>
-                            <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 8 }}>No Active Promos</Text>
-                            <Text style={{ textAlign: 'center', color: '#64748B', maxWidth: 250 }}>Click 'Add New' to create a countdown banner campaign across the app.</Text>
+                            <Text style={s.emptyTitle}>Babu Promo Banners a Yanzu</Text>
+                            <Text style={s.emptySub}>
+                                Danna maɓallin '+ Sabo' domin ƙirƙirar sabon countdown banner tare da rangwame da taimakon Gemini AI.
+                            </Text>
+                            <TouchableOpacity onPress={handleAddNew} style={s.emptyCreateBtn}>
+                                <Ionicons name="sparkles" size={16} color={NAVY} />
+                                <Text style={s.emptyCreateBtnText}>Ƙirƙiri Talla Da AI</Text>
+                            </TouchableOpacity>
                         </View>
                     }
                 />
@@ -656,3 +832,695 @@ export const AdminPromoBanners = () => {
         </View>
     );
 };
+
+const s = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: '#F8FAFC'
+    },
+    listHeader: {
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 20,
+        paddingTop: Platform.OS === 'ios' ? 20 : 16,
+        paddingBottom: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E2E8F0',
+        elevation: 1,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2
+    },
+    headerTitle: {
+        fontSize: 20,
+        fontWeight: '900',
+        color: NAVY
+    },
+    headerSubtitle: {
+        fontSize: 12,
+        color: '#64748B',
+        marginTop: 2
+    },
+    addBtn: {
+        backgroundColor: NAVY,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: GOLD
+    },
+    addBtnText: {
+        color: '#FFFFFF',
+        fontWeight: '800',
+        fontSize: 13
+    },
+    centered: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 40
+    },
+    loadingText: {
+        marginTop: 12,
+        color: '#64748B',
+        fontSize: 14,
+        fontWeight: '600'
+    },
+    emptyStateBox: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 40,
+        marginTop: 40,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    emptyIconCircle: {
+        width: 76,
+        height: 76,
+        borderRadius: 38,
+        backgroundColor: '#FFFBEB',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#FDE68A'
+    },
+    emptyTitle: {
+        fontSize: 18,
+        fontWeight: '900',
+        color: NAVY,
+        marginBottom: 6
+    },
+    emptySub: {
+        fontSize: 13,
+        color: '#64748B',
+        textAlign: 'center',
+        lineHeight: 18,
+        marginBottom: 20
+    },
+    emptyCreateBtn: {
+        backgroundColor: GOLD,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        borderRadius: 24
+    },
+    emptyCreateBtnText: {
+        color: NAVY,
+        fontWeight: '900',
+        fontSize: 14
+    },
+    bannerCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        marginBottom: 16,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        elevation: 2,
+        shadowColor: NAVY,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.06,
+        shadowRadius: 6
+    },
+    bannerHero: {
+        height: 140,
+        backgroundColor: NAVY,
+        position: 'relative',
+        justifyContent: 'flex-end',
+        padding: 16
+    },
+    bannerBgImage: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100%',
+        height: '100%',
+        opacity: 0.45
+    },
+    bannerHeroOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(14, 26, 46, 0.4)'
+    },
+    statusChip: {
+        position: 'absolute',
+        top: 12,
+        left: 12,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12
+    },
+    statusChipText: {
+        color: '#FFFFFF',
+        fontWeight: '800',
+        fontSize: 10,
+        letterSpacing: 0.5
+    },
+    bannerTitles: {
+        zIndex: 2
+    },
+    redBadge: {
+        alignSelf: 'flex-start',
+        backgroundColor: '#EF4444',
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 4,
+        marginBottom: 4
+    },
+    redBadgeText: {
+        color: '#FFFFFF',
+        fontWeight: '800',
+        fontSize: 10,
+        letterSpacing: 0.5
+    },
+    bannerTitleText: {
+        color: '#FFFFFF',
+        fontWeight: '900',
+        fontSize: 18,
+        lineHeight: 22
+    },
+    bannerDetails: {
+        padding: 16
+    },
+    tagsRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginBottom: 12,
+        flexWrap: 'wrap'
+    },
+    locTag: {
+        backgroundColor: '#F1F5F9',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 6
+    },
+    locTagText: {
+        color: '#475569',
+        fontWeight: '700',
+        fontSize: 10,
+        textTransform: 'uppercase'
+    },
+    productLinkedTag: {
+        backgroundColor: '#F5F3FF',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 6,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4
+    },
+    productLinkedText: {
+        color: '#7C3AED',
+        fontWeight: '700',
+        fontSize: 10
+    },
+    timerTag: {
+        backgroundColor: '#FFFBEB',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 6,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4
+    },
+    timerTagText: {
+        color: '#D97706',
+        fontWeight: '700',
+        fontSize: 10
+    },
+    discountTag: {
+        backgroundColor: '#ECFDF5',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 6,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4
+    },
+    discountTagText: {
+        color: '#059669',
+        fontWeight: '700',
+        fontSize: 10
+    },
+    cardActionsRow: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        gap: 10,
+        paddingTop: 10,
+        borderTopWidth: 1,
+        borderTopColor: '#F1F5F9'
+    },
+    editActionBtn: {
+        backgroundColor: '#F1F5F9',
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6
+    },
+    editActionText: {
+        fontWeight: '700',
+        color: NAVY,
+        fontSize: 12
+    },
+    deleteActionBtn: {
+        backgroundColor: '#FEF2F2',
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6
+    },
+    deleteActionText: {
+        fontWeight: '700',
+        color: '#EF4444',
+        fontSize: 12
+    },
+    editHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 20
+    },
+    editTitle: {
+        fontSize: 22,
+        fontWeight: '900',
+        color: NAVY
+    },
+    editSub: {
+        fontSize: 12,
+        color: '#64748B',
+        marginTop: 2
+    },
+    aiButton: {
+        backgroundColor: NAVY,
+        paddingHorizontal: 14,
+        paddingVertical: 9,
+        borderRadius: 18,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        borderWidth: 1,
+        borderColor: GOLD
+    },
+    aiButtonText: {
+        fontWeight: '800',
+        color: GOLD,
+        fontSize: 12
+    },
+    closeEditBtn: {
+        backgroundColor: '#FFFFFF',
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    formCard: {
+        backgroundColor: '#FFFFFF',
+        padding: 20,
+        borderRadius: 24,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        elevation: 2,
+        shadowColor: NAVY,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8
+    },
+    statusToggleRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20,
+        paddingBottom: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9'
+    },
+    formSectionTitle: {
+        fontWeight: '800',
+        fontSize: 15,
+        color: NAVY
+    },
+    statusToggleButton: {
+        paddingHorizontal: 14,
+        paddingVertical: 7,
+        borderRadius: 20,
+        borderWidth: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6
+    },
+    inputLabel: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: '#64748B',
+        marginBottom: 8,
+        letterSpacing: 0.5
+    },
+    locationChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingHorizontal: 14,
+        paddingVertical: 9,
+        borderRadius: 12,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    locationChipActive: {
+        backgroundColor: '#FFFBEB',
+        borderColor: GOLD
+    },
+    checkboxSquare: {
+        width: 18,
+        height: 18,
+        borderRadius: 5,
+        borderWidth: 2,
+        borderColor: '#CBD5E1',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    checkboxSquareActive: {
+        backgroundColor: GOLD,
+        borderColor: GOLD
+    },
+    locationChipText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#64748B'
+    },
+    locationChipTextActive: {
+        color: NAVY,
+        fontWeight: '800'
+    },
+    imagePreviewBox: {
+        borderRadius: 16,
+        overflow: 'hidden',
+        height: 150,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        backgroundColor: '#F8FAFC',
+        position: 'relative'
+    },
+    imagePreview: {
+        width: '100%',
+        height: '100%',
+        resizeMode: 'cover'
+    },
+    imageChangeOverlay: {
+        position: 'absolute',
+        top: 10,
+        right: 10,
+        backgroundColor: 'rgba(14, 26, 46, 0.85)',
+        paddingHorizontal: 14,
+        paddingVertical: 7,
+        borderRadius: 18,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        borderWidth: 1,
+        borderColor: GOLD
+    },
+    imageChangeText: {
+        color: '#FFFFFF',
+        fontWeight: '800',
+        fontSize: 12
+    },
+    imageUploadDashed: {
+        height: 140,
+        borderRadius: 16,
+        borderWidth: 2,
+        borderColor: '#E2E8F0',
+        borderStyle: 'dashed',
+        backgroundColor: '#F8FAFC',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    uploadIconBg: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        backgroundColor: '#FFFBEB',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 8,
+        borderWidth: 1,
+        borderColor: '#FDE68A'
+    },
+    uploadPrimaryText: {
+        color: NAVY,
+        fontWeight: '800',
+        fontSize: 14
+    },
+    uploadSubText: {
+        color: '#94A3B8',
+        fontSize: 11,
+        marginTop: 2
+    },
+    formTextInput: {
+        backgroundColor: '#F8FAFC',
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        color: NAVY,
+        fontWeight: '600',
+        fontSize: 14
+    },
+    aiSuggestionBadge: {
+        fontSize: 11,
+        color: '#059669',
+        marginTop: 4,
+        fontWeight: '700'
+    },
+    aiNotifCard: {
+        backgroundColor: '#F0FDFA',
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#5EEAD4'
+    },
+    aiNotifTitle: {
+        fontSize: 11,
+        color: '#0D9488',
+        fontWeight: '800',
+        marginBottom: 4
+    },
+    aiNotifText: {
+        fontSize: 13,
+        color: '#115E59',
+        lineHeight: 18
+    },
+    formPickerButton: {
+        backgroundColor: '#F8FAFC',
+        paddingHorizontal: 12,
+        paddingVertical: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between'
+    },
+    formPickerButtonActive: {
+        backgroundColor: '#FFFBEB',
+        borderColor: GOLD
+    },
+    formPickerText: {
+        color: '#94A3B8',
+        fontWeight: '600',
+        fontSize: 13,
+        flex: 1
+    },
+    formPickerTextActive: {
+        color: NAVY,
+        fontWeight: '700'
+    },
+    discountBox: {
+        backgroundColor: '#F8FAFC',
+        padding: 16,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    discountBoxTitle: {
+        fontSize: 13,
+        fontWeight: '800',
+        color: NAVY,
+        marginBottom: 12
+    },
+    discountTypeBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        padding: 10,
+        borderRadius: 10,
+        backgroundColor: '#FFFFFF',
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    discountTypeBtnActive: {
+        borderColor: GOLD,
+        backgroundColor: '#FFFBEB'
+    },
+    discountTypeLabel: {
+        fontWeight: '700',
+        color: NAVY,
+        fontSize: 12
+    },
+    discountInput: {
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: GOLD,
+        color: NAVY,
+        fontWeight: '800',
+        fontSize: 16
+    },
+    savePromoBtn: {
+        backgroundColor: GOLD,
+        paddingVertical: 15,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 10,
+        elevation: 2,
+        shadowColor: GOLD,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 6
+    },
+    savePromoBtnText: {
+        color: NAVY,
+        fontWeight: '900',
+        fontSize: 15
+    },
+    modalOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(14, 26, 46, 0.65)',
+        zIndex: 100,
+        justifyContent: 'center',
+        padding: 20
+    },
+    modalCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 24,
+        padding: 20,
+        maxHeight: '80%',
+        elevation: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.2,
+        shadowRadius: 10
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16
+    },
+    modalTitle: {
+        fontSize: 16,
+        fontWeight: '900',
+        color: NAVY
+    },
+    modalSub: {
+        fontSize: 11,
+        color: '#64748B',
+        marginTop: 2
+    },
+    iconButton: {
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        backgroundColor: '#F1F5F9',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    searchBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8FAFC',
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        marginBottom: 14,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    searchInput: {
+        flex: 1,
+        marginLeft: 8,
+        fontSize: 14,
+        color: NAVY,
+        fontWeight: '600'
+    },
+    searchResultItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 10,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    productThumb: {
+        width: 44,
+        height: 44,
+        borderRadius: 8,
+        marginRight: 10,
+        backgroundColor: '#F1F5F9'
+    },
+    productTitle: {
+        fontWeight: '700',
+        color: NAVY,
+        fontSize: 13
+    },
+    productPrice: {
+        color: GOLD,
+        fontWeight: '800',
+        fontSize: 12,
+        marginTop: 2
+    },
+    selectBadge: {
+        backgroundColor: NAVY,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 14
+    },
+    selectBadgeText: {
+        color: GOLD,
+        fontWeight: '800',
+        fontSize: 11
+    }
+});

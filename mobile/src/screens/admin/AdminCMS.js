@@ -1,12 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, TextInput, Alert, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, Alert, ScrollView, ActivityIndicator } from 'react-native';
 import { supabase } from '../../lib/supabase';
-import { styles } from '../../styles/theme';
+import { Ionicons } from '@expo/vector-icons';
+
+const NAVY = '#0E1A2E';
+const GOLD = '#D9A73A';
+
+const PAGES = [
+    { slug: 'about', label: 'About Us', icon: 'information-circle-outline' },
+    { slug: 'terms', label: 'Terms & Conditions', icon: 'document-text-outline' },
+    { slug: 'privacy', label: 'Privacy Policy', icon: 'shield-checkmark-outline' },
+    { slug: 'contact', label: 'Contact Us', icon: 'call-outline' },
+    { slug: 'faq', label: 'FAQ', icon: 'help-circle-outline' },
+    { slug: 'refund', label: 'Refund Policy', icon: 'cash-outline' },
+];
 
 export const AdminCMS = () => {
     const [selectedPage, setSelectedPage] = useState('about');
     const [content, setContent] = useState('');
+    const [title, setTitle] = useState('');
     const [loading, setLoading] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [previewMode, setPreviewMode] = useState(false);
 
     useEffect(() => {
         fetchPage();
@@ -14,69 +29,247 @@ export const AdminCMS = () => {
 
     const fetchPage = async () => {
         setLoading(true);
-        const { data } = await supabase.from('app_pages').select('content').eq('slug', selectedPage).single();
-        if (data) setContent(data.content || '');
-        else setContent('');
-        setLoading(false);
+        try {
+            const { data } = await supabase
+                .from('app_pages')
+                .select('*')
+                .eq('slug', selectedPage)
+                .maybeSingle();
+
+            if (data) {
+                setContent(data.content || '');
+                setTitle(data.title || selectedPage.toUpperCase());
+            } else {
+                setContent('');
+                const pageMeta = PAGES.find(p => p.slug === selectedPage);
+                setTitle(pageMeta ? pageMeta.label : selectedPage);
+            }
+        } catch (e) {
+            console.error('CMS fetch error:', e);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleSave = async () => {
-        setLoading(true);
-        // Upsert by slug logic manually since we might not have ID
-        const { data: existing } = await supabase.from('app_pages').select('id').eq('slug', selectedPage).single();
+        setSaving(true);
+        try {
+            const { data: existing } = await supabase
+                .from('app_pages')
+                .select('id')
+                .eq('slug', selectedPage)
+                .maybeSingle();
 
-        let result;
-        if (existing) {
-            result = await supabase.from('app_pages').update({ content, updated_at: new Date() }).eq('id', existing.id);
-        } else {
-            result = await supabase.from('app_pages').insert([{
-                slug: selectedPage,
-                title: selectedPage.charAt(0).toUpperCase() + selectedPage.slice(1) + ' Us', // rough title
-                content
-            }]);
+            let result;
+            if (existing) {
+                result = await supabase
+                    .from('app_pages')
+                    .update({ 
+                        title, 
+                        content, 
+                        updated_at: new Date().toISOString() 
+                    })
+                    .eq('id', existing.id);
+            } else {
+                result = await supabase
+                    .from('app_pages')
+                    .insert([{
+                        slug: selectedPage,
+                        title: title || selectedPage,
+                        content
+                    }]);
+            }
+
+            if (result.error) throw result.error;
+            Alert.alert('An Yi Nasara', `An sabunta shafin "${title}" cikin nasara.`);
+        } catch (err) {
+            Alert.alert('Kuskure', err.message || 'An kasa adana shafi.');
+        } finally {
+            setSaving(false);
         }
-
-        if (result.error) Alert.alert('Error', result.error.message);
-        else Alert.alert('Success', 'Page Updated');
-        setLoading(false);
     };
 
     return (
-        <ScrollView style={{ flex: 1, backgroundColor: 'white' }} contentContainerStyle={{ padding: 20 }}>
-            <Text style={styles.sectionTitle}>Content Manager</Text>
+        <ScrollView 
+            style={{ flex: 1, backgroundColor: '#F8FAFC' }} 
+            contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
+            showsVerticalScrollIndicator={false}
+        >
+            {/* Header */}
+            <View style={{ marginBottom: 16 }}>
+                <Text style={{ fontSize: 18, fontWeight: '900', color: NAVY }}>
+                    Kula Da Shafukan Manhaja (CMS Manager)
+                </Text>
+                <Text style={{ color: '#64748B', fontSize: 11.5, marginTop: 2 }}>
+                    Gyara rubutu da bayanai a shafukan About, Terms, Privacy, FAQ da dai sauransu
+                </Text>
+            </View>
 
-            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
-                {['about', 'terms', 'privacy'].map(slug => (
-                    <TouchableOpacity
-                        key={slug}
-                        onPress={() => setSelectedPage(slug)}
+            {/* Page Selector Tabs */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginBottom: 16 }}>
+                {PAGES.map(page => {
+                    const active = selectedPage === page.slug;
+                    return (
+                        <TouchableOpacity
+                            key={page.slug}
+                            onPress={() => {
+                                setSelectedPage(page.slug);
+                                setPreviewMode(false);
+                            }}
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 6,
+                                paddingHorizontal: 14,
+                                paddingVertical: 8,
+                                borderRadius: 12,
+                                backgroundColor: active ? NAVY : '#FFFFFF',
+                                borderWidth: 1,
+                                borderColor: active ? GOLD : '#E2E8F0',
+                                shadowColor: NAVY,
+                                shadowOffset: { width: 0, height: 2 },
+                                shadowOpacity: active ? 0.1 : 0.03,
+                                shadowRadius: 4,
+                                elevation: 1
+                            }}
+                        >
+                            <Ionicons name={page.icon} size={15} color={active ? GOLD : '#64748B'} />
+                            <Text style={{
+                                fontSize: 11.5,
+                                fontWeight: '800',
+                                color: active ? GOLD : '#64748B'
+                            }}>
+                                {page.label}
+                            </Text>
+                        </TouchableOpacity>
+                    );
+                })}
+            </ScrollView>
+
+            {loading ? (
+                <View style={{ padding: 40, alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color={GOLD} />
+                    <Text style={{ marginTop: 12, fontSize: 12, fontWeight: '700', color: '#64748B' }}>Ana loda shafi...</Text>
+                </View>
+            ) : (
+                <View style={{
+                    backgroundColor: '#FFFFFF',
+                    padding: 18,
+                    borderRadius: 20,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                    shadowColor: NAVY,
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.04,
+                    shadowRadius: 6,
+                    elevation: 1
+                }}>
+                    {/* Title & Preview Switch */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>
+                            Taken Shafi (Page Title)
+                        </Text>
+                        <TouchableOpacity
+                            onPress={() => setPreviewMode(!previewMode)}
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 4,
+                                backgroundColor: previewMode ? 'rgba(217, 167, 58, 0.15)' : '#F1F5F9',
+                                paddingHorizontal: 10,
+                                paddingVertical: 5,
+                                borderRadius: 8,
+                                borderWidth: 1,
+                                borderColor: previewMode ? GOLD : 'transparent'
+                            }}
+                        >
+                            <Ionicons name={previewMode ? "eye" : "eye-outline"} size={14} color={previewMode ? GOLD : NAVY} />
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: previewMode ? GOLD : NAVY }}>
+                                {previewMode ? 'Duba Rubutu (Edit)' : 'Duban Gani (Preview)'}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <TextInput
                         style={{
-                            paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
-                            backgroundColor: selectedPage === slug ? '#0F172A' : '#F1F5F9'
+                            backgroundColor: '#F8FAFC',
+                            padding: 12,
+                            borderRadius: 12,
+                            borderWidth: 1,
+                            borderColor: '#E2E8F0',
+                            fontSize: 14,
+                            fontWeight: '800',
+                            color: NAVY,
+                            marginBottom: 14
+                        }}
+                        value={title}
+                        onChangeText={setTitle}
+                        placeholder="Taken Shafi"
+                        placeholderTextColor="#94A3B8"
+                    />
+
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B', textTransform: 'uppercase', marginBottom: 8 }}>
+                        {previewMode ? 'Yadda Zai Fito Ga Abokin Ciniki:' : 'Rubutun Ciki (Content):'}
+                    </Text>
+
+                    {previewMode ? (
+                        <View style={{
+                            backgroundColor: '#F8FAFC',
+                            padding: 16,
+                            borderRadius: 14,
+                            minHeight: 250,
+                            borderWidth: 1,
+                            borderColor: '#E2E8F0'
+                        }}>
+                            <Text style={{ fontSize: 16, fontWeight: '900', color: NAVY, marginBottom: 8 }}>{title}</Text>
+                            <Text style={{ fontSize: 13, color: '#334155', lineHeight: 20 }}>
+                                {content || 'Babu wani rubutu da aka saka tukuna.'}
+                            </Text>
+                        </View>
+                    ) : (
+                        <View style={{
+                            backgroundColor: '#F8FAFC',
+                            borderRadius: 14,
+                            borderWidth: 1,
+                            borderColor: '#E2E8F0',
+                            minHeight: 300,
+                            padding: 14
+                        }}>
+                            <TextInput
+                                style={{ flex: 1, textAlignVertical: 'top', fontSize: 13.5, color: NAVY, lineHeight: 20 }}
+                                multiline
+                                placeholder="Rubuta bayanin shafi a nan..."
+                                placeholderTextColor="#94A3B8"
+                                value={content}
+                                onChangeText={setContent}
+                            />
+                        </View>
+                    )}
+
+                    {/* Save Button */}
+                    <TouchableOpacity
+                        onPress={handleSave}
+                        disabled={saving}
+                        style={{
+                            backgroundColor: NAVY,
+                            padding: 15,
+                            borderRadius: 14,
+                            alignItems: 'center',
+                            marginTop: 18,
+                            borderWidth: 1,
+                            borderColor: GOLD
                         }}
                     >
-                        <Text style={{ color: selectedPage === slug ? 'white' : '#64748B', fontWeight: '600', textTransform: 'capitalize' }}>{slug}</Text>
+                        {saving ? (
+                            <ActivityIndicator color={GOLD} />
+                        ) : (
+                            <Text style={{ color: GOLD, fontWeight: '900', fontSize: 13.5, letterSpacing: 0.3 }}>
+                                ADANA SHAFI (SAVE CONTENT)
+                            </Text>
+                        )}
                     </TouchableOpacity>
-                ))}
-            </View>
-
-            <View style={{ backgroundColor: '#F8FAFC', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', minHeight: 400 }}>
-                <TextInput
-                    style={{ flex: 1, textAlignVertical: 'top', fontSize: 14, color: '#334155' }}
-                    multiline
-                    placeholder="Enter page content here (Markdown or Plain Text)..."
-                    value={content}
-                    onChangeText={setContent}
-                />
-            </View>
-
-            <TouchableOpacity
-                onPress={handleSave}
-                disabled={loading}
-                style={{ backgroundColor: '#3B82F6', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 20 }}
-            >
-                <Text style={{ color: 'white', fontWeight: '700' }}>{loading ? 'Saving...' : 'Save Content'}</Text>
-            </TouchableOpacity>
+                </View>
+            )}
         </ScrollView>
     );
 };

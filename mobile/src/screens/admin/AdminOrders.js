@@ -33,7 +33,7 @@ function formatAddress(addr) {
     return [parsed.address, parsed.city, parsed.state].filter(Boolean).join(', ');
 }
 
-export const AdminOrders = () => {
+export const AdminOrders = ({ navigation, onBack }) => {
     const [orders, setOrders] = useState([]);
     const [whatsappVisible, setWhatsappVisible] = useState(false);
     const [whatsappPhone, setWhatsappPhone] = useState('');
@@ -619,33 +619,51 @@ export const AdminOrders = () => {
     return (
         <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
             {/* ── Stats Header ── */}
-            <View style={{ backgroundColor: '#0F172A', padding: 20, paddingBottom: 28, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 }}>
-                <Text style={{ color: 'white', fontSize: 22, fontWeight: '900', marginBottom: 12 }}>Order Management</Text>
-                {/* 8. Revenue Summary by Date */}
-                <View style={{ backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 16, padding: 14, marginBottom: 12 }}>
+            <View style={{ backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingTop: Platform.OS === 'ios' ? 48 : 20, paddingBottom: 16, borderBottomWidth: 1, borderColor: '#E2E8F0' }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        {(navigation?.canGoBack?.() || onBack) && (
+                            <TouchableOpacity onPress={onBack || (() => navigation.goBack())} style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
+                                <Ionicons name="arrow-back" size={20} color="#0E1A2E" />
+                            </TouchableOpacity>
+                        )}
+                        <View>
+                            <Text style={{ fontSize: 20, fontWeight: '900', color: '#0E1A2E', letterSpacing: -0.5 }}>Order Management</Text>
+                            <Text style={{ color: '#64748B', fontSize: 12, fontWeight: '500' }}>Live tracking, fulfillment & dispatch</Text>
+                        </View>
+                    </View>
+                    <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A' }}>
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: '#D9A73A' }}>LIVE ORDERS</Text>
+                    </View>
+                </View>
+
+                {/* Revenue Summary by Date */}
+                <View style={{ backgroundColor: '#0E1A2E', borderRadius: 18, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(217, 167, 58, 0.3)', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 2 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                        <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 }}>REVENUE</Text>
-                        <View style={{ flexDirection: 'row', gap: 6 }}>
+                        <Text style={{ color: '#D9A73A', fontSize: 11, fontWeight: '800', letterSpacing: 0.8 }}>PAID REVENUE</Text>
+                        <View style={{ flexDirection: 'row', gap: 6, backgroundColor: 'rgba(255,255,255,0.08)', padding: 3, borderRadius: 10 }}>
                             {[['all', 'All'], ['today', 'Today'], ['week', '7d'], ['month', '30d']].map(([val, label]) => (
                                 <TouchableOpacity key={val} onPress={() => setDateFilter(val)}
-                                    style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, backgroundColor: dateFilter === val ? 'white' : 'transparent' }}>
-                                    <Text style={{ color: dateFilter === val ? '#0F172A' : 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '700' }}>{label}</Text>
+                                    style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: dateFilter === val ? '#D9A73A' : 'transparent' }}>
+                                    <Text style={{ color: dateFilter === val ? '#0E1A2E' : 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '800' }}>{label}</Text>
                                 </TouchableOpacity>
                             ))}
                         </View>
                     </View>
-                    <Text style={{ color: 'white', fontSize: 26, fontWeight: '900' }}>₦{stats.totalRevenue.toLocaleString()}</Text>
+                    <Text style={{ color: '#FFFFFF', fontSize: 26, fontWeight: '900' }}>₦{stats.totalRevenue.toLocaleString()}</Text>
                 </View>
+
+                {/* Quick stats rail */}
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                     {[
-                        { label: 'Total', value: stats.total, icon: 'list' },
-                        { label: 'Pending', value: stats.pendingCount, icon: 'time' },
-                        { label: 'Delivered', value: stats.deliveredCount, icon: 'checkmark-circle' },
+                        { label: 'Total', value: stats.total, icon: 'receipt-outline', color: '#0E1A2E' },
+                        { label: 'Pending', value: stats.pendingCount, icon: 'time-outline', color: '#D9A73A' },
+                        { label: 'Delivered', value: stats.deliveredCount, icon: 'checkmark-circle-outline', color: '#10B981' },
                     ].map(s => (
-                        <View key={s.label} style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.08)', padding: 12, borderRadius: 16, alignItems: 'center' }}>
-                            <Ionicons name={s.icon} size={18} color="rgba(255,255,255,0.6)" />
-                            <Text style={{ color: 'white', fontSize: 20, fontWeight: '800', marginTop: 4 }}>{s.value}</Text>
-                            <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '600', marginTop: 2 }}>{s.label.toUpperCase()}</Text>
+                        <View key={s.label} style={{ flex: 1, backgroundColor: '#FFFFFF', padding: 12, borderRadius: 16, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 3, elevation: 1 }}>
+                            <Ionicons name={s.icon} size={18} color={s.color} />
+                            <Text style={{ color: '#0E1A2E', fontSize: 18, fontWeight: '800', marginTop: 4 }}>{s.value}</Text>
+                            <Text style={{ color: '#64748B', fontSize: 10, fontWeight: '700', marginTop: 2 }}>{s.label.toUpperCase()}</Text>
                         </View>
                     ))}
                 </View>
@@ -653,7 +671,7 @@ export const AdminOrders = () => {
 
             {/* 1. Bulk Action Bar */}
             {bulkMode && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#1E293B', padding: 12, gap: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#0E1A2E', padding: 12, gap: 10, borderWidth: 1, borderColor: '#D9A73A' }}>
                     <TouchableOpacity onPress={() => { setBulkMode(false); setSelectedIds(new Set()); }} style={{ padding: 8 }}>
                         <Ionicons name="close" size={18} color="white" />
                     </TouchableOpacity>
@@ -879,11 +897,11 @@ export const AdminOrders = () => {
                                                                     key={driver.id}
                                                                     onPress={() => assignDriver(order.id, driver.id)}
                                                                     disabled={updating}
-                                                                    style={[S.driverChip, isAssigned && { backgroundColor: '#0F172A', borderColor: '#0F172A' }]}
+                                                                    style={[S.driverChip, isAssigned && { backgroundColor: '#0E1A2E', borderColor: '#D9A73A' }]}
                                                                 >
-                                                                    <Ionicons name="bicycle" size={13} color={isAssigned ? 'white' : '#3B82F6'} />
-                                                                    <Text style={{ color: isAssigned ? 'white' : '#0F172A', fontSize: 12, fontWeight: '700' }}>{driver.name}</Text>
-                                                                    <Text style={{ color: isAssigned ? 'rgba(255,255,255,0.6)' : '#94A3B8', fontSize: 10 }}>{getLevel(driver.xp)}</Text>
+                                                                    <Ionicons name="bicycle" size={13} color={isAssigned ? '#D9A73A' : '#0E1A2E'} />
+                                                                    <Text style={{ color: isAssigned ? 'white' : '#0E1A2E', fontSize: 12, fontWeight: '700' }}>{driver.name}</Text>
+                                                                    <Text style={{ color: isAssigned ? 'rgba(255,255,255,0.7)' : '#94A3B8', fontSize: 10 }}>{getLevel(driver.xp)}</Text>
                                                                 </TouchableOpacity>
                                                             );
                                                         })}
@@ -921,11 +939,11 @@ export const AdminOrders = () => {
                                                         key={status}
                                                         onPress={() => updateStatus(order.id, status, order)}
                                                         disabled={updating || isCurrent}
-                                                        style={[S.statusBtn, isCurrent && { backgroundColor: '#0F172A', borderColor: '#0F172A', opacity: 1 }]}
+                                                        style={[S.statusBtn, isCurrent && { backgroundColor: '#0E1A2E', borderColor: '#D9A73A', opacity: 1 }]}
                                                     >
                                                         {updating && isCurrent
                                                             ? <ActivityIndicator size="small" color="white" />
-                                                            : <Text style={{ color: isCurrent ? 'white' : '#475569', fontWeight: '700', fontSize: 12 }}>{status}</Text>
+                                                            : <Text style={{ color: isCurrent ? '#D9A73A' : '#475569', fontWeight: '800', fontSize: 12 }}>{status}</Text>
                                                         }
                                                     </TouchableOpacity>
                                                 );
@@ -968,7 +986,7 @@ export const AdminOrders = () => {
                                         <Text style={S.cardTitle}>📌 Admin Notes (Internal)</Text>
                                         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-end' }}>
                                             <TextInput
-                                                style={{ flex: 1, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, padding: 10, fontSize: 13, color: '#0F172A', backgroundColor: '#F8FAFC', minHeight: 44 }}
+                                                style={{ flex: 1, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, padding: 10, fontSize: 13, color: '#0E1A2E', backgroundColor: '#F8FAFC', minHeight: 44 }}
                                                 placeholder="Add a private note for this order..."
                                                 placeholderTextColor="#94A3B8"
                                                 value={adminNote}
@@ -976,8 +994,8 @@ export const AdminOrders = () => {
                                                 multiline
                                             />
                                             <TouchableOpacity onPress={saveAdminNote} disabled={savingNote || !adminNote.trim()}
-                                                style={{ backgroundColor: adminNote.trim() ? '#0F172A' : '#E2E8F0', padding: 12, borderRadius: 12 }}>
-                                                {savingNote ? <ActivityIndicator size="small" color="white" /> : <Ionicons name="send" size={16} color={adminNote.trim() ? 'white' : '#94A3B8'} />}
+                                                style={{ backgroundColor: adminNote.trim() ? '#0E1A2E' : '#E2E8F0', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: adminNote.trim() ? '#D9A73A' : 'transparent' }}>
+                                                {savingNote ? <ActivityIndicator size="small" color="white" /> : <Ionicons name="send" size={16} color={adminNote.trim() ? '#D9A73A' : '#94A3B8'} />}
                                             </TouchableOpacity>
                                         </View>
                                     </View>
@@ -1069,21 +1087,21 @@ export const AdminOrders = () => {
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 const S = {
-    orderCard: { backgroundColor: 'white', padding: 16, borderRadius: 16, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 },
-    orderRef: { fontSize: 13, fontWeight: '800', color: '#64748B', letterSpacing: 0.5 },
+    orderCard: { backgroundColor: '#FFFFFF', padding: 16, borderRadius: 18, marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 6, elevation: 1 },
+    orderRef: { fontSize: 13, fontWeight: '800', color: '#0E1A2E', letterSpacing: 0.5 },
     badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-    searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: '#E2E8F0', gap: 8 },
-    searchInput: { flex: 1, fontSize: 14, color: '#0F172A' },
-    filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F1F5F9', marginRight: 8 },
-    activeChip: { backgroundColor: '#0F172A' },
-    card: { backgroundColor: 'white', borderRadius: 18, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 4, elevation: 1 },
-    cardTitle: { fontSize: 13, fontWeight: '800', color: '#0F172A', marginBottom: 12, letterSpacing: 0.2 },
-    cardValue: { fontWeight: '700', fontSize: 16, color: '#0F172A', marginBottom: 2 },
+    searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: '#E2E8F0', gap: 8 },
+    searchInput: { flex: 1, fontSize: 14, color: '#0E1A2E', fontWeight: '600' },
+    filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F1F5F9', marginRight: 8, borderWidth: 1, borderColor: '#E2E8F0' },
+    activeChip: { backgroundColor: '#0E1A2E', borderColor: '#D9A73A' },
+    card: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 4, elevation: 1 },
+    cardTitle: { fontSize: 13, fontWeight: '800', color: '#0E1A2E', marginBottom: 12, letterSpacing: 0.2 },
+    cardValue: { fontWeight: '700', fontSize: 16, color: '#0E1A2E', marginBottom: 2 },
     cardSub: { fontSize: 13, color: '#64748B' },
     detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
     detailLabel: { fontSize: 13, color: '#64748B', fontWeight: '500' },
-    detailValue: { fontSize: 13, fontWeight: '700', color: '#0F172A' },
-    callBtn: { backgroundColor: '#3B82F6', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, marginTop: 10, alignSelf: 'flex-start' },
+    detailValue: { fontSize: 13, fontWeight: '700', color: '#0E1A2E' },
+    callBtn: { backgroundColor: '#0E1A2E', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, marginTop: 10, alignSelf: 'flex-start', borderWidth: 1, borderColor: '#D9A73A' },
     driverChip: { flexDirection: 'column', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14, backgroundColor: 'white', borderWidth: 1, borderColor: '#E2E8F0', gap: 2, minWidth: 80 },
     statusBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: 'white', alignItems: 'center' },
     actionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, padding: 14, borderRadius: 14 },

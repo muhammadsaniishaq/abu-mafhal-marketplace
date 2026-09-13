@@ -216,7 +216,7 @@ export const NotificationsPage = ({ onBack }) => {
                         </TouchableOpacity>
                     </View>
                 </View>
-                <Text style={localStyles.message} numberOfLines={2}>{item.message}</Text>
+                <Text style={localStyles.message} numberOfLines={2}>{item.body || item.message}</Text>
             </View>
         </TouchableOpacity>
     );

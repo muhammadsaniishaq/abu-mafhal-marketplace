@@ -1,16 +1,23 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { View, Text, TouchableOpacity, FlatList, ActivityIndicator, Alert, TextInput, Modal, ScrollView, Animated, KeyboardAvoidingView, Platform } from 'react-native';
+import { 
+    View, Text, TouchableOpacity, FlatList, ActivityIndicator, 
+    Alert, TextInput, Modal, ScrollView, Animated, KeyboardAvoidingView, 
+    Platform, StyleSheet, RefreshControl, Linking 
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { whatsappService } from '../../services/whatsappService';
+
+const NAVY = '#0E1A2E';
+const DEEP_NAVY = '#1E293B';
+const GOLD = '#D9A73A';
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 const fmtDate = (dateString) => {
     if (!dateString) return '';
     const d = new Date(dateString);
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleDateString('en-GB', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
 // ─── SKELETON ─────────────────────────────────────────────────────────────
@@ -30,7 +37,7 @@ const SkeletonPulse = ({ style }) => {
 const SkeletonList = () => (
     <View style={{ padding: 14, gap: 12 }}>
         {[1, 2, 3, 4].map(i => (
-            <View key={i} style={{ backgroundColor: 'white', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#F1F5F9' }}>
+            <View key={i} style={s.skeletonCard}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
                     <SkeletonPulse style={{ width: '60%', height: 16, borderRadius: 4 }} />
                     <SkeletonPulse style={{ width: 60, height: 24, borderRadius: 12 }} />
@@ -57,38 +64,61 @@ const TicketDetailsModal = ({ visible, ticket, onClose, onSuccess, onDelete, onR
     }, [visible, ticket]);
 
     const handleReply = async () => {
-        if (!reply.trim()) return Alert.alert('Attention', 'Please write a reply before sending.');
+        if (!reply.trim()) return Alert.alert('Kula', 'Da fatan za a rubuta amsa kafin aika wa.');
         setSending(true);
 
-        const { error } = await supabase
-            .from('support_tickets')
-            .update({ status: 'resolved', admin_reply: reply.trim() })
-            .eq('id', ticket.id);
+        try {
+            const { error } = await supabase
+                .from('support_tickets')
+                .update({ status: 'resolved', admin_reply: reply.trim() })
+                .eq('id', ticket.id);
 
-        if (error) {
-            Alert.alert('Error', error.message);
+            if (error) {
+                Alert.alert('Kuskure', error.message);
+                setSending(false);
+                return;
+            }
+
+            // Insert in-app notification with correct schema
+            if (ticket.user_id) {
+                await supabase.from('notifications').insert([{
+                    user_id: ticket.user_id,
+                    title: 'An Amsa Tikitin Ku (Ticket Resolved)',
+                    body: `Admin ya amsa bukatarku kan "${ticket.subject}": ${reply.trim().substring(0, 80)}...`,
+                    is_read: false,
+                    data: {
+                        type: 'support',
+                        ticket_id: ticket.id
+                    }
+                }]);
+            }
+
+            // WhatsApp Notification if available
+            if (ticket.user?.phone) {
+                const supportMsg = `Barka! An amsa korafin ku a Abu-Mafhal Marketplace dangane da "${ticket.subject}". Amsa: ${reply.trim().substring(0, 80)}... Da fatan za a duba manhaja don ganin cikakken bayani.`;
+                whatsappService.sendDirect(ticket.user.phone, supportMsg, ticket.user_id)
+                    .catch(e => console.log('Support Reply WhatsApp Error:', e));
+            }
+
+            Alert.alert('Nasarar Aikawa', 'An aika amsa kuma an rufe wannan tikitin cikin nasara.');
             setSending(false);
+            onSuccess();
+        } catch (e) {
+            console.error('Reply catch:', e);
+            Alert.alert('Kuskure', e.message);
+            setSending(false);
+        }
+    };
+
+    const handleOpenWhatsApp = () => {
+        if (!ticket.user?.phone) {
+            Alert.alert('Babu Lambar Waya', 'Wannan mai amfani bashi da lambar waya a account dinsa.');
             return;
         }
-
-        if (ticket.user_id) {
-            await supabase.from('notifications').insert([{
-                user_id: ticket.user_id,
-                title: 'Ticket Resolved',
-                message: `Admin replied: ${reply.trim().substring(0, 50)}...`,
-                type: 'system'
-            }]);
-        }
-
-        if (ticket.user?.phone) {
-            const supportMsg = `Hi! A reply has been posted to your support query "${ticket.subject}". Reply: ${reply.trim().substring(0, 80)}... Please check the app for details.`;
-            whatsappService.sendDirect(ticket.user.phone, supportMsg, ticket.user_id)
-                .catch(e => console.log('Support Reply WhatsApp Error:', e));
-        }
-
-        Alert.alert('Success', 'Reply sent and ticket marked as resolved.');
-        setSending(false);
-        onSuccess();
+        let cleanPhone = ticket.user.phone.replace(/[^0-9]/g, '');
+        if (cleanPhone.startsWith('0')) cleanPhone = '234' + cleanPhone.slice(1);
+        const text = encodeURIComponent(`Barka ${ticket.user.full_name || ''}, daga Abu-Mafhal Customer Support dangane da tikitin ku: "${ticket.subject}".`);
+        Linking.openURL(`https://wa.me/${cleanPhone}?text=${text}`);
     };
 
     if (!ticket) return null;
@@ -97,112 +127,116 @@ const TicketDetailsModal = ({ visible, ticket, onClose, onSuccess, onDelete, onR
 
     return (
         <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-            <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.6)', justifyContent: 'flex-end' }}>
-                <View style={{ backgroundColor: '#F8FAFC', borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '90%' }}>
-
+            <View style={s.modalOverlay}>
+                <View style={s.modalCard}>
                     {/* Header */}
-                    <LinearGradient colors={['#1E1B4B', '#312E81']} style={{ padding: 20, paddingTop: 24, borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <View style={{ flex: 1, marginRight: 10 }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                                    <View style={{ backgroundColor: isOpen ? '#FEF3C7' : '#D1FAE5', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
-                                        <Text style={{ fontSize: 10, fontWeight: '800', color: isOpen ? '#D97706' : '#047857', textTransform: 'uppercase' }}>
-                                            {ticket.status}
-                                        </Text>
-                                    </View>
-                                    <View style={{ backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
-                                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#E0E7FF' }}>{ticket.category || 'General'}</Text>
-                                    </View>
+                    <View style={s.modalHeader}>
+                        <View style={{ flex: 1, marginRight: 10 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                <View style={[s.badgePill, { backgroundColor: isOpen ? '#FEF3C7' : '#DCFCE7' }]}>
+                                    <Text style={[s.badgePillText, { color: isOpen ? '#D97706' : '#059669' }]}>
+                                        {isOpen ? 'A BUDE (PENDING)' : 'AN WARWARE (RESOLVED)'}
+                                    </Text>
                                 </View>
-                                <Text style={{ fontSize: 20, fontWeight: '800', color: 'white', lineHeight: 28 }}>{ticket.subject}</Text>
+                                <View style={s.catBadge}>
+                                    <Text style={s.catBadgeText}>{ticket.category || 'General'}</Text>
+                                </View>
                             </View>
-                            <TouchableOpacity onPress={onClose} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' }}>
-                                <Ionicons name="close" size={20} color="white" />
-                            </TouchableOpacity>
+                            <Text style={s.modalTicketSubject}>{ticket.subject}</Text>
                         </View>
-                    </LinearGradient>
+                        <TouchableOpacity onPress={onClose} style={s.closeModalBtn}>
+                            <Ionicons name="close" size={20} color={NAVY} />
+                        </TouchableOpacity>
+                    </View>
 
                     {/* Messages Body */}
                     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
                         <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 20 }}>
-
                             {/* Actions Header */}
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                                <Text style={{ fontSize: 13, fontWeight: '700', color: '#64748B' }}>{fmtDate(ticket.created_at)}</Text>
-                                <View style={{ flexDirection: 'row', gap: 12 }}>
+                            <View style={s.ticketMetaRow}>
+                                <Text style={s.ticketMetaDate}>{fmtDate(ticket.created_at)}</Text>
+                                <View style={{ flexDirection: 'row', gap: 10 }}>
                                     {!isOpen && (
-                                        <TouchableOpacity onPress={() => onReopen(ticket.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#EFF6FF', borderRadius: 8 }}>
-                                            <Ionicons name="refresh" size={14} color="#3B82F6" />
-                                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#3B82F6' }}>Reopen</Text>
+                                        <TouchableOpacity onPress={() => onReopen(ticket.id)} style={s.reopenBtn}>
+                                            <Ionicons name="refresh" size={14} color={NAVY} />
+                                            <Text style={s.reopenBtnText}>Sake Budewa</Text>
                                         </TouchableOpacity>
                                     )}
-                                    <TouchableOpacity onPress={() => onDelete(ticket.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#FEF2F2', borderRadius: 8 }}>
+                                    <TouchableOpacity onPress={() => onDelete(ticket.id)} style={s.deleteBtn}>
                                         <Ionicons name="trash" size={14} color="#EF4444" />
-                                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#EF4444' }}>Delete</Text>
+                                        <Text style={s.deleteBtnText}>Goge</Text>
                                     </TouchableOpacity>
                                 </View>
                             </View>
 
                             {/* User Profile Banner */}
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: 'white', padding: 14, borderRadius: 16, marginBottom: 20, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center' }}>
-                                    <Text style={{ fontSize: 16, fontWeight: '800', color: '#3B82F6' }}>
+                            <View style={s.userBanner}>
+                                <View style={s.userAvatarCircle}>
+                                    <Text style={s.userAvatarText}>
                                         {ticket.user?.full_name ? ticket.user.full_name.charAt(0).toUpperCase() : '?'}
                                     </Text>
                                 </View>
                                 <View style={{ flex: 1 }}>
-                                    <Text style={{ fontSize: 15, fontWeight: '700', color: '#0F172A' }}>{ticket.user?.full_name || 'Unknown User'}</Text>
-                                    <Text style={{ fontSize: 12, color: '#64748B' }}>{ticket.user?.email || 'No email provided'}</Text>
+                                    <Text style={s.userNameText}>{ticket.user?.full_name || 'Bako (Unknown User)'}</Text>
+                                    <Text style={s.userEmailText}>{ticket.user?.email || ticket.user?.phone || 'Babu lamba/email'}</Text>
                                 </View>
+                                {ticket.user?.phone && (
+                                    <TouchableOpacity 
+                                        style={s.whatsAppDirectBtn}
+                                        onPress={handleOpenWhatsApp}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Ionicons name="logo-whatsapp" size={16} color="#16A34A" />
+                                        <Text style={s.whatsAppDirectText}>Chat</Text>
+                                    </TouchableOpacity>
+                                )}
                             </View>
 
                             {/* User Message Bubble */}
-                            <Text style={{ fontSize: 13, fontWeight: '700', color: '#64748B', marginLeft: 12, marginBottom: 6 }}>User Message</Text>
-                            <View style={{ backgroundColor: 'white', padding: 16, borderRadius: 20, borderTopLeftRadius: 4, shadowColor: '#94A3B8', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 2, marginBottom: 24 }}>
-                                <Text style={{ fontSize: 15, color: '#334155', lineHeight: 24 }}>{ticket.message}</Text>
+                            <Text style={s.bubbleLabel}>SAKON MAI SAYAYYA (USER INQUIRY)</Text>
+                            <View style={s.userMessageBubble}>
+                                <Text style={s.userMessageText}>{ticket.message}</Text>
                             </View>
 
                             {/* Admin Reply or Action */}
                             {ticket.admin_reply ? (
                                 <View style={{ alignItems: 'flex-end', marginBottom: 24 }}>
-                                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#10B981', marginRight: 12, marginBottom: 6 }}>Admin Reply</Text>
-                                    <LinearGradient colors={['#10B981', '#059669']} style={{ padding: 16, borderRadius: 20, borderTopRightRadius: 4, width: '90%' }}>
-                                        <Text style={{ fontSize: 15, color: 'white', lineHeight: 24 }}>{ticket.admin_reply}</Text>
-                                    </LinearGradient>
+                                    <Text style={[s.bubbleLabel, { color: '#059669', marginRight: 8 }]}>AMSAR ADMIN (RESOLVED)</Text>
+                                    <View style={s.adminReplyBubble}>
+                                        <Text style={s.adminReplyText}>{ticket.admin_reply}</Text>
+                                    </View>
                                 </View>
                             ) : (
-                                <View style={{ backgroundColor: 'white', padding: 20, borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                                        <Ionicons name="chatbox-ellipses" size={18} color="#0F172A" />
-                                        <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>Resolve Ticket</Text>
+                                <View style={s.replyBox}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                                        <Ionicons name="chatbox-ellipses" size={18} color={NAVY} />
+                                        <Text style={s.replyBoxTitle}>Amsa Tikiti & Warware Matsala</Text>
                                     </View>
                                     <TextInput
-                                        style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, padding: 14, fontSize: 15, color: '#0F172A', minHeight: 120, textAlignVertical: 'top' }}
-                                        placeholder="Write your definitive reply to the user..."
+                                        style={s.replyInput}
+                                        placeholder="Rubuta amsar ka ga wannan mai sayayya a nan..."
                                         placeholderTextColor="#94A3B8"
                                         multiline
                                         value={reply}
                                         onChangeText={setReply}
                                     />
                                     <TouchableOpacity
-                                        style={{ marginTop: 16, borderRadius: 12, overflow: 'hidden' }}
+                                        style={s.sendReplyBtn}
                                         onPress={handleReply}
                                         disabled={sending}
+                                        activeOpacity={0.85}
                                     >
-                                        <LinearGradient colors={['#3B82F6', '#2563EB']} style={{ padding: 16, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 }}>
-                                            {sending ? (
-                                                <ActivityIndicator color="white" />
-                                            ) : (
-                                                <>
-                                                    <Ionicons name="send" size={18} color="white" />
-                                                    <Text style={{ color: 'white', fontWeight: '800', fontSize: 15 }}>Send & Resolve</Text>
-                                                </>
-                                            )}
-                                        </LinearGradient>
+                                        {sending ? (
+                                            <ActivityIndicator color={NAVY} />
+                                        ) : (
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                <Ionicons name="checkmark-done-circle" size={18} color={NAVY} />
+                                                <Text style={s.sendReplyBtnText}>Aika Amsa & Warwarewa</Text>
+                                            </View>
+                                        )}
                                     </TouchableOpacity>
                                 </View>
                             )}
-
                         </ScrollView>
                     </KeyboardAvoidingView>
                 </View>
@@ -216,6 +250,7 @@ export const AdminSupport = () => {
     const insets = useSafeAreaInsets();
     const [tickets, setTickets] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
 
     // UI State
     const [search, setSearch] = useState('');
@@ -224,30 +259,41 @@ export const AdminSupport = () => {
 
     const fetchTickets = useCallback(async () => {
         setLoading(true);
-        const { data, error } = await supabase
-            .from('support_tickets')
-            .select('*, user:profiles(full_name, email, phone)')
-            .order('created_at', { ascending: false });
+        try {
+            const { data, error } = await supabase
+                .from('support_tickets')
+                .select('*, user:profiles(full_name, email, phone)')
+                .order('created_at', { ascending: false });
 
-        if (error && error.code !== '42P01') {
-            Alert.alert('Error', error.message);
-        } else {
-            setTickets(data || []);
+            if (error && error.code !== '42P01') {
+                console.warn('Error fetching support tickets:', error.message);
+            } else {
+                setTickets(data || []);
+            }
+        } catch (e) {
+            console.error('Fetch support catch:', e);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
         }
-        setLoading(false);
     }, []);
 
     useEffect(() => { fetchTickets(); }, [fetchTickets]);
 
+    const onRefresh = () => {
+        setRefreshing(true);
+        fetchTickets();
+    };
+
     // ─── Actions ────────────────────────────────────────────────────────────
     const handleDelete = (id) => {
-        Alert.alert('Delete Ticket', 'Are you sure you want to permanently delete this ticket?', [
-            { text: 'Cancel', style: 'cancel' },
+        Alert.alert('Goge Tikiti', 'Shin da gaske kana son goge wannan tikitin gaba daya?', [
+            { text: 'A\'a', style: 'cancel' },
             {
-                text: 'Delete', style: 'destructive', onPress: async () => {
+                text: 'Eh, Goge', style: 'destructive', onPress: async () => {
                     const { error } = await supabase.from('support_tickets').delete().eq('id', id);
                     if (error) {
-                        Alert.alert('Error', error.message);
+                        Alert.alert('Kuskure', error.message);
                     } else {
                         setTickets(prev => prev.filter(t => t.id !== id));
                         if (selectedTicket?.id === id) setSelectedTicket(null);
@@ -258,13 +304,13 @@ export const AdminSupport = () => {
     };
 
     const handleReopen = (id) => {
-        Alert.alert('Reopen Ticket', 'This will mark the ticket as Pending again.', [
-            { text: 'Cancel', style: 'cancel' },
+        Alert.alert('Sake Bude Tikiti', 'Wannan zai maida tikitin a matsayin wanda yake jiran amsa (Pending).', [
+            { text: 'A\'a', style: 'cancel' },
             {
-                text: 'Reopen', onPress: async () => {
+                text: 'Eh, Bude', onPress: async () => {
                     const { error } = await supabase.from('support_tickets').update({ status: 'open', admin_reply: null }).eq('id', id);
                     if (error) {
-                        Alert.alert('Error', error.message);
+                        Alert.alert('Kuskure', error.message);
                     } else {
                         setTickets(prev => prev.map(t => t.id === id ? { ...t, status: 'open', admin_reply: null } : t));
                         setSelectedTicket(null);
@@ -293,118 +339,119 @@ export const AdminSupport = () => {
         return list;
     }, [tickets, search, filter]);
 
-    // ─── Renderers ──────────────────────────────────────────────────────────
     const renderHeader = () => (
-        <LinearGradient colors={['#1E1B4B', '#312E81']} style={{ paddingTop: insets.top + 10, paddingHorizontal: 20, paddingBottom: 24, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-                <View>
-                    <Text style={{ fontSize: 28, fontWeight: '900', color: 'white', letterSpacing: -0.5 }}>Support</Text>
-                    <Text style={{ fontSize: 14, color: '#A5B4FC', marginTop: 2 }}>{tickets.filter(t => t.status === 'open').length} pending tickets</Text>
-                </View>
-                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' }}>
-                    <Ionicons name="chatbubbles" size={22} color="white" />
+        <View style={[s.header, { paddingTop: Platform.OS === 'ios' ? insets.top + 10 : 16 }]}>
+            <View style={s.headerRow}>
+                <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Ionicons name="chatbubbles" size={22} color={GOLD} />
+                        <Text style={s.headerTitle}>Tikitin Agaji (Support)</Text>
+                    </View>
+                    <Text style={s.headerSubtitle}>
+                        {tickets.filter(t => t.status === 'open').length} suna jiran amsa a yanzu
+                    </Text>
                 </View>
             </View>
 
             {/* Search */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 14, paddingHorizontal: 14, height: 46 }}>
-                <Ionicons name="search" size={18} color="#A5B4FC" />
+            <View style={s.searchBar}>
+                <Ionicons name="search" size={16} color={GOLD} />
                 <TextInput
-                    style={{ flex: 1, marginLeft: 10, color: 'white', fontSize: 15 }}
-                    placeholder="Search messages, names, categories..."
-                    placeholderTextColor="#A5B4FC"
+                    style={s.searchInput}
+                    placeholder="Bincika saƙo, suna ko rukuni..."
+                    placeholderTextColor="#94A3B8"
                     value={search}
                     onChangeText={setSearch}
                 />
                 {search.length > 0 && (
                     <TouchableOpacity onPress={() => setSearch('')}>
-                        <Ionicons name="close-circle" size={18} color="#A5B4FC" />
+                        <Ionicons name="close-circle" size={17} color="#94A3B8" />
                     </TouchableOpacity>
                 )}
             </View>
 
-            {/* Filters */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, marginTop: 16 }}>
-                {['all', 'open', 'resolved'].map(f => {
-                    const active = filter === f;
-                    const labels = { all: 'All Tickets', open: 'Pending', resolved: 'Resolved' };
-                    let count = 0;
-                    if (f === 'all') count = tickets.length;
-                    if (f === 'open') count = tickets.filter(t => t.status === 'open').length;
-                    if (f === 'resolved') count = tickets.filter(t => t.status === 'resolved').length;
-
+            {/* Filter Tabs */}
+            <View style={s.filterRow}>
+                {[
+                    { id: 'all', label: 'Duka Tikiti', count: tickets.length },
+                    { id: 'open', label: 'Jiran Amsa', count: tickets.filter(t => t.status === 'open').length },
+                    { id: 'resolved', label: 'An Warware', count: tickets.filter(t => t.status === 'resolved').length },
+                ].map(f => {
+                    const active = filter === f.id;
                     return (
                         <TouchableOpacity
-                            key={f}
-                            onPress={() => setFilter(f)}
-                            style={{
-                                paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
-                                backgroundColor: active ? 'white' : 'rgba(255,255,255,0.1)',
-                                flexDirection: 'row', alignItems: 'center', gap: 6
-                            }}
+                            key={f.id}
+                            onPress={() => setFilter(f.id)}
+                            style={[s.filterPill, active && s.filterPillActive]}
+                            activeOpacity={0.8}
                         >
-                            <Text style={{ fontSize: 13, fontWeight: '700', color: active ? '#1E1B4B' : 'white' }}>{labels[f]}</Text>
-                            <View style={{ backgroundColor: active ? '#EEF2FF' : 'rgba(255,255,255,0.2)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10 }}>
-                                <Text style={{ fontSize: 10, fontWeight: '800', color: active ? '#4F46E5' : 'white' }}>{count}</Text>
+                            <Text style={[s.filterPillText, active && s.filterPillTextActive]}>{f.label}</Text>
+                            <View style={[s.countBadge, active && s.countBadgeActive]}>
+                                <Text style={[s.countBadgeText, active && s.countBadgeTextActive]}>{f.count}</Text>
                             </View>
                         </TouchableOpacity>
                     );
                 })}
-            </ScrollView>
-        </LinearGradient>
+            </View>
+        </View>
     );
 
     const renderItem = ({ item }) => {
         const isOpen = item.status === 'open';
         return (
             <TouchableOpacity
-                activeOpacity={0.7}
+                activeOpacity={0.85}
                 onPress={() => setSelectedTicket(item)}
-                style={{
-                    backgroundColor: 'white', padding: 16, borderRadius: 16, marginBottom: 12,
-                    borderWidth: 1, borderColor: isOpen ? '#FFE4E6' : '#F1F5F9',
-                    shadowColor: isOpen ? '#E11D48' : '#94A3B8', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 1
-                }}
+                style={[s.ticketCard, isOpen && s.ticketCardOpen]}
             >
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                    <View style={{ flex: 1, marginRight: 12, flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
-                        <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: isOpen ? '#FFF1F2' : '#F1F5F9', justifyContent: 'center', alignItems: 'center' }}>
-                            <Ionicons name={isOpen ? "alert-circle" : "checkmark-done"} size={18} color={isOpen ? "#E11D48" : "#10B981"} />
+                <View style={s.ticketTop}>
+                    <View style={{ flex: 1, marginRight: 10, flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+                        <View style={[s.statusIconCircle, { backgroundColor: isOpen ? '#FEF3C7' : '#ECFDF5' }]}>
+                            <Ionicons 
+                                name={isOpen ? "alert-circle" : "checkmark-done"} 
+                                size={18} 
+                                color={isOpen ? "#D97706" : "#059669"} 
+                            />
                         </View>
                         <View style={{ flex: 1 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                <View style={{ backgroundColor: '#F8FAFC', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B' }}>{item.category || 'General'}</Text>
+                                <View style={s.categoryTag}>
+                                    <Text style={s.categoryTagText}>{item.category || 'General'}</Text>
                                 </View>
-                                <Text style={{ fontSize: 11, color: '#94A3B8' }}>{fmtDate(item.created_at)}</Text>
+                                <Text style={s.dateText}>{fmtDate(item.created_at)}</Text>
                             </View>
-                            <Text style={{ fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 2 }} numberOfLines={1}>{item.subject}</Text>
+                            <Text style={s.subjectText} numberOfLines={1}>{item.subject}</Text>
                         </View>
                     </View>
-                    <View style={{ backgroundColor: isOpen ? '#FFF7ED' : '#ECFDF5', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
-                        <Text style={{ fontSize: 10, fontWeight: '800', color: isOpen ? '#C2410C' : '#047857', textTransform: 'uppercase' }}>
-                            {item.status}
+                    <View style={[s.statusTag, { backgroundColor: isOpen ? '#FEF3C7' : '#ECFDF5' }]}>
+                        <Text style={[s.statusTagText, { color: isOpen ? '#D97706' : '#059669' }]}>
+                            {isOpen ? 'A BUDE' : 'AN RUFE'}
                         </Text>
                     </View>
                 </View>
 
-                <Text style={{ fontSize: 14, color: '#475569', lineHeight: 20, marginBottom: 14 }} numberOfLines={2}>
+                <Text style={s.messagePreview} numberOfLines={2}>
                     {item.message}
                 </Text>
 
-                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', padding: 10, borderRadius: 10 }}>
-                    <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center', marginRight: 8 }}>
-                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#64748B' }}>
+                <View style={s.ticketFooter}>
+                    <View style={s.footerAvatar}>
+                        <Text style={s.footerAvatarText}>
                             {item.user?.full_name ? item.user.full_name.charAt(0).toUpperCase() : '?'}
                         </Text>
                     </View>
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#334155', flex: 1 }} numberOfLines={1}>
-                        {item.user?.full_name || 'Unknown User'}
+                    <Text style={s.footerUserName} numberOfLines={1}>
+                        {item.user?.full_name || 'Bako (Guest User)'}
                     </Text>
-                    {item.admin_reply && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                            <Ionicons name="return-down-forward" size={14} color="#10B981" />
-                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#10B981' }}>Replied</Text>
+                    {item.admin_reply ? (
+                        <View style={s.repliedBadge}>
+                            <Ionicons name="return-down-forward" size={13} color="#059669" />
+                            <Text style={s.repliedBadgeText}>An Amsa</Text>
+                        </View>
+                    ) : (
+                        <View style={s.pendingBadge}>
+                            <Ionicons name="time-outline" size={13} color="#D97706" />
+                            <Text style={s.pendingBadgeText}>Yana Jira</Text>
                         </View>
                     )}
                 </View>
@@ -413,7 +460,7 @@ export const AdminSupport = () => {
     };
 
     return (
-        <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+        <View style={s.container}>
             {renderHeader()}
 
             {loading ? (
@@ -421,18 +468,21 @@ export const AdminSupport = () => {
             ) : (
                 <FlatList
                     data={filteredTickets}
-                    keyExtractor={i => i.id}
+                    keyExtractor={i => i.id ? i.id.toString() : Math.random().toString()}
                     renderItem={renderItem}
-                    contentContainerStyle={{ padding: 14, paddingBottom: insets.bottom + 80 }}
+                    contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 80 }}
                     showsVerticalScrollIndicator={false}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[GOLD, NAVY]} />}
                     ListEmptyComponent={
-                        <View style={{ alignItems: 'center', justifyContent: 'center', padding: 40, marginTop: 40 }}>
-                            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#EEF2FF', justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
-                                <Ionicons name="chatbubbles-outline" size={32} color="#4F46E5" />
+                        <View style={s.emptyBox}>
+                            <View style={s.emptyIconCircle}>
+                                <Ionicons name="chatbubbles-outline" size={36} color={GOLD} />
                             </View>
-                            <Text style={{ fontSize: 18, fontWeight: '800', color: '#1E293B', marginBottom: 6 }}>No Tickets Found</Text>
-                            <Text style={{ fontSize: 14, color: '#64748B', textAlign: 'center', lineHeight: 22 }}>
-                                {search ? `We couldn't find any tickets matching "${search}"` : "You don't have any support tickets at the moment."}
+                            <Text style={s.emptyTitle}>Babu Tikitin Agaji</Text>
+                            <Text style={s.emptySub}>
+                                {search 
+                                    ? `Babu wani korafi da ya dace da "${search}"` 
+                                    : "Babu wani tikitin neman agaji ko korafi da aka aiko a yanzu."}
                             </Text>
                         </View>
                     }
@@ -450,3 +500,479 @@ export const AdminSupport = () => {
         </View>
     );
 };
+
+const s = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: '#F8FAFC'
+    },
+    header: {
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 20,
+        paddingBottom: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E2E8F0',
+        elevation: 1,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2
+    },
+    headerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 12
+    },
+    headerTitle: {
+        fontSize: 20,
+        fontWeight: '900',
+        color: NAVY
+    },
+    headerSubtitle: {
+        fontSize: 12,
+        color: '#64748B',
+        marginTop: 2
+    },
+    searchBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8FAFC',
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 9,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        marginBottom: 12
+    },
+    searchInput: {
+        flex: 1,
+        marginLeft: 8,
+        color: NAVY,
+        fontSize: 13,
+        fontWeight: '600'
+    },
+    filterRow: {
+        flexDirection: 'row',
+        gap: 8
+    },
+    filterPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 16,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        gap: 6
+    },
+    filterPillActive: {
+        backgroundColor: NAVY,
+        borderColor: NAVY
+    },
+    filterPillText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#64748B'
+    },
+    filterPillTextActive: {
+        color: GOLD,
+        fontWeight: '800'
+    },
+    countBadge: {
+        backgroundColor: '#E2E8F0',
+        paddingHorizontal: 6,
+        paddingVertical: 1,
+        borderRadius: 8
+    },
+    countBadgeActive: {
+        backgroundColor: 'rgba(217, 167, 58, 0.25)'
+    },
+    countBadgeText: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: '#64748B'
+    },
+    countBadgeTextActive: {
+        color: GOLD
+    },
+    ticketCard: {
+        backgroundColor: '#FFFFFF',
+        padding: 16,
+        borderRadius: 16,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        elevation: 1,
+        shadowColor: NAVY,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 4
+    },
+    ticketCardOpen: {
+        borderColor: '#FDE68A'
+    },
+    ticketTop: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 10
+    },
+    statusIconCircle: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        justifyContent: 'center',
+        alignItems: 'center'
+    },
+    categoryTag: {
+        backgroundColor: '#F1F5F9',
+        paddingHorizontal: 7,
+        paddingVertical: 2,
+        borderRadius: 6
+    },
+    categoryTagText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#475569'
+    },
+    dateText: {
+        fontSize: 11,
+        color: '#94A3B8'
+    },
+    subjectText: {
+        fontSize: 15,
+        fontWeight: '800',
+        color: NAVY
+    },
+    statusTag: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 10
+    },
+    statusTagText: {
+        fontSize: 10,
+        fontWeight: '800'
+    },
+    messagePreview: {
+        fontSize: 13,
+        color: '#475569',
+        lineHeight: 18,
+        marginBottom: 12
+    },
+    ticketFooter: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8FAFC',
+        padding: 8,
+        borderRadius: 10
+    },
+    footerAvatar: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: '#FFFBEB',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 8,
+        borderWidth: 1,
+        borderColor: '#FDE68A'
+    },
+    footerAvatarText: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: NAVY
+    },
+    footerUserName: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: NAVY,
+        flex: 1
+    },
+    repliedBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#ECFDF5',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6
+    },
+    repliedBadgeText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#059669'
+    },
+    pendingBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#FFFBEB',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6
+    },
+    pendingBadgeText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#D97706'
+    },
+    skeletonCard: {
+        backgroundColor: 'white',
+        borderRadius: 16,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    emptyBox: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 40,
+        marginTop: 40,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    emptyIconCircle: {
+        width: 72,
+        height: 72,
+        borderRadius: 36,
+        backgroundColor: '#FFFBEB',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 14,
+        borderWidth: 1,
+        borderColor: '#FDE68A'
+    },
+    emptyTitle: {
+        fontSize: 17,
+        fontWeight: '900',
+        color: NAVY,
+        marginBottom: 6
+    },
+    emptySub: {
+        fontSize: 13,
+        color: '#64748B',
+        textAlign: 'center',
+        lineHeight: 18
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(14, 26, 46, 0.65)',
+        justifyContent: 'flex-end'
+    },
+    modalCard: {
+        backgroundColor: '#FFFFFF',
+        borderTopLeftRadius: 28,
+        borderTopRightRadius: 28,
+        height: '90%'
+    },
+    modalHeader: {
+        paddingHorizontal: 20,
+        paddingVertical: 18,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start'
+    },
+    badgePill: {
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 8
+    },
+    badgePillText: {
+        fontSize: 10,
+        fontWeight: '800'
+    },
+    catBadge: {
+        backgroundColor: '#F1F5F9',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 8
+    },
+    catBadgeText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#475569'
+    },
+    modalTicketSubject: {
+        fontSize: 18,
+        fontWeight: '900',
+        color: NAVY,
+        lineHeight: 22
+    },
+    closeModalBtn: {
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        backgroundColor: '#F1F5F9',
+        justifyContent: 'center',
+        alignItems: 'center'
+    },
+    ticketMetaRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16
+    },
+    ticketMetaDate: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#64748B'
+    },
+    reopenBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        backgroundColor: '#FFFBEB',
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#FDE68A'
+    },
+    reopenBtnText: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: NAVY
+    },
+    deleteBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        backgroundColor: '#FEF2F2',
+        borderRadius: 8
+    },
+    deleteBtnText: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: '#EF4444'
+    },
+    userBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        backgroundColor: '#F8FAFC',
+        padding: 12,
+        borderRadius: 14,
+        marginBottom: 18,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    userAvatarCircle: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#FFFBEB',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#FDE68A'
+    },
+    userAvatarText: {
+        fontSize: 15,
+        fontWeight: '800',
+        color: NAVY
+    },
+    userNameText: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: NAVY
+    },
+    userEmailText: {
+        fontSize: 11,
+        color: '#64748B'
+    },
+    whatsAppDirectBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#DCFCE7',
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#86EFAC'
+    },
+    whatsAppDirectText: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#16A34A'
+    },
+    bubbleLabel: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: '#64748B',
+        marginLeft: 8,
+        marginBottom: 6,
+        letterSpacing: 0.5
+    },
+    userMessageBubble: {
+        backgroundColor: '#FFFFFF',
+        padding: 16,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        marginBottom: 20
+    },
+    userMessageText: {
+        fontSize: 14,
+        color: '#334155',
+        lineHeight: 22
+    },
+    adminReplyBubble: {
+        backgroundColor: '#ECFDF5',
+        padding: 16,
+        borderRadius: 16,
+        width: '92%',
+        borderWidth: 1,
+        borderColor: '#A7F3D0'
+    },
+    adminReplyText: {
+        fontSize: 14,
+        color: '#065F46',
+        lineHeight: 22,
+        fontWeight: '600'
+    },
+    replyBox: {
+        backgroundColor: '#FFFFFF',
+        padding: 18,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    replyBoxTitle: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: NAVY
+    },
+    replyInput: {
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        borderRadius: 12,
+        padding: 12,
+        fontSize: 14,
+        color: NAVY,
+        minHeight: 100,
+        textAlignVertical: 'top'
+    },
+    sendReplyBtn: {
+        marginTop: 14,
+        borderRadius: 14,
+        backgroundColor: GOLD,
+        paddingVertical: 14,
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    sendReplyBtnText: {
+        color: NAVY,
+        fontWeight: '900',
+        fontSize: 14
+    }
+});

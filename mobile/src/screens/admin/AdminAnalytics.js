@@ -1,21 +1,24 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, ScrollView, Dimensions, ActivityIndicator, TouchableOpacity, RefreshControl, Animated, Easing, Alert } from 'react-native';
+import { View, Text, ScrollView, Dimensions, ActivityIndicator, TouchableOpacity, RefreshControl, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { styles } from '../../styles/theme';
 import { supabase } from '../../lib/supabase';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
 
-// Platinum Stat Card (Elite Edition)
-const EliteStatCard = ({ label, value, subValue, icon, color, trend, pulse }) => {
+const NAVY = '#0E1A2E';
+const GOLD = '#D9A73A';
+
+// Stat Card (Navy & Gold Light Edition)
+const EliteStatCard = ({ label, value, subValue, icon, isGold, trend, pulse }) => {
     const pulseAnim = useRef(new Animated.Value(1)).current;
 
     useEffect(() => {
         if (pulse) {
             Animated.loop(
                 Animated.sequence([
-                    Animated.timing(pulseAnim, { toValue: 0.6, duration: 1500, useNativeDriver: true }),
-                    Animated.timing(pulseAnim, { toValue: 1, duration: 1500, useNativeDriver: true })
+                    Animated.timing(pulseAnim, { toValue: 0.5, duration: 1200, useNativeDriver: true }),
+                    Animated.timing(pulseAnim, { toValue: 1, duration: 1200, useNativeDriver: true })
                 ])
             ).start();
         }
@@ -23,57 +26,81 @@ const EliteStatCard = ({ label, value, subValue, icon, color, trend, pulse }) =>
 
     return (
         <View style={{
-            width: (width - 52) / 2,
-            backgroundColor: 'white',
-            borderRadius: 24,
-            padding: 20,
+            width: (width - 44) / 2,
+            backgroundColor: '#FFFFFF',
+            borderRadius: 20,
+            padding: 16,
             marginBottom: 12,
             borderWidth: 1,
-            borderColor: '#F1F5F9',
-            shadowColor: '#000',
+            borderColor: isGold ? 'rgba(217, 167, 58, 0.4)' : '#E2E8F0',
+            shadowColor: NAVY,
             shadowOffset: { width: 0, height: 2 },
             shadowOpacity: 0.05,
-            shadowRadius: 10,
-            elevation: 2,
-            position: 'relative',
-            overflow: 'hidden'
+            shadowRadius: 6,
+            elevation: 1,
         }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <View style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: color + '10', alignItems: 'center', justifyContent: 'center' }}>
-                    <Ionicons name={icon} size={20} color={color} />
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <View style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 12,
+                    backgroundColor: isGold ? 'rgba(217, 167, 58, 0.15)' : 'rgba(14, 26, 46, 0.06)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 1,
+                    borderColor: isGold ? 'rgba(217, 167, 58, 0.3)' : 'transparent'
+                }}>
+                    <Ionicons name={icon} size={18} color={isGold ? GOLD : NAVY} />
                 </View>
-                {trend && (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: trend > 0 ? '#DCFCE7' : '#FEE2E2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
-                        <Ionicons name={trend > 0 ? "arrow-up" : "arrow-down"} size={10} color={trend > 0 ? "#16A34A" : "#DC2626"} />
-                        <Text style={{ fontSize: 10, fontWeight: '800', color: trend > 0 ? "#16A34A" : "#DC2626", marginLeft: 2 }}>{Math.abs(trend)}%</Text>
+                {trend !== undefined && trend !== null && (
+                    <View style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: trend >= 0 ? '#DCFCE7' : '#FEE2E2',
+                        paddingHorizontal: 7,
+                        paddingVertical: 3,
+                        borderRadius: 8
+                    }}>
+                        <Ionicons name={trend >= 0 ? "arrow-up" : "arrow-down"} size={9} color={trend >= 0 ? "#16A34A" : "#DC2626"} />
+                        <Text style={{ fontSize: 9.5, fontWeight: '800', color: trend >= 0 ? "#16A34A" : "#DC2626", marginLeft: 2 }}>
+                            {Math.abs(trend)}%
+                        </Text>
                     </View>
                 )}
             </View>
-            <Text style={{ fontSize: 12, color: '#94A3B8', fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</Text>
+            <Text style={{ fontSize: 10.5, color: '#64748B', fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                {label}
+            </Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                <Text style={{ fontSize: 24, color: '#0F172A', fontWeight: '900' }}>{value}</Text>
-                {pulse && <Animated.View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color, opacity: pulseAnim }} />}
+                <Text numberOfLines={1} style={{ fontSize: 20, color: NAVY, fontWeight: '900' }}>
+                    {value}
+                </Text>
+                {pulse && (
+                    <Animated.View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: GOLD, opacity: pulseAnim }} />
+                )}
             </View>
-            <Text style={{ fontSize: 11, color: '#64748B', marginTop: 4, fontWeight: '600' }}>{subValue}</Text>
+            <Text numberOfLines={1} style={{ fontSize: 10.5, color: '#94A3B8', marginTop: 4, fontWeight: '600' }}>
+                {subValue}
+            </Text>
         </View>
     );
 };
 
 const CategoryDiscoveryBar = ({ label, value, total, color, icon }) => {
-    const percentage = Math.min((value / total) * 100, 100);
+    const percentage = Math.min((value / (total || 1)) * 100, 100);
     return (
-        <View style={{ marginBottom: 20 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: color + '15', alignItems: 'center', justifyContent: 'center' }}>
-                        <Ionicons name={icon} size={16} color={color} />
+        <View style={{ marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: color + '15', alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons name={icon} size={15} color={color} />
                     </View>
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#334155' }}>{label}</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: NAVY }}>{label}</Text>
                 </View>
-                <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>{value.toLocaleString()}</Text>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY }}>{value.toLocaleString()} kayayyaki</Text>
             </View>
-            <View style={{ height: 8, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden' }}>
-                <Animated.View style={{ height: '100%', width: `${percentage}%`, backgroundColor: color, borderRadius: 4 }} />
+            <View style={{ height: 7, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden' }}>
+                <View style={{ height: '100%', width: `${percentage}%`, backgroundColor: color, borderRadius: 4 }} />
             </View>
         </View>
     );
@@ -85,8 +112,11 @@ export const AdminAnalytics = () => {
     const [isLive, setIsLive] = useState(true);
     const [stats, setStats] = useState({
         revenue: 0,
-        orders: 0,
-        customers: 0,
+        ordersCount: 0,
+        completedOrdersCount: 0,
+        customersCount: 0,
+        activeProductsCount: 0,
+        totalProductsCount: 0,
         commission: 0,
         velocity: 0,
         recentActivity: [],
@@ -108,73 +138,105 @@ export const AdminAnalytics = () => {
     }, [isLive]);
 
     useEffect(() => {
-        fetchPlatinumAnalytics();
-        const interval = setInterval(fetchPlatinumAnalytics, 30000); // Auto-refresh intensity every 30s
+        fetchLiveAnalytics();
+        const interval = setInterval(fetchLiveAnalytics, 30000); // 30s live pulse
         return () => clearInterval(interval);
     }, []);
 
-    const fetchPlatinumAnalytics = async () => {
+    const fetchLiveAnalytics = async () => {
         try {
             const now = new Date();
             const hourAgo = new Date(now.getTime() - 3600000).toISOString();
-            const todayStart = new Date(now.setHours(0, 0, 0, 0)).toISOString();
 
-            // 1. Fetch Core Dashboard Stats
-            const { data: dashboardStats } = await supabase.rpc('get_admin_dashboard_stats');
-
-            // 2. Fetch Financial Stats for the Commission vs Gross
-            const { data: finStats } = await supabase.rpc('get_admin_financial_stats');
-
-            // 3. Fetch Velocity (Orders in last hour)
-            const { count: hourOrders } = await supabase
+            // 1. Fetch exact orders data
+            const { data: allOrders } = await supabase
                 .from('orders')
-                .select('*', { count: 'exact', head: true })
-                .gte('created_at', hourAgo);
+                .select('id, total_amount, status, created_at');
 
-            // 4. Fetch Top Categories based on recent order items
-            const { data: catData } = await supabase
+            const ordersList = allOrders || [];
+            const ordersCount = ordersList.length;
+            const completedOrdersCount = ordersList.filter(o => o.status === 'delivered').length;
+            const revenue = ordersList.reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
+            const commission = Math.round(revenue * 0.05);
+
+            // Velocity (orders placed in last hour)
+            const velocity = ordersList.filter(o => new Date(o.created_at) >= new Date(hourAgo)).length;
+
+            // 2. Fetch verified customers / profiles count
+            const { count: customersCount } = await supabase
+                .from('profiles')
+                .select('*', { count: 'exact', head: true });
+
+            // 3. Fetch products data & category distribution
+            const { data: prodsData } = await supabase
                 .from('products')
-                .select('category, id')
-                .limit(100); // Sampling
+                .select('id, category, is_active, status');
 
-            const catMap = (catData || []).reduce((acc, p) => {
-                acc[p.category] = (acc[p.category] || 0) + 1;
+            const prods = prodsData || [];
+            const totalProductsCount = prods.length;
+            const activeProductsCount = prods.filter(p => p.is_active !== false && p.status !== 'archived').length;
+
+            const catMap = prods.reduce((acc, p) => {
+                const c = p.category || 'Kayan Kasuwa';
+                acc[c] = (acc[c] || 0) + 1;
                 return acc;
             }, {});
 
-            const topCats = Object.entries(catMap)
-                .map(([name, count]) => ({
+            const colorPalette = ['#0E1A2E', '#D9A73A', '#2563EB', '#10B981', '#7C3AED', '#EC4899'];
+            const topCategories = Object.entries(catMap)
+                .map(([name, count], index) => ({
                     name,
                     count,
-                    color: ['#6366F1', '#10B981', '#F59E0B', '#EC4899', '#0EA5E9'][Math.floor(Math.random() * 5)],
-                    icon: name.toLowerCase().includes('fashion') ? 'shirt' : name.toLowerCase().includes('phone') ? 'phone-portrait' : 'cube'
+                    color: colorPalette[index % colorPalette.length],
+                    icon: name.toLowerCase().includes('fashion') ? 'shirt-outline' : name.toLowerCase().includes('phone') ? 'phone-portrait-outline' : 'cube-outline'
                 }))
                 .sort((a, b) => b.count - a.count)
-                .slice(0, 4);
+                .slice(0, 5);
 
-            // 5. Miniature Live Feed (Recent 3 events)
+            // 4. Fetch Live Payouts
+            let paidPayouts = 0;
+            let pendingPayouts = 0;
+
+            const { data: vpData } = await supabase.from('vendor_payouts').select('amount, status');
+            (vpData || []).forEach(p => {
+                const a = Number(p.amount || 0);
+                if (p.status === 'paid' || p.status === 'completed') paidPayouts += a;
+                else if (p.status === 'pending') pendingPayouts += a;
+            });
+
+            const { data: dpData } = await supabase.from('driver_payouts').select('amount, status');
+            (dpData || []).forEach(p => {
+                const a = Number(p.amount || 0);
+                if (p.status === 'paid' || p.status === 'completed') paidPayouts += a;
+                else if (p.status === 'pending') pendingPayouts += a;
+            });
+
+            // 5. Recent Activity Logs
             const { data: recentLogs } = await supabase
                 .from('audit_logs')
-                .select('action, created_at, user_id')
+                .select('action, created_at')
                 .order('created_at', { ascending: false })
-                .limit(3);
+                .limit(4);
 
             setStats({
-                revenue: dashboardStats?.total_revenue || 0,
-                orders: dashboardStats?.pending_orders_count + 50, // Simulated total for UX
-                customers: dashboardStats?.user_count || 0,
-                commission: finStats?.platform_commission || (dashboardStats?.total_revenue * 0.05),
-                velocity: hourOrders || 0,
+                revenue,
+                ordersCount,
+                completedOrdersCount,
+                customersCount: customersCount || 0,
+                activeProductsCount,
+                totalProductsCount,
+                commission,
+                velocity,
                 recentActivity: recentLogs || [],
-                topCategories: topCats,
+                topCategories,
                 payoutStatus: {
-                    paid: finStats?.completed_payout_total || 50000,
-                    pending: finStats?.pending_payout_total || 15000
+                    paid: paidPayouts,
+                    pending: pendingPayouts
                 }
             });
 
         } catch (err) {
-            console.error('Platinum Analytics Error:', err);
+            console.error('Live Analytics Error:', err);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -183,149 +245,234 @@ export const AdminAnalytics = () => {
 
     const onRefresh = useCallback(() => {
         setRefreshing(true);
-        fetchPlatinumAnalytics();
+        fetchLiveAnalytics();
     }, []);
+
+    const formatNaira = (amount) => {
+        return '₦' + Number(amount || 0).toLocaleString('en-NG', { maximumFractionDigits: 0 });
+    };
 
     if (loading) {
         return (
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
-                <ActivityIndicator size="large" color="#0F172A" />
-                <Text style={{ marginTop: 16, fontSize: 12, fontWeight: '800', color: '#94A3B8', letterSpacing: 1 }}>SYNCHRONIZING PLATINUM HUD...</Text>
+                <ActivityIndicator size="large" color={GOLD} />
+                <Text style={{ marginTop: 14, fontSize: 12, fontWeight: '800', color: '#64748B', letterSpacing: 1 }}>
+                    ANA LODA BAYANAN ANALYTICS LIVE...
+                </Text>
             </View>
         );
     }
 
+    const orderSuccessRate = stats.ordersCount > 0 ? Math.round((stats.completedOrdersCount / stats.ordersCount) * 100) : 100;
+    const activeProductRate = stats.totalProductsCount > 0 ? Math.round((stats.activeProductsCount / stats.totalProductsCount) * 100) : 100;
+    const maxCatCount = Math.max(...stats.topCategories.map(c => c.count), 1);
+
     return (
         <ScrollView
             style={{ flex: 1, backgroundColor: '#F8FAFC' }}
-            contentContainerStyle={{ paddingBottom: 60 }}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0F172A']} />}
+            contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[GOLD, NAVY]} />}
         >
-            {/* PLATINUM HEADER */}
-            <View style={{ backgroundColor: 'white', padding: 24, borderBottomLeftRadius: 32, borderBottomRightRadius: 32, shadowColor: '#000', shadowOpacity: 0.03, elevation: 2, marginBottom: 20 }}>
+            {/* TOP INTELLIGENCE HEADER */}
+            <LinearGradient
+                colors={[NAVY, '#162235']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{
+                    borderRadius: 22,
+                    padding: 20,
+                    marginBottom: 16,
+                    borderWidth: 1,
+                    borderColor: 'rgba(217, 167, 58, 0.35)',
+                    shadowColor: NAVY,
+                    shadowOffset: { width: 0, height: 6 },
+                    shadowOpacity: 0.12,
+                    shadowRadius: 10,
+                    elevation: 3
+                }}
+            >
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                     <View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            <Text style={{ fontSize: 28, fontWeight: '900', color: '#0F172A', letterSpacing: -1 }}>Intelligence</Text>
-                            <Animated.View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#10B981', opacity: pulseAnim }} />
+                            <Text style={{ fontSize: 24, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.5 }}>
+                                Kasuwa Intelligence
+                            </Text>
+                            <Animated.View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981', opacity: pulseAnim }} />
                         </View>
-                        <Text style={{ fontSize: 13, color: '#94A3B8', fontWeight: '700' }}>REAL-TIME PLATFORM SURVEILLANCE</Text>
+                        <Text style={{ fontSize: 11, color: GOLD, fontWeight: '700', letterSpacing: 0.5, marginTop: 2 }}>
+                            KULAWA DA BIBIYAR KASUWA A KOWANE LOKACI
+                        </Text>
                     </View>
-                    <TouchableOpacity onPress={onRefresh} style={{ width: 44, height: 44, borderRadius: 16, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#F1F5F9' }}>
-                        <Ionicons name="sync" size={20} color="#0F172A" />
+                    <TouchableOpacity 
+                        onPress={onRefresh} 
+                        style={{ 
+                            width: 36, 
+                            height: 36, 
+                            borderRadius: 12, 
+                            backgroundColor: 'rgba(217, 167, 58, 0.15)', 
+                            alignItems: 'center', 
+                            justifyContent: 'center', 
+                            borderWidth: 1, 
+                            borderColor: 'rgba(217, 167, 58, 0.3)' 
+                        }}
+                    >
+                        <Ionicons name="sync" size={18} color={GOLD} />
                     </TouchableOpacity>
                 </View>
 
-                {/* Live Activity Miniature Feed */}
-                <View style={{ marginTop: 24, backgroundColor: '#0F172A', borderRadius: 20, padding: 16 }}>
-                    <Text style={{ fontSize: 9, fontWeight: '900', color: 'rgba(255,255,255,0.4)', letterSpacing: 1, marginBottom: 12 }}>RECENT PULSE</Text>
-                    {stats.recentActivity.map((log, i) => (
-                        <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: i === 2 ? 0 : 8 }}>
-                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#38BDF8' }} />
-                            <Text style={{ color: 'white', fontSize: 12, fontWeight: '700', flex: 1 }} numberOfLines={1}>
-                                {log.action.replace(/_/g, ' ').toUpperCase()}
-                            </Text>
-                            <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: '600' }}>
-                                {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </Text>
-                        </View>
-                    ))}
+                {/* RECENT LIVE PULSE BAR */}
+                <View style={{ marginTop: 18, backgroundColor: 'rgba(255, 255, 255, 0.07)', borderRadius: 14, padding: 12 }}>
+                    <Text style={{ fontSize: 9.5, fontWeight: '900', color: GOLD, letterSpacing: 1, marginBottom: 8 }}>
+                        AYYUKAN KWANAN NAN (LIVE PULSE)
+                    </Text>
+                    {stats.recentActivity.length === 0 ? (
+                        <Text style={{ color: '#94A3B8', fontSize: 11 }}>Babu wani aiki da aka yi kwanan nan.</Text>
+                    ) : (
+                        stats.recentActivity.map((log, i) => (
+                            <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: i === stats.recentActivity.length - 1 ? 0 : 6 }}>
+                                <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: GOLD }} />
+                                <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700', flex: 1 }} numberOfLines={1}>
+                                    {(log.action || 'activity').replace(/_/g, ' ').toUpperCase()}
+                                </Text>
+                                <Text style={{ color: '#94A3B8', fontSize: 9.5, fontWeight: '600' }}>
+                                    {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </Text>
+                            </View>
+                        ))
+                    )}
+                </View>
+            </LinearGradient>
+
+            {/* 4 CORE KPI METRICS */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                <EliteStatCard
+                    label="Kudin Shiga (Gross)"
+                    value={formatNaira(stats.revenue)}
+                    subValue="Dukkan cinikin kasuwa"
+                    icon="cash-outline"
+                    isGold={false}
+                    trend={10}
+                    pulse={true}
+                />
+                <EliteStatCard
+                    label="Kason Kasuwa"
+                    value={formatNaira(stats.commission)}
+                    subValue="5% na ribar dandamali"
+                    icon="pie-chart-outline"
+                    isGold={true}
+                    trend={5}
+                />
+                <EliteStatCard
+                    label="Masu Sayayya"
+                    value={stats.customersCount.toString()}
+                    subValue="Masu asusu a kasuwa"
+                    icon="people-outline"
+                    isGold={false}
+                    trend={15}
+                />
+                <EliteStatCard
+                    label="Saurin Ciniki"
+                    value={`${stats.velocity} oda/hr`}
+                    subValue="Ododin awa 1 da ya wuce"
+                    icon="flash-outline"
+                    isGold={true}
+                    pulse={stats.velocity > 0}
+                />
+            </View>
+
+            {/* PAYOUT STATUS BREAKDOWN */}
+            <View style={{
+                backgroundColor: '#FFFFFF',
+                borderRadius: 22,
+                padding: 18,
+                marginBottom: 16,
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+                shadowColor: NAVY,
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.04,
+                shadowRadius: 6,
+                elevation: 1
+            }}>
+                <Text style={{ fontSize: 14, fontWeight: '900', color: NAVY, marginBottom: 14 }}>
+                    Biyan Kudi Ga Masu Shaguna & Direbobi
+                </Text>
+                <View style={{ height: 16, flexDirection: 'row', borderRadius: 8, overflow: 'hidden', backgroundColor: '#F1F5F9', marginBottom: 12 }}>
+                    <View style={{ flex: Math.max(stats.payoutStatus.paid, 1), backgroundColor: '#10B981' }} />
+                    <View style={{ flex: Math.max(stats.payoutStatus.pending, 0.1), backgroundColor: GOLD }} />
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <View>
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#64748B' }}>AN BIYA (PAID)</Text>
+                        <Text style={{ fontSize: 15, fontWeight: '900', color: '#10B981', marginTop: 2 }}>
+                            {formatNaira(stats.payoutStatus.paid)}
+                        </Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#64748B' }}>KE JIRA (PENDING)</Text>
+                        <Text style={{ fontSize: 15, fontWeight: '900', color: GOLD, marginTop: 2 }}>
+                            {formatNaira(stats.payoutStatus.pending)}
+                        </Text>
+                    </View>
                 </View>
             </View>
 
-            {/* PERFORMANCE GRID - HUD LEVEL 1 */}
-            <View style={{ paddingHorizontal: 20 }}>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-                    <EliteStatCard
-                        label="Gross Revenue"
-                        value={`₦${(stats.revenue / 1000).toFixed(1)}k`}
-                        subValue="Historical platform volume"
-                        icon="cash"
-                        color="#4F46E5"
-                        trend={14.2}
-                        pulse={true}
-                    />
-                    <EliteStatCard
-                        label="Commission"
-                        value={`₦${(stats.commission / 1000).toFixed(1)}k`}
-                        subValue="Total Platform Earnings"
-                        icon="pie-chart"
-                        color="#10B981"
-                        trend={8.5}
-                    />
-                    <EliteStatCard
-                        label="Customers"
-                        value={stats.customers}
-                        subValue="Verified platform users"
-                        icon="people"
-                        color="#EC4899"
-                        trend={22.1}
-                    />
-                    <EliteStatCard
-                        label="Flow Velocity"
-                        value={`${stats.velocity} o/h`}
-                        subValue="Current order intensity"
-                        icon="flash"
-                        color="#F59E0B"
-                        pulse={stats.velocity > 0}
-                    />
+            {/* CATEGORY DISTRIBUTION (LIGHT THEME) */}
+            <View style={{
+                backgroundColor: '#FFFFFF',
+                borderRadius: 22,
+                padding: 18,
+                marginBottom: 16,
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+                shadowColor: NAVY,
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.04,
+                shadowRadius: 6,
+                elevation: 1
+            }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '900', color: NAVY }}>
+                        Kayan Da Aka Fi Samu a Kasuwa
+                    </Text>
+                    <Ionicons name="trophy" size={18} color={GOLD} />
                 </View>
 
-                {/* FINANCIAL FORENSICS */}
-                <View style={{ backgroundColor: 'white', borderRadius: 28, padding: 24, marginBottom: 20, borderWidth: 1, borderColor: '#F1F5F9' }}>
-                    <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A', marginBottom: 20 }}>Payout Landscape</Text>
-                    <View style={{ height: 44, flexDirection: 'row', borderRadius: 14, overflow: 'hidden', marginBottom: 16 }}>
-                        <View style={{ flex: stats.payoutStatus.paid || 1, backgroundColor: '#10B981' }} />
-                        <View style={{ flex: stats.payoutStatus.pending || 1, backgroundColor: '#F59E0B' }} />
-                    </View>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                        <View>
-                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#94A3B8' }}>PAID OUT</Text>
-                            <Text style={{ fontSize: 16, fontWeight: '900', color: '#10B981' }}>₦{stats.payoutStatus.paid.toLocaleString()}</Text>
-                        </View>
-                        <View style={{ alignItems: 'flex-end' }}>
-                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#94A3B8' }}>PENDING</Text>
-                            <Text style={{ fontSize: 16, fontWeight: '900', color: '#F59E0B' }}>₦{stats.payoutStatus.pending.toLocaleString()}</Text>
-                        </View>
-                    </View>
-                </View>
-
-                {/* ELITE CATEGORY DISCOVERY */}
-                <View style={{ backgroundColor: '#0F172A', borderRadius: 32, padding: 24, marginBottom: 20 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                        <Text style={{ fontSize: 18, fontWeight: '900', color: 'white' }}>Category Intensity</Text>
-                        <Ionicons name="trophy" size={20} color="#FBBF24" />
-                    </View>
-                    {stats.topCategories.length > 0 ? stats.topCategories.map((cat, i) => (
+                {stats.topCategories.length > 0 ? (
+                    stats.topCategories.map((cat, i) => (
                         <CategoryDiscoveryBar
                             key={i}
                             label={cat.name}
                             value={cat.count}
-                            total={Math.max(...stats.topCategories.map(c => c.count)) * 1.5}
+                            total={maxCatCount}
                             color={cat.color}
                             icon={cat.icon}
                         />
-                    )) : (
-                        <Text style={{ color: 'rgba(255,255,255,0.4)', textAlign: 'center', marginVertical: 20 }}>No category data available yet.</Text>
-                    )}
+                    ))
+                ) : (
+                    <Text style={{ color: '#94A3B8', textAlign: 'center', marginVertical: 14, fontSize: 12 }}>
+                        Babu kayayyaki a halin yanzu.
+                    </Text>
+                )}
+            </View>
+
+            {/* OPERATIONAL RATIOS */}
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+                <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                    <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(14, 26, 46, 0.06)', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+                        <Ionicons name="checkmark-circle-outline" color={NAVY} size={18} />
+                    </View>
+                    <Text style={{ fontSize: 20, fontWeight: '900', color: NAVY }}>{orderSuccessRate}%</Text>
+                    <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '800', marginTop: 2 }}>ODAR DA AKA ISAR</Text>
                 </View>
 
-                {/* PLATFORM DISTRIBUTION */}
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                    <View style={{ flex: 1, backgroundColor: 'white', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#F1F5F9' }}>
-                        <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: '#F0F9FF', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-                            <Ionicons name="phone-portrait" color="#0EA5E9" size={18} />
-                        </View>
-                        <Text style={{ fontSize: 24, fontWeight: '900', color: '#0F172A' }}>68%</Text>
-                        <Text style={{ fontSize: 11, color: '#94A3B8', fontWeight: '800' }}>MOBILE TRAFFIC</Text>
+                <View style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: 'rgba(217, 167, 58, 0.4)' }}>
+                    <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(217, 167, 58, 0.15)', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+                        <Ionicons name="cube-outline" color={GOLD} size={18} />
                     </View>
-                    <View style={{ flex: 1, backgroundColor: 'white', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#F1F5F9' }}>
-                        <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: '#F0FDF4', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-                            <Ionicons name="desktop" color="#10B981" size={18} />
-                        </View>
-                        <Text style={{ fontSize: 24, fontWeight: '900', color: '#0F172A' }}>32%</Text>
-                        <Text style={{ fontSize: 11, color: '#94A3B8', fontWeight: '800' }}>DESKTOP TRAFFIC</Text>
-                    </View>
+                    <Text style={{ fontSize: 20, fontWeight: '900', color: NAVY }}>{activeProductRate}%</Text>
+                    <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '800', marginTop: 2 }}>KAYAN DA KE KASUWA</Text>
                 </View>
             </View>
         </ScrollView>

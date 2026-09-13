@@ -139,20 +139,18 @@ export const AdminPayouts = () => {
                             if (updateError) throw updateError;
 
                             if (status === 'rejected') {
-                                const { data: walletData, error: walletFetchError } = await supabase
+                                const { data: walletData } = await supabase
                                     .from('wallets')
                                     .select('balance')
                                     .eq('user_id', selectedRequest.target_user_id)
-                                    .single();
+                                    .maybeSingle();
 
-                                if (walletFetchError) throw walletFetchError;
-
-                                const newBalance = (walletData.balance || 0) + selectedRequest.amount;
+                                const currentBalance = Number(walletData?.balance || 0);
+                                const newBalance = currentBalance + Number(selectedRequest.amount || 0);
 
                                 const { error: walletUpdateError } = await supabase
                                     .from('wallets')
-                                    .update({ balance: newBalance })
-                                    .eq('user_id', selectedRequest.target_user_id);
+                                    .upsert({ user_id: selectedRequest.target_user_id, balance: newBalance }, { onConflict: 'user_id' });
 
                                 if (walletUpdateError) throw walletUpdateError;
                             }

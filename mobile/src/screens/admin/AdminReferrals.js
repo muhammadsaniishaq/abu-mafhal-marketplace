@@ -1,16 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Alert, TextInput, Dimensions, Switch, Modal, FlatList } from 'react-native';
-import { styles as themeStyles } from '../../styles/theme';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { 
+    View, Text, ScrollView, ActivityIndicator, TouchableOpacity, 
+    Alert, TextInput, Dimensions, Switch, Modal, FlatList, StyleSheet, 
+    RefreshControl, Platform 
+} from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { UserAvatar } from '../../components/UserAvatar';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
+const NAVY = '#0E1A2E';
+const DEEP_NAVY = '#1E293B';
+const GOLD = '#D9A73A';
 
 export const AdminReferrals = () => {
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [activeTab, setActiveTab] = useState('overview'); // overview, activity, rankings, settings
-    const [stats, setStats] = useState({ totalRefs: 0, liability: 0, growthRate: '+12%' });
+    const [stats, setStats] = useState({ totalRefs: 0, liability: 0, totalAmbassadors: 0, recentCount: 0 });
     const [referralSettings, setReferralSettings] = useState({
         reward_per_referral: 500,
         new_user_reward: 200,
@@ -21,33 +28,38 @@ export const AdminReferrals = () => {
     const [rankings, setRankings] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [activitySearch, setActivitySearch] = useState('');
-    const [isRefreshing, setIsRefreshing] = useState(false);
 
     // Drill-down State
     const [selectedAmbassador, setSelectedAmbassador] = useState(null);
     const [ambassadorRefs, setAmbassadorRefs] = useState([]);
     const [loadingDrill, setLoadingDrill] = useState(false);
 
-    useEffect(() => {
-        fetchData();
-    }, [activeTab]);
-
-    const fetchData = async () => {
-        if (!isRefreshing) setLoading(true);
+    const fetchData = useCallback(async () => {
         try {
             if (activeTab === 'overview') {
                 const { count: totalRefs } = await supabase.from('referrals').select('*', { count: 'exact', head: true });
                 const { data: coinsData } = await supabase.from('profiles').select('mafhal_coins');
                 const totalLiability = coinsData?.reduce((sum, p) => sum + (p.mafhal_coins || 0), 0) || 0;
+                const ambassadorsCount = coinsData?.filter(p => (p.mafhal_coins || 0) > 0).length || 0;
+
+                // Recent referrals in the last 7 days
+                const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+                const { count: recentRefs } = await supabase
+                    .from('referrals')
+                    .select('*', { count: 'exact', head: true })
+                    .gte('created_at', sevenDaysAgo);
 
                 setStats({
                     totalRefs: totalRefs || 0,
                     liability: totalLiability,
-                    growthRate: '+12.5%' // Logic for growth can be added here
+                    totalAmbassadors: ambassadorsCount,
+                    recentCount: recentRefs || 0
                 });
             } else if (activeTab === 'settings') {
-                const { data: settings } = await supabase.from('referral_settings').select('*').eq('id', 'default').single();
-                if (settings) setReferralSettings(settings);
+                const { data: settings } = await supabase.from('referral_settings').select('*').eq('id', 'default').maybeSingle();
+                if (settings) {
+                    setReferralSettings(settings);
+                }
             } else if (activeTab === 'activity') {
                 const { data: refs } = await supabase
                     .from('referrals')
@@ -75,11 +87,21 @@ export const AdminReferrals = () => {
                 if (ambassadors) setRankings(ambassadors);
             }
         } catch (error) {
-            console.error('Admin Fetch Error:', error);
+            console.error('Admin Referrals Fetch Error:', error);
         } finally {
             setLoading(false);
-            setIsRefreshing(false);
+            setRefreshing(false);
         }
+    }, [activeTab]);
+
+    useEffect(() => {
+        setLoading(true);
+        fetchData();
+    }, [fetchData]);
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        fetchData();
     };
 
     const fetchAmbassadorDetails = async (ambassador) => {
@@ -108,19 +130,21 @@ export const AdminReferrals = () => {
     const updateSettings = async () => {
         setLoading(true);
         try {
+            const payload = {
+                id: 'default',
+                reward_per_referral: parseFloat(referralSettings.reward_per_referral) || 0,
+                new_user_reward: parseFloat(referralSettings.new_user_reward) || 0,
+                is_campaign_active: referralSettings.is_campaign_active
+            };
+
             const { error } = await supabase
                 .from('referral_settings')
-                .update({
-                    reward_per_referral: parseFloat(referralSettings.reward_per_referral),
-                    new_user_reward: parseFloat(referralSettings.new_user_reward),
-                    is_campaign_active: referralSettings.is_campaign_active
-                })
-                .eq('id', 'default');
+                .upsert(payload);
 
             if (error) throw error;
-            Alert.alert('Success', 'Global settings updated.');
+            Alert.alert('An Sabunta', 'An yi nasarar adana sabbin saitunan gayyatar abokai.');
         } catch (error) {
-            Alert.alert('Error', error.message);
+            Alert.alert('Kuskure', error.message);
         } finally {
             setLoading(false);
         }
@@ -128,272 +152,322 @@ export const AdminReferrals = () => {
 
     const handleActivitySearch = (text) => {
         setActivitySearch(text);
-        if (!text) {
+        if (!text.trim()) {
             setFilteredActivities(activities);
             return;
         }
+        const q = text.toLowerCase();
         const filtered = activities.filter(act =>
-            act.referrer?.full_name?.toLowerCase().includes(text.toLowerCase()) ||
-            act.referred?.full_name?.toLowerCase().includes(text.toLowerCase())
+            act.referrer?.full_name?.toLowerCase().includes(q) ||
+            act.referred?.full_name?.toLowerCase().includes(q)
         );
         setFilteredActivities(filtered);
     };
 
-    const TabButton = ({ id, label, icon }) => (
-        <TouchableOpacity
-            onPress={() => setActiveTab(id)}
-            style={{
-                paddingVertical: 12,
-                paddingHorizontal: 20,
-                borderRadius: 20,
-                backgroundColor: activeTab === id ? '#10B981' : 'rgba(255,255,255,0.05)',
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 8,
-                marginRight: 10
-            }}
-        >
-            <Ionicons name={icon} size={18} color={activeTab === id ? 'white' : '#94A3B8'} />
-            <Text style={{ color: activeTab === id ? 'white' : '#94A3B8', fontWeight: '800', fontSize: 13 }}>{label}</Text>
-        </TouchableOpacity>
-    );
+    const TabButton = ({ id, label, icon }) => {
+        const isActive = activeTab === id;
+        return (
+            <TouchableOpacity
+                onPress={() => setActiveTab(id)}
+                style={[s.tabPill, isActive && s.tabPillActive]}
+                activeOpacity={0.8}
+            >
+                <Ionicons name={icon} size={16} color={isActive ? GOLD : '#64748B'} />
+                <Text style={[s.tabPillText, isActive && s.tabPillTextActive]}>{label}</Text>
+            </TouchableOpacity>
+        );
+    };
 
     return (
-        <View style={{ flex: 1, backgroundColor: '#0F172A' }}>
-            {/* ELITE HEADER */}
-            <View style={{ paddingTop: 60, paddingHorizontal: 24, paddingBottom: 24 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                    <View>
-                        <Text style={{ color: 'white', fontSize: 26, fontWeight: '900', letterSpacing: -1 }}>Referral Elite</Text>
-                        <Text style={{ color: '#10B981', fontSize: 13, fontWeight: '700' }}>Administrative Intelligence</Text>
+        <View style={s.container}>
+            {/* Header */}
+            <View style={s.header}>
+                <View style={s.headerTopRow}>
+                    <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Ionicons name="gift" size={22} color={GOLD} />
+                            <Text style={s.headerTitle}>Gayyato Abokai (Referrals)</Text>
+                        </View>
+                        <Text style={s.headerSubtitle}>Sarrafa Mafhal Coins, jakadu da shirin lada na kasuwa</Text>
                     </View>
-                    <TouchableOpacity onPress={() => fetchData()} style={{ width: 48, height: 48, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 16, justifyContent: 'center', alignItems: 'center' }}>
-                        <Ionicons name="refresh" size={20} color="#10B981" />
+                    <TouchableOpacity onPress={onRefresh} style={s.refreshBtn} activeOpacity={0.8}>
+                        <Ionicons name="refresh" size={18} color={NAVY} />
                     </TouchableOpacity>
                 </View>
 
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <TabButton id="overview" label="Metrics" icon="analytics" />
-                    <TabButton id="activity" label="Stream" icon="list" />
-                    <TabButton id="rankings" label="Elite" icon="trophy" />
-                    <TabButton id="settings" label="Config" icon="options" />
+                {/* Navigation Pills */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                    <TabButton id="overview" label="Bayanai (Overview)" icon="analytics-outline" />
+                    <TabButton id="activity" label="Bibiyar Aiki (Stream)" icon="list-outline" />
+                    <TabButton id="rankings" label="Gwaraza (Ambassadors)" icon="trophy-outline" />
+                    <TabButton id="settings" label="Saituna (Config)" icon="settings-outline" />
                 </ScrollView>
             </View>
 
-            <View style={{ flex: 1, backgroundColor: '#F8FAFC', borderTopLeftRadius: 40, borderTopRightRadius: 40, marginTop: 10 }}>
-                {loading && !isRefreshing ? (
-                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                        <ActivityIndicator size="large" color="#0F172A" />
-                        <Text style={{ marginTop: 16, color: '#94A3B8', fontWeight: '700' }}>Synchronizing Data...</Text>
-                    </View>
-                ) : (
-                    <ScrollView contentContainerStyle={{ padding: 24 }} showsVerticalScrollIndicator={false}>
-
-                        {activeTab === 'overview' && (
-                            <View>
-                                <View style={{ backgroundColor: '#1E293B', padding: 24, borderRadius: 32, marginBottom: 20, shadowColor: "#000", shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20 }}>
-                                    <Text style={{ color: '#94A3B8', fontSize: 12, fontWeight: '800', letterSpacing: 1 }}>TOTAL CONVERSIONS</Text>
-                                    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 12, marginTop: 8 }}>
-                                        <Text style={{ color: 'white', fontSize: 42, fontWeight: '900' }}>{stats.totalRefs}</Text>
-                                        <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.2)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginBottom: 10 }}>
-                                            <Text style={{ color: '#10B981', fontSize: 12, fontWeight: '900' }}>{stats.growthRate}</Text>
-                                        </View>
+            {loading && !refreshing ? (
+                <View style={s.centered}>
+                    <ActivityIndicator size="large" color={GOLD} />
+                    <Text style={s.loadingText}>Ana loda bayanan shirin lada...</Text>
+                </View>
+            ) : (
+                <ScrollView 
+                    contentContainerStyle={{ padding: 16, paddingBottom: 80 }} 
+                    showsVerticalScrollIndicator={false}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[GOLD, NAVY]} />}
+                >
+                    {activeTab === 'overview' && (
+                        <View>
+                            {/* Main Hero Card */}
+                            <View style={s.heroCard}>
+                                <Text style={s.heroCardLabel}>JIMILLAR GAYYATA DA AKA YI (CONVERSIONS)</Text>
+                                <View style={s.heroStatsRow}>
+                                    <Text style={s.heroNumber}>{stats.totalRefs}</Text>
+                                    <View style={s.recentPill}>
+                                        <Ionicons name="flash" size={12} color="#059669" />
+                                        <Text style={s.recentPillText}>+{stats.recentCount} a wannan makon</Text>
                                     </View>
-                                </View>
-
-                                <View style={{ flexDirection: 'row', gap: 16 }}>
-                                    <View style={{ flex: 1, backgroundColor: 'white', padding: 20, borderRadius: 28, borderWidth: 1, borderColor: '#F1F5F9' }}>
-                                        <Text style={{ color: '#94A3B8', fontSize: 10, fontWeight: '800' }}>LIABILITY</Text>
-                                        <Text style={{ color: '#0F172A', fontSize: 20, fontWeight: '900', marginTop: 4 }}>{stats.liability.toLocaleString()} <Text style={{ fontSize: 10 }}>AMC</Text></Text>
-                                    </View>
-                                    <View style={{ flex: 1, backgroundColor: 'white', padding: 20, borderRadius: 28, borderWidth: 1, borderColor: '#F1F5F9' }}>
-                                        <Text style={{ color: '#94A3B8', fontSize: 10, fontWeight: '800' }}>ACTIVE CAMPAIGNS</Text>
-                                        <Text style={{ color: '#0F172A', fontSize: 20, fontWeight: '900', marginTop: 4 }}>Elite One</Text>
-                                    </View>
-                                </View>
-
-                                <View style={{ marginTop: 32, backgroundColor: '#F0F9FF', padding: 24, borderRadius: 32, borderLeftWidth: 6, borderLeftColor: '#3B82F6' }}>
-                                    <Text style={{ color: '#1E40AF', fontSize: 16, fontWeight: '900' }}>Intelligence Insight</Text>
-                                    <Text style={{ color: '#3B82F6', fontSize: 13, marginTop: 4, lineHeight: 18 }}>Referral engagement is up by 15% this week. Consider increasing the reward for 24 hours to spark a viral loop.</Text>
                                 </View>
                             </View>
-                        )}
 
-                        {activeTab === 'activity' && (
-                            <View>
-                                <View style={{ backgroundColor: 'white', borderRadius: 24, padding: 4, flexDirection: 'row', alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: '#F1F5F9' }}>
-                                    <Ionicons name="search" size={18} color="#94A3B8" style={{ marginLeft: 16 }} />
-                                    <TextInput
-                                        placeholder="Filter activity..."
-                                        style={{ flex: 1, height: 52, paddingHorizontal: 12, fontWeight: '600' }}
-                                        value={activitySearch}
-                                        onChangeText={handleActivitySearch}
-                                    />
-                                </View>
-                                {filteredActivities.map((act, i) => (
-                                    <View key={i} style={{ backgroundColor: 'white', borderRadius: 24, padding: 18, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9' }}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-                                            <UserAvatar user={act.referrer} size={44} border="#E2E8F0" />
-                                            <View style={{ flex: 1 }}>
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
-                                                    <Text style={{ fontWeight: '900', color: '#0F172A' }}>{act.referrer?.full_name?.split(' ')[0]}</Text>
-                                                    <Ionicons name="arrow-forward" size={12} color="#94A3B8" style={{ marginHorizontal: 6 }} />
-                                                    <Text style={{ fontWeight: '900', color: '#0F172A' }}>{act.referred?.full_name?.split(' ')[0]}</Text>
-                                                </View>
-                                                <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>{new Date(act.created_at).toLocaleDateString()} • {new Date(act.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-                                            </View>
-                                            <Text style={{ fontWeight: '900', color: '#10B981' }}>+{act.reward_amount}</Text>
-                                        </View>
+                            {/* Two Column Grid */}
+                            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+                                <View style={s.statBox}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Ionicons name="wallet-outline" size={16} color={GOLD} />
+                                        <Text style={s.statBoxLabel}>KUDIN LADA (COINS)</Text>
                                     </View>
-                                ))}
-                            </View>
-                        )}
-
-                        {activeTab === 'rankings' && (
-                            <View>
-                                <View style={{ backgroundColor: 'white', borderRadius: 24, padding: 4, flexDirection: 'row', alignItems: 'center', marginBottom: 24, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                                    <Ionicons name="search" size={18} color="#94A3B8" style={{ marginLeft: 16 }} />
-                                    <TextInput
-                                        placeholder="Find an ambassador..."
-                                        style={{ flex: 1, height: 52, paddingHorizontal: 12, fontWeight: '600' }}
-                                        value={searchQuery}
-                                        onChangeText={setSearchQuery}
-                                    />
+                                    <Text style={s.statBoxValue}>{stats.liability.toLocaleString()} <Text style={{ fontSize: 11, color: '#64748B' }}>AMC</Text></Text>
+                                    <Text style={s.statBoxSub}>Adadin coins a hannun masu sayayya</Text>
                                 </View>
-                                {rankings.filter(u => u.full_name?.toLowerCase().includes(searchQuery.toLowerCase())).map((u, i) => (
-                                    <TouchableOpacity
-                                        key={i}
-                                        onPress={() => fetchAmbassadorDetails(u)}
-                                        style={{ backgroundColor: 'white', borderRadius: 28, padding: 16, marginBottom: 12, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9' }}
-                                    >
-                                        <View style={{ marginRight: 16, position: 'relative' }}>
-                                            <UserAvatar user={u} size={50} border={i < 3 ? '#F59E0B' : '#F1F5F9'} />
-                                            {i < 3 && (
-                                                <View style={{ position: 'absolute', top: -4, right: -4, backgroundColor: '#F59E0B', borderRadius: 10, width: 20, height: 20, justifyContent: 'center', alignItems: 'center' }}>
-                                                    <Text style={{ color: 'white', fontSize: 10, fontWeight: '900' }}>{i + 1}</Text>
-                                                </View>
-                                            )}
-                                        </View>
+
+                                <View style={s.statBox}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Ionicons name="people-outline" size={16} color={NAVY} />
+                                        <Text style={s.statBoxLabel}>JAKADUN KASUWA</Text>
+                                    </View>
+                                    <Text style={s.statBoxValue}>{stats.totalAmbassadors}</Text>
+                                    <Text style={s.statBoxSub}>Masu kudaden Mafhal coins</Text>
+                                </View>
+                            </View>
+
+                            {/* Live Intelligence Card */}
+                            <View style={s.intelligenceCard}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                    <Ionicons name="bulb-outline" size={18} color={NAVY} />
+                                    <Text style={s.intelligenceTitle}>Hanyar Bunkasa Shirin Lada</Text>
+                                </View>
+                                <Text style={s.intelligenceText}>
+                                    A yanzu haka akwai mutane {stats.totalAmbassadors} da ke da Mafhal coins {stats.liability.toLocaleString()}. 
+                                    Idan ka kara ladan gayyata a sashin 'Saituna', zai kara kwadaitar da masu sayayya su gayyato sabbin abokan ciniki.
+                                </Text>
+                            </View>
+                        </View>
+                    )}
+
+                    {activeTab === 'activity' && (
+                        <View>
+                            <View style={s.searchBar}>
+                                <Ionicons name="search" size={16} color={GOLD} />
+                                <TextInput
+                                    placeholder="Bincika sunan mai gayyata ko wanda aka gayyato..."
+                                    placeholderTextColor="#94A3B8"
+                                    style={s.searchInput}
+                                    value={activitySearch}
+                                    onChangeText={handleActivitySearch}
+                                />
+                            </View>
+
+                            {filteredActivities.map((act, i) => (
+                                <View key={act.id || i} style={s.activityCard}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                        <UserAvatar user={act.referrer} size={42} border={GOLD} />
                                         <View style={{ flex: 1 }}>
-                                            <Text style={{ fontWeight: '900', color: '#0F172A', fontSize: 16 }}>{u.full_name}</Text>
-                                            <Text style={{ fontSize: 12, color: '#94A3B8' }}>{u.referral_code}</Text>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                <Text style={s.referrerName}>{act.referrer?.full_name?.split(' ')[0] || 'User'}</Text>
+                                                <Ionicons name="arrow-forward" size={12} color="#94A3B8" style={{ marginHorizontal: 6 }} />
+                                                <Text style={s.referredName}>{act.referred?.full_name?.split(' ')[0] || 'User'}</Text>
+                                            </View>
+                                            <Text style={s.activityDate}>
+                                                {new Date(act.created_at).toLocaleDateString()} • {new Date(act.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </Text>
                                         </View>
-                                        <View style={{ alignItems: 'flex-end' }}>
-                                            <Text style={{ fontWeight: '900', color: '#10B981', fontSize: 18 }}>{u.mafhal_coins.toLocaleString()}</Text>
-                                            <Text style={{ fontSize: 10, color: '#94A3B8', fontWeight: '800' }}>AMC</Text>
+                                        <View style={s.rewardBadge}>
+                                            <Text style={s.rewardBadgeText}>+{act.reward_amount} AMC</Text>
                                         </View>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-                        )}
-
-                        {activeTab === 'settings' && (
-                            <View style={{ backgroundColor: 'white', borderRadius: 32, padding: 24, borderWidth: 1, borderColor: '#F1F5F9' }}>
-                                <Text style={{ fontSize: 20, fontWeight: '900', color: '#0F172A', marginBottom: 28 }}>Campaign Engine</Text>
-
-                                <View style={{ marginBottom: 20 }}>
-                                    <Text style={{ fontSize: 11, color: '#94A3B8', fontWeight: '900', marginBottom: 8, letterSpacing: 1 }}>REFERRER BOUNTY (AMC)</Text>
-                                    <TextInput
-                                        style={{ backgroundColor: '#F8FAFC', padding: 18, borderRadius: 16, fontSize: 18, fontWeight: '900', color: '#0F172A', borderWidth: 1, borderColor: '#E2E8F0' }}
-                                        value={(referralSettings.reward_per_referral ?? 0).toString()}
-                                        onChangeText={(val) => setReferralSettings({ ...referralSettings, reward_per_referral: val })}
-                                        keyboardType="numeric"
-                                    />
-                                    <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 4 }}>Paid to the Ambassador (Referrer)</Text>
-                                </View>
-
-                                <View style={{ marginBottom: 28 }}>
-                                    <Text style={{ fontSize: 11, color: '#94A3B8', fontWeight: '900', marginBottom: 8, letterSpacing: 1 }}>NEW JOINER GIFT (AMC)</Text>
-                                    <TextInput
-                                        style={{ backgroundColor: '#F8FAFC', padding: 18, borderRadius: 16, fontSize: 18, fontWeight: '900', color: '#3B82F6', borderWidth: 1, borderColor: '#E2E8F0' }}
-                                        value={(referralSettings.new_user_reward ?? 0).toString()}
-                                        onChangeText={(val) => setReferralSettings({ ...referralSettings, new_user_reward: val })}
-                                        keyboardType="numeric"
-                                    />
-                                    <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 4 }}>Paid to the User who joins via link</Text>
-                                </View>
-
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32, backgroundColor: '#F8FAFC', padding: 18, borderRadius: 24 }}>
-                                    <View>
-                                        <Text style={{ fontSize: 15, fontWeight: '900', color: '#0F172A' }}>Campaign Status</Text>
-                                        <Text style={{ fontSize: 12, color: '#64748B' }}>Enable/Disable all referral coins</Text>
                                     </View>
-                                    <Switch
-                                        value={referralSettings.is_campaign_active}
-                                        onValueChange={(val) => setReferralSettings({ ...referralSettings, is_campaign_active: val })}
-                                        trackColor={{ false: '#CBD5E1', true: '#10B981' }}
-                                    />
                                 </View>
+                            ))}
 
-                                <TouchableOpacity
-                                    onPress={updateSettings}
-                                    style={{ backgroundColor: '#0F172A', padding: 22, borderRadius: 24, alignItems: 'center' }}
-                                >
-                                    <Text style={{ color: 'white', fontWeight: '900', fontSize: 16 }}>Deploy Changes</Text>
-                                </TouchableOpacity>
+                            {filteredActivities.length === 0 && (
+                                <View style={s.emptyBox}>
+                                    <Ionicons name="list-outline" size={36} color="#CBD5E1" />
+                                    <Text style={s.emptyTitle}>Babu Wani Aiki A Yanzu</Text>
+                                    <Text style={s.emptySub}>Babu bayanan sabon gayyata a wannan sashin.</Text>
+                                </View>
+                            )}
+                        </View>
+                    )}
+
+                    {activeTab === 'rankings' && (
+                        <View>
+                            <View style={s.searchBar}>
+                                <Ionicons name="search" size={16} color={GOLD} />
+                                <TextInput
+                                    placeholder="Bincika gwarzon mai gayyata..."
+                                    placeholderTextColor="#94A3B8"
+                                    style={s.searchInput}
+                                    value={searchQuery}
+                                    onChangeText={setSearchQuery}
+                                />
                             </View>
-                        )}
 
-                        <View style={{ height: 60 }} />
-                    </ScrollView>
-                )}
-            </View>
+                            {rankings.filter(u => u.full_name?.toLowerCase().includes(searchQuery.toLowerCase())).map((u, i) => (
+                                <TouchableOpacity
+                                    key={u.id || i}
+                                    onPress={() => fetchAmbassadorDetails(u)}
+                                    style={s.rankCard}
+                                    activeOpacity={0.8}
+                                >
+                                    <View style={{ marginRight: 14, position: 'relative' }}>
+                                        <UserAvatar user={u} size={46} border={i < 3 ? GOLD : '#E2E8F0'} />
+                                        {i < 3 && (
+                                            <View style={s.trophyRankBadge}>
+                                                <Text style={s.trophyRankText}>{i + 1}</Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={s.ambassadorName}>{u.full_name || 'Jakadan Kasuwa'}</Text>
+                                        <Text style={s.referralCodeText}>Code: {u.referral_code || 'Babu'}</Text>
+                                    </View>
+                                    <View style={{ alignItems: 'flex-end' }}>
+                                        <Text style={s.coinsAmountText}>{(u.mafhal_coins || 0).toLocaleString()}</Text>
+                                        <Text style={s.coinsUnitText}>AMC</Text>
+                                    </View>
+                                </TouchableOpacity>
+                            ))}
+
+                            {rankings.length === 0 && (
+                                <View style={s.emptyBox}>
+                                    <Ionicons name="trophy-outline" size={36} color="#CBD5E1" />
+                                    <Text style={s.emptyTitle}>Babu Gwarazan Jakadu</Text>
+                                    <Text style={s.emptySub}>Babu masu amfani da ke da coins a halin yanzu.</Text>
+                                </View>
+                            )}
+                        </View>
+                    )}
+
+                    {activeTab === 'settings' && (
+                        <View style={s.settingsCard}>
+                            <Text style={s.settingsTitle}>Saitunan Shirin Lada (Campaign Engine)</Text>
+
+                            <View style={{ marginBottom: 18 }}>
+                                <Text style={s.fieldLabel}>LADAN MAI GAYYATA (REFERRER BOUNTY IN AMC)</Text>
+                                <TextInput
+                                    style={s.fieldInput}
+                                    value={(referralSettings.reward_per_referral ?? 0).toString()}
+                                    onChangeText={(val) => setReferralSettings({ ...referralSettings, reward_per_referral: val })}
+                                    keyboardType="numeric"
+                                />
+                                <Text style={s.fieldHelp}>Adadin Mafhal Coins da mai gayyato aboki zai samu a kowane mutum daya.</Text>
+                            </View>
+
+                            <View style={{ marginBottom: 20 }}>
+                                <Text style={s.fieldLabel}>LADAN SABON SHIGA (NEW USER GIFT IN AMC)</Text>
+                                <TextInput
+                                    style={s.fieldInput}
+                                    value={(referralSettings.new_user_reward ?? 0).toString()}
+                                    onChangeText={(val) => setReferralSettings({ ...referralSettings, new_user_reward: val })}
+                                    keyboardType="numeric"
+                                />
+                                <Text style={s.fieldHelp}>Kyautar coins ga sabon mutumin da ya yi rajista ta link din abokinsa.</Text>
+                            </View>
+
+                            <View style={s.switchRow}>
+                                <View style={{ flex: 1, marginRight: 10 }}>
+                                    <Text style={s.switchTitle}>Kunna Shirin Gayyatar (Campaign Status)</Text>
+                                    <Text style={s.switchSub}>Bada damar samun Mafhal coins yayin gayyato sabbin mutane</Text>
+                                </View>
+                                <Switch
+                                    value={referralSettings.is_campaign_active}
+                                    onValueChange={(val) => setReferralSettings({ ...referralSettings, is_campaign_active: val })}
+                                    trackColor={{ false: '#CBD5E1', true: '#FEF3C7' }}
+                                    thumbColor={referralSettings.is_campaign_active ? GOLD : '#94A3B8'}
+                                />
+                            </View>
+
+                            <TouchableOpacity
+                                onPress={updateSettings}
+                                style={s.saveSettingsBtn}
+                                activeOpacity={0.85}
+                            >
+                                <Text style={s.saveSettingsBtnText}>Ajiye Saitunan Lada</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
+                </ScrollView>
+            )}
 
             {/* AMBASSADOR DRILL-DOWN MODAL */}
             <Modal visible={!!selectedAmbassador} animationType="slide" transparent={true}>
-                <View style={{ flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.95)', justifyContent: 'flex-end' }}>
-                    <View style={{ backgroundColor: 'white', borderTopLeftRadius: 40, borderTopRightRadius: 40, height: '85%', padding: 24 }}>
+                <View style={s.drillModalOverlay}>
+                    <View style={s.drillModalContent}>
                         {selectedAmbassador && (
                             <>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
+                                <View style={s.drillModalHeader}>
                                     <View>
-                                        <Text style={{ fontSize: 24, fontWeight: '900', color: '#0F172A' }}>{selectedAmbassador.full_name}</Text>
-                                        <Text style={{ color: '#10B981', fontWeight: '800' }}>Protocol Analysis</Text>
+                                        <Text style={s.drillModalTitle}>{selectedAmbassador.full_name}</Text>
+                                        <Text style={s.drillModalSub}>Bayanin Gayyatar Jakada</Text>
                                     </View>
-                                    <TouchableOpacity onPress={() => setSelectedAmbassador(null)} style={{ width: 48, height: 48, backgroundColor: '#F1F5F9', borderRadius: 16, justifyContent: 'center', alignItems: 'center' }}>
-                                        <Ionicons name="close" size={28} color="#0F172A" />
+                                    <TouchableOpacity onPress={() => setSelectedAmbassador(null)} style={s.closeCircleBtn}>
+                                        <Ionicons name="close" size={20} color={NAVY} />
                                     </TouchableOpacity>
                                 </View>
 
-                                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 32 }}>
-                                    <View style={{ flex: 1, backgroundColor: '#F8FAFC', padding: 16, borderRadius: 20 }}>
-                                        <Text style={{ color: '#94A3B8', fontSize: 10, fontWeight: '900' }}>TOTAL COINS</Text>
-                                        <Text style={{ color: '#0F172A', fontSize: 20, fontWeight: '900' }}>{selectedAmbassador.mafhal_coins}</Text>
+                                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+                                    <View style={s.drillStatBox}>
+                                        <Text style={s.drillStatLabel}>JIMILLAR COINS</Text>
+                                        <Text style={s.drillStatValue}>{(selectedAmbassador.mafhal_coins || 0).toLocaleString()} AMC</Text>
                                     </View>
-                                    <View style={{ flex: 1, backgroundColor: '#F8FAFC', padding: 16, borderRadius: 20 }}>
-                                        <Text style={{ color: '#94A3B8', fontSize: 10, fontWeight: '900' }}>REFERRALS</Text>
-                                        <Text style={{ color: '#0F172A', fontSize: 20, fontWeight: '900' }}>{ambassadorRefs.length}</Text>
+                                    <View style={s.drillStatBox}>
+                                        <Text style={s.drillStatLabel}>MUTANEN DA YA GAYYATA</Text>
+                                        <Text style={s.drillStatValue}>{ambassadorRefs.length}</Text>
                                     </View>
                                 </View>
 
-                                <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A', marginBottom: 16 }}>Network Map</Text>
+                                <Text style={s.networkMapTitle}>Mutanen Da Ya Gayyato (Network Map)</Text>
                                 {loadingDrill ? (
-                                    <ActivityIndicator color="#0F172A" style={{ marginTop: 20 }} />
+                                    <ActivityIndicator color={GOLD} style={{ marginTop: 30 }} />
                                 ) : (
                                     <FlatList
                                         data={ambassadorRefs}
                                         showsVerticalScrollIndicator={false}
                                         keyExtractor={(item) => item.id}
                                         renderItem={({ item }) => (
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
-                                                <UserAvatar user={item.referred} size={40} />
-                                                <View style={{ flex: 1, marginLeft: 16 }}>
-                                                    <Text style={{ fontWeight: '800', color: '#1E293B' }}>{item.referred?.full_name}</Text>
-                                                    <Text style={{ fontSize: 11, color: '#94A3B8' }}>{new Date(item.created_at).toLocaleDateString()}</Text>
+                                            <View style={s.networkRow}>
+                                                <UserAvatar user={item.referred} size={38} />
+                                                <View style={{ flex: 1, marginLeft: 12 }}>
+                                                    <Text style={s.networkName}>{item.referred?.full_name || 'Aboki'}</Text>
+                                                    <Text style={s.networkDate}>{new Date(item.created_at).toLocaleDateString()}</Text>
                                                 </View>
-                                                <Text style={{ fontWeight: '800', color: '#10B981' }}>+{item.reward_amount} AMC</Text>
+                                                <Text style={s.networkReward}>+{item.reward_amount} AMC</Text>
                                             </View>
                                         )}
-                                        ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 40, color: '#94A3B8' }}>No referrals tracked for this ambassador.</Text>}
+                                        ListEmptyComponent={
+                                            <View style={{ padding: 30, alignItems: 'center' }}>
+                                                <Text style={{ color: '#94A3B8', fontSize: 13, fontWeight: '600' }}>Babu wani wanda ya shiga ta link din wannan jakadan ba tukuna.</Text>
+                                            </View>
+                                        }
                                     />
                                 )}
                             </>
                         )}
                         <TouchableOpacity
                             onPress={() => setSelectedAmbassador(null)}
-                            style={{ backgroundColor: '#0F172A', padding: 20, borderRadius: 24, alignItems: 'center', marginTop: 20 }}
+                            style={s.closeDrillBtn}
+                            activeOpacity={0.85}
                         >
-                            <Text style={{ color: 'white', fontWeight: '900' }}>Close Analysis</Text>
+                            <Text style={s.closeDrillBtnText}>Rufe Dubawa</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -401,3 +475,455 @@ export const AdminReferrals = () => {
         </View>
     );
 };
+
+const s = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: '#F8FAFC'
+    },
+    header: {
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 20,
+        paddingTop: Platform.OS === 'ios' ? 20 : 16,
+        paddingBottom: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E2E8F0',
+        elevation: 1,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2
+    },
+    headerTopRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 14
+    },
+    headerTitle: {
+        fontSize: 20,
+        fontWeight: '900',
+        color: NAVY
+    },
+    headerSubtitle: {
+        fontSize: 12,
+        color: '#64748B',
+        marginTop: 2
+    },
+    refreshBtn: {
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        backgroundColor: '#F1F5F9',
+        justifyContent: 'center',
+        alignItems: 'center'
+    },
+    tabPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 18,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    tabPillActive: {
+        backgroundColor: NAVY,
+        borderColor: NAVY
+    },
+    tabPillText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#64748B'
+    },
+    tabPillTextActive: {
+        color: GOLD,
+        fontWeight: '800'
+    },
+    centered: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 40
+    },
+    loadingText: {
+        marginTop: 12,
+        color: '#64748B',
+        fontSize: 14,
+        fontWeight: '600'
+    },
+    heroCard: {
+        backgroundColor: '#FFFFFF',
+        padding: 20,
+        borderRadius: 20,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        elevation: 1,
+        shadowColor: NAVY,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 6
+    },
+    heroCardLabel: {
+        color: '#64748B',
+        fontSize: 11,
+        fontWeight: '800',
+        letterSpacing: 0.5
+    },
+    heroStatsRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        gap: 12,
+        marginTop: 8
+    },
+    heroNumber: {
+        color: NAVY,
+        fontSize: 38,
+        fontWeight: '900'
+    },
+    recentPill: {
+        backgroundColor: '#ECFDF5',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 12,
+        marginBottom: 8
+    },
+    recentPillText: {
+        color: '#059669',
+        fontSize: 12,
+        fontWeight: '800'
+    },
+    statBox: {
+        flex: 1,
+        backgroundColor: '#FFFFFF',
+        padding: 16,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    statBoxLabel: {
+        color: '#64748B',
+        fontSize: 10,
+        fontWeight: '800'
+    },
+    statBoxValue: {
+        color: NAVY,
+        fontSize: 20,
+        fontWeight: '900',
+        marginTop: 6
+    },
+    statBoxSub: {
+        fontSize: 10,
+        color: '#94A3B8',
+        marginTop: 4
+    },
+    intelligenceCard: {
+        backgroundColor: '#FFFBEB',
+        padding: 18,
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: '#FDE68A'
+    },
+    intelligenceTitle: {
+        color: NAVY,
+        fontSize: 14,
+        fontWeight: '800'
+    },
+    intelligenceText: {
+        color: '#475569',
+        fontSize: 12,
+        lineHeight: 18,
+        marginTop: 4
+    },
+    searchBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        marginBottom: 14
+    },
+    searchInput: {
+        flex: 1,
+        marginLeft: 8,
+        fontSize: 13,
+        color: NAVY,
+        fontWeight: '600'
+    },
+    activityCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 14,
+        marginBottom: 10,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    referrerName: {
+        fontWeight: '800',
+        color: NAVY,
+        fontSize: 14
+    },
+    referredName: {
+        fontWeight: '800',
+        color: GOLD,
+        fontSize: 14
+    },
+    activityDate: {
+        fontSize: 11,
+        color: '#94A3B8',
+        marginTop: 3
+    },
+    rewardBadge: {
+        backgroundColor: '#ECFDF5',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 10
+    },
+    rewardBadgeText: {
+        fontWeight: '900',
+        color: '#059669',
+        fontSize: 12
+    },
+    emptyBox: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 40,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        marginTop: 20
+    },
+    emptyTitle: {
+        fontSize: 16,
+        fontWeight: '900',
+        color: NAVY,
+        marginTop: 10
+    },
+    emptySub: {
+        fontSize: 12,
+        color: '#64748B',
+        textAlign: 'center',
+        marginTop: 4
+    },
+    rankCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 14,
+        marginBottom: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    trophyRankBadge: {
+        position: 'absolute',
+        top: -4,
+        right: -4,
+        backgroundColor: GOLD,
+        borderRadius: 9,
+        width: 18,
+        height: 18,
+        justifyContent: 'center',
+        alignItems: 'center'
+    },
+    trophyRankText: {
+        color: NAVY,
+        fontSize: 10,
+        fontWeight: '900'
+    },
+    ambassadorName: {
+        fontWeight: '800',
+        color: NAVY,
+        fontSize: 15
+    },
+    referralCodeText: {
+        fontSize: 11,
+        color: '#64748B',
+        marginTop: 2
+    },
+    coinsAmountText: {
+        fontWeight: '900',
+        color: GOLD,
+        fontSize: 16
+    },
+    coinsUnitText: {
+        fontSize: 10,
+        color: '#94A3B8',
+        fontWeight: '800'
+    },
+    settingsCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        padding: 20,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    settingsTitle: {
+        fontSize: 16,
+        fontWeight: '900',
+        color: NAVY,
+        marginBottom: 20
+    },
+    fieldLabel: {
+        fontSize: 11,
+        color: '#64748B',
+        fontWeight: '800',
+        marginBottom: 6,
+        letterSpacing: 0.5
+    },
+    fieldInput: {
+        backgroundColor: '#F8FAFC',
+        padding: 14,
+        borderRadius: 12,
+        fontSize: 16,
+        fontWeight: '800',
+        color: NAVY,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    fieldHelp: {
+        fontSize: 11,
+        color: '#94A3B8',
+        marginTop: 4
+    },
+    switchRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 24,
+        backgroundColor: '#F8FAFC',
+        padding: 14,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    switchTitle: {
+        fontSize: 13,
+        fontWeight: '800',
+        color: NAVY
+    },
+    switchSub: {
+        fontSize: 11,
+        color: '#64748B',
+        marginTop: 2
+    },
+    saveSettingsBtn: {
+        backgroundColor: GOLD,
+        paddingVertical: 15,
+        borderRadius: 16,
+        alignItems: 'center'
+    },
+    saveSettingsBtnText: {
+        color: NAVY,
+        fontWeight: '900',
+        fontSize: 15
+    },
+    drillModalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(14, 26, 46, 0.65)',
+        justifyContent: 'flex-end'
+    },
+    drillModalContent: {
+        backgroundColor: '#FFFFFF',
+        borderTopLeftRadius: 28,
+        borderTopRightRadius: 28,
+        height: '80%',
+        padding: 20
+    },
+    drillModalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20,
+        paddingBottom: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9'
+    },
+    drillModalTitle: {
+        fontSize: 18,
+        fontWeight: '900',
+        color: NAVY
+    },
+    drillModalSub: {
+        fontSize: 12,
+        color: '#64748B',
+        marginTop: 2
+    },
+    closeCircleBtn: {
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        backgroundColor: '#F1F5F9',
+        justifyContent: 'center',
+        alignItems: 'center'
+    },
+    drillStatBox: {
+        flex: 1,
+        backgroundColor: '#F8FAFC',
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    drillStatLabel: {
+        color: '#64748B',
+        fontSize: 9,
+        fontWeight: '800'
+    },
+    drillStatValue: {
+        color: NAVY,
+        fontSize: 16,
+        fontWeight: '900',
+        marginTop: 4
+    },
+    networkMapTitle: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: NAVY,
+        marginBottom: 12
+    },
+    networkRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9'
+    },
+    networkName: {
+        fontWeight: '700',
+        color: NAVY,
+        fontSize: 13
+    },
+    networkDate: {
+        fontSize: 11,
+        color: '#94A3B8',
+        marginTop: 2
+    },
+    networkReward: {
+        fontWeight: '800',
+        color: '#059669',
+        fontSize: 12
+    },
+    closeDrillBtn: {
+        backgroundColor: NAVY,
+        paddingVertical: 14,
+        borderRadius: 14,
+        alignItems: 'center',
+        marginTop: 14
+    },
+    closeDrillBtnText: {
+        color: '#FFFFFF',
+        fontWeight: '800',
+        fontSize: 14
+    }
+});

@@ -1,48 +1,136 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
     View, Text, TouchableOpacity, ScrollView, Alert, 
-    ActivityIndicator, Image, StatusBar, Platform, RefreshControl 
+    ActivityIndicator, Image, StatusBar, Platform, RefreshControl, Dimensions 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { styles } from '../styles/theme';
 import { supabase } from '../lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const AM_LOGO = require('../../assets/am_logo.png');
 
+// ─── IMPORT ALL 26 ADMIN SCREENS & AI COPILOT ─────────────────────────────────
 import { AdminProducts } from './admin/AdminProducts';
 import { AdminVendors } from './admin/AdminVendors';
 import { AdminUsers } from './admin/AdminUsers';
 import { AdminBanners } from './admin/AdminBanners';
 import { AdminSettings } from './admin/AdminSettings';
 import { AdminCategories } from './admin/AdminCategories';
+import { AdminOrders } from './admin/AdminOrders';
+import { AdminAnalytics } from './admin/AdminAnalytics';
+import { AdminFinancials } from './admin/AdminFinancials';
+import { AdminCoupons } from './admin/AdminCoupons';
+import { AdminFlashSales } from './admin/AdminFlashSales';
+import { AdminBrands } from './admin/AdminBrands';
+import { AdminPromoBanners } from './admin/AdminPromoBanners';
+import { AdminPayouts } from './admin/AdminPayouts';
+import { AdminBroadcast } from './admin/AdminBroadcast';
+import { AdminReferrals } from './admin/AdminReferrals';
+import { AdminAuditLogs } from './admin/AdminAuditLogs';
+import { AdminInvoices } from './admin/AdminInvoices';
+import { AdminAbandonedCarts } from './admin/AdminAbandonedCarts';
+import { AdminSupport } from './admin/AdminSupport';
+import { AdminDisputes } from './admin/AdminDisputes';
+import { AdminReviews } from './admin/AdminReviews';
+import { AdminCMS } from './admin/AdminCMS';
+import { AdminHomeSettings } from './admin/AdminHomeSettings';
+import { AdminAIAssistantModal } from '../components/AdminAIAssistantModal';
 
-const CORE_TABS = [
+// ─── NAVY & GOLD LIGHT PALETTE ───────────────────────────────────────────────
+const NAVY = '#0E1A2E';
+const GOLD = '#D9A73A';
+
+// Top Quick Pill Tabs
+const QUICK_TABS = [
     { id: 'overview', label: 'Dashboard', icon: 'grid-outline', activeIcon: 'grid' },
+    { id: 'orders', label: 'Ododi', icon: 'cart-outline', activeIcon: 'cart' },
     { id: 'products', label: 'Kayayyaki', icon: 'cube-outline', activeIcon: 'cube' },
     { id: 'vendors', label: 'Yan Kasuwa', icon: 'storefront-outline', activeIcon: 'storefront' },
-    { id: 'users', label: 'Masu Sayayya', icon: 'people-outline', activeIcon: 'people' },
+    { id: 'users', label: 'Masu Saye', icon: 'people-outline', activeIcon: 'people' },
+    { id: 'financials', label: 'Kudi', icon: 'cash-outline', activeIcon: 'cash' },
+    { id: 'analytics', label: 'Intelligence', icon: 'stats-chart-outline', activeIcon: 'stats-chart' },
     { id: 'banners', label: 'Tallace', icon: 'images-outline', activeIcon: 'images' },
     { id: 'settings', label: 'Saituna', icon: 'settings-outline', activeIcon: 'settings' },
+];
+
+// All Admin Modules Organized into Logical Categories
+const MODULE_SECTIONS = [
+    {
+        title: 'Kasuwanci Da Kayayyaki (Commerce & Catalog)',
+        items: [
+            { id: 'products', title: 'Kayayyaki', desc: 'Duba & sarrafa kayan kasuwa', icon: 'cube-outline', color: '#9333EA', bg: '#F3E8FF' },
+            { id: 'orders', title: 'Umarnin Sayayya', desc: 'Bibiyar ododi da isar da kaya', icon: 'cart-outline', color: '#2563EB', bg: '#EFF6FF' },
+            { id: 'categories', title: 'Rukunoni', desc: 'Nau\'o\'in kayayyakin kasuwa', icon: 'grid-outline', color: '#059669', bg: '#ECFDF5' },
+            { id: 'brands', title: 'Official Brands', desc: 'Manyan shagunan kamfanoni', icon: 'pricetag-outline', color: '#D97706', bg: '#FFFBEB' },
+            { id: 'invoices', title: 'Invoices & Rasitai', desc: 'Duba rasitai & aika email', icon: 'receipt-outline', color: '#4F46E5', bg: '#EEF2FF' },
+            { id: 'abandoned_carts', title: 'Kwandunan Sayayya', desc: 'Taimaka wa masu kwandon kaya', icon: 'basket-outline', color: '#DC2626', bg: '#FEF2F2' },
+        ]
+    },
+    {
+        title: 'Masu Ruwa Da Tsaki (Stakeholders & Users)',
+        items: [
+            { id: 'users', title: 'Masu Sayayya', desc: 'Bibiyar asusu, tiers & wallet', icon: 'people-outline', color: '#059669', bg: '#ECFDF5' },
+            { id: 'vendors', title: 'Yan Kasuwa', desc: 'Aikace-aikace & amincewa da shago', icon: 'storefront-outline', color: '#2563EB', bg: '#EFF6FF' },
+            { id: 'payouts', title: 'Biyan Kudi (Payouts)', desc: 'Biyan dillalai da direbobi', icon: 'wallet-outline', color: '#D97706', bg: '#FFFBEB' },
+            { id: 'referrals', title: 'Gayyato Abokai', desc: 'Mafhal coins & shirin lada', icon: 'gift-outline', color: '#7C3AED', bg: '#F5F3FF' },
+        ]
+    },
+    {
+        title: 'Talla Da Rangwame (Marketing & Promotions)',
+        items: [
+            { id: 'banners', title: 'Tallan Gida (Banners)', desc: 'Hero banners & hotunan talla', icon: 'images-outline', color: '#D97706', bg: '#FFFBEB' },
+            { id: 'promo_banners', title: 'Promos & AI Talla', desc: 'Rubuta talla ta Gemini AI', icon: 'sparkles-outline', color: '#9333EA', bg: '#F3E8FF' },
+            { id: 'flash_sales', title: 'Flash Sales', desc: 'Kasuwar sauki mai agogo', icon: 'flash-outline', color: '#DC2626', bg: '#FEF2F2' },
+            { id: 'coupons', title: 'Lambobin Coupon', desc: 'Sanya kudaden rangwame', icon: 'ticket-outline', color: '#059669', bg: '#ECFDF5' },
+            { id: 'broadcast', title: 'Sanarwar Gaggawa', desc: 'Aika push ga jama\'a', icon: 'megaphone-outline', color: '#2563EB', bg: '#EFF6FF' },
+        ]
+    },
+    {
+        title: 'Kudi Da Bincike (Finance & Intelligence)',
+        items: [
+            { id: 'analytics', title: 'Intelligence HUD', desc: 'Cikakken binciken kasuwa live', icon: 'stats-chart-outline', color: '#2563EB', bg: '#EFF6FF' },
+            { id: 'financials', title: 'Bayanin Kudi', desc: 'Rabon kasuwa da kudin shiga', icon: 'cash-outline', color: '#16A34A', bg: '#DCFCE7' },
+            { id: 'audit_logs', title: 'Ayyukan Tsaro (Audit)', desc: 'Forensic logs & CSV export', icon: 'shield-checkmark-outline', color: '#475569', bg: '#F1F5F9' },
+        ]
+    },
+    {
+        title: 'Kula Da Masu Sayayya (Care & Moderation)',
+        items: [
+            { id: 'support', title: 'Tikitin Agaji (Support)', desc: 'Amsa korafe-korafe & WhatsApp', icon: 'chatbubbles-outline', color: '#2563EB', bg: '#EFF6FF' },
+            { id: 'disputes', title: 'Sasanta Rikici', desc: 'Rikicin kaya tsakanin abokan ciniki', icon: 'warning-outline', color: '#D97706', bg: '#FFFBEB' },
+            { id: 'reviews', title: 'Bitar Kayan Kasuwa', desc: 'Tace reviews & ratings', icon: 'star-outline', color: '#F59E0B', bg: '#FEF3C7' },
+        ]
+    },
+    {
+        title: 'Saituna Da Bayanai (Platform & Appearance)',
+        items: [
+            { id: 'home_settings', title: 'Tsarin Fuskar Gida', desc: 'Kayan shafin farko na manhaja', icon: 'home-outline', color: '#4F46E5', bg: '#EEF2FF' },
+            { id: 'cms', title: 'Shafukan Dokoki (CMS)', desc: 'About, Terms, Privacy, FAQ', icon: 'document-text-outline', color: '#475569', bg: '#F1F5F9' },
+            { id: 'settings', title: 'Saitunan Dandamali', desc: 'Kudin aika kaya, APIs, gateways', icon: 'settings-outline', color: '#0E1A2E', bg: '#F8FAFC' },
+        ]
+    }
 ];
 
 export const AdminDashboard = ({ user, onLogout, navigation }) => {
     const [activeTab, setActiveTab] = useState('overview');
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [showAiModal, setShowAiModal] = useState(false);
 
     const [stats, setStats] = useState({
+        totalRevenue: 0,
         totalProducts: 0,
         activeProducts: 0,
+        totalOrders: 0,
+        pendingOrders: 0,
         totalUsers: 0,
         totalVendors: 0,
-        totalBuyers: 0,
         totalBanners: 0,
         lowStockCount: 0
     });
 
+    const [recentOrders, setRecentOrders] = useState([]);
     const [recentProducts, setRecentProducts] = useState([]);
-    const [recentVendors, setRecentVendors] = useState([]);
 
     useEffect(() => {
         fetchAdminData();
@@ -62,7 +150,18 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
             const activeProducts = prods.filter(p => p.is_active !== false && p.status !== 'rejected').length;
             const lowStockCount = prods.filter(p => (p.stock_quantity ?? p.stock ?? 0) < 5).length;
 
-            // 2. Profiles Query
+            // 2. Orders Query
+            const { data: ordersData } = await supabase
+                .from('orders')
+                .select('id, total_amount, status, created_at, user:profiles(full_name, email)')
+                .order('created_at', { ascending: false });
+
+            const ordersList = ordersData || [];
+            const totalOrders = ordersList.length;
+            const pendingOrders = ordersList.filter(o => o.status === 'pending' || o.status === 'processing').length;
+            const totalRevenue = ordersList.reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
+
+            // 3. Profiles Query
             const { data: profilesData } = await supabase
                 .from('profiles')
                 .select('id, full_name, email, phone, role, status, suspended, business_name, created_at')
@@ -70,11 +169,9 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
 
             const profs = profilesData || [];
             const totalUsers = profs.length;
-            const vendorList = profs.filter(u => u.role === 'vendor');
-            const totalVendors = vendorList.length;
-            const totalBuyers = profs.filter(u => u.role !== 'vendor' && u.role !== 'admin').length;
+            const totalVendors = profs.filter(u => u.role === 'vendor').length;
 
-            // 3. Banners Query
+            // 4. Banners Query
             const { data: bannersData } = await supabase
                 .from('banners')
                 .select('id, is_active');
@@ -82,17 +179,19 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
             const totalBanners = (bannersData || []).filter(b => b.is_active !== false).length;
 
             setStats({
+                totalRevenue,
                 totalProducts,
                 activeProducts,
+                totalOrders,
+                pendingOrders,
                 totalUsers,
                 totalVendors,
-                totalBuyers,
                 totalBanners,
                 lowStockCount
             });
 
-            setRecentProducts(prods.slice(0, 6));
-            setRecentVendors(vendorList.slice(0, 5));
+            setRecentOrders(ordersList.slice(0, 5));
+            setRecentProducts(prods.slice(0, 5));
 
         } catch (e) {
             console.error("Admin Dashboard Fetch error:", e);
@@ -128,16 +227,16 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
         return '₦' + Number(amount || 0).toLocaleString('en-NG', { maximumFractionDigits: 0 });
     };
 
-    const adminName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Admin';
+    const adminName = user?.user_metadata?.full_name || user?.full_name || user?.email?.split('@')[0] || 'Admin';
 
     // ─── OVERVIEW COMPONENT ───────────────────────────────────────────────────
     const renderOverview = () => {
         if (loading) {
             return (
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 }}>
-                    <ActivityIndicator size="large" color="#0E1A2E" />
+                    <ActivityIndicator size="large" color={GOLD} />
                     <Text style={{ marginTop: 12, fontSize: 13, fontWeight: '700', color: '#64748B' }}>
-                        Ana loda bayanan Admin...
+                        Ana loda bayanan Admin live...
                     </Text>
                 </View>
             );
@@ -145,24 +244,24 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
 
         return (
             <ScrollView 
-                contentContainerStyle={{ padding: 16, paddingBottom: 50 }}
+                contentContainerStyle={{ padding: 16, paddingBottom: 80 }}
                 showsVerticalScrollIndicator={false}
                 refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={['#D9A73A', '#0E1A2E']} />
+                    <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[GOLD, NAVY]} />
                 }
             >
-                {/* WELCOME BANNER */}
+                {/* WELCOME HERO BANNER */}
                 <LinearGradient
-                    colors={['#0E1A2E', '#1A2F4C']}
+                    colors={[NAVY, '#162235']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={{
                         borderRadius: 22,
                         padding: 18,
-                        marginBottom: 18,
+                        marginBottom: 16,
                         borderWidth: 1,
                         borderColor: 'rgba(217, 167, 58, 0.35)',
-                        shadowColor: '#0E1A2E',
+                        shadowColor: NAVY,
                         shadowOffset: { width: 0, height: 6 },
                         shadowOpacity: 0.12,
                         shadowRadius: 10,
@@ -187,34 +286,114 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                                     KASUWA TANA TAFIA LAFIYA (LIVE)
                                 </Text>
                             </View>
-                            <Text style={{ color: 'white', fontSize: 18, fontWeight: '900', letterSpacing: -0.3 }}>
+
+                            <Text style={{ color: '#FFFFFF', fontSize: 19, fontWeight: '900', letterSpacing: -0.3 }}>
                                 Barka da Aiki, {adminName}! 👋
                             </Text>
+
                             <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '600', marginTop: 4 }}>
                                 Babban sashen sarrafa kasuwar Abu Mafhal a wayar hannu.
                             </Text>
                         </View>
 
-                        <TouchableOpacity 
-                            onPress={handleRefresh}
-                            style={{ 
-                                width: 36, 
-                                height: 36, 
-                                borderRadius: 12, 
-                                backgroundColor: 'rgba(255, 255, 255, 0.1)', 
-                                alignItems: 'center', 
-                                justifyContent: 'center',
+                        <View style={{ flexDirection: 'row', gap: 6 }}>
+                            <TouchableOpacity 
+                                onPress={() => setShowAiModal(true)}
+                                style={{ 
+                                    width: 36, 
+                                    height: 36, 
+                                    borderRadius: 12, 
+                                    backgroundColor: 'rgba(217, 167, 58, 0.2)', 
+                                    alignItems: 'center', 
+                                    justifyContent: 'center',
+                                    borderWidth: 1,
+                                    borderColor: GOLD
+                                }}
+                            >
+                                <Ionicons name="sparkles" size={17} color={GOLD} />
+                            </TouchableOpacity>
+
+                            <TouchableOpacity 
+                                onPress={handleRefresh}
+                                style={{ 
+                                    width: 36, 
+                                    height: 36, 
+                                    borderRadius: 12, 
+                                    backgroundColor: 'rgba(255, 255, 255, 0.1)', 
+                                    alignItems: 'center', 
+                                    justifyContent: 'center',
+                                    borderWidth: 1,
+                                    borderColor: 'rgba(255, 255, 255, 0.15)'
+                                }}
+                            >
+                                <Ionicons name="refresh" size={17} color={GOLD} />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    {/* Revenue strip inside Hero */}
+                    <View style={{
+                        marginTop: 14,
+                        paddingTop: 12,
+                        borderTopWidth: 1,
+                        borderTopColor: 'rgba(255, 255, 255, 0.1)',
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                    }}>
+                        <View>
+                            <Text style={{ color: '#94A3B8', fontSize: 10, fontWeight: '700' }}>Cikakken Kudin Shiga (Gross)</Text>
+                            <Text style={{ color: GOLD, fontSize: 18, fontWeight: '900', marginTop: 1 }}>{formatNaira(stats.totalRevenue)}</Text>
+                        </View>
+
+                        <TouchableOpacity
+                            onPress={() => setActiveTab('financials')}
+                            style={{
+                                backgroundColor: 'rgba(217, 167, 58, 0.15)',
+                                paddingHorizontal: 10,
+                                paddingVertical: 5,
+                                borderRadius: 8,
                                 borderWidth: 1,
-                                borderColor: 'rgba(255, 255, 255, 0.15)'
+                                borderColor: 'rgba(217, 167, 58, 0.3)'
                             }}
                         >
-                            <Ionicons name="refresh" size={17} color="#D9A73A" />
+                            <Text style={{ color: GOLD, fontSize: 10.5, fontWeight: '800' }}>Bayanin Kudi →</Text>
                         </TouchableOpacity>
                     </View>
                 </LinearGradient>
 
                 {/* 4 CORE KPI METRICS */}
                 <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+                    {/* Orders */}
+                    <TouchableOpacity 
+                        activeOpacity={0.8}
+                        onPress={() => setActiveTab('orders')}
+                        style={{
+                            flex: 1,
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: 18,
+                            padding: 14,
+                            borderWidth: 1,
+                            borderColor: '#E2E8F0',
+                            shadowColor: NAVY,
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.04,
+                            shadowRadius: 6,
+                            elevation: 1
+                        }}
+                    >
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>Ododin Sayayya</Text>
+                            <View style={{ width: 28, height: 28, borderRadius: 9, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' }}>
+                                <Ionicons name="cart" size={15} color="#2563EB" />
+                            </View>
+                        </View>
+                        <Text style={{ fontSize: 22, fontWeight: '900', color: NAVY }}>{stats.totalOrders}</Text>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#D97706', marginTop: 2 }}>
+                            {stats.pendingOrders} Ke Jira
+                        </Text>
+                    </TouchableOpacity>
+
                     {/* Products */}
                     <TouchableOpacity 
                         activeOpacity={0.8}
@@ -226,7 +405,7 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                             padding: 14,
                             borderWidth: 1,
                             borderColor: '#E2E8F0',
-                            shadowColor: '#0E1A2E',
+                            shadowColor: NAVY,
                             shadowOffset: { width: 0, height: 2 },
                             shadowOpacity: 0.04,
                             shadowRadius: 6,
@@ -239,12 +418,14 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                                 <Ionicons name="cube" size={15} color="#9333EA" />
                             </View>
                         </View>
-                        <Text style={{ fontSize: 22, fontWeight: '900', color: '#0E1A2E' }}>{stats.totalProducts}</Text>
+                        <Text style={{ fontSize: 22, fontWeight: '900', color: NAVY }}>{stats.totalProducts}</Text>
                         <Text style={{ fontSize: 10, fontWeight: '700', color: '#16A34A', marginTop: 2 }}>
                             {stats.activeProducts} Masu Aiki
                         </Text>
                     </TouchableOpacity>
+                </View>
 
+                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 18 }}>
                     {/* Vendors */}
                     <TouchableOpacity 
                         activeOpacity={0.8}
@@ -256,7 +437,7 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                             padding: 14,
                             borderWidth: 1,
                             borderColor: '#E2E8F0',
-                            shadowColor: '#0E1A2E',
+                            shadowColor: NAVY,
                             shadowOffset: { width: 0, height: 2 },
                             shadowOpacity: 0.04,
                             shadowRadius: 6,
@@ -265,18 +446,16 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                     >
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                             <Text style={{ fontSize: 10, fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>Yan Kasuwa</Text>
-                            <View style={{ width: 28, height: 28, borderRadius: 9, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' }}>
-                                <Ionicons name="storefront" size={15} color="#2563EB" />
+                            <View style={{ width: 28, height: 28, borderRadius: 9, backgroundColor: '#FFFBEB', alignItems: 'center', justifyContent: 'center' }}>
+                                <Ionicons name="storefront" size={15} color={GOLD} />
                             </View>
                         </View>
-                        <Text style={{ fontSize: 22, fontWeight: '900', color: '#0E1A2E' }}>{stats.totalVendors}</Text>
-                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#2563EB', marginTop: 2 }}>
+                        <Text style={{ fontSize: 22, fontWeight: '900', color: NAVY }}>{stats.totalVendors}</Text>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: GOLD, marginTop: 2 }}>
                             Shagunan Kasuwa
                         </Text>
                     </TouchableOpacity>
-                </View>
 
-                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 18 }}>
                     {/* Users */}
                     <TouchableOpacity 
                         activeOpacity={0.8}
@@ -288,7 +467,7 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                             padding: 14,
                             borderWidth: 1,
                             borderColor: '#E2E8F0',
-                            shadowColor: '#0E1A2E',
+                            shadowColor: NAVY,
                             shadowOffset: { width: 0, height: 2 },
                             shadowOpacity: 0.04,
                             shadowRadius: 6,
@@ -301,108 +480,158 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                                 <Ionicons name="people" size={15} color="#059669" />
                             </View>
                         </View>
-                        <Text style={{ fontSize: 22, fontWeight: '900', color: '#0E1A2E' }}>{stats.totalUsers}</Text>
+                        <Text style={{ fontSize: 22, fontWeight: '900', color: NAVY }}>{stats.totalUsers}</Text>
                         <Text style={{ fontSize: 10, fontWeight: '700', color: '#059669', marginTop: 2 }}>
-                            {stats.totalBuyers} Abokan Ciniki
+                            Masu Asusu
                         </Text>
                     </TouchableOpacity>
+                </View>
 
-                    {/* Banners */}
-                    <TouchableOpacity 
-                        activeOpacity={0.8}
-                        onPress={() => setActiveTab('banners')}
-                        style={{
-                            flex: 1,
+                {/* COMPREHENSIVE MODULAR GRID OF ALL 26 ADMIN CAPABILITIES */}
+                {MODULE_SECTIONS.map((section, sIndex) => (
+                    <View key={sIndex} style={{ marginBottom: 18 }}>
+                        <Text style={{
+                            fontSize: 12,
+                            fontWeight: '900',
+                            color: NAVY,
+                            marginBottom: 10,
+                            letterSpacing: 0.3,
+                            paddingLeft: 4
+                        }}>
+                            {section.title}
+                        </Text>
+
+                        <View style={{
                             backgroundColor: '#FFFFFF',
-                            borderRadius: 18,
-                            padding: 14,
+                            borderRadius: 20,
+                            padding: 12,
                             borderWidth: 1,
                             borderColor: '#E2E8F0',
-                            shadowColor: '#0E1A2E',
+                            shadowColor: NAVY,
                             shadowOffset: { width: 0, height: 2 },
                             shadowOpacity: 0.04,
                             shadowRadius: 6,
                             elevation: 1
-                        }}
-                    >
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#64748B', textTransform: 'uppercase' }}>Tallace</Text>
-                            <View style={{ width: 28, height: 28, borderRadius: 9, backgroundColor: '#FFFBEB', alignItems: 'center', justifyContent: 'center' }}>
-                                <Ionicons name="images" size={15} color="#D97706" />
+                        }}>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                                {section.items.map((item) => (
+                                    <TouchableOpacity
+                                        key={item.id}
+                                        onPress={() => setActiveTab(item.id)}
+                                        activeOpacity={0.7}
+                                        style={{
+                                            width: '48%',
+                                            backgroundColor: '#F8FAFC',
+                                            borderRadius: 14,
+                                            padding: 12,
+                                            marginBottom: 8,
+                                            borderWidth: 1,
+                                            borderColor: '#F1F5F9',
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 10
+                                        }}
+                                    >
+                                        <View style={{
+                                            width: 38,
+                                            height: 38,
+                                            borderRadius: 11,
+                                            backgroundColor: item.bg,
+                                            alignItems: 'center',
+                                            justifyContent: 'center'
+                                        }}>
+                                            <Ionicons name={item.icon} size={18} color={item.color} />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '800', color: NAVY }}>
+                                                {item.title}
+                                            </Text>
+                                            <Text numberOfLines={1} style={{ fontSize: 9.5, color: '#64748B', marginTop: 1 }}>
+                                                {item.desc}
+                                            </Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                ))}
                             </View>
                         </View>
-                        <Text style={{ fontSize: 22, fontWeight: '900', color: '#0E1A2E' }}>{stats.totalBanners}</Text>
-                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#D97706', marginTop: 2 }}>
-                            Banners Masu Aiki
+                    </View>
+                ))}
+
+                {/* RECENT ORDERS PREVIEW */}
+                <View style={{ backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '900', color: NAVY }}>
+                            Ododin Da Aka Yi Kwanan Nan
                         </Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* QUICK ACTION SHORTCUTS */}
-                <View style={{ backgroundColor: '#FFFFFF', borderRadius: 22, padding: 16, marginBottom: 18, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                    <Text style={{ fontSize: 13, fontWeight: '900', color: '#0E1A2E', marginBottom: 14 }}>
-                        Ayyukan Gaggawa (Quick Actions)
-                    </Text>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                        <TouchableOpacity 
-                            onPress={() => setActiveTab('products')} 
-                            style={{ alignItems: 'center', width: '22%' }}
-                            activeOpacity={0.7}
-                        >
-                            <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: '#F3E8FF', alignItems: 'center', justifyContent: 'center', marginBottom: 5 }}>
-                                <Ionicons name="cube" size={20} color="#9333EA" />
-                            </View>
-                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#0E1A2E', textAlign: 'center' }}>Kayayyaki</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity 
-                            onPress={() => setActiveTab('vendors')} 
-                            style={{ alignItems: 'center', width: '22%' }}
-                            activeOpacity={0.7}
-                        >
-                            <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center', marginBottom: 5 }}>
-                                <Ionicons name="storefront" size={20} color="#2563EB" />
-                            </View>
-                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#0E1A2E', textAlign: 'center' }}>Yan Kasuwa</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity 
-                            onPress={() => setActiveTab('users')} 
-                            style={{ alignItems: 'center', width: '22%' }}
-                            activeOpacity={0.7}
-                        >
-                            <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: '#ECFDF5', alignItems: 'center', justifyContent: 'center', marginBottom: 5 }}>
-                                <Ionicons name="people" size={20} color="#059669" />
-                            </View>
-                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#0E1A2E', textAlign: 'center' }}>Masu Saye</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity 
-                            onPress={() => setActiveTab('settings')} 
-                            style={{ alignItems: 'center', width: '22%' }}
-                            activeOpacity={0.7}
-                        >
-                            <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', marginBottom: 5 }}>
-                                <Ionicons name="settings" size={20} color="#475569" />
-                            </View>
-                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#0E1A2E', textAlign: 'center' }}>Saituna</Text>
+                        <TouchableOpacity onPress={() => setActiveTab('orders')}>
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: GOLD }}>Duba Duka →</Text>
                         </TouchableOpacity>
                     </View>
+
+                    {recentOrders.length === 0 ? (
+                        <Text style={{ color: '#94A3B8', fontSize: 11, textAlign: 'center', paddingVertical: 14 }}>
+                            Babu ododi a halin yanzu.
+                        </Text>
+                    ) : (
+                        recentOrders.map((ord) => (
+                            <View 
+                                key={ord.id} 
+                                style={{ 
+                                    flexDirection: 'row', 
+                                    justifyContent: 'space-between', 
+                                    alignItems: 'center', 
+                                    paddingVertical: 10, 
+                                    borderBottomWidth: 1, 
+                                    borderBottomColor: '#F1F5F9' 
+                                }}
+                            >
+                                <View style={{ flex: 1, paddingRight: 10 }}>
+                                    <Text style={{ fontSize: 12, fontWeight: '800', color: NAVY }}>
+                                        #{ord.id.slice(0, 8)}
+                                    </Text>
+                                    <Text style={{ fontSize: 10.5, color: '#64748B', marginTop: 1 }}>
+                                        {ord.user?.full_name || ord.user?.email || 'Customer'}
+                                    </Text>
+                                </View>
+                                <View style={{ alignItems: 'flex-end' }}>
+                                    <Text style={{ fontSize: 12.5, fontWeight: '900', color: NAVY }}>
+                                        {formatNaira(ord.total_amount)}
+                                    </Text>
+                                    <View style={{
+                                        backgroundColor: ord.status === 'delivered' ? '#DCFCE7' : 'rgba(217, 167, 58, 0.15)',
+                                        paddingHorizontal: 6,
+                                        paddingVertical: 2,
+                                        borderRadius: 6,
+                                        marginTop: 3
+                                    }}>
+                                        <Text style={{
+                                            fontSize: 9,
+                                            fontWeight: '800',
+                                            color: ord.status === 'delivered' ? '#166534' : GOLD,
+                                            textTransform: 'uppercase'
+                                        }}>
+                                            {ord.status || 'pending'}
+                                        </Text>
+                                    </View>
+                                </View>
+                            </View>
+                        ))
+                    )}
                 </View>
 
                 {/* RECENT PRODUCTS */}
-                <View style={{ backgroundColor: '#FFFFFF', borderRadius: 22, padding: 16, marginBottom: 18, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                <View style={{ backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                        <Text style={{ fontSize: 13, fontWeight: '900', color: '#0E1A2E' }}>
+                        <Text style={{ fontSize: 13, fontWeight: '900', color: NAVY }}>
                             Kayan Da Aka Saka Kwanan Nan
                         </Text>
                         <TouchableOpacity onPress={() => setActiveTab('products')}>
-                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#2563EB' }}>Duba Duka →</Text>
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: GOLD }}>Duba Duka →</Text>
                         </TouchableOpacity>
                     </View>
 
                     {recentProducts.length === 0 ? (
-                        <Text style={{ color: '#94A3B8', fontSize: 11, textAlign: 'center', paddingVertical: 16 }}>
+                        <Text style={{ color: '#94A3B8', fontSize: 11, textAlign: 'center', paddingVertical: 14 }}>
                             Babu wani kaya a halin yanzu.
                         </Text>
                     ) : (
@@ -415,112 +644,26 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                                     style={{ 
                                         flexDirection: 'row', 
                                         alignItems: 'center', 
-                                        paddingVertical: 10, 
+                                        paddingVertical: 9, 
                                         borderBottomWidth: 1, 
                                         borderBottomColor: '#F1F5F9' 
                                     }}
                                 >
                                     <Image 
                                         source={{ uri: img }} 
-                                        style={{ width: 42, height: 42, borderRadius: 10, backgroundColor: '#F8FAFC', marginRight: 12 }} 
+                                        style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#F8FAFC', marginRight: 12 }} 
                                     />
                                     <View style={{ flex: 1 }}>
-                                        <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '800', color: '#0E1A2E' }}>
+                                        <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '800', color: NAVY }}>
                                             {prod.name}
                                         </Text>
-                                        <Text style={{ fontSize: 10, color: '#64748B', marginTop: 2 }}>
-                                            Stock: <Text style={{ fontWeight: '700', color: stock < 5 ? '#EF4444' : '#0E1A2E' }}>{stock}</Text>
-                                        </Text>
-                                    </View>
-                                    <View style={{ alignItems: 'flex-end' }}>
-                                        <Text style={{ fontSize: 12, fontWeight: '900', color: '#0E1A2E' }}>
-                                            {formatNaira(prod.price)}
-                                        </Text>
-                                        <View style={{ 
-                                            backgroundColor: prod.is_active !== false ? '#DCFCE7' : '#F1F5F9', 
-                                            paddingHorizontal: 6, 
-                                            paddingVertical: 2, 
-                                            borderRadius: 6, 
-                                            marginTop: 3 
-                                        }}>
-                                            <Text style={{ 
-                                                fontSize: 8.5, 
-                                                fontWeight: '800', 
-                                                color: prod.is_active !== false ? '#15803D' : '#64748B' 
-                                            }}>
-                                                {prod.is_active !== false ? 'Active' : 'Off'}
-                                            </Text>
-                                        </View>
-                                    </View>
-                                </View>
-                            );
-                        })
-                    )}
-                </View>
-
-                {/* REGISTERED VENDORS LIST */}
-                <View style={{ backgroundColor: '#FFFFFF', borderRadius: 22, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                        <Text style={{ fontSize: 13, fontWeight: '900', color: '#0E1A2E' }}>
-                            Dillalan Kasuwa (Vendors)
-                        </Text>
-                        <TouchableOpacity onPress={() => setActiveTab('vendors')}>
-                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#2563EB' }}>Duba Duka →</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {recentVendors.length === 0 ? (
-                        <Text style={{ color: '#94A3B8', fontSize: 11, textAlign: 'center', paddingVertical: 16 }}>
-                            Babu yan kasuwa da suka yi rajista tukuna.
-                        </Text>
-                    ) : (
-                        recentVendors.map((v) => {
-                            const name = v.business_name || v.full_name || 'Vendor Store';
-                            const initial = name[0].toUpperCase();
-                            return (
-                                <View 
-                                    key={v.id} 
-                                    style={{ 
-                                        flexDirection: 'row', 
-                                        alignItems: 'center', 
-                                        paddingVertical: 10, 
-                                        borderBottomWidth: 1, 
-                                        borderBottomColor: '#F1F5F9' 
-                                    }}
-                                >
-                                    <View style={{ 
-                                        width: 38, 
-                                        height: 38, 
-                                        borderRadius: 12, 
-                                        backgroundColor: '#EFF6FF', 
-                                        alignItems: 'center', 
-                                        justifyContent: 'center', 
-                                        marginRight: 12 
-                                    }}>
-                                        <Text style={{ fontSize: 14, fontWeight: '900', color: '#2563EB' }}>{initial}</Text>
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: '800', color: '#0E1A2E' }}>
-                                            {name}
-                                        </Text>
                                         <Text style={{ fontSize: 10, color: '#64748B', marginTop: 1 }}>
-                                            {v.phone || v.email || 'Babu lamba'}
+                                            Stock: <Text style={{ fontWeight: '700', color: stock < 5 ? '#EF4444' : NAVY }}>{stock}</Text>
                                         </Text>
                                     </View>
-                                    <View style={{ 
-                                        backgroundColor: v.suspended ? '#FEE2E2' : '#DCFCE7', 
-                                        paddingHorizontal: 8, 
-                                        paddingVertical: 3, 
-                                        borderRadius: 8 
-                                    }}>
-                                        <Text style={{ 
-                                            fontSize: 9.5, 
-                                            fontWeight: '800', 
-                                            color: v.suspended ? '#B91C1C' : '#15803D' 
-                                        }}>
-                                            {v.suspended ? 'Suspended' : 'Active'}
-                                        </Text>
-                                    </View>
+                                    <Text style={{ fontSize: 12, fontWeight: '900', color: NAVY }}>
+                                        {formatNaira(prod.price)}
+                                    </Text>
                                 </View>
                             );
                         })
@@ -530,21 +673,69 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
         );
     };
 
-    // ─── TAB CONTENT SWITCHER ────────────────────────────────────────────────
+    // ─── TAB CONTENT SWITCHER (ALL 26 SCREENS HANDLED LIVE) ────────────────────
     const renderContent = () => {
         switch (activeTab) {
+            // Commerce & Catalog
             case 'products':
-                return <AdminProducts />;
-            case 'vendors':
-                return <AdminVendors />;
+                return <AdminProducts navigation={navigation} />;
+            case 'orders':
+                return <AdminOrders navigation={navigation} />;
+            case 'categories':
+                return <AdminCategories navigation={navigation} />;
+            case 'brands':
+                return <AdminBrands navigation={navigation} />;
+            case 'invoices':
+                return <AdminInvoices navigation={navigation} />;
+            case 'abandoned_carts':
+                return <AdminAbandonedCarts navigation={navigation} />;
+
+            // Stakeholders & Users
             case 'users':
-                return <AdminUsers />;
+                return <AdminUsers navigation={navigation} />;
+            case 'vendors':
+                return <AdminVendors navigation={navigation} />;
+            case 'payouts':
+                return <AdminPayouts navigation={navigation} />;
+            case 'referrals':
+                return <AdminReferrals navigation={navigation} />;
+
+            // Marketing & Promotions
             case 'banners':
-                return <AdminBanners />;
+                return <AdminBanners navigation={navigation} />;
+            case 'promo_banners':
+                return <AdminPromoBanners navigation={navigation} />;
+            case 'flash_sales':
+                return <AdminFlashSales navigation={navigation} />;
+            case 'coupons':
+                return <AdminCoupons navigation={navigation} />;
+            case 'broadcast':
+                return <AdminBroadcast navigation={navigation} />;
+
+            // Finance & Intelligence
+            case 'analytics':
+                return <AdminAnalytics navigation={navigation} />;
+            case 'financials':
+                return <AdminFinancials navigation={navigation} />;
+            case 'audit_logs':
+                return <AdminAuditLogs navigation={navigation} />;
+
+            // Care & Moderation
+            case 'support':
+                return <AdminSupport navigation={navigation} />;
+            case 'disputes':
+                return <AdminDisputes navigation={navigation} />;
+            case 'reviews':
+                return <AdminReviews navigation={navigation} />;
+
+            // Platform & Content
+            case 'home_settings':
+                return <AdminHomeSettings navigation={navigation} />;
+            case 'cms':
+                return <AdminCMS navigation={navigation} />;
             case 'settings':
                 return <AdminSettings navigation={navigation} />;
-            case 'categories':
-                return <AdminCategories />;
+
             default:
                 return renderOverview();
         }
@@ -552,11 +743,11 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
 
     return (
         <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
-            <StatusBar barStyle="light-content" backgroundColor="#0E1A2E" />
+            <StatusBar barStyle="light-content" backgroundColor={NAVY} />
 
-            {/* ── TOP HEADER ── */}
+            {/* ── TOP HEADER (NAVY & GOLD) ── */}
             <LinearGradient
-                colors={['#0E1A2E', '#162235']}
+                colors={[NAVY, '#162235']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
                 style={{ 
@@ -578,22 +769,22 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                         <View style={{
                             width: 36, 
                             height: 36, 
-                            borderRadius: 10,
-                            backgroundColor: 'rgba(217, 167, 58, 0.12)',
+                            borderRadius: 10, 
+                            backgroundColor: 'rgba(217, 167, 58, 0.12)', 
                             borderWidth: 1, 
-                            borderColor: 'rgba(217, 167, 58, 0.3)',
+                            borderColor: 'rgba(217, 167, 58, 0.3)', 
                             overflow: 'hidden',
                             alignItems: 'center', 
                             justifyContent: 'center',
                         }}>
-                            <Image source={AM_LOGO} style={{ width: 30, height: 30 }} resizeMode="contain" />
+                            <Image source={AM_LOGO} style={{ width: 28, height: 28 }} resizeMode="contain" />
                         </View>
                         <View>
-                            <Text style={{ fontSize: 16, fontWeight: '900', color: 'white', letterSpacing: -0.3 }}>
-                                Abu Mafhal <Text style={{ color: '#D9A73A' }}>Admin</Text>
+                            <Text style={{ fontSize: 16, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.3 }}>
+                                Abu Mafhal <Text style={{ color: GOLD }}>Admin</Text>
                             </Text>
                             <Text style={{ fontSize: 8.5, color: '#94A3B8', fontWeight: '700', letterSpacing: 1 }}>
-                                MOBILE CONSOLE
+                                MOBILE COMMAND CONSOLE
                             </Text>
                         </View>
                     </View>
@@ -608,12 +799,33 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                                     borderRadius: 10,
                                     backgroundColor: 'rgba(217, 167, 58, 0.15)',
                                     borderWidth: 1,
-                                    borderColor: 'rgba(217, 167, 58, 0.3)'
+                                    borderColor: 'rgba(217, 167, 58, 0.3)',
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 4
                                 }}
                             >
-                                <Text style={{ color: '#D9A73A', fontSize: 10, fontWeight: '800' }}>← Home</Text>
+                                <Ionicons name="arrow-back" size={12} color={GOLD} />
+                                <Text style={{ color: GOLD, fontSize: 10.5, fontWeight: '800' }}>Dashboard</Text>
                             </TouchableOpacity>
                         )}
+
+                        <TouchableOpacity 
+                            onPress={() => setShowAiModal(true)}
+                            style={{ 
+                                width: 34, 
+                                height: 34, 
+                                borderRadius: 10, 
+                                backgroundColor: 'rgba(217, 167, 58, 0.15)', 
+                                alignItems: 'center', 
+                                justifyContent: 'center',
+                                borderWidth: 1,
+                                borderColor: 'rgba(217, 167, 58, 0.3)'
+                            }}
+                            title="AI Copilot"
+                        >
+                            <Ionicons name="sparkles" size={16} color={GOLD} />
+                        </TouchableOpacity>
 
                         <TouchableOpacity 
                             onPress={handleLogoutPrompt}
@@ -629,18 +841,18 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                             }}
                             title="Fita"
                         >
-                            <Ionicons name="log-out-outline" size={17} color="#F87171" />
+                            <Ionicons name="log-out-outline" size={16} color="#F87171" />
                         </TouchableOpacity>
                     </View>
                 </View>
 
-                {/* HORIZONTAL PILL TABS */}
+                {/* HORIZONTAL QUICK PILL TABS */}
                 <ScrollView 
                     horizontal 
                     showsHorizontalScrollIndicator={false} 
-                    contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
+                    contentContainerStyle={{ paddingHorizontal: 16, gap: 7 }}
                 >
-                    {CORE_TABS.map((tab) => {
+                    {QUICK_TABS.map((tab) => {
                         const isActive = activeTab === tab.id;
                         return (
                             <TouchableOpacity
@@ -651,21 +863,21 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                                     flexDirection: 'row',
                                     alignItems: 'center',
                                     gap: 5,
-                                    paddingHorizontal: 14, 
+                                    paddingHorizontal: 12, 
                                     paddingVertical: 6, 
                                     borderRadius: 12, 
-                                    backgroundColor: isActive ? '#D9A73A' : 'rgba(255, 255, 255, 0.08)',
-                                    borderWidth: 1,
-                                    borderColor: isActive ? 'transparent' : 'rgba(255, 255, 255, 0.12)'
+                                    backgroundColor: isActive ? GOLD : 'rgba(255, 255, 255, 0.08)',
+                                    borderWidth: 1, 
+                                    borderColor: isActive ? GOLD : 'rgba(255, 255, 255, 0.12)'
                                 }}
                             >
                                 <Ionicons 
                                     name={isActive ? tab.activeIcon : tab.icon} 
                                     size={13} 
-                                    color={isActive ? '#0E1A2E' : '#FFFFFF'} 
+                                    color={isActive ? NAVY : '#FFFFFF'} 
                                 />
                                 <Text style={{ 
-                                    color: isActive ? '#0E1A2E' : '#FFFFFF', 
+                                    color: isActive ? NAVY : '#FFFFFF', 
                                     fontWeight: isActive ? '900' : '700', 
                                     fontSize: 11,
                                     letterSpacing: 0.2
@@ -678,10 +890,86 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                 </ScrollView>
             </LinearGradient>
 
+            {/* ── SUB-SCREEN NAVIGATION BAR (IF INSIDE A SUB-SCREEN) ── */}
+            {activeTab !== 'overview' && (
+                <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingHorizontal: 16,
+                    paddingVertical: 10,
+                    backgroundColor: '#FFFFFF',
+                    borderBottomWidth: 1,
+                    borderColor: '#E2E8F0'
+                }}>
+                    <TouchableOpacity
+                        onPress={() => setActiveTab('overview')}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                    >
+                        <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }}>
+                            <Ionicons name="chevron-back" size={16} color={NAVY} />
+                        </View>
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY }}>
+                            Komawa Babban Dashboard
+                        </Text>
+                    </TouchableOpacity>
+
+                    <View style={{
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        borderRadius: 6,
+                        backgroundColor: 'rgba(217, 167, 58, 0.15)',
+                        borderWidth: 1,
+                        borderColor: 'rgba(217, 167, 58, 0.3)'
+                    }}>
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: GOLD, textTransform: 'uppercase' }}>
+                            {activeTab.replace(/_/g, ' ')}
+                        </Text>
+                    </View>
+                </View>
+            )}
+
             {/* ── MAIN CONTENT AREA ── */}
             <View style={{ flex: 1 }}>
                 {renderContent()}
             </View>
+
+            {/* ── FLOATING AI ASSISTANT BUTTON ── */}
+            <TouchableOpacity
+                onPress={() => setShowAiModal(true)}
+                activeOpacity={0.85}
+                style={{
+                    position: 'absolute',
+                    bottom: 24,
+                    right: 20,
+                    backgroundColor: NAVY,
+                    borderRadius: 28,
+                    paddingHorizontal: 16,
+                    paddingVertical: 12,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    borderWidth: 1.5,
+                    borderColor: GOLD,
+                    shadowColor: NAVY,
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 10,
+                    elevation: 5,
+                    zIndex: 99
+                }}
+            >
+                <Ionicons name="sparkles" size={18} color={GOLD} />
+                <Text style={{ color: GOLD, fontWeight: '900', fontSize: 12.5, letterSpacing: 0.5 }}>
+                    Admin AI Copilot
+                </Text>
+            </TouchableOpacity>
+
+            {/* AI ASSISTANT MODAL */}
+            <AdminAIAssistantModal
+                visible={showAiModal}
+                onClose={() => setShowAiModal(false)}
+            />
         </View>
     );
 };
