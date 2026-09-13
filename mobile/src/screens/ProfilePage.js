@@ -184,38 +184,38 @@ const ProfilePageInner = ({
     const displayName = user?.fullName || user?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Member';
     const displaySubtitle = user?.email || user?.phone || user?.phone_number || '';
 
-    // Menu Group 1: Shopping & Activity (with subtle pastel icon tints for elegant decoration)
+    // Menu Group 1: Shopping & Activity (subtle Navy & Gold tuned palette)
     const shoppingItems = [
         {
             icon: 'bag-handle-outline',
-            iconColor: '#0284C7',
-            iconBg: '#E0F2FE',
+            iconColor: '#0A192F',
+            iconBg: '#EFF6FF',
             label: 'My Orders',
             badge: pendingOrders > 0 ? `${pendingOrders} active` : ordersCount > 0 ? `${ordersCount}` : null,
-            badgeColor: pendingOrders > 0 ? '#F59E0B' : '#64748B',
+            badgeColor: pendingOrders > 0 ? '#D97706' : '#0A192F',
             screen: 'orders'
         },
         {
             icon: 'storefront-outline',
-            iconColor: '#059669',
-            iconBg: '#ECFDF5',
+            iconColor: '#B45309',
+            iconBg: '#FEF9EC',
             label: 'Followed Stores',
             subtitle: 'Stores you follow',
             badge: followedStores.length > 0 ? `${followedStores.length}` : null,
-            badgeColor: '#059669',
+            badgeColor: '#B45309',
             action: () => setShowFollowedModal(true)
         },
         {
             icon: 'heart-outline',
-            iconColor: '#E11D48',
+            iconColor: '#BE123C',
             iconBg: '#FFE4E6',
             label: 'Wishlist & Saved',
             screen: 'wishlist'
         },
         {
             icon: 'navigate-outline',
-            iconColor: '#7C3AED',
-            iconBg: '#F5F3FF',
+            iconColor: '#0A192F',
+            iconBg: '#F1F5F9',
             label: 'Track Delivery',
             screen: 'TrackOrder'
         },
@@ -232,24 +232,24 @@ const ProfilePageInner = ({
     const financeItems = [
         {
             icon: 'wallet-outline',
-            iconColor: '#059669',
-            iconBg: '#ECFDF5',
+            iconColor: '#B45309',
+            iconBg: '#FEF9EC',
             label: 'Mafhal Pay & Wallet',
             extra: formatCurrency(wallet.balance),
             screen: 'wallet'
         },
         {
             icon: 'gift-outline',
-            iconColor: '#D97706',
-            iconBg: '#FEF3C7',
+            iconColor: '#D4AF37',
+            iconBg: '#FEF9EC',
             label: 'Refer & Earn (₦1,000 Bonus)',
             badge: '₦1k Bonus',
-            badgeColor: '#10B981',
+            badgeColor: '#059669',
             screen: 'referral'
         },
         {
             icon: 'location-outline',
-            iconColor: '#475569',
+            iconColor: '#0A192F',
             iconBg: '#F1F5F9',
             label: 'Delivery Addresses',
             screen: 'address'
@@ -260,15 +260,15 @@ const ProfilePageInner = ({
     const supportItems = [
         {
             icon: 'settings-outline',
-            iconColor: '#475569',
+            iconColor: '#0A192F',
             iconBg: '#F1F5F9',
             label: 'Account Settings',
             screen: 'settings'
         },
         {
             icon: 'headset-outline',
-            iconColor: '#0284C7',
-            iconBg: '#E0F2FE',
+            iconColor: '#0A192F',
+            iconBg: '#EFF6FF',
             label: 'Customer Support & WhatsApp',
             screen: 'support'
         },
@@ -363,7 +363,7 @@ const ProfilePageInner = ({
                         {/* Decorative Top Passport Accent */}
                         <View style={s.heroTopBarDecor}>
                             <View style={s.passportBadge}>
-                                <Ionicons name="sparkles" size={10} color="#0284C7" />
+                                <Ionicons name="sparkles" size={10} color="#D4AF37" />
                                 <Text style={s.passportText}>VERIFIED PASSPORT</Text>
                             </View>
                             <View style={s.heroStatusPill}>
@@ -374,9 +374,11 @@ const ProfilePageInner = ({
 
                         <View style={s.heroMainRow}>
                             <View style={s.avatarWrap}>
-                                <UserAvatar user={user} size={50} />
+                                <View style={s.avatarRing}>
+                                    <UserAvatar user={user} size={48} />
+                                </View>
                                 <View style={s.verifiedDot}>
-                                    <Ionicons name="checkmark" size={9} color="#FFFFFF" />
+                                    <Ionicons name="checkmark" size={9} color="#F59E0B" />
                                 </View>
                             </View>
 
@@ -407,7 +409,7 @@ const ProfilePageInner = ({
                                         activeOpacity={0.75}
                                         onPress={() => onNavigate && onNavigate('editProfile')}
                                     >
-                                        <Ionicons name="pencil-sharp" size={10} color="#475569" style={{ marginRight: 3 }} />
+                                        <Ionicons name="pencil-sharp" size={10} color="#0A192F" style={{ marginRight: 3 }} />
                                         <Text style={s.editPillText}>Edit</Text>
                                     </TouchableOpacity>
 
@@ -416,7 +418,7 @@ const ProfilePageInner = ({
                                         activeOpacity={0.75}
                                         onPress={() => setShowFollowedModal(true)}
                                     >
-                                        <Ionicons name="storefront" size={10} color="#0284C7" style={{ marginRight: 3 }} />
+                                        <Ionicons name="storefront" size={10} color="#B45309" style={{ marginRight: 3 }} />
                                         <Text style={s.heroStoresPillText}>
                                             {followedStores.length} {followedStores.length === 1 ? 'Store' : 'Stores'}
                                         </Text>
@@ -457,7 +459,7 @@ const ProfilePageInner = ({
                             <Text style={s.metricValue} numberOfLines={1}>
                                 {loading ? '...' : formatCurrency(wallet.balance)}
                             </Text>
-                            <Text style={s.metricSub}>Balance →</Text>
+                            <Text style={[s.metricSub, { color: '#B45309' }]}>Balance →</Text>
                         </TouchableOpacity>
 
                         <View style={s.metricDivider} />
@@ -547,8 +549,8 @@ const ProfilePageInner = ({
                             activeOpacity={0.85}
                             onPress={onOpenVendorRegister}
                         >
-                            <View style={[s.roleIconCircle, { backgroundColor: '#FEF3C7' }]}>
-                                <Ionicons name="briefcase-outline" size={17} color="#D97706" />
+                            <View style={[s.roleIconCircle, { backgroundColor: '#0A192F' }]}>
+                                <Ionicons name="briefcase-outline" size={16} color="#F59E0B" />
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={s.roleCardTitle}>
@@ -568,7 +570,7 @@ const ProfilePageInner = ({
                 )}
 
                 {/* ── GROUP 1: SHOPPING & ACTIVITY ── */}
-                <Text style={s.sectionHeader}>SHOPPING & ACTIVITY</Text>
+                <Text style={s.sectionHeader}><Text style={s.sectionHeaderSpark}>✦ </Text>SHOPPING & ACTIVITY</Text>
                 <View style={s.menuGroup}>
                     {shoppingItems.map((item, idx) => (
                         <View key={item.label}>
@@ -601,7 +603,7 @@ const ProfilePageInner = ({
                 </View>
 
                 {/* ── GROUP 2: FINANCES & REWARDS ── */}
-                <Text style={s.sectionHeader}>FINANCE & REWARDS</Text>
+                <Text style={s.sectionHeader}><Text style={s.sectionHeaderSpark}>✦ </Text>FINANCE & REWARDS</Text>
                 <View style={s.menuGroup}>
                     {financeItems.map((item, idx) => (
                         <View key={item.label}>
@@ -631,7 +633,7 @@ const ProfilePageInner = ({
                 </View>
 
                 {/* ── GROUP 3: PREFERENCES & SUPPORT ── */}
-                <Text style={s.sectionHeader}>PREFERENCES & SUPPORT</Text>
+                <Text style={s.sectionHeader}><Text style={s.sectionHeaderSpark}>✦ </Text>PREFERENCES & SUPPORT</Text>
                 <View style={s.menuGroup}>
                     {supportItems.map((item, idx) => (
                         <View key={item.label}>
@@ -690,7 +692,7 @@ const ProfilePageInner = ({
                         <View style={s.modalHeader}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                 <View style={s.modalHeaderIconWrap}>
-                                    <Ionicons name="storefront" size={16} color="#0284C7" />
+                                    <Ionicons name="storefront" size={16} color="#F59E0B" />
                                 </View>
                                 <View>
                                     <Text style={s.modalTitle}>Followed Stores</Text>
@@ -752,7 +754,7 @@ const ProfilePageInner = ({
                                             onNavigate && onNavigate('stores');
                                         }}
                                     >
-                                        <Ionicons name="compass-outline" size={14} color="#FFFFFF" style={{ marginRight: 5 }} />
+                                        <Ionicons name="compass-outline" size={14} color="#FCD34D" style={{ marginRight: 5 }} />
                                         <Text style={s.modalDiscoverBtnText}>Explore Verified Stores</Text>
                                     </TouchableOpacity>
                                 </View>
@@ -812,7 +814,7 @@ const ProfilePageInner = ({
                                                         onNavigate && onNavigate('stores');
                                                     }}
                                                 >
-                                                    <Ionicons name="storefront-outline" size={12} color="#0284C7" />
+                                                    <Ionicons name="storefront-outline" size={12} color="#0A192F" />
                                                     <Text style={s.actionVisitText}>Visit Store</Text>
                                                 </TouchableOpacity>
 
@@ -908,9 +910,9 @@ const s = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#E2E8F0',
         borderLeftWidth: 3.5,
-        borderLeftColor: '#0284C7',
+        borderLeftColor: '#0A192F',
         marginBottom: 10,
-        boxShadow: '0px 1px 4px rgba(15, 23, 42, 0.03)',
+        boxShadow: '0px 1px 4px rgba(10, 25, 47, 0.04)',
         elevation: 1
     },
     heroTopBarDecor: {
@@ -926,17 +928,17 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
-        backgroundColor: '#F0F9FF',
+        backgroundColor: '#FEF9EC',
         paddingHorizontal: 6,
         paddingVertical: 2,
         borderRadius: 4,
         borderWidth: 1,
-        borderColor: '#BAE6FD'
+        borderColor: '#FDE68A'
     },
     passportText: {
         fontSize: 8,
         fontWeight: '900',
-        color: '#0284C7',
+        color: '#92400E',
         letterSpacing: 0.5
     },
     heroStatusPill: {
@@ -963,14 +965,21 @@ const s = StyleSheet.create({
         position: 'relative',
         marginRight: 12
     },
+    avatarRing: {
+        padding: 1.5,
+        borderRadius: 27,
+        borderWidth: 1.5,
+        borderColor: '#FDE68A',
+        backgroundColor: '#FFFBEB'
+    },
     verifiedDot: {
         position: 'absolute',
-        bottom: -2,
-        right: -2,
+        bottom: -1,
+        right: -1,
         width: 16,
         height: 16,
         borderRadius: 8,
-        backgroundColor: '#10B981',
+        backgroundColor: '#0A192F',
         borderWidth: 1.5,
         borderColor: '#FFFFFF',
         alignItems: 'center',
@@ -1000,8 +1009,8 @@ const s = StyleSheet.create({
         borderWidth: 1
     },
     roleBadgeBuyer: {
-        backgroundColor: '#EFF6FF',
-        borderColor: '#BFDBFE'
+        backgroundColor: '#0A192F',
+        borderColor: '#D4AF37'
     },
     roleBadgeVendor: {
         backgroundColor: '#ECFDF5',
@@ -1020,7 +1029,7 @@ const s = StyleSheet.create({
         fontWeight: '800',
         letterSpacing: 0.4
     },
-    roleTextBuyer: { color: '#2563EB' },
+    roleTextBuyer: { color: '#FCD34D' },
     roleTextVendor: { color: '#059669' },
     roleTextAdmin: { color: '#DC2626' },
     roleTextDriver: { color: '#7C3AED' },
@@ -1056,14 +1065,14 @@ const s = StyleSheet.create({
         paddingHorizontal: 8,
         paddingVertical: 3,
         borderRadius: 5,
-        backgroundColor: '#F0FDF4',
+        backgroundColor: '#FEF9EC',
         borderWidth: 1,
-        borderColor: '#BBF7D0'
+        borderColor: '#FDE68A'
     },
     heroStoresPillText: {
         fontSize: 10,
         fontWeight: '800',
-        color: '#059669'
+        color: '#92400E'
     },
 
     /* Guest Card */
@@ -1100,12 +1109,14 @@ const s = StyleSheet.create({
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 7,
-        backgroundColor: '#F59E0B'
+        backgroundColor: '#0A192F',
+        borderWidth: 1,
+        borderColor: '#D4AF37'
     },
     guestSignInBtnText: {
         fontSize: 11,
         fontWeight: '800',
-        color: '#0A192F'
+        color: '#FCD34D'
     },
 
     /* Metrics Card (Compact) */
@@ -1117,10 +1128,12 @@ const s = StyleSheet.create({
         paddingHorizontal: 6,
         borderWidth: 1,
         borderColor: '#E2E8F0',
+        borderTopWidth: 2,
+        borderTopColor: '#0A192F',
         marginBottom: 10,
         alignItems: 'center',
         justifyContent: 'space-between',
-        boxShadow: '0px 1px 3px rgba(15, 23, 42, 0.02)',
+        boxShadow: '0px 1px 3px rgba(10, 25, 47, 0.03)',
         elevation: 1
     },
     metricColumn: {
@@ -1131,19 +1144,19 @@ const s = StyleSheet.create({
     metricLabel: {
         fontSize: 8.5,
         fontWeight: '800',
-        color: '#94A3B8',
+        color: '#64748B',
         letterSpacing: 0.8,
         marginBottom: 2
     },
     metricValue: {
         fontSize: 13,
         fontWeight: '800',
-        color: '#0F172A',
+        color: '#0A192F',
         marginBottom: 1
     },
     metricSub: {
         fontSize: 9.5,
-        color: '#0284C7',
+        color: '#B45309',
         fontWeight: '600'
     },
     metricDivider: {
@@ -1163,8 +1176,10 @@ const s = StyleSheet.create({
         gap: 10
     },
     roleCardBuyer: {
-        backgroundColor: '#FFFBEB',
-        borderColor: '#FDE68A'
+        backgroundColor: '#FFFDF5',
+        borderColor: '#FDE68A',
+        borderLeftWidth: 3.5,
+        borderLeftColor: '#0A192F'
     },
     roleCardVendor: {
         backgroundColor: '#ECFDF5',
@@ -1198,13 +1213,17 @@ const s = StyleSheet.create({
 
     /* Menu Groups (Refined & Compact) */
     sectionHeader: {
-        fontSize: 9,
+        fontSize: 9.5,
         fontWeight: '800',
-        color: '#94A3B8',
-        letterSpacing: 0.9,
-        marginTop: 6,
+        color: '#0A192F',
+        letterSpacing: 0.8,
+        marginTop: 8,
         marginBottom: 4,
         marginLeft: 2
+    },
+    sectionHeaderSpark: {
+        color: '#D4AF37',
+        fontSize: 8.5
     },
     menuGroup: {
         backgroundColor: '#FFFFFF',
@@ -1335,7 +1354,7 @@ const s = StyleSheet.create({
         width: 30,
         height: 30,
         borderRadius: 8,
-        backgroundColor: '#E0F2FE',
+        backgroundColor: '#0A192F',
         alignItems: 'center',
         justifyContent: 'center'
     },
@@ -1422,7 +1441,9 @@ const s = StyleSheet.create({
     modalDiscoverBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#0284C7',
+        backgroundColor: '#0A192F',
+        borderWidth: 1,
+        borderColor: '#D4AF37',
         paddingHorizontal: 14,
         paddingVertical: 7.5,
         borderRadius: 8,
@@ -1431,7 +1452,7 @@ const s = StyleSheet.create({
     modalDiscoverBtnText: {
         fontSize: 11,
         fontWeight: '800',
-        color: '#FFFFFF'
+        color: '#FCD34D'
     },
     storesListWrap: {
         gap: 8,
@@ -1473,7 +1494,7 @@ const s = StyleSheet.create({
         width: 14,
         height: 14,
         borderRadius: 7,
-        backgroundColor: '#0284C7',
+        backgroundColor: '#0A192F',
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1.5,
@@ -1489,7 +1510,7 @@ const s = StyleSheet.create({
         color: '#0F172A'
     },
     officialBadge: {
-        backgroundColor: '#F59E0B',
+        backgroundColor: '#D4AF37',
         paddingHorizontal: 4,
         paddingVertical: 1,
         borderRadius: 3
@@ -1542,7 +1563,9 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#E0F2FE',
+        backgroundColor: '#EFF6FF',
+        borderWidth: 1,
+        borderColor: '#BFDBFE',
         paddingVertical: 6,
         borderRadius: 7,
         gap: 3
@@ -1550,7 +1573,7 @@ const s = StyleSheet.create({
     actionVisitText: {
         fontSize: 10,
         fontWeight: '800',
-        color: '#0284C7'
+        color: '#0A192F'
     },
     actionWhatsAppBtn: {
         flex: 1.1,
