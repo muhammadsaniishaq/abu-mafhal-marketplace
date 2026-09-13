@@ -597,56 +597,57 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
             }}>
                 <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" translucent={true} />
 
-                {/* Top row: logo + actions */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                {/* Top row: logo + actions (100% mobile-first, no overflow) */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, minWidth: 0 }}>
+                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 7, minWidth: 0, marginRight: 8 }}>
                         <Image
                             source={settings?.logo_url ? { uri: settings.logo_url } : AM_LOGO}
-                            style={{ width: 34, height: 34, borderRadius: 6 }}
+                            style={{ width: 30, height: 30, borderRadius: 6, flexShrink: 0 }}
                             resizeMode="contain"
                         />
-                        <View>
-                            <Text style={{ fontSize: 14.5, fontWeight: '900', color: '#0A192F', letterSpacing: 0.5 }}>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text numberOfLines={1} ellipsizeMode="tail" style={{ fontSize: 13.5, fontWeight: '900', color: '#0A192F', letterSpacing: 0.3 }}>
                                 {settings?.app_name ? settings.app_name.toUpperCase() : 'ABU MAFHAL'}
                             </Text>
-                            <Text style={{ fontSize: 7, fontWeight: '700', color: '#64748B', letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                            <Text numberOfLines={1} ellipsizeMode="tail" style={{ fontSize: 7.5, fontWeight: '700', color: '#64748B', letterSpacing: 0.3, textTransform: 'uppercase' }}>
                                 {settings?.tagline || 'YOUR MARKETPLACE, YOUR CHOICE.'}
                             </Text>
                         </View>
                     </View>
 
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, flexShrink: 0 }}>
                         <TouchableOpacity
-                            onPress={onGoToShop}
+                            onPress={() => onNavigate ? onNavigate('categories') : onGoToShop()}
                             style={{
                                 flexDirection: 'row',
                                 alignItems: 'center',
-                                gap: 4,
+                                gap: 3.5,
                                 backgroundColor: '#E0F2FE',
-                                paddingHorizontal: 10,
-                                paddingVertical: 5,
-                                borderRadius: 12,
+                                paddingHorizontal: 8,
+                                paddingVertical: 4.5,
+                                borderRadius: 10,
                                 borderWidth: 1,
-                                borderColor: '#BAE6FD'
+                                borderColor: '#BAE6FD',
+                                flexShrink: 0
                             }}
                             activeOpacity={0.8}
                         >
-                            <Ionicons name="bag-handle" size={13} color="#0284C7" />
-                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#0284C7' }}>Shop</Text>
+                            <Ionicons name="grid-outline" size={12} color="#0284C7" />
+                            <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#0284C7' }}>Category</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity onPress={onGoToCart} style={{ position: 'relative', padding: 4 }}>
-                            <Ionicons name="cart-outline" size={22} color="#0F172A" />
+                        <TouchableOpacity onPress={onGoToCart} style={{ position: 'relative', padding: 3, flexShrink: 0 }}>
+                            <Ionicons name="cart-outline" size={21} color="#0F172A" />
                             {cartCount > 0 ? (
-                                <View style={{ position: 'absolute', top: 0, right: 0, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 }}>
-                                    <Text style={{ color: 'white', fontSize: 9, fontWeight: '900' }}>{cartCount}</Text>
+                                <View style={{ position: 'absolute', top: -1, right: -1, minWidth: 15, height: 15, borderRadius: 7.5, backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 }}>
+                                    <Text style={{ color: 'white', fontSize: 8.5, fontWeight: '900' }}>{cartCount > 99 ? '99+' : cartCount}</Text>
                                 </View>
                             ) : null}
                         </TouchableOpacity>
 
-                        <TouchableOpacity onPress={onGoToNotifications} style={{ position: 'relative', padding: 4 }}>
-                            <Ionicons name="notifications-outline" size={22} color="#0F172A" />
-                            <View style={{ position: 'absolute', top: 3, right: 3, width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#EF4444' }} />
+                        <TouchableOpacity onPress={onGoToNotifications} style={{ position: 'relative', padding: 3, flexShrink: 0 }}>
+                            <Ionicons name="notifications-outline" size={21} color="#0F172A" />
+                            <View style={{ position: 'absolute', top: 2, right: 2, width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444' }} />
                         </TouchableOpacity>
                     </View>
                 </View>
