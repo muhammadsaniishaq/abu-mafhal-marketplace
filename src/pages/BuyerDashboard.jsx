@@ -38,6 +38,7 @@ const BuyerDashboard = () => {
 
   const menuItems = [
     { label: 'My Orders', path: '/buyer/orders', icon: ShoppingBag, color: 'text-blue-500' },
+    { label: 'Followed Stores', path: '/stores', icon: Store, color: 'text-amber-500' },
     { label: 'Wishlist', path: '/buyer/wishlist', icon: Heart, color: 'text-rose-500' },
     { label: 'Wallet', path: '/buyer/wallet', icon: Wallet, color: 'text-emerald-500' },
     { label: 'Loyalty & Rewards', path: '/buyer/loyalty', icon: Gift, color: 'text-purple-500' },

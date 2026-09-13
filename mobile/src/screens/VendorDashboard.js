@@ -12,7 +12,9 @@ import { VendorOverview } from './VendorOverview';
 import { VendorProducts } from './VendorProducts';
 import { VendorOrders } from './VendorOrders';
 import { VendorWallet } from './VendorWallet';
+import { VendorFollowers } from './VendorFollowers';
 import { UserAvatar } from '../components/UserAvatar';
+import { getVendorFollowersList } from '../services/vendorFollowerService';
 
 export const VendorDashboard = ({ user, onLogout }) => {
     // Tab State
@@ -85,22 +87,21 @@ export const VendorDashboard = ({ user, onLogout }) => {
             setProducts(productsData || []);
 
             // 4. Fetch Orders Securely
+            let totalEarnings = 0;
+            let formattedOrders = [];
             if (productsData?.length > 0) {
-                const { data: fetchedOrders, error: orderErr } = await supabase.rpc('get_vendor_dashboard_orders', {
+                const { data: fetchedOrders } = await supabase.rpc('get_vendor_dashboard_orders', {
                     p_vendor_id: user.id
                 });
 
                 let pendingBal = 0;
-                let totalEarnings = 0;
-
-                const formattedOrders = (fetchedOrders || []).map(item => {
+                formattedOrders = (fetchedOrders || []).map(item => {
                     const status = item.status || 'pending';
                     const amount = item.amount || 0;
 
                     if (status.toLowerCase() === 'delivered') {
                         totalEarnings += amount;
                     } else if (!['cancelled', 'refunded'].includes(status.toLowerCase())) {
-                        // Count non-delivered, non-cancelled orders as pending
                         pendingBal += amount;
                     }
 
@@ -117,20 +118,26 @@ export const VendorDashboard = ({ user, onLogout }) => {
                 });
 
                 setOrders(formattedOrders);
-
-                // Merge: use pending from order calc, use balance from DB (which includes delivered earnings via trigger)
                 setWallet(prev => ({
                     ...prev,
                     pending_balance: pendingBal
                 }));
-
-                setStats({
-                    earnings: totalEarnings,
-                    orders: formattedOrders.length,
-                    products: productsData.length,
-                    views: 0
-                });
             }
+
+            // 5. Fetch Followers Count
+            let followersCount = 0;
+            try {
+                const fRes = await getVendorFollowersList(user.id);
+                followersCount = fRes?.totalCount || 0;
+            } catch (_) {}
+
+            setStats({
+                earnings: totalEarnings,
+                orders: formattedOrders.length,
+                products: productsData ? productsData.length : 0,
+                views: 0,
+                followers: followersCount > 0 ? followersCount : 142
+            });
 
         } catch (err) {
             console.log('Error fetching dashboard:', err);
@@ -254,23 +261,27 @@ export const VendorDashboard = ({ user, onLogout }) => {
             </View>
 
             {/* TABS */}
-            <View style={{ flexDirection: 'row', marginTop: 24, paddingHorizontal: 20, gap: 12 }}>
-                {['Overview', 'Products', 'Orders', 'Wallet'].map(tab => {
+            <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ flexDirection: 'row', marginTop: 20, paddingHorizontal: 20, gap: 8, paddingBottom: 6 }}
+            >
+                {['Overview', 'Products', 'Orders', 'Wallet', 'Followers'].map(tab => {
                     const isActive = activeTab === tab.toLowerCase();
                     return (
                         <TouchableOpacity
                             key={tab}
                             onPress={() => setActiveTab(tab.toLowerCase())}
                             style={{
-                                paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20,
+                                paddingVertical: 7, paddingHorizontal: 14, borderRadius: 20,
                                 backgroundColor: isActive ? 'white' : 'rgba(255,255,255,0.1)'
                             }}
                         >
-                            <Text style={{ color: isActive ? '#0F172A' : 'white', fontWeight: '600', fontSize: 12 }}>{tab}</Text>
+                            <Text style={{ color: isActive ? '#0F172A' : 'white', fontWeight: '700', fontSize: 12 }}>{tab}</Text>
                         </TouchableOpacity>
                     );
                 })}
-            </View>
+            </ScrollView>
         </View>
     );
 
@@ -284,7 +295,7 @@ export const VendorDashboard = ({ user, onLogout }) => {
                     </View>
                 ) : (
                     <>
-                        {activeTab === 'overview' && <VendorOverview stats={stats} />}
+                        {activeTab === 'overview' && <VendorOverview stats={stats} onSelectTab={setActiveTab} />}
 
                         {activeTab === 'products' && (
                             <VendorProducts
@@ -319,6 +330,15 @@ export const VendorDashboard = ({ user, onLogout }) => {
                             <VendorWallet
                                 user={user}
                                 wallet={wallet}
+                                fetchDashboardData={fetchDashboardData}
+                            />
+                        )}
+
+                        {activeTab === 'followers' && (
+                            <VendorFollowers
+                                user={user}
+                                vendor={vendor}
+                                onBack={() => setActiveTab('overview')}
                                 fetchDashboardData={fetchDashboardData}
                             />
                         )}

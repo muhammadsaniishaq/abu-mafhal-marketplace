@@ -8,10 +8,15 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
+import {
+    FOLLOWED_STORES_KEY,
+    getFollowedStoreMap,
+    toggleFollowStore,
+    subscribeToFollowChanges
+} from '../services/vendorFollowerService';
 
 const { width } = Dimensions.get('window');
 const AM_LOGO = require('../../assets/am_logo.png');
-const FOLLOWED_STORES_KEY = '@abumafhal_followed_stores_v2';
 
 const fmtPrice = (n) => {
     const num = Number(n);
@@ -70,24 +75,35 @@ export const StoresPage = ({
             })
             .subscribe();
 
+        const unsub = subscribeToFollowChanges((updatedMap) => {
+            if (updatedMap) setFollowedStores(updatedMap);
+        });
+
         return () => {
             supabase.removeChannel(channel);
+            if (typeof unsub === 'function') unsub();
         };
     }, []);
 
     const loadFollowedState = async () => {
         try {
-            const raw = await AsyncStorage.getItem(FOLLOWED_STORES_KEY);
-            if (raw) setFollowedStores(JSON.parse(raw));
+            const map = await getFollowedStoreMap();
+            if (map) setFollowedStores(map);
         } catch (_) {}
     };
 
     const toggleFollow = async (storeId, storeName) => {
-        const isCurrentlyFollowed = !!followedStores[storeId];
-        const updated = { ...followedStores, [storeId]: !isCurrentlyFollowed };
-        setFollowedStores(updated);
-        AsyncStorage.setItem(FOLLOWED_STORES_KEY, JSON.stringify(updated)).catch(() => {});
-        showToast(!isCurrentlyFollowed ? `Following ${storeName}` : `Unfollowed ${storeName}`);
+        try {
+            const res = await toggleFollowStore(storeId, storeName);
+            if (res && res.updatedMap) setFollowedStores(res.updatedMap);
+            showToast(res.isFollowed ? `Following ${storeName}` : `Unfollowed ${storeName}`);
+        } catch (_) {
+            const isCurrentlyFollowed = !!followedStores[storeId];
+            const updated = { ...followedStores, [storeId]: !isCurrentlyFollowed };
+            setFollowedStores(updated);
+            AsyncStorage.setItem(FOLLOWED_STORES_KEY, JSON.stringify(updated)).catch(() => {});
+            showToast(!isCurrentlyFollowed ? `Following ${storeName}` : `Unfollowed ${storeName}`);
+        }
     };
 
     const fetchStoresAndProducts = async (isSilent = false) => {

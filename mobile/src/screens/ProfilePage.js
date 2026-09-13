@@ -2,18 +2,27 @@ import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
+    TextInput,
+    Image,
     TouchableOpacity,
     SafeAreaView,
     ScrollView,
     ActivityIndicator,
     Platform,
     Alert,
+    Modal,
+    Linking,
     StyleSheet
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { UserAvatar } from '../components/UserAvatar';
 import { useAppSettings } from '../context/AppSettingsContext';
+import {
+    getFollowedStoresList,
+    toggleFollowStore,
+    subscribeToFollowChanges
+} from '../services/vendorFollowerService';
 
 // Clean currency formatter
 const formatCurrency = (amount) => {
@@ -54,6 +63,12 @@ const ProfilePageInner = ({
     const [vendorApp, setVendorApp] = useState(null);
     const { settings } = useAppSettings();
 
+    // Followed Stores State
+    const [followedStores, setFollowedStores] = useState([]);
+    const [showFollowedModal, setShowFollowedModal] = useState(false);
+    const [followedLoading, setFollowedLoading] = useState(false);
+    const [storeSearch, setStoreSearch] = useState('');
+
     useEffect(() => {
         const loadProfileData = async () => {
             let activeUid = user?.id;
@@ -86,6 +101,34 @@ const ProfilePageInner = ({
 
         loadProfileData();
     }, [user?.id]);
+
+    useEffect(() => {
+        loadFollowedStores();
+        const unsub = subscribeToFollowChanges(() => {
+            loadFollowedStores();
+        });
+        return () => {
+            if (typeof unsub === 'function') unsub();
+        };
+    }, [user?.id]);
+
+    const loadFollowedStores = async () => {
+        try {
+            setFollowedLoading(true);
+            const list = await getFollowedStoresList(user?.id);
+            setFollowedStores(list || []);
+        } catch (_) {
+        } finally {
+            setFollowedLoading(false);
+        }
+    };
+
+    const handleUnfollowStore = async (storeId, storeName) => {
+        try {
+            await toggleFollowStore(storeId, storeName, user?.id);
+            setFollowedStores(prev => prev.filter(s => s.id !== storeId));
+        } catch (_) {}
+    };
 
     const fetchData = async (uid) => {
         try {
@@ -151,6 +194,14 @@ const ProfilePageInner = ({
             screen: 'orders'
         },
         {
+            icon: 'storefront-outline',
+            label: 'Followed Stores',
+            subtitle: 'Shagunan da nake bi',
+            badge: followedStores.length > 0 ? `${followedStores.length} stores` : null,
+            badgeColor: '#0284C7',
+            action: () => setShowFollowedModal(true)
+        },
+        {
             icon: 'heart-outline',
             label: 'Wishlist & Favorites',
             screen: 'wishlist'
@@ -208,7 +259,12 @@ const ProfilePageInner = ({
         }
     ];
 
-    const handleItemPress = (screen) => {
+    const handleItemPress = (item) => {
+        if (item.action) {
+            item.action();
+            return;
+        }
+        const screen = item.screen;
         if (!screen) return;
         if (!user && screen !== 'support' && screen !== 'about') {
             onNavigate && onNavigate('Auth');
@@ -235,6 +291,13 @@ const ProfilePageInner = ({
         }
     };
 
+    // Filter followed stores
+    const filteredFollowedStores = followedStores.filter(st => {
+        if (!storeSearch) return true;
+        const q = storeSearch.toLowerCase();
+        return st.name.toLowerCase().includes(q) || (st.category && st.category.toLowerCase().includes(q));
+    });
+
     return (
         <SafeAreaView style={s.safeArea}>
             {/* ── TOP NAV BAR ── */}
@@ -248,7 +311,10 @@ const ProfilePageInner = ({
                     <Ionicons name="chevron-back" size={22} color="#0F172A" />
                 </TouchableOpacity>
 
-                <Text style={s.topBarTitle}>My Profile</Text>
+                <View style={{ alignItems: 'center' }}>
+                    <Text style={s.topBarTitle}>My Profile</Text>
+                    <Text style={s.topBarSubtitle}>Account & Preferences</Text>
+                </View>
 
                 {user ? (
                     <TouchableOpacity
@@ -299,14 +365,28 @@ const ProfilePageInner = ({
                                 <Text style={s.heroSub} numberOfLines={1}>{displaySubtitle}</Text>
                             ) : null}
 
-                            <TouchableOpacity
-                                style={s.editPillBtn}
-                                activeOpacity={0.75}
-                                onPress={() => onNavigate && onNavigate('editProfile')}
-                            >
-                                <Ionicons name="pencil-sharp" size={12} color="#475569" style={{ marginRight: 4 }} />
-                                <Text style={s.editPillText}>Edit Profile</Text>
-                            </TouchableOpacity>
+                            {/* Action Pills Row */}
+                            <View style={s.heroPillsRow}>
+                                <TouchableOpacity
+                                    style={s.editPillBtn}
+                                    activeOpacity={0.75}
+                                    onPress={() => onNavigate && onNavigate('editProfile')}
+                                >
+                                    <Ionicons name="pencil-sharp" size={12} color="#475569" style={{ marginRight: 4 }} />
+                                    <Text style={s.editPillText}>Edit Profile</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={s.heroStoresPill}
+                                    activeOpacity={0.75}
+                                    onPress={() => setShowFollowedModal(true)}
+                                >
+                                    <Ionicons name="storefront" size={12} color="#0284C7" style={{ marginRight: 4 }} />
+                                    <Text style={s.heroStoresPillText}>
+                                        {followedStores.length} {followedStores.length === 1 ? 'Store' : 'Stores'} Followed
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </View>
                 ) : (
@@ -406,7 +486,7 @@ const ProfilePageInner = ({
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={s.roleCardTitle}>Vendor Management Dashboard</Text>
-                                <Text style={s.roleCardSub}>Manage products, orders & store earnings</Text>
+                                <Text style={s.roleCardSub}>Manage products, orders, followers & store earnings</Text>
                             </View>
                             <Ionicons name="arrow-forward" size={18} color="#059669" />
                         </TouchableOpacity>
@@ -452,19 +532,24 @@ const ProfilePageInner = ({
                 )}
 
                 {/* ── GROUP 1: SHOPPING & ORDERS ── */}
-                <Text style={s.sectionHeader}>SHOPPING & ORDERS</Text>
+                <Text style={s.sectionHeader}>SHOPPING & ACTIVITY</Text>
                 <View style={s.menuGroup}>
                     {shoppingItems.map((item, idx) => (
                         <View key={item.label}>
                             <TouchableOpacity
                                 style={s.menuRow}
                                 activeOpacity={0.65}
-                                onPress={() => handleItemPress(item.screen)}
+                                onPress={() => handleItemPress(item)}
                             >
                                 <View style={s.menuIconBox}>
                                     <Ionicons name={item.icon} size={20} color="#1E293B" />
                                 </View>
-                                <Text style={s.menuLabel}>{item.label}</Text>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={s.menuLabel}>{item.label}</Text>
+                                    {item.subtitle && (
+                                        <Text style={s.menuSubLabel}>{item.subtitle}</Text>
+                                    )}
+                                </View>
 
                                 {item.badge ? (
                                     <View style={[s.menuBadge, { backgroundColor: item.badgeColor }]}>
@@ -487,7 +572,7 @@ const ProfilePageInner = ({
                             <TouchableOpacity
                                 style={s.menuRow}
                                 activeOpacity={0.65}
-                                onPress={() => handleItemPress(item.screen)}
+                                onPress={() => handleItemPress(item)}
                             >
                                 <View style={s.menuIconBox}>
                                     <Ionicons name={item.icon} size={20} color="#1E293B" />
@@ -517,7 +602,7 @@ const ProfilePageInner = ({
                             <TouchableOpacity
                                 style={s.menuRow}
                                 activeOpacity={0.65}
-                                onPress={() => handleItemPress(item.screen)}
+                                onPress={() => handleItemPress(item)}
                             >
                                 <View style={s.menuIconBox}>
                                     <Ionicons name={item.icon} size={20} color="#1E293B" />
@@ -555,6 +640,176 @@ const ProfilePageInner = ({
                     <Text style={s.versionText}>Abu Mafhal Marketplace • v1.0.0 (Encrypted)</Text>
                 </View>
             </ScrollView>
+
+            {/* ── FOLLOWED STORES MODAL ── */}
+            <Modal
+                visible={showFollowedModal}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setShowFollowedModal(false)}
+            >
+                <View style={s.modalOverlay}>
+                    <View style={s.modalCard}>
+                        {/* Modal Header */}
+                        <View style={s.modalHeader}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                <View style={s.modalHeaderIconWrap}>
+                                    <Ionicons name="storefront" size={18} color="#0284C7" />
+                                </View>
+                                <View>
+                                    <Text style={s.modalTitle}>Shagunan Da Kake Bi</Text>
+                                    <Text style={s.modalSubtitle}>Followed Stores ({followedStores.length})</Text>
+                                </View>
+                            </View>
+                            <TouchableOpacity
+                                onPress={() => setShowFollowedModal(false)}
+                                style={s.modalCloseBtn}
+                                activeOpacity={0.7}
+                            >
+                                <Ionicons name="close" size={20} color="#64748B" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Search Input */}
+                        {followedStores.length > 0 && (
+                            <View style={s.storeSearchBox}>
+                                <Ionicons name="search-outline" size={16} color="#64748B" style={{ marginRight: 8 }} />
+                                <TextInput
+                                    placeholder="Nemi a cikin shagunan da kake bi..."
+                                    placeholderTextColor="#94A3B8"
+                                    value={storeSearch}
+                                    onChangeText={setStoreSearch}
+                                    style={s.storeSearchInput}
+                                />
+                                {storeSearch.length > 0 && (
+                                    <TouchableOpacity onPress={() => setStoreSearch('')}>
+                                        <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        )}
+
+                        <ScrollView style={s.modalScroll} showsVerticalScrollIndicator={false}>
+                            {followedLoading ? (
+                                <View style={s.modalLoaderWrap}>
+                                    <ActivityIndicator size="small" color="#0284C7" />
+                                    <Text style={s.modalLoaderText}>Ana ɗauko shagunan da kake bi...</Text>
+                                </View>
+                            ) : filteredFollowedStores.length === 0 ? (
+                                <View style={s.modalEmptyWrap}>
+                                    <View style={s.modalEmptyIconCircle}>
+                                        <Ionicons name="storefront-outline" size={38} color="#94A3B8" />
+                                    </View>
+                                    <Text style={s.modalEmptyTitle}>
+                                        {storeSearch ? 'Babu shagon da ya dace' : 'Ba ka bi kowane shago ba tukuna'}
+                                    </Text>
+                                    <Text style={s.modalEmptySub}>
+                                        {storeSearch
+                                            ? 'Babu shago a cikin jerin da kake bi mai wannan sunan.'
+                                            : 'Yi follow na shagunan da kake so domin samun sanarwar sabbin kayayyaki, rangwame, da bayarwa kai tsaye.'}
+                                    </Text>
+                                    <TouchableOpacity
+                                        style={s.modalDiscoverBtn}
+                                        activeOpacity={0.85}
+                                        onPress={() => {
+                                            setShowFollowedModal(false);
+                                            onNavigate && onNavigate('stores');
+                                        }}
+                                    >
+                                        <Ionicons name="compass-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                                        <Text style={s.modalDiscoverBtnText}>Gano Shagunan Kasuwa (Explore Stores)</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            ) : (
+                                <View style={s.storesListWrap}>
+                                    {filteredFollowedStores.map(store => (
+                                        <View key={store.id} style={s.followedCard}>
+                                            <View style={s.followedTopRow}>
+                                                <View style={s.storeAvatarWrap}>
+                                                    {store.logo ? (
+                                                        <Image source={{ uri: store.logo }} style={s.storeLogo} />
+                                                    ) : (
+                                                        <View style={s.storeLogoFallback}>
+                                                            <Ionicons name="storefront" size={24} color="#0284C7" />
+                                                        </View>
+                                                    )}
+                                                    {store.isVerified && (
+                                                        <View style={s.storeVerifiedDot}>
+                                                            <Ionicons name="checkmark" size={10} color="#FFFFFF" />
+                                                        </View>
+                                                    )}
+                                                </View>
+
+                                                <View style={s.storeMetaCol}>
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                        <Text style={s.storeCardName} numberOfLines={1}>{store.name}</Text>
+                                                        {store.isOfficial && (
+                                                            <View style={s.officialBadge}>
+                                                                <Text style={s.officialBadgeText}>OFFICIAL</Text>
+                                                            </View>
+                                                        )}
+                                                    </View>
+                                                    <Text style={s.storeCategory} numberOfLines={1}>{store.category}</Text>
+
+                                                    <View style={s.storeStatsRow}>
+                                                        <View style={s.storeStatItem}>
+                                                            <Ionicons name="star" size={12} color="#F59E0B" />
+                                                            <Text style={s.storeStatTextBold}>{store.rating}</Text>
+                                                            <Text style={s.storeStatTextDim}>({store.reviews})</Text>
+                                                        </View>
+                                                        <Text style={s.storeStatDot}>•</Text>
+                                                        <View style={s.storeStatItem}>
+                                                            <Ionicons name="cube-outline" size={12} color="#64748B" />
+                                                            <Text style={s.storeStatTextDim}>{store.productsCount} Items</Text>
+                                                        </View>
+                                                    </View>
+                                                </View>
+                                            </View>
+
+                                            {/* Action Buttons */}
+                                            <View style={s.followedActionsRow}>
+                                                <TouchableOpacity
+                                                    style={s.actionVisitBtn}
+                                                    activeOpacity={0.8}
+                                                    onPress={() => {
+                                                        setShowFollowedModal(false);
+                                                        onNavigate && onNavigate('stores');
+                                                    }}
+                                                >
+                                                    <Ionicons name="storefront-outline" size={13} color="#0284C7" />
+                                                    <Text style={s.actionVisitText}>Duba Shago</Text>
+                                                </TouchableOpacity>
+
+                                                <TouchableOpacity
+                                                    style={s.actionWhatsAppBtn}
+                                                    activeOpacity={0.8}
+                                                    onPress={() => {
+                                                        const phone = store.phone ? store.phone.replace(/[^0-9]/g, '') : '2349021486162';
+                                                        const text = encodeURIComponent(`Barka ${store.name}, ina tuntubar ku ne daga Abu Mafhal Marketplace.`);
+                                                        Linking.openURL(`https://wa.me/${phone}?text=${text}`).catch(() => {});
+                                                    }}
+                                                >
+                                                    <Ionicons name="logo-whatsapp" size={13} color="#059669" />
+                                                    <Text style={s.actionWhatsAppText}>WhatsApp</Text>
+                                                </TouchableOpacity>
+
+                                                <TouchableOpacity
+                                                    style={s.actionUnfollowBtn}
+                                                    activeOpacity={0.75}
+                                                    onPress={() => handleUnfollowStore(store.id, store.name)}
+                                                >
+                                                    <Ionicons name="close-circle-outline" size={13} color="#EF4444" />
+                                                    <Text style={s.actionUnfollowText}>Cire</Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 };
@@ -569,7 +824,7 @@ const s = StyleSheet.create({
         backgroundColor: '#F8FAFC'
     },
     topBar: {
-        height: 52,
+        height: 54,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -579,8 +834,8 @@ const s = StyleSheet.create({
         borderBottomColor: '#F1F5F9'
     },
     topBarBtn: {
-        width: 38,
-        height: 38,
+        width: 36,
+        height: 36,
         borderRadius: 8,
         backgroundColor: '#F8FAFC',
         alignItems: 'center',
@@ -589,10 +844,15 @@ const s = StyleSheet.create({
         borderColor: '#E2E8F0'
     },
     topBarTitle: {
-        fontSize: 16,
+        fontSize: 15.5,
         fontWeight: '800',
         color: '#0F172A',
         letterSpacing: -0.2
+    },
+    topBarSubtitle: {
+        fontSize: 10,
+        color: '#64748B',
+        marginTop: 1
     },
     scroll: {
         flex: 1,
@@ -600,7 +860,7 @@ const s = StyleSheet.create({
     },
     scrollContent: {
         paddingHorizontal: 16,
-        paddingTop: 16,
+        paddingTop: 14,
         paddingBottom: 40
     },
 
@@ -609,11 +869,13 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#FFFFFF',
-        borderRadius: 12,
+        borderRadius: 16,
         padding: 16,
         borderWidth: 1,
         borderColor: '#E2E8F0',
-        marginBottom: 12
+        marginBottom: 12,
+        boxShadow: '0px 2px 8px rgba(15, 23, 42, 0.04)',
+        elevation: 1
     },
     avatarWrap: {
         position: 'relative',
@@ -640,18 +902,18 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         flexWrap: 'wrap',
-        gap: 8,
+        gap: 6,
         marginBottom: 3
     },
     heroName: {
-        fontSize: 16.5,
+        fontSize: 16,
         fontWeight: '800',
         color: '#0F172A',
         letterSpacing: -0.2
     },
     roleBadge: {
-        paddingHorizontal: 7,
-        paddingVertical: 2,
+        paddingHorizontal: 6,
+        paddingVertical: 1.5,
         borderRadius: 4,
         borderWidth: 1
     },
@@ -672,7 +934,7 @@ const s = StyleSheet.create({
         borderColor: '#DDD6FE'
     },
     roleBadgeText: {
-        fontSize: 9.5,
+        fontSize: 9,
         fontWeight: '800',
         letterSpacing: 0.5
     },
@@ -681,25 +943,45 @@ const s = StyleSheet.create({
     roleTextAdmin: { color: '#DC2626' },
     roleTextDriver: { color: '#7C3AED' },
     heroSub: {
-        fontSize: 12,
+        fontSize: 11.5,
         color: '#64748B',
-        marginBottom: 6
+        marginBottom: 8
+    },
+    heroPillsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        flexWrap: 'wrap'
     },
     editPillBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        alignSelf: 'flex-start',
         paddingHorizontal: 9,
-        paddingVertical: 3.5,
+        paddingVertical: 4,
         borderRadius: 6,
         backgroundColor: '#F1F5F9',
         borderWidth: 1,
         borderColor: '#E2E8F0'
     },
     editPillText: {
-        fontSize: 11,
+        fontSize: 10.5,
         fontWeight: '700',
         color: '#475569'
+    },
+    heroStoresPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 9,
+        paddingVertical: 4,
+        borderRadius: 6,
+        backgroundColor: '#E0F2FE',
+        borderWidth: 1,
+        borderColor: '#BAE6FD'
+    },
+    heroStoresPillText: {
+        fontSize: 10.5,
+        fontWeight: '800',
+        color: '#0284C7'
     },
 
     /* Guest Card */
@@ -707,7 +989,7 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#FFFFFF',
-        borderRadius: 12,
+        borderRadius: 14,
         padding: 16,
         borderWidth: 1,
         borderColor: '#E2E8F0',
@@ -715,9 +997,9 @@ const s = StyleSheet.create({
         gap: 12
     },
     guestIconWrap: {
-        width: 46,
-        height: 46,
-        borderRadius: 23,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         backgroundColor: '#F1F5F9',
         alignItems: 'center',
         justifyContent: 'center'
@@ -734,7 +1016,7 @@ const s = StyleSheet.create({
     },
     guestSignInBtn: {
         paddingHorizontal: 14,
-        paddingVertical: 8,
+        paddingVertical: 7.5,
         borderRadius: 8,
         backgroundColor: '#F59E0B'
     },
@@ -748,17 +1030,19 @@ const s = StyleSheet.create({
     metricsCard: {
         flexDirection: 'row',
         backgroundColor: '#FFFFFF',
-        borderRadius: 12,
-        paddingVertical: 14,
+        borderRadius: 14,
+        paddingVertical: 12,
         paddingHorizontal: 8,
         borderWidth: 1,
         borderColor: '#E2E8F0',
-        marginBottom: 14
+        marginBottom: 12,
+        alignItems: 'center',
+        justifyContent: 'space-between'
     },
     metricColumn: {
         flex: 1,
         alignItems: 'center',
-        justifyContent: 'center'
+        paddingHorizontal: 4
     },
     metricLabel: {
         fontSize: 9.5,
@@ -768,53 +1052,52 @@ const s = StyleSheet.create({
         marginBottom: 3
     },
     metricValue: {
-        fontSize: 16,
-        fontWeight: '900',
+        fontSize: 14,
+        fontWeight: '800',
         color: '#0F172A',
-        letterSpacing: -0.3
+        marginBottom: 2
     },
     metricSub: {
-        fontSize: 10,
-        color: '#64748B',
-        marginTop: 3,
+        fontSize: 10.5,
+        color: '#0284C7',
         fontWeight: '600'
     },
     metricDivider: {
         width: 1,
-        backgroundColor: '#F1F5F9',
-        marginVertical: 4
+        height: 32,
+        backgroundColor: '#F1F5F9'
     },
 
-    /* Role Banner */
+    /* Role Card */
     roleCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 14,
         borderRadius: 12,
+        padding: 14,
         borderWidth: 1,
         marginBottom: 16,
         gap: 12
     },
-    roleCardAdmin: {
-        backgroundColor: '#FEF2F2',
-        borderColor: '#FECACA'
+    roleCardBuyer: {
+        backgroundColor: '#FFFBEB',
+        borderColor: '#FDE68A'
     },
     roleCardVendor: {
         backgroundColor: '#ECFDF5',
         borderColor: '#A7F3D0'
     },
+    roleCardAdmin: {
+        backgroundColor: '#FEF2F2',
+        borderColor: '#FECACA'
+    },
     roleCardDriver: {
         backgroundColor: '#F5F3FF',
         borderColor: '#DDD6FE'
     },
-    roleCardBuyer: {
-        backgroundColor: '#FFFFFF',
-        borderColor: '#E2E8F0'
-    },
     roleIconCircle: {
         width: 38,
         height: 38,
-        borderRadius: 8,
+        borderRadius: 19,
         alignItems: 'center',
         justifyContent: 'center'
     },
@@ -829,49 +1112,53 @@ const s = StyleSheet.create({
         marginTop: 1
     },
 
-    /* Section Headers & Groups */
+    /* Menu Groups */
     sectionHeader: {
         fontSize: 11,
         fontWeight: '800',
         color: '#94A3B8',
         letterSpacing: 0.8,
-        marginBottom: 8,
+        marginBottom: 6,
         marginLeft: 4
     },
     menuGroup: {
         backgroundColor: '#FFFFFF',
-        borderRadius: 12,
+        borderRadius: 14,
         borderWidth: 1,
         borderColor: '#E2E8F0',
-        overflow: 'hidden',
-        marginBottom: 18
+        marginBottom: 16,
+        overflow: 'hidden'
     },
     menuRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 13,
-        paddingHorizontal: 14
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        gap: 12
     },
     menuIconBox: {
-        width: 32,
-        height: 32,
-        borderRadius: 6,
+        width: 30,
+        height: 30,
+        borderRadius: 8,
         backgroundColor: '#F8FAFC',
         alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 12
+        justifyContent: 'center'
     },
     menuLabel: {
-        flex: 1,
         fontSize: 13.5,
-        fontWeight: '600',
-        color: '#1E293B'
+        fontWeight: '700',
+        color: '#0F172A'
+    },
+    menuSubLabel: {
+        fontSize: 10,
+        color: '#94A3B8',
+        marginTop: 1
     },
     menuBadge: {
         paddingHorizontal: 7,
-        paddingVertical: 2.5,
-        borderRadius: 6,
-        marginRight: 8
+        paddingVertical: 2,
+        borderRadius: 10,
+        marginRight: 6
     },
     menuBadgeText: {
         fontSize: 10,
@@ -880,19 +1167,20 @@ const s = StyleSheet.create({
     },
     menuExtra: {
         fontSize: 12.5,
-        fontWeight: '700',
-        color: '#059669',
-        marginRight: 8
+        fontWeight: '800',
+        color: '#0F172A',
+        marginRight: 6
     },
     menuDivider: {
         height: 1,
-        backgroundColor: '#F1F5F9',
-        marginLeft: 58
+        backgroundColor: '#F8FAFC',
+        marginLeft: 56
     },
 
-    /* Footer / Logout */
+    /* Footer */
     footerWrap: {
         marginTop: 4,
+        marginBottom: 20,
         alignItems: 'center',
         gap: 14
     },
@@ -900,12 +1188,12 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        width: '100%',
-        paddingVertical: 12,
         backgroundColor: '#FEF2F2',
         borderWidth: 1,
-        borderColor: '#FCA5A5',
-        borderRadius: 8
+        borderColor: '#FECACA',
+        borderRadius: 12,
+        paddingVertical: 12,
+        width: '100%'
     },
     logoutText: {
         fontSize: 13,
@@ -916,19 +1204,300 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        width: '100%',
+        backgroundColor: '#0A192F',
+        borderRadius: 12,
         paddingVertical: 12,
-        backgroundColor: '#F59E0B',
-        borderRadius: 8
+        width: '100%'
     },
     loginText: {
         fontSize: 13,
-        fontWeight: '900',
-        color: '#0A192F'
+        fontWeight: '800',
+        color: '#FFFFFF'
     },
     versionText: {
         fontSize: 10.5,
-        fontWeight: '600',
-        color: '#94A3B8'
+        color: '#94A3B8',
+        fontWeight: '600'
+    },
+
+    /* Followed Stores Modal */
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(15, 23, 42, 0.65)',
+        justifyContent: 'flex-end'
+    },
+    modalCard: {
+        backgroundColor: '#F8FAFC',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        maxHeight: '85%',
+        paddingBottom: 24
+    },
+    modalHeader: {
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 18,
+        paddingVertical: 14,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9'
+    },
+    modalHeaderIconWrap: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: '#E0F2FE',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    modalTitle: {
+        fontSize: 15,
+        fontWeight: '800',
+        color: '#0F172A'
+    },
+    modalSubtitle: {
+        fontSize: 11,
+        color: '#64748B',
+        marginTop: 1
+    },
+    modalCloseBtn: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: '#F1F5F9',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    storeSearchBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        marginHorizontal: 16,
+        marginTop: 12,
+        marginBottom: 6,
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        height: 40,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    storeSearchInput: {
+        flex: 1,
+        fontSize: 12.5,
+        color: '#0F172A',
+        padding: 0
+    },
+    modalScroll: {
+        paddingHorizontal: 16,
+        paddingTop: 8
+    },
+    modalLoaderWrap: {
+        paddingVertical: 40,
+        alignItems: 'center',
+        gap: 8
+    },
+    modalLoaderText: {
+        fontSize: 12,
+        color: '#64748B'
+    },
+    modalEmptyWrap: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 24,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        alignItems: 'center',
+        marginTop: 12,
+        gap: 8
+    },
+    modalEmptyIconCircle: {
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        backgroundColor: '#F1F5F9',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    modalEmptyTitle: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: '#0F172A',
+        marginTop: 4
+    },
+    modalEmptySub: {
+        fontSize: 11.5,
+        color: '#64748B',
+        textAlign: 'center',
+        lineHeight: 16
+    },
+    modalDiscoverBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#0284C7',
+        paddingHorizontal: 16,
+        paddingVertical: 9,
+        borderRadius: 10,
+        marginTop: 8
+    },
+    modalDiscoverBtnText: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#FFFFFF'
+    },
+    storesListWrap: {
+        gap: 10,
+        paddingBottom: 20
+    },
+    followedCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 14,
+        padding: 14,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    followedTopRow: {
+        flexDirection: 'row',
+        gap: 12,
+        marginBottom: 10
+    },
+    storeAvatarWrap: {
+        position: 'relative'
+    },
+    storeLogo: {
+        width: 46,
+        height: 46,
+        borderRadius: 12,
+        backgroundColor: '#F1F5F9'
+    },
+    storeLogoFallback: {
+        width: 46,
+        height: 46,
+        borderRadius: 12,
+        backgroundColor: '#E0F2FE',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    storeVerifiedDot: {
+        position: 'absolute',
+        bottom: -2,
+        right: -2,
+        width: 15,
+        height: 15,
+        borderRadius: 7.5,
+        backgroundColor: '#0284C7',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1.5,
+        borderColor: '#FFFFFF'
+    },
+    storeMetaCol: {
+        flex: 1,
+        justifyContent: 'center'
+    },
+    storeCardName: {
+        fontSize: 13.5,
+        fontWeight: '800',
+        color: '#0F172A'
+    },
+    officialBadge: {
+        backgroundColor: '#F59E0B',
+        paddingHorizontal: 5,
+        paddingVertical: 1,
+        borderRadius: 4
+    },
+    officialBadgeText: {
+        fontSize: 8,
+        fontWeight: '900',
+        color: '#FFFFFF',
+        letterSpacing: 0.5
+    },
+    storeCategory: {
+        fontSize: 11,
+        color: '#64748B',
+        marginTop: 1,
+        marginBottom: 3
+    },
+    storeStatsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5
+    },
+    storeStatItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3
+    },
+    storeStatTextBold: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: '#0F172A'
+    },
+    storeStatTextDim: {
+        fontSize: 10.5,
+        color: '#64748B'
+    },
+    storeStatDot: {
+        fontSize: 10,
+        color: '#CBD5E1'
+    },
+    followedActionsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingTop: 10,
+        borderTopWidth: 1,
+        borderTopColor: '#F8FAFC'
+    },
+    actionVisitBtn: {
+        flex: 1.2,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#E0F2FE',
+        paddingVertical: 7,
+        borderRadius: 8,
+        gap: 4
+    },
+    actionVisitText: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: '#0284C7'
+    },
+    actionWhatsAppBtn: {
+        flex: 1.1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#ECFDF5',
+        borderWidth: 1,
+        borderColor: '#A7F3D0',
+        paddingVertical: 7,
+        borderRadius: 8,
+        gap: 4
+    },
+    actionWhatsAppText: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: '#059669'
+    },
+    actionUnfollowBtn: {
+        flex: 0.9,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#FEF2F2',
+        borderWidth: 1,
+        borderColor: '#FECACA',
+        paddingVertical: 7,
+        borderRadius: 8,
+        gap: 4
+    },
+    actionUnfollowText: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: '#DC2626'
     }
 });
