@@ -57,10 +57,12 @@ const navigationRef = createNavigationContainerRef();
 const linking = {
     prefixes: [
         'abumafhal://',
+        'https://abumafhal.com/mobile',
+        'https://www.abumafhal.com/mobile',
         'https://abumafhal.com',
-        'http://abumafhal.com',
         'https://www.abumafhal.com',
-        'http://www.abumafhal.com',
+        '/mobile',
+        '/',
     ],
     config: {
         screens: {
@@ -76,6 +78,7 @@ const linking = {
             Invoice: 'invoice',
             CheckoutPage: 'checkout',
             AddressPage: 'address',
+            ProductComparison: 'compare',
         },
     },
 };
@@ -373,19 +376,10 @@ export default function App() {
                         window.sessionStorage.clear();
                     }
                     if (window.history && window.history.replaceState) {
-                        window.history.replaceState(null, '', window.location.pathname || '/');
+                        window.history.replaceState(null, '', '/mobile');
                     }
                     window.location.hash = '';
                 } catch (_) {}
-
-                // On Web, redirect/reload to guarantee 100% clean guest state on Landing
-                setTimeout(() => {
-                    try {
-                        if (window.location) {
-                            window.location.replace(window.location.pathname || '/');
-                        }
-                    } catch (_) {}
-                }, 80);
             }
 
             setTimeout(() => {
@@ -416,26 +410,49 @@ export default function App() {
 
     const getInitialRoute = () => {
         try {
-            if (!user) {
-                return 'Landing';
+            const hash = typeof window !== 'undefined' ? (window.location.hash || '').toLowerCase() : '';
+            const path = typeof window !== 'undefined' ? (window.location.pathname || '').toLowerCase() : '';
+            const last = typeof window !== 'undefined' ? window.localStorage?.getItem('@abumafhal_last_screen') : null;
+            const storedUser = user || getStoredUserSync();
+
+            if (hash.includes('auth') || hash.includes('login') || hash.includes('register')) {
+                return 'Auth';
             }
-            if (typeof window !== 'undefined') {
-                const path = window.location.pathname || '';
-                const hash = window.location.hash || '';
-                const last = window.localStorage?.getItem('@abumafhal_last_screen');
-                if (user?.role === 'admin' && (path.includes('admin') || hash.includes('admin') || last === 'AdminDashboard')) {
-                    return 'AdminDashboard';
-                }
-                if (user?.role === 'vendor' && (path.includes('vendor') || hash.includes('vendor') || last === 'VendorDashboard')) {
-                    return 'VendorDashboard';
-                }
-                if (user?.role === 'driver' && (path.includes('driver') || hash.includes('driver') || last === 'DriverDashboard')) {
-                    return 'DriverDashboard';
-                }
-                if (last && ['AdminDashboard', 'VendorDashboard', 'DriverDashboard', 'Main'].includes(last)) {
+            if (hash.includes('admin') || path.includes('admin')) {
+                if (storedUser?.role === 'admin') return 'AdminDashboard';
+                return storedUser ? 'Main' : 'Auth';
+            }
+            if (hash.includes('vendor') || path.includes('vendor')) {
+                if (storedUser?.role === 'vendor') return 'VendorDashboard';
+                return storedUser ? 'Main' : 'Auth';
+            }
+            if (hash.includes('driver') || path.includes('driver')) {
+                if (storedUser?.role === 'driver') return 'DriverDashboard';
+                return storedUser ? 'Main' : 'Auth';
+            }
+            if (hash.includes('checkout')) {
+                return 'CheckoutPage';
+            }
+            if (hash.includes('track') || hash.includes('order')) {
+                return 'TrackOrder';
+            }
+            if (hash.includes('invoice')) {
+                return 'Invoice';
+            }
+            if (hash.includes('product/')) {
+                return 'ProductDetails';
+            }
+            if (storedUser) {
+                if (storedUser.role === 'admin' && (last === 'AdminDashboard' || hash.includes('admin'))) return 'AdminDashboard';
+                if (storedUser.role === 'vendor' && (last === 'VendorDashboard' || hash.includes('vendor'))) return 'VendorDashboard';
+                if (storedUser.role === 'driver' && (last === 'DriverDashboard' || hash.includes('driver'))) return 'DriverDashboard';
+                if (last && ['AdminDashboard', 'VendorDashboard', 'DriverDashboard', 'Main', 'CheckoutPage', 'TrackOrder'].includes(last)) {
                     return last;
                 }
+                return 'Main';
             }
+            if (last === 'Main') return 'Main';
+            return 'Landing';
         } catch (_) {}
         return user ? 'Main' : 'Landing';
     };

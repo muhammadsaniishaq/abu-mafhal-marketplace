@@ -513,10 +513,44 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
         if (!banner) return onGoToShop();
         const link = banner.action_link;
         if (link && typeof link === 'string') {
-            if (link.startsWith('http://') || link.startsWith('https://')) {
-                Linking.openURL(link).catch(() => onGoToShop());
-                return;
+            const lowerLink = link.toLowerCase().trim();
+
+            // Intercept internal Abu Mafhal URLs to keep users 100% inside the mobile app
+            if (lowerLink.includes('abumafhal.com') || lowerLink.startsWith('/')) {
+                if (lowerLink.includes('cart')) {
+                    return onGoToCart();
+                }
+                if (lowerLink.includes('notification')) {
+                    return onGoToNotifications();
+                }
+                if (lowerLink.includes('vendor') && onNavigate) {
+                    return onNavigate('VendorDashboard');
+                }
+                if (lowerLink.includes('admin') && onNavigate) {
+                    return onNavigate('AdminDashboard');
+                }
+                if ((lowerLink.includes('order') || lowerLink.includes('track')) && onNavigate) {
+                    return onNavigate('TrackOrder');
+                }
+                if (lowerLink.includes('category:')) {
+                    const cat = link.split('category:')[1]?.trim();
+                    if (cat) setActiveCategoryFilter(cat);
+                    return;
+                }
+                if (lowerLink.includes('category/')) {
+                    const cat = link.split('category/')[1]?.split('?')[0]?.trim();
+                    if (cat) setActiveCategoryFilter(decodeURIComponent(cat));
+                    return;
+                }
+                if (lowerLink.includes('product/')) {
+                    const prodId = link.split('product/')[1]?.split('?')[0]?.trim();
+                    if (prodId && onProductClick) {
+                        return onProductClick({ id: prodId });
+                    }
+                }
+                return onGoToShop();
             }
+
             if (link.startsWith('category:')) {
                 const cat = link.replace('category:', '').trim();
                 setActiveCategoryFilter(cat);
@@ -524,6 +558,12 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
             }
             if (link === 'cart') return onGoToCart();
             if (link === 'notifications') return onGoToNotifications();
+
+            // Only external third-party URLs open browser
+            if (link.startsWith('http://') || link.startsWith('https://')) {
+                Linking.openURL(link).catch(() => onGoToShop());
+                return;
+            }
         }
         onGoToShop();
     };

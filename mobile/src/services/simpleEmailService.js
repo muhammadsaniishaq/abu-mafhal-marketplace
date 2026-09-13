@@ -81,7 +81,7 @@ const generateEmailHTML = (type, data) => {
                 Registration: ${new Date().toLocaleDateString()}
               </div>
               <p style="text-align: center;">
-                <a href="${(typeof window !== 'undefined' && window.location) ? window.location.origin : 'https://abumafhal.com'}/login" class="button">Get Started →</a>
+                <a href="${(typeof window !== 'undefined' && window.location) ? window.location.origin : 'https://abumafhal.com'}/mobile#auth" class="button">Get Started →</a>
               </p>
             </div>
             <div class="footer">
@@ -114,7 +114,7 @@ const generateEmailHTML = (type, data) => {
                 • Grow your business
               </div>
               <p style="text-align: center;">
-                <a href="${(typeof window !== 'undefined' && window.location) ? window.location.origin : 'https://abumafhal.com'}/vendor" class="button" style="background: #10b981;">
+                <a href="${(typeof window !== 'undefined' && window.location) ? window.location.origin : 'https://abumafhal.com'}/mobile#vendor" class="button" style="background: #10b981;">
                   Go to Vendor Dashboard →
                 </a>
               </p>
@@ -188,7 +188,7 @@ const generateEmailHTML = (type, data) => {
                 ${data.address}
               </div>
               <p style="text-align: center;">
-                <a href="${(typeof window !== 'undefined' && window.location) ? window.location.origin : 'https://abumafhal.com'}/buyer/orders" class="button">
+                <a href="${(typeof window !== 'undefined' && window.location) ? window.location.origin : 'https://abumafhal.com'}/mobile#orders" class="button">
                   Track Your Order →
                 </a>
               </p>
@@ -223,7 +223,7 @@ const generateEmailHTML = (type, data) => {
               </div>
 
               <p style="text-align: center;">
-                <a href="${(typeof window !== 'undefined' && window.location) ? window.location.origin : 'https://abumafhal.com'}/buyer/orders" class="button">
+                <a href="${(typeof window !== 'undefined' && window.location) ? window.location.origin : 'https://abumafhal.com'}/mobile#orders" class="button">
                   View Order Details →
                 </a>
               </p>
@@ -304,7 +304,7 @@ const generateEmailHTML = (type, data) => {
               </div>
 
               <p style="text-align: center;">
-                <a href="${(typeof window !== 'undefined' && window.location) ? window.location.origin : 'https://abumafhal.com'}/driver/dashboard" class="button" style="background: #8B5CF6;">
+                <a href="${(typeof window !== 'undefined' && window.location) ? window.location.origin : 'https://abumafhal.com'}/mobile#driver" class="button" style="background: #8B5CF6;">
                   View Delivery Details →
                 </a>
               </p>

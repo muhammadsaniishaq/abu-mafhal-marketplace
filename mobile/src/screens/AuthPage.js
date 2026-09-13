@@ -19,7 +19,17 @@ const AM_LOGO = require('../../assets/am_logo.png');
 export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
     const insets = useSafeAreaInsets();
     const { params } = route || {};
-    const codeFromLink = params?.code;
+    const getWebQueryCode = () => {
+        try {
+            if (typeof window !== 'undefined') {
+                const str = (window.location.search || '') + (window.location.hash || '');
+                const match = str.match(/code=([A-Za-z0-9_-]+)/i);
+                if (match && match[1]) return match[1].toUpperCase();
+            }
+        } catch (_) {}
+        return null;
+    };
+    const codeFromLink = params?.code || getWebQueryCode();
     const { settings } = useAppSettings();
 
     // ── Language State (English & Hausa) ──────────────────────────────────────
