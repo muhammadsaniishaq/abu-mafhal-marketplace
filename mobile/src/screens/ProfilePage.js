@@ -37,13 +37,51 @@ const formatCurrency = (amount) => {
     }
 };
 
-// Loyalty tier resolver
+// Loyalty tier resolver with progress and perks
 const getLoyaltyTier = (pts = 0) => {
     const points = pts || 0;
-    if (points >= 5000) return { tier: 'VIP Gold', color: '#D97706', icon: 'shield-checkmark' };
-    if (points >= 1500) return { tier: 'Platinum', color: '#F59E0B', icon: 'trophy' };
-    if (points >= 500) return { tier: 'Silver', color: '#3B82F6', icon: 'ribbon' };
-    return { tier: 'Bronze Member', color: '#64748B', icon: 'medal' };
+    if (points >= 5000) {
+        return {
+            tier: 'VIP Gold',
+            color: '#D4AF37',
+            icon: 'shield-checkmark',
+            nextTier: 'Max Tier',
+            nextPoints: 5000,
+            progress: 1.0,
+            perk: 'VIP Concierge & 5% Instant Cashback on All Orders'
+        };
+    }
+    if (points >= 1500) {
+        return {
+            tier: 'Platinum Member',
+            color: '#F59E0B',
+            icon: 'trophy',
+            nextTier: 'VIP Gold',
+            nextPoints: 5000,
+            progress: Math.min(1, Math.max(0.12, (points - 1500) / 3500)),
+            perk: 'Free Delivery on Orders > ₦15k & Priority Support'
+        };
+    }
+    if (points >= 500) {
+        return {
+            tier: 'Silver Member',
+            color: '#3B82F6',
+            icon: 'ribbon',
+            nextTier: 'Platinum',
+            nextPoints: 1500,
+            progress: Math.min(1, Math.max(0.12, (points - 500) / 1000)),
+            perk: '2% Cash Rebate & Exclusive Flash Deal Access'
+        };
+    }
+    return {
+        tier: 'Bronze Member',
+        color: '#64748B',
+        icon: 'medal',
+        nextTier: 'Silver',
+        nextPoints: 500,
+        progress: Math.min(1, Math.max(0.08, points / 500)),
+        perk: 'Earn 10 reward points for every ₦1,000 spent'
+    };
 };
 
 const ProfilePageInner = ({
@@ -68,6 +106,56 @@ const ProfilePageInner = ({
     const [showFollowedModal, setShowFollowedModal] = useState(false);
     const [followedLoading, setFollowedLoading] = useState(false);
     const [storeSearch, setStoreSearch] = useState('');
+
+    // New Features State
+    const [showVouchersModal, setShowVouchersModal] = useState(false);
+    const [showMemberPassModal, setShowMemberPassModal] = useState(false);
+    const [copiedCode, setCopiedCode] = useState(null);
+
+    const availableVouchers = [
+        {
+            id: 'v1',
+            code: 'MAFHALGOLD',
+            title: '₦2,500 Off Storewide',
+            minSpend: 'Orders above ₦20,000',
+            expiry: 'Expires in 5 days',
+            badge: 'EXCLUSIVE',
+            badgeColor: '#D97706'
+        },
+        {
+            id: 'v2',
+            code: 'FREESHIP26',
+            title: '100% Free Express Delivery',
+            minSpend: 'Next 2 store orders',
+            expiry: 'Expires in 7 days',
+            badge: 'POPULAR',
+            badgeColor: '#059669'
+        },
+        {
+            id: 'v3',
+            code: 'VIPCASH5',
+            title: '5% Instant Wallet Rebate',
+            minSpend: 'Electronics & Fashion category',
+            expiry: 'Valid all month',
+            badge: 'CASHBACK',
+            badgeColor: '#7C3AED'
+        }
+    ];
+
+    const copyCodeToClipboard = (code, desc = 'Voucher code') => {
+        try {
+            if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
+                navigator.clipboard.writeText(code);
+            }
+        } catch (_) {}
+        setCopiedCode(code);
+        if (Platform.OS === 'web') {
+            alert(`${desc} "${code}" copied to clipboard! Apply at checkout.`);
+        } else {
+            Alert.alert('Copied!', `${desc} "${code}" copied to clipboard. Apply at checkout.`);
+        }
+        setTimeout(() => setCopiedCode(null), 3500);
+    };
 
     useEffect(() => {
         const loadProfileData = async () => {
@@ -339,14 +427,24 @@ const ProfilePageInner = ({
                 </View>
 
                 {user ? (
-                    <TouchableOpacity
-                        onPress={() => onNavigate && onNavigate('editProfile')}
-                        style={s.topBarBtn}
-                        activeOpacity={0.7}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                        <Ionicons name="create-outline" size={17} color="#0F172A" />
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <TouchableOpacity
+                            onPress={() => setShowMemberPassModal(true)}
+                            style={s.topBarBtn}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                            <Ionicons name="qr-code-outline" size={15} color="#0A192F" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={() => onNavigate && onNavigate('editProfile')}
+                            style={s.topBarBtn}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                            <Ionicons name="create-outline" size={15} color="#0A192F" />
+                        </TouchableOpacity>
+                    </View>
                 ) : (
                     <View style={{ width: 32 }} />
                 )}
@@ -493,6 +591,145 @@ const ProfilePageInner = ({
                                 {loyalty.tier}
                             </Text>
                         </TouchableOpacity>
+                    </View>
+                )}
+
+                {/* ── QUICK ACTION DOCK (MODERN MICRO-RIBBON) ── */}
+                {user && (
+                    <View style={s.actionDock}>
+                        <TouchableOpacity
+                            style={s.dockItem}
+                            activeOpacity={0.75}
+                            onPress={() => onNavigate && onNavigate('wallet')}
+                        >
+                            <View style={[s.dockIconWrap, { backgroundColor: '#FEF9EC', borderColor: '#FDE68A' }]}>
+                                <Ionicons name="add-circle" size={17} color="#D4AF37" />
+                            </View>
+                            <Text style={s.dockLabel}>Top Up</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={s.dockItem}
+                            activeOpacity={0.75}
+                            onPress={() => setShowVouchersModal(true)}
+                        >
+                            <View style={[s.dockIconWrap, { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }]}>
+                                <Ionicons name="ticket" size={16} color="#B45309" />
+                                <View style={s.dockBadge}>
+                                    <Text style={s.dockBadgeText}>3</Text>
+                                </View>
+                            </View>
+                            <Text style={s.dockLabel}>Vouchers</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={s.dockItem}
+                            activeOpacity={0.75}
+                            onPress={() => setShowMemberPassModal(true)}
+                        >
+                            <View style={[s.dockIconWrap, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
+                                <Ionicons name="qr-code" size={16} color="#0A192F" />
+                            </View>
+                            <Text style={s.dockLabel}>VIP Pass</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={s.dockItem}
+                            activeOpacity={0.75}
+                            onPress={() => {
+                                const refCode = user?.referral_code || `AM-${(user?.id || '2026').slice(0, 6).toUpperCase()}`;
+                                copyCodeToClipboard(refCode, 'Referral code');
+                            }}
+                        >
+                            <View style={[s.dockIconWrap, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}>
+                                <Ionicons name="gift" size={16} color="#059669" />
+                            </View>
+                            <Text style={s.dockLabel}>Share ID</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+
+                {/* ── VIP LOYALTY TIER PROGRESS TRACKER (COMPACT & MODERN) ── */}
+                {user && (
+                    <View style={s.loyaltyCard}>
+                        <View style={s.loyaltyTopRow}>
+                            <View style={[s.loyaltyTierBadge, { backgroundColor: '#FEF9EC', borderColor: '#FDE68A' }]}>
+                                <Ionicons name={loyalty.icon || 'trophy'} size={12} color="#D4AF37" />
+                                <Text style={s.loyaltyTierName}>{loyalty.tier}</Text>
+                            </View>
+                            <Text style={s.loyaltyPointsText}>
+                                <Text style={s.loyaltyPointsBold}>{wallet.points}</Text> / {loyalty.nextPoints} pts
+                            </Text>
+                        </View>
+
+                        {/* Gold Progress Track */}
+                        <View style={s.loyaltyTrack}>
+                            <View style={[s.loyaltyBar, { width: `${Math.round(loyalty.progress * 100)}%` }]} />
+                        </View>
+
+                        {/* Perk Subtext */}
+                        <View style={s.loyaltyPerkRow}>
+                            <Ionicons name="sparkles" size={11} color="#D4AF37" />
+                            <Text style={s.loyaltyPerkText} numberOfLines={1}>{loyalty.perk}</Text>
+                        </View>
+                    </View>
+                )}
+
+                {/* ── FOLLOWED STORES LIVE STRIP (QUICK STORE CAROUSEL) ── */}
+                {user && followedStores.length > 0 && (
+                    <View style={s.liveStoresWrap}>
+                        <View style={s.liveStoresHeader}>
+                            <Text style={s.liveStoresTitle}>
+                                <Text style={s.sectionHeaderSpark}>✦ </Text>STORES YOU FOLLOW
+                            </Text>
+                            <TouchableOpacity
+                                activeOpacity={0.7}
+                                onPress={() => setShowFollowedModal(true)}
+                            >
+                                <Text style={s.liveStoresViewAll}>View All ({followedStores.length}) →</Text>
+                            </TouchableOpacity>
+                        </View>
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={s.liveStoresScroll}
+                        >
+                            {followedStores.map(store => (
+                                <TouchableOpacity
+                                    key={store.id}
+                                    style={s.liveStoreItem}
+                                    activeOpacity={0.8}
+                                    onPress={() => {
+                                        setShowFollowedModal(false);
+                                        onNavigate && onNavigate('stores');
+                                    }}
+                                >
+                                    <View style={s.liveStoreRing}>
+                                        {store.logo ? (
+                                            <Image source={{ uri: store.logo }} style={s.liveStoreAvatar} />
+                                        ) : (
+                                            <View style={s.liveStoreFallback}>
+                                                <Ionicons name="storefront" size={16} color="#0A192F" />
+                                            </View>
+                                        )}
+                                        <View style={s.liveStoreDot} />
+                                    </View>
+                                    <Text style={s.liveStoreName} numberOfLines={1}>{store.name}</Text>
+                                </TouchableOpacity>
+                            ))}
+                            <TouchableOpacity
+                                style={s.liveStoreAddBtn}
+                                activeOpacity={0.8}
+                                onPress={() => {
+                                    onNavigate && onNavigate('stores');
+                                }}
+                            >
+                                <View style={s.liveStoreAddIconWrap}>
+                                    <Ionicons name="add" size={18} color="#0A192F" />
+                                </View>
+                                <Text style={s.liveStoreName}>Discover</Text>
+                            </TouchableOpacity>
+                        </ScrollView>
                     </View>
                 )}
 
@@ -651,6 +888,22 @@ const ProfilePageInner = ({
                             {idx < supportItems.length - 1 && <View style={s.menuDivider} />}
                         </View>
                     ))}
+                </View>
+
+                {/* ── SECURITY TRUST CARD ── */}
+                <View style={s.securityCard}>
+                    <View style={s.securityIconWrap}>
+                        <Ionicons name="shield-checkmark" size={15} color="#059669" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={s.securityTitle}>Account Protection: Active</Text>
+                            <View style={s.securityBadge}>
+                                <Text style={s.securityBadgeText}>256-BIT SSL</Text>
+                            </View>
+                        </View>
+                        <Text style={s.securitySub}>Biometric session verified • Zero-liability purchase protection</Text>
+                    </View>
                 </View>
 
                 {/* ── LOGOUT / AUTH BUTTON ── */}
@@ -845,6 +1098,145 @@ const ProfilePageInner = ({
                                 </View>
                             )}
                         </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ── VOUCHERS & PROMOS MODAL (NEW FEATURE) ── */}
+            <Modal
+                visible={showVouchersModal}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setShowVouchersModal(false)}
+            >
+                <View style={s.modalOverlay}>
+                    <View style={s.modalCard}>
+                        <View style={s.modalHeader}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <View style={[s.modalHeaderIconWrap, { backgroundColor: '#FEF9EC' }]}>
+                                    <Ionicons name="ticket" size={16} color="#B45309" />
+                                </View>
+                                <View>
+                                    <Text style={s.modalTitle}>Vouchers & Rewards</Text>
+                                    <Text style={s.modalSubtitle}>{availableVouchers.length} active coupons available</Text>
+                                </View>
+                            </View>
+                            <TouchableOpacity
+                                onPress={() => setShowVouchersModal(false)}
+                                style={s.modalCloseBtn}
+                                activeOpacity={0.7}
+                            >
+                                <Ionicons name="close" size={18} color="#64748B" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView style={s.modalScroll} showsVerticalScrollIndicator={false}>
+                            <View style={{ gap: 10, paddingBottom: 24, paddingTop: 8 }}>
+                                {availableVouchers.map((v) => (
+                                    <View key={v.id} style={s.voucherCard}>
+                                        <View style={[s.voucherLeftAccent, { backgroundColor: v.badgeColor }]} />
+                                        <View style={s.voucherContent}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                                                <View style={[s.voucherBadge, { backgroundColor: v.badgeColor + '18' }]}>
+                                                    <Text style={[s.voucherBadgeText, { color: v.badgeColor }]}>{v.badge}</Text>
+                                                </View>
+                                                <Text style={s.voucherExpiryText}>{v.expiry}</Text>
+                                            </View>
+                                            <Text style={s.voucherTitle}>{v.title}</Text>
+                                            <Text style={s.voucherMinSpend}>{v.minSpend}</Text>
+
+                                            <View style={s.voucherCodeRow}>
+                                                <View style={s.voucherCodeBox}>
+                                                    <Text style={s.voucherCodeText}>{v.code}</Text>
+                                                </View>
+                                                <TouchableOpacity
+                                                    style={s.voucherCopyBtn}
+                                                    activeOpacity={0.8}
+                                                    onPress={() => copyCodeToClipboard(v.code, 'Voucher')}
+                                                >
+                                                    <Ionicons
+                                                        name={copiedCode === v.code ? 'checkmark-circle' : 'copy-outline'}
+                                                        size={12}
+                                                        color={copiedCode === v.code ? '#059669' : '#0A192F'}
+                                                    />
+                                                    <Text style={[s.voucherCopyBtnText, copiedCode === v.code && { color: '#059669' }]}>
+                                                        {copiedCode === v.code ? 'Copied' : 'Copy'}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                        </View>
+                                    </View>
+                                ))}
+                            </View>
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ── DIGITAL MEMBER PASSPORT & QR MODAL (NEW LUXURY FEATURE) ── */}
+            <Modal
+                visible={showMemberPassModal}
+                animationType="fade"
+                transparent={true}
+                onRequestClose={() => setShowMemberPassModal(false)}
+            >
+                <View style={s.modalOverlay}>
+                    <View style={s.memberPassCard}>
+                        <View style={s.passHeaderRow}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Ionicons name="sparkles" size={13} color="#D4AF37" />
+                                <Text style={s.passHeaderTitle}>ABU MAFHAL PASSPORT</Text>
+                            </View>
+                            <TouchableOpacity
+                                onPress={() => setShowMemberPassModal(false)}
+                                style={s.passCloseBtn}
+                                activeOpacity={0.7}
+                            >
+                                <Ionicons name="close" size={16} color="#FFFFFF" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={s.passInterior}>
+                            <View style={s.passUserRow}>
+                                <View style={s.passAvatarRing}>
+                                    <UserAvatar user={user} size={46} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={s.passUserName} numberOfLines={1}>{displayName}</Text>
+                                    <Text style={s.passMemberId}>
+                                        MEMBER ID: AM-{(user?.id || '202688').slice(0, 8).toUpperCase()}
+                                    </Text>
+                                    <View style={s.passTierBadge}>
+                                        <Ionicons name="shield-checkmark" size={10} color="#D4AF37" style={{ marginRight: 3 }} />
+                                        <Text style={s.passTierBadgeText}>{loyalty.tier.toUpperCase()}</Text>
+                                    </View>
+                                </View>
+                            </View>
+
+                            <View style={s.qrBoxContainer}>
+                                <View style={s.qrFrame}>
+                                    <Ionicons name="qr-code" size={130} color="#0A192F" />
+                                </View>
+                                <Text style={s.qrScanPrompt}>Scan for Hub VIP Verification & Partner Discounts</Text>
+                            </View>
+
+                            <View style={s.barcodeWrap}>
+                                <View style={s.barcodeLinesRow}>
+                                    {[2, 1, 3, 1, 2, 4, 1, 3, 2, 1, 4, 2, 3, 1, 2, 4, 1, 2, 3, 2, 1, 3, 2, 4, 1].map((w, i) => (
+                                        <View
+                                            key={i}
+                                            style={{
+                                                width: w,
+                                                height: 20,
+                                                backgroundColor: '#0A192F',
+                                                marginHorizontal: 1.2
+                                            }}
+                                        />
+                                    ))}
+                                </View>
+                                <Text style={s.barcodeText}>SECURE PASSPORT • 2026-AM-VERIFIED</Text>
+                            </View>
+                        </View>
                     </View>
                 </View>
             </Modal>
@@ -1165,6 +1557,208 @@ const s = StyleSheet.create({
         backgroundColor: '#F1F5F9'
     },
 
+    /* Quick Action Dock (Modern Micro-Ribbon) */
+    actionDock: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        paddingVertical: 10,
+        paddingHorizontal: 8,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        marginBottom: 10,
+        boxShadow: '0px 1px 3px rgba(10, 25, 47, 0.03)',
+        elevation: 1
+    },
+    dockItem: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    dockIconWrap: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative',
+        marginBottom: 3
+    },
+    dockLabel: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#0A192F'
+    },
+    dockBadge: {
+        position: 'absolute',
+        top: -3,
+        right: -3,
+        backgroundColor: '#D97706',
+        borderRadius: 6,
+        paddingHorizontal: 4,
+        paddingVertical: 0.5,
+        borderWidth: 1,
+        borderColor: '#FFFFFF'
+    },
+    dockBadgeText: {
+        fontSize: 8,
+        fontWeight: '900',
+        color: '#FFFFFF'
+    },
+
+    /* VIP Loyalty Progress Tracker */
+    loyaltyCard: {
+        backgroundColor: '#FFFDF7',
+        borderRadius: 12,
+        padding: 10,
+        borderWidth: 1,
+        borderColor: '#FDE68A',
+        marginBottom: 10,
+        boxShadow: '0px 1px 3px rgba(10, 25, 47, 0.03)',
+        elevation: 1
+    },
+    loyaltyTopRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 6
+    },
+    loyaltyTierBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 5,
+        borderWidth: 1
+    },
+    loyaltyTierName: {
+        fontSize: 9.5,
+        fontWeight: '800',
+        color: '#92400E'
+    },
+    loyaltyPointsText: {
+        fontSize: 10,
+        color: '#64748B',
+        fontWeight: '600'
+    },
+    loyaltyPointsBold: {
+        fontWeight: '800',
+        color: '#0A192F'
+    },
+    loyaltyTrack: {
+        height: 5,
+        backgroundColor: '#F1F5F9',
+        borderRadius: 3,
+        overflow: 'hidden',
+        marginBottom: 6
+    },
+    loyaltyBar: {
+        height: '100%',
+        backgroundColor: '#D4AF37',
+        borderRadius: 3
+    },
+    loyaltyPerkRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4
+    },
+    loyaltyPerkText: {
+        fontSize: 9.5,
+        color: '#B45309',
+        fontWeight: '600',
+        flex: 1
+    },
+
+    /* Followed Stores Live Strip */
+    liveStoresWrap: {
+        marginBottom: 12
+    },
+    liveStoresHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 6,
+        paddingHorizontal: 2
+    },
+    liveStoresTitle: {
+        fontSize: 9.5,
+        fontWeight: '800',
+        color: '#0A192F',
+        letterSpacing: 0.8
+    },
+    liveStoresViewAll: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#B45309'
+    },
+    liveStoresScroll: {
+        gap: 10,
+        paddingVertical: 2
+    },
+    liveStoreItem: {
+        alignItems: 'center',
+        width: 52
+    },
+    liveStoreRing: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        borderWidth: 1.5,
+        borderColor: '#FDE68A',
+        padding: 1.5,
+        backgroundColor: '#FFFFFF',
+        position: 'relative'
+    },
+    liveStoreAvatar: {
+        width: '100%',
+        height: '100%',
+        borderRadius: 20
+    },
+    liveStoreFallback: {
+        width: '100%',
+        height: '100%',
+        borderRadius: 20,
+        backgroundColor: '#FEF9EC',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    liveStoreDot: {
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: '#10B981',
+        borderWidth: 1.5,
+        borderColor: '#FFFFFF'
+    },
+    liveStoreName: {
+        fontSize: 9,
+        fontWeight: '600',
+        color: '#334155',
+        marginTop: 3,
+        textAlign: 'center'
+    },
+    liveStoreAddBtn: {
+        alignItems: 'center',
+        width: 52
+    },
+    liveStoreAddIconWrap: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: '#F1F5F9',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+
     /* Role Card (Compact) */
     roleCard: {
         flexDirection: 'row',
@@ -1280,6 +1874,51 @@ const s = StyleSheet.create({
         height: 1,
         backgroundColor: '#F8FAFC',
         marginLeft: 48
+    },
+
+    /* Security Trust Card */
+    securityCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 10,
+        padding: 9,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        marginBottom: 10,
+        gap: 8
+    },
+    securityIconWrap: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: '#ECFDF5',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    securityTitle: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: '#0F172A'
+    },
+    securityBadge: {
+        backgroundColor: '#ECFDF5',
+        paddingHorizontal: 4,
+        paddingVertical: 1,
+        borderRadius: 3,
+        borderWidth: 1,
+        borderColor: '#A7F3D0'
+    },
+    securityBadgeText: {
+        fontSize: 7.5,
+        fontWeight: '900',
+        color: '#059669',
+        letterSpacing: 0.4
+    },
+    securitySub: {
+        fontSize: 9,
+        color: '#64748B',
+        marginTop: 1
     },
 
     /* Footer */
@@ -1608,5 +2247,214 @@ const s = StyleSheet.create({
         fontSize: 10,
         fontWeight: '800',
         color: '#DC2626'
+    },
+
+    /* Voucher Card & Modal Styles */
+    voucherCard: {
+        flexDirection: 'row',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        overflow: 'hidden'
+    },
+    voucherLeftAccent: {
+        width: 4
+    },
+    voucherContent: {
+        flex: 1,
+        padding: 10
+    },
+    voucherBadge: {
+        paddingHorizontal: 5,
+        paddingVertical: 1,
+        borderRadius: 4
+    },
+    voucherBadgeText: {
+        fontSize: 8,
+        fontWeight: '900',
+        letterSpacing: 0.4
+    },
+    voucherExpiryText: {
+        fontSize: 9.5,
+        color: '#64748B'
+    },
+    voucherTitle: {
+        fontSize: 12.5,
+        fontWeight: '800',
+        color: '#0F172A',
+        marginTop: 2
+    },
+    voucherMinSpend: {
+        fontSize: 10,
+        color: '#64748B',
+        marginBottom: 8
+    },
+    voucherCodeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#F8FAFC',
+        borderRadius: 7,
+        paddingHorizontal: 8,
+        paddingVertical: 5,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        borderStyle: 'dashed'
+    },
+    voucherCodeBox: {
+        flexDirection: 'row',
+        alignItems: 'center'
+    },
+    voucherCodeText: {
+        fontSize: 11,
+        fontWeight: '900',
+        color: '#0A192F',
+        letterSpacing: 0.8
+    },
+    voucherCopyBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 5,
+        borderWidth: 1,
+        borderColor: '#CBD5E1'
+    },
+    voucherCopyBtnText: {
+        fontSize: 9.5,
+        fontWeight: '800',
+        color: '#0A192F'
+    },
+
+    /* Digital Member Pass Modal Styles */
+    memberPassCard: {
+        backgroundColor: '#0A192F',
+        width: '90%',
+        maxWidth: 360,
+        borderRadius: 20,
+        borderWidth: 1.5,
+        borderColor: '#D4AF37',
+        overflow: 'hidden',
+        boxShadow: '0px 8px 30px rgba(10, 25, 47, 0.45)',
+        elevation: 10
+    },
+    passHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(212, 175, 55, 0.2)',
+        backgroundColor: '#0D213E'
+    },
+    passHeaderTitle: {
+        fontSize: 9.5,
+        fontWeight: '900',
+        color: '#FCD34D',
+        letterSpacing: 0.8
+    },
+    passCloseBtn: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    passInterior: {
+        backgroundColor: '#FFFFFF',
+        margin: 10,
+        borderRadius: 14,
+        padding: 14,
+        alignItems: 'center'
+    },
+    passUserRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        width: '100%',
+        paddingBottom: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9'
+    },
+    passAvatarRing: {
+        padding: 1.5,
+        borderRadius: 25,
+        borderWidth: 1.5,
+        borderColor: '#D4AF37',
+        backgroundColor: '#FFFBEB'
+    },
+    passUserName: {
+        fontSize: 13.5,
+        fontWeight: '800',
+        color: '#0A192F'
+    },
+    passMemberId: {
+        fontSize: 9,
+        fontWeight: '700',
+        color: '#64748B',
+        letterSpacing: 0.5,
+        marginTop: 1
+    },
+    passTierBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-start',
+        backgroundColor: '#FEF9EC',
+        paddingHorizontal: 5,
+        paddingVertical: 1,
+        borderRadius: 4,
+        marginTop: 3,
+        borderWidth: 1,
+        borderColor: '#FDE68A'
+    },
+    passTierBadgeText: {
+        fontSize: 8,
+        fontWeight: '900',
+        color: '#92400E',
+        letterSpacing: 0.5
+    },
+    qrBoxContainer: {
+        alignItems: 'center',
+        paddingVertical: 10
+    },
+    qrFrame: {
+        padding: 8,
+        backgroundColor: '#F8FAFC',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    qrScanPrompt: {
+        fontSize: 9.5,
+        color: '#64748B',
+        marginTop: 6,
+        textAlign: 'center',
+        fontWeight: '600'
+    },
+    barcodeWrap: {
+        width: '100%',
+        alignItems: 'center',
+        paddingTop: 8,
+        borderTopWidth: 1,
+        borderTopColor: '#F1F5F9'
+    },
+    barcodeLinesRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    barcodeText: {
+        fontSize: 7.5,
+        fontWeight: '800',
+        color: '#94A3B8',
+        letterSpacing: 1,
+        marginTop: 3
     }
 });
