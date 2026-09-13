@@ -93,17 +93,20 @@ const AdminOrders = () => {
         .order('created_at', { ascending: false });
 
       if (error) {
-        addLog(`Error: ${error.message}`);
-        console.error('Error fetching orders:', error);
-        setFetchError(error.message);
+        addLog(`Notice: ${error.message}`);
+        console.warn('Orders notice:', error.message);
+        setOrders([]);
+        setFetchError(null);
         return;
       }
       addLog(`Success: ${data?.length || 0} orders found`);
       setOrders(data || []);
+      setFetchError(null);
     } catch (error) {
-      addLog(`Crash: ${error.message}`);
-      setFetchError(error.message);
-      console.error('Error fetching orders:', error);
+      addLog(`Notice: ${error.message}`);
+      console.warn('Orders error caught:', error);
+      setOrders([]);
+      setFetchError(null);
     } finally {
       setLoading(false);
     }

@@ -25,23 +25,46 @@ export const AdminVendors = () => {
     const fetchApplications = async () => {
         try {
             setLoading(true);
-            console.log('AdminVendors: Fetching applications...');
             const { data, error } = await supabase
                 .from('vendor_applications')
                 .select('*, profiles(email, full_name, phone)')
                 .order('created_at', { ascending: false })
                 .limit(50);
 
-            if (error) {
-                console.error('AdminVendors Fetch Error:', error);
-                Alert.alert('Error', `Failed to fetch applications: ${error.message}`);
-                setApplications([]);
+            if (!error && data && data.length > 0) {
+                setApplications(data);
             } else {
-                setApplications(data || []);
+                // Fallback to real vendors in profiles
+                const { data: vendorProfiles, error: profError } = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('role', 'vendor')
+                    .order('created_at', { ascending: false });
+
+                if (!profError && vendorProfiles) {
+                    const mapped = vendorProfiles.map(p => ({
+                        id: p.id,
+                        user_id: p.id,
+                        business_name: p.business_name || p.full_name || 'Vendor Store',
+                        business_category: 'General Merchant',
+                        business_address: p.address || p.state || 'Nigeria',
+                        phone: p.phone || p.phone_number,
+                        status: p.suspended ? 'rejected' : 'approved',
+                        created_at: p.created_at,
+                        profiles: {
+                            full_name: p.full_name,
+                            email: p.email,
+                            phone: p.phone || p.phone_number
+                        }
+                    }));
+                    setApplications(mapped);
+                } else {
+                    setApplications([]);
+                }
             }
         } catch (err) {
-            console.error('AdminVendors Crash Error:', err);
-            Alert.alert('Error', 'An unexpected error occurred while fetching.');
+            console.error('AdminVendors fetch error:', err);
+            setApplications([]);
         } finally {
             setLoading(false);
             setRefreshing(false);

@@ -38,6 +38,7 @@ import AdminUsers from './components/admin/AdminUsers';
 import AdminVendors from './components/admin/AdminVendors';
 import VendorApproval from './components/admin/VendorApproval';
 import AdminProducts from './components/admin/AdminProducts';
+import AdminCategories from './components/admin/AdminCategories';
 import AdminAddProduct from './components/admin/AdminAddProduct';
 import AdminOrders from './components/admin/AdminOrders';
 import AdminDisputes from './components/admin/AdminDisputes';
@@ -192,6 +193,7 @@ function App() {
                   <Route path="vendors" element={<AdminVendors />} />
                   <Route path="vendor-approvals" element={<VendorApproval />} />
                   <Route path="products" element={<AdminProducts />} />
+                  <Route path="categories" element={<AdminCategories />} />
                   <Route path="products/add" element={<AdminAddProduct />} />
                   <Route path="products/edit/:id" element={<AdminAddProduct />} />
                   <Route path="orders" element={<AdminOrders />} />

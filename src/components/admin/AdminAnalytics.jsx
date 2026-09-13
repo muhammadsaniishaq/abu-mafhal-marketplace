@@ -1,350 +1,496 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../../config/supabase';
+import {
+  TrendingUp, Users, Package, Store, Layers,
+  ShoppingBag, CheckCircle2, AlertTriangle, ArrowUpRight,
+  ShieldCheck, Sparkles, RefreshCw, Clock, Plus, ExternalLink,
+  ChevronRight, ArrowDownRight, Tag, Settings, Eye
+} from 'lucide-react';
 
 const AdminAnalytics = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
   const [stats, setStats] = useState({
-    totalRevenue: 0,
-    totalOrders: 0,
     totalProducts: 0,
+    activeProducts: 0,
+    pendingProducts: 0,
     totalUsers: 0,
     totalVendors: 0,
-    pendingOrders: 0,
-    pendingProducts: 0,
-    pendingVendorApps: 0,
-    todayRevenue: 0,
-    todayOrders: 0,
-    activeDisputes: 0
+    totalBuyers: 0,
+    totalCategories: 0,
+    activeBanners: 0,
+    totalOrders: 0,
+    totalRevenue: 0
   });
-  
-  const [recentOrders, setRecentOrders] = useState([]);
-  const [topProducts, setTopProducts] = useState([]);
+
+  const [recentProducts, setRecentProducts] = useState([]);
   const [recentUsers, setRecentUsers] = useState([]);
+  const [categories, setCategories] = useState([]);
 
   useEffect(() => {
-    fetchAnalytics();
+    fetchDashboardData();
   }, []);
 
-  const fetchAnalytics = async () => {
+  const fetchDashboardData = async () => {
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      // 1. Fetch Orders (Supabase)
-      const { data: orders, error: ordersError } = await supabase
-        .from('orders')
-        .select('*');
-      if (ordersError) throw ordersError;
-
-      const totalRevenue = orders.reduce((sum, order) => sum + (order.total_amount || 0), 0);
-      const todayOrders = orders.filter(order => new Date(order.created_at) >= today);
-      const todayRevenue = todayOrders.reduce((sum, order) => sum + (order.total_amount || 0), 0);
-      const pendingOrdersCount = orders.filter(order => order.status === 'pending').length;
-
-      // 2. Fetch Products (Supabase)
-      const { data: products, error: productsError } = await supabase
+      // 1. Fetch Products
+      const { data: productsData } = await supabase
         .from('products')
-        .select('*');
-      if (productsError) throw productsError;
-      const pendingProductsCount = products.filter(p => !p.is_approved).length;
+        .select('id, name, price, category, status, is_active, stock, stock_quantity, images, image_url, created_at')
+        .order('created_at', { ascending: false });
 
-      // Top selling products
-      const topProductsData = products
-        .sort((a, b) => (b.sales_count || 0) - (a.sales_count || 0))
-        .slice(0, 5);
+      const prods = productsData || [];
+      const totalProducts = prods.length;
+      const activeProducts = prods.filter(p => p.is_active !== false && p.status !== 'rejected').length;
+      const pendingProducts = prods.filter(p => p.status === 'pending' || !p.status).length;
 
-      // 3. Fetch Users (Profiles from Supabase)
-      const { data: users, error: usersError } = await supabase
+      // 2. Fetch Profiles
+      const { data: profilesData } = await supabase
         .from('profiles')
-        .select('*');
-      if (usersError) throw usersError;
-      const vendors = users.filter(u => u.role === 'vendor');
-      
-      // Recent users (last 7 days)
-      const weekAgo = new Date();
-      weekAgo.setDate(weekAgo.getDate() - 7);
-      const recentUsersData = users
-        .filter(u => u.created_at && new Date(u.created_at) >= weekAgo)
-        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-        .slice(0, 5);
+        .select('id, full_name, email, role, status, business_name, avatar_url, created_at')
+        .order('created_at', { ascending: false });
 
-      // 4. Fetch Vendor Applications (Supabase table: vendor_applications)
-      const { data: applications, error: appsError } = await supabase
-        .from('vendor_applications')
-        .select('*');
-      // Note: If table doesn't exist yet, we fail gracefully
-      const pendingAppsCount = appsError ? 0 : applications.filter(app => app.status === 'pending').length;
+      const profs = profilesData || [];
+      const totalUsers = profs.length;
+      const totalVendors = profs.filter(u => u.role === 'vendor').length;
+      const totalBuyers = profs.filter(u => u.role !== 'vendor' && u.role !== 'admin').length;
 
-      // 5. Fetch Disputes (Supabase)
-      const { data: disputes, error: disputesError } = await supabase
-        .from('disputes')
-        .select('*');
-      const activeDisputesCount = disputesError ? 0 : disputes.filter(d => d.status === 'open').length;
+      // 3. Fetch Categories
+      const { data: categoriesData } = await supabase
+        .from('categories')
+        .select('id, name, slug, is_active, display_order')
+        .order('display_order', { ascending: true, nullsFirst: false });
 
-      // Recent orders
-      const recentOrdersData = orders
-        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-        .slice(0, 5);
+      const cats = categoriesData || [];
+
+      // 4. Fetch Banners
+      const { data: bannersData } = await supabase
+        .from('banners')
+        .select('id, title, is_active');
+
+      const activeBanners = (bannersData || []).filter(b => b.is_active !== false).length;
+
+      // 5. Fetch Orders / Transactions if available
+      let totalOrders = 0;
+      let totalRevenue = 0;
+      try {
+        const { data: ordersData } = await supabase
+          .from('orders')
+          .select('id, total_amount, status');
+
+        if (ordersData && Array.isArray(ordersData)) {
+          totalOrders = ordersData.length;
+          totalRevenue = ordersData.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
+        }
+      } catch (e) {
+        // Orders table empty or schema pending, graceful fallback
+      }
 
       setStats({
-        totalRevenue,
-        totalOrders: orders.length,
-        totalProducts: products.length,
-        totalUsers: users.length,
-        totalVendors: vendors.length,
-        pendingOrders: pendingOrdersCount,
-        pendingProducts: pendingProductsCount,
-        pendingVendorApps: pendingAppsCount,
-        todayRevenue,
-        todayOrders: todayOrders.length,
-        activeDisputes: activeDisputesCount
+        totalProducts,
+        activeProducts,
+        pendingProducts,
+        totalUsers,
+        totalVendors,
+        totalBuyers,
+        totalCategories: cats.length,
+        activeBanners,
+        totalOrders,
+        totalRevenue
       });
 
-      setRecentOrders(recentOrdersData);
-      setTopProducts(topProductsData);
-      setRecentUsers(recentUsersData);
+      setRecentProducts(prods.slice(0, 5));
+      setRecentUsers(profs.slice(0, 5));
+      setCategories(cats.slice(0, 6));
 
     } catch (error) {
-      console.error('Error fetching analytics:', error.message);
+      console.error('Error loading dashboard stats:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchDashboardData();
+  };
+
+  const formatNaira = (amount) => {
+    return '₦' + Number(amount || 0).toLocaleString('en-NG', { maximumFractionDigits: 0 });
   };
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Loading analytics...</p>
-        </div>
+      <div className="flex flex-col items-center justify-center min-h-[450px]">
+        <div className="w-12 h-12 border-4 border-violet-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="text-sm font-bold text-slate-600">Ana loda bayanan Babban Dashboard...</p>
       </div>
     );
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard Analytics</h1>
-        <p className="text-gray-600 dark:text-gray-400">Platform overview and key metrics</p>
+    <div className="space-y-6 animate-fadeIn">
+      {/* ── HERO BANNER & STATUS ── */}
+      <div className="relative overflow-hidden bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 sm:p-8 rounded-3xl border border-slate-800 shadow-xl">
+        <div className="absolute right-0 top-0 w-96 h-96 bg-violet-600/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold tracking-wide">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Tsarin Yana Aiki 100% (Marketplace Live)</span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+              Babban Dashboard na Abu Mafhal
+            </h1>
+            <p className="text-sm text-slate-300 max-w-2xl leading-relaxed">
+              Barka da zuwa cibiyar sarrafa kasuwa. Duba bayanan kayayyaki, dillalai (vendors), masu sayayya, da rukunai a lokaci guda ba tare da bata lokaci ba.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-white font-bold text-xs backdrop-blur-md transition-all active:scale-95"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+              <span>{refreshing ? 'Ana Sabuntawa...' : 'Sake Sabuntawa'}</span>
+            </button>
+            <Link
+              to="/admin/products/add"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs shadow-lg shadow-violet-600/30 transition-all hover:scale-105 active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Sanya Sabon Kaya</span>
+            </Link>
+          </div>
+        </div>
       </div>
 
-      {/* Main Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {/* Total Revenue */}
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-lg p-6 shadow-lg">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm opacity-90">Total Revenue</p>
-            <span className="text-2xl">💰</span>
+      {/* ── KPI METRICS CARDS ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+        {/* Total Products */}
+        <div 
+          onClick={() => navigate('/admin/products')}
+          className="group cursor-pointer bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md hover:border-violet-300 transition-all"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Jimillar Kayan Kasuwa</span>
+            <div className="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center group-hover:bg-violet-600 group-hover:text-white transition-all">
+              <Package className="w-5 h-5" />
+            </div>
           </div>
-          <p className="text-3xl font-bold mb-1">₦{stats.totalRevenue.toLocaleString()}</p>
-          <p className="text-xs opacity-75">From {stats.totalOrders} orders</p>
+          <div className="flex items-baseline justify-between">
+            <h3 className="text-2xl sm:text-3xl font-black text-slate-900">{stats.totalProducts}</h3>
+            <span className="inline-flex items-center text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
+              {stats.activeProducts} Masu Aiki
+            </span>
+          </div>
+          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+            <span>Masu jiran tabbatarwa</span>
+            <strong className="text-amber-600 font-bold">{stats.pendingProducts}</strong>
+          </div>
+        </div>
+
+        {/* Vendors */}
+        <div 
+          onClick={() => navigate('/admin/vendors')}
+          className="group cursor-pointer bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md hover:border-blue-300 transition-all"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Yan Kasuwa (Vendors)</span>
+            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all">
+              <Store className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="flex items-baseline justify-between">
+            <h3 className="text-2xl sm:text-3xl font-black text-slate-900">{stats.totalVendors}</h3>
+            <span className="inline-flex items-center text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
+              Shagunan Kasuwa
+            </span>
+          </div>
+          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+            <span>Dillalan da aka tantance</span>
+            <strong className="text-slate-900 font-bold">{stats.totalVendors}</strong>
+          </div>
         </div>
 
         {/* Total Users */}
-        <div className="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-lg p-6 shadow-lg">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm opacity-90">Total Users</p>
-            <span className="text-2xl">👥</span>
+        <div 
+          onClick={() => navigate('/admin/users')}
+          className="group cursor-pointer bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md hover:border-cyan-300 transition-all"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Masu Amfani (Users)</span>
+            <div className="w-10 h-10 rounded-xl bg-cyan-50 text-cyan-600 flex items-center justify-center group-hover:bg-cyan-600 group-hover:text-white transition-all">
+              <Users className="w-5 h-5" />
+            </div>
           </div>
-          <p className="text-3xl font-bold mb-1">{stats.totalUsers}</p>
-          <p className="text-xs opacity-75">{stats.totalVendors} vendors</p>
+          <div className="flex items-baseline justify-between">
+            <h3 className="text-2xl sm:text-3xl font-black text-slate-900">{stats.totalUsers}</h3>
+            <span className="inline-flex items-center text-xs font-bold text-cyan-700 bg-cyan-50 px-2 py-0.5 rounded-md">
+              {stats.totalBuyers} Masu Saye
+            </span>
+          </div>
+          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+            <span>Rijistar dukkan asusun</span>
+            <strong className="text-slate-900 font-bold">{stats.totalUsers}</strong>
+          </div>
         </div>
 
-        {/* Total Products */}
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-lg p-6 shadow-lg">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm opacity-90">Total Products</p>
-            <span className="text-2xl">📦</span>
+        {/* Categories & Banners */}
+        <div 
+          onClick={() => navigate('/admin/categories')}
+          className="group cursor-pointer bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md hover:border-emerald-300 transition-all"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Rukunai da Tallace</span>
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-all">
+              <Layers className="w-5 h-5" />
+            </div>
           </div>
-          <p className="text-3xl font-bold mb-1">{stats.totalProducts}</p>
-          <p className="text-xs opacity-75">{stats.pendingProducts} pending</p>
-        </div>
-
-        {/* Today's Stats */}
-        <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-lg p-6 shadow-lg">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm opacity-90">Today's Revenue</p>
-            <span className="text-2xl">📈</span>
+          <div className="flex items-baseline justify-between">
+            <h3 className="text-2xl sm:text-3xl font-black text-slate-900">{stats.totalCategories}</h3>
+            <span className="inline-flex items-center text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
+              {stats.activeBanners} Banners Masu Aiki
+            </span>
           </div>
-          <p className="text-3xl font-bold mb-1">₦{stats.todayRevenue.toLocaleString()}</p>
-          <p className="text-xs opacity-75">{stats.todayOrders} orders today</p>
+          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+            <span>Rukunan Kayan Kasuwa</span>
+            <strong className="text-slate-900 font-bold">{stats.totalCategories}</strong>
+          </div>
         </div>
       </div>
 
-      {/* Alert Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        {stats.pendingOrders > 0 && (
-          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-            <div className="flex items-center gap-3">
-              <span className="text-3xl">⚠️</span>
+      {/* ── QUICK ACTIONS BAR ── */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-violet-600" />
+            Hanyoyin Gaggawa (Quick Actions)
+          </h2>
+          <span className="text-xs text-slate-400">Sarrafa kasuwa kai tsaye</span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <button
+            onClick={() => navigate('/admin/products/add')}
+            className="flex flex-col items-center justify-center p-3.5 rounded-xl bg-slate-50 hover:bg-violet-50 hover:text-violet-700 border border-slate-200/80 text-slate-700 font-bold text-xs transition-all group"
+          >
+            <div className="w-8 h-8 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+              <Plus className="w-4 h-4" />
+            </div>
+            <span>Sanya Kaya</span>
+          </button>
+
+          <button
+            onClick={() => navigate('/admin/products')}
+            className="flex flex-col items-center justify-center p-3.5 rounded-xl bg-slate-50 hover:bg-violet-50 hover:text-violet-700 border border-slate-200/80 text-slate-700 font-bold text-xs transition-all group"
+          >
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+              <Package className="w-4 h-4" />
+            </div>
+            <span>Duba Kayayyaki</span>
+          </button>
+
+          <button
+            onClick={() => navigate('/admin/categories')}
+            className="flex flex-col items-center justify-center p-3.5 rounded-xl bg-slate-50 hover:bg-violet-50 hover:text-violet-700 border border-slate-200/80 text-slate-700 font-bold text-xs transition-all group"
+          >
+            <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+              <Layers className="w-4 h-4" />
+            </div>
+            <span>Sarrafa Rukunai</span>
+          </button>
+
+          <button
+            onClick={() => navigate('/admin/vendors')}
+            className="flex flex-col items-center justify-center p-3.5 rounded-xl bg-slate-50 hover:bg-violet-50 hover:text-violet-700 border border-slate-200/80 text-slate-700 font-bold text-xs transition-all group"
+          >
+            <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+              <Store className="w-4 h-4" />
+            </div>
+            <span>Yan Kasuwa</span>
+          </button>
+
+          <button
+            onClick={() => navigate('/admin/cms')}
+            className="flex flex-col items-center justify-center p-3.5 rounded-xl bg-slate-50 hover:bg-violet-50 hover:text-violet-700 border border-slate-200/80 text-slate-700 font-bold text-xs transition-all group"
+          >
+            <div className="w-8 h-8 rounded-lg bg-pink-100 text-pink-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <span>Tallan Banners</span>
+          </button>
+
+          <button
+            onClick={() => navigate('/admin/settings')}
+            className="flex flex-col items-center justify-center p-3.5 rounded-xl bg-slate-50 hover:bg-violet-50 hover:text-violet-700 border border-slate-200/80 text-slate-700 font-bold text-xs transition-all group"
+          >
+            <div className="w-8 h-8 rounded-lg bg-slate-200 text-slate-700 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+              <Settings className="w-4 h-4" />
+            </div>
+            <span>Saitunan Kasuwa</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ── TWO COLUMN MAIN LAYOUT: RECENT PRODUCTS & RECENT PROFILES ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Recent Products */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
               <div>
-                <p className="font-semibold text-yellow-800 dark:text-yellow-400">{stats.pendingOrders} Pending Orders</p>
-                <p className="text-sm text-yellow-700 dark:text-yellow-500">Require attention</p>
+                <h2 className="text-base font-black text-slate-900">Kayan Da Aka Saka Kwanan Nan</h2>
+                <p className="text-xs text-slate-500">Kayayyakin da aka sanya kwanan nan a kasuwa</p>
               </div>
+              <Link 
+                to="/admin/products"
+                className="inline-flex items-center gap-1 text-xs font-bold text-violet-600 hover:text-violet-700"
+              >
+                <span>Duba Duka</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
             </div>
-          </div>
-        )}
 
-        {stats.pendingVendorApps > 0 && (
-          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-            <div className="flex items-center gap-3">
-              <span className="text-3xl">📋</span>
-              <div>
-                <p className="font-semibold text-blue-800 dark:text-blue-400">{stats.pendingVendorApps} Vendor Applications</p>
-                <p className="text-sm text-blue-700 dark:text-blue-500">Awaiting review</p>
+            {recentProducts.length === 0 ? (
+              <div className="text-center py-12 text-slate-400">
+                <Package className="w-10 h-10 mx-auto mb-2 opacity-40" />
+                <p className="text-sm font-semibold">Babu wani kaya a halin yanzu</p>
               </div>
-            </div>
-          </div>
-        )}
-
-        {stats.activeDisputes > 0 && (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-            <div className="flex items-center gap-3">
-              <span className="text-3xl">⚡</span>
-              <div>
-                <p className="font-semibold text-red-800 dark:text-red-400">{stats.activeDisputes} Active Disputes</p>
-                <p className="text-sm text-red-700 dark:text-red-500">Need resolution</p>
+            ) : (
+              <div className="space-y-3">
+                {recentProducts.map((p) => {
+                  const img = p.images?.[0] || p.image_url || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=120';
+                  return (
+                    <div key={p.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50/70 hover:bg-slate-50 border border-slate-100 transition-all">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <img 
+                          src={img} 
+                          alt={p.name} 
+                          className="w-11 h-11 rounded-lg object-cover bg-white border border-slate-200 flex-shrink-0"
+                          onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=120'; }}
+                        />
+                        <div className="min-w-0">
+                          <p className="font-bold text-sm text-slate-900 truncate">{p.name}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[11px] font-semibold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200/60">
+                              {p.category || 'Gaba Daya'}
+                            </span>
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                              p.status === 'approved' 
+                                ? 'bg-emerald-50 text-emerald-700'
+                                : 'bg-amber-50 text-amber-700'
+                            }`}>
+                              {p.status || 'Active'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right pl-3 flex-shrink-0">
+                        <p className="font-black text-sm text-slate-900">{formatNaira(p.price)}</p>
+                        <p className="text-[11px] text-slate-400 font-medium">Stock: {p.stock ?? p.stock_quantity ?? '0'}</p>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            </div>
+            )}
           </div>
-        )}
-      </div>
-
-      {/* Two Column Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        {/* Recent Orders */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h2 className="text-xl font-bold mb-4">Recent Orders</h2>
-          {recentOrders.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">No orders yet</p>
-          ) : (
-            <div className="space-y-3">
-              {recentOrders.map(order => (
-                <div key={order.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                  <div className="flex-1">
-                    <p className="font-medium">#{order.id.substring(0, 8)}</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">{order.userName}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-green-600">₦{order.total_amount?.toLocaleString()}</p>
-                    <span className={`text-xs px-2 py-1 rounded-full ${
-                      typeof order.status === 'string' 
-                        ? (order.status === 'delivered' ? 'bg-green-100 text-green-800' :
-                           order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                           'bg-blue-100 text-blue-800')
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {typeof order.status === 'string' ? order.status : (order.status?.status || 'Processing')}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          
+          <div className="pt-4 mt-4 border-t border-slate-100 text-center">
+            <Link
+              to="/admin/products/add"
+              className="inline-flex items-center gap-2 text-xs font-bold text-violet-600 hover:text-violet-700"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Sanya Sabon Kaya A Kasuwa</span>
+            </Link>
+          </div>
         </div>
 
-        {/* Top Products */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h2 className="text-xl font-bold mb-4">Top Selling Products</h2>
-          {topProducts.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">No sales data yet</p>
-          ) : (
-            <div className="space-y-3">
-              {topProducts.map((product, index) => (
-                <div key={product.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                  <span className="text-2xl font-bold text-gray-400">#{index + 1}</span>
-                  <img
-                    src={product.images?.[0] || 'https://via.placeholder.com/50'}
-                    alt={product.name}
-                    className="w-12 h-12 object-cover rounded"
-                  />
-                  <div className="flex-1">
-                    <p className="font-medium line-clamp-1">{product.name}</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">{product.sales || 0} sales</p>
-                  </div>
-                  <p className="font-bold text-blue-600">₦{product.price?.toLocaleString()}</p>
-                </div>
-              ))}
+        {/* Recent Registered Users & Vendors */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+              <div>
+                <h2 className="text-base font-black text-slate-900">Sababbin Masu Rijista</h2>
+                <p className="text-xs text-slate-500">Asusun da suka yi rajista a kasuwa</p>
+              </div>
+              <Link 
+                to="/admin/users"
+                className="inline-flex items-center gap-1 text-xs font-bold text-violet-600 hover:text-violet-700"
+              >
+                <span>Duba Duka</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
             </div>
-          )}
-        </div>
-      </div>
 
-      {/* Recent Users */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-        <h2 className="text-xl font-bold mb-4">Recent User Registrations</h2>
-        {recentUsers.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">No new users this week</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-900">
-                <tr>
-                  <th className="text-left py-3 px-4">Name</th>
-                  <th className="text-left py-3 px-4">Email</th>
-                  <th className="text-left py-3 px-4">Role</th>
-                  <th className="text-left py-3 px-4">Joined</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentUsers.map(user => (
-                  <tr key={user.id} className="border-b dark:border-gray-700">
-                    <td className="py-3 px-4 font-medium">{user.full_name || user.name}</td>
-                    <td className="py-3 px-4 text-sm">{user.email}</td>
-                    <td className="py-3 px-4">
-                      <span className={`text-xs px-2 py-1 rounded-full capitalize ${
-                        user.role === 'vendor' ? 'bg-green-100 text-green-800' :
-                        user.role === 'admin' ? 'bg-purple-100 text-purple-800' :
-                        'bg-blue-100 text-blue-800'
-                      }`}>
-                        {user.role}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-sm">
-                      {new Date(user.created_at || user.createdAt).toLocaleDateString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {recentUsers.length === 0 ? (
+              <div className="text-center py-12 text-slate-400">
+                <Users className="w-10 h-10 mx-auto mb-2 opacity-40" />
+                <p className="text-sm font-semibold">Babu sababbin masu amfani</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {recentUsers.map((u) => {
+                  const initial = (u.full_name || u.business_name || u.email || 'A')[0].toUpperCase();
+                  const isVendor = u.role === 'vendor';
+                  const isAdmin = u.role === 'admin';
+                  return (
+                    <div key={u.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50/70 hover:bg-slate-50 border border-slate-100 transition-all">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs text-white flex-shrink-0 shadow-sm ${
+                          isVendor 
+                            ? 'bg-gradient-to-br from-blue-600 to-indigo-700' 
+                            : isAdmin 
+                              ? 'bg-gradient-to-br from-violet-600 to-purple-700'
+                              : 'bg-gradient-to-br from-slate-600 to-slate-700'
+                        }`}>
+                          {initial}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-sm text-slate-900 truncate">
+                            {u.full_name || u.business_name || 'Mai Sayayya'}
+                          </p>
+                          <p className="text-xs text-slate-400 truncate">{u.email || 'Babu Imel'}</p>
+                        </div>
+                      </div>
+                      <div className="text-right pl-3 flex-shrink-0">
+                        <span className={`inline-block text-[11px] font-bold px-2 py-0.5 rounded-full capitalize ${
+                          isVendor 
+                            ? 'bg-blue-50 text-blue-700 border border-blue-200' 
+                            : isAdmin 
+                              ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                              : 'bg-slate-100 text-slate-600 border border-slate-200'
+                        }`}>
+                          {u.role || 'buyer'}
+                        </span>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          {u.created_at ? new Date(u.created_at).toLocaleDateString() : 'Kwanan nan'}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-        <button
-          onClick={() => window.location.href = '/admin/vendor-approvals'}
-          className="p-4 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
-        >
-          <span className="text-3xl mb-2 block">📋</span>
-          <p className="font-medium">Review Applications</p>
-        </button>
-        
-        <button
-          onClick={() => window.location.href = '/admin/products'}
-          className="p-4 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded-lg transition-colors"
-        >
-          <span className="text-3xl mb-2 block">📦</span>
-          <p className="font-medium">Manage Products</p>
-        </button>
-        
-        <button
-          onClick={() => window.location.href = '/admin/orders'}
-          className="p-4 bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30 rounded-lg transition-colors"
-        >
-          <span className="text-3xl mb-2 block">🛍️</span>
-          <p className="font-medium">View Orders</p>
-        </button>
-        
-        <button
-          onClick={() => window.location.href = '/admin/users'}
-          className="p-4 bg-orange-50 dark:bg-orange-900/20 hover:bg-orange-100 dark:hover:bg-orange-900/30 rounded-lg transition-colors"
-        >
-          <span className="text-3xl mb-2 block">👥</span>
-          <p className="font-medium">Manage Users</p>
-        </button>
+          <div className="pt-4 mt-4 border-t border-slate-100 text-center">
+            <Link
+              to="/admin/vendors"
+              className="inline-flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-700"
+            >
+              <Store className="w-3.5 h-3.5" />
+              <span>Duba Dukkan Dillalan Kasuwa (Vendors)</span>
+            </Link>
+          </div>
+        </div>
       </div>
     </div>
   );

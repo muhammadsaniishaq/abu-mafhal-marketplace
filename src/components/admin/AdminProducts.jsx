@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../config/supabase';
 import { useNavigate } from 'react-router-dom';
-import { FiSearch, FiFilter, FiPlus, FiEye, FiEdit2, FiTrash2, FiCheckCircle, FiXCircle, FiMoreVertical } from 'react-icons/fi';
+import { FiSearch, FiFilter, FiPlus, FiEye, FiEdit2, FiTrash2, FiCheckCircle, FiXCircle, FiMoreVertical, FiPackage } from 'react-icons/fi';
 
 const AdminProducts = () => {
   const navigate = useNavigate();
