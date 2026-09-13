@@ -182086,7 +182086,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
               style: {
                 minWidth: 0
               },
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
+              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
                 numberOfLines: 1,
                 ellipsizeMode: "tail",
                 style: {
@@ -182095,12 +182095,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
                   color: '#0A192F',
                   letterSpacing: 0.3
                 },
-                children: ["ABU ", /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
-                  style: {
-                    color: '#0284C7'
-                  },
-                  children: "MAFHAL"
-                })]
+                children: "ABU MAFHAL"
               }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
                 numberOfLines: 1,
                 ellipsizeMode: "tail",
@@ -182260,29 +182255,13 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
               size: 15,
               color: "#94A3B8"
             })
-          }) : /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-            style: {
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 6
-            },
-            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-              onPress: handleVoiceSearch,
-              hitSlop: { top: 6, bottom: 6, left: 4, right: 4 },
-              children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                name: "mic-outline",
-                size: 16,
-                color: "#0284C7"
-              })
-            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-              onPress: handleImageSearch,
-              hitSlop: { top: 6, bottom: 6, left: 4, right: 4 },
-              children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-                name: "camera-outline",
-                size: 16,
-                color: "#0284C7"
-              })
-            })]
+          }) : /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
+            onPress: () => onNavigate ? onNavigate('categories') : onGoToShop(),
+            children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+              name: "grid-outline",
+              size: 17,
+              color: "#64748B"
+            })
           })]
         })]
       }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(ScrollView.default, {

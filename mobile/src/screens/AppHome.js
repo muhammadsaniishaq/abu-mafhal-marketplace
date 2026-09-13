@@ -608,7 +608,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                         />
                         <View style={{ minWidth: 0 }}>
                             <Text numberOfLines={1} ellipsizeMode="tail" style={{ fontSize: 13, fontWeight: '900', color: '#0A192F', letterSpacing: 0.3 }}>
-                                ABU <Text style={{ color: '#0284C7' }}>MAFHAL</Text>
+                                ABU MAFHAL
                             </Text>
                             <Text numberOfLines={1} ellipsizeMode="tail" style={{ fontSize: 7.5, fontWeight: '800', color: '#64748B', letterSpacing: 0.8, textTransform: 'uppercase' }}>
                                 MARKETPLACE
@@ -724,14 +724,9 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                             <Ionicons name="close-circle" size={15} color="#94A3B8" />
                         </TouchableOpacity>
                     ) : (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <TouchableOpacity onPress={handleVoiceSearch} hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}>
-                                <Ionicons name="mic-outline" size={16} color="#0284C7" />
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={handleImageSearch} hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}>
-                                <Ionicons name="camera-outline" size={16} color="#0284C7" />
-                            </TouchableOpacity>
-                        </View>
+                        <TouchableOpacity onPress={() => onNavigate ? onNavigate('categories') : onGoToShop()}>
+                            <Ionicons name="grid-outline" size={17} color="#64748B" />
+                        </TouchableOpacity>
                     )}
                 </View>
             </View>
