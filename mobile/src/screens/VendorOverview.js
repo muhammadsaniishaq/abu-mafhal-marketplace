@@ -77,8 +77,8 @@ export const VendorOverview = ({ stats, onSelectTab }) => {
                     <Ionicons name="people" size={22} color="#6366F1" />
                 </View>
                 <View style={{ flex: 1 }}>
-                    <Text style={localStyles.actionTitle}>Mabiyan Shago (Store Fans)</Text>
-                    <Text style={localStyles.actionSub}>Duba masu bibiyar shagonka domin tuntuɓar su da tallata sabbin kaya.</Text>
+                    <Text style={localStyles.actionTitle}>Store Followers</Text>
+                    <Text style={localStyles.actionSub}>Engage your audience, send product updates, and reward loyal buyers.</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
             </TouchableOpacity>

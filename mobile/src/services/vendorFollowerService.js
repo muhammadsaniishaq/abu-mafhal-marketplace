@@ -103,7 +103,7 @@ export const toggleFollowStore = async (storeId, storeName = 'Store', userId = n
 
     return {
         isFollowed: willFollow,
-        message: willFollow ? `Kina bin ${storeName}` : `Ka daina bin ${storeName}`,
+        message: willFollow ? `Following ${storeName}` : `Unfollowed ${storeName}`,
         updatedMap
     };
 };

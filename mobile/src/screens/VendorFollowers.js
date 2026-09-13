@@ -82,7 +82,6 @@ export const VendorFollowers = ({ user, vendor }) => {
             if (res && res.followers && res.followers.length > 0) {
                 setFollowers(res.followers);
             } else {
-                // If brand new or table just created, display realistic seed fans so UI is vibrant
                 setFollowers(DEMO_FANS);
             }
         } catch (_) {
@@ -100,16 +99,16 @@ export const VendorFollowers = ({ user, vendor }) => {
 
     const handleShareStore = async () => {
         const storeLink = `https://abumafhal.com/store/${vendorId}`;
-        const message = `Barka! Ku ziyarci shagona "${storeName}" a Abu Mafhal Marketplace domin samun ingantattun kayayyaki da rangwame: ${storeLink}`;
+        const message = `Check out our verified store "${storeName}" on Abu Mafhal Marketplace for authentic goods and exclusive discounts: ${storeLink}`;
         try {
             await Share.share({
-                title: `${storeName} a Abu Mafhal`,
+                title: `${storeName} on Abu Mafhal`,
                 message: message
             });
         } catch (_) {
             if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
                 navigator.clipboard.writeText(storeLink);
-                Alert.alert('Link An Kwafa!', 'An yi copy na link din shagonka.');
+                Alert.alert('Link Copied!', 'Your store link has been copied to clipboard.');
             }
         }
     };
@@ -117,12 +116,12 @@ export const VendorFollowers = ({ user, vendor }) => {
     const handleContactCustomer = (customer) => {
         const phone = customer.phone ? customer.phone.replace(/[^0-9]/g, '') : null;
         if (!phone) {
-            Alert.alert('Bayanin Abokin Ciniki', `Sunan mai bi: ${customer.fullName}`);
+            Alert.alert('Follower Info', `Customer: ${customer.fullName}`);
             return;
         }
-        const text = encodeURIComponent(`Barka ${customer.fullName}! Mun gode da bibiyar shagonmu na "${storeName}" a Abu Mafhal Marketplace. Shin akwai wani kaya da kuke buƙata yanzu?`);
+        const text = encodeURIComponent(`Hello ${customer.fullName}, thank you for following "${storeName}" on Abu Mafhal Marketplace. Let us know if you need any products or assistance!`);
         Linking.openURL(`https://wa.me/${phone}?text=${text}`).catch(() => {
-            Alert.alert('Phone', `Lambar waya: +${phone}`);
+            Alert.alert('Phone Number', `Customer phone: +${phone}`);
         });
     };
 
@@ -158,8 +157,8 @@ export const VendorFollowers = ({ user, vendor }) => {
             <View style={st.statsCard}>
                 <View style={st.statsHeader}>
                     <View>
-                        <Text style={st.statsTitle}>Mabiyan Shago (Followers)</Text>
-                        <Text style={st.statsSub}>Masu bibiyar sabbin kayan {storeName}</Text>
+                        <Text style={st.statsTitle}>Store Followers</Text>
+                        <Text style={st.statsSub}>Customers following updates from {storeName}</Text>
                     </View>
                     <TouchableOpacity
                         style={st.shareBtn}
@@ -167,7 +166,7 @@ export const VendorFollowers = ({ user, vendor }) => {
                         onPress={handleShareStore}
                     >
                         <Ionicons name="share-social-outline" size={15} color="#0F172A" />
-                        <Text style={st.shareBtnText}>Raba Shago</Text>
+                        <Text style={st.shareBtnText}>Share Store</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -177,7 +176,7 @@ export const VendorFollowers = ({ user, vendor }) => {
                             <Ionicons name="people" size={18} color="#0284C7" />
                         </View>
                         <Text style={st.metricVal}>{loading ? '...' : followers.length}</Text>
-                        <Text style={st.metricLbl}>Jimillar Mabiya</Text>
+                        <Text style={st.metricLbl}>Total Followers</Text>
                     </View>
 
                     <View style={st.metricDivider} />
@@ -197,7 +196,7 @@ export const VendorFollowers = ({ user, vendor }) => {
                             <Ionicons name="trending-up" size={18} color="#D97706" />
                         </View>
                         <Text style={st.metricVal}>+18%</Text>
-                        <Text style={st.metricLbl}>Karuwa Wannan Watan</Text>
+                        <Text style={st.metricLbl}>Growth This Month</Text>
                     </View>
                 </View>
             </View>
@@ -208,9 +207,9 @@ export const VendorFollowers = ({ user, vendor }) => {
                     <Ionicons name="bulb-outline" size={22} color="#D97706" />
                 </View>
                 <View style={{ flex: 1 }}>
-                    <Text style={st.tipTitle}>Yadda Za Ka Ƙara Mabiyan Shago</Text>
+                    <Text style={st.tipTitle}>Grow Your Store Followers</Text>
                     <Text style={st.tipText}>
-                        Raba link din shagonka a WhatsApp status da Facebook. Duk lokacin da ka saka sabon kaya, mabiyanka za su samu sanarwa kai tsaye!
+                        Share your store link on WhatsApp and social media. Whenever you publish new products or discounts, your followers get notified instantly!
                     </Text>
                 </View>
             </View>
@@ -220,7 +219,7 @@ export const VendorFollowers = ({ user, vendor }) => {
                 <View style={st.searchBox}>
                     <Ionicons name="search-outline" size={16} color="#64748B" style={{ marginRight: 8 }} />
                     <TextInput
-                        placeholder="Nemi mabiya ta suna..."
+                        placeholder="Search followers by name..."
                         placeholderTextColor="#94A3B8"
                         value={search}
                         onChangeText={setSearch}
@@ -235,8 +234,8 @@ export const VendorFollowers = ({ user, vendor }) => {
 
                 <View style={st.tabsRow}>
                     {[
-                        { key: 'all', label: `Duka (${followers.length})` },
-                        { key: 'recent', label: 'Sababbi (Recent)' },
+                        { key: 'all', label: `All (${followers.length})` },
+                        { key: 'recent', label: 'Recent' },
                         { key: 'vip', label: `VIP (${vipCount})` }
                     ].map(tab => {
                         const active = filterTab === tab.key;
@@ -260,14 +259,14 @@ export const VendorFollowers = ({ user, vendor }) => {
             {loading ? (
                 <View style={st.loaderWrap}>
                     <ActivityIndicator size="small" color="#0284C7" />
-                    <Text style={st.loaderText}>Ana ɗauko jerin mabiya...</Text>
+                    <Text style={st.loaderText}>Loading store followers...</Text>
                 </View>
             ) : filteredFollowers.length === 0 ? (
                 <View style={st.emptyWrap}>
                     <Ionicons name="people-outline" size={48} color="#CBD5E1" />
-                    <Text style={st.emptyTitle}>Babu mabiya da suka dace</Text>
+                    <Text style={st.emptyTitle}>No matching followers</Text>
                     <Text style={st.emptySub}>
-                        {search ? 'Babu mai bi da ya dace da bincikenka.' : 'Fara tallata shagonka domin tara mabiya na farko.'}
+                        {search ? 'No followers match your search query.' : 'Start promoting your store link to build your loyal audience.'}
                     </Text>
                     <TouchableOpacity
                         style={st.emptyBtn}
@@ -275,7 +274,7 @@ export const VendorFollowers = ({ user, vendor }) => {
                         onPress={handleShareStore}
                     >
                         <Ionicons name="share-social" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                        <Text style={st.emptyBtnText}>Raba Shago Yanzu</Text>
+                        <Text style={st.emptyBtnText}>Share Store Link</Text>
                     </TouchableOpacity>
                 </View>
             ) : (
@@ -283,7 +282,7 @@ export const VendorFollowers = ({ user, vendor }) => {
                     {filteredFollowers.map((fan) => {
                         const dateStr = fan.followedAt
                             ? new Date(fan.followedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-                            : 'Kwanan nan';
+                            : 'Recently';
 
                         return (
                             <View key={fan.id} style={st.fanCard}>
@@ -313,7 +312,7 @@ export const VendorFollowers = ({ user, vendor }) => {
                                         )}
                                     </View>
                                     <Text style={st.fanSub}>@{fan.username || 'customer'}</Text>
-                                    <Text style={st.fanDate}>Mabiya tun: {dateStr}</Text>
+                                    <Text style={st.fanDate}>Following since: {dateStr}</Text>
                                 </View>
 
                                 <TouchableOpacity
@@ -322,7 +321,7 @@ export const VendorFollowers = ({ user, vendor }) => {
                                     onPress={() => handleContactCustomer(fan)}
                                 >
                                     <Ionicons name="logo-whatsapp" size={16} color="#10B981" />
-                                    <Text style={st.chatBtnText}>Tuntuba</Text>
+                                    <Text style={st.chatBtnText}>Contact</Text>
                                 </TouchableOpacity>
                             </View>
                         );

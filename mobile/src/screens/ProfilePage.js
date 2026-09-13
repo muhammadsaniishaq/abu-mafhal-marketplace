@@ -196,7 +196,7 @@ const ProfilePageInner = ({
         {
             icon: 'storefront-outline',
             label: 'Followed Stores',
-            subtitle: 'Shagunan da nake bi',
+            subtitle: 'Stores you follow',
             badge: followedStores.length > 0 ? `${followedStores.length} stores` : null,
             badgeColor: '#0284C7',
             action: () => setShowFollowedModal(true)
@@ -657,8 +657,8 @@ const ProfilePageInner = ({
                                     <Ionicons name="storefront" size={18} color="#0284C7" />
                                 </View>
                                 <View>
-                                    <Text style={s.modalTitle}>Shagunan Da Kake Bi</Text>
-                                    <Text style={s.modalSubtitle}>Followed Stores ({followedStores.length})</Text>
+                                    <Text style={s.modalTitle}>Followed Stores</Text>
+                                    <Text style={s.modalSubtitle}>{followedStores.length} stores followed</Text>
                                 </View>
                             </View>
                             <TouchableOpacity
@@ -675,7 +675,7 @@ const ProfilePageInner = ({
                             <View style={s.storeSearchBox}>
                                 <Ionicons name="search-outline" size={16} color="#64748B" style={{ marginRight: 8 }} />
                                 <TextInput
-                                    placeholder="Nemi a cikin shagunan da kake bi..."
+                                    placeholder="Search stores you follow..."
                                     placeholderTextColor="#94A3B8"
                                     value={storeSearch}
                                     onChangeText={setStoreSearch}
@@ -693,7 +693,7 @@ const ProfilePageInner = ({
                             {followedLoading ? (
                                 <View style={s.modalLoaderWrap}>
                                     <ActivityIndicator size="small" color="#0284C7" />
-                                    <Text style={s.modalLoaderText}>Ana ɗauko shagunan da kake bi...</Text>
+                                    <Text style={s.modalLoaderText}>Loading followed stores...</Text>
                                 </View>
                             ) : filteredFollowedStores.length === 0 ? (
                                 <View style={s.modalEmptyWrap}>
@@ -701,12 +701,12 @@ const ProfilePageInner = ({
                                         <Ionicons name="storefront-outline" size={38} color="#94A3B8" />
                                     </View>
                                     <Text style={s.modalEmptyTitle}>
-                                        {storeSearch ? 'Babu shagon da ya dace' : 'Ba ka bi kowane shago ba tukuna'}
+                                        {storeSearch ? 'No matching stores' : 'No Followed Stores Yet'}
                                     </Text>
                                     <Text style={s.modalEmptySub}>
                                         {storeSearch
-                                            ? 'Babu shago a cikin jerin da kake bi mai wannan sunan.'
-                                            : 'Yi follow na shagunan da kake so domin samun sanarwar sabbin kayayyaki, rangwame, da bayarwa kai tsaye.'}
+                                            ? 'No store in your followed list matches that name.'
+                                            : 'Follow your favorite verified sellers to receive real-time updates on new arrivals, discounts, and order faster.'}
                                     </Text>
                                     <TouchableOpacity
                                         style={s.modalDiscoverBtn}
@@ -717,7 +717,7 @@ const ProfilePageInner = ({
                                         }}
                                     >
                                         <Ionicons name="compass-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                                        <Text style={s.modalDiscoverBtnText}>Gano Shagunan Kasuwa (Explore Stores)</Text>
+                                        <Text style={s.modalDiscoverBtnText}>Explore Verified Stores</Text>
                                     </TouchableOpacity>
                                 </View>
                             ) : (
@@ -777,7 +777,7 @@ const ProfilePageInner = ({
                                                     }}
                                                 >
                                                     <Ionicons name="storefront-outline" size={13} color="#0284C7" />
-                                                    <Text style={s.actionVisitText}>Duba Shago</Text>
+                                                    <Text style={s.actionVisitText}>Visit Store</Text>
                                                 </TouchableOpacity>
 
                                                 <TouchableOpacity
@@ -785,7 +785,7 @@ const ProfilePageInner = ({
                                                     activeOpacity={0.8}
                                                     onPress={() => {
                                                         const phone = store.phone ? store.phone.replace(/[^0-9]/g, '') : '2349021486162';
-                                                        const text = encodeURIComponent(`Barka ${store.name}, ina tuntubar ku ne daga Abu Mafhal Marketplace.`);
+                                                        const text = encodeURIComponent(`Hello ${store.name}, I am contacting you directly from Abu Mafhal Marketplace.`);
                                                         Linking.openURL(`https://wa.me/${phone}?text=${text}`).catch(() => {});
                                                     }}
                                                 >
@@ -799,7 +799,7 @@ const ProfilePageInner = ({
                                                     onPress={() => handleUnfollowStore(store.id, store.name)}
                                                 >
                                                     <Ionicons name="close-circle-outline" size={13} color="#EF4444" />
-                                                    <Text style={s.actionUnfollowText}>Cire</Text>
+                                                    <Text style={s.actionUnfollowText}>Unfollow</Text>
                                                 </TouchableOpacity>
                                             </View>
                                         </View>
