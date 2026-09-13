@@ -109,3 +109,5 @@ ON public.profiles FOR UPDATE
 USING (true);
 
 GRANT ALL ON public.profiles TO authenticated, anon, service_role;
+
+-- DONE! Sign ups will now work smoothly without "Database error saving new user".

@@ -365,6 +365,10 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
                 setErrorMsg(lang === 'ha' ? 'Email ko kalmar sirri ba daidai ba ne.' : 'Incorrect email or password. Please try again.');
             } else if (rawMsg.includes('Email not confirmed')) {
                 setErrorMsg(lang === 'ha' ? 'Ba a tabbatar da email ba tukuna. Duba inbox dinka.' : 'Your email is not confirmed yet. Please verify your email inbox.');
+            } else if (rawMsg.toLowerCase().includes('database error') || rawMsg.toLowerCase().includes('saving new user')) {
+                setErrorMsg(lang === 'ha' 
+                    ? 'Kuskuren Database: Ba a iya ƙirƙirar sabon asusu ba. Da fatan za a gudanar da "fix_database_auth_and_signup.sql" a Supabase SQL Editor.' 
+                    : 'Database error saving new user. Please execute "fix_database_auth_and_signup.sql" in your Supabase SQL Editor.');
             } else {
                 setErrorMsg(rawMsg);
             }
@@ -487,7 +491,14 @@ export const AuthPage = ({ route, onBack, onLoginSuccess }) => {
                 );
             }
         } catch (err) {
-            setErrorMsg(err.message || 'Verification failed.');
+            const rawMsg = err.message || 'Verification failed.';
+            if (rawMsg.toLowerCase().includes('database error') || rawMsg.toLowerCase().includes('saving new user')) {
+                setErrorMsg(lang === 'ha' 
+                    ? 'Kuskuren Database: Ba a iya ƙirƙirar sabon asusu ba. Da fatan za a gudanar da "fix_database_auth_and_signup.sql" a Supabase SQL Editor.' 
+                    : 'Database error saving new user. Please execute "fix_database_auth_and_signup.sql" in your Supabase SQL Editor.');
+            } else {
+                setErrorMsg(rawMsg);
+            }
         } finally {
             setLoading(false);
         }
@@ -1265,7 +1276,7 @@ const s = StyleSheet.create({
     headerIconBtn: {
         width: 36,
         height: 36,
-        borderRadius: 12,
+        borderRadius: 8,
         backgroundColor: 'rgba(255,255,255,0.08)',
         alignItems: 'center',
         justifyContent: 'center',
@@ -1305,7 +1316,7 @@ const s = StyleSheet.create({
         backgroundColor: 'rgba(0, 210, 255, 0.1)',
         borderWidth: 1,
         borderColor: 'rgba(0, 210, 255, 0.3)',
-        borderRadius: 10,
+        borderRadius: 6,
     },
     langBadgeTxt: {
         fontSize: 10,
@@ -1313,7 +1324,7 @@ const s = StyleSheet.create({
         color: '#00D2FF',
     },
     heroBanner: {
-        borderRadius: 24,
+        borderRadius: 12,
         padding: 20,
         overflow: 'hidden',
         borderWidth: 1,
@@ -1338,7 +1349,7 @@ const s = StyleSheet.create({
         backgroundColor: 'rgba(255,255,255,0.08)',
         paddingHorizontal: 8,
         paddingVertical: 3,
-        borderRadius: 8,
+        borderRadius: 4,
     },
     heroSecurityTxt: {
         fontSize: 9,
@@ -1366,7 +1377,7 @@ const s = StyleSheet.create({
         backgroundColor: '#FEF2F2',
         borderWidth: 1,
         borderColor: '#FCA5A5',
-        borderRadius: 16,
+        borderRadius: 8,
         padding: 12,
         marginBottom: 14,
     },
@@ -1383,14 +1394,14 @@ const s = StyleSheet.create({
         backgroundColor: '#ECFDF5',
         borderWidth: 1,
         borderColor: '#A7F3D0',
-        borderRadius: 18,
+        borderRadius: 8,
         padding: 14,
         marginBottom: 16,
     },
     referralIconWrap: {
         width: 36,
         height: 36,
-        borderRadius: 12,
+        borderRadius: 6,
         backgroundColor: '#D1FAE5',
         alignItems: 'center',
         justifyContent: 'center',
@@ -1408,7 +1419,7 @@ const s = StyleSheet.create({
     },
     cardContainer: {
         backgroundColor: '#FFFFFF',
-        borderRadius: 24,
+        borderRadius: 12,
         padding: 18,
         borderWidth: 1,
         borderColor: '#E2E8F0',
@@ -1421,7 +1432,7 @@ const s = StyleSheet.create({
     segmentedContainer: {
         flexDirection: 'row',
         backgroundColor: '#F1F5F9',
-        borderRadius: 18,
+        borderRadius: 8,
         padding: 4,
         marginBottom: 18,
         borderWidth: 1,
@@ -1434,7 +1445,7 @@ const s = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         paddingVertical: 11,
-        borderRadius: 14,
+        borderRadius: 6,
         backgroundColor: 'transparent',
     },
     segmentedBtnActive: {
@@ -1466,7 +1477,7 @@ const s = StyleSheet.create({
         justifyContent: 'center',
         gap: 6,
         paddingVertical: 8,
-        borderRadius: 12,
+        borderRadius: 8,
         backgroundColor: '#F8FAFC',
         borderWidth: 1,
         borderColor: '#E2E8F0',
@@ -1505,7 +1516,7 @@ const s = StyleSheet.create({
         backgroundColor: '#F8FAFC',
         borderWidth: 1.5,
         borderColor: '#E2E8F0',
-        borderRadius: 16,
+        borderRadius: 8,
         paddingHorizontal: 12,
         height: 50,
     },
@@ -1534,6 +1545,7 @@ const s = StyleSheet.create({
         fontSize: 14,
         color: '#0F172A',
         fontWeight: '600',
+        ...(Platform.OS === 'web' ? { outlineWidth: 0, outlineStyle: 'none' } : {}),
     },
     eyeBtn: {
         position: 'absolute',
@@ -1582,7 +1594,7 @@ const s = StyleSheet.create({
     checkbox: {
         width: 20,
         height: 20,
-        borderRadius: 6,
+        borderRadius: 4,
         borderWidth: 2,
         borderColor: '#CBD5E1',
         alignItems: 'center',
@@ -1605,7 +1617,7 @@ const s = StyleSheet.create({
         backgroundColor: '#F1F5F9',
         paddingHorizontal: 10,
         paddingVertical: 5,
-        borderRadius: 10,
+        borderRadius: 6,
     },
     biometricTxt: {
         fontSize: 11,
@@ -1628,7 +1640,7 @@ const s = StyleSheet.create({
     primaryBtn: {
         backgroundColor: '#F59E0B',
         height: 52,
-        borderRadius: 16,
+        borderRadius: 8,
         alignItems: 'center',
         justifyContent: 'center',
         shadowColor: '#F59E0B',
@@ -1679,7 +1691,7 @@ const s = StyleSheet.create({
         justifyContent: 'center',
         gap: 8,
         height: 46,
-        borderRadius: 14,
+        borderRadius: 8,
         backgroundColor: '#F8FAFC',
         borderWidth: 1.5,
         borderColor: '#E2E8F0',
@@ -1711,7 +1723,7 @@ const s = StyleSheet.create({
     otpHeaderIcon: {
         width: 60,
         height: 60,
-        borderRadius: 20,
+        borderRadius: 10,
         backgroundColor: '#F0FDFA',
         borderWidth: 1,
         borderColor: '#CCFBF1',
@@ -1743,7 +1755,7 @@ const s = StyleSheet.create({
     pinBox: {
         width: 44,
         height: 52,
-        borderRadius: 14,
+        borderRadius: 8,
         backgroundColor: '#F8FAFC',
         borderWidth: 1.5,
         borderColor: '#CBD5E1',
@@ -1809,7 +1821,7 @@ const s = StyleSheet.create({
     modalCard: {
         width: '100%',
         backgroundColor: '#FFFFFF',
-        borderRadius: 24,
+        borderRadius: 12,
         padding: 22,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 10 },
@@ -1826,7 +1838,7 @@ const s = StyleSheet.create({
     modalIconWrap: {
         width: 44,
         height: 44,
-        borderRadius: 14,
+        borderRadius: 8,
         backgroundColor: '#FEF3C7',
         alignItems: 'center',
         justifyContent: 'center',
