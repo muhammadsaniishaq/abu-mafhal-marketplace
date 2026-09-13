@@ -182056,63 +182056,85 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
-            marginBottom: 10
+            marginBottom: 8,
+            minWidth: 0,
+            width: '100%'
           },
           children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
             style: {
+              flex: 1,
               flexDirection: 'row',
               alignItems: 'center',
-              gap: 8
+              gap: 7,
+              minWidth: 0,
+              marginRight: 6
             },
             children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
               source: settings?.logo_url ? {
                 uri: settings.logo_url
               } : AM_LOGO,
               style: {
-                width: 34,
-                height: 34,
-                borderRadius: 6
+                width: 28,
+                height: 28,
+                borderRadius: 7,
+                flexShrink: 0,
+                borderWidth: 1,
+                borderColor: '#E2E8F0'
               },
               resizeMode: "contain"
             }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
-              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+              style: {
+                minWidth: 0
+              },
+              children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(Text.default, {
+                numberOfLines: 1,
+                ellipsizeMode: "tail",
                 style: {
-                  fontSize: 14.5,
+                  fontSize: 13,
                   fontWeight: '900',
                   color: '#0A192F',
-                  letterSpacing: 0.5
+                  letterSpacing: 0.3
                 },
-                children: settings?.app_name ? settings.app_name.toUpperCase() : 'ABU MAFHAL'
+                children: ["ABU ", /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                  style: {
+                    color: '#0284C7'
+                  },
+                  children: "MAFHAL"
+                })]
               }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
+                numberOfLines: 1,
+                ellipsizeMode: "tail",
                 style: {
-                  fontSize: 7,
-                  fontWeight: '700',
+                  fontSize: 7.5,
+                  fontWeight: '800',
                   color: '#64748B',
-                  letterSpacing: 0.5,
+                  letterSpacing: 0.8,
                   textTransform: 'uppercase'
                 },
-                children: settings?.tagline ? (settings.tagline.length > 22 ? settings.tagline.slice(0, 22) + '...' : settings.tagline) : 'VERIFIED MARKETPLACE'
+                children: "MARKETPLACE"
               })]
             })]
           }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
             style: {
               flexDirection: 'row',
               alignItems: 'center',
-              gap: 8
+              gap: 6,
+              flexShrink: 0
             },
             children: [/*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
               onPress: () => onNavigate ? onNavigate('categories') : onGoToShop(),
               style: {
                 flexDirection: 'row',
                 alignItems: 'center',
-                gap: 3,
-                backgroundColor: '#E0F2FE',
-                paddingHorizontal: 7,
-                paddingVertical: 4,
-                borderRadius: 9,
+                gap: 3.5,
+                backgroundColor: '#F0F9FF',
+                paddingHorizontal: 8,
+                height: 32,
+                borderRadius: 16,
                 borderWidth: 1,
                 borderColor: '#BAE6FD',
-                flexShrink: 0
+                flexShrink: 0,
+                justifyContent: 'center'
               },
               activeOpacity: 0.8,
               children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
@@ -182121,7 +182143,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
                 color: "#0284C7"
               }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
                 style: {
-                  fontSize: 10,
+                  fontSize: 10.5,
                   fontWeight: '800',
                   color: '#0284C7'
                 },
@@ -182130,53 +182152,71 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
             }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
               onPress: onGoToCart,
               style: {
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: '#F8FAFC',
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+                alignItems: 'center',
+                justifyContent: 'center',
                 position: 'relative',
-                padding: 4
+                flexShrink: 0
               },
+              activeOpacity: 0.8,
               children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
                 name: "cart-outline",
-                size: 22,
+                size: 17,
                 color: "#0F172A"
               }), cartCount > 0 ? /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
                 style: {
                   position: 'absolute',
-                  top: 0,
-                  right: 0,
-                  minWidth: 16,
-                  height: 16,
-                  borderRadius: 8,
+                  top: -3,
+                  right: -3,
+                  minWidth: 15,
+                  height: 15,
+                  borderRadius: 7.5,
                   backgroundColor: '#EF4444',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  paddingHorizontal: 3
+                  paddingHorizontal: 2
                 },
                 children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
                   style: {
                     color: 'white',
-                    fontSize: 9,
+                    fontSize: 8,
                     fontWeight: '900'
                   },
-                  children: cartCount
+                  children: cartCount > 99 ? '99+' : cartCount
                 })
               }) : null]
             }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
               onPress: onGoToNotifications,
               style: {
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: '#F8FAFC',
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+                alignItems: 'center',
+                justifyContent: 'center',
                 position: 'relative',
-                padding: 4
+                flexShrink: 0
               },
+              activeOpacity: 0.8,
               children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
                 name: "notifications-outline",
-                size: 22,
+                size: 17,
                 color: "#0F172A"
               }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
                 style: {
                   position: 'absolute',
-                  top: 3,
-                  right: 3,
-                  width: 7,
-                  height: 7,
-                  borderRadius: 3.5,
+                  top: 5,
+                  right: 6,
+                  width: 6,
+                  height: 6,
+                  borderRadius: 3,
                   backgroundColor: '#EF4444'
                 }
               })]
@@ -182187,36 +182227,62 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
             flexDirection: 'row',
             alignItems: 'center',
             backgroundColor: '#F8FAFC',
-            borderRadius: 14,
-            paddingHorizontal: 12,
-            height: 44,
+            borderRadius: 12,
+            paddingHorizontal: 11,
+            height: 38,
             borderWidth: 1,
             borderColor: '#E2E8F0',
-            gap: 8
+            gap: 7
           },
           children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
             name: "search-outline",
-            size: 18,
+            size: 16,
             color: "#94A3B8"
           }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TextInput.default, {
-            placeholder: "Search for products, brands and more...",
+            placeholder: "Search products, brands, stores...",
             placeholderTextColor: "#94A3B8",
             style: {
               flex: 1,
-              fontSize: 13,
+              fontSize: 12.5,
               color: '#0F172A',
-              fontWeight: '500'
+              fontWeight: '500',
+              paddingVertical: 0,
+              minWidth: 0
             },
             value: searchQuery,
             onChangeText: setSearchQuery,
             onSubmitEditing: handleSearchSubmit
-          }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
-            onPress: () => onNavigate ? onNavigate('categories') : onGoToShop(),
+          }), searchQuery.length > 0 ? /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
+            onPress: () => setSearchQuery(''),
+            hitSlop: { top: 6, bottom: 6, left: 6, right: 6 },
             children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
-              name: "grid-outline",
-              size: 18,
-              color: "#64748B"
+              name: "close-circle",
+              size: 15,
+              color: "#94A3B8"
             })
+          }) : /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
+            style: {
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6
+            },
+            children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
+              onPress: handleVoiceSearch,
+              hitSlop: { top: 6, bottom: 6, left: 4, right: 4 },
+              children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+                name: "mic-outline",
+                size: 16,
+                color: "#0284C7"
+              })
+            }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
+              onPress: handleImageSearch,
+              hitSlop: { top: 6, bottom: 6, left: 4, right: 4 },
+              children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
+                name: "camera-outline",
+                size: 16,
+                color: "#0284C7"
+              })
+            })]
           })]
         })]
       }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(ScrollView.default, {

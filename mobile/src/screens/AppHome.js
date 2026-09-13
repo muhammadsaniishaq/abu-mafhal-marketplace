@@ -585,12 +585,12 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
 
     return (
         <View style={styles.container}>
-            {/* ── TOP HEADER (Matching Screenshot 2) ── */}
+            {/* ── TOP HEADER (First-Mobile Luxury Header) ── */}
             <View style={{
                 backgroundColor: '#FFFFFF',
-                paddingTop: (insets.top > 0 ? insets.top : (Platform.OS === 'ios' ? 44 : (StatusBar.currentHeight || 24))) + 6,
-                paddingBottom: 10,
-                paddingHorizontal: 16,
+                paddingTop: Platform.OS === 'web' ? 10 : ((insets.top > 0 ? insets.top : (Platform.OS === 'ios' ? 44 : (StatusBar.currentHeight || 0))) + 4),
+                paddingBottom: 9,
+                paddingHorizontal: 12,
                 borderBottomWidth: 1,
                 borderBottomColor: '#F1F5F9',
                 zIndex: 10
@@ -598,58 +598,102 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                 <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" translucent={true} />
 
                 {/* Top row: logo + actions (Strict First-Mobile Layout, 0% overflow) */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9, minWidth: 0, width: '100%' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, minWidth: 0, width: '100%' }}>
                     {/* Brand Identity */}
-                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0, marginRight: 6 }}>
+                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 7, minWidth: 0, marginRight: 6 }}>
                         <Image
                             source={settings?.logo_url ? { uri: settings.logo_url } : AM_LOGO}
-                            style={{ width: 28, height: 28, borderRadius: 6, flexShrink: 0 }}
+                            style={{ width: 28, height: 28, borderRadius: 7, flexShrink: 0, borderWidth: 1, borderColor: '#E2E8F0' }}
                             resizeMode="contain"
                         />
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                            <Text numberOfLines={1} ellipsizeMode="tail" style={{ fontSize: 13, fontWeight: '900', color: '#0A192F', letterSpacing: 0.2 }}>
-                                {settings?.app_name ? settings.app_name.toUpperCase() : 'ABU MAFHAL'}
+                        <View style={{ minWidth: 0 }}>
+                            <Text numberOfLines={1} ellipsizeMode="tail" style={{ fontSize: 13, fontWeight: '900', color: '#0A192F', letterSpacing: 0.3 }}>
+                                ABU <Text style={{ color: '#0284C7' }}>MAFHAL</Text>
                             </Text>
-                            <Text numberOfLines={1} ellipsizeMode="tail" style={{ fontSize: 7.5, fontWeight: '700', color: '#64748B', letterSpacing: 0.2, textTransform: 'uppercase' }}>
-                                {settings?.tagline ? (settings.tagline.length > 22 ? settings.tagline.slice(0, 22) + '...' : settings.tagline) : 'VERIFIED MARKETPLACE'}
+                            <Text numberOfLines={1} ellipsizeMode="tail" style={{ fontSize: 7.5, fontWeight: '800', color: '#64748B', letterSpacing: 0.8, textTransform: 'uppercase' }}>
+                                MARKETPLACE
                             </Text>
                         </View>
                     </View>
 
-                    {/* Right Actions: Category Pill + Cart + Notifications */}
+                    {/* Right Actions: Category Pill + Cart Circle + Notifications Circle */}
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                         <TouchableOpacity
                             onPress={() => onNavigate ? onNavigate('categories') : onGoToShop()}
                             style={{
                                 flexDirection: 'row',
                                 alignItems: 'center',
-                                gap: 3,
-                                backgroundColor: '#E0F2FE',
-                                paddingHorizontal: 7,
-                                paddingVertical: 4,
-                                borderRadius: 9,
+                                gap: 3.5,
+                                backgroundColor: '#F0F9FF',
+                                paddingHorizontal: 8,
+                                height: 32,
+                                borderRadius: 16,
                                 borderWidth: 1,
                                 borderColor: '#BAE6FD',
-                                flexShrink: 0
+                                flexShrink: 0,
+                                justifyContent: 'center'
                             }}
                             activeOpacity={0.8}
                         >
                             <Ionicons name="grid-outline" size={12} color="#0284C7" />
-                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#0284C7' }}>Category</Text>
+                            <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#0284C7' }}>Category</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity onPress={onGoToCart} style={{ position: 'relative', padding: 2.5, flexShrink: 0 }}>
-                            <Ionicons name="cart-outline" size={20} color="#0F172A" />
+                        {/* Cart Circle */}
+                        <TouchableOpacity
+                            onPress={onGoToCart}
+                            style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: 16,
+                                backgroundColor: '#F8FAFC',
+                                borderWidth: 1,
+                                borderColor: '#E2E8F0',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                position: 'relative',
+                                flexShrink: 0
+                            }}
+                            activeOpacity={0.8}
+                        >
+                            <Ionicons name="cart-outline" size={17} color="#0F172A" />
                             {cartCount > 0 ? (
-                                <View style={{ position: 'absolute', top: -1, right: -1, minWidth: 14, height: 14, borderRadius: 7, backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 }}>
+                                <View style={{
+                                    position: 'absolute',
+                                    top: -3,
+                                    right: -3,
+                                    minWidth: 15,
+                                    height: 15,
+                                    borderRadius: 7.5,
+                                    backgroundColor: '#EF4444',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    paddingHorizontal: 2
+                                }}>
                                     <Text style={{ color: 'white', fontSize: 8, fontWeight: '900' }}>{cartCount > 99 ? '99+' : cartCount}</Text>
                                 </View>
                             ) : null}
                         </TouchableOpacity>
 
-                        <TouchableOpacity onPress={onGoToNotifications} style={{ position: 'relative', padding: 2.5, flexShrink: 0 }}>
-                            <Ionicons name="notifications-outline" size={20} color="#0F172A" />
-                            <View style={{ position: 'absolute', top: 2, right: 2, width: 5.5, height: 5.5, borderRadius: 3, backgroundColor: '#EF4444' }} />
+                        {/* Notifications Circle */}
+                        <TouchableOpacity
+                            onPress={onGoToNotifications}
+                            style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: 16,
+                                backgroundColor: '#F8FAFC',
+                                borderWidth: 1,
+                                borderColor: '#E2E8F0',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                position: 'relative',
+                                flexShrink: 0
+                            }}
+                            activeOpacity={0.8}
+                        >
+                            <Ionicons name="notifications-outline" size={17} color="#0F172A" />
+                            <View style={{ position: 'absolute', top: 5, right: 6, width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444' }} />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -659,25 +703,36 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                     flexDirection: 'row',
                     alignItems: 'center',
                     backgroundColor: '#F8FAFC',
-                    borderRadius: 14,
-                    paddingHorizontal: 12,
-                    height: 44,
+                    borderRadius: 12,
+                    paddingHorizontal: 11,
+                    height: 38,
                     borderWidth: 1,
                     borderColor: '#E2E8F0',
-                    gap: 8
+                    gap: 7
                 }}>
-                    <Ionicons name="search-outline" size={18} color="#94A3B8" />
+                    <Ionicons name="search-outline" size={16} color="#94A3B8" />
                     <TextInput
-                        placeholder="Search for products, brands and more..."
+                        placeholder="Search products, brands, stores..."
                         placeholderTextColor="#94A3B8"
-                        style={{ flex: 1, fontSize: 13, color: '#0F172A', fontWeight: '500' }}
+                        style={{ flex: 1, fontSize: 12.5, color: '#0F172A', fontWeight: '500', paddingVertical: 0, minWidth: 0 }}
                         value={searchQuery}
                         onChangeText={setSearchQuery}
                         onSubmitEditing={handleSearchSubmit}
                     />
-                    <TouchableOpacity onPress={() => onNavigate ? onNavigate('categories') : onGoToShop()}>
-                        <Ionicons name="grid-outline" size={18} color="#64748B" />
-                    </TouchableOpacity>
+                    {searchQuery.length > 0 ? (
+                        <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                            <Ionicons name="close-circle" size={15} color="#94A3B8" />
+                        </TouchableOpacity>
+                    ) : (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <TouchableOpacity onPress={handleVoiceSearch} hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}>
+                                <Ionicons name="mic-outline" size={16} color="#0284C7" />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={handleImageSearch} hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}>
+                                <Ionicons name="camera-outline" size={16} color="#0284C7" />
+                            </TouchableOpacity>
+                        </View>
+                    )}
                 </View>
             </View>
 
