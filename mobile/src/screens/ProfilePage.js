@@ -24,7 +24,7 @@ import {
     subscribeToFollowChanges
 } from '../services/vendorFollowerService';
 
-// Clean currency formatter
+// Compact currency formatter
 const formatCurrency = (amount) => {
     try {
         return new Intl.NumberFormat('en-NG', {
@@ -184,10 +184,12 @@ const ProfilePageInner = ({
     const displayName = user?.fullName || user?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Member';
     const displaySubtitle = user?.email || user?.phone || user?.phone_number || '';
 
-    // Menu Group 1: Shopping & Activity
+    // Menu Group 1: Shopping & Activity (with subtle pastel icon tints for elegant decoration)
     const shoppingItems = [
         {
             icon: 'bag-handle-outline',
+            iconColor: '#0284C7',
+            iconBg: '#E0F2FE',
             label: 'My Orders',
             badge: pendingOrders > 0 ? `${pendingOrders} active` : ordersCount > 0 ? `${ordersCount}` : null,
             badgeColor: pendingOrders > 0 ? '#F59E0B' : '#64748B',
@@ -195,24 +197,32 @@ const ProfilePageInner = ({
         },
         {
             icon: 'storefront-outline',
+            iconColor: '#059669',
+            iconBg: '#ECFDF5',
             label: 'Followed Stores',
             subtitle: 'Stores you follow',
-            badge: followedStores.length > 0 ? `${followedStores.length} stores` : null,
-            badgeColor: '#0284C7',
+            badge: followedStores.length > 0 ? `${followedStores.length}` : null,
+            badgeColor: '#059669',
             action: () => setShowFollowedModal(true)
         },
         {
             icon: 'heart-outline',
-            label: 'Wishlist & Favorites',
+            iconColor: '#E11D48',
+            iconBg: '#FFE4E6',
+            label: 'Wishlist & Saved',
             screen: 'wishlist'
         },
         {
             icon: 'navigate-outline',
-            label: 'Track Active Delivery',
+            iconColor: '#7C3AED',
+            iconBg: '#F5F3FF',
+            label: 'Track Delivery',
             screen: 'TrackOrder'
         },
         {
             icon: 'chatbubbles-outline',
+            iconColor: '#0D9488',
+            iconBg: '#CCFBF1',
             label: 'Messages & Chats',
             screen: 'ConversationsScreen'
         }
@@ -222,19 +232,25 @@ const ProfilePageInner = ({
     const financeItems = [
         {
             icon: 'wallet-outline',
+            iconColor: '#059669',
+            iconBg: '#ECFDF5',
             label: 'Mafhal Pay & Wallet',
             extra: formatCurrency(wallet.balance),
             screen: 'wallet'
         },
         {
             icon: 'gift-outline',
+            iconColor: '#D97706',
+            iconBg: '#FEF3C7',
             label: 'Refer & Earn (₦1,000 Bonus)',
-            badge: 'Earn ₦1k',
+            badge: '₦1k Bonus',
             badgeColor: '#10B981',
             screen: 'referral'
         },
         {
             icon: 'location-outline',
+            iconColor: '#475569',
+            iconBg: '#F1F5F9',
             label: 'Delivery Addresses',
             screen: 'address'
         }
@@ -244,16 +260,22 @@ const ProfilePageInner = ({
     const supportItems = [
         {
             icon: 'settings-outline',
+            iconColor: '#475569',
+            iconBg: '#F1F5F9',
             label: 'Account Settings',
             screen: 'settings'
         },
         {
             icon: 'headset-outline',
+            iconColor: '#0284C7',
+            iconBg: '#E0F2FE',
             label: 'Customer Support & WhatsApp',
             screen: 'support'
         },
         {
             icon: 'information-circle-outline',
+            iconColor: '#64748B',
+            iconBg: '#F8FAFC',
             label: 'About Abu Mafhal',
             screen: 'about'
         }
@@ -300,20 +322,20 @@ const ProfilePageInner = ({
 
     return (
         <SafeAreaView style={s.safeArea}>
-            {/* ── TOP NAV BAR ── */}
+            {/* ── TOP NAV BAR (COMPACT & SLEEK) ── */}
             <View style={s.topBar}>
                 <TouchableOpacity
                     onPress={onBack}
                     style={s.topBarBtn}
                     activeOpacity={0.7}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                    <Ionicons name="chevron-back" size={22} color="#0F172A" />
+                    <Ionicons name="chevron-back" size={19} color="#0F172A" />
                 </TouchableOpacity>
 
                 <View style={{ alignItems: 'center' }}>
                     <Text style={s.topBarTitle}>My Profile</Text>
-                    <Text style={s.topBarSubtitle}>Account & Preferences</Text>
+                    <Text style={s.topBarSubtitle}>Account & Settings</Text>
                 </View>
 
                 {user ? (
@@ -321,12 +343,12 @@ const ProfilePageInner = ({
                         onPress={() => onNavigate && onNavigate('editProfile')}
                         style={s.topBarBtn}
                         activeOpacity={0.7}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
-                        <Ionicons name="create-outline" size={20} color="#0F172A" />
+                        <Ionicons name="create-outline" size={17} color="#0F172A" />
                     </TouchableOpacity>
                 ) : (
-                    <View style={{ width: 38 }} />
+                    <View style={{ width: 32 }} />
                 )}
             </View>
 
@@ -335,57 +357,71 @@ const ProfilePageInner = ({
                 contentContainerStyle={s.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
-                {/* ── USER HERO CARD ── */}
+                {/* ── USER HERO CARD (COMPACT, SLEEK, WITH SUBTLE LUXURY DECORATION) ── */}
                 {user ? (
                     <View style={s.heroCard}>
-                        <View style={s.avatarWrap}>
-                            <UserAvatar user={user} size={64} />
-                            <View style={s.verifiedDot}>
-                                <Ionicons name="checkmark" size={11} color="#FFFFFF" />
+                        {/* Decorative Top Passport Accent */}
+                        <View style={s.heroTopBarDecor}>
+                            <View style={s.passportBadge}>
+                                <Ionicons name="sparkles" size={10} color="#0284C7" />
+                                <Text style={s.passportText}>VERIFIED PASSPORT</Text>
+                            </View>
+                            <View style={s.heroStatusPill}>
+                                <View style={s.activeDot} />
+                                <Text style={s.heroStatusText}>Active Member</Text>
                             </View>
                         </View>
 
-                        <View style={s.heroInfo}>
-                            <View style={s.heroNameRow}>
-                                <Text style={s.heroName} numberOfLines={1}>{displayName}</Text>
-                                <View style={[
-                                    s.roleBadge,
-                                    isAdmin ? s.roleBadgeAdmin : isVendor ? s.roleBadgeVendor : isDriver ? s.roleBadgeDriver : s.roleBadgeBuyer
-                                ]}>
-                                    <Text style={[
-                                        s.roleBadgeText,
-                                        isAdmin ? s.roleTextAdmin : isVendor ? s.roleTextVendor : isDriver ? s.roleTextDriver : s.roleTextBuyer
-                                    ]}>
-                                        {isAdmin ? 'ADMIN' : isVendor ? 'VENDOR' : isDriver ? 'DRIVER' : 'MEMBER'}
-                                    </Text>
+                        <View style={s.heroMainRow}>
+                            <View style={s.avatarWrap}>
+                                <UserAvatar user={user} size={50} />
+                                <View style={s.verifiedDot}>
+                                    <Ionicons name="checkmark" size={9} color="#FFFFFF" />
                                 </View>
                             </View>
 
-                            {displaySubtitle ? (
-                                <Text style={s.heroSub} numberOfLines={1}>{displaySubtitle}</Text>
-                            ) : null}
+                            <View style={s.heroInfo}>
+                                <View style={s.heroNameRow}>
+                                    <Text style={s.heroName} numberOfLines={1}>{displayName}</Text>
+                                    <View style={[
+                                        s.roleBadge,
+                                        isAdmin ? s.roleBadgeAdmin : isVendor ? s.roleBadgeVendor : isDriver ? s.roleBadgeDriver : s.roleBadgeBuyer
+                                    ]}>
+                                        <Text style={[
+                                            s.roleBadgeText,
+                                            isAdmin ? s.roleTextAdmin : isVendor ? s.roleTextVendor : isDriver ? s.roleTextDriver : s.roleTextBuyer
+                                        ]}>
+                                            {isAdmin ? 'ADMIN' : isVendor ? 'VENDOR' : isDriver ? 'DRIVER' : 'BUYER'}
+                                        </Text>
+                                    </View>
+                                </View>
 
-                            {/* Action Pills Row */}
-                            <View style={s.heroPillsRow}>
-                                <TouchableOpacity
-                                    style={s.editPillBtn}
-                                    activeOpacity={0.75}
-                                    onPress={() => onNavigate && onNavigate('editProfile')}
-                                >
-                                    <Ionicons name="pencil-sharp" size={12} color="#475569" style={{ marginRight: 4 }} />
-                                    <Text style={s.editPillText}>Edit Profile</Text>
-                                </TouchableOpacity>
+                                {displaySubtitle ? (
+                                    <Text style={s.heroSub} numberOfLines={1}>{displaySubtitle}</Text>
+                                ) : null}
 
-                                <TouchableOpacity
-                                    style={s.heroStoresPill}
-                                    activeOpacity={0.75}
-                                    onPress={() => setShowFollowedModal(true)}
-                                >
-                                    <Ionicons name="storefront" size={12} color="#0284C7" style={{ marginRight: 4 }} />
-                                    <Text style={s.heroStoresPillText}>
-                                        {followedStores.length} {followedStores.length === 1 ? 'Store' : 'Stores'} Followed
-                                    </Text>
-                                </TouchableOpacity>
+                                {/* Compact Action Pills Row */}
+                                <View style={s.heroPillsRow}>
+                                    <TouchableOpacity
+                                        style={s.editPillBtn}
+                                        activeOpacity={0.75}
+                                        onPress={() => onNavigate && onNavigate('editProfile')}
+                                    >
+                                        <Ionicons name="pencil-sharp" size={10} color="#475569" style={{ marginRight: 3 }} />
+                                        <Text style={s.editPillText}>Edit</Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        style={s.heroStoresPill}
+                                        activeOpacity={0.75}
+                                        onPress={() => setShowFollowedModal(true)}
+                                    >
+                                        <Ionicons name="storefront" size={10} color="#0284C7" style={{ marginRight: 3 }} />
+                                        <Text style={s.heroStoresPillText}>
+                                            {followedStores.length} {followedStores.length === 1 ? 'Store' : 'Stores'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
                         </View>
                     </View>
@@ -393,11 +429,11 @@ const ProfilePageInner = ({
                     /* GUEST CARD */
                     <View style={s.guestCard}>
                         <View style={s.guestIconWrap}>
-                            <Ionicons name="person-circle-outline" size={44} color="#0A192F" />
+                            <Ionicons name="person-circle-outline" size={38} color="#0A192F" />
                         </View>
                         <View style={{ flex: 1 }}>
                             <Text style={s.guestTitle}>Welcome to Abu Mafhal</Text>
-                            <Text style={s.guestSub}>Sign in to access orders, wallet, rewards & more</Text>
+                            <Text style={s.guestSub}>Sign in to access orders, wallet & rewards</Text>
                         </View>
                         <TouchableOpacity
                             style={s.guestSignInBtn}
@@ -409,7 +445,7 @@ const ProfilePageInner = ({
                     </View>
                 )}
 
-                {/* ── UNIFIED 3-IN-1 QUICK METRICS CARD (ZERO CLUTTER) ── */}
+                {/* ── UNIFIED 3-IN-1 QUICK METRICS CARD (COMPACT & SMOOTH) ── */}
                 {user && (
                     <View style={s.metricsCard}>
                         <TouchableOpacity
@@ -421,7 +457,7 @@ const ProfilePageInner = ({
                             <Text style={s.metricValue} numberOfLines={1}>
                                 {loading ? '...' : formatCurrency(wallet.balance)}
                             </Text>
-                            <Text style={s.metricSub}>View Balance →</Text>
+                            <Text style={s.metricSub}>Balance →</Text>
                         </TouchableOpacity>
 
                         <View style={s.metricDivider} />
@@ -436,7 +472,7 @@ const ProfilePageInner = ({
                                 {loading ? '...' : `${ordersCount}`}
                             </Text>
                             <Text style={[s.metricSub, pendingOrders > 0 && { color: '#D97706', fontWeight: '700' }]}>
-                                {pendingOrders > 0 ? `${pendingOrders} Pending` : 'All Completed'}
+                                {pendingOrders > 0 ? `${pendingOrders} Pending` : 'Completed'}
                             </Text>
                         </TouchableOpacity>
 
@@ -458,7 +494,7 @@ const ProfilePageInner = ({
                     </View>
                 )}
 
-                {/* ── CONTEXTUAL ROLE ACCESS BANNER (1 SINGLE CLEAN CARD) ── */}
+                {/* ── CONTEXTUAL ROLE ACCESS BANNER (COMPACT) ── */}
                 {user && (
                     isAdmin ? (
                         <TouchableOpacity
@@ -466,14 +502,14 @@ const ProfilePageInner = ({
                             activeOpacity={0.85}
                             onPress={onOpenAdmin}
                         >
-                            <View style={[s.roleIconCircle, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
-                                <Ionicons name="shield-checkmark" size={20} color="#DC2626" />
+                            <View style={[s.roleIconCircle, { backgroundColor: '#FEE2E2' }]}>
+                                <Ionicons name="shield-checkmark" size={17} color="#DC2626" />
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={s.roleCardTitle}>Admin Control Console</Text>
                                 <Text style={s.roleCardSub}>Inspect platform metrics, vendors & approvals</Text>
                             </View>
-                            <Ionicons name="arrow-forward" size={18} color="#DC2626" />
+                            <Ionicons name="arrow-forward" size={15} color="#DC2626" />
                         </TouchableOpacity>
                     ) : isVendor ? (
                         <TouchableOpacity
@@ -481,14 +517,14 @@ const ProfilePageInner = ({
                             activeOpacity={0.85}
                             onPress={onOpenVendor}
                         >
-                            <View style={[s.roleIconCircle, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
-                                <Ionicons name="storefront" size={20} color="#059669" />
+                            <View style={[s.roleIconCircle, { backgroundColor: '#D1FAE5' }]}>
+                                <Ionicons name="storefront" size={17} color="#059669" />
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={s.roleCardTitle}>Vendor Management Dashboard</Text>
-                                <Text style={s.roleCardSub}>Manage products, orders, followers & store earnings</Text>
+                                <Text style={s.roleCardSub}>Manage products, orders, followers & payouts</Text>
                             </View>
-                            <Ionicons name="arrow-forward" size={18} color="#059669" />
+                            <Ionicons name="arrow-forward" size={15} color="#059669" />
                         </TouchableOpacity>
                     ) : isDriver ? (
                         <TouchableOpacity
@@ -496,14 +532,14 @@ const ProfilePageInner = ({
                             activeOpacity={0.85}
                             onPress={() => onNavigate && onNavigate('DriverDashboard')}
                         >
-                            <View style={[s.roleIconCircle, { backgroundColor: 'rgba(139, 92, 246, 0.1)' }]}>
-                                <Ionicons name="bicycle" size={20} color="#7C3AED" />
+                            <View style={[s.roleIconCircle, { backgroundColor: '#EDE9FE' }]}>
+                                <Ionicons name="bicycle" size={17} color="#7C3AED" />
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={s.roleCardTitle}>Driver Services Portal</Text>
                                 <Text style={s.roleCardSub}>View pickups, deliveries & route tasks</Text>
                             </View>
-                            <Ionicons name="arrow-forward" size={18} color="#7C3AED" />
+                            <Ionicons name="arrow-forward" size={15} color="#7C3AED" />
                         </TouchableOpacity>
                     ) : (
                         <TouchableOpacity
@@ -512,26 +548,26 @@ const ProfilePageInner = ({
                             onPress={onOpenVendorRegister}
                         >
                             <View style={[s.roleIconCircle, { backgroundColor: '#FEF3C7' }]}>
-                                <Ionicons name="briefcase-outline" size={20} color="#D97706" />
+                                <Ionicons name="briefcase-outline" size={17} color="#D97706" />
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={s.roleCardTitle}>
                                     {vendorApp?.status === 'pending'
-                                        ? 'Seller Verification In Progress'
+                                        ? 'Seller Application In Review'
                                         : 'Sell on Abu Mafhal'}
                                 </Text>
                                 <Text style={s.roleCardSub}>
                                     {vendorApp?.status === 'pending'
-                                        ? 'Your vendor application is currently under review'
-                                        : 'Open your vendor store and sell across Nigeria'}
+                                        ? 'Your application is currently under review'
+                                        : 'Open your vendor store and reach buyers nationwide'}
                                 </Text>
                             </View>
-                            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                            <Ionicons name="chevron-forward" size={15} color="#94A3B8" />
                         </TouchableOpacity>
                     )
                 )}
 
-                {/* ── GROUP 1: SHOPPING & ORDERS ── */}
+                {/* ── GROUP 1: SHOPPING & ACTIVITY ── */}
                 <Text style={s.sectionHeader}>SHOPPING & ACTIVITY</Text>
                 <View style={s.menuGroup}>
                     {shoppingItems.map((item, idx) => (
@@ -541,8 +577,8 @@ const ProfilePageInner = ({
                                 activeOpacity={0.65}
                                 onPress={() => handleItemPress(item)}
                             >
-                                <View style={s.menuIconBox}>
-                                    <Ionicons name={item.icon} size={20} color="#1E293B" />
+                                <View style={[s.menuIconBox, { backgroundColor: item.iconBg }]}>
+                                    <Ionicons name={item.icon} size={16} color={item.iconColor} />
                                 </View>
                                 <View style={{ flex: 1 }}>
                                     <Text style={s.menuLabel}>{item.label}</Text>
@@ -557,7 +593,7 @@ const ProfilePageInner = ({
                                     </View>
                                 ) : null}
 
-                                <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+                                <Ionicons name="chevron-forward" size={14} color="#CBD5E1" />
                             </TouchableOpacity>
                             {idx < shoppingItems.length - 1 && <View style={s.menuDivider} />}
                         </View>
@@ -574,8 +610,8 @@ const ProfilePageInner = ({
                                 activeOpacity={0.65}
                                 onPress={() => handleItemPress(item)}
                             >
-                                <View style={s.menuIconBox}>
-                                    <Ionicons name={item.icon} size={20} color="#1E293B" />
+                                <View style={[s.menuIconBox, { backgroundColor: item.iconBg }]}>
+                                    <Ionicons name={item.icon} size={16} color={item.iconColor} />
                                 </View>
                                 <Text style={s.menuLabel}>{item.label}</Text>
 
@@ -587,7 +623,7 @@ const ProfilePageInner = ({
                                     </View>
                                 ) : null}
 
-                                <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+                                <Ionicons name="chevron-forward" size={14} color="#CBD5E1" />
                             </TouchableOpacity>
                             {idx < financeItems.length - 1 && <View style={s.menuDivider} />}
                         </View>
@@ -595,7 +631,7 @@ const ProfilePageInner = ({
                 </View>
 
                 {/* ── GROUP 3: PREFERENCES & SUPPORT ── */}
-                <Text style={s.sectionHeader}>SUPPORT & PREFERENCES</Text>
+                <Text style={s.sectionHeader}>PREFERENCES & SUPPORT</Text>
                 <View style={s.menuGroup}>
                     {supportItems.map((item, idx) => (
                         <View key={item.label}>
@@ -604,11 +640,11 @@ const ProfilePageInner = ({
                                 activeOpacity={0.65}
                                 onPress={() => handleItemPress(item)}
                             >
-                                <View style={s.menuIconBox}>
-                                    <Ionicons name={item.icon} size={20} color="#1E293B" />
+                                <View style={[s.menuIconBox, { backgroundColor: item.iconBg }]}>
+                                    <Ionicons name={item.icon} size={16} color={item.iconColor} />
                                 </View>
                                 <Text style={s.menuLabel}>{item.label}</Text>
-                                <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+                                <Ionicons name="chevron-forward" size={14} color="#CBD5E1" />
                             </TouchableOpacity>
                             {idx < supportItems.length - 1 && <View style={s.menuDivider} />}
                         </View>
@@ -623,8 +659,8 @@ const ProfilePageInner = ({
                             activeOpacity={0.8}
                             onPress={confirmLogout}
                         >
-                            <Ionicons name="log-out-outline" size={18} color="#DC2626" style={{ marginRight: 8 }} />
-                            <Text style={s.logoutText}>Log Out Account</Text>
+                            <Ionicons name="log-out-outline" size={15} color="#DC2626" style={{ marginRight: 6 }} />
+                            <Text style={s.logoutText}>Log Out</Text>
                         </TouchableOpacity>
                     ) : (
                         <TouchableOpacity
@@ -632,16 +668,16 @@ const ProfilePageInner = ({
                             activeOpacity={0.85}
                             onPress={() => onNavigate && onNavigate('Auth')}
                         >
-                            <Ionicons name="log-in-outline" size={18} color="#0A192F" style={{ marginRight: 8 }} />
+                            <Ionicons name="log-in-outline" size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
                             <Text style={s.loginText}>Sign In / Create Account</Text>
                         </TouchableOpacity>
                     )}
 
-                    <Text style={s.versionText}>Abu Mafhal Marketplace • v1.0.0 (Encrypted)</Text>
+                    <Text style={s.versionText}>Abu Mafhal Marketplace • v1.0.0 (Secure)</Text>
                 </View>
             </ScrollView>
 
-            {/* ── FOLLOWED STORES MODAL ── */}
+            {/* ── FOLLOWED STORES MODAL (COMPACT & REFINED) ── */}
             <Modal
                 visible={showFollowedModal}
                 animationType="slide"
@@ -652,9 +688,9 @@ const ProfilePageInner = ({
                     <View style={s.modalCard}>
                         {/* Modal Header */}
                         <View style={s.modalHeader}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                 <View style={s.modalHeaderIconWrap}>
-                                    <Ionicons name="storefront" size={18} color="#0284C7" />
+                                    <Ionicons name="storefront" size={16} color="#0284C7" />
                                 </View>
                                 <View>
                                     <Text style={s.modalTitle}>Followed Stores</Text>
@@ -666,14 +702,14 @@ const ProfilePageInner = ({
                                 style={s.modalCloseBtn}
                                 activeOpacity={0.7}
                             >
-                                <Ionicons name="close" size={20} color="#64748B" />
+                                <Ionicons name="close" size={18} color="#64748B" />
                             </TouchableOpacity>
                         </View>
 
                         {/* Search Input */}
                         {followedStores.length > 0 && (
                             <View style={s.storeSearchBox}>
-                                <Ionicons name="search-outline" size={16} color="#64748B" style={{ marginRight: 8 }} />
+                                <Ionicons name="search-outline" size={15} color="#64748B" style={{ marginRight: 6 }} />
                                 <TextInput
                                     placeholder="Search stores you follow..."
                                     placeholderTextColor="#94A3B8"
@@ -683,7 +719,7 @@ const ProfilePageInner = ({
                                 />
                                 {storeSearch.length > 0 && (
                                     <TouchableOpacity onPress={() => setStoreSearch('')}>
-                                        <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                                        <Ionicons name="close-circle" size={15} color="#94A3B8" />
                                     </TouchableOpacity>
                                 )}
                             </View>
@@ -693,19 +729,19 @@ const ProfilePageInner = ({
                             {followedLoading ? (
                                 <View style={s.modalLoaderWrap}>
                                     <ActivityIndicator size="small" color="#0284C7" />
-                                    <Text style={s.modalLoaderText}>Loading followed stores...</Text>
+                                    <Text style={s.modalLoaderText}>Loading stores...</Text>
                                 </View>
                             ) : filteredFollowedStores.length === 0 ? (
                                 <View style={s.modalEmptyWrap}>
                                     <View style={s.modalEmptyIconCircle}>
-                                        <Ionicons name="storefront-outline" size={38} color="#94A3B8" />
+                                        <Ionicons name="storefront-outline" size={32} color="#94A3B8" />
                                     </View>
                                     <Text style={s.modalEmptyTitle}>
                                         {storeSearch ? 'No matching stores' : 'No Followed Stores Yet'}
                                     </Text>
                                     <Text style={s.modalEmptySub}>
                                         {storeSearch
-                                            ? 'No store in your followed list matches that name.'
+                                            ? 'No store in your followed list matches that query.'
                                             : 'Follow your favorite verified sellers to receive real-time updates on new arrivals, discounts, and order faster.'}
                                     </Text>
                                     <TouchableOpacity
@@ -716,7 +752,7 @@ const ProfilePageInner = ({
                                             onNavigate && onNavigate('stores');
                                         }}
                                     >
-                                        <Ionicons name="compass-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                                        <Ionicons name="compass-outline" size={14} color="#FFFFFF" style={{ marginRight: 5 }} />
                                         <Text style={s.modalDiscoverBtnText}>Explore Verified Stores</Text>
                                     </TouchableOpacity>
                                 </View>
@@ -730,18 +766,18 @@ const ProfilePageInner = ({
                                                         <Image source={{ uri: store.logo }} style={s.storeLogo} />
                                                     ) : (
                                                         <View style={s.storeLogoFallback}>
-                                                            <Ionicons name="storefront" size={24} color="#0284C7" />
+                                                            <Ionicons name="storefront" size={20} color="#0284C7" />
                                                         </View>
                                                     )}
                                                     {store.isVerified && (
                                                         <View style={s.storeVerifiedDot}>
-                                                            <Ionicons name="checkmark" size={10} color="#FFFFFF" />
+                                                            <Ionicons name="checkmark" size={8} color="#FFFFFF" />
                                                         </View>
                                                     )}
                                                 </View>
 
                                                 <View style={s.storeMetaCol}>
-                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                                                         <Text style={s.storeCardName} numberOfLines={1}>{store.name}</Text>
                                                         {store.isOfficial && (
                                                             <View style={s.officialBadge}>
@@ -753,20 +789,20 @@ const ProfilePageInner = ({
 
                                                     <View style={s.storeStatsRow}>
                                                         <View style={s.storeStatItem}>
-                                                            <Ionicons name="star" size={12} color="#F59E0B" />
+                                                            <Ionicons name="star" size={10} color="#F59E0B" />
                                                             <Text style={s.storeStatTextBold}>{store.rating}</Text>
                                                             <Text style={s.storeStatTextDim}>({store.reviews})</Text>
                                                         </View>
                                                         <Text style={s.storeStatDot}>•</Text>
                                                         <View style={s.storeStatItem}>
-                                                            <Ionicons name="cube-outline" size={12} color="#64748B" />
+                                                            <Ionicons name="cube-outline" size={10} color="#64748B" />
                                                             <Text style={s.storeStatTextDim}>{store.productsCount} Items</Text>
                                                         </View>
                                                     </View>
                                                 </View>
                                             </View>
 
-                                            {/* Action Buttons */}
+                                            {/* Compact Action Buttons */}
                                             <View style={s.followedActionsRow}>
                                                 <TouchableOpacity
                                                     style={s.actionVisitBtn}
@@ -776,7 +812,7 @@ const ProfilePageInner = ({
                                                         onNavigate && onNavigate('stores');
                                                     }}
                                                 >
-                                                    <Ionicons name="storefront-outline" size={13} color="#0284C7" />
+                                                    <Ionicons name="storefront-outline" size={12} color="#0284C7" />
                                                     <Text style={s.actionVisitText}>Visit Store</Text>
                                                 </TouchableOpacity>
 
@@ -789,7 +825,7 @@ const ProfilePageInner = ({
                                                         Linking.openURL(`https://wa.me/${phone}?text=${text}`).catch(() => {});
                                                     }}
                                                 >
-                                                    <Ionicons name="logo-whatsapp" size={13} color="#059669" />
+                                                    <Ionicons name="logo-whatsapp" size={12} color="#059669" />
                                                     <Text style={s.actionWhatsAppText}>WhatsApp</Text>
                                                 </TouchableOpacity>
 
@@ -798,7 +834,7 @@ const ProfilePageInner = ({
                                                     activeOpacity={0.75}
                                                     onPress={() => handleUnfollowStore(store.id, store.name)}
                                                 >
-                                                    <Ionicons name="close-circle-outline" size={13} color="#EF4444" />
+                                                    <Ionicons name="close-circle-outline" size={12} color="#EF4444" />
                                                     <Text style={s.actionUnfollowText}>Unfollow</Text>
                                                 </TouchableOpacity>
                                             </View>
@@ -824,7 +860,7 @@ const s = StyleSheet.create({
         backgroundColor: '#F8FAFC'
     },
     topBar: {
-        height: 54,
+        height: 48,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -834,8 +870,8 @@ const s = StyleSheet.create({
         borderBottomColor: '#F1F5F9'
     },
     topBarBtn: {
-        width: 36,
-        height: 36,
+        width: 32,
+        height: 32,
         borderRadius: 8,
         backgroundColor: '#F8FAFC',
         alignItems: 'center',
@@ -844,52 +880,98 @@ const s = StyleSheet.create({
         borderColor: '#E2E8F0'
     },
     topBarTitle: {
-        fontSize: 15.5,
+        fontSize: 14.5,
         fontWeight: '800',
         color: '#0F172A',
         letterSpacing: -0.2
     },
     topBarSubtitle: {
-        fontSize: 10,
+        fontSize: 9.5,
         color: '#64748B',
-        marginTop: 1
+        marginTop: 0.5
     },
     scroll: {
         flex: 1,
         backgroundColor: '#F8FAFC'
     },
     scrollContent: {
-        paddingHorizontal: 16,
-        paddingTop: 14,
-        paddingBottom: 40
+        paddingHorizontal: 14,
+        paddingTop: 10,
+        paddingBottom: 36
     },
 
-    /* Hero Card */
+    /* Hero Card (Compact, Decorated & Smooth) */
     heroCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
         backgroundColor: '#FFFFFF',
-        borderRadius: 16,
-        padding: 16,
+        borderRadius: 14,
+        padding: 12,
         borderWidth: 1,
         borderColor: '#E2E8F0',
-        marginBottom: 12,
-        boxShadow: '0px 2px 8px rgba(15, 23, 42, 0.04)',
+        borderLeftWidth: 3.5,
+        borderLeftColor: '#0284C7',
+        marginBottom: 10,
+        boxShadow: '0px 1px 4px rgba(15, 23, 42, 0.03)',
         elevation: 1
+    },
+    heroTopBarDecor: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 8,
+        paddingBottom: 6,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F8FAFC'
+    },
+    passportBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#F0F9FF',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+        borderWidth: 1,
+        borderColor: '#BAE6FD'
+    },
+    passportText: {
+        fontSize: 8,
+        fontWeight: '900',
+        color: '#0284C7',
+        letterSpacing: 0.5
+    },
+    heroStatusPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4
+    },
+    activeDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: '#10B981'
+    },
+    heroStatusText: {
+        fontSize: 9.5,
+        fontWeight: '600',
+        color: '#64748B'
+    },
+    heroMainRow: {
+        flexDirection: 'row',
+        alignItems: 'center'
     },
     avatarWrap: {
         position: 'relative',
-        marginRight: 14
+        marginRight: 12
     },
     verifiedDot: {
         position: 'absolute',
         bottom: -2,
         right: -2,
-        width: 18,
-        height: 18,
-        borderRadius: 9,
+        width: 16,
+        height: 16,
+        borderRadius: 8,
         backgroundColor: '#10B981',
-        borderWidth: 2,
+        borderWidth: 1.5,
         borderColor: '#FFFFFF',
         alignItems: 'center',
         justifyContent: 'center'
@@ -902,18 +984,18 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         flexWrap: 'wrap',
-        gap: 6,
-        marginBottom: 3
+        gap: 5,
+        marginBottom: 2
     },
     heroName: {
-        fontSize: 16,
+        fontSize: 14.5,
         fontWeight: '800',
         color: '#0F172A',
         letterSpacing: -0.2
     },
     roleBadge: {
-        paddingHorizontal: 6,
-        paddingVertical: 1.5,
+        paddingHorizontal: 5,
+        paddingVertical: 1,
         borderRadius: 4,
         borderWidth: 1
     },
@@ -934,54 +1016,54 @@ const s = StyleSheet.create({
         borderColor: '#DDD6FE'
     },
     roleBadgeText: {
-        fontSize: 9,
+        fontSize: 8.5,
         fontWeight: '800',
-        letterSpacing: 0.5
+        letterSpacing: 0.4
     },
     roleTextBuyer: { color: '#2563EB' },
     roleTextVendor: { color: '#059669' },
     roleTextAdmin: { color: '#DC2626' },
     roleTextDriver: { color: '#7C3AED' },
     heroSub: {
-        fontSize: 11.5,
+        fontSize: 10.5,
         color: '#64748B',
-        marginBottom: 8
+        marginBottom: 6
     },
     heroPillsRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
+        gap: 5,
         flexWrap: 'wrap'
     },
     editPillBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 9,
-        paddingVertical: 4,
-        borderRadius: 6,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 5,
         backgroundColor: '#F1F5F9',
         borderWidth: 1,
         borderColor: '#E2E8F0'
     },
     editPillText: {
-        fontSize: 10.5,
+        fontSize: 10,
         fontWeight: '700',
         color: '#475569'
     },
     heroStoresPill: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 9,
-        paddingVertical: 4,
-        borderRadius: 6,
-        backgroundColor: '#E0F2FE',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 5,
+        backgroundColor: '#F0FDF4',
         borderWidth: 1,
-        borderColor: '#BAE6FD'
+        borderColor: '#BBF7D0'
     },
     heroStoresPillText: {
-        fontSize: 10.5,
+        fontSize: 10,
         fontWeight: '800',
-        color: '#0284C7'
+        color: '#059669'
     },
 
     /* Guest Card */
@@ -990,93 +1072,95 @@ const s = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: '#FFFFFF',
         borderRadius: 14,
-        padding: 16,
+        padding: 14,
         borderWidth: 1,
         borderColor: '#E2E8F0',
-        marginBottom: 14,
-        gap: 12
+        marginBottom: 10,
+        gap: 10
     },
     guestIconWrap: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        width: 38,
+        height: 38,
+        borderRadius: 19,
         backgroundColor: '#F1F5F9',
         alignItems: 'center',
         justifyContent: 'center'
     },
     guestTitle: {
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: '800',
         color: '#0F172A'
     },
     guestSub: {
-        fontSize: 11,
+        fontSize: 10.5,
         color: '#64748B',
-        marginTop: 2
+        marginTop: 1
     },
     guestSignInBtn: {
-        paddingHorizontal: 14,
-        paddingVertical: 7.5,
-        borderRadius: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 7,
         backgroundColor: '#F59E0B'
     },
     guestSignInBtnText: {
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: '800',
         color: '#0A192F'
     },
 
-    /* Metrics Card */
+    /* Metrics Card (Compact) */
     metricsCard: {
         flexDirection: 'row',
         backgroundColor: '#FFFFFF',
-        borderRadius: 14,
-        paddingVertical: 12,
-        paddingHorizontal: 8,
+        borderRadius: 12,
+        paddingVertical: 10,
+        paddingHorizontal: 6,
         borderWidth: 1,
         borderColor: '#E2E8F0',
-        marginBottom: 12,
+        marginBottom: 10,
         alignItems: 'center',
-        justifyContent: 'space-between'
+        justifyContent: 'space-between',
+        boxShadow: '0px 1px 3px rgba(15, 23, 42, 0.02)',
+        elevation: 1
     },
     metricColumn: {
         flex: 1,
         alignItems: 'center',
-        paddingHorizontal: 4
+        paddingHorizontal: 2
     },
     metricLabel: {
-        fontSize: 9.5,
+        fontSize: 8.5,
         fontWeight: '800',
         color: '#94A3B8',
         letterSpacing: 0.8,
-        marginBottom: 3
-    },
-    metricValue: {
-        fontSize: 14,
-        fontWeight: '800',
-        color: '#0F172A',
         marginBottom: 2
     },
+    metricValue: {
+        fontSize: 13,
+        fontWeight: '800',
+        color: '#0F172A',
+        marginBottom: 1
+    },
     metricSub: {
-        fontSize: 10.5,
+        fontSize: 9.5,
         color: '#0284C7',
         fontWeight: '600'
     },
     metricDivider: {
         width: 1,
-        height: 32,
+        height: 26,
         backgroundColor: '#F1F5F9'
     },
 
-    /* Role Card */
+    /* Role Card (Compact) */
     roleCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        borderRadius: 12,
-        padding: 14,
+        borderRadius: 11,
+        padding: 10,
         borderWidth: 1,
-        marginBottom: 16,
-        gap: 12
+        marginBottom: 12,
+        gap: 10
     },
     roleCardBuyer: {
         backgroundColor: '#FFFBEB',
@@ -1095,94 +1179,96 @@ const s = StyleSheet.create({
         borderColor: '#DDD6FE'
     },
     roleIconCircle: {
-        width: 38,
-        height: 38,
-        borderRadius: 19,
+        width: 32,
+        height: 32,
+        borderRadius: 16,
         alignItems: 'center',
         justifyContent: 'center'
     },
     roleCardTitle: {
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: '800',
         color: '#0F172A'
     },
     roleCardSub: {
-        fontSize: 11,
+        fontSize: 10,
         color: '#64748B',
         marginTop: 1
     },
 
-    /* Menu Groups */
+    /* Menu Groups (Refined & Compact) */
     sectionHeader: {
-        fontSize: 11,
+        fontSize: 9,
         fontWeight: '800',
         color: '#94A3B8',
-        letterSpacing: 0.8,
-        marginBottom: 6,
-        marginLeft: 4
+        letterSpacing: 0.9,
+        marginTop: 6,
+        marginBottom: 4,
+        marginLeft: 2
     },
     menuGroup: {
         backgroundColor: '#FFFFFF',
-        borderRadius: 14,
+        borderRadius: 12,
         borderWidth: 1,
         borderColor: '#E2E8F0',
-        marginBottom: 16,
-        overflow: 'hidden'
+        marginBottom: 10,
+        overflow: 'hidden',
+        boxShadow: '0px 1px 3px rgba(15, 23, 42, 0.02)',
+        elevation: 1
     },
     menuRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 12,
-        paddingHorizontal: 14,
-        gap: 12
+        paddingVertical: 8.5,
+        paddingHorizontal: 12,
+        gap: 10
     },
     menuIconBox: {
-        width: 30,
-        height: 30,
-        borderRadius: 8,
-        backgroundColor: '#F8FAFC',
+        width: 26,
+        height: 26,
+        borderRadius: 7,
         alignItems: 'center',
         justifyContent: 'center'
     },
     menuLabel: {
-        fontSize: 13.5,
+        fontSize: 12.5,
         fontWeight: '700',
         color: '#0F172A'
     },
     menuSubLabel: {
-        fontSize: 10,
+        fontSize: 9.5,
         color: '#94A3B8',
-        marginTop: 1
+        marginTop: 0.5
     },
     menuBadge: {
-        paddingHorizontal: 7,
-        paddingVertical: 2,
-        borderRadius: 10,
-        marginRight: 6
+        paddingHorizontal: 6,
+        paddingVertical: 1.5,
+        borderRadius: 8,
+        marginRight: 4
     },
     menuBadgeText: {
-        fontSize: 10,
+        fontSize: 9,
         fontWeight: '800',
         color: '#FFFFFF'
     },
     menuExtra: {
-        fontSize: 12.5,
+        fontSize: 11.5,
         fontWeight: '800',
         color: '#0F172A',
-        marginRight: 6
+        marginRight: 4
     },
     menuDivider: {
         height: 1,
         backgroundColor: '#F8FAFC',
-        marginLeft: 56
+        marginLeft: 48
     },
 
     /* Footer */
     footerWrap: {
         marginTop: 4,
-        marginBottom: 20,
+        marginBottom: 16,
         alignItems: 'center',
-        gap: 14
+        gap: 10
     },
     logoutBtn: {
         flexDirection: 'row',
@@ -1191,12 +1277,12 @@ const s = StyleSheet.create({
         backgroundColor: '#FEF2F2',
         borderWidth: 1,
         borderColor: '#FECACA',
-        borderRadius: 12,
-        paddingVertical: 12,
+        borderRadius: 10,
+        paddingVertical: 9.5,
         width: '100%'
     },
     logoutText: {
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: '800',
         color: '#DC2626'
     },
@@ -1205,17 +1291,17 @@ const s = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#0A192F',
-        borderRadius: 12,
-        paddingVertical: 12,
+        borderRadius: 10,
+        paddingVertical: 9.5,
         width: '100%'
     },
     loginText: {
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: '800',
         color: '#FFFFFF'
     },
     versionText: {
-        fontSize: 10.5,
+        fontSize: 9.5,
         color: '#94A3B8',
         fontWeight: '600'
     },
@@ -1228,17 +1314,17 @@ const s = StyleSheet.create({
     },
     modalCard: {
         backgroundColor: '#F8FAFC',
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
         maxHeight: '85%',
-        paddingBottom: 24
+        paddingBottom: 20
     },
     modalHeader: {
         backgroundColor: '#FFFFFF',
-        paddingHorizontal: 18,
-        paddingVertical: 14,
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -1246,27 +1332,27 @@ const s = StyleSheet.create({
         borderBottomColor: '#F1F5F9'
     },
     modalHeaderIconWrap: {
-        width: 36,
-        height: 36,
-        borderRadius: 10,
+        width: 30,
+        height: 30,
+        borderRadius: 8,
         backgroundColor: '#E0F2FE',
         alignItems: 'center',
         justifyContent: 'center'
     },
     modalTitle: {
-        fontSize: 15,
+        fontSize: 14,
         fontWeight: '800',
         color: '#0F172A'
     },
     modalSubtitle: {
-        fontSize: 11,
+        fontSize: 10,
         color: '#64748B',
-        marginTop: 1
+        marginTop: 0.5
     },
     modalCloseBtn: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+        width: 28,
+        height: 28,
+        borderRadius: 14,
         backgroundColor: '#F1F5F9',
         alignItems: 'center',
         justifyContent: 'center'
@@ -1275,107 +1361,107 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#FFFFFF',
-        marginHorizontal: 16,
-        marginTop: 12,
+        marginHorizontal: 14,
+        marginTop: 10,
         marginBottom: 6,
-        borderRadius: 12,
-        paddingHorizontal: 12,
-        height: 40,
+        borderRadius: 10,
+        paddingHorizontal: 10,
+        height: 36,
         borderWidth: 1,
         borderColor: '#E2E8F0'
     },
     storeSearchInput: {
         flex: 1,
-        fontSize: 12.5,
+        fontSize: 11.5,
         color: '#0F172A',
         padding: 0
     },
     modalScroll: {
-        paddingHorizontal: 16,
-        paddingTop: 8
+        paddingHorizontal: 14,
+        paddingTop: 6
     },
     modalLoaderWrap: {
-        paddingVertical: 40,
+        paddingVertical: 30,
         alignItems: 'center',
-        gap: 8
+        gap: 6
     },
     modalLoaderText: {
-        fontSize: 12,
+        fontSize: 11,
         color: '#64748B'
     },
     modalEmptyWrap: {
         backgroundColor: '#FFFFFF',
-        borderRadius: 16,
-        padding: 24,
+        borderRadius: 14,
+        padding: 20,
         borderWidth: 1,
         borderColor: '#E2E8F0',
         alignItems: 'center',
-        marginTop: 12,
-        gap: 8
+        marginTop: 10,
+        gap: 6
     },
     modalEmptyIconCircle: {
-        width: 56,
-        height: 56,
-        borderRadius: 28,
+        width: 48,
+        height: 48,
+        borderRadius: 24,
         backgroundColor: '#F1F5F9',
         alignItems: 'center',
         justifyContent: 'center'
     },
     modalEmptyTitle: {
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: '800',
         color: '#0F172A',
-        marginTop: 4
+        marginTop: 2
     },
     modalEmptySub: {
-        fontSize: 11.5,
+        fontSize: 10.5,
         color: '#64748B',
         textAlign: 'center',
-        lineHeight: 16
+        lineHeight: 15
     },
     modalDiscoverBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#0284C7',
-        paddingHorizontal: 16,
-        paddingVertical: 9,
-        borderRadius: 10,
-        marginTop: 8
+        paddingHorizontal: 14,
+        paddingVertical: 7.5,
+        borderRadius: 8,
+        marginTop: 6
     },
     modalDiscoverBtnText: {
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: '800',
         color: '#FFFFFF'
     },
     storesListWrap: {
-        gap: 10,
-        paddingBottom: 20
+        gap: 8,
+        paddingBottom: 16
     },
     followedCard: {
         backgroundColor: '#FFFFFF',
-        borderRadius: 14,
-        padding: 14,
+        borderRadius: 12,
+        padding: 11,
         borderWidth: 1,
         borderColor: '#E2E8F0'
     },
     followedTopRow: {
         flexDirection: 'row',
-        gap: 12,
-        marginBottom: 10
+        gap: 10,
+        marginBottom: 8
     },
     storeAvatarWrap: {
         position: 'relative'
     },
     storeLogo: {
-        width: 46,
-        height: 46,
-        borderRadius: 12,
+        width: 40,
+        height: 40,
+        borderRadius: 10,
         backgroundColor: '#F1F5F9'
     },
     storeLogoFallback: {
-        width: 46,
-        height: 46,
-        borderRadius: 12,
+        width: 40,
+        height: 40,
+        borderRadius: 10,
         backgroundColor: '#E0F2FE',
         alignItems: 'center',
         justifyContent: 'center'
@@ -1384,9 +1470,9 @@ const s = StyleSheet.create({
         position: 'absolute',
         bottom: -2,
         right: -2,
-        width: 15,
-        height: 15,
-        borderRadius: 7.5,
+        width: 14,
+        height: 14,
+        borderRadius: 7,
         backgroundColor: '#0284C7',
         alignItems: 'center',
         justifyContent: 'center',
@@ -1398,56 +1484,56 @@ const s = StyleSheet.create({
         justifyContent: 'center'
     },
     storeCardName: {
-        fontSize: 13.5,
+        fontSize: 12.5,
         fontWeight: '800',
         color: '#0F172A'
     },
     officialBadge: {
         backgroundColor: '#F59E0B',
-        paddingHorizontal: 5,
+        paddingHorizontal: 4,
         paddingVertical: 1,
-        borderRadius: 4
+        borderRadius: 3
     },
     officialBadgeText: {
-        fontSize: 8,
+        fontSize: 7.5,
         fontWeight: '900',
         color: '#FFFFFF',
-        letterSpacing: 0.5
+        letterSpacing: 0.4
     },
     storeCategory: {
-        fontSize: 11,
+        fontSize: 10,
         color: '#64748B',
         marginTop: 1,
-        marginBottom: 3
+        marginBottom: 2
     },
     storeStatsRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 5
+        gap: 4
     },
     storeStatItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 3
+        gap: 2
     },
     storeStatTextBold: {
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: '800',
         color: '#0F172A'
     },
     storeStatTextDim: {
-        fontSize: 10.5,
+        fontSize: 9.5,
         color: '#64748B'
     },
     storeStatDot: {
-        fontSize: 10,
+        fontSize: 9,
         color: '#CBD5E1'
     },
     followedActionsRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
-        paddingTop: 10,
+        gap: 6,
+        paddingTop: 8,
         borderTopWidth: 1,
         borderTopColor: '#F8FAFC'
     },
@@ -1457,12 +1543,12 @@ const s = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#E0F2FE',
-        paddingVertical: 7,
-        borderRadius: 8,
-        gap: 4
+        paddingVertical: 6,
+        borderRadius: 7,
+        gap: 3
     },
     actionVisitText: {
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: '800',
         color: '#0284C7'
     },
@@ -1474,12 +1560,12 @@ const s = StyleSheet.create({
         backgroundColor: '#ECFDF5',
         borderWidth: 1,
         borderColor: '#A7F3D0',
-        paddingVertical: 7,
-        borderRadius: 8,
-        gap: 4
+        paddingVertical: 6,
+        borderRadius: 7,
+        gap: 3
     },
     actionWhatsAppText: {
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: '800',
         color: '#059669'
     },
@@ -1491,12 +1577,12 @@ const s = StyleSheet.create({
         backgroundColor: '#FEF2F2',
         borderWidth: 1,
         borderColor: '#FECACA',
-        paddingVertical: 7,
-        borderRadius: 8,
-        gap: 4
+        paddingVertical: 6,
+        borderRadius: 7,
+        gap: 3
     },
     actionUnfollowText: {
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: '800',
         color: '#DC2626'
     }
