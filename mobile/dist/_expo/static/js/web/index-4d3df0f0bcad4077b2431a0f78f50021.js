@@ -195402,10 +195402,10 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
           pagingEnabled: true,
           showsHorizontalScrollIndicator: false,
           style: {
-            marginHorizontal: 14,
-            marginTop: 14,
-            height: 150,
-            borderRadius: 18,
+            marginHorizontal: 12,
+            marginTop: 10,
+            height: 115,
+            borderRadius: 14,
             overflow: 'hidden'
           },
           onScroll: Animated.default.event([{
@@ -195424,8 +195424,8 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
           children: banners.map(banner => /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
             activeOpacity: 0.9,
             style: {
-              width: _stylesTheme.WIDTH - 28,
-              height: 150
+              width: _stylesTheme.WIDTH - 24,
+              height: 115
             },
             children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(ImageBackground.default, {
               source: {
@@ -195436,7 +195436,7 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
                 height: '100%'
               },
               imageStyle: {
-                borderRadius: 18
+                borderRadius: 14
               },
               resizeMode: "cover"
             })
@@ -195516,11 +195516,11 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
               }
             },
             style: {
-              width: _stylesTheme.WIDTH - 28,
-              marginHorizontal: 14,
-              borderRadius: 20,
+              width: _stylesTheme.WIDTH - 24,
+              marginHorizontal: 12,
+              borderRadius: 14,
               overflow: 'hidden',
-              height: 128,
+              height: 95,
               backgroundColor: '#0F172A'
             },
             children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(Image.default, {
@@ -195680,23 +195680,25 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
           children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
             onPress: onBack,
             style: styles.iconCircle,
+            activeOpacity: 0.8,
             children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
               name: "arrow-back",
-              size: 20,
+              size: 18,
               color: "#0F172A"
             })
           }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
             style: {
-              flex: 1
+              flex: 1,
+              minWidth: 0
             },
             children: /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(View.default, {
               style: styles.searchBar,
               children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
                 name: "search-outline",
-                size: 15,
+                size: 14,
                 color: "#94A3B8"
               }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TextInput.default, {
-                placeholder: "Search products\u2026",
+                placeholder: "Search catalog...",
                 placeholderTextColor: "#94A3B8",
                 style: styles.searchInput,
                 value: searchQuery,
@@ -195705,99 +195707,80 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
                 style: {
                   flexDirection: 'row',
                   alignItems: 'center',
-                  gap: 8
+                  gap: 6
                 },
                 children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
                   onPress: handleVoiceSearch,
+                  hitSlop: { top: 6, bottom: 6, left: 4, right: 4 },
                   children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
                     name: "mic-outline",
-                    size: 16,
-                    color: "#6366F1"
+                    size: 15,
+                    color: "#0284C7"
                   })
                 }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
                   onPress: handleImageSearch,
+                  hitSlop: { top: 6, bottom: 6, left: 4, right: 4 },
                   children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
                     name: "camera-outline",
-                    size: 16,
-                    color: "#6366F1"
+                    size: 15,
+                    color: "#0284C7"
                   })
                 })]
               }) : /*#__PURE__*/(0, _reactJsxRuntime.jsx)(TouchableOpacity.default, {
                 onPress: () => setSearchQuery(''),
+                hitSlop: { top: 6, bottom: 6, left: 6, right: 6 },
                 children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
                   name: "close-circle",
-                  size: 15,
+                  size: 14,
                   color: "#94A3B8"
                 })
               })]
             })
           }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
             onPress: onCompareClick,
-            style: [styles.iconCircle, {
-              position: 'relative'
-            }],
+            style: styles.iconCircle,
+            activeOpacity: 0.8,
             children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
               name: "git-compare-outline",
-              size: 19,
+              size: 17,
               color: "#0F172A"
             }), comparisonCount > 0 && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
               style: styles.compareBadge,
               children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
                 style: {
                   color: 'white',
-                  fontSize: 9,
-                  fontWeight: '800'
+                  fontSize: 8,
+                  fontWeight: '900'
                 },
                 children: comparisonCount
               })
             })]
           }), /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
             onPress: onGoToCart,
-            style: [styles.iconCircle, {
-              position: 'relative'
-            }],
+            style: styles.iconCircle,
+            activeOpacity: 0.8,
             children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
               name: "cart-outline",
-              size: 20,
+              size: 18,
               color: "#0F172A"
             }), cartCount > 0 && /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-              style: {
-                position: 'absolute',
-                top: -2,
-                right: -2,
-                backgroundColor: '#10B981',
-                borderRadius: 8,
-                minWidth: 16,
-                height: 16,
-                alignItems: 'center',
-                justifyContent: 'center',
-                paddingHorizontal: 2
-              },
+              style: styles.cartBadge,
               children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
                 style: {
                   color: 'white',
-                  fontSize: 9,
-                  fontWeight: '800'
+                  fontSize: 8,
+                  fontWeight: '900'
                 },
                 children: cartCount > 99 ? '99+' : cartCount
               })
             })]
           })]
-        }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-          style: styles.accentStrip,
-          children: /*#__PURE__*/(0, _reactJsxRuntime.jsx)(View.default, {
-            style: styles.accentInner
-          })
-        }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(FlatList.default, {
+        }), null, /*#__PURE__*/(0, _reactJsxRuntime.jsx)(FlatList.default, {
           horizontal: true,
           data: categories,
           keyExtractor: (i, idx) => i.slug || i.label || idx.toString(),
           showsHorizontalScrollIndicator: false,
-          contentContainerStyle: {
-            paddingHorizontal: 14,
-            paddingVertical: 9,
-            gap: 7
-          },
+          contentContainerStyle: styles.catScroll,
           renderItem: ({
             item: cat
           }) => {
@@ -195805,10 +195788,11 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
             return /*#__PURE__*/(0, _reactJsxRuntime.jsxs)(TouchableOpacity.default, {
               style: [styles.chip, active && styles.chipActive],
               onPress: () => setActiveCategory(cat.label),
+              activeOpacity: 0.8,
               children: [/*#__PURE__*/(0, _reactJsxRuntime.jsx)(_expoVectorIcons.Ionicons, {
                 name: cat.icon || 'pricetag-outline',
-                size: 12,
-                color: active ? 'white' : '#64748B'
+                size: 11,
+                color: active ? '#FFFFFF' : '#0284C7'
               }), /*#__PURE__*/(0, _reactJsxRuntime.jsx)(Text.default, {
                 style: [styles.chipTxt, active && styles.chipTxtActive],
                 children: cat.label
@@ -195953,36 +195937,54 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
       backgroundColor: '#F8FAFC'
     },
     safe: {
-      backgroundColor: 'white',
-      paddingTop: 0
+      backgroundColor: '#FFFFFF',
+      paddingTop: 0,
+      borderBottomWidth: 1,
+      borderBottomColor: '#F1F5F9',
+      zIndex: 20
     },
     // ── Header ────────────────────────────────────────────────────────────────
     header: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-      backgroundColor: 'white',
-      gap: 8
+      paddingHorizontal: 12,
+      paddingTop: 8,
+      paddingBottom: 6,
+      backgroundColor: '#FFFFFF',
+      gap: 7
     },
     iconCircle: {
-      width: 38,
-      height: 38,
-      borderRadius: 19,
-      backgroundColor: '#F1F5F9',
+      width: 34,
+      height: 34,
+      borderRadius: 10,
+      backgroundColor: '#F8FAFC',
       alignItems: 'center',
       justifyContent: 'center',
       borderWidth: 1,
-      borderColor: '#E2E8F0'
+      borderColor: '#E2E8F0',
+      position: 'relative',
+      flexShrink: 0
     },
     compareBadge: {
       position: 'absolute',
-      top: -2,
-      right: -2,
+      top: -3,
+      right: -3,
       backgroundColor: '#0284C7',
-      borderRadius: 8,
-      minWidth: 16,
-      height: 16,
+      borderRadius: 7,
+      minWidth: 15,
+      height: 15,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 2
+    },
+    cartBadge: {
+      position: 'absolute',
+      top: -3,
+      right: -3,
+      backgroundColor: '#EF4444',
+      borderRadius: 7,
+      minWidth: 15,
+      height: 15,
       alignItems: 'center',
       justifyContent: 'center',
       paddingHorizontal: 2
@@ -195990,63 +195992,52 @@ __d(function (global, require, _$$_IMPORT_DEFAULT, _$$_IMPORT_ALL, module, expor
     searchBar: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: '#F1F5F9',
-      borderRadius: 22,
-      paddingHorizontal: 12,
-      height: 40,
+      backgroundColor: '#F8FAFC',
+      borderRadius: 10,
+      paddingHorizontal: 9,
+      height: 34,
       borderWidth: 1,
       borderColor: '#E2E8F0',
       gap: 6
     },
     searchInput: {
       flex: 1,
-      fontSize: 13,
+      fontSize: 12,
+      fontWeight: '500',
       color: '#0F172A',
-      paddingVertical: 0
+      paddingVertical: 0,
+      minWidth: 0
     },
-    // ── Gradient accent strip ──────────────────────────────────────────────────
-    accentStrip: {
-      height: 3,
-      backgroundColor: '#E2E8F0',
-      overflow: 'hidden'
+    catScroll: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      gap: 6,
+      alignItems: 'center'
     },
-    accentInner: {
-      height: 3,
-      width: '35%',
-      backgroundColor: '#0284C7',
-      borderRadius: 2
-    },
-    // ── Chips ─────────────────────────────────────────────────────────────────
     chip: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 5,
-      paddingHorizontal: 12,
-      paddingVertical: 7,
-      borderRadius: 22,
-      backgroundColor: '#F1F5F9',
+      gap: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 8,
+      backgroundColor: '#F8FAFC',
       borderWidth: 1,
-      borderColor: '#E2E8F0'
+      borderColor: '#E2E8F0',
+      height: 28
     },
     chipActive: {
       backgroundColor: '#0284C7',
-      borderColor: '#0284C7',
-      elevation: 4,
-      shadowColor: '#0284C7',
-      shadowOffset: {
-        width: 0,
-        height: 3
-      },
-      shadowOpacity: 0.25,
-      shadowRadius: 6
+      borderColor: '#0284C7'
     },
     chipTxt: {
-      fontSize: 12,
-      fontWeight: '700',
+      fontSize: 11,
+      fontWeight: '600',
       color: '#64748B'
     },
     chipTxtActive: {
-      color: 'white'
+      color: '#FFFFFF',
+      fontWeight: '700'
     },
     // ── Section blocks ────────────────────────────────────────────────────────
     sectionBlock: {

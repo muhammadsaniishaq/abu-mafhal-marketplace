@@ -402,11 +402,11 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
     const renderPromoDots = () => {
         if (promoBanners.length <= 1) return null;
         return (
-            <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 10 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 8 }}>
                 {promoBanners.map((_, i) => {
-                    const w  = promoScrollX.interpolate({ inputRange: [(i-1)*(WIDTH-32), i*(WIDTH-32), (i+1)*(WIDTH-32)], outputRange: [5, 18, 5], extrapolate: 'clamp' });
-                    const op = promoScrollX.interpolate({ inputRange: [(i-1)*(WIDTH-32), i*(WIDTH-32), (i+1)*(WIDTH-32)], outputRange: [0.3, 1, 0.3], extrapolate: 'clamp' });
-                    return <Animated.View key={i} style={{ height: 5, width: w, borderRadius: 3, backgroundColor: '#6366F1', marginHorizontal: 2, opacity: op }} />;
+                    const w  = promoScrollX.interpolate({ inputRange: [(i-1)*(WIDTH-24), i*(WIDTH-24), (i+1)*(WIDTH-24)], outputRange: [4, 14, 4], extrapolate: 'clamp' });
+                    const op = promoScrollX.interpolate({ inputRange: [(i-1)*(WIDTH-24), i*(WIDTH-24), (i+1)*(WIDTH-24)], outputRange: [0.3, 1, 0.3], extrapolate: 'clamp' });
+                    return <Animated.View key={i} style={{ height: 3.5, width: w, borderRadius: 2, backgroundColor: '#0284C7', marginHorizontal: 2, opacity: op }} />;
                 })}
             </View>
         );
@@ -576,34 +576,34 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
                 <>
                     <Animated.ScrollView
                         ref={slideRef} horizontal pagingEnabled showsHorizontalScrollIndicator={false}
-                        style={{ marginHorizontal: 14, marginTop: 14, height: 150, borderRadius: 18, overflow: 'hidden' }}
+                        style={{ marginHorizontal: 12, marginTop: 10, height: 115, borderRadius: 14, overflow: 'hidden' }}
                         onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: false })}
-                        onMomentumScrollEnd={e => { const i = Math.round(e.nativeEvent.contentOffset.x / (WIDTH - 32)); }}
+                        onMomentumScrollEnd={e => { const i = Math.round(e.nativeEvent.contentOffset.x / (WIDTH - 24)); }}
                         scrollEventThrottle={16}
                     >
                         {banners.map(banner => (
-                            <TouchableOpacity key={banner.id} activeOpacity={0.9} style={{ width: WIDTH - 28, height: 150 }}>
+                            <TouchableOpacity key={banner.id} activeOpacity={0.9} style={{ width: WIDTH - 24, height: 115 }}>
                                 <ImageBackground
                                     source={{ uri: banner.image_url || 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?q=80&w=800' }}
                                     style={{ width: '100%', height: '100%' }}
-                                    imageStyle={{ borderRadius: 18 }}
+                                    imageStyle={{ borderRadius: 14 }}
                                     resizeMode="cover"
                                 />
                             </TouchableOpacity>
                         ))}
                     </Animated.ScrollView>
-                    <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 10 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 8 }}>
                         {banners.map((_, i) => {
-                            const w  = scrollX.interpolate({ inputRange: [(i-1)*(WIDTH-32), i*(WIDTH-32), (i+1)*(WIDTH-32)], outputRange: [5, 18, 5], extrapolate: 'clamp' });
-                            const op = scrollX.interpolate({ inputRange: [(i-1)*(WIDTH-32), i*(WIDTH-32), (i+1)*(WIDTH-32)], outputRange: [0.3, 1, 0.3], extrapolate: 'clamp' });
-                            return <Animated.View key={i} style={{ height: 5, width: w, borderRadius: 3, backgroundColor: '#6366F1', marginHorizontal: 2, opacity: op }} />;
+                            const w  = scrollX.interpolate({ inputRange: [(i-1)*(WIDTH-24), i*(WIDTH-24), (i+1)*(WIDTH-24)], outputRange: [4, 14, 4], extrapolate: 'clamp' });
+                            const op = scrollX.interpolate({ inputRange: [(i-1)*(WIDTH-24), i*(WIDTH-24), (i+1)*(WIDTH-24)], outputRange: [0.3, 1, 0.3], extrapolate: 'clamp' });
+                            return <Animated.View key={i} style={{ height: 3.5, width: w, borderRadius: 2, backgroundColor: '#0284C7', marginHorizontal: 2, opacity: op }} />;
                         })}
                     </View>
                 </>
             )}
 
             {promoBanners.length > 0 && (
-                <View style={{ marginTop: 16 }}>
+                <View style={{ marginTop: 10 }}>
                     <FlatList
                         ref={promoFlatListRef} data={promoBanners} horizontal pagingEnabled
                         showsHorizontalScrollIndicator={false} snapToInterval={WIDTH} decelerationRate="fast"
@@ -620,28 +620,28 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
                                             .catch(() => {});
                                     }
                                 }}
-                                style={{ width: WIDTH - 28, marginHorizontal: 14, borderRadius: 20, overflow: 'hidden', height: 128, backgroundColor: '#0F172A' }}
+                                style={{ width: WIDTH - 24, marginHorizontal: 12, borderRadius: 14, overflow: 'hidden', height: 95, backgroundColor: '#0F172A' }}
                             >
                                 <Image source={{ uri: promo.image_url }} style={{ width: '100%', height: '100%', position: 'absolute', opacity: 0.45 }} resizeMode="cover" />
                                 <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,23,42,0.45)' }} />
-                                <View style={{ padding: 18, justifyContent: 'center', height: '100%' }}>
+                                <View style={{ padding: 12, justifyContent: 'center', height: '100%' }}>
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                         <View style={{ flex: 1 }}>
-                                            <View style={{ backgroundColor: '#EF4444', alignSelf: 'flex-start', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6, marginBottom: 6 }}>
-                                                <Text style={{ color: 'white', fontWeight: '900', fontSize: 9, letterSpacing: 0.8 }}>{promo.subtitle?.toUpperCase() || 'LIMITED OFFER'}</Text>
+                                            <View style={{ backgroundColor: '#EF4444', alignSelf: 'flex-start', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5, marginBottom: 4 }}>
+                                                <Text style={{ color: 'white', fontWeight: '900', fontSize: 8.5, letterSpacing: 0.6 }}>{promo.subtitle?.toUpperCase() || 'LIMITED OFFER'}</Text>
                                             </View>
-                                            <Text style={{ fontSize: 18, fontWeight: '900', color: 'white', lineHeight: 22, paddingRight: 8 }} numberOfLines={2}>{promo.title || 'Special Promotion'}</Text>
+                                            <Text style={{ fontSize: 14, fontWeight: '900', color: 'white', lineHeight: 18, paddingRight: 6 }} numberOfLines={1}>{promo.title || 'Special Promotion'}</Text>
                                         </View>
                                         {promo.linkData?.timerEnd && (
-                                            <View style={{ backgroundColor: 'rgba(255,255,255,0.12)', padding: 8, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', alignItems: 'center' }}>
-                                                <Text style={{ color: 'white', fontSize: 8, fontWeight: '800', marginBottom: 3, letterSpacing: 0.8 }}>ENDS IN</Text>
+                                            <View style={{ backgroundColor: 'rgba(255,255,255,0.12)', padding: 6, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', alignItems: 'center' }}>
+                                                <Text style={{ color: 'white', fontSize: 7.5, fontWeight: '800', marginBottom: 2, letterSpacing: 0.6 }}>ENDS IN</Text>
                                                 <CountdownTimer targetDate={promo.linkData.timerEnd} lightMode />
                                             </View>
                                         )}
                                     </View>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 }}>
-                                        <Text style={{ color: '#F8FAFC', fontWeight: '700', fontSize: 12 }}>{promo.linkData?.text || 'Explore Offer'}</Text>
-                                        <Ionicons name="arrow-forward" size={12} color="#F8FAFC" />
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                                        <Text style={{ color: '#F8FAFC', fontWeight: '700', fontSize: 11 }}>{promo.linkData?.text || 'Explore Offer'}</Text>
+                                        <Ionicons name="arrow-forward" size={10} color="#F8FAFC" />
                                     </View>
                                 </View>
                             </TouchableOpacity>
@@ -676,86 +676,77 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
         <View style={styles.container}>
             <SafeAreaView style={styles.safe}>
 
-                {/* ── DECORATED HEADER ── */}
+                {/* ── MODERN COMPACT FIRST-MOBILE HEADER ── */}
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={onBack} style={styles.iconCircle}>
-                        <Ionicons name="arrow-back" size={20} color="#0F172A" />
+                    <TouchableOpacity onPress={onBack} style={styles.iconCircle} activeOpacity={0.8}>
+                        <Ionicons name="arrow-back" size={18} color="#0F172A" />
                     </TouchableOpacity>
 
-                    {/* Center: brand + search */}
-                    <View style={{ flex: 1 }}>
+                    {/* Center: compact search bar */}
+                    <View style={{ flex: 1, minWidth: 0 }}>
                         <View style={styles.searchBar}>
-                            <Ionicons name="search-outline" size={15} color="#94A3B8" />
+                            <Ionicons name="search-outline" size={14} color="#94A3B8" />
                             <TextInput
-                                placeholder="Search products…"
+                                placeholder="Search catalog..."
                                 placeholderTextColor="#94A3B8"
                                 style={styles.searchInput}
                                 value={searchQuery}
                                 onChangeText={setSearchQuery}
                             />
                             {searchQuery.length === 0 ? (
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                    <TouchableOpacity onPress={handleVoiceSearch}>
-                                        <Ionicons name="mic-outline" size={16} color="#6366F1" />
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <TouchableOpacity onPress={handleVoiceSearch} hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}>
+                                        <Ionicons name="mic-outline" size={15} color="#0284C7" />
                                     </TouchableOpacity>
-                                    <TouchableOpacity onPress={handleImageSearch}>
-                                        <Ionicons name="camera-outline" size={16} color="#6366F1" />
+                                    <TouchableOpacity onPress={handleImageSearch} hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}>
+                                        <Ionicons name="camera-outline" size={15} color="#0284C7" />
                                     </TouchableOpacity>
                                 </View>
                             ) : (
-                                <TouchableOpacity onPress={() => setSearchQuery('')}>
-                                    <Ionicons name="close-circle" size={15} color="#94A3B8" />
+                                <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                                    <Ionicons name="close-circle" size={14} color="#94A3B8" />
                                 </TouchableOpacity>
                             )}
                         </View>
                     </View>
 
                     {/* Compare */}
-                    <TouchableOpacity onPress={onCompareClick} style={[styles.iconCircle, { position: 'relative' }]}>
-                        <Ionicons name="git-compare-outline" size={19} color="#0F172A" />
+                    <TouchableOpacity onPress={onCompareClick} style={styles.iconCircle} activeOpacity={0.8}>
+                        <Ionicons name="git-compare-outline" size={17} color="#0F172A" />
                         {comparisonCount > 0 && (
                             <View style={styles.compareBadge}>
-                                <Text style={{ color: 'white', fontSize: 9, fontWeight: '800' }}>{comparisonCount}</Text>
+                                <Text style={{ color: 'white', fontSize: 8, fontWeight: '900' }}>{comparisonCount}</Text>
                             </View>
                         )}
                     </TouchableOpacity>
 
                     {/* Cart */}
-                    <TouchableOpacity onPress={onGoToCart} style={[styles.iconCircle, { position: 'relative' }]}>
-                        <Ionicons name="cart-outline" size={20} color="#0F172A" />
+                    <TouchableOpacity onPress={onGoToCart} style={styles.iconCircle} activeOpacity={0.8}>
+                        <Ionicons name="cart-outline" size={18} color="#0F172A" />
                         {cartCount > 0 && (
-                            <View style={{
-                                position: 'absolute', top: -2, right: -2,
-                                backgroundColor: '#10B981', borderRadius: 8,
-                                minWidth: 16, height: 16,
-                                alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2,
-                            }}>
-                                <Text style={{ color: 'white', fontSize: 9, fontWeight: '800' }}>{cartCount > 99 ? '99+' : cartCount}</Text>
+                            <View style={styles.cartBadge}>
+                                <Text style={{ color: 'white', fontSize: 8, fontWeight: '900' }}>{cartCount > 99 ? '99+' : cartCount}</Text>
                             </View>
                         )}
                     </TouchableOpacity>
                 </View>
 
-                {/* ── Gradient accent strip ── */}
-                <View style={styles.accentStrip}>
-                    <View style={styles.accentInner} />
-                </View>
-
-                {/* ── Category Chips ── */}
+                {/* ── Category Micro-Pills (Compact First-Mobile) ── */}
                 <FlatList
                     horizontal
                     data={categories}
                     keyExtractor={(i, idx) => (i.slug || i.label || idx.toString())}
                     showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ paddingHorizontal: 14, paddingVertical: 9, gap: 7 }}
+                    contentContainerStyle={styles.catScroll}
                     renderItem={({ item: cat }) => {
                         const active = activeCategory === cat.label || activeCategory === cat.slug;
                         return (
                             <TouchableOpacity
                                 style={[styles.chip, active && styles.chipActive]}
                                 onPress={() => setActiveCategory(cat.label)}
+                                activeOpacity={0.8}
                             >
-                                <Ionicons name={cat.icon || 'pricetag-outline'} size={12} color={active ? 'white' : '#64748B'} />
+                                <Ionicons name={cat.icon || 'pricetag-outline'} size={11} color={active ? '#FFFFFF' : '#0284C7'} />
                                 <Text style={[styles.chipTxt, active && styles.chipTxtActive]}>{cat.label}</Text>
                             </TouchableOpacity>
                         );
@@ -859,59 +850,111 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F8FAFC' },
     safe: {
-        backgroundColor: 'white',
-        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 40) : 0,
+        backgroundColor: '#FFFFFF',
+        paddingTop: Platform.OS === 'android' && StatusBar.currentHeight ? StatusBar.currentHeight : 0,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+        zIndex: 20,
     },
 
     // ── Header ────────────────────────────────────────────────────────────────
     header: {
-        flexDirection: 'row', alignItems: 'center',
-        paddingHorizontal: 14, paddingVertical: 10,
-        backgroundColor: 'white',
-        gap: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingTop: 8,
+        paddingBottom: 6,
+        backgroundColor: '#FFFFFF',
+        gap: 7,
     },
     iconCircle: {
-        width: 38, height: 38, borderRadius: 19,
-        backgroundColor: '#F1F5F9',
-        alignItems: 'center', justifyContent: 'center',
-        borderWidth: 1, borderColor: '#E2E8F0',
+        width: 34,
+        height: 34,
+        borderRadius: 10,
+        backgroundColor: '#F8FAFC',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        position: 'relative',
+        flexShrink: 0,
     },
     compareBadge: {
-        position: 'absolute', top: -2, right: -2,
-        backgroundColor: '#0284C7', borderRadius: 8,
-        minWidth: 16, height: 16,
-        alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2,
+        position: 'absolute',
+        top: -3,
+        right: -3,
+        backgroundColor: '#0284C7',
+        borderRadius: 7,
+        minWidth: 15,
+        height: 15,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 2,
+    },
+    cartBadge: {
+        position: 'absolute',
+        top: -3,
+        right: -3,
+        backgroundColor: '#EF4444',
+        borderRadius: 7,
+        minWidth: 15,
+        height: 15,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 2,
     },
     searchBar: {
-        flexDirection: 'row', alignItems: 'center',
-        backgroundColor: '#F1F5F9', borderRadius: 22,
-        paddingHorizontal: 12, height: 40,
-        borderWidth: 1, borderColor: '#E2E8F0', gap: 6,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8FAFC',
+        borderRadius: 10,
+        paddingHorizontal: 9,
+        height: 34,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        gap: 6,
     },
-    searchInput: { flex: 1, fontSize: 13, color: '#0F172A', paddingVertical: 0 },
-
-    // ── Gradient accent strip ──────────────────────────────────────────────────
-    accentStrip: { height: 3, backgroundColor: '#E2E8F0', overflow: 'hidden' },
-    accentInner: {
-        height: 3, width: '35%',
-        backgroundColor: '#0284C7',
-        borderRadius: 2,
+    searchInput: {
+        flex: 1,
+        fontSize: 12,
+        fontWeight: '500',
+        color: '#0F172A',
+        paddingVertical: 0,
+        minWidth: 0,
     },
 
-    // ── Chips ─────────────────────────────────────────────────────────────────
+    // ── Category Micro-Pills (Compact First-Mobile) ───────────────────────────
+    catScroll: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        gap: 6,
+        alignItems: 'center',
+    },
     chip: {
-        flexDirection: 'row', alignItems: 'center', gap: 5,
-        paddingHorizontal: 12, paddingVertical: 7,
-        borderRadius: 22, backgroundColor: '#F1F5F9',
-        borderWidth: 1, borderColor: '#E2E8F0',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 8,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        height: 28,
     },
     chipActive: {
-        backgroundColor: '#0284C7', borderColor: '#0284C7',
-        elevation: 4, shadowColor: '#0284C7',
-        shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 6,
+        backgroundColor: '#0284C7',
+        borderColor: '#0284C7',
     },
-    chipTxt:       { fontSize: 12, fontWeight: '700', color: '#64748B' },
-    chipTxtActive: { color: 'white' },
+    chipTxt: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: '#64748B',
+    },
+    chipTxtActive: {
+        color: '#FFFFFF',
+        fontWeight: '700',
+    },
 
     // ── Section blocks ────────────────────────────────────────────────────────
     sectionBlock: { marginTop: 18, marginBottom: 4 },
