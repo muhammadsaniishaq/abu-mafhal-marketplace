@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
     View, Text, TextInput, ScrollView,
     Image, Dimensions, StatusBar,
@@ -10,7 +10,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { supabase } from "../lib/supabase";
 
 const { width } = Dimensions.get("window");
-const RAIL = 82;
+const RAIL = 88;
 
 const C = {
     navy:"#0A192F", navyMid:"#0E2340", navyLight:"#1B3358",
@@ -299,7 +299,7 @@ export const CategoriesPage = ({onSelectCategory,onGoToCart,cartCount=0,onProduc
     const subs=selCat?getSubcats(selCat):[];
     const banner=selCat?getBanner(selCat):null;
     const emoji=selCat?getEmoji(selCat):"🛍️";
-    const CW=(width-RAIL-24-8)/2;
+    const CW=(width-RAIL-26-10)/2;
 
     const sliderL=modeA.interpolate({inputRange:[0,1],outputRange:[3,3+(width*0.26)/2]});
     const sBC=sfA.interpolate({inputRange:[0,1],outputRange:["#E8D99A","#D9A73A"]});
@@ -310,15 +310,14 @@ export const CategoriesPage = ({onSelectCategory,onGoToCart,cartCount=0,onProduc
 
             {/* HEADER */}
             <LinearGradient colors={["#0A192F","#0E2340","#071422"]} style={s.hdr} start={{x:0,y:0}} end={{x:1,y:1}}>
-                <View style={s.goldLine}/>
+                {/* Row 1: Brand + Actions */}
                 <View style={s.hRow}>
                     <View style={s.brand}>
-                        <LinearGradient colors={["#D9A73A","#A07820"]} style={s.logo}><Text style={{fontSize:16}}>🛍️</Text></LinearGradient>
-                        <View>
-                            <View style={s.bTitleRow}>
-                                <Text style={s.bTitle}>ABU <Text style={s.bAccent}>MAFHAL</Text></Text>
-                                <View style={s.dPill}><Text style={s.dPillTxt}>DEPTS</Text></View>
-                            </View>
+                        <LinearGradient colors={["#D9A73A","#A07820"]} style={s.logo}>
+                            <Text style={{fontSize:15}}>🛍️</Text>
+                        </LinearGradient>
+                        <View style={{flexShrink:1}}>
+                            <Text style={s.bTitle} numberOfLines={1}>ABU <Text style={s.bAccent}>MAFHAL</Text></Text>
                             <Text style={s.bSub}>Category Explorer</Text>
                         </View>
                     </View>
@@ -326,24 +325,23 @@ export const CategoriesPage = ({onSelectCategory,onGoToCart,cartCount=0,onProduc
                         <View style={s.modeWrap}>
                             <Animated.View style={[s.mSlider,{left:sliderL}]}/>
                             <Pressable onPress={()=>switchVm("explorer")} style={s.mBtn}>
-                                <Ionicons name="layers" size={12} color={vm==="explorer"?"#0A192F":"#9CA3AF"}/>
-                                <Text style={[s.mTxt,vm==="explorer"&&s.mTxtOn]}>Explore</Text>
+                                <Ionicons name="layers" size={11} color={vm==="explorer"?"#0A192F":"#9CA3AF"}/>
                             </Pressable>
                             <Pressable onPress={()=>switchVm("grid")} style={s.mBtn}>
                                 <Ionicons name="grid" size={11} color={vm==="grid"?"#0A192F":"#9CA3AF"}/>
-                                <Text style={[s.mTxt,vm==="grid"&&s.mTxtOn]}>Grid</Text>
                             </Pressable>
                         </View>
-                        <Pressable onPress={onGoToCart} android_ripple={{color:"rgba(217,167,58,0.2)",radius:20,borderless:true}}>
+                        <Pressable onPress={onGoToCart} android_ripple={{color:"rgba(217,167,58,0.2)",radius:18,borderless:true}}>
                             <Animated.View style={[s.cartBtn,{transform:[{scale:cartA}]}]}>
-                                <Ionicons name="cart" size={21} color="#FFFFFF"/>
-                                {cartCount>0&&<LinearGradient colors={["#F5C842","#D9A73A"]} style={s.cartBadge}><Text style={s.cartBTxt}>{cartCount>99?"99+":cartCount}</Text></LinearGradient>}
+                                <Ionicons name="cart" size={20} color="#FFFFFF"/>
+                                {cartCount>0&&<View style={s.cartBadge}><Text style={s.cartBTxt}>{cartCount>99?"99+":cartCount}</Text></View>}
                             </Animated.View>
                         </Pressable>
                     </View>
                 </View>
+                {/* Row 2: Search */}
                 <Animated.View style={[s.sWrap,{borderColor:sBC}]}>
-                    <Ionicons name="search" size={14} color="#9CA3AF"/>
+                    <Ionicons name="search" size={15} color="#9CA3AF"/>
                     <TextInput placeholder="Search categories..." placeholderTextColor="#6B7280" value={sq} onChangeText={setSq} style={s.sInput}
                         onFocus={()=>Animated.timing(sfA,{toValue:1,duration:180,useNativeDriver:false}).start()}
                         onBlur={()=>Animated.timing(sfA,{toValue:0,duration:180,useNativeDriver:false}).start()}/>
@@ -481,49 +479,45 @@ export const CategoriesPage = ({onSelectCategory,onGoToCart,cartCount=0,onProduc
 const s = StyleSheet.create({
     root:{flex:1,backgroundColor:"#F9F5EB"},
     // Header
-    hdr:{paddingTop:Platform.OS==="ios"?52:44,paddingHorizontal:14,paddingBottom:12},
-    goldLine:{height:2,backgroundColor:"#D9A73A",width:50,borderRadius:2,marginBottom:12,opacity:0.65},
-    hRow:{flexDirection:"row",alignItems:"center",justifyContent:"space-between",marginBottom:11},
-    brand:{flexDirection:"row",alignItems:"center",gap:9},
-    logo:{width:38,height:38,borderRadius:19,alignItems:"center",justifyContent:"center"},
-    bTitleRow:{flexDirection:"row",alignItems:"center",gap:5},
-    bTitle:{color:"#FFFFFF",fontSize:15,fontWeight:"900",letterSpacing:0.4},
+    hdr:{paddingTop:Platform.OS==="ios"?54:StatusBar.currentHeight+10,paddingHorizontal:16,paddingBottom:14},
+    hRow:{flexDirection:"row",alignItems:"center",justifyContent:"space-between",marginBottom:12},
+    brand:{flexDirection:"row",alignItems:"center",gap:10,flexShrink:1,marginRight:10},
+    logo:{width:36,height:36,borderRadius:18,alignItems:"center",justifyContent:"center"},
+    bTitle:{color:"#FFFFFF",fontSize:15,fontWeight:"900",letterSpacing:0.3},
     bAccent:{color:"#D9A73A"},
-    dPill:{backgroundColor:"rgba(217,167,58,0.18)",paddingHorizontal:5,paddingVertical:1.5,borderRadius:5,borderWidth:1,borderColor:"rgba(217,167,58,0.3)"},
-    dPillTxt:{color:"#D9A73A",fontSize:7.5,fontWeight:"900",letterSpacing:0.4},
-    bSub:{color:"#8A9AB0",fontSize:10,fontWeight:"600",marginTop:1},
-    hRight:{flexDirection:"row",alignItems:"center",gap:7},
+    bSub:{color:"#8A9AB0",fontSize:9.5,fontWeight:"600",marginTop:2},
+    hRight:{flexDirection:"row",alignItems:"center",gap:8},
     // Mode toggle
-    modeWrap:{flexDirection:"row",backgroundColor:"rgba(255,255,255,0.08)",borderRadius:11,padding:3,borderWidth:1,borderColor:"rgba(255,255,255,0.14)",position:"relative",overflow:"hidden"},
-    mSlider:{position:"absolute",top:3,height:"84%",width:"48%",backgroundColor:"#D9A73A",borderRadius:8,zIndex:0},
-    mBtn:{flexDirection:"row",alignItems:"center",paddingHorizontal:7,paddingVertical:5,gap:2.5,zIndex:1},
+    modeWrap:{flexDirection:"row",backgroundColor:"rgba(255,255,255,0.1)",borderRadius:10,padding:2,borderWidth:1,borderColor:"rgba(255,255,255,0.15)",position:"relative",overflow:"hidden"},
+    mSlider:{position:"absolute",top:2,height:"88%",width:"48%",backgroundColor:"#D9A73A",borderRadius:8,zIndex:0},
+    mBtn:{alignItems:"center",justifyContent:"center",paddingHorizontal:10,paddingVertical:6,zIndex:1},
     mTxt:{fontSize:10,fontWeight:"700",color:"#9CA3AF"},
     mTxtOn:{color:"#0A192F"},
     // Cart
-    cartBtn:{width:38,height:38,borderRadius:19,backgroundColor:"rgba(255,255,255,0.09)",borderWidth:1,borderColor:"rgba(255,255,255,0.16)",alignItems:"center",justifyContent:"center"},
-    cartBadge:{position:"absolute",top:-4,right:-5,borderRadius:9,minWidth:17,height:17,alignItems:"center",justifyContent:"center",paddingHorizontal:2.5,borderWidth:1.5,borderColor:"#0A192F"},
-    cartBTxt:{color:"#0A192F",fontSize:8.5,fontWeight:"900"},
+    cartBtn:{width:36,height:36,borderRadius:18,backgroundColor:"rgba(255,255,255,0.1)",borderWidth:1,borderColor:"rgba(255,255,255,0.18)",alignItems:"center",justifyContent:"center"},
+    cartBadge:{position:"absolute",top:-3,right:-4,borderRadius:8,minWidth:16,height:16,alignItems:"center",justifyContent:"center",paddingHorizontal:2,backgroundColor:"#D9A73A",borderWidth:1.5,borderColor:"#0A192F"},
+    cartBTxt:{color:"#0A192F",fontSize:8,fontWeight:"900"},
     // Search
-    sWrap:{flexDirection:"row",alignItems:"center",backgroundColor:"#FFFFFF",borderRadius:14,paddingHorizontal:11,height:42,borderWidth:1.5,gap:7,elevation:3},
-    sInput:{flex:1,fontSize:13,color:"#1F2937",fontWeight:"600",paddingVertical:0},
+    sWrap:{flexDirection:"row",alignItems:"center",backgroundColor:"#FFFFFF",borderRadius:14,paddingHorizontal:12,height:40,borderWidth:1.5,gap:8,elevation:3,shadowColor:"#000",shadowOffset:{width:0,height:2},shadowOpacity:0.08,shadowRadius:4},
+    sInput:{flex:1,fontSize:12.5,color:"#1F2937",fontWeight:"600",paddingVertical:0},
     // Explorer
     exWrap:{flex:1,flexDirection:"row"},
     // Rail
-    rail:{width:RAIL,backgroundColor:"#E4DEC4",borderRightWidth:1,borderRightColor:"#D0C99C"},
-    rItem:{paddingVertical:11,paddingHorizontal:6,alignItems:"center",position:"relative",borderBottomWidth:1,borderBottomColor:"#D0C99C"},
+    rail:{width:RAIL,backgroundColor:"#E8E2CA",borderRightWidth:1,borderRightColor:"#D5CC9E"},
+    rItem:{paddingVertical:12,paddingHorizontal:8,alignItems:"center",position:"relative",borderBottomWidth:StyleSheet.hairlineWidth,borderBottomColor:"#D0C99C"},
     rPill:{position:"absolute",left:0,top:10,bottom:10,width:3.5,backgroundColor:"#D9A73A",borderTopRightRadius:3.5,borderBottomRightRadius:3.5},
-    rImgBox:{width:48,height:48,borderRadius:13,backgroundColor:"#FFFFFF",overflow:"hidden",marginBottom:5,borderWidth:1.5,borderColor:"#D0C99C",position:"relative"},
-    rImgBoxOn:{borderColor:"#D9A73A",elevation:3},
+    rImgBox:{width:50,height:50,borderRadius:14,backgroundColor:"#FFFFFF",overflow:"hidden",marginBottom:6,borderWidth:1.5,borderColor:"#D5CC9E",position:"relative"},
+    rImgBoxOn:{borderColor:"#D9A73A",elevation:3,shadowColor:"#D9A73A",shadowOffset:{width:0,height:2},shadowOpacity:0.3,shadowRadius:4},
     rImg:{width:"100%",height:"100%",resizeMode:"cover"},
-    rLbl:{fontSize:9.5,fontWeight:"700",color:"#6B7280",textAlign:"center",lineHeight:12},
+    rLbl:{fontSize:9.5,fontWeight:"700",color:"#6B7280",textAlign:"center",lineHeight:13,marginTop:1},
     rLblOn:{color:"#A07820",fontWeight:"900"},
-    rCount:{marginTop:3,backgroundColor:"#D0C99C",paddingHorizontal:5,paddingVertical:1,borderRadius:7},
-    rCountOn:{backgroundColor:"rgba(217,167,58,0.2)"},
+    rCount:{marginTop:4,backgroundColor:"#D5CC9E",paddingHorizontal:6,paddingVertical:1.5,borderRadius:7},
+    rCountOn:{backgroundColor:"rgba(217,167,58,0.22)"},
     rCountTxt:{fontSize:8.5,fontWeight:"800",color:"#6B7280"},
     rCountTxtOn:{color:"#A07820"},
     // Showcase
-    show:{flex:1,backgroundColor:"#FFFFFF"},
-    showContent:{padding:10,paddingBottom:130},
+    show:{flex:1,backgroundColor:"#FFFEF8"},
+    showContent:{padding:12,paddingBottom:130},
     // Hero
     hero:{height:140,borderRadius:18,overflow:"hidden",marginBottom:12,backgroundColor:"#0A192F",elevation:4},
     heroImg:{...StyleSheet.absoluteFillObject,width:"100%",height:"100%",opacity:0.5},
