@@ -71,6 +71,15 @@ export const ChatScreen = ({ route, navigation }) => {
         initChat();
     }, []);
 
+    // Fetch missing products when messages change
+    useEffect(() => {
+        messages.forEach(msg => {
+            if (msg.product_id && !productsCache[msg.product_id]) {
+                fetchProductInfo(msg.product_id);
+            }
+        });
+    }, [messages, productsCache]);
+
     const initChat = async () => {
         try {
             const { data: { user } } = await supabase.auth.getUser();
@@ -348,12 +357,6 @@ export const ChatScreen = ({ route, navigation }) => {
         // Is this a product inquiry message?
         const isProductInquiry = item.product_id || (item.message && item.message.includes('[Product Inquiry:'));
         const embeddedProduct = item.product_id ? productsCache[item.product_id] : null;
-
-        useEffect(() => {
-            if (item.product_id && !productsCache[item.product_id]) {
-                fetchProductInfo(item.product_id);
-            }
-        }, [item.product_id]);
 
         return (
             <View style={[s.msgWrapper, isMe ? s.msgWrapperMe : s.msgWrapperThem]}>
