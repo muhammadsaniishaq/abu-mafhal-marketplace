@@ -1,1303 +1,599 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
-    View, Text, TextInput, TouchableOpacity, ScrollView,
-    Image, Dimensions, StatusBar, ActivityIndicator,
-    RefreshControl, StyleSheet, Animated, Linking, Platform
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '../lib/supabase';
+    View, Text, TextInput, ScrollView,
+    Image, Dimensions, StatusBar,
+    RefreshControl, StyleSheet, Animated, Linking, Platform,
+    Pressable,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { supabase } from "../lib/supabase";
 
-const { width, height } = Dimensions.get('window');
-const AM_LOGO = require('../../assets/am_logo.png');
+const { width } = Dimensions.get("window");
+const RAIL = 82;
 
-const BRAND = {
-    navy: '#0A192F',
-    navyLight: '#0E223D',
-    gold: '#D9A73A',
-    goldLight: '#FEF3C7',
-    emerald: '#10B981',
-    emeraldLight: '#ECFDF5',
-    sky: '#0284C7',
-    skyLight: '#E0F2FE',
-    slate: '#64748B',
-    slateDark: '#0F172A',
-    bg: '#F8FAFC',
-    card: '#FFFFFF',
-    border: '#E2E8F0',
+const C = {
+    navy:"#0A192F", navyMid:"#0E2340", navyLight:"#1B3358",
+    gold:"#D9A73A", goldBright:"#F5C842", goldLight:"#FFF8E1",
+    goldBorder:"rgba(217,167,58,0.35)", goldGlow:"rgba(217,167,58,0.18)",
+    goldDark:"#A07820", white:"#FFFFFF", offWhite:"#F9F5EB",
+    bg:"#F0EDD6", card:"#FFFFFF", border:"#E8D99A", borderSoft:"#EEE5C0",
+    slate:"#6B7280", slateLight:"#9CA3AF", slateDark:"#1F2937",
+    emerald:"#10B981", emeraldBg:"#ECFDF5", red:"#EF4444", shimmer:"#EDE8D0",
 };
 
-const DEFAULT_CATEGORY_IMAGES = {
-    'phones & tablets': 'https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?q=80&w=400&auto=format&fit=crop',
-    'fashion & apparel': 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=400&auto=format&fit=crop',
-    'electronics & gadgets': 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=400&auto=format&fit=crop',
-    'shoes & footwear': 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=400&auto=format&fit=crop',
-    'beauty & health': 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=400&auto=format&fit=crop',
-    'home & living': 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?q=80&w=400&auto=format&fit=crop',
-    'automotive': 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=400&auto=format&fit=crop',
-    'groceries & food': 'https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=400&auto=format&fit=crop',
+const CAT_IMGS = {
+    "phones & tablets":"https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?q=80&w=300&auto=format&fit=crop",
+    "fashion & apparel":"https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=300&auto=format&fit=crop",
+    "electronics & gadgets":"https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=300&auto=format&fit=crop",
+    "shoes & footwear":"https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=300&auto=format&fit=crop",
+    "beauty & health":"https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=300&auto=format&fit=crop",
+    "home & living":"https://images.unsplash.com/photo-1555041469-a586c61ea9bc?q=80&w=300&auto=format&fit=crop",
+    "automotive":"https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=300&auto=format&fit=crop",
+    "groceries & food":"https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=300&auto=format&fit=crop",
 };
 
-const CATEGORY_BANNERS = {
-    'phones & tablets': {
-        banner: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?q=80&w=700&auto=format&fit=crop',
-        tagline: 'Up to 35% OFF Smartphones & Tablets',
-        highlight: 'Genuine Brand Warranty'
-    },
-    'electronics & gadgets': {
-        banner: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=700&auto=format&fit=crop',
-        tagline: 'Premium Laptops, TVs & Smart Audio',
-        highlight: '100% Authentic Tech'
-    },
-    'fashion & apparel': {
-        banner: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=700&auto=format&fit=crop',
-        tagline: 'New Season Men & Women Collections',
-        highlight: 'Trending Urban & Traditional'
-    },
-    'shoes & footwear': {
-        banner: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=700&auto=format&fit=crop',
-        tagline: 'Top Brand Sneakers, Sandals & Loafers',
-        highlight: 'Comfort & Durability Guaranteed'
-    },
-    'beauty & health': {
-        banner: 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=700&auto=format&fit=crop',
-        tagline: 'Luxury Perfumes & Radiant Skincare',
-        highlight: 'Original Brands Only'
-    },
-    'home & living': {
-        banner: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?q=80&w=700&auto=format&fit=crop',
-        tagline: 'Modern Living & Kitchen Essentials',
-        highlight: 'Fast Express Delivery'
-    },
+const BANNERS = {
+    "phones & tablets":{banner:"https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?q=80&w=700&auto=format&fit=crop",tagline:"Up to 35% OFF Smartphones & Tablets",highlight:"Genuine Brand Warranty"},
+    "electronics & gadgets":{banner:"https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=700&auto=format&fit=crop",tagline:"Premium Laptops, TVs & Smart Audio",highlight:"100% Authentic Tech"},
+    "fashion & apparel":{banner:"https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=700&auto=format&fit=crop",tagline:"New Season Men & Women Collections",highlight:"Trending Urban & Traditional"},
+    "shoes & footwear":{banner:"https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=700&auto=format&fit=crop",tagline:"Top Brand Sneakers, Sandals & Loafers",highlight:"Comfort & Durability"},
+    "beauty & health":{banner:"https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=700&auto=format&fit=crop",tagline:"Luxury Perfumes & Radiant Skincare",highlight:"Original Brands Only"},
+    "home & living":{banner:"https://images.unsplash.com/photo-1555041469-a586c61ea9bc?q=80&w=700&auto=format&fit=crop",tagline:"Modern Living & Kitchen Essentials",highlight:"Fast Express Delivery"},
 };
 
-const SUBCATEGORIES_MAP = {
-    'phones & tablets': [
-        { name: 'All Phones', query: '' },
-        { name: 'Smartphones', query: 'smartphone' },
-        { name: 'iPhones', query: 'iphone' },
-        { name: 'Android', query: 'android' },
-        { name: 'Tablets & iPads', query: 'tablet' },
-        { name: 'Earbuds & Audio', query: 'audio' },
-        { name: 'Power & Cables', query: 'charger' },
-        { name: 'Cases & Covers', query: 'case' },
-    ],
-    'electronics & gadgets': [
-        { name: 'All Electronics', query: '' },
-        { name: 'Laptops & PCs', query: 'laptop' },
-        { name: 'Smart TVs', query: 'tv' },
-        { name: 'Smart Watches', query: 'watch' },
-        { name: 'Cameras', query: 'camera' },
-        { name: 'Gaming Consoles', query: 'gaming' },
-        { name: 'Audio Systems', query: 'speaker' },
-    ],
-    'fashion & apparel': [
-        { name: 'All Fashion', query: '' },
-        { name: 'Men\'s Wear', query: 'men' },
-        { name: 'Women\'s Wear', query: 'women' },
-        { name: 'Traditional & Kaftans', query: 'kaftan' },
-        { name: 'Bags & Wallets', query: 'bag' },
-        { name: 'Watches & Jewelry', query: 'jewelry' },
-        { name: 'Caps & Accessories', query: 'cap' },
-    ],
-    'shoes & footwear': [
-        { name: 'All Shoes', query: '' },
-        { name: 'Sneakers & Sports', query: 'sneaker' },
-        { name: 'Formal Shoes', query: 'formal' },
-        { name: 'Sandals & Slippers', query: 'sandal' },
-        { name: 'Boots & Casual', query: 'boot' },
-        { name: 'Women\'s Heels', query: 'heels' },
-    ],
-    'beauty & health': [
-        { name: 'All Beauty', query: '' },
-        { name: 'Skincare & Glow', query: 'skincare' },
-        { name: 'Perfumes & Scents', query: 'perfume' },
-        { name: 'Hair Care', query: 'hair' },
-        { name: 'Makeup & Cosmetics', query: 'makeup' },
-        { name: 'Personal Care', query: 'care' },
-    ],
-    'home & living': [
-        { name: 'All Home', query: '' },
-        { name: 'Kitchenware', query: 'kitchen' },
-        { name: 'Furniture & Decor', query: 'furniture' },
-        { name: 'Bedding & Linen', query: 'bedding' },
-        { name: 'Home Appliances', query: 'appliance' },
-        { name: 'Lighting & Lamps', query: 'light' },
-    ],
+const SUBCATS = {
+    "phones & tablets":[{n:"All",i:"apps",q:""},{n:"Smartphones",i:"phone-portrait",q:"smartphone"},{n:"iPhones",i:"logo-apple",q:"iphone"},{n:"Tablets",i:"tablet-portrait",q:"tablet"},{n:"Earbuds",i:"headset",q:"audio"},{n:"Cases",i:"shield",q:"case"}],
+    "electronics & gadgets":[{n:"All",i:"apps",q:""},{n:"Laptops",i:"laptop",q:"laptop"},{n:"Smart TVs",i:"tv",q:"tv"},{n:"Smartwatch",i:"watch",q:"watch"},{n:"Cameras",i:"camera",q:"camera"},{n:"Gaming",i:"game-controller",q:"gaming"}],
+    "fashion & apparel":[{n:"All",i:"apps",q:""},{n:"Men",i:"man",q:"men"},{n:"Women",i:"woman",q:"women"},{n:"Traditional",i:"shirt",q:"kaftan"},{n:"Bags",i:"bag",q:"bag"},{n:"Jewelry",i:"diamond",q:"jewelry"}],
+    "shoes & footwear":[{n:"All",i:"apps",q:""},{n:"Sneakers",i:"footsteps",q:"sneaker"},{n:"Formal",i:"briefcase",q:"formal"},{n:"Sandals",i:"sunny",q:"sandal"},{n:"Boots",i:"rainy",q:"boot"}],
+    "beauty & health":[{n:"All",i:"apps",q:""},{n:"Skincare",i:"sparkles",q:"skincare"},{n:"Perfumes",i:"flower",q:"perfume"},{n:"Hair",i:"cut",q:"hair"},{n:"Makeup",i:"color-palette",q:"makeup"}],
+    "home & living":[{n:"All",i:"apps",q:""},{n:"Kitchen",i:"restaurant",q:"kitchen"},{n:"Furniture",i:"bed",q:"furniture"},{n:"Bedding",i:"moon",q:"bedding"},{n:"Appliances",i:"power",q:"appliance"}],
 };
 
-const getCategoryImage = (cat) => {
+const EMOJI = {"phones & tablets":"📱","electronics & gadgets":"💻","fashion & apparel":"👗","shoes & footwear":"👟","beauty & health":"💄","home & living":"🏠","automotive":"🚗","groceries & food":"🛒","sports & fitness":"🏋️","baby & kids":"👶"};
+
+const getCatImg = (cat) => {
     if (cat?.image_url) return cat.image_url;
-    const key = (cat?.name || '').toLowerCase().trim();
-    for (const [k, img] of Object.entries(DEFAULT_CATEGORY_IMAGES)) {
-        if (key.includes(k) || k.includes(key)) return img;
-    }
-    return 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?q=80&w=400&auto=format&fit=crop';
+    const k = (cat?.name||"").toLowerCase().trim();
+    for (const [key,img] of Object.entries(CAT_IMGS)) { if (k.includes(key)||key.includes(k)) return img; }
+    return "https://images.unsplash.com/photo-1472851294608-062f824d29cc?q=80&w=300&auto=format&fit=crop";
 };
 
-const getCategoryBanner = (cat) => {
-    const key = (cat?.name || '').toLowerCase().trim();
-    for (const [k, b] of Object.entries(CATEGORY_BANNERS)) {
-        if (key.includes(k) || k.includes(key)) return b;
-    }
-    return {
-        banner: getCategoryImage(cat),
-        tagline: `Discover ${cat?.name || 'Top'} Collections`,
-        highlight: 'Verified Escrow Guarantee'
-    };
+const getBanner = (cat) => {
+    const k = (cat?.name||"").toLowerCase().trim();
+    for (const [key,b] of Object.entries(BANNERS)) { if (k.includes(key)||key.includes(k)) return b; }
+    return {banner:getCatImg(cat),tagline:`Discover ${cat?.name||"Top"} Collections`,highlight:"Verified Escrow Guarantee"};
 };
 
-const getSubcategories = (cat) => {
-    const key = (cat?.name || '').toLowerCase().trim();
-    for (const [k, list] of Object.entries(SUBCATEGORIES_MAP)) {
-        if (key.includes(k) || k.includes(key)) return list;
-    }
-    return [
-        { name: 'All Items', query: '' },
-        { name: 'Popular Picks', query: 'popular' },
-        { name: 'Top Deals', query: 'deals' },
-        { name: 'New Arrivals', query: 'new' },
-        { name: 'Accessories', query: 'accessories' }
-    ];
+const getSubcats = (cat) => {
+    const k = (cat?.name||"").toLowerCase().trim();
+    for (const [key,list] of Object.entries(SUBCATS)) { if (k.includes(key)||key.includes(k)) return list; }
+    return [{n:"All",i:"apps",q:""},{n:"Popular",i:"star",q:"popular"},{n:"Deals",i:"pricetag",q:"deals"},{n:"New",i:"sparkles",q:"new"}];
 };
 
-const fmtPrice = (n) => {
-    const num = Number(n);
-    if (!num) return '₦0';
-    return `₦${num.toLocaleString()}`;
+const getEmoji = (cat) => {
+    const k = (cat?.name||"").toLowerCase().trim();
+    for (const [key,em] of Object.entries(EMOJI)) { if (k.includes(key)||key.includes(k)) return em; }
+    return "🛍️";
 };
 
-const getProductImage = (item) => {
-    if (item?.image_url) return item.image_url;
-    if (Array.isArray(item?.images) && item.images.length > 0) return item.images[0];
-    if (typeof item?.images === 'string') {
-        try {
-            const parsed = JSON.parse(item.images);
-            if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
-        } catch (_) {}
-        return item.images;
-    }
-    return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=400&auto=format&fit=crop';
+const fmtN = (n) => { const x=Number(n); return x?`₦${x.toLocaleString()}`:"₦0"; };
+
+const getProdImg = (p) => {
+    if (p?.image_url) return p.image_url;
+    if (Array.isArray(p?.images)&&p.images.length>0) return p.images[0];
+    if (typeof p?.images==="string") { try { const a=JSON.parse(p.images); if (Array.isArray(a)&&a.length>0) return a[0]; } catch(_){} return p.images; }
+    return "https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=300&auto=format&fit=crop";
 };
 
-export const CategoriesPage = ({
-    onSelectCategory,
-    onGoToCart,
-    cartCount = 0,
-    onProductClick,
-    onAddToCart,
-    onGoToShop,
-    onNavigate
-}) => {
-    const [searchQuery, setSearchQuery] = useState('');
-    const [viewMode, setViewMode] = useState('explorer'); // 'explorer' | 'grid'
-    const [categories, setCategories] = useState([]);
-    const [selectedCategory, setSelectedCategory] = useState(null);
-    const [activeSubcategory, setActiveSubcategory] = useState(null);
-    const [products, setProducts] = useState([]);
-    const [categoryCounts, setCategoryCounts] = useState({});
-    const [loading, setLoading] = useState(true);
-    const [refreshing, setRefreshing] = useState(false);
+// Shimmer
+const Shimmer = ({style}) => {
+    const a=useRef(new Animated.Value(0)).current;
+    useEffect(()=>{Animated.loop(Animated.sequence([Animated.timing(a,{toValue:1,duration:800,useNativeDriver:true}),Animated.timing(a,{toValue:0,duration:800,useNativeDriver:true})]))  .start();},[]);
+    return <Animated.View style={[{backgroundColor:"#EDE8D0",borderRadius:8},style,{opacity:a.interpolate({inputRange:[0,1],outputRange:[0.4,0.85]})}]} />;
+};
 
-    // Toast feedback
-    const [toastMessage, setToastMessage] = useState('');
-    const toastAnim = useRef(new Animated.Value(0)).current;
+const Skeleton = () => (
+    <View style={{flex:1,flexDirection:"row"}}>
+        <View style={{width:RAIL,backgroundColor:"#E4DEC4",paddingTop:8}}>
+            {[1,2,3,4,5].map(i=>(
+                <View key={i} style={{padding:8,alignItems:"center",gap:5}}>
+                    <Shimmer style={{width:48,height:48,borderRadius:13}} />
+                    <Shimmer style={{width:56,height:8}} />
+                </View>
+            ))}
+        </View>
+        <View style={{flex:1,padding:10,gap:10,backgroundColor:"#FFFEF7"}}>
+            <Shimmer style={{height:130,borderRadius:18}} />
+            <Shimmer style={{height:32,borderRadius:9}} />
+            <View style={{flexDirection:"row",gap:8}}>
+                <Shimmer style={{flex:1,height:150,borderRadius:14}} />
+                <Shimmer style={{flex:1,height:150,borderRadius:14}} />
+            </View>
+        </View>
+    </View>
+);
 
-    const showToast = (msg) => {
-        setToastMessage(msg);
-        Animated.sequence([
-            Animated.timing(toastAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
-            Animated.delay(2000),
-            Animated.timing(toastAnim, { toValue: 0, duration: 200, useNativeDriver: true })
-        ]).start();
+// Rail Item
+const RailItem = React.memo(({cat,isSelected,count,onPress}) => {
+    const sc=useRef(new Animated.Value(1)).current;
+    const bg=useRef(new Animated.Value(isSelected?1:0)).current;
+    useEffect(()=>{Animated.timing(bg,{toValue:isSelected?1:0,duration:180,useNativeDriver:false}).start();},[isSelected]);
+    const press=()=>{
+        Animated.sequence([Animated.timing(sc,{toValue:0.9,duration:70,useNativeDriver:true}),Animated.spring(sc,{toValue:1,speed:28,bounciness:10,useNativeDriver:true})]).start();
+        onPress();
     };
-
-    useEffect(() => {
-        fetchCategoriesAndProducts();
-
-        const catChannel = supabase
-            .channel('categories-page-realtime-v4')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, () => {
-                fetchCategoriesAndProducts(true);
-            })
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
-                fetchCategoriesAndProducts(true);
-            })
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(catChannel);
-        };
-    }, []);
-
-    const fetchCategoriesAndProducts = async (isSilent = false) => {
-        if (!isSilent) setLoading(true);
-        try {
-            const [catsRes, prodsRes] = await Promise.allSettled([
-                supabase
-                    .from('categories')
-                    .select('*')
-                    .eq('is_active', true)
-                    .order('display_order', { ascending: true, nullsFirst: false }),
-                supabase
-                    .from('products')
-                    .select('id, name, description, price, compare_at_price, image_url, images, category, rating, reviews, stock, total_sales, is_active, status, vendor_id, created_at')
-                    .eq('status', 'approved')
-                    .order('created_at', { ascending: false })
-                    .limit(150)
-            ]);
-
-            const catsList = (catsRes.status === 'fulfilled' && Array.isArray(catsRes.value?.data)) ? catsRes.value.data : [];
-            const prodsList = (prodsRes.status === 'fulfilled' && Array.isArray(prodsRes.value?.data)) ? prodsRes.value.data : [];
-
-            setCategories(catsList);
-            setProducts(prodsList);
-
-            // Compute product counts per category
-            const counts = {};
-            prodsList.forEach(p => {
-                if (p.category) {
-                    const norm = p.category.toLowerCase().trim();
-                    counts[norm] = (counts[norm] || 0) + 1;
-                }
-            });
-            setCategoryCounts(counts);
-
-            // Set initial active category if none selected
-            if (!selectedCategory && catsList.length > 0) {
-                setSelectedCategory(catsList[0]);
-                setActiveSubcategory(null);
-            } else if (selectedCategory) {
-                const refreshedSelected = catsList.find(c => c.id === selectedCategory.id) || catsList[0];
-                setSelectedCategory(refreshedSelected);
-            }
-        } catch (err) {
-            console.log('CategoriesPage fetch error:', err);
-        } finally {
-            setLoading(false);
-            setRefreshing(false);
-        }
-    };
-
-    const onRefresh = () => {
-        setRefreshing(true);
-        fetchCategoriesAndProducts(true);
-    };
-
-    const handleWhatsAppConcierge = (cat) => {
-        const catName = cat ? cat.name : 'General Catalog';
-        const phone = '2349021486162';
-        const msg = encodeURIComponent(`Hello Abu Mafhal Marketplace, I need help finding items in the "${catName}" category.`);
-        Linking.openURL(`https://wa.me/${phone}?text=${msg}`).catch(() => {});
-    };
-
-    const handleAddToCartItem = (product) => {
-        if (onAddToCart) {
-            onAddToCart(product);
-            showToast(`Added "${product.name}" to cart!`);
-        }
-    };
-
-    // Filter categories by search
-    const filteredCategories = categories.filter(cat =>
-        (cat.name || '').toLowerCase().includes(searchQuery.toLowerCase())
+    const bgC=bg.interpolate({inputRange:[0,1],outputRange:["transparent","#FFFFFF"]});
+    return (
+        <Pressable onPress={press} android_ripple={{color:"rgba(217,167,58,0.15)"}}>
+            <Animated.View style={[s.rItem,{backgroundColor:bgC}]}>
+                {isSelected&&<View style={s.rPill}/>}
+                <Animated.View style={[s.rImgBox,isSelected&&s.rImgBoxOn,{transform:[{scale:sc}]}]}>
+                    <Image source={{uri:getCatImg(cat)}} style={s.rImg}/>
+                </Animated.View>
+                <Text numberOfLines={2} style={[s.rLbl,isSelected&&s.rLblOn]}>{cat.name}</Text>
+                {count>0&&<View style={[s.rCount,isSelected&&s.rCountOn]}><Text style={[s.rCountTxt,isSelected&&s.rCountTxtOn]}>{count}</Text></View>}
+            </Animated.View>
+        </Pressable>
     );
+});
 
-    // Filter live products for the active selected category
-    const activeCategoryProducts = products.filter(p => {
-        if (!selectedCategory) return true;
-        const catName = (selectedCategory.name || '').toLowerCase().trim();
-        const pCat = (p.category || '').toLowerCase().trim();
-        const matchesCategory = pCat.includes(catName) || catName.includes(pCat);
-        if (!matchesCategory) return false;
+// Product Card
+const ProdCard = React.memo(({prod,onPress,onAdd,cw}) => {
+    const sc=useRef(new Animated.Value(1)).current;
+    const addSc=useRef(new Animated.Value(1)).current;
+    const hasDisc=Number(prod.compare_at_price)>Number(prod.price);
+    const pct=hasDisc?Math.round(((Number(prod.compare_at_price)-Number(prod.price))/Number(prod.compare_at_price))*100):0;
+    const onIn=()=>Animated.spring(sc,{toValue:0.95,speed:50,useNativeDriver:true}).start();
+    const onOut=()=>Animated.spring(sc,{toValue:1,speed:50,useNativeDriver:true}).start();
+    const doAdd=()=>{
+        Animated.sequence([Animated.timing(addSc,{toValue:1.4,duration:100,useNativeDriver:true}),Animated.spring(addSc,{toValue:1,speed:22,bounciness:12,useNativeDriver:true})]).start();
+        onAdd&&onAdd(prod);
+    };
+    return (
+        <Pressable onPress={onPress} onPressIn={onIn} onPressOut={onOut} android_ripple={{color:"rgba(217,167,58,0.12)"}}>
+            <Animated.View style={[s.pCard,{width:cw,transform:[{scale:sc}]}]}>
+                <View style={s.pImgBox}>
+                    <Image source={{uri:getProdImg(prod)}} style={s.pImg} resizeMode="cover"/>
+                    {hasDisc&&<View style={s.pDisc}><Text style={s.pDiscTxt}>-{pct}%</Text></View>}
+                </View>
+                <View style={s.pBody}>
+                    <Text numberOfLines={2} style={s.pName}>{prod.name}</Text>
+                    {prod.rating>0&&(
+                        <View style={s.ratingRow}>
+                            <Ionicons name="star" size={9} color="#D9A73A"/>
+                            <Text style={s.ratingTxt}>{Number(prod.rating).toFixed(1)}</Text>
+                        </View>
+                    )}
+                    <View style={s.pPriceRow}>
+                        <Text style={s.pPrice}>{fmtN(prod.price)}</Text>
+                        <Pressable onPress={doAdd}>
+                            <Animated.View style={[s.addBtn,{transform:[{scale:addSc}]}]}>
+                                <Ionicons name="add" size={16} color="#0A192F"/>
+                            </Animated.View>
+                        </Pressable>
+                    </View>
+                    {hasDisc&&<Text style={s.strikeP}>{fmtN(prod.compare_at_price)}</Text>}
+                </View>
+            </Animated.View>
+        </Pressable>
+    );
+});
 
-        if (activeSubcategory && activeSubcategory.query) {
-            const q = activeSubcategory.query.toLowerCase();
-            return (p.name || '').toLowerCase().includes(q) ||
-                (p.description || '').toLowerCase().includes(q);
-        }
+// Subcat Chip
+const Chip = React.memo(({sub,isActive,onPress}) => {
+    const sc=useRef(new Animated.Value(1)).current;
+    const tap=()=>{
+        Animated.sequence([Animated.timing(sc,{toValue:0.88,duration:60,useNativeDriver:true}),Animated.spring(sc,{toValue:1,speed:28,bounciness:10,useNativeDriver:true})]).start();
+        onPress();
+    };
+    return (
+        <Pressable onPress={tap}>
+            <Animated.View style={[s.chip,isActive&&s.chipOn,{transform:[{scale:sc}]}]}>
+                <Ionicons name={sub.i||"apps"} size={10} color={isActive?"#0A192F":"#6B7280"} style={{marginRight:3}}/>
+                <Text style={[s.chipTxt,isActive&&s.chipTxtOn]}>{sub.n}</Text>
+            </Animated.View>
+        </Pressable>
+    );
+});
+
+// Grid Card
+const GCard = React.memo(({cat,count,onPress}) => {
+    const sc=useRef(new Animated.Value(1)).current;
+    const onIn=()=>Animated.spring(sc,{toValue:0.93,speed:55,useNativeDriver:true}).start();
+    const onOut=()=>Animated.spring(sc,{toValue:1,speed:55,useNativeDriver:true}).start();
+    return (
+        <Pressable onPress={onPress} onPressIn={onIn} onPressOut={onOut}>
+            <Animated.View style={[s.gCard,{transform:[{scale:sc}]}]}>
+                <View style={s.gImgBox}>
+                    <Image source={{uri:getCatImg(cat)}} style={s.gImg} resizeMode="cover"/>
+                    <LinearGradient colors={["transparent","rgba(10,25,47,0.85)"]} style={StyleSheet.absoluteFillObject} start={{x:0,y:0.3}} end={{x:0,y:1}}/>
+                    <Text style={s.gEmoji}>{getEmoji(cat)}</Text>
+                </View>
+                <Text numberOfLines={2} style={s.gTitle}>{cat.name}</Text>
+                <Text style={s.gCount}>{count>0?`${count} items`:"Explore"}</Text>
+            </Animated.View>
+        </Pressable>
+    );
+});
+
+// ═══════ MAIN ═══════
+export const CategoriesPage = ({onSelectCategory,onGoToCart,cartCount=0,onProductClick,onAddToCart,onGoToShop,onNavigate}) => {
+    const [sq,setSq]=useState(""); // search query
+    const [vm,setVm]=useState("explorer"); // view mode
+    const [cats,setCats]=useState([]);
+    const [selCat,setSelCat]=useState(null);
+    const [activeSub,setActiveSub]=useState(null);
+    const [prods,setProds]=useState([]);
+    const [counts,setCounts]=useState({});
+    const [loading,setLoading]=useState(true);
+    const [refreshing,setRefreshing]=useState(false);
+    const [toastMsg,setToastMsg]=useState("");
+
+    const toastA=useRef(new Animated.Value(0)).current;
+    const cartA=useRef(new Animated.Value(1)).current;
+    const modeA=useRef(new Animated.Value(0)).current;
+    const sfA=useRef(new Animated.Value(0)).current; // search focus
+
+    const toast=(msg)=>{
+        setToastMsg(msg);
+        Animated.sequence([Animated.spring(toastA,{toValue:1,speed:20,bounciness:12,useNativeDriver:true}),Animated.delay(2000),Animated.timing(toastA,{toValue:0,duration:220,useNativeDriver:true})]).start();
+    };
+
+    const bounceCart=()=>{
+        Animated.sequence([Animated.timing(cartA,{toValue:1.35,duration:100,useNativeDriver:true}),Animated.spring(cartA,{toValue:1,speed:22,bounciness:10,useNativeDriver:true})]).start();
+    };
+
+    const switchVm=(m)=>{
+        Animated.timing(modeA,{toValue:m==="explorer"?0:1,duration:200,useNativeDriver:false}).start();
+        setVm(m);
+    };
+
+    useEffect(()=>{
+        fetchD();
+        const ch=supabase.channel("cats-v3")
+            .on("postgres_changes",{event:"*",schema:"public",table:"categories"},()=>fetchD(true))
+            .on("postgres_changes",{event:"*",schema:"public",table:"products"},()=>fetchD(true))
+            .subscribe();
+        return ()=>supabase.removeChannel(ch);
+    },[]);
+
+    const fetchD=async(silent=false)=>{
+        if(!silent)setLoading(true);
+        try {
+            const [cr,pr]=await Promise.allSettled([
+                supabase.from("categories").select("*").eq("is_active",true).order("display_order",{ascending:true,nullsFirst:false}),
+                supabase.from("products").select("id,name,description,price,compare_at_price,image_url,images,category,rating,reviews,stock,total_sales,status,created_at").eq("status","approved").order("created_at",{ascending:false}).limit(150),
+            ]);
+            const cl=cr.status==="fulfilled"&&Array.isArray(cr.value?.data)?cr.value.data:[];
+            const pl=pr.status==="fulfilled"&&Array.isArray(pr.value?.data)?pr.value.data:[];
+            setCats(cl); setProds(pl);
+            const c={};
+            pl.forEach(p=>{if(p.category){const k=p.category.toLowerCase().trim();c[k]=(c[k]||0)+1;}});
+            setCounts(c);
+            setSelCat(prev=>{
+                if(!prev&&cl.length>0)return cl[0];
+                if(prev)return cl.find(c=>c.id===prev.id)||cl[0];
+                return prev;
+            });
+        } catch(e){console.log("[CatPage]",e);}
+        finally{setLoading(false);setRefreshing(false);}
+    };
+
+    const onRefresh=()=>{setRefreshing(true);fetchD(true);};
+    const doWA=(cat)=>{const m=encodeURIComponent(`Hello Abu Mafhal, help me find "${cat?.name||"items"}".`);Linking.openURL(`https://wa.me/2349021486162?text=${m}`).catch(()=>{});};
+    const doAdd=(p)=>{if(onAddToCart){onAddToCart(p);bounceCart();toast(`Added "${p.name}" to cart`);}};
+    const doSel=useCallback((cat)=>{setSelCat(cat);setActiveSub(null);},[]);
+
+    const fCats=cats.filter(c=>(c.name||"").toLowerCase().includes(sq.toLowerCase()));
+    const fProds=prods.filter(p=>{
+        if(!selCat)return true;
+        const cn=(selCat.name||"").toLowerCase().trim();
+        const pc=(p.category||"").toLowerCase().trim();
+        if(!(pc.includes(cn)||cn.includes(pc)))return false;
+        if(activeSub?.q){const q=activeSub.q.toLowerCase();return(p.name||"").toLowerCase().includes(q)||(p.description||"").toLowerCase().includes(q);}
         return true;
     });
 
-    const activeSubcategories = selectedCategory ? getSubcategories(selectedCategory) : [];
-    const activeBanner = selectedCategory ? getCategoryBanner(selectedCategory) : null;
+    const subs=selCat?getSubcats(selCat):[];
+    const banner=selCat?getBanner(selCat):null;
+    const emoji=selCat?getEmoji(selCat):"🛍️";
+    const CW=(width-RAIL-24-8)/2;
+
+    const sliderL=modeA.interpolate({inputRange:[0,1],outputRange:[3,3+(width*0.26)/2]});
+    const sBC=sfA.interpolate({inputRange:[0,1],outputRange:["#E8D99A","#D9A73A"]});
 
     return (
-        <View style={s.container}>
-            <StatusBar barStyle="light-content" backgroundColor={BRAND.navy} />
+        <View style={s.root}>
+            <StatusBar barStyle="light-content" backgroundColor="#0A192F" translucent/>
 
-            {/* ══════════════════════════════════════════════════
-                1. LUXURY MOBILE TOP HEADER
-            ══════════════════════════════════════════════════ */}
-            <View style={s.header}>
-                <View style={s.headerTopRow}>
-                    <View style={s.brandGroup}>
-                        <Image source={AM_LOGO} style={s.brandLogo} resizeMode="contain" />
+            {/* HEADER */}
+            <LinearGradient colors={["#0A192F","#0E2340","#071422"]} style={s.hdr} start={{x:0,y:0}} end={{x:1,y:1}}>
+                <View style={s.goldLine}/>
+                <View style={s.hRow}>
+                    <View style={s.brand}>
+                        <LinearGradient colors={["#D9A73A","#A07820"]} style={s.logo}><Text style={{fontSize:16}}>🛍️</Text></LinearGradient>
                         <View>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                                <Text style={s.brandTitle}>
-                                    ABU <Text style={s.brandTitleAccent}>MAFHAL</Text>
-                                </Text>
-                                <View style={s.brandBadgePill}>
-                                    <Text style={s.brandBadgeTxt}>DEPARTMENTS</Text>
-                                </View>
+                            <View style={s.bTitleRow}>
+                                <Text style={s.bTitle}>ABU <Text style={s.bAccent}>MAFHAL</Text></Text>
+                                <View style={s.dPill}><Text style={s.dPillTxt}>DEPTS</Text></View>
                             </View>
-                            <Text style={s.brandSubtitle}>
-                                Smart Category Explorer
-                            </Text>
+                            <Text style={s.bSub}>Category Explorer</Text>
                         </View>
                     </View>
-
-                    <View style={s.headerActions}>
-                        {/* View Mode Switcher */}
-                        <TouchableOpacity
-                            onPress={() => setViewMode(viewMode === 'explorer' ? 'grid' : 'explorer')}
-                            style={s.modeToggleBtn}
-                            activeOpacity={0.8}
-                        >
-                            <Ionicons
-                                name={viewMode === 'explorer' ? 'grid-outline' : 'git-branch-outline'}
-                                size={17}
-                                color="#FFFFFF"
-                            />
-                            <Text style={s.modeToggleTxt}>
-                                {viewMode === 'explorer' ? 'Grid' : 'Explorer'}
-                            </Text>
-                        </TouchableOpacity>
-
-                        {/* Cart Button */}
-                        <TouchableOpacity
-                            onPress={onGoToCart}
-                            style={s.cartBtn}
-                            activeOpacity={0.8}
-                        >
-                            <Ionicons name="cart-outline" size={23} color="#FFFFFF" />
-                            {cartCount > 0 && (
-                                <View style={s.cartBadge}>
-                                    <Text style={s.cartBadgeTxt}>
-                                        {cartCount > 99 ? '99+' : cartCount}
-                                    </Text>
-                                </View>
-                            )}
-                        </TouchableOpacity>
+                    <View style={s.hRight}>
+                        <View style={s.modeWrap}>
+                            <Animated.View style={[s.mSlider,{left:sliderL}]}/>
+                            <Pressable onPress={()=>switchVm("explorer")} style={s.mBtn}>
+                                <Ionicons name="layers" size={12} color={vm==="explorer"?"#0A192F":"#9CA3AF"}/>
+                                <Text style={[s.mTxt,vm==="explorer"&&s.mTxtOn]}>Explore</Text>
+                            </Pressable>
+                            <Pressable onPress={()=>switchVm("grid")} style={s.mBtn}>
+                                <Ionicons name="grid" size={11} color={vm==="grid"?"#0A192F":"#9CA3AF"}/>
+                                <Text style={[s.mTxt,vm==="grid"&&s.mTxtOn]}>Grid</Text>
+                            </Pressable>
+                        </View>
+                        <Pressable onPress={onGoToCart} android_ripple={{color:"rgba(217,167,58,0.2)",radius:20,borderless:true}}>
+                            <Animated.View style={[s.cartBtn,{transform:[{scale:cartA}]}]}>
+                                <Ionicons name="cart" size={21} color="#FFFFFF"/>
+                                {cartCount>0&&<LinearGradient colors={["#F5C842","#D9A73A"]} style={s.cartBadge}><Text style={s.cartBTxt}>{cartCount>99?"99+":cartCount}</Text></LinearGradient>}
+                            </Animated.View>
+                        </Pressable>
                     </View>
                 </View>
+                <Animated.View style={[s.sWrap,{borderColor:sBC}]}>
+                    <Ionicons name="search" size={14} color="#9CA3AF"/>
+                    <TextInput placeholder="Search categories..." placeholderTextColor="#6B7280" value={sq} onChangeText={setSq} style={s.sInput}
+                        onFocus={()=>Animated.timing(sfA,{toValue:1,duration:180,useNativeDriver:false}).start()}
+                        onBlur={()=>Animated.timing(sfA,{toValue:0,duration:180,useNativeDriver:false}).start()}/>
+                    {sq.length>0&&<Pressable onPress={()=>setSq("")} hitSlop={10}><Ionicons name="close-circle" size={16} color="#6B7280"/></Pressable>}
+                </Animated.View>
+            </LinearGradient>
 
-                {/* Search Bar */}
-                <View style={s.searchBar}>
-                    <Ionicons name="search" size={17} color={BRAND.slate} style={{ marginRight: 8 }} />
-                    <TextInput
-                        placeholder="Search departments, items, brands..."
-                        placeholderTextColor="#94A3B8"
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                        style={s.searchInput}
-                    />
-                    {searchQuery.length > 0 && (
-                        <TouchableOpacity onPress={() => setSearchQuery('')} style={{ padding: 4 }}>
-                            <Ionicons name="close-circle" size={18} color="#94A3B8" />
-                        </TouchableOpacity>
-                    )}
-                </View>
-            </View>
-
-            {/* ══════════════════════════════════════════════════
-                2. MAIN CATEGORIES CONTENT (EXPLORER VS GRID)
-            ══════════════════════════════════════════════════ */}
-            {loading && !refreshing ? (
-                <View style={s.loadingBox}>
-                    <ActivityIndicator size="large" color={BRAND.sky} />
-                    <Text style={s.loadingTxt}>Loading smart catalog taxonomy...</Text>
-                </View>
-            ) : viewMode === 'explorer' && filteredCategories.length > 0 ? (
-                /* ─── DUAL-PANE CATEGORY EXPLORER (AliExpress / Shopee Style) ─── */
-                <View style={s.explorerContainer}>
-                    {/* Left Vertical Category Rail */}
-                    <ScrollView
-                        showsVerticalScrollIndicator={false}
-                        style={s.railScroll}
-                        contentContainerStyle={s.railScrollContent}
-                    >
-                        {filteredCategories.map((cat, idx) => {
-                            const isSelected = selectedCategory?.id === cat.id;
-                            const count = categoryCounts[(cat.name || '').toLowerCase().trim()] || 0;
-
-                            return (
-                                <TouchableOpacity
-                                    key={'rail-' + cat.id}
-                                    activeOpacity={0.85}
-                                    onPress={() => {
-                                        setSelectedCategory(cat);
-                                        setActiveSubcategory(null);
-                                    }}
-                                    style={[
-                                        s.railItem,
-                                        isSelected && s.railItemActive
-                                    ]}
-                                >
-                                    {/* Active Left Pill Bar */}
-                                    {isSelected && <View style={s.railActiveIndicator} />}
-
-                                    <View style={[
-                                        s.railIconBox,
-                                        isSelected && s.railIconBoxActive
-                                    ]}>
-                                        <Image
-                                            source={{ uri: getCategoryImage(cat) }}
-                                            style={s.railIconImg}
-                                        />
-                                    </View>
-
-                                    <Text
-                                        numberOfLines={2}
-                                        style={[
-                                            s.railItemTitle,
-                                            isSelected && s.railItemTitleActive
-                                        ]}
-                                    >
-                                        {cat.name}
-                                    </Text>
-
-                                    {count > 0 && (
-                                        <Text style={[
-                                            s.railItemCount,
-                                            isSelected && s.railItemCountActive
-                                        ]}>
-                                            {count} items
-                                        </Text>
-                                    )}
-                                </TouchableOpacity>
-                            );
-                        })}
+            {/* BODY */}
+            {loading&&!refreshing?<Skeleton/>:vm==="explorer"?(
+                <View style={s.exWrap}>
+                    {/* RAIL */}
+                    <ScrollView style={s.rail} showsVerticalScrollIndicator={false} contentContainerStyle={{paddingTop:6,paddingBottom:120}}>
+                        {fCats.map(cat=>(
+                            <RailItem key={cat.id} cat={cat} isSelected={selCat?.id===cat.id}
+                                count={counts[(cat.name||"").toLowerCase().trim()]||0}
+                                onPress={()=>doSel(cat)}/>
+                        ))}
                     </ScrollView>
 
-                    {/* Right Dynamic Content Pane */}
-                    <ScrollView
-                        showsVerticalScrollIndicator={false}
-                        style={s.showcaseScroll}
-                        contentContainerStyle={s.showcaseContent}
-                        refreshControl={
-                            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[BRAND.sky]} />
-                        }
-                    >
-                        {selectedCategory && (
-                            <View>
-                                {/* Category Spotlight Hero Banner */}
-                                <TouchableOpacity
-                                    activeOpacity={0.92}
-                                    onPress={() => onSelectCategory ? onSelectCategory(selectedCategory.name) : onGoToShop && onGoToShop(selectedCategory.name)}
-                                    style={s.heroBannerCard}
-                                >
-                                    <Image
-                                        source={{ uri: activeBanner.banner }}
-                                        style={s.heroBannerImg}
-                                    />
-                                    <View style={s.heroBannerOverlay} />
-
-                                    <View style={s.heroBannerContent}>
-                                        <View style={s.heroBadgeRow}>
-                                            <Ionicons name="sparkles" size={11} color="#FFFFFF" />
-                                            <Text style={s.heroBadgeTxt}>{activeBanner.highlight}</Text>
+                    {/* SHOWCASE */}
+                    <ScrollView style={s.show} showsVerticalScrollIndicator={false} contentContainerStyle={s.showContent}
+                        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#D9A73A" colors={["#D9A73A"]}/>}>
+                        {selCat&&(
+                            <>
+                                {/* Hero Banner */}
+                                <Pressable onPress={()=>onSelectCategory?onSelectCategory(selCat.name):onGoToShop&&onGoToShop(selCat.name)} style={s.hero}>
+                                    <Image source={{uri:banner.banner}} style={s.heroImg}/>
+                                    <LinearGradient colors={["transparent","rgba(10,25,47,0.7)","rgba(10,25,47,0.97)"]} style={StyleSheet.absoluteFillObject} start={{x:0,y:0}} end={{x:0,y:1}}/>
+                                    <View style={s.heroContent}>
+                                        <View style={s.heroBadge}><Text style={s.heroBadgeTxt}>✦ {banner.highlight}</Text></View>
+                                        <View>
+                                            <Text style={{fontSize:20,marginBottom:2}}>{emoji}</Text>
+                                            <Text style={s.heroTitle} numberOfLines={1}>{selCat.name}</Text>
+                                            <Text style={s.heroSub} numberOfLines={1}>{banner.tagline}</Text>
                                         </View>
-
-                                        <Text style={s.heroBannerTitle} numberOfLines={2}>
-                                            {selectedCategory.name}
-                                        </Text>
-                                        <Text style={s.heroBannerSub} numberOfLines={1}>
-                                            {activeBanner.tagline}
-                                        </Text>
-
-                                        <View style={s.heroCtaPill}>
-                                            <Text style={s.heroCtaTxt}>Explore All Items</Text>
-                                            <Ionicons name="arrow-forward" size={12} color="#FFFFFF" />
-                                        </View>
+                                        <LinearGradient colors={["#D9A73A","#A07820"]} style={s.heroCta} start={{x:0,y:0}} end={{x:1,y:0}}>
+                                            <Text style={s.heroCtaTxt}>Shop Now</Text>
+                                            <Ionicons name="arrow-forward" size={11} color="#0A192F"/>
+                                        </LinearGradient>
                                     </View>
-                                </TouchableOpacity>
+                                </Pressable>
 
-                                {/* ─── Subcategories Filter Chips ─── */}
-                                <View style={s.subcategoriesWrap}>
-                                    <Text style={s.sectionHeaderTitle}>
-                                        POPULAR SECTIONS
-                                    </Text>
-
-                                    <ScrollView
-                                        horizontal
-                                        showsHorizontalScrollIndicator={false}
-                                        contentContainerStyle={s.subcatChipsRow}
-                                    >
-                                        {activeSubcategories.map((sub, sIdx) => {
-                                            const isActive = (activeSubcategory?.name === sub.name) || (!activeSubcategory && sIdx === 0);
-
-                                            return (
-                                                <TouchableOpacity
-                                                    key={'sub-' + sIdx}
-                                                    onPress={() => {
-                                                        if (sub.query === '') {
-                                                            setActiveSubcategory(null);
-                                                        } else {
-                                                            setActiveSubcategory(sub);
-                                                        }
-                                                    }}
-                                                    style={[
-                                                        s.subcatChip,
-                                                        isActive && s.subcatChipActive
-                                                    ]}
-                                                    activeOpacity={0.75}
-                                                >
-                                                    <Text style={[
-                                                        s.subcatChipTxt,
-                                                        isActive && s.subcatChipTxtActive
-                                                    ]}>
-                                                        {sub.name}
-                                                    </Text>
-                                                </TouchableOpacity>
-                                            );
-                                        })}
+                                {/* Subcats */}
+                                <View style={s.subcatSec}>
+                                    <View style={s.secRow}><View style={s.dot}/><Text style={s.secLbl}>FILTER</Text></View>
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chipRow}>
+                                        {subs.map((sub,i)=>(
+                                            <Chip key={i} sub={sub}
+                                                isActive={activeSub?.n===sub.n||(!activeSub&&i===0)}
+                                                onPress={()=>sub.q===""?setActiveSub(null):setActiveSub(sub)}/>
+                                        ))}
                                     </ScrollView>
                                 </View>
 
-                                {/* ─── Live Products in Selected Category ─── */}
-                                <View style={s.productsSection}>
-                                    <View style={s.productsHeadRow}>
-                                        <Text style={s.sectionHeaderTitle}>
-                                            IN-STOCK PRODUCTS ({activeCategoryProducts.length})
-                                        </Text>
-
-                                        <TouchableOpacity
-                                            onPress={() => onSelectCategory ? onSelectCategory(selectedCategory.name) : onGoToShop && onGoToShop(selectedCategory.name)}
-                                            style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}
-                                        >
-                                            <Text style={s.seeAllTxt}>See All in Shop</Text>
-                                            <Ionicons name="chevron-forward" size={12} color={BRAND.sky} />
-                                        </TouchableOpacity>
-                                    </View>
-
-                                    {activeCategoryProducts.length === 0 ? (
-                                        <View style={s.emptyCategoryBox}>
-                                            <Ionicons name="cube-outline" size={32} color="#94A3B8" />
-                                            <Text style={s.emptyCategoryTitle}>
-                                                No items match this filter yet
-                                            </Text>
-                                            <TouchableOpacity
-                                                onPress={() => onSelectCategory ? onSelectCategory(selectedCategory.name) : onGoToShop && onGoToShop(selectedCategory.name)}
-                                                style={s.emptyCategoryBtn}
-                                            >
-                                                <Text style={s.emptyCategoryBtnTxt}>Browse Marketplace</Text>
-                                            </TouchableOpacity>
+                                {/* Products */}
+                                <View style={s.prodSec}>
+                                    <View style={s.prodHdr}>
+                                        <View style={s.secRow}>
+                                            <View style={s.dot}/>
+                                            <Text style={s.secLbl}>IN-STOCK</Text>
+                                            <View style={s.cBubble}><Text style={s.cBubbleTxt}>{fProds.length}</Text></View>
                                         </View>
-                                    ) : (
-                                        <View style={s.productsGrid}>
-                                            {activeCategoryProducts.slice(0, 10).map((prod) => {
-                                                const hasDiscount = Number(prod.compare_at_price) > Number(prod.price);
-
-                                                return (
-                                                    <TouchableOpacity
-                                                        key={'cat-prod-' + prod.id}
-                                                        activeOpacity={0.9}
-                                                        onPress={() => onProductClick && onProductClick(prod)}
-                                                        style={s.prodCard}
-                                                    >
-                                                        <View style={s.prodImgBox}>
-                                                            <Image
-                                                                source={{ uri: getProductImage(prod) }}
-                                                                style={s.prodImg}
-                                                                resizeMode="cover"
-                                                            />
-                                                            {hasDiscount && (
-                                                                <View style={s.discountBadge}>
-                                                                    <Text style={s.discountTxt}>SALE</Text>
-                                                                </View>
-                                                            )}
-                                                        </View>
-
-                                                        <View style={s.prodBody}>
-                                                            <Text numberOfLines={2} style={s.prodName}>
-                                                                {prod.name}
-                                                            </Text>
-
-                                                            <View style={s.prodPriceRow}>
-                                                                <Text style={s.prodPrice}>
-                                                                    {fmtPrice(prod.price)}
-                                                                </Text>
-
-                                                                <TouchableOpacity
-                                                                    onPress={() => handleAddToCartItem(prod)}
-                                                                    style={s.prodAddBtn}
-                                                                    activeOpacity={0.7}
-                                                                >
-                                                                    <Ionicons name="add" size={16} color="#FFFFFF" />
-                                                                </TouchableOpacity>
-                                                            </View>
-                                                        </View>
-                                                    </TouchableOpacity>
-                                                );
-                                            })}
+                                        <Pressable onPress={()=>onSelectCategory?onSelectCategory(selCat.name):onGoToShop&&onGoToShop(selCat.name)} style={s.seeAll}>
+                                            <Text style={s.seeAllTxt}>See all</Text>
+                                            <Ionicons name="chevron-forward" size={10} color="#A07820"/>
+                                        </Pressable>
+                                    </View>
+                                    {fProds.length===0?(
+                                        <View style={s.emptyBox}>
+                                            <Text style={{fontSize:32,marginBottom:6}}>📦</Text>
+                                            <Text style={s.emptyT}>No items match</Text>
+                                            <Text style={s.emptyS}>Try another filter</Text>
+                                            <Pressable onPress={()=>onSelectCategory?onSelectCategory(selCat.name):onGoToShop&&onGoToShop(selCat.name)} style={s.emptyBtn}>
+                                                <Text style={s.emptyBtnT}>Browse All</Text>
+                                            </Pressable>
+                                        </View>
+                                    ):(
+                                        <View style={s.grid}>
+                                            {fProds.slice(0,10).map(p=>(
+                                                <ProdCard key={p.id} prod={p} cw={CW}
+                                                    onPress={()=>onProductClick&&onProductClick(p)}
+                                                    onAdd={doAdd}/>
+                                            ))}
                                         </View>
                                     )}
                                 </View>
 
-                                {/* WhatsApp Help Concierge */}
-                                <TouchableOpacity
-                                    activeOpacity={0.88}
-                                    onPress={() => handleWhatsAppConcierge(selectedCategory)}
-                                    style={s.conciergePill}
-                                >
-                                    <View style={s.conciergeIconBox}>
-                                        <Ionicons name="logo-whatsapp" size={18} color="#10B981" />
+                                {/* WhatsApp */}
+                                <Pressable onPress={()=>doWA(selCat)} style={s.wa}>
+                                    <View style={s.waIcon}><Ionicons name="logo-whatsapp" size={18} color="#25D366"/></View>
+                                    <View style={{flex:1}}>
+                                        <Text style={s.waTitle}>Need help with {selCat.name}?</Text>
+                                        <Text style={s.waSub}>Chat on WhatsApp</Text>
                                     </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={s.conciergeTitle}>Need help finding {selectedCategory.name}?</Text>
-                                        <Text style={s.conciergeSub}>Ask our concierge assistant on WhatsApp</Text>
-                                    </View>
-                                    <Ionicons name="chevron-forward" size={14} color="#64748B" />
-                                </TouchableOpacity>
-                            </View>
+                                    <Ionicons name="chevron-forward" size={13} color="#059669"/>
+                                </Pressable>
+                                <View style={{height:16}}/>
+                            </>
                         )}
                     </ScrollView>
                 </View>
-            ) : (
-                /* ─── 3-COLUMN LUXURY VISUAL GRID SHOWCASE ─── */
-                <ScrollView
-                    showsVerticalScrollIndicator={false}
-                    contentContainerStyle={s.gridContainer}
-                    refreshControl={
-                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[BRAND.sky]} />
-                    }
-                >
-                    <View style={s.gridHeaderNote}>
-                        <Text style={s.gridHeaderTitle}>ALL MARKETPLACE DEPARTMENTS</Text>
-                        <Text style={s.gridHeaderSub}>Tap any department to shop or drill down</Text>
-                    </View>
-
-                    <View style={s.gridCardsWrap}>
-                        {filteredCategories.map((cat) => {
-                            const count = categoryCounts[(cat.name || '').toLowerCase().trim()] || 0;
-
-                            return (
-                                <TouchableOpacity
-                                    key={'grid-cat-' + cat.id}
-                                    activeOpacity={0.85}
-                                    onPress={() => {
-                                        setSelectedCategory(cat);
-                                        setViewMode('explorer');
-                                    }}
-                                    style={s.gridCard}
-                                >
-                                    <View style={s.gridCardImgWrap}>
-                                        <Image
-                                            source={{ uri: getCategoryImage(cat) }}
-                                            style={s.gridCardImg}
-                                        />
-                                    </View>
-
-                                    <Text numberOfLines={2} style={s.gridCardTitle}>
-                                        {cat.name}
-                                    </Text>
-
-                                    <View style={s.gridCountBadge}>
-                                        <Text style={s.gridCountTxt}>
-                                            {count > 0 ? `${count} items` : 'Explore'}
-                                        </Text>
-                                    </View>
-                                </TouchableOpacity>
-                            );
-                        })}
+            ):(
+                /* GRID */
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.gridCont}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#D9A73A" colors={["#D9A73A"]}/>}>
+                    <LinearGradient colors={["#0A192F","#1B3358"]} style={s.statsBar} start={{x:0,y:0}} end={{x:1,y:0}}>
+                        <View style={s.si}><Text style={s.sn}>{fCats.length}</Text><Text style={s.sl}>Depts</Text></View>
+                        <View style={s.sdiv}/>
+                        <View style={s.si}><Text style={s.sn}>{prods.length}</Text><Text style={s.sl}>Products</Text></View>
+                        <View style={s.sdiv}/>
+                        <View style={s.si}><Text style={s.sn}>✓</Text><Text style={s.sl}>Verified</Text></View>
+                    </LinearGradient>
+                    <View style={[s.secRow,{marginBottom:10}]}><View style={s.dot}/><Text style={[s.secLbl,{color:"#0A192F"}]}>ALL DEPARTMENTS</Text></View>
+                    <View style={s.gWrap}>
+                        {fCats.map(cat=>(
+                            <GCard key={cat.id} cat={cat}
+                                count={counts[(cat.name||"").toLowerCase().trim()]||0}
+                                onPress={()=>{doSel(cat);switchVm("explorer");}}/>
+                        ))}
                     </View>
                 </ScrollView>
             )}
 
-            {/* ════ FLOATING TOAST NOTIFICATION ════ */}
-            {toastMessage.length > 0 && (
-                <Animated.View style={[s.toastContainer, { opacity: toastAnim }]}>
-                    <Ionicons name="checkmark-circle" size={18} color="#10B981" />
-                    <Text style={s.toastTxt} numberOfLines={1}>{toastMessage}</Text>
-                </Animated.View>
-            )}
+            {/* TOAST */}
+            <Animated.View pointerEvents="none" style={[s.toast,{opacity:toastA,transform:[{translateY:toastA.interpolate({inputRange:[0,1],outputRange:[16,0]})}]}]}>
+                <LinearGradient colors={["#0E2340","#0A192F"]} style={s.toastIn} start={{x:0,y:0}} end={{x:1,y:0}}>
+                    <Ionicons name="checkmark-circle" size={16} color="#D9A73A"/>
+                    <Text style={s.toastTxt} numberOfLines={1}>{toastMsg}</Text>
+                </LinearGradient>
+            </Animated.View>
         </View>
     );
 };
 
 const s = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#F8FAFC',
-    },
-    // Top Header
-    header: {
-        backgroundColor: BRAND.navy,
-        paddingTop: Platform.OS === 'ios' ? 50 : 44,
-        paddingHorizontal: 16,
-        paddingBottom: 16,
-        borderBottomLeftRadius: 24,
-        borderBottomRightRadius: 24,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 10,
-        elevation: 6,
-    },
-    headerTopRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 12,
-    },
-    brandGroup: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-    },
-    brandLogo: {
-        width: 36,
-        height: 36,
-    },
-    brandTitle: {
-        color: '#FFFFFF',
-        fontSize: 16,
-        fontWeight: '900',
-        letterSpacing: 0.6,
-    },
-    brandTitleAccent: {
-        color: '#38BDF8',
-    },
-    brandBadgePill: {
-        backgroundColor: 'rgba(56, 189, 248, 0.18)',
-        paddingHorizontal: 6,
-        paddingVertical: 1.5,
-        borderRadius: 6,
-        borderWidth: 1,
-        borderColor: 'rgba(56, 189, 248, 0.35)',
-    },
-    brandBadgeTxt: {
-        color: '#38BDF8',
-        fontSize: 8.5,
-        fontWeight: '900',
-        letterSpacing: 0.5,
-    },
-    brandSubtitle: {
-        color: '#94A3B8',
-        fontSize: 10.5,
-        fontWeight: '600',
-        marginTop: 1,
-    },
-    headerActions: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-    },
-    modeToggleBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        backgroundColor: 'rgba(255, 255, 255, 0.12)',
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.15)',
-    },
-    modeToggleTxt: {
-        color: '#FFFFFF',
-        fontSize: 11,
-        fontWeight: '700',
-    },
-    cartBtn: {
-        position: 'relative',
-        padding: 4,
-    },
-    cartBadge: {
-        position: 'absolute',
-        top: 0,
-        right: -3,
-        backgroundColor: '#F59E0B',
-        borderRadius: 10,
-        minWidth: 17,
-        height: 17,
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingHorizontal: 3,
-        borderWidth: 1.5,
-        borderColor: BRAND.navy,
-    },
-    cartBadgeTxt: {
-        color: '#0A192F',
-        fontSize: 9,
-        fontWeight: '900',
-    },
-    // Search Bar
-    searchBar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FFFFFF',
-        borderRadius: 14,
-        paddingHorizontal: 12,
-        height: 44,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 6,
-        elevation: 3,
-    },
-    searchInput: {
-        flex: 1,
-        fontSize: 13,
-        color: BRAND.slateDark,
-        fontWeight: '600',
-    },
-    // Loading
-    loadingBox: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 60,
-    },
-    loadingTxt: {
-        marginTop: 10,
-        fontSize: 12,
-        color: BRAND.slate,
-        fontWeight: '700',
-    },
-    // Explorer Layout
-    explorerContainer: {
-        flex: 1,
-        flexDirection: 'row',
-    },
-    // Left Category Rail
-    railScroll: {
-        width: 95,
-        backgroundColor: '#F1F5F9',
-        borderRightWidth: 1,
-        borderRightColor: '#E2E8F0',
-    },
-    railScrollContent: {
-        paddingVertical: 10,
-        paddingBottom: 100,
-    },
-    railItem: {
-        paddingVertical: 12,
-        paddingHorizontal: 6,
-        alignItems: 'center',
-        position: 'relative',
-        borderBottomWidth: 1,
-        borderBottomColor: '#E8EDF5',
-    },
-    railItemActive: {
-        backgroundColor: '#FFFFFF',
-    },
-    railActiveIndicator: {
-        position: 'absolute',
-        left: 0,
-        top: 10,
-        bottom: 10,
-        width: 3.5,
-        backgroundColor: BRAND.sky,
-        borderTopRightRadius: 3,
-        borderBottomRightRadius: 3,
-    },
-    railIconBox: {
-        width: 44,
-        height: 44,
-        borderRadius: 12,
-        backgroundColor: '#FFFFFF',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 6,
-        overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-    },
-    railIconBoxActive: {
-        borderColor: BRAND.sky,
-        backgroundColor: BRAND.skyLight,
-    },
-    railIconImg: {
-        width: '100%',
-        height: '100%',
-        resizeMode: 'cover',
-    },
-    railItemTitle: {
-        fontSize: 10.5,
-        fontWeight: '700',
-        color: BRAND.slate,
-        textAlign: 'center',
-        lineHeight: 13,
-    },
-    railItemTitleActive: {
-        color: BRAND.sky,
-        fontWeight: '900',
-    },
-    railItemCount: {
-        fontSize: 9,
-        color: '#94A3B8',
-        fontWeight: '600',
-        marginTop: 2,
-    },
-    railItemCountActive: {
-        color: '#0284C7',
-    },
-    // Right Showcase Area
-    showcaseScroll: {
-        flex: 1,
-        backgroundColor: '#FFFFFF',
-    },
-    showcaseContent: {
-        padding: 12,
-        paddingBottom: 130,
-    },
-    // Hero Banner Card
-    heroBannerCard: {
-        height: 125,
-        borderRadius: 18,
-        overflow: 'hidden',
-        position: 'relative',
-        marginBottom: 14,
-        backgroundColor: BRAND.navy,
-        shadowColor: BRAND.navy,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 8,
-        elevation: 3,
-    },
-    heroBannerImg: {
-        width: '100%',
-        height: '100%',
-        position: 'absolute',
-        opacity: 0.55,
-    },
-    heroBannerOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(10, 25, 47, 0.5)',
-    },
-    heroBannerContent: {
-        padding: 12,
-        justifyContent: 'space-between',
-        height: '100%',
-    },
-    heroBadgeRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        alignSelf: 'flex-start',
-        backgroundColor: 'rgba(2, 132, 199, 0.75)',
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 6,
-    },
-    heroBadgeTxt: {
-        color: '#FFFFFF',
-        fontSize: 9,
-        fontWeight: '800',
-        textTransform: 'uppercase',
-    },
-    heroBannerTitle: {
-        color: '#FFFFFF',
-        fontSize: 16,
-        fontWeight: '900',
-        letterSpacing: -0.2,
-    },
-    heroBannerSub: {
-        color: '#E0F2FE',
-        fontSize: 10.5,
-        fontWeight: '600',
-    },
-    heroCtaPill: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        alignSelf: 'flex-start',
-        backgroundColor: 'rgba(255, 255, 255, 0.22)',
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.3)',
-    },
-    heroCtaTxt: {
-        color: '#FFFFFF',
-        fontSize: 10,
-        fontWeight: '800',
-    },
-    // Subcategories Section
-    subcategoriesWrap: {
-        marginBottom: 16,
-    },
-    sectionHeaderTitle: {
-        fontSize: 11,
-        fontWeight: '900',
-        color: BRAND.slate,
-        letterSpacing: 0.5,
-        textTransform: 'uppercase',
-        marginBottom: 8,
-    },
-    subcatChipsRow: {
-        gap: 8,
-        paddingBottom: 2,
-    },
-    subcatChip: {
-        backgroundColor: '#F1F5F9',
-        paddingHorizontal: 12,
-        paddingVertical: 7,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-    },
-    subcatChipActive: {
-        backgroundColor: BRAND.navy,
-        borderColor: BRAND.navy,
-    },
-    subcatChipTxt: {
-        fontSize: 11,
-        fontWeight: '700',
-        color: BRAND.slateDark,
-    },
-    subcatChipTxtActive: {
-        color: '#FFFFFF',
-    },
-    // Products Section
-    productsSection: {
-        marginBottom: 14,
-    },
-    productsHeadRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 10,
-    },
-    seeAllTxt: {
-        fontSize: 11,
-        color: BRAND.sky,
-        fontWeight: '800',
-    },
-    productsGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 10,
-        justifyContent: 'space-between',
-    },
-    prodCard: {
-        width: (width - 95 - 24 - 10) / 2,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: '#F1F5F9',
-        overflow: 'hidden',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 5,
-        elevation: 1.5,
-    },
-    prodImgBox: {
-        width: '100%',
-        height: 105,
-        backgroundColor: '#F8FAFC',
-        position: 'relative',
-    },
-    prodImg: {
-        width: '100%',
-        height: '100%',
-    },
-    discountBadge: {
-        position: 'absolute',
-        top: 6,
-        left: 6,
-        backgroundColor: '#EF4444',
-        paddingHorizontal: 5,
-        paddingVertical: 1.5,
-        borderRadius: 6,
-    },
-    discountTxt: {
-        color: '#FFFFFF',
-        fontSize: 8.5,
-        fontWeight: '900',
-    },
-    prodBody: {
-        padding: 8,
-    },
-    prodName: {
-        fontSize: 11,
-        fontWeight: '700',
-        color: BRAND.slateDark,
-        lineHeight: 14,
-        height: 28,
-        marginBottom: 6,
-    },
-    prodPriceRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    prodPrice: {
-        fontSize: 12,
-        fontWeight: '900',
-        color: BRAND.navy,
-    },
-    prodAddBtn: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        backgroundColor: BRAND.sky,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    emptyCategoryBox: {
-        paddingVertical: 35,
-        alignItems: 'center',
-        backgroundColor: '#F8FAFC',
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        paddingHorizontal: 16,
-    },
-    emptyCategoryTitle: {
-        color: BRAND.slate,
-        fontSize: 12,
-        fontWeight: '700',
-        marginTop: 8,
-        textAlign: 'center',
-    },
-    emptyCategoryBtn: {
-        marginTop: 10,
-        backgroundColor: BRAND.navy,
-        paddingHorizontal: 14,
-        paddingVertical: 6,
-        borderRadius: 10,
-    },
-    emptyCategoryBtnTxt: {
-        color: '#FFFFFF',
-        fontSize: 11,
-        fontWeight: '800',
-    },
-    // Concierge Pill
-    conciergePill: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        backgroundColor: '#F0FDF4',
-        padding: 12,
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: '#DCFCE7',
-        marginTop: 10,
-    },
-    conciergeIconBox: {
-        width: 34,
-        height: 34,
-        borderRadius: 17,
-        backgroundColor: '#DCFCE7',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    conciergeTitle: {
-        fontSize: 11.5,
-        fontWeight: '800',
-        color: '#166534',
-    },
-    conciergeSub: {
-        fontSize: 10,
-        color: '#15803D',
-        marginTop: 1,
-    },
-    // Visual Grid Mode
-    gridContainer: {
-        padding: 14,
-        paddingBottom: 130,
-    },
-    gridHeaderNote: {
-        marginBottom: 12,
-    },
-    gridHeaderTitle: {
-        fontSize: 12,
-        fontWeight: '900',
-        color: BRAND.navy,
-        letterSpacing: 0.5,
-    },
-    gridHeaderSub: {
-        fontSize: 11,
-        color: BRAND.slate,
-        marginTop: 2,
-    },
-    gridCardsWrap: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 10,
-        justifyContent: 'space-between',
-    },
-    gridCard: {
-        width: (width - 28 - 20) / 3,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 18,
-        padding: 10,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#F1F5F9',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 6,
-        elevation: 1.5,
-        marginBottom: 4,
-    },
-    gridCardImgWrap: {
-        width: 58,
-        height: 58,
-        borderRadius: 16,
-        backgroundColor: '#F8FAFC',
-        overflow: 'hidden',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 8,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-    },
-    gridCardImg: {
-        width: '100%',
-        height: '100%',
-        resizeMode: 'cover',
-    },
-    gridCardTitle: {
-        fontSize: 11,
-        fontWeight: '800',
-        color: BRAND.slateDark,
-        textAlign: 'center',
-        lineHeight: 14,
-        height: 28,
-    },
-    gridCountBadge: {
-        marginTop: 6,
-        backgroundColor: '#F1F5F9',
-        paddingHorizontal: 8,
-        paddingVertical: 2.5,
-        borderRadius: 8,
-    },
-    gridCountTxt: {
-        fontSize: 9.5,
-        fontWeight: '700',
-        color: BRAND.sky,
-    },
+    root:{flex:1,backgroundColor:"#F9F5EB"},
+    // Header
+    hdr:{paddingTop:Platform.OS==="ios"?52:44,paddingHorizontal:14,paddingBottom:12},
+    goldLine:{height:2,backgroundColor:"#D9A73A",width:50,borderRadius:2,marginBottom:12,opacity:0.65},
+    hRow:{flexDirection:"row",alignItems:"center",justifyContent:"space-between",marginBottom:11},
+    brand:{flexDirection:"row",alignItems:"center",gap:9},
+    logo:{width:38,height:38,borderRadius:19,alignItems:"center",justifyContent:"center"},
+    bTitleRow:{flexDirection:"row",alignItems:"center",gap:5},
+    bTitle:{color:"#FFFFFF",fontSize:15,fontWeight:"900",letterSpacing:0.4},
+    bAccent:{color:"#D9A73A"},
+    dPill:{backgroundColor:"rgba(217,167,58,0.18)",paddingHorizontal:5,paddingVertical:1.5,borderRadius:5,borderWidth:1,borderColor:"rgba(217,167,58,0.3)"},
+    dPillTxt:{color:"#D9A73A",fontSize:7.5,fontWeight:"900",letterSpacing:0.4},
+    bSub:{color:"#8A9AB0",fontSize:10,fontWeight:"600",marginTop:1},
+    hRight:{flexDirection:"row",alignItems:"center",gap:7},
+    // Mode toggle
+    modeWrap:{flexDirection:"row",backgroundColor:"rgba(255,255,255,0.08)",borderRadius:11,padding:3,borderWidth:1,borderColor:"rgba(255,255,255,0.14)",position:"relative",overflow:"hidden"},
+    mSlider:{position:"absolute",top:3,height:"84%",width:"48%",backgroundColor:"#D9A73A",borderRadius:8,zIndex:0},
+    mBtn:{flexDirection:"row",alignItems:"center",paddingHorizontal:7,paddingVertical:5,gap:2.5,zIndex:1},
+    mTxt:{fontSize:10,fontWeight:"700",color:"#9CA3AF"},
+    mTxtOn:{color:"#0A192F"},
+    // Cart
+    cartBtn:{width:38,height:38,borderRadius:19,backgroundColor:"rgba(255,255,255,0.09)",borderWidth:1,borderColor:"rgba(255,255,255,0.16)",alignItems:"center",justifyContent:"center"},
+    cartBadge:{position:"absolute",top:-4,right:-5,borderRadius:9,minWidth:17,height:17,alignItems:"center",justifyContent:"center",paddingHorizontal:2.5,borderWidth:1.5,borderColor:"#0A192F"},
+    cartBTxt:{color:"#0A192F",fontSize:8.5,fontWeight:"900"},
+    // Search
+    sWrap:{flexDirection:"row",alignItems:"center",backgroundColor:"#FFFFFF",borderRadius:14,paddingHorizontal:11,height:42,borderWidth:1.5,gap:7,elevation:3},
+    sInput:{flex:1,fontSize:13,color:"#1F2937",fontWeight:"600",paddingVertical:0},
+    // Explorer
+    exWrap:{flex:1,flexDirection:"row"},
+    // Rail
+    rail:{width:RAIL,backgroundColor:"#E4DEC4",borderRightWidth:1,borderRightColor:"#D0C99C"},
+    rItem:{paddingVertical:11,paddingHorizontal:6,alignItems:"center",position:"relative",borderBottomWidth:1,borderBottomColor:"#D0C99C"},
+    rPill:{position:"absolute",left:0,top:10,bottom:10,width:3.5,backgroundColor:"#D9A73A",borderTopRightRadius:3.5,borderBottomRightRadius:3.5},
+    rImgBox:{width:48,height:48,borderRadius:13,backgroundColor:"#FFFFFF",overflow:"hidden",marginBottom:5,borderWidth:1.5,borderColor:"#D0C99C",position:"relative"},
+    rImgBoxOn:{borderColor:"#D9A73A",elevation:3},
+    rImg:{width:"100%",height:"100%",resizeMode:"cover"},
+    rLbl:{fontSize:9.5,fontWeight:"700",color:"#6B7280",textAlign:"center",lineHeight:12},
+    rLblOn:{color:"#A07820",fontWeight:"900"},
+    rCount:{marginTop:3,backgroundColor:"#D0C99C",paddingHorizontal:5,paddingVertical:1,borderRadius:7},
+    rCountOn:{backgroundColor:"rgba(217,167,58,0.2)"},
+    rCountTxt:{fontSize:8.5,fontWeight:"800",color:"#6B7280"},
+    rCountTxtOn:{color:"#A07820"},
+    // Showcase
+    show:{flex:1,backgroundColor:"#FFFFFF"},
+    showContent:{padding:10,paddingBottom:130},
+    // Hero
+    hero:{height:140,borderRadius:18,overflow:"hidden",marginBottom:12,backgroundColor:"#0A192F",elevation:4},
+    heroImg:{...StyleSheet.absoluteFillObject,width:"100%",height:"100%",opacity:0.5},
+    heroContent:{flex:1,padding:12,justifyContent:"space-between"},
+    heroBadge:{alignSelf:"flex-start",backgroundColor:"rgba(217,167,58,0.2)",paddingHorizontal:8,paddingVertical:2.5,borderRadius:7,borderWidth:1,borderColor:"rgba(217,167,58,0.35)"},
+    heroBadgeTxt:{color:"#D9A73A",fontSize:8.5,fontWeight:"800"},
+    heroTitle:{color:"#FFFFFF",fontSize:16,fontWeight:"900",letterSpacing:-0.2},
+    heroSub:{color:"rgba(255,255,255,0.75)",fontSize:10.5,fontWeight:"600",marginTop:1},
+    heroCta:{flexDirection:"row",alignItems:"center",gap:4,alignSelf:"flex-start",paddingHorizontal:11,paddingVertical:5.5,borderRadius:11,elevation:3},
+    heroCtaTxt:{color:"#0A192F",fontSize:11,fontWeight:"900"},
+    // Section labels
+    secRow:{flexDirection:"row",alignItems:"center",gap:5,marginBottom:7},
+    dot:{width:4.5,height:4.5,borderRadius:2.5,backgroundColor:"#D9A73A"},
+    secLbl:{fontSize:10,fontWeight:"900",color:"#6B7280",letterSpacing:0.6,textTransform:"uppercase"},
+    // Subcat section
+    subcatSec:{marginBottom:12},
+    chipRow:{gap:6,paddingBottom:2,flexDirection:"row"},
+    chip:{flexDirection:"row",alignItems:"center",backgroundColor:"#F0EDD6",paddingHorizontal:10,paddingVertical:6,borderRadius:11,borderWidth:1,borderColor:"#E8D99A"},
+    chipOn:{backgroundColor:"#0A192F",borderColor:"#D9A73A"},
+    chipTxt:{fontSize:10.5,fontWeight:"700",color:"#1F2937"},
+    chipTxtOn:{color:"#D9A73A"},
+    // Products
+    prodSec:{marginBottom:14},
+    prodHdr:{flexDirection:"row",alignItems:"center",justifyContent:"space-between",marginBottom:9},
+    cBubble:{backgroundColor:"rgba(217,167,58,0.18)",paddingHorizontal:6,paddingVertical:1,borderRadius:7,borderWidth:1,borderColor:"rgba(217,167,58,0.3)",marginLeft:4},
+    cBubbleTxt:{fontSize:9.5,fontWeight:"800",color:"#A07820"},
+    seeAll:{flexDirection:"row",alignItems:"center",gap:1.5},
+    seeAllTxt:{fontSize:11,color:"#A07820",fontWeight:"800"},
+    grid:{flexDirection:"row",flexWrap:"wrap",gap:8},
+    // Product card
+    pCard:{backgroundColor:"#FFFFFF",borderRadius:14,overflow:"hidden",borderWidth:1,borderColor:"#EEE5C0",elevation:2},
+    pImgBox:{width:"100%",height:105,backgroundColor:"#F9F5EB",position:"relative"},
+    pImg:{width:"100%",height:"100%"},
+    pDisc:{position:"absolute",top:6,left:6,backgroundColor:"#D9A73A",paddingHorizontal:5,paddingVertical:2,borderRadius:7},
+    pDiscTxt:{color:"#0A192F",fontSize:8.5,fontWeight:"900"},
+    pBody:{padding:8},
+    pName:{fontSize:11,fontWeight:"700",color:"#1F2937",lineHeight:14,marginBottom:3,minHeight:28},
+    ratingRow:{flexDirection:"row",alignItems:"center",gap:2,marginBottom:3},
+    ratingTxt:{fontSize:9.5,fontWeight:"800",color:"#D9A73A"},
+    pPriceRow:{flexDirection:"row",alignItems:"center",justifyContent:"space-between"},
+    pPrice:{fontSize:12.5,fontWeight:"900",color:"#0A192F"},
+    strikeP:{fontSize:9,color:"#9CA3AF",textDecorationLine:"line-through",fontWeight:"600",marginTop:1},
+    addBtn:{width:27,height:27,borderRadius:13.5,backgroundColor:"#D9A73A",alignItems:"center",justifyContent:"center",elevation:3},
+    // Empty
+    emptyBox:{paddingVertical:36,alignItems:"center",backgroundColor:"#F9F5EB",borderRadius:16,borderWidth:1.5,borderColor:"#E8D99A",borderStyle:"dashed"},
+    emptyT:{fontSize:12.5,fontWeight:"800",color:"#1F2937",textAlign:"center"},
+    emptyS:{fontSize:10.5,color:"#9CA3AF",marginTop:2,textAlign:"center"},
+    emptyBtn:{marginTop:12,backgroundColor:"#0A192F",paddingHorizontal:18,paddingVertical:8,borderRadius:12,borderWidth:1,borderColor:"#D9A73A"},
+    emptyBtnT:{color:"#D9A73A",fontSize:11.5,fontWeight:"900"},
+    // WhatsApp
+    wa:{flexDirection:"row",alignItems:"center",gap:9,backgroundColor:"#ECFDF5",padding:11,borderRadius:15,borderWidth:1,borderColor:"#BBF7D0"},
+    waIcon:{width:36,height:36,borderRadius:18,backgroundColor:"#D1FAE5",alignItems:"center",justifyContent:"center"},
+    waTitle:{fontSize:11.5,fontWeight:"800",color:"#065F46",lineHeight:15},
+    waSub:{fontSize:10,color:"#059669",marginTop:1},
+    // Grid mode
+    gridCont:{padding:12,paddingBottom:130},
+    statsBar:{flexDirection:"row",borderRadius:16,padding:14,marginBottom:14,elevation:4},
+    si:{flex:1,alignItems:"center"},
+    sn:{fontSize:18,fontWeight:"900",color:"#D9A73A"},
+    sl:{fontSize:9.5,color:"#A0B4CC",fontWeight:"700",marginTop:1},
+    sdiv:{width:1,backgroundColor:"rgba(255,255,255,0.1)",marginVertical:4},
+    gWrap:{flexDirection:"row",flexWrap:"wrap",gap:8,marginTop:2},
+    gCard:{width:(width-24-16)/3,backgroundColor:"#FFFFFF",borderRadius:16,overflow:"hidden",borderWidth:1,borderColor:"#EEE5C0",elevation:2,marginBottom:2},
+    gImgBox:{width:"100%",height:82,position:"relative",alignItems:"center",justifyContent:"flex-end",paddingBottom:5},
+    gImg:{...StyleSheet.absoluteFillObject,width:"100%",height:"100%",resizeMode:"cover"},
+    gEmoji:{fontSize:22,zIndex:1},
+    gTitle:{fontSize:10.5,fontWeight:"800",color:"#1F2937",textAlign:"center",paddingHorizontal:5,paddingTop:6,lineHeight:13,minHeight:26},
+    gCount:{fontSize:9,fontWeight:"700",color:"#A07820",textAlign:"center",paddingBottom:8,paddingTop:2},
     // Toast
-    toastContainer: {
-        position: 'absolute',
-        bottom: 95,
-        left: 20,
-        right: 20,
-        backgroundColor: BRAND.navy,
-        borderRadius: 16,
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.25,
-        shadowRadius: 10,
-        elevation: 8,
-        zIndex: 9999,
-    },
-    toastTxt: {
-        color: '#FFFFFF',
-        fontSize: 12,
-        fontWeight: '700',
-        flex: 1,
-    },
+    toast:{position:"absolute",bottom:95,left:14,right:14,alignItems:"center",zIndex:9999},
+    toastIn:{flexDirection:"row",alignItems:"center",gap:9,paddingVertical:12,paddingHorizontal:16,borderRadius:18,elevation:9,borderWidth:1,borderColor:"rgba(217,167,58,0.3)",width:"100%"},
+    toastTxt:{color:"#FFFFFF",fontSize:12.5,fontWeight:"700",flex:1},
 });
