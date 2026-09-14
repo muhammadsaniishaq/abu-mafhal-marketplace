@@ -229,10 +229,13 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
                 category: formData.category,
                 brand: formData.brand,
                 price: parsePrice(formData.price),
+                compare_at_price: parsePrice(formData.originalPrice) || null,
                 original_price: parsePrice(formData.originalPrice) || null,
                 cost: parsePrice(formData.cost) || null,
+                stock: parseInt(formData.stock) || 0,
                 stock_quantity: parseInt(formData.stock) || 0,
                 sku: formData.sku,
+                image_url: imageUrls[0] || null,
                 images: imageUrls,
                 video_url: videoUrl, // Standardize top-level field
                 status: formData.status,

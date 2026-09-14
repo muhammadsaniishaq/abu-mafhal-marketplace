@@ -3,139 +3,236 @@ import {
     View, Text, ScrollView, Image, TouchableOpacity,
     Dimensions, Animated, StatusBar, Share, Alert,
     ActivityIndicator, StyleSheet, Platform, Modal,
-    Clipboard, Linking, Pressable
+    Linking, Pressable
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useComparison } from '../context/ComparisonContext';
 import { Video, ResizeMode } from 'expo-av';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
-import * as FileSystem from 'expo-file-system/legacy';
 
 const { width } = Dimensions.get('window');
 const AM_LOGO = require('../../assets/am_logo.png');
 
+const BRAND = {
+    navy: '#0A192F',
+    navyLight: '#0E223D',
+    gold: '#D9A73A',
+    goldLight: '#FEF3C7',
+    emerald: '#10B981',
+    emeraldLight: '#ECFDF5',
+    sky: '#0284C7',
+    skyLight: '#E0F2FE',
+    slate: '#64748B',
+    slateDark: '#0F172A',
+    bg: '#F8FAFC',
+    card: '#FFFFFF',
+    border: '#E2E8F0',
+    danger: '#EF4444',
+};
+
 const fmtPrice = (n) => {
     const num = Number(n);
-    if (!num) return '—';
+    if (!num) return '₦0';
     return `₦${num.toLocaleString()}`;
 };
 
 export const ProductDetails = ({ route, navigation, addToCart }) => {
-    const { product } = route.params || {};
-    const insets = useSafeAreaInsets();
-    const { addToComparison, isInComparison } = useComparison();
+    const initialProduct = route?.params?.product || null;
+    const productId = route?.params?.id || route?.params?.productId || initialProduct?.id;
 
-    // ── State ─────────────────────────────────────────────────────────────────
+    const insets = useSafeAreaInsets();
+    const { addToComparison } = useComparison();
+
+    // ── States ────────────────────────────────────────────────────────────────
+    const [product, setProduct] = useState(initialProduct);
     const [activeImg, setActiveImg] = useState(0);
     const [quantity, setQuantity] = useState(1);
+    const [selectedVariant, setSelectedVariant] = useState(null);
     const [descExpanded, setDescExpanded] = useState(false);
-    const [validVideo, setValidVideo] = useState(null);
-    const [showVideoModal, setShowVideoModal] = useState(false);
     const [vendor, setVendor] = useState(null);
     const [loadingVend, setLoadingVend] = useState(true);
+    const [relatedProducts, setRelatedProducts] = useState([]);
+    const [reviewsList, setReviewsList] = useState([]);
+    const [loadingReviews, setLoadingReviews] = useState(false);
     const [liked, setLiked] = useState(false);
     const [cartDone, setCartDone] = useState(false);
     const [imgZoom, setImgZoom] = useState(false);
+    const [showVideoModal, setShowVideoModal] = useState(false);
     const [showMenu, setShowMenu] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
+
+    // Toast feedback
+    const [toastMessage, setToastMessage] = useState('');
+    const toastAnim = useRef(new Animated.Value(0)).current;
 
     const heartScale = useRef(new Animated.Value(1)).current;
     const cartScale = useRef(new Animated.Value(1)).current;
 
-    // ── Calculations ──────────────────────────────────────────────────────────
-    const origP = Number(product?.compare_at_price || (product?.price ? product.price * 1.35 : 62000));
-    const finalP = Number(product?.price || 45000);
-    const calcDiscount = origP > finalP ? Math.round(((origP - finalP) / origP) * 100) : 28;
-    const discountPercent = product?.discount || calcDiscount || 28;
+    const showToast = (msg) => {
+        setToastMessage(msg);
+        Animated.sequence([
+            Animated.timing(toastAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+            Animated.delay(2200),
+            Animated.timing(toastAnim, { toValue: 0, duration: 200, useNativeDriver: true })
+        ]).start();
+    };
 
-    const stock = product?.stock_quantity != null ? Number(product.stock_quantity) : (product?.stock != null ? Number(product.stock) : 12);
-    const isOutOfStock = stock === 0;
+    // ── Fetch Fresh Product & Related Data ────────────────────────────────────
+    useEffect(() => {
+        fetchLiveProduct();
+        checkWishlist();
+    }, [productId]);
 
-    const getImgs = (imgs) => {
-        if (!imgs) return [];
-        if (Array.isArray(imgs)) return imgs.filter(Boolean);
+    const fetchLiveProduct = async () => {
+        if (!productId) return;
         try {
-            const p = JSON.parse(imgs);
-            return Array.isArray(p) ? p.filter(Boolean) : [imgs];
-        } catch {
-            return [imgs];
+            const { data, error } = await supabase
+                .from('products')
+                .select('*')
+                .eq('id', productId)
+                .maybeSingle();
+
+            if (data) {
+                setProduct(data);
+                fetchVendor(data);
+                fetchRelatedProducts(data.category, data.id);
+                fetchReviews(data.id);
+            } else if (initialProduct) {
+                fetchVendor(initialProduct);
+                fetchRelatedProducts(initialProduct.category, initialProduct.id);
+                fetchReviews(initialProduct.id);
+            }
+        } catch (err) {
+            console.log('Error fetching live product:', err);
         }
     };
 
-    const parsedImages = getImgs(product?.images);
-    const defaultHeadphones = [
-        'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=800&auto=format&fit=crop',
-        'https://images.unsplash.com/photo-1484704849700-f032a568e944?q=80&w=800&auto=format&fit=crop',
-        'https://images.unsplash.com/photo-1546435770-a3e426bf472b?q=80&w=800&auto=format&fit=crop',
-        'https://images.unsplash.com/photo-1583394838336-acd977736f90?q=80&w=800&auto=format&fit=crop',
-    ];
-    const images = parsedImages.length > 0 ? parsedImages : defaultHeadphones;
-
-    useEffect(() => {
-        fetchVendor();
-        validateVideo();
-        checkWishlist();
-    }, [product?.id]);
-
-    const fetchVendor = async () => {
+    // ── Fetch Real Vendor / Store Profile ─────────────────────────────────────
+    const fetchVendor = async (currentProd) => {
         setLoadingVend(true);
-        const vId = product?.vendor_id || product?.user_id || product?.owner_id;
+        const vId = currentProd?.vendor_id || currentProd?.user_id;
+
+        // Default Official Store Fallback
+        const officialStore = {
+            id: 'official',
+            name: 'Abu Mafhal Official Store',
+            business_name: 'Abu Mafhal Official Store',
+            role: 'admin',
+            isOfficial: true,
+            is_verified: true,
+            rating: 5.0,
+            reviews: '3.8K',
+            phone: '2349021486162',
+            whatsapp: '2349021486162',
+            avatar: null,
+            tagline: 'Official Flagship Mall • 100% Genuine Guaranteed'
+        };
+
         if (!vId || vId === 'admin') {
-            setVendor({
-                id: 'admin',
-                full_name: 'TechWorld Store',
-                role: 'Vendor',
-                is_verified: true,
-                avatar_url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=200&auto=format&fit=crop'
-            });
+            setVendor(officialStore);
             setLoadingVend(false);
             return;
         }
+
         try {
-            const { data } = await supabase.from('profiles').select('*').eq('id', vId).maybeSingle();
+            const { data } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', vId)
+                .maybeSingle();
+
             if (data) {
+                const parseAddr = (addr) => {
+                    if (!addr || typeof addr !== 'string') return {};
+                    try {
+                        if (addr.startsWith('{') && addr.endsWith('}')) return JSON.parse(addr);
+                    } catch (_) {}
+                    return {};
+                };
+                const vAddr = parseAddr(data.address);
+
                 setVendor({
-                    ...data,
-                    full_name: data.store_name || data.full_name || 'TechWorld Store',
+                    id: data.id,
+                    name: data.business_name || data.full_name || 'Verified Merchant',
+                    business_name: data.business_name || data.full_name || 'Verified Merchant',
+                    role: data.role || 'vendor',
+                    isOfficial: data.role === 'admin',
                     is_verified: true,
+                    rating: 4.9,
+                    reviews: '120+',
+                    phone: data.phone || data.phone_number || '2349021486162',
+                    whatsapp: vAddr.whatsapp || data.phone || data.phone_number || '2349021486162',
+                    avatar: data.avatar_url || null,
+                    tagline: vAddr.tagline || 'Verified Marketplace Merchant'
                 });
             } else {
-                setVendor({
-                    id: vId,
-                    full_name: 'TechWorld Store',
-                    is_verified: true,
-                });
+                setVendor(officialStore);
             }
         } catch {
-            setVendor({
-                id: 'admin',
-                full_name: 'TechWorld Store',
-                is_verified: true,
-            });
+            setVendor(officialStore);
         } finally {
             setLoadingVend(false);
         }
     };
 
-    const validateVideo = async () => {
-        let uri = product?.video_url || product?.metadata?.video;
-        if (uri && typeof uri === 'string') {
-            setValidVideo(uri);
+    // ── Fetch Real Related Products ───────────────────────────────────────────
+    const fetchRelatedProducts = async (cat, currentId) => {
+        if (!cat) return;
+        try {
+            const { data } = await supabase
+                .from('products')
+                .select('id, name, price, compare_at_price, image_url, images, rating, stock, category')
+                .eq('category', cat)
+                .eq('status', 'approved')
+                .neq('id', currentId)
+                .limit(6);
+
+            if (data && data.length > 0) {
+                setRelatedProducts(data);
+            }
+        } catch (_) {}
+    };
+
+    // ── Fetch Real Reviews ────────────────────────────────────────────────────
+    const fetchReviews = async (currentId) => {
+        setLoadingReviews(true);
+        try {
+            const { data } = await supabase
+                .from('reviews')
+                .select('*')
+                .eq('product_id', currentId)
+                .order('created_at', { ascending: false })
+                .limit(10);
+
+            if (data && data.length > 0) {
+                setReviewsList(data);
+            }
+        } catch (_) {} finally {
+            setLoadingReviews(false);
         }
     };
 
+    // ── Wishlist State ────────────────────────────────────────────────────────
     const checkWishlist = async () => {
         try {
             const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return;
-            const { data } = await supabase.from('wishlists').select('items').eq('id', user.id).maybeSingle();
-            if (data?.items) setLiked(data.items.includes(product?.id));
-        } catch {}
+            if (!user || !productId) return;
+            const { data } = await supabase
+                .from('wishlists')
+                .select('items')
+                .eq('id', user.id)
+                .maybeSingle();
+
+            if (data?.items) {
+                setLiked(data.items.includes(productId));
+            }
+        } catch (_) {}
     };
 
-    const handleLike = async () => {
+    const handleToggleWishlist = async () => {
         Animated.sequence([
-            Animated.spring(heartScale, { toValue: 1.4, useNativeDriver: true, tension: 400 }),
+            Animated.spring(heartScale, { toValue: 1.35, useNativeDriver: true, tension: 400 }),
             Animated.spring(heartScale, { toValue: 1, useNativeDriver: true }),
         ]).start();
 
@@ -147,59 +244,155 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
             }
             const { data } = await supabase.from('wishlists').select('items').eq('id', user.id).maybeSingle();
             const curr = data?.items || [];
-            const next = liked ? curr.filter(i => i !== product.id) : [...curr, product.id];
+            const next = liked ? curr.filter(i => i !== productId) : [...curr, productId];
+
             setLiked(!liked);
+            showToast(!liked ? 'Saved to Wishlist ❤️' : 'Removed from Wishlist');
             await supabase.from('wishlists').upsert({ id: user.id, items: next, updated_at: new Date() });
         } catch {
             setLiked(!liked);
         }
     };
 
+    // ── Calculations & Parsing ────────────────────────────────────────────────
+    const currentPrice = Number(selectedVariant?.price || product?.price || 0);
+    const comparePrice = Number(product?.compare_at_price || product?.original_price || 0);
+    const hasDiscount = comparePrice > currentPrice && currentPrice > 0;
+    const discountPercent = hasDiscount ? Math.round(((comparePrice - currentPrice) / comparePrice) * 100) : null;
+
+    const stock = product?.stock_quantity != null ? Number(product.stock_quantity) : (product?.stock != null ? Number(product.stock) : 10);
+    const isOutOfStock = stock <= 0;
+
+    // Parse Images cleanly
+    const parseImgs = () => {
+        const list = [];
+        if (product?.image_url) list.push(product.image_url);
+
+        if (Array.isArray(product?.images)) {
+            product.images.forEach(img => {
+                if (typeof img === 'string' && img && !list.includes(img)) list.push(img);
+            });
+        } else if (typeof product?.images === 'string') {
+            try {
+                const parsed = JSON.parse(product.images);
+                if (Array.isArray(parsed)) {
+                    parsed.forEach(img => { if (img && !list.includes(img)) list.push(img); });
+                }
+            } catch (_) {
+                if (product.images && !list.includes(product.images)) list.push(product.images);
+            }
+        }
+
+        if (list.length === 0) {
+            list.push('https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=600&auto=format&fit=crop');
+        }
+        return list;
+    };
+
+    const images = parseImgs();
+
+    // Parse Variants cleanly
+    const variants = (() => {
+        const v = product?.metadata?.variants || product?.variants;
+        if (Array.isArray(v) && v.length > 0) return v;
+        return [];
+    })();
+
+    // Parse Specifications
+    const specifications = (() => {
+        const specs = [];
+        specs.push({ key: 'Brand', value: product?.brand || 'Abu Mafhal Verified' });
+        specs.push({ key: 'Category', value: product?.category || 'General Department' });
+        if (product?.sku) specs.push({ key: 'SKU Code', value: product.sku });
+        specs.push({ key: 'Condition', value: 'Brand New / Factory Sealed' });
+        specs.push({ key: 'Warranty', value: '12 Months Official Merchant Warranty' });
+        if (product?.shipping_weight) specs.push({ key: 'Weight', value: `${product.shipping_weight} kg` });
+
+        // Merge custom specs from metadata
+        const customSpecs = product?.metadata?.specifications || product?.specifications;
+        if (Array.isArray(customSpecs)) {
+            customSpecs.forEach(s => {
+                if (s.key && s.value && !specs.some(x => x.key.toLowerCase() === s.key.toLowerCase())) {
+                    specs.push({ key: s.key, value: s.value });
+                }
+            });
+        }
+        return specs;
+    })();
+
+    // ── Cart & Purchase Handlers ──────────────────────────────────────────────
     const handleAddToCart = () => {
         if (!addToCart) return;
         if (isOutOfStock) {
-            Alert.alert('Out of Stock', 'This item is currently out of stock.');
+            Alert.alert('Out of Stock', 'This product is currently sold out.');
             return;
         }
-        addToCart({ ...product, price: finalP }, quantity);
+
+        addToCart({
+            ...product,
+            price: currentPrice,
+            selectedVariant: selectedVariant?.name || null
+        }, quantity);
+
         setCartDone(true);
+        showToast(`Added ${quantity}x "${product.name}" to cart!`);
+
         Animated.sequence([
             Animated.spring(cartScale, { toValue: 0.9, useNativeDriver: true, tension: 400 }),
             Animated.spring(cartScale, { toValue: 1, useNativeDriver: true }),
         ]).start();
-        setTimeout(() => setCartDone(false), 1200);
+
+        setTimeout(() => setCartDone(false), 1600);
     };
 
     const handleBuyNow = () => {
-        if (!addToCart) return;
         if (isOutOfStock) {
-            Alert.alert('Out of Stock', 'This item is currently out of stock.');
+            Alert.alert('Out of Stock', 'This product is currently sold out.');
             return;
         }
-        addToCart({ ...product, price: finalP }, quantity);
+        if (addToCart) {
+            addToCart({
+                ...product,
+                price: currentPrice,
+                selectedVariant: selectedVariant?.name || null
+            }, quantity);
+        }
         navigation.navigate('Main', { screen: 'cart' });
     };
 
     const handleQty = (delta) => {
         const next = quantity + delta;
         if (next < 1) return;
-        if (stock != null && next > stock) {
-            Alert.alert('Max Stock', `Only ${stock} units available.`);
+        if (stock > 0 && next > stock) {
+            Alert.alert('Maximum Stock Reached', `Only ${stock} units are currently available.`);
             return;
         }
         setQuantity(next);
     };
 
+    const handleWhatsAppVendor = () => {
+        const rawPhone = vendor?.whatsapp || vendor?.phone || '2349021486162';
+        const phone = rawPhone.replace(/[^0-9]/g, '');
+        const msg = encodeURIComponent(
+            `Hello ${vendor?.name || 'Seller'}, I am inquiring about "${product?.name}" (${fmtPrice(currentPrice)}) on Abu Mafhal Marketplace. Is it available for express delivery?`
+        );
+        Linking.openURL(`https://wa.me/${phone}?text=${msg}`).catch(() => {
+            Alert.alert('Contact Seller', `Phone: +${phone}`);
+        });
+    };
+
     const handleShare = () => {
         Share.share({
-            message: `🛍️ Check out "${product?.name || 'Wireless Headphones Pro Max'}" on Abu Mafhal Marketplace!\n💰 Price: ${fmtPrice(finalP)}\n📱 Shop now on Abu Mafhal`,
+            message: `🛍️ Check out "${product?.name}" on Abu Mafhal Marketplace!\n💰 Price: ${fmtPrice(currentPrice)}\n🛡️ 100% Genuine with Buyer Escrow Guarantee.\nShop here: https://abumafhal.com/mobile#product/${product?.id}`,
+            title: product?.name
         });
     };
 
     if (!product) {
         return (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
-                <ActivityIndicator size="large" color="#0A192F" />
+            <View style={s.loadingContainer}>
+                <ActivityIndicator size="large" color={BRAND.navy} />
+                <Text style={s.loadingTxt}>Loading live product details...</Text>
             </View>
         );
     }
@@ -208,167 +401,112 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
         <View style={s.root}>
             <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-            {/* ── TOP BAR (Matching Screenshot 3) ── */}
-            <View style={[s.topBar, { paddingTop: Math.max(insets.top, 14) }]}>
+            {/* ══════════════════════════════════════════════════
+                1. TOP LUXURY NAVIGATION BAR
+            ══════════════════════════════════════════════════ */}
+            <View style={[s.topBar, { paddingTop: Math.max(insets.top, 12) }]}>
                 <TouchableOpacity
-                    style={s.topBarBtn}
+                    style={s.topNavBtn}
                     onPress={() => navigation.goBack()}
                     activeOpacity={0.7}
                 >
-                    <Ionicons name="menu-outline" size={26} color="#0F172A" />
+                    <Ionicons name="arrow-back" size={22} color={BRAND.slateDark} />
                 </TouchableOpacity>
 
-                {/* Abu Mafhal Center Logo */}
-                <View style={s.topBarLogoWrap}>
+                <View style={s.topBrandCenter}>
                     <Image source={AM_LOGO} style={s.topLogoImg} resizeMode="contain" />
-                    <View style={{ alignItems: 'flex-start' }}>
+                    <View>
                         <Text style={s.topLogoTitle}>
-                            ABU <Text style={{ color: '#00D2FF' }}>MAFHAL</Text>
+                            ABU <Text style={{ color: BRAND.sky }}>MAFHAL</Text>
                         </Text>
-                        <Text style={s.topLogoSubtitle}>YOUR MARKETPLACE, YOUR CHOICE.</Text>
+                        <Text style={s.topLogoSub}>VERIFIED MARKETPLACE</Text>
                     </View>
                 </View>
 
-                {/* Top Right Actions */}
                 <View style={s.topRightActions}>
                     <TouchableOpacity
                         style={s.topIconBtn}
-                        onPress={() => navigation.navigate('Main', { screen: 'shop' })}
+                        onPress={handleShare}
+                        activeOpacity={0.7}
                     >
-                        <Ionicons name="search-outline" size={22} color="#0F172A" />
+                        <Ionicons name="share-social-outline" size={21} color={BRAND.slateDark} />
                     </TouchableOpacity>
 
                     <TouchableOpacity
                         style={s.topIconBtn}
                         onPress={() => navigation.navigate('Main', { screen: 'cart' })}
+                        activeOpacity={0.7}
                     >
-                        <Ionicons name="cart-outline" size={22} color="#0F172A" />
-                        <View style={s.cartBadge}>
-                            <Text style={s.cartBadgeTxt}>3</Text>
-                        </View>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={s.topIconBtn}
-                        onPress={() => setShowMenu(prev => !prev)}
-                    >
-                        <Ionicons name="ellipsis-vertical" size={20} color="#0F172A" />
+                        <Ionicons name="cart-outline" size={22} color={BRAND.slateDark} />
                     </TouchableOpacity>
                 </View>
             </View>
 
-            {/* Dropdown Menu Modal */}
-            {showMenu && (
-                <View style={s.menuPopup}>
-                    <TouchableOpacity style={s.menuItem} onPress={handleShare}>
-                        <Ionicons name="share-social-outline" size={18} color="#0F172A" />
-                        <Text style={s.menuItemTxt}>Share Product</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={s.menuItem}
-                        onPress={() => {
-                            addToComparison(product);
-                            setShowMenu(false);
-                            Alert.alert('Comparison', 'Added to product comparison list.');
-                        }}
-                    >
-                        <Ionicons name="git-compare-outline" size={18} color="#0F172A" />
-                        <Text style={s.menuItemTxt}>Compare</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[s.menuItem, { borderBottomWidth: 0 }]}
-                        onPress={() => {
-                            Clipboard.setString(product?.name || '');
-                            setShowMenu(false);
-                            Alert.alert('Copied', 'Product link copied.');
-                        }}
-                    >
-                        <Ionicons name="copy-outline" size={18} color="#0F172A" />
-                        <Text style={s.menuItemTxt}>Copy Name</Text>
-                    </TouchableOpacity>
-                </View>
-            )}
-
             <ScrollView
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 120 }}
+                contentContainerStyle={{ paddingBottom: 130 }}
             >
-                {/* ── BREADCRUMB ── */}
+                {/* ── BREADCRUMB STRIP ── */}
                 <View style={s.breadcrumbRow}>
-                    <Text style={s.breadcrumbMuted}>Home</Text>
-                    <Ionicons name="chevron-forward" size={12} color="#94A3B8" />
-                    <Text style={s.breadcrumbMuted}>{product?.category || 'Electronics'}</Text>
-                    <Ionicons name="chevron-forward" size={12} color="#94A3B8" />
-                    <Text style={s.breadcrumbMuted}>Audio</Text>
-                    <Ionicons name="chevron-forward" size={12} color="#94A3B8" />
+                    <Text style={s.breadcrumbMuted}>Marketplace</Text>
+                    <Ionicons name="chevron-forward" size={11} color="#94A3B8" />
+                    <Text style={s.breadcrumbMuted}>{product.category || 'General'}</Text>
+                    <Ionicons name="chevron-forward" size={11} color="#94A3B8" />
                     <Text style={s.breadcrumbActive} numberOfLines={1}>
-                        {product?.name || 'Wireless Headphones'}
+                        {product.name}
                     </Text>
                 </View>
 
-                {/* ── GALLERY ROW (Matching Screenshot 3 Left Thumbnails + Right Big Card) ── */}
+                {/* ══════════════════════════════════════════════════
+                    2. DUAL-PANE IMAGE GALLERY (Thumbnails + Main Stage)
+                ══════════════════════════════════════════════════ */}
                 <View style={s.galleryContainer}>
-                    {/* Left Column: Thumbnails */}
-                    <View style={s.thumbnailCol}>
-                        {images.slice(0, 4).map((uri, idx) => (
-                            <TouchableOpacity
-                                key={idx}
-                                style={[s.thumbnailWrap, activeImg === idx && s.thumbnailWrapActive]}
-                                onPress={() => setActiveImg(idx)}
-                                activeOpacity={0.8}
-                            >
-                                <Image source={{ uri }} style={s.thumbnailImg} resizeMode="contain" />
-                            </TouchableOpacity>
-                        ))}
-
-                        {/* Video thumbnail with play icon */}
-                        <TouchableOpacity
-                            style={[s.thumbnailWrap, s.videoThumbWrap]}
-                            onPress={() => {
-                                if (validVideo) {
-                                    setShowVideoModal(true);
-                                } else {
-                                    Alert.alert('Video Preview', 'Product video demonstration is available soon.');
-                                }
-                            }}
-                            activeOpacity={0.8}
-                        >
-                            <Image
-                                source={{ uri: images[0] }}
-                                style={[s.thumbnailImg, { opacity: 0.6 }]}
-                                resizeMode="contain"
-                            />
-                            <View style={s.videoPlayOverlay}>
-                                <Ionicons name="play" size={16} color="#FFFFFF" />
-                            </View>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Right Column: Large Product Image Card */}
-                    <View style={s.mainImageCard}>
-                        {/* Discount Badge */}
-                        <View style={s.mainDiscountBadge}>
-                            <Text style={s.mainDiscountTxt}>{discountPercent}%</Text>
-                            <Text style={s.mainDiscountTxtSub}>OFF</Text>
+                    {/* Left Thumbnails Column (if more than 1 image) */}
+                    {images.length > 1 && (
+                        <View style={s.thumbnailCol}>
+                            {images.slice(0, 5).map((uri, idx) => (
+                                <TouchableOpacity
+                                    key={'thumb-' + idx}
+                                    style={[s.thumbnailWrap, activeImg === idx && s.thumbnailWrapActive]}
+                                    onPress={() => setActiveImg(idx)}
+                                    activeOpacity={0.8}
+                                >
+                                    <Image source={{ uri }} style={s.thumbnailImg} resizeMode="contain" />
+                                </TouchableOpacity>
+                            ))}
                         </View>
+                    )}
 
-                        {/* Floating Heart Button */}
+                    {/* Main Stage Image Card */}
+                    <View style={s.mainImageCard}>
+                        {/* Discount Ribbon */}
+                        {hasDiscount && (
+                            <View style={s.discountBadge}>
+                                <Text style={s.discountTxt}>-{discountPercent}%</Text>
+                                <Text style={s.discountSub}>OFF</Text>
+                            </View>
+                        )}
+
+                        {/* Floating Wishlist Heart */}
                         <TouchableOpacity
-                            style={s.mainHeartBtn}
-                            onPress={handleLike}
+                            style={s.floatingHeartBtn}
+                            onPress={handleToggleWishlist}
                             activeOpacity={0.8}
                         >
                             <Animated.View style={{ transform: [{ scale: heartScale }] }}>
                                 <Ionicons
                                     name={liked ? "heart" : "heart-outline"}
-                                    size={20}
-                                    color={liked ? "#EF4444" : "#0F172A"}
+                                    size={21}
+                                    color={liked ? BRAND.danger : BRAND.slateDark}
                                 />
                             </Animated.View>
                         </TouchableOpacity>
 
-                        {/* Main Product Image */}
-                        <Pressable onPress={() => setImgZoom(true)} style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+                        {/* Tap to Zoom Stage */}
+                        <Pressable
+                            onPress={() => setImgZoom(true)}
+                            style={s.mainImgPressable}
+                        >
                             <Image
                                 source={{ uri: images[activeImg] || images[0] }}
                                 style={s.mainImg}
@@ -376,177 +514,234 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                             />
                         </Pressable>
 
-                        {/* 1/5 Indicator Badge */}
+                        {/* Image Counter Badge */}
                         <View style={s.counterBadge}>
-                            <Text style={s.counterBadgeTxt}>{activeImg + 1}/{images.length || 5}</Text>
+                            <Ionicons name="images-outline" size={11} color="#FFFFFF" style={{ marginRight: 3 }} />
+                            <Text style={s.counterBadgeTxt}>{activeImg + 1}/{images.length}</Text>
                         </View>
                     </View>
                 </View>
 
-                {/* ── PRODUCT TITLE & DETAILS ── */}
+                {/* ══════════════════════════════════════════════════
+                    3. PRODUCT INFORMATION & PRICING
+                ══════════════════════════════════════════════════ */}
                 <View style={s.contentSection}>
-                    <Text style={s.productTitle}>
-                        {product?.name || 'Wireless Headphones Pro Max'}
-                    </Text>
-
-                    <Text style={s.productSubtitle}>
-                        {product?.description?.slice(0, 60) || 'Premium Sound. All Day Comfort.'}
-                    </Text>
-
-                    {/* Rating & Sold Row */}
-                    <View style={s.ratingRow}>
-                        <Ionicons name="star" size={16} color="#F59E0B" />
-                        <Text style={s.ratingNum}>4.8</Text>
-                        <Text style={s.reviewsCount}>(256 reviews)</Text>
-                        <Text style={s.ratingDivider}>|</Text>
-                        <Text style={s.soldCount}>1.2K+ sold</Text>
+                    {/* Department / Category Pill */}
+                    <View style={s.categoryPillRow}>
+                        <View style={s.categoryPill}>
+                            <Text style={s.categoryPillTxt}>{product.category || 'General'}</Text>
+                        </View>
+                        {product.brand && (
+                            <View style={s.brandPill}>
+                                <Text style={s.brandPillTxt}>Brand: {product.brand}</Text>
+                            </View>
+                        )}
                     </View>
 
-                    {/* ── VERIFIED SELLER CARD ── */}
-                    <View style={s.sellerCard}>
-                        <View style={s.sellerAvatarWrap}>
-                            <Image
-                                source={{ uri: vendor?.avatar_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=200&auto=format&fit=crop' }}
-                                style={s.sellerAvatar}
-                            />
+                    {/* Product Name */}
+                    <Text style={s.productTitle}>
+                        {product.name}
+                    </Text>
+
+                    {/* Rating & Sold Micro-Row */}
+                    <View style={s.ratingRow}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                            <Ionicons name="star" size={15} color="#F59E0B" />
+                            <Text style={s.ratingNum}>{product.rating || '4.9'}</Text>
                         </View>
-                        <View style={{ flex: 1, marginLeft: 10 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                                <Text style={s.sellerName}>{vendor?.full_name || 'TechWorld Store'}</Text>
-                                <Ionicons name="checkmark-circle" size={16} color="#00D2FF" />
-                            </View>
-                            <Text style={s.sellerVerifiedTxt}>Verified Seller</Text>
-                        </View>
-                        <TouchableOpacity
-                            style={s.viewStoreBtn}
-                            onPress={() => navigation.navigate('Main', { screen: 'stores' })}
-                        >
-                            <Text style={s.viewStoreBtnTxt}>View Store</Text>
-                        </TouchableOpacity>
+                        <Text style={s.reviewsCount}>({product.reviews || reviewsList.length || 18} reviews)</Text>
+                        <Text style={s.ratingDivider}>•</Text>
+                        <Text style={s.soldCount}>
+                            {product.total_sales ? `${product.total_sales}+ sold` : 'Verified Authentic'}
+                        </Text>
                     </View>
 
                     {/* ── PRICE & STOCK ROW ── */}
                     <View style={s.priceStockRow}>
-                        <View style={s.priceWrap}>
-                            <Text style={s.currentPrice}>{fmtPrice(finalP)}</Text>
-                            <Text style={s.comparePrice}>{fmtPrice(origP)}</Text>
-                            <View style={s.savePill}>
-                                <Text style={s.savePillTxt}>{discountPercent}% OFF</Text>
+                        <View>
+                            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
+                                <Text style={s.currentPrice}>{fmtPrice(currentPrice)}</Text>
+                                {hasDiscount && (
+                                    <Text style={s.comparePrice}>{fmtPrice(comparePrice)}</Text>
+                                )}
                             </View>
+                            {hasDiscount && (
+                                <Text style={s.saveAmountTxt}>
+                                    You save {fmtPrice(comparePrice - currentPrice)} ({discountPercent}% off)
+                                </Text>
+                            )}
                         </View>
 
-                        <View style={s.stockWrap}>
+                        {/* Stock Status Badge */}
+                        <View style={s.stockBox}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                                <View style={s.stockDot} />
-                                <Text style={s.stockStatusTxt}>In Stock</Text>
+                                <View style={[s.stockDot, isOutOfStock && s.stockDotOut]} />
+                                <Text style={[s.stockStatusTxt, isOutOfStock && s.stockStatusTxtOut]}>
+                                    {isOutOfStock ? 'Out of Stock' : 'In Stock'}
+                                </Text>
                             </View>
-                            <Text style={s.stockLeftTxt}>Only {stock} left!</Text>
+                            {!isOutOfStock && stock <= 5 && (
+                                <Text style={s.lowStockAlert}>Only {stock} left!</Text>
+                            )}
                         </View>
                     </View>
 
-                    {/* ── 4 FEATURE ICON BLOCKS (Matching Screenshot 3) ── */}
-                    <View style={s.featuresGrid}>
-                        <View style={s.featureBox}>
-                            <View style={s.featureIconCircle}>
-                                <Ionicons name="headset-outline" size={20} color="#0284C7" />
-                            </View>
-                            <Text style={s.featureLabel}>High Quality</Text>
-                            <Text style={s.featureLabelBold}>Sound</Text>
+                    {/* ── REAL SELLER / STORE CARD ── */}
+                    <View style={s.sellerCard}>
+                        <View style={s.sellerAvatarWrap}>
+                            {vendor?.avatar ? (
+                                <Image source={{ uri: vendor.avatar }} style={s.sellerAvatar} />
+                            ) : vendor?.isOfficial ? (
+                                <Image source={AM_LOGO} style={s.sellerAvatar} resizeMode="contain" />
+                            ) : (
+                                <View style={[s.sellerAvatar, { backgroundColor: BRAND.skyLight, alignItems: 'center', justifyContent: 'center' }]}>
+                                    <Ionicons name="storefront" size={20} color={BRAND.sky} />
+                                </View>
+                            )}
+                            {vendor?.is_verified && (
+                                <View style={s.sellerCheckBadge}>
+                                    <Ionicons name="checkmark-sharp" size={8} color="#FFFFFF" />
+                                </View>
+                            )}
                         </View>
 
-                        <View style={s.featureBox}>
-                            <View style={s.featureIconCircle}>
-                                <Ionicons name="battery-charging-outline" size={20} color="#0284C7" />
+                        <View style={{ flex: 1, marginLeft: 10 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Text numberOfLines={1} style={s.sellerName}>
+                                    {vendor?.name || 'Abu Mafhal Official Store'}
+                                </Text>
                             </View>
-                            <Text style={s.featureLabel}>Long Battery</Text>
-                            <Text style={s.featureLabelBold}>Life</Text>
+                            <Text numberOfLines={1} style={s.sellerTagline}>
+                                {vendor?.tagline || 'Verified Marketplace Merchant'}
+                            </Text>
                         </View>
 
-                        <View style={s.featureBox}>
-                            <View style={s.featureIconCircle}>
-                                <Ionicons name="mic-outline" size={20} color="#0284C7" />
-                            </View>
-                            <Text style={s.featureLabel}>Built-in</Text>
-                            <Text style={s.featureLabelBold}>Microphone</Text>
-                        </View>
+                        {/* WhatsApp Vendor Contact Button */}
+                        <TouchableOpacity
+                            onPress={handleWhatsAppVendor}
+                            style={s.sellerWhatsAppBtn}
+                            activeOpacity={0.8}
+                        >
+                            <Ionicons name="logo-whatsapp" size={15} color="#10B981" />
+                            <Text style={s.sellerWhatsAppTxt}>Chat</Text>
+                        </TouchableOpacity>
 
-                        <View style={s.featureBox}>
-                            <View style={s.featureIconCircle}>
-                                <Ionicons name="leaf-outline" size={20} color="#0284C7" />
-                            </View>
-                            <Text style={s.featureLabel}>Comfortable</Text>
-                            <Text style={s.featureLabelBold}>Design</Text>
-                        </View>
+                        <TouchableOpacity
+                            style={s.viewStoreBtn}
+                            onPress={() => navigation.navigate('Main', { screen: 'stores' })}
+                            activeOpacity={0.8}
+                        >
+                            <Text style={s.viewStoreBtnTxt}>Store</Text>
+                        </TouchableOpacity>
                     </View>
 
-                    {/* ── QUANTITY & ACTION BUTTONS ROW (Matching Screenshot 3) ── */}
+                    {/* ── VARIANTS SELECTION (Color / Size) ── */}
+                    {variants.length > 0 && (
+                        <View style={s.variantsSection}>
+                            <Text style={s.sectionHeaderTitle}>
+                                SELECT VARIANT / OPTION
+                            </Text>
+                            <View style={s.variantsRow}>
+                                {variants.map((v, vIdx) => {
+                                    const isSel = selectedVariant?.name === v.name || (!selectedVariant && vIdx === 0);
+
+                                    return (
+                                        <TouchableOpacity
+                                            key={'var-' + vIdx}
+                                            onPress={() => setSelectedVariant(v)}
+                                            style={[s.variantPill, isSel && s.variantPillActive]}
+                                            activeOpacity={0.8}
+                                        >
+                                            <Text style={[s.variantPillTxt, isSel && s.variantPillTxtActive]}>
+                                                {v.name}
+                                            </Text>
+                                            {v.price && (
+                                                <Text style={[s.variantPriceTxt, isSel && s.variantPriceTxtActive]}>
+                                                    {fmtPrice(v.price)}
+                                                </Text>
+                                            )}
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        </View>
+                    )}
+
+                    {/* ── QUANTITY STEPPER & ACTION BUTTONS ── */}
                     <View style={s.actionRowContainer}>
-                        {/* Quantity Stepper */}
                         <View style={s.qtySection}>
                             <Text style={s.qtyHeading}>Quantity</Text>
                             <View style={s.qtyStepper}>
-                                <TouchableOpacity style={s.qtyBtn} onPress={() => handleQty(-1)}>
-                                    <Ionicons name="remove" size={16} color="#0F172A" />
+                                <TouchableOpacity
+                                    style={s.qtyBtn}
+                                    onPress={() => handleQty(-1)}
+                                    disabled={quantity <= 1 || isOutOfStock}
+                                >
+                                    <Ionicons name="remove" size={16} color={quantity <= 1 ? '#CBD5E1' : BRAND.slateDark} />
                                 </TouchableOpacity>
                                 <Text style={s.qtyValue}>{quantity}</Text>
-                                <TouchableOpacity style={s.qtyBtn} onPress={() => handleQty(1)}>
-                                    <Ionicons name="add" size={16} color="#0F172A" />
+                                <TouchableOpacity
+                                    style={s.qtyBtn}
+                                    onPress={() => handleQty(1)}
+                                    disabled={isOutOfStock}
+                                >
+                                    <Ionicons name="add" size={16} color={isOutOfStock ? '#CBD5E1' : BRAND.slateDark} />
                                 </TouchableOpacity>
                             </View>
                         </View>
 
-                        {/* Dual Action Buttons */}
                         <View style={s.dualButtonsWrap}>
                             <TouchableOpacity
-                                style={[s.addToCartBtn, cartDone && s.addToCartBtnDone]}
+                                style={[s.addToCartBtn, cartDone && s.addToCartBtnDone, isOutOfStock && s.btnDisabled]}
                                 onPress={handleAddToCart}
+                                disabled={isOutOfStock}
                                 activeOpacity={0.85}
                             >
-                                <Ionicons
-                                    name={cartDone ? "checkmark-circle" : "cart"}
-                                    size={18}
-                                    color={cartDone ? "#10B981" : "#0A192F"}
-                                />
-                                <Text style={[s.addToCartTxt, cartDone && { color: '#10B981' }]}>
-                                    {cartDone ? "Added!" : "Add to Cart"}
-                                </Text>
+                                <Animated.View style={{ transform: [{ scale: cartScale }], flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <Ionicons
+                                        name={cartDone ? "checkmark-circle" : "cart"}
+                                        size={18}
+                                        color={cartDone ? "#10B981" : "#FFFFFF"}
+                                    />
+                                    <Text style={[s.addToCartTxt, cartDone && { color: '#10B981' }]}>
+                                        {cartDone ? "Added to Cart!" : isOutOfStock ? "Out of Stock" : "Add to Cart"}
+                                    </Text>
+                                </Animated.View>
                             </TouchableOpacity>
 
                             <TouchableOpacity
-                                style={s.buyNowBtn}
+                                style={[s.buyNowBtn, isOutOfStock && s.btnDisabled]}
                                 onPress={handleBuyNow}
+                                disabled={isOutOfStock}
                                 activeOpacity={0.85}
                             >
-                                <Ionicons name="flash" size={16} color="#0F172A" />
+                                <Ionicons name="flash" size={16} color="#0A192F" />
                                 <Text style={s.buyNowTxt}>Buy Now</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
 
-                    {/* ── 4 TRUST BADGES STRIP ── */}
+                    {/* ── 4 TRUST & GUARANTEE TILES ── */}
                     <View style={s.trustBadgesRow}>
                         <View style={s.trustItem}>
-                            <Ionicons name="bus-outline" size={18} color="#0284C7" />
-                            <Text style={s.trustTitle}>Fast Delivery</Text>
-                            <Text style={s.trustSub}>Across Nigeria</Text>
+                            <Ionicons name="shield-checkmark" size={18} color={BRAND.sky} />
+                            <Text style={s.trustTitle}>Buyer Escrow</Text>
+                            <Text style={s.trustSub}>Money Protected</Text>
                         </View>
-
                         <View style={s.trustItem}>
-                            <Ionicons name="shield-checkmark-outline" size={18} color="#0284C7" />
+                            <Ionicons name="sync" size={18} color={BRAND.emerald} />
                             <Text style={s.trustTitle}>7 Days</Text>
                             <Text style={s.trustSub}>Return Policy</Text>
                         </View>
-
                         <View style={s.trustItem}>
-                            <Ionicons name="card-outline" size={18} color="#0284C7" />
-                            <Text style={s.trustTitle}>Secure</Text>
-                            <Text style={s.trustSub}>Payments</Text>
+                            <Ionicons name="rocket-outline" size={18} color={BRAND.gold} />
+                            <Text style={s.trustTitle}>Express</Text>
+                            <Text style={s.trustSub}>Nationwide</Text>
                         </View>
-
                         <View style={s.trustItem}>
-                            <Ionicons name="checkmark-done-circle-outline" size={18} color="#0284C7" />
-                            <Text style={s.trustTitle}>100% Original</Text>
-                            <Text style={s.trustSub}>Products</Text>
+                            <Ionicons name="ribbon-outline" size={18} color={BRAND.sky} />
+                            <Text style={s.trustTitle}>100% Genuine</Text>
+                            <Text style={s.trustSub}>Direct Sourced</Text>
                         </View>
                     </View>
 
@@ -556,50 +751,120 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                         onPress={() => setDescExpanded(prev => !prev)}
                         activeOpacity={0.7}
                     >
-                        <Text style={s.accordionTitle}>Product Description</Text>
+                        <Text style={s.accordionTitle}>Product Description & Specifications</Text>
                         <Ionicons
-                            name={descExpanded ? "chevron-up" : "chevron-forward"}
+                            name={descExpanded ? "chevron-up" : "chevron-down"}
                             size={18}
-                            color="#0F172A"
+                            color={BRAND.slateDark}
                         />
                     </TouchableOpacity>
 
                     {descExpanded && (
                         <View style={s.accordionContent}>
                             <Text style={s.descriptionText}>
-                                {product?.description ||
-                                    'Engineered for maximum acoustic fidelity and acoustic isolation. Features high-definition drivers, ultra-soft memory foam ear cushions, and seamless wireless connectivity across all your favorite devices.'}
+                                {product.description || 'Authentic product verified by Abu Mafhal Marketplace. Genuine brand warranty and premium quality guaranteed.'}
                             </Text>
 
-                            {/* Key specs */}
+                            {/* Specifications Table */}
                             <View style={s.specsTable}>
-                                <View style={s.specRow}>
-                                    <Text style={s.specLabel}>Brand</Text>
-                                    <Text style={s.specVal}>{product?.brand || 'Abu Mafhal Verified'}</Text>
-                                </View>
-                                <View style={s.specRow}>
-                                    <Text style={s.specLabel}>Category</Text>
-                                    <Text style={s.specVal}>{product?.category || 'Electronics'}</Text>
-                                </View>
-                                <View style={s.specRow}>
-                                    <Text style={s.specLabel}>Condition</Text>
-                                    <Text style={s.specVal}>Brand New / Sealed</Text>
-                                </View>
-                                <View style={s.specRow}>
-                                    <Text style={s.specLabel}>Warranty</Text>
-                                    <Text style={s.specVal}>12 Months Official Warranty</Text>
-                                </View>
+                                {specifications.map((spec, sIdx) => (
+                                    <View key={'spec-' + sIdx} style={[s.specRow, sIdx % 2 === 1 && { backgroundColor: '#FFFFFF' }]}>
+                                        <Text style={s.specLabel}>{spec.key}</Text>
+                                        <Text style={s.specVal}>{spec.value}</Text>
+                                    </View>
+                                ))}
                             </View>
+                        </View>
+                    )}
+
+                    {/* ── CUSTOMER REVIEWS SECTION ── */}
+                    <View style={s.reviewsSection}>
+                        <View style={s.reviewsHeadRow}>
+                            <Text style={s.sectionHeaderTitle}>
+                                CUSTOMER REVIEWS ({product.reviews || reviewsList.length || 0})
+                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Ionicons name="star" size={14} color="#F59E0B" />
+                                <Text style={{ fontSize: 13, fontWeight: '800', color: BRAND.slateDark }}>
+                                    {product.rating || '4.9'} / 5.0
+                                </Text>
+                            </View>
+                        </View>
+
+                        {reviewsList.length === 0 ? (
+                            <View style={s.emptyReviewsBox}>
+                                <Text style={s.emptyReviewsTxt}>
+                                    ⭐ Rated {product.rating || '5.0'} by verified marketplace buyers.
+                                </Text>
+                                <Text style={s.emptyReviewsSub}>
+                                    Authentic purchases are protected by Abu Mafhal Buyer Guarantee.
+                                </Text>
+                            </View>
+                        ) : (
+                            <View style={{ gap: 8 }}>
+                                {reviewsList.map((rev, rIdx) => (
+                                    <View key={'rev-' + rIdx} style={s.reviewCard}>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <Text style={s.reviewerName}>{rev.user_name || 'Verified Buyer'}</Text>
+                                            <View style={{ flexDirection: 'row', gap: 2 }}>
+                                                {[1, 2, 3, 4, 5].map(st => (
+                                                    <Ionicons
+                                                        key={st}
+                                                        name="star"
+                                                        size={11}
+                                                        color={st <= (rev.rating || 5) ? "#F59E0B" : "#E2E8F0"}
+                                                    />
+                                                ))}
+                                            </View>
+                                        </View>
+                                        <Text style={s.reviewComment}>{rev.comment || 'Excellent product, works perfectly!'}</Text>
+                                    </View>
+                                ))}
+                            </View>
+                        )}
+                    </View>
+
+                    {/* ── RELATED PRODUCTS SECTION ── */}
+                    {relatedProducts.length > 0 && (
+                        <View style={s.relatedSection}>
+                            <Text style={s.sectionHeaderTitle}>
+                                RELATED IN {product.category?.toUpperCase() || 'THIS DEPARTMENT'}
+                            </Text>
+
+                            <ScrollView
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                contentContainerStyle={{ gap: 10, paddingVertical: 4 }}
+                            >
+                                {relatedProducts.map((rel) => (
+                                    <TouchableOpacity
+                                        key={'rel-' + rel.id}
+                                        activeOpacity={0.88}
+                                        onPress={() => navigation.push('ProductDetails', { product: rel, id: rel.id })}
+                                        style={s.relatedCard}
+                                    >
+                                        <View style={s.relatedImgWrap}>
+                                            <Image
+                                                source={{ uri: rel.image_url || (Array.isArray(rel.images) ? rel.images[0] : 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=400') }}
+                                                style={s.relatedImg}
+                                                resizeMode="contain"
+                                            />
+                                        </View>
+                                        <Text numberOfLines={1} style={s.relatedName}>{rel.name}</Text>
+                                        <Text style={s.relatedPrice}>{fmtPrice(rel.price)}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
                         </View>
                     )}
                 </View>
             </ScrollView>
 
-            {/* ── ZOOM MODAL ── */}
-            <Modal visible={imgZoom} transparent animationType="fade">
+            {/* ════ ZOOM FULL SCREEN MODAL ════ */}
+            <Modal visible={imgZoom} transparent animationType="fade" onRequestClose={() => setImgZoom(false)}>
                 <View style={s.zoomModalWrap}>
                     <TouchableOpacity style={s.zoomCloseBtn} onPress={() => setImgZoom(false)}>
-                        <Ionicons name="close" size={24} color="white" />
+                        <Ionicons name="close" size={24} color="#FFFFFF" />
                     </TouchableOpacity>
                     <Image
                         source={{ uri: images[activeImg] || images[0] }}
@@ -609,23 +874,13 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                 </View>
             </Modal>
 
-            {/* ── VIDEO MODAL ── */}
-            <Modal visible={showVideoModal} transparent animationType="slide">
-                <View style={s.zoomModalWrap}>
-                    <TouchableOpacity style={s.zoomCloseBtn} onPress={() => setShowVideoModal(false)}>
-                        <Ionicons name="close" size={24} color="white" />
-                    </TouchableOpacity>
-                    {validVideo && (
-                        <Video
-                            source={{ uri: validVideo }}
-                            style={{ width: width - 32, height: 300, borderRadius: 16 }}
-                            useNativeControls
-                            resizeMode={ResizeMode.CONTAIN}
-                            shouldPlay
-                        />
-                    )}
-                </View>
-            </Modal>
+            {/* ════ FLOATING TOAST NOTIFICATION ════ */}
+            {toastMessage.length > 0 && (
+                <Animated.View style={[s.toastContainer, { opacity: toastAnim }]}>
+                    <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+                    <Text style={s.toastTxt} numberOfLines={1}>{toastMessage}</Text>
+                </Animated.View>
+            )}
         </View>
     );
 };
@@ -635,7 +890,18 @@ const s = StyleSheet.create({
         flex: 1,
         backgroundColor: '#FFFFFF',
     },
-
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+    },
+    loadingTxt: {
+        marginTop: 10,
+        fontSize: 12,
+        fontWeight: '700',
+        color: BRAND.slate,
+    },
     // Top Bar
     topBar: {
         backgroundColor: '#FFFFFF',
@@ -647,156 +913,101 @@ const s = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: '#F1F5F9',
     },
-    topBarBtn: {
-        padding: 4,
+    topNavBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#F8FAFC',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    topBarLogoWrap: {
+    topBrandCenter: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
     },
     topLogoImg: {
-        width: 32,
-        height: 32,
+        width: 30,
+        height: 30,
     },
     topLogoTitle: {
         fontSize: 14,
         fontWeight: '900',
-        color: '#0A192F',
+        color: BRAND.navy,
         letterSpacing: 0.5,
     },
-    topLogoSubtitle: {
-        fontSize: 6.5,
-        fontWeight: '700',
-        color: '#64748B',
+    topLogoSub: {
+        fontSize: 7,
+        fontWeight: '800',
+        color: BRAND.slate,
         letterSpacing: 0.5,
     },
     topRightActions: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
+        gap: 8,
     },
     topIconBtn: {
-        position: 'relative',
-        padding: 4,
-    },
-    cartBadge: {
-        position: 'absolute',
-        top: 0,
-        right: 0,
-        backgroundColor: '#EF4444',
-        borderRadius: 8,
-        minWidth: 16,
-        height: 16,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#F8FAFC',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingHorizontal: 3,
     },
-    cartBadgeTxt: {
-        color: '#FFFFFF',
-        fontSize: 9,
-        fontWeight: '900',
-    },
-
-    // Menu popup
-    menuPopup: {
-        position: 'absolute',
-        top: 60,
-        right: 16,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        elevation: 8,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-        zIndex: 99,
-        minWidth: 160,
-    },
-    menuItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: '#F1F5F9',
-    },
-    menuItemTxt: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: '#0F172A',
-    },
-
     // Breadcrumb
     breadcrumbRow: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
         paddingHorizontal: 16,
-        paddingVertical: 10,
+        paddingVertical: 8,
+        backgroundColor: '#F8FAFC',
     },
     breadcrumbMuted: {
-        fontSize: 11.5,
-        color: '#64748B',
-        fontWeight: '500',
+        fontSize: 11,
+        color: BRAND.slate,
+        fontWeight: '600',
     },
     breadcrumbActive: {
-        fontSize: 11.5,
-        color: '#0F172A',
-        fontWeight: '700',
+        fontSize: 11,
+        color: BRAND.slateDark,
+        fontWeight: '800',
         flexShrink: 1,
     },
-
-    // Gallery Row
+    // Gallery
     galleryContainer: {
         flexDirection: 'row',
         paddingHorizontal: 16,
-        gap: 12,
-        marginBottom: 16,
+        gap: 10,
+        paddingTop: 12,
+        marginBottom: 14,
     },
     thumbnailCol: {
-        width: 58,
+        width: 52,
         gap: 8,
     },
     thumbnailWrap: {
-        width: 58,
-        height: 58,
-        borderRadius: 10,
+        width: 52,
+        height: 52,
+        borderRadius: 12,
         backgroundColor: '#F8FAFC',
         borderWidth: 1,
         borderColor: '#E2E8F0',
-        padding: 4,
+        padding: 3,
         alignItems: 'center',
         justifyContent: 'center',
         overflow: 'hidden',
     },
     thumbnailWrapActive: {
-        borderColor: '#0284C7',
+        borderColor: BRAND.sky,
         borderWidth: 2,
-        backgroundColor: '#F0F9FF',
+        backgroundColor: BRAND.skyLight,
     },
     thumbnailImg: {
         width: '100%',
         height: '100%',
     },
-    videoThumbWrap: {
-        position: 'relative',
-        backgroundColor: '#0F172A',
-    },
-    videoPlayOverlay: {
-        position: 'absolute',
-        width: 26,
-        height: 26,
-        borderRadius: 13,
-        backgroundColor: 'rgba(0,0,0,0.6)',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-
-    // Main Image Card
     mainImageCard: {
         flex: 1,
         height: 290,
@@ -807,263 +1018,329 @@ const s = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         position: 'relative',
-        padding: 16,
+        padding: 12,
     },
-    mainDiscountBadge: {
+    discountBadge: {
         position: 'absolute',
-        top: 14,
-        left: 14,
-        backgroundColor: '#F59E0B',
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 10,
+        top: 12,
+        left: 12,
+        backgroundColor: BRAND.gold,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
         alignItems: 'center',
         zIndex: 2,
     },
-    mainDiscountTxt: {
-        color: '#0F172A',
-        fontSize: 13,
+    discountTxt: {
+        color: BRAND.navy,
+        fontSize: 12,
         fontWeight: '900',
-        lineHeight: 14,
+        lineHeight: 13,
     },
-    mainDiscountTxtSub: {
-        color: '#0F172A',
-        fontSize: 9,
-        fontWeight: '800',
+    discountSub: {
+        color: BRAND.navy,
+        fontSize: 8,
+        fontWeight: '900',
     },
-    mainHeartBtn: {
+    floatingHeartBtn: {
         position: 'absolute',
-        top: 14,
-        right: 14,
+        top: 12,
+        right: 12,
         width: 36,
         height: 36,
         borderRadius: 18,
         backgroundColor: '#FFFFFF',
         alignItems: 'center',
         justifyContent: 'center',
-        elevation: 3,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
+        shadowOpacity: 0.1,
         shadowRadius: 4,
+        elevation: 3,
         zIndex: 2,
+    },
+    mainImgPressable: {
+        width: '100%',
+        height: '92%',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     mainImg: {
         width: '100%',
-        height: '90%',
+        height: '100%',
     },
     counterBadge: {
         position: 'absolute',
-        bottom: 14,
-        right: 14,
-        backgroundColor: 'rgba(15, 23, 42, 0.75)',
+        bottom: 12,
+        right: 12,
+        backgroundColor: 'rgba(10, 25, 47, 0.75)',
         paddingHorizontal: 8,
         paddingVertical: 3,
         borderRadius: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
     },
     counterBadgeTxt: {
         color: '#FFFFFF',
         fontSize: 10,
-        fontWeight: '700',
+        fontWeight: '800',
     },
-
     // Content Section
     contentSection: {
         paddingHorizontal: 16,
     },
-    productTitle: {
-        fontSize: 20,
-        fontWeight: '900',
-        color: '#0F172A',
-        marginBottom: 4,
+    categoryPillRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: 6,
     },
-    productSubtitle: {
-        fontSize: 12.5,
-        color: '#64748B',
-        fontWeight: '500',
-        marginBottom: 8,
+    categoryPill: {
+        backgroundColor: BRAND.skyLight,
+        paddingHorizontal: 8,
+        paddingVertical: 2.5,
+        borderRadius: 6,
+    },
+    categoryPillTxt: {
+        color: BRAND.sky,
+        fontSize: 9.5,
+        fontWeight: '900',
+        textTransform: 'uppercase',
+    },
+    brandPill: {
+        backgroundColor: '#F1F5F9',
+        paddingHorizontal: 8,
+        paddingVertical: 2.5,
+        borderRadius: 6,
+    },
+    brandPillTxt: {
+        color: BRAND.slateDark,
+        fontSize: 9.5,
+        fontWeight: '700',
+    },
+    productTitle: {
+        fontSize: 19,
+        fontWeight: '900',
+        color: BRAND.slateDark,
+        lineHeight: 25,
+        marginBottom: 6,
     },
     ratingRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 5,
+        gap: 6,
         marginBottom: 14,
     },
     ratingNum: {
         fontSize: 13,
-        fontWeight: '800',
-        color: '#0F172A',
+        fontWeight: '900',
+        color: BRAND.slateDark,
     },
     reviewsCount: {
         fontSize: 12,
-        color: '#64748B',
+        color: BRAND.slate,
+        fontWeight: '600',
     },
     ratingDivider: {
-        fontSize: 12,
+        fontSize: 10,
         color: '#CBD5E1',
-        marginHorizontal: 4,
     },
     soldCount: {
         fontSize: 12,
-        color: '#64748B',
-        fontWeight: '600',
-    },
-
-    // Seller Card
-    sellerCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F8FAFC',
-        borderRadius: 14,
-        padding: 10,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        marginBottom: 16,
-    },
-    sellerAvatarWrap: {
-        width: 38,
-        height: 38,
-        borderRadius: 19,
-        backgroundColor: '#0A192F',
-        overflow: 'hidden',
-    },
-    sellerAvatar: {
-        width: '100%',
-        height: '100%',
-    },
-    sellerName: {
-        fontSize: 13.5,
-        fontWeight: '800',
-        color: '#0F172A',
-    },
-    sellerVerifiedTxt: {
-        fontSize: 11,
-        fontWeight: '600',
-        color: '#10B981',
-    },
-    viewStoreBtn: {
-        backgroundColor: '#EFF6FF',
-        paddingHorizontal: 12,
-        paddingVertical: 7,
-        borderRadius: 20,
-    },
-    viewStoreBtnTxt: {
-        color: '#2563EB',
-        fontSize: 11.5,
+        color: BRAND.emerald,
         fontWeight: '700',
     },
-
     // Price & Stock
     priceStockRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 18,
-    },
-    priceWrap: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
+        paddingVertical: 12,
+        borderTopWidth: 1,
+        borderBottomWidth: 1,
+        borderColor: '#F1F5F9',
+        marginBottom: 14,
     },
     currentPrice: {
         fontSize: 22,
         fontWeight: '900',
-        color: '#0F172A',
+        color: BRAND.navy,
     },
     comparePrice: {
         fontSize: 13,
-        color: '#94A3B8',
+        color: BRAND.slate,
         textDecorationLine: 'line-through',
+        fontWeight: '600',
     },
-    savePill: {
-        backgroundColor: '#10B981',
-        paddingHorizontal: 7,
-        paddingVertical: 3,
-        borderRadius: 6,
-    },
-    savePillTxt: {
-        color: '#FFFFFF',
-        fontSize: 10,
+    saveAmountTxt: {
+        fontSize: 10.5,
+        color: BRAND.emerald,
         fontWeight: '800',
+        marginTop: 2,
     },
-    stockWrap: {
+    stockBox: {
         alignItems: 'flex-end',
     },
     stockDot: {
         width: 7,
         height: 7,
         borderRadius: 3.5,
-        backgroundColor: '#10B981',
+        backgroundColor: BRAND.emerald,
+    },
+    stockDotOut: {
+        backgroundColor: BRAND.danger,
     },
     stockStatusTxt: {
         fontSize: 12,
         fontWeight: '800',
-        color: '#10B981',
+        color: BRAND.emerald,
     },
-    stockLeftTxt: {
+    stockStatusTxtOut: {
+        color: BRAND.danger,
+    },
+    lowStockAlert: {
         fontSize: 10,
-        color: '#64748B',
-        marginTop: 1,
+        color: BRAND.danger,
+        fontWeight: '700',
+        marginTop: 2,
     },
-
-    // 4 Feature Blocks
-    featuresGrid: {
+    // Seller Card
+    sellerCard: {
         flexDirection: 'row',
-        gap: 8,
-        marginBottom: 20,
-    },
-    featureBox: {
-        flex: 1,
+        alignItems: 'center',
         backgroundColor: '#F8FAFC',
-        borderRadius: 14,
+        borderRadius: 16,
+        padding: 10,
         borderWidth: 1,
         borderColor: '#E2E8F0',
-        paddingVertical: 12,
-        paddingHorizontal: 4,
-        alignItems: 'center',
+        marginBottom: 16,
     },
-    featureIconCircle: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: '#E0F2FE',
+    sellerAvatarWrap: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: BRAND.navy,
+        overflow: 'hidden',
+        position: 'relative',
+    },
+    sellerAvatar: {
+        width: '100%',
+        height: '100%',
+    },
+    sellerCheckBadge: {
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        backgroundColor: BRAND.sky,
+        borderRadius: 6,
+        width: 12,
+        height: 12,
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 6,
     },
-    featureLabel: {
-        fontSize: 9.5,
-        color: '#64748B',
-        fontWeight: '600',
-        textAlign: 'center',
+    sellerName: {
+        fontSize: 13,
+        fontWeight: '900',
+        color: BRAND.slateDark,
     },
-    featureLabelBold: {
-        fontSize: 9.5,
-        color: '#0F172A',
+    sellerTagline: {
+        fontSize: 10.5,
+        color: BRAND.slate,
+        marginTop: 1,
+    },
+    sellerWhatsAppBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#ECFDF5',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: '#A7F3D0',
+        marginRight: 6,
+    },
+    sellerWhatsAppTxt: {
+        color: '#065F46',
+        fontSize: 11,
         fontWeight: '800',
-        textAlign: 'center',
     },
-
+    viewStoreBtn: {
+        backgroundColor: BRAND.navy,
+        paddingHorizontal: 11,
+        paddingVertical: 6,
+        borderRadius: 10,
+    },
+    viewStoreBtnTxt: {
+        color: '#FFFFFF',
+        fontSize: 11,
+        fontWeight: '800',
+    },
+    // Variants Section
+    variantsSection: {
+        marginBottom: 16,
+    },
+    sectionHeaderTitle: {
+        fontSize: 11,
+        fontWeight: '900',
+        color: BRAND.slate,
+        letterSpacing: 0.5,
+        textTransform: 'uppercase',
+        marginBottom: 8,
+    },
+    variantsRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    variantPill: {
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 10,
+    },
+    variantPillActive: {
+        backgroundColor: BRAND.navy,
+        borderColor: BRAND.navy,
+    },
+    variantPillTxt: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: BRAND.slateDark,
+    },
+    variantPillTxtActive: {
+        color: '#FFFFFF',
+    },
+    variantPriceTxt: {
+        fontSize: 10,
+        color: BRAND.slate,
+        marginTop: 1,
+    },
+    variantPriceTxtActive: {
+        color: BRAND.gold,
+    },
     // Action Row
     actionRowContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
-        marginBottom: 20,
+        gap: 10,
+        marginBottom: 18,
     },
     qtySection: {
         alignItems: 'center',
     },
     qtyHeading: {
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: '700',
-        color: '#64748B',
-        marginBottom: 4,
+        color: BRAND.slate,
+        marginBottom: 3,
     },
     qtyStepper: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F1F5F9',
+        backgroundColor: '#F8FAFC',
         borderRadius: 12,
         borderWidth: 1,
         borderColor: '#E2E8F0',
@@ -1071,57 +1348,61 @@ const s = StyleSheet.create({
         paddingHorizontal: 4,
     },
     qtyBtn: {
-        width: 32,
-        height: 40,
+        width: 28,
+        height: 38,
         alignItems: 'center',
         justifyContent: 'center',
     },
     qtyValue: {
         fontSize: 14,
-        fontWeight: '800',
-        color: '#0F172A',
-        paddingHorizontal: 8,
+        fontWeight: '900',
+        color: BRAND.slateDark,
+        paddingHorizontal: 6,
     },
     dualButtonsWrap: {
         flex: 1,
-        gap: 8,
+        gap: 6,
     },
     addToCartBtn: {
         height: 42,
         borderRadius: 12,
-        borderWidth: 1.5,
-        borderColor: '#0A192F',
-        backgroundColor: '#FFFFFF',
-        flexDirection: 'row',
+        backgroundColor: BRAND.navy,
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 8,
+        shadowColor: BRAND.navy,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 2,
     },
     addToCartBtnDone: {
-        borderColor: '#10B981',
         backgroundColor: '#ECFDF5',
+        borderWidth: 1,
+        borderColor: BRAND.emerald,
     },
     addToCartTxt: {
-        fontSize: 13.5,
-        fontWeight: '800',
-        color: '#0A192F',
+        fontSize: 13,
+        fontWeight: '900',
+        color: '#FFFFFF',
     },
     buyNowBtn: {
-        height: 42,
+        height: 38,
         borderRadius: 12,
-        backgroundColor: '#F59E0B',
+        backgroundColor: BRAND.gold,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 6,
+        gap: 4,
     },
     buyNowTxt: {
-        fontSize: 13.5,
-        fontWeight: '800',
-        color: '#0F172A',
+        fontSize: 12.5,
+        fontWeight: '900',
+        color: BRAND.navy,
     },
-
-    // Trust Badges Strip
+    btnDisabled: {
+        backgroundColor: '#CBD5E1',
+    },
+    // Trust Badges
     trustBadgesRow: {
         flexDirection: 'row',
         backgroundColor: '#F8FAFC',
@@ -1129,8 +1410,8 @@ const s = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#E2E8F0',
         paddingVertical: 12,
-        paddingHorizontal: 6,
-        marginBottom: 20,
+        paddingHorizontal: 4,
+        marginBottom: 16,
     },
     trustItem: {
         flex: 1,
@@ -1138,18 +1419,17 @@ const s = StyleSheet.create({
         gap: 2,
     },
     trustTitle: {
-        fontSize: 8.5,
-        fontWeight: '800',
-        color: '#0F172A',
+        fontSize: 9.5,
+        fontWeight: '900',
+        color: BRAND.slateDark,
         textAlign: 'center',
-        marginTop: 4,
+        marginTop: 3,
     },
     trustSub: {
-        fontSize: 7.5,
-        color: '#64748B',
+        fontSize: 8,
+        color: BRAND.slate,
         textAlign: 'center',
     },
-
     // Accordion
     accordionHeader: {
         flexDirection: 'row',
@@ -1158,49 +1438,135 @@ const s = StyleSheet.create({
         paddingVertical: 14,
         borderTopWidth: 1,
         borderBottomWidth: 1,
-        borderColor: '#E2E8F0',
+        borderColor: '#F1F5F9',
+        marginBottom: 12,
     },
     accordionTitle: {
-        fontSize: 14,
-        fontWeight: '800',
-        color: '#0F172A',
+        fontSize: 13.5,
+        fontWeight: '900',
+        color: BRAND.slateDark,
     },
     accordionContent: {
-        paddingVertical: 12,
+        paddingBottom: 14,
     },
     descriptionText: {
-        fontSize: 12.5,
-        lineHeight: 19,
+        fontSize: 13,
+        lineHeight: 20,
         color: '#475569',
         marginBottom: 12,
     },
     specsTable: {
         backgroundColor: '#F8FAFC',
-        borderRadius: 10,
-        padding: 10,
+        borderRadius: 12,
         borderWidth: 1,
         borderColor: '#E2E8F0',
-        gap: 6,
+        overflow: 'hidden',
     },
     specRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
     },
     specLabel: {
-        fontSize: 11,
-        color: '#64748B',
+        fontSize: 11.5,
+        color: BRAND.slate,
         fontWeight: '600',
     },
     specVal: {
-        fontSize: 11,
-        color: '#0F172A',
-        fontWeight: '700',
+        fontSize: 11.5,
+        color: BRAND.slateDark,
+        fontWeight: '800',
     },
-
-    // Zoom modal
+    // Reviews
+    reviewsSection: {
+        marginTop: 10,
+        marginBottom: 16,
+    },
+    reviewsHeadRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 8,
+    },
+    emptyReviewsBox: {
+        backgroundColor: '#F8FAFC',
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    emptyReviewsTxt: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: BRAND.slateDark,
+    },
+    emptyReviewsSub: {
+        fontSize: 10.5,
+        color: BRAND.slate,
+        marginTop: 2,
+    },
+    reviewCard: {
+        backgroundColor: '#F8FAFC',
+        padding: 10,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    reviewerName: {
+        fontSize: 11.5,
+        fontWeight: '800',
+        color: BRAND.slateDark,
+    },
+    reviewComment: {
+        fontSize: 12,
+        color: '#475569',
+        marginTop: 4,
+    },
+    // Related
+    relatedSection: {
+        marginTop: 10,
+        marginBottom: 20,
+    },
+    relatedCard: {
+        width: 125,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        padding: 8,
+    },
+    relatedImgWrap: {
+        width: '100%',
+        height: 90,
+        backgroundColor: '#F8FAFC',
+        borderRadius: 10,
+        overflow: 'hidden',
+        marginBottom: 6,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    relatedImg: {
+        width: '100%',
+        height: '100%',
+    },
+    relatedName: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: BRAND.slateDark,
+        marginBottom: 2,
+    },
+    relatedPrice: {
+        fontSize: 12,
+        fontWeight: '900',
+        color: BRAND.navy,
+    },
+    // Zoom Modal
     zoomModalWrap: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.92)',
+        backgroundColor: 'rgba(10, 25, 47, 0.95)',
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -1212,7 +1578,33 @@ const s = StyleSheet.create({
         zIndex: 10,
     },
     zoomFullImg: {
-        width: width - 32,
-        height: 400,
+        width: width - 24,
+        height: 420,
+    },
+    // Toast
+    toastContainer: {
+        position: 'absolute',
+        bottom: 85,
+        left: 20,
+        right: 20,
+        backgroundColor: BRAND.navy,
+        borderRadius: 14,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+        elevation: 8,
+        zIndex: 9999,
+    },
+    toastTxt: {
+        color: '#FFFFFF',
+        fontSize: 12,
+        fontWeight: '700',
+        flex: 1,
     },
 });
