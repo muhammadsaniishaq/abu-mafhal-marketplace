@@ -119,8 +119,8 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
 
         const officialStore = {
             id: 'official',
-            name: 'TechWorld Store',
-            business_name: 'TechWorld Store',
+            name: 'Abu Mafhal Official',
+            business_name: 'Abu Mafhal Official',
             role: 'admin',
             isOfficial: true,
             is_verified: true,
@@ -157,8 +157,8 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
 
                 setVendor({
                     id: data.id,
-                    name: data.business_name || data.full_name || 'TechWorld Store',
-                    business_name: data.business_name || data.full_name || 'TechWorld Store',
+                    name: data.business_name || data.full_name || 'Marketplace Seller',
+                    business_name: data.business_name || data.full_name || 'Marketplace Seller',
                     role: data.role || 'vendor',
                     isOfficial: data.role === 'admin',
                     is_verified: true,
@@ -689,7 +689,7 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                         <View style={{ flex: 1, marginLeft: 10 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                                 <Text numberOfLines={1} style={s.sellerName}>
-                                    {vendor?.name || 'TechWorld Store'}
+                                    {vendor?.name || 'Marketplace Seller'}
                                 </Text>
                                 <Ionicons name="checkmark-circle" size={16} color={BRAND.sky} />
                             </View>
@@ -897,7 +897,7 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                                 </View>
                                 <View>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                        <Text style={s.chatVendorTitle}>{vendor?.name || 'TechWorld Store'}</Text>
+                                        <Text style={s.chatVendorTitle}>{vendor?.name || 'Marketplace Seller'}</Text>
                                         <Ionicons name="checkmark-circle" size={13} color={BRAND.sky} />
                                     </View>
                                     <Text style={s.chatLiveSub}>● Online Now • Instant Reply</Text>
