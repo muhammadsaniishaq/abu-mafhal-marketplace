@@ -429,8 +429,9 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                     await supabase.from('messages').insert({
                         sender_id: user.id,
                         receiver_id: targetId,
-                        message: initialText.trim(),
-                        message_type: 'text',
+                        message: `🛍️ [Product Inquiry: ${product?.name} - ₦${currentPrice}]\n${initialText.trim()}`,
+                        message_type: 'product_inquiry',
+                        product_id: product?.id,
                         created_at: new Date().toISOString()
                     });
                 } catch (sendErr) {
@@ -441,7 +442,7 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
             // Open full ChatScreen with live messages, typing indicator, and realtime subscriptions
             navigation.navigate('ChatScreen', {
                 vendorId: targetId,
-                vendorName: vendor?.name || 'TechWorld Store',
+                vendorName: vendor?.name || 'Merchant',
                 vendorAvatar: vendor?.avatar || null,
                 productId: product?.id,
                 productName: product?.name,

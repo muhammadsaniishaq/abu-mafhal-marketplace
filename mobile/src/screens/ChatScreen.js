@@ -52,11 +52,12 @@ export const ChatScreen = ({ route, navigation }) => {
     const [uploading, setUploading] = useState(false);
     const [zoomImg, setZoomImg] = useState(null);
     const [showOptionsModal, setShowOptionsModal] = useState(false);
+    const [productsCache, setProductsCache] = useState({});
 
     const isSupport = vendorId === 'admin' || vendorId === 'admin_support' || vendorName?.toLowerCase()?.includes('support');
 
     const [targetProfile, setTargetProfile] = useState({
-        full_name: isSupport ? 'Abu Mafhal Support' : (vendorName || 'TechWorld Store'),
+        full_name: isSupport ? 'Abu Mafhal Support' : (vendorName || 'Merchant'),
         avatar_url: vendorAvatar || null,
         role: isSupport ? 'Support Team' : (vendorRole || 'Verified Seller'),
         is_online: true,
@@ -86,7 +87,7 @@ export const ChatScreen = ({ route, navigation }) => {
             if (!resolvedId || resolvedId === 'admin' || resolvedId === 'official') {
                 const { data: adminProf } = await supabase
                     .from('profiles')
-                    .select('id, full_name, avatar_url, role, phone')
+                    .select('id, full_name, business_name, avatar_url, role, phone')
                     .eq('role', 'admin')
                     .limit(1)
                     .maybeSingle();
@@ -96,7 +97,7 @@ export const ChatScreen = ({ route, navigation }) => {
                     setTargetId(adminProf.id);
                     setTargetProfile(prev => ({
                         ...prev,
-                        full_name: adminProf.full_name || 'Abu Mafhal Support',
+                        full_name: adminProf.business_name || adminProf.full_name || 'Abu Mafhal Support',
                         avatar_url: adminProf.avatar_url || prev.avatar_url,
                         role: 'Support Team',
                         phone: adminProf.phone || prev.phone
@@ -122,16 +123,18 @@ export const ChatScreen = ({ route, navigation }) => {
 
     const fetchTargetProfile = async (id) => {
         try {
-            const { data } = await supabase
-                .from('profiles')
-                .select('id, full_name, business_name, avatar_url, role, phone, is_online, address')
-                .eq('id', id)
-                .maybeSingle();
+            const [profileRes, storeRes] = await Promise.all([
+                supabase.from('profiles').select('id, full_name, business_name, avatar_url, role, phone, is_online, address').eq('id', id).maybeSingle(),
+                supabase.from('stores').select('name, logo, phone, whatsapp').eq('user_id', id).maybeSingle()
+            ]);
 
-            if (data) {
-                let wa = data.phone;
+            const data = profileRes?.data;
+            const store = storeRes?.data;
+
+            if (data || store) {
+                let wa = store?.whatsapp || data?.phone;
                 try {
-                    if (data.address && typeof data.address === 'string' && data.address.startsWith('{')) {
+                    if (data?.address && typeof data.address === 'string' && data.address.startsWith('{')) {
                         const parsed = JSON.parse(data.address);
                         if (parsed.whatsapp) wa = parsed.whatsapp;
                     }
@@ -139,16 +142,28 @@ export const ChatScreen = ({ route, navigation }) => {
 
                 setTargetProfile(prev => ({
                     ...prev,
-                    full_name: data.business_name || data.full_name || prev.full_name,
-                    avatar_url: data.avatar_url || prev.avatar_url,
-                    role: data.role === 'admin' ? 'Support Team' : 'Verified Seller',
-                    is_online: data.is_online !== undefined ? data.is_online : true,
-                    phone: data.phone || prev.phone,
-                    whatsapp: wa || data.phone || prev.whatsapp
+                    full_name: store?.name || data?.business_name || data?.full_name || prev.full_name,
+                    avatar_url: store?.logo || data?.avatar_url || prev.avatar_url,
+                    role: data?.role === 'admin' ? 'Support Team' : 'Verified Seller',
+                    is_online: data?.is_online !== undefined ? data.is_online : true,
+                    phone: store?.phone || data?.phone || prev.phone,
+                    whatsapp: wa || prev.whatsapp
                 }));
             }
         } catch (e) {
             console.log('fetchTargetProfile error:', e);
+        }
+    };
+
+    const fetchProductInfo = async (pId) => {
+        if (!pId || productsCache[pId]) return;
+        try {
+            const { data } = await supabase.from('products').select('id, name, price, image_url').eq('id', pId).single();
+            if (data) {
+                setProductsCache(prev => ({ ...prev, [pId]: data }));
+            }
+        } catch (e) {
+            console.log('Error fetching product for chat context:', e);
         }
     };
 
@@ -329,6 +344,16 @@ export const ChatScreen = ({ route, navigation }) => {
     const renderMessage = ({ item }) => {
         const isMe = item.sender_id === currentUser?.id;
         const timeStr = new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        // Is this a product inquiry message?
+        const isProductInquiry = item.product_id || (item.message && item.message.includes('[Product Inquiry:'));
+        const embeddedProduct = item.product_id ? productsCache[item.product_id] : null;
+
+        useEffect(() => {
+            if (item.product_id && !productsCache[item.product_id]) {
+                fetchProductInfo(item.product_id);
+            }
+        }, [item.product_id]);
 
         return (
             <View style={[s.msgWrapper, isMe ? s.msgWrapperMe : s.msgWrapperThem]}>
@@ -341,6 +366,23 @@ export const ChatScreen = ({ route, navigation }) => {
 
                 <View style={{ maxWidth: '78%' }}>
                     <View style={[s.bubble, isMe ? s.bubbleMe : s.bubbleThem]}>
+                        
+                        {/* PRODUCT CONTEXT EMBED */}
+                        {isProductInquiry && embeddedProduct && (
+                            <TouchableOpacity 
+                                style={s.embeddedProductCard} 
+                                activeOpacity={0.8}
+                                onPress={() => navigation.navigate('ProductDetails', { id: embeddedProduct.id, product: embeddedProduct })}
+                            >
+                                <Image source={{ uri: embeddedProduct.image_url || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=300' }} style={s.embedImg} />
+                                <View style={s.embedInfo}>
+                                    <Text numberOfLines={1} style={s.embedTitle}>{embeddedProduct.name}</Text>
+                                    <Text style={s.embedPrice}>{fmtPrice(embeddedProduct.price)}</Text>
+                                </View>
+                                <Ionicons name="chevron-forward" size={16} color={BRAND.navy} />
+                            </TouchableOpacity>
+                        )}
+
                         {item.message_type === 'image' || item.media_url ? (
                             <TouchableOpacity onPress={() => setZoomImg(item.media_url || item.message)} activeOpacity={0.9}>
                                 <Image
@@ -351,7 +393,7 @@ export const ChatScreen = ({ route, navigation }) => {
                             </TouchableOpacity>
                         ) : (
                             <Text style={[s.msgText, isMe ? s.msgTextMe : s.msgTextThem]}>
-                                {item.message}
+                                {item.message?.replace(/\[Product Inquiry:.*?\]\n?/, '')}
                             </Text>
                         )}
                     </View>
@@ -978,5 +1020,38 @@ const s = StyleSheet.create({
         fontSize: 12.5,
         fontWeight: '600',
         color: BRAND.slateDark,
+    },
+    embeddedProductCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 8,
+        padding: 8,
+        marginBottom: 6,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        width: 220,
+    },
+    embedImg: {
+        width: 44,
+        height: 44,
+        borderRadius: 6,
+        backgroundColor: '#F1F5F9',
+    },
+    embedInfo: {
+        flex: 1,
+        marginLeft: 8,
+        justifyContent: 'center',
+    },
+    embedTitle: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: BRAND.navy,
+        marginBottom: 2,
+    },
+    embedPrice: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: BRAND.goldDark,
     },
 });
