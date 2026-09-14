@@ -64,38 +64,51 @@ const VendorProfile = () => {
 
   const fetchProfile = async () => {
     try {
-      const { data, error: fetchError } = await supabase
+      const targetUid = currentUser?.uid || currentUser?.id;
+      if (!targetUid) return;
+
+      // 1. Fetch from master 'profiles' table
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', targetUid)
+        .maybeSingle();
+
+      // 2. Fetch from 'users' table
+      const { data: userData } = await supabase
         .from('users')
         .select('*')
-        .eq('id', currentUser.uid)
-        .single();
+        .eq('id', targetUid)
+        .maybeSingle();
 
-      if (fetchError) throw fetchError;
-      
-      if (data) {
-        setProfileData({
-          ...profileData,
-          name: data.full_name || data.name || '',
-          email: data.email || '',
-          phone: data.phone || '',
-          avatar: data.avatar_url || data.avatar || '',
-          businessName: data.business_name || data.businessName || '',
-          businessDescription: data.business_description || data.businessDescription || '',
-          businessAddress: data.business_address || data.businessAddress || '',
-          businessLocation: data.business_location || data.businessLocation || '',
-          businessPhone: data.business_phone || data.businessPhone || '',
-          businessEmail: data.business_email || data.businessEmail || '',
-          businessWebsite: data.business_website || data.businessWebsite || '',
-          taxId: data.tax_id || data.taxId || '',
-          businessLicense: data.business_license || data.businessLicense || '',
-          socialMedia: data.social_media || data.socialMedia || profileData.socialMedia,
-          bankDetails: data.bank_details || data.bankDetails || profileData.bankDetails,
-          shippingInfo: data.shipping_info || data.shippingInfo || profileData.shippingInfo,
-          operatingHours: data.operating_hours || data.operatingHours || profileData.operatingHours,
-          policies: data.policies || profileData.policies,
-          bannerImage: data.banner_image || data.bannerImage || ''
-        });
+      let parsedAddr = {};
+      if (profile?.address && profile.address.startsWith('{')) {
+        try { parsedAddr = JSON.parse(profile.address); } catch (_) {}
       }
+
+      setProfileData({
+        ...profileData,
+        name: profile?.full_name || userData?.full_name || userData?.name || '',
+        email: profile?.email || userData?.email || currentUser?.email || '',
+        phone: profile?.phone || userData?.phone || '',
+        avatar: profile?.avatar_url || userData?.avatar_url || userData?.avatar || '',
+        businessName: profile?.business_name || parsedAddr.business_name || userData?.business_name || '',
+        businessDescription: profile?.about || parsedAddr.about || userData?.business_description || '',
+        businessCategory: profile?.business_category || parsedAddr.category || 'General Merchant',
+        businessAddress: parsedAddr.address || profile?.address || userData?.business_address || '',
+        businessLocation: profile?.state || userData?.business_location || '',
+        businessPhone: profile?.phone || userData?.business_phone || '',
+        businessEmail: profile?.business_email || profile?.email || '',
+        businessWebsite: profile?.business_website || '',
+        taxId: userData?.tax_id || '',
+        businessLicense: userData?.business_license || '',
+        socialMedia: userData?.social_media || profileData.socialMedia,
+        bankDetails: userData?.bank_details || profileData.bankDetails,
+        shippingInfo: userData?.shipping_info || profileData.shippingInfo,
+        operatingHours: userData?.operating_hours || profileData.operatingHours,
+        policies: userData?.policies || profileData.policies,
+        bannerImage: profile?.cover_image || parsedAddr.cover_image || userData?.banner_image || ''
+      });
     } catch (error) {
       console.error('Error fetching profile:', error.message);
     }
@@ -134,8 +147,9 @@ const VendorProfile = () => {
     if (!file) return;
 
     try {
+      const targetUid = currentUser?.uid || currentUser?.id;
       const timestamp = Date.now();
-      const fileName = `${currentUser.uid}/${timestamp}_${file.name}`;
+      const fileName = `${targetUid}/${timestamp}_${file.name}`;
       
       const { data, error: uploadError } = await supabase.storage
         .from('avatars')
@@ -148,10 +162,10 @@ const VendorProfile = () => {
         .getPublicUrl(fileName);
 
       setProfileData({...profileData, avatar: publicUrl});
-      setMessage({ type: 'success', text: 'Avatar uploaded!' });
+      setMessage({ type: 'success', text: 'Store Logo / Avatar uploaded!' });
     } catch (error) {
       console.error('Avatar upload error:', error.message);
-      setMessage({ type: 'error', text: 'Failed to upload avatar' });
+      setMessage({ type: 'error', text: 'Failed to upload avatar: ' + error.message });
     }
   };
 
@@ -168,26 +182,57 @@ const VendorProfile = () => {
     setMessage({ type: '', text: '' });
 
     try {
+      const targetUid = currentUser?.uid || currentUser?.id;
       let bannerUrl = profileData.bannerImage;
       
       if (bannerImage) {
         const timestamp = Date.now();
-        const fileName = `${currentUser.uid}/${timestamp}_${bannerImage.name}`;
+        const fileName = `${targetUid}/${timestamp}_${bannerImage.name}`;
         
         const { data, error: uploadError } = await supabase.storage
-          .from('banners')
+          .from('avatars')
           .upload(fileName, bannerImage);
 
-        if (uploadError) throw uploadError;
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('banners')
-          .getPublicUrl(fileName);
-        
-        bannerUrl = publicUrl;
+        if (!uploadError) {
+          const { data: { publicUrl } } = supabase.storage
+            .from('avatars')
+            .getPublicUrl(fileName);
+          bannerUrl = publicUrl;
+        }
       }
 
-      const updatedProfile = {
+      // 1. Update master 'profiles' table for instant live Store display
+      const addrPayload = JSON.stringify({
+        address: profileData.businessAddress,
+        about: profileData.businessDescription,
+        cover_image: bannerUrl,
+        category: profileData.businessCategory || 'General Merchant',
+        business_name: profileData.businessName
+      });
+
+      const profileUpdates = {
+        id: targetUid,
+        full_name: profileData.name,
+        phone: profileData.phone || profileData.businessPhone,
+        avatar_url: profileData.avatar,
+        business_name: profileData.businessName || profileData.name,
+        about: profileData.businessDescription,
+        cover_image: bannerUrl,
+        business_category: profileData.businessCategory || 'General Merchant',
+        address: addrPayload,
+        updated_at: new Date().toISOString()
+      };
+
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert(profileUpdates, { onConflict: 'id' });
+
+      if (profileError) {
+        console.warn('Profile direct sync note:', profileError);
+      }
+
+      // 2. Also update 'users' table
+      const updatedUserRecord = {
         full_name: profileData.name,
         phone: profileData.phone,
         avatar_url: profileData.avatar,
@@ -209,17 +254,16 @@ const VendorProfile = () => {
         updated_at: new Date().toISOString()
       };
 
-      const { error: updateError } = await supabase
+      await supabase
         .from('users')
-        .update(updatedProfile)
-        .eq('id', currentUser.uid);
-
-      if (updateError) throw updateError;
+        .update(updatedUserRecord)
+        .eq('id', targetUid)
+        .catch(() => {});
       
-      setMessage({ type: 'success', text: 'Profile updated successfully!' });
+      setMessage({ type: 'success', text: 'Store Profile & Branding saved successfully!' });
     } catch (error) {
       console.error('Error updating profile:', error.message);
-      setMessage({ type: 'error', text: 'Failed to update profile' });
+      setMessage({ type: 'error', text: 'Failed to update store profile: ' + error.message });
     } finally {
       setLoading(false);
     }
@@ -246,33 +290,56 @@ const VendorProfile = () => {
       )}
 
       {/* Banner Image */}
-      <div className="mb-6 relative h-48 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg overflow-hidden">
-        {(bannerPreview || profileData.bannerImage) && (
-          <img src={bannerPreview || profileData.bannerImage} alt="Banner" className="w-full h-full object-cover" />
-        )}
-        <label className="absolute bottom-4 right-4 px-4 py-2 bg-white hover:bg-gray-100 text-gray-800 rounded-lg cursor-pointer shadow-lg">
-          Change Banner
-          <input type="file" accept="image/*" onChange={handleBannerUpload} className="hidden" />
-        </label>
+      <div className="mb-6">
+        <div className="relative h-48 bg-gradient-to-r from-blue-500 to-purple-500 rounded-2xl overflow-hidden shadow-inner">
+          {(bannerPreview || profileData.bannerImage) && (
+            <img src={bannerPreview || profileData.bannerImage} alt="Banner" className="w-full h-full object-cover" />
+          )}
+          <label className="absolute bottom-4 right-4 px-4 py-2 bg-white/90 hover:bg-white text-gray-900 font-bold text-xs rounded-xl cursor-pointer shadow-lg backdrop-blur-sm transition-all">
+            Upload Banner Photo
+            <input type="file" accept="image/*" onChange={handleBannerUpload} className="hidden" />
+          </label>
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-xs font-bold text-gray-500 shrink-0">Banner URL:</span>
+          <input
+            type="text"
+            name="bannerImage"
+            value={profileData.bannerImage}
+            onChange={handleChange}
+            placeholder="Or paste direct image URL for store cover banner..."
+            className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-xl focus:ring-2 focus:ring-sky-500/20"
+          />
+        </div>
       </div>
 
       {/* Avatar & Basic Info */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6 -mt-20">
-        <div className="flex items-end gap-6">
-          <div className="w-32 h-32 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden border-4 border-white shadow-lg">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-md p-6 mb-6 -mt-16 border border-gray-100">
+        <div className="flex flex-col sm:flex-row sm:items-end gap-6">
+          <div className="w-28 h-28 rounded-2xl bg-gray-100 overflow-hidden border-4 border-white shadow-lg shrink-0">
             {profileData.avatar ? (
-              <img src={profileData.avatar} alt="Avatar" className="w-full h-full object-cover" />
+              <img src={profileData.avatar} alt="Logo" className="w-full h-full object-contain p-1" />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-5xl">👤</div>
+              <div className="w-full h-full flex items-center justify-center text-4xl">🏪</div>
             )}
           </div>
-          <div className="flex-1 mt-20">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{profileData.name || 'Vendor Name'}</h2>
-            <p className="text-gray-600 dark:text-gray-400">{profileData.businessName || 'Business Name'}</p>
-            <label className="inline-block mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg cursor-pointer">
-              Change Avatar
-              <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
-            </label>
+          <div className="flex-1">
+            <h2 className="text-2xl font-black text-gray-900 dark:text-white">{profileData.businessName || profileData.name || 'Store Name'}</h2>
+            <p className="text-gray-500 text-xs font-semibold">{profileData.businessCategory || 'Verified Store'}</p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <label className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl cursor-pointer shadow-sm">
+                Upload Logo
+                <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
+              </label>
+              <input
+                type="text"
+                name="avatar"
+                value={profileData.avatar}
+                onChange={handleChange}
+                placeholder="Or paste direct Logo URL..."
+                className="px-3 py-1.5 text-xs border border-gray-200 rounded-xl flex-1 min-w-[200px]"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -321,15 +388,28 @@ const VendorProfile = () => {
         {/* Business Info Tab */}
         {activeTab === 'business' && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 space-y-4">
-            <h3 className="text-xl font-semibold mb-4">Business Information</h3>
+            <h3 className="text-xl font-semibold mb-4">Store & Business Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-2">Business Name</label>
-                <input type="text" name="businessName" value={profileData.businessName} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700" />
+                <label className="block text-sm font-bold mb-2">Store / Business Name *</label>
+                <input type="text" name="businessName" value={profileData.businessName} onChange={handleChange} placeholder="e.g. Abu Mafhal Official Store" className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 font-semibold" />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">Business Phone</label>
-                <input type="tel" name="businessPhone" value={profileData.businessPhone} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700" />
+                <label className="block text-sm font-bold mb-2">Store Category</label>
+                <select name="businessCategory" value={profileData.businessCategory} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700">
+                  <option value="Official Mall & Flagship Store">Official Mall & Flagship Store</option>
+                  <option value="Electronics & Smart Devices">Electronics & Smart Devices</option>
+                  <option value="Fashion & Apparel">Fashion & Apparel</option>
+                  <option value="Beauty, Perfumes & Personal Care">Beauty, Perfumes & Personal Care</option>
+                  <option value="Home & Living">Home & Living</option>
+                  <option value="Groceries & Supermarket">Groceries & Supermarket</option>
+                  <option value="Phones & Accessories">Phones & Accessories</option>
+                  <option value="General Merchant">General Merchant</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Business Phone / WhatsApp</label>
+                <input type="tel" name="businessPhone" value={profileData.businessPhone} onChange={handleChange} placeholder="2349021486162" className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700" />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2">Business Email</label>

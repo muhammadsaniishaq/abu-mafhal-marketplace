@@ -10,57 +10,64 @@ import {
 
 const NAV_ITEMS = [
   { 
-    label: 'Babban Dashboard', 
-    subLabel: 'Overview & Pulse',
+    label: 'Official Store Profile', 
+    subLabel: 'Store Name, Cover & Bio',
+    path: '/admin/store-profile', 
+    icon: Store, 
+    color: 'text-amber-500' 
+  },
+  { 
+    label: 'Executive Overview', 
+    subLabel: 'Analytics & Pulse',
     path: '/admin/analytics', 
     icon: LayoutDashboard, 
     color: 'text-violet-600' 
   },
   { 
-    label: 'Kayan Kasuwa', 
+    label: 'Marketplace Products', 
     subLabel: 'Products Management',
     path: '/admin/products', 
     icon: Package, 
     color: 'text-emerald-600' 
   },
   { 
-    label: 'Rukunai (Categories)', 
-    subLabel: 'Store Categories',
+    label: 'Store Categories', 
+    subLabel: 'Taxonomy & Icons',
     path: '/admin/categories', 
     icon: Layers, 
     color: 'text-amber-600' 
   },
   { 
-    label: 'Odoji da Sayayya', 
-    subLabel: 'Orders & Sales',
+    label: 'Orders & Sales', 
+    subLabel: 'Shipments & Invoices',
     path: '/admin/orders', 
     icon: ShoppingCart, 
     color: 'text-blue-600' 
   },
   { 
-    label: 'Yan Kasuwa (Vendors)', 
-    subLabel: 'Store Merchants',
+    label: 'Merchant Stores', 
+    subLabel: 'Vendors & Approvals',
     path: '/admin/vendors', 
-    icon: Store, 
+    icon: Users, 
     color: 'text-pink-600' 
   },
   { 
-    label: 'Masu Amfani (Users)', 
-    subLabel: 'Customers & Profiles',
+    label: 'Customer Accounts', 
+    subLabel: 'Profiles & Tiers',
     path: '/admin/users', 
     icon: Users, 
     color: 'text-cyan-600' 
   },
   { 
-    label: 'Talla da Banners', 
-    subLabel: 'Promotions & Hero',
+    label: 'Content & Banners', 
+    subLabel: 'Promotions & Hero CMS',
     path: '/admin/cms', 
     icon: Sparkles, 
     color: 'text-purple-600' 
   },
   { 
-    label: 'Saitunan Kasuwa', 
-    subLabel: 'Platform Settings',
+    label: 'Platform Settings', 
+    subLabel: 'Gateways, Delivery & Fees',
     path: '/admin/settings', 
     icon: Settings, 
     color: 'text-slate-600' 

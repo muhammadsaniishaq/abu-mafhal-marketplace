@@ -63,8 +63,49 @@ export const VendorOverview = ({ stats, onSelectTab }) => {
                 />
             </View>
 
+            {/* Store Profile Branding Quick Card */}
+            <TouchableOpacity
+                style={{
+                    backgroundColor: '#0A192F',
+                    borderRadius: 20,
+                    padding: 16,
+                    marginTop: 14,
+                    marginBottom: 8,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    borderWidth: 1,
+                    borderColor: '#D4AF37',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.15,
+                    shadowRadius: 8,
+                    elevation: 3
+                }}
+                activeOpacity={0.85}
+                onPress={() => onSelectTab && onSelectTab('store_profile')}
+            >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 }}>
+                    <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(212, 175, 55, 0.2)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#D4AF37' }}>
+                        <Ionicons name="storefront" size={22} color="#FDE68A" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={{ fontSize: 14, fontWeight: '900', color: '#FFFFFF' }}>Store Profile & Cover</Text>
+                            <View style={{ backgroundColor: '#D4AF37', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                                <Text style={{ fontSize: 9, fontWeight: '900', color: '#0A192F' }}>EDIT</Text>
+                            </View>
+                        </View>
+                        <Text style={{ fontSize: 11, color: '#94A3B8', fontWeight: '500', marginTop: 2 }}>
+                            Set your Cover Banner, Logo, Store Name & Bio to look professional.
+                        </Text>
+                    </View>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#D4AF37" />
+            </TouchableOpacity>
+
             {/* Quick Actions / Tips */}
-            <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', marginTop: 14, marginBottom: 12 }}>
+            <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', marginTop: 10, marginBottom: 12 }}>
                 Grow Your Business
             </Text>
 

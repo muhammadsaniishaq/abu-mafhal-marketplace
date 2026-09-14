@@ -35,6 +35,7 @@ import { AdminReviews } from './admin/AdminReviews';
 import { AdminCMS } from './admin/AdminCMS';
 import { AdminHomeSettings } from './admin/AdminHomeSettings';
 import { AdminAIAssistantModal } from '../components/AdminAIAssistantModal';
+import { VendorStoreProfile } from './VendorStoreProfile';
 
 // ─── NAVY & GOLD LIGHT PALETTE ───────────────────────────────────────────────
 const NAVY = '#0E1A2E';
@@ -43,6 +44,7 @@ const GOLD = '#D9A73A';
 // Top Quick Pill Tabs
 const QUICK_TABS = [
     { id: 'overview', label: 'Dashboard', icon: 'grid-outline', activeIcon: 'grid' },
+    { id: 'store_profile', label: 'Official Store', icon: 'storefront-outline', activeIcon: 'storefront' },
     { id: 'orders', label: 'Orders', icon: 'cart-outline', activeIcon: 'cart' },
     { id: 'products', label: 'Products', icon: 'cube-outline', activeIcon: 'cube' },
     { id: 'vendors', label: 'Vendors', icon: 'storefront-outline', activeIcon: 'storefront' },
@@ -58,6 +60,7 @@ const MODULE_SECTIONS = [
     {
         title: 'Commerce & Catalog',
         items: [
+            { id: 'store_profile', title: 'Official Store Profile', desc: 'Cover banner, store name, logo & bio', icon: 'storefront-outline', color: '#D97706', bg: '#FFFBEB' },
             { id: 'products', title: 'Products', desc: 'Manage inventory & catalog', icon: 'cube-outline', color: '#9333EA', bg: '#F3E8FF' },
             { id: 'orders', title: 'Orders', desc: 'Track sales & fulfillments', icon: 'cart-outline', color: '#2563EB', bg: '#EFF6FF' },
             { id: 'categories', title: 'Categories', desc: 'Store product taxonomy', icon: 'grid-outline', color: '#059669', bg: '#ECFDF5' },
@@ -744,6 +747,16 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                 return <AdminReviews navigation={navigation} />;
 
             // Platform & Content
+            case 'store_profile':
+                return (
+                    <VendorStoreProfile
+                        user={user}
+                        vendor={null}
+                        isAdminStore={true}
+                        onBack={() => setActiveTab('overview')}
+                        onSaved={() => fetchAdminData()}
+                    />
+                );
             case 'home_settings':
                 return <AdminHomeSettings navigation={navigation} />;
             case 'cms':

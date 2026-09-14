@@ -52,6 +52,7 @@ import AdminAuditLogs from './components/admin/AdminAuditLogs';
 import AdminReviews from './components/admin/AdminReviews';
 import AdminSettings from './components/admin/AdminSettings';
 import AdminAbandonedCarts from './components/admin/AdminAbandonedCarts';
+import AdminStoreProfile from './components/admin/AdminStoreProfile';
 
 // ==================== VENDOR COMPONENTS ====================
 import VendorAnalytics from './components/vendor/VendorAnalytics';
@@ -251,6 +252,7 @@ function App() {
                   <Route path="abandoned-carts" element={<AdminAbandonedCarts />} />
                   <Route path="reviews" element={<AdminReviews />} />
                   <Route path="settings" element={<AdminSettings />} />
+                  <Route path="store-profile" element={<AdminStoreProfile />} />
                 </Route>
 
                 {/* ==================== VENDOR ROUTES ==================== */}

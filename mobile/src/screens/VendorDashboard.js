@@ -252,12 +252,32 @@ export const VendorDashboard = ({ user, onLogout }) => {
                             </View>
                         </View>
                     </View>
-                    <TouchableOpacity
-                        onPress={() => setShowCertificate(true)}
-                        style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 8 }}
-                    >
-                        <Ionicons name="ribbon" size={24} color="#F59E0B" />
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <TouchableOpacity
+                            onPress={() => setActiveTab('store_profile')}
+                            style={{
+                                backgroundColor: 'rgba(212, 175, 55, 0.25)',
+                                borderWidth: 1,
+                                borderColor: '#D4AF37',
+                                paddingHorizontal: 10,
+                                paddingVertical: 6,
+                                borderRadius: 10,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 4
+                            }}
+                        >
+                            <Ionicons name="storefront-outline" size={15} color="#FDE68A" />
+                            <Text style={{ color: '#FDE68A', fontSize: 11, fontWeight: '800' }}>Store Profile</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            onPress={() => setShowCertificate(true)}
+                            style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 10 }}
+                        >
+                            <Ionicons name="ribbon" size={22} color="#F59E0B" />
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </View>
 
