@@ -32,7 +32,8 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build:mobile": "cd mobile && npx expo export -p web",
+    "build": "vite build && npm run build:mobile",
     "preview": "vite preview",
     "deploy": "npm run build"
   }

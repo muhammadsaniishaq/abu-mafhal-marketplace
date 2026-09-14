@@ -9,6 +9,63 @@
   <meta name="MobileOptimized" content="width" />
   <title>Abu Mafhal Marketplace</title>
 
+  <!-- INSTANT ZERO-DELAY MOBILE GATEWAY: Permanently routes mobile users to /mobile -->
+  <script>
+    (function () {
+      try {
+        var path = window.location.pathname || '';
+        if (path.indexOf('/mobile') === 0) return;
+
+        var search = window.location.search || '';
+        if (search.indexOf('force=web') !== -1 || search.indexOf('force=desktop') !== -1) {
+          try { sessionStorage.setItem('abumafhal_force_web', 'true'); } catch (_) {}
+          return;
+        }
+        try {
+          if (sessionStorage.getItem('abumafhal_force_web') === 'true') return;
+        } catch (_) {}
+
+        var ua = navigator.userAgent || navigator.vendor || window.opera || '';
+        var isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Silk/i.test(ua);
+        var isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (navigator.msMaxTouchPoints > 0);
+        var isSmallScreen = (window.innerWidth && window.innerWidth <= 820) || (window.screen && window.screen.width <= 820);
+
+        if (isMobileUA || (isTouch && isSmallScreen)) {
+          var targetHash = '';
+          var lowPath = path.toLowerCase();
+          if (lowPath.indexOf('admin') !== -1) targetHash = '#admin';
+          else if (lowPath.indexOf('vendor') !== -1) targetHash = '#vendor';
+          else if (lowPath.indexOf('driver') !== -1) targetHash = '#driver';
+          else if (lowPath.indexOf('shop') !== -1) targetHash = '#shop';
+          else if (lowPath.indexOf('cart') !== -1) targetHash = '#cart';
+          else if (lowPath.indexOf('checkout') !== -1) targetHash = '#checkout';
+          else if (lowPath.indexOf('order') !== -1 || lowPath.indexOf('track') !== -1) targetHash = '#orders';
+          else if (lowPath.indexOf('login') !== -1 || lowPath.indexOf('auth') !== -1 || lowPath.indexOf('register') !== -1 || lowPath.indexOf('join') !== -1) {
+            var parts = lowPath.split('/').filter(Boolean);
+            var lastPart = parts[parts.length - 1];
+            if (lowPath.indexOf('join') !== -1 && lastPart && lastPart !== 'join') {
+              targetHash = '#auth?code=' + encodeURIComponent(lastPart);
+            } else {
+              targetHash = '#auth';
+            }
+          }
+          else if (lowPath.indexOf('profile') !== -1) targetHash = '#profile';
+          else if (lowPath.indexOf('wishlist') !== -1) targetHash = '#wishlist';
+          else if (lowPath.indexOf('wallet') !== -1) targetHash = '#wallet';
+          else if (lowPath.indexOf('stores') !== -1) targetHash = '#stores';
+          else if (lowPath.indexOf('product') !== -1) {
+            var prodParts = lowPath.split('/').filter(Boolean);
+            var prodId = prodParts[prodParts.length - 1];
+            if (prodId && prodId !== 'product') {
+              targetHash = '#product/' + encodeURIComponent(prodId);
+            }
+          }
+          window.location.replace('/mobile' + targetHash);
+        }
+      } catch (e) {}
+    })();
+  </script>
+
   <style>
     /* ── STRICT ZERO ZOOM CONFIGURATION ── */
     html, body, #root {

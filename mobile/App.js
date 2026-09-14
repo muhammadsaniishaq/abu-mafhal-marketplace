@@ -59,10 +59,7 @@ const linking = {
         'abumafhal://',
         'https://abumafhal.com/mobile',
         'https://www.abumafhal.com/mobile',
-        'https://abumafhal.com',
-        'https://www.abumafhal.com',
         '/mobile',
-        '/',
     ],
     config: {
         screens: {
@@ -201,6 +198,19 @@ export default function App() {
         } catch (err) {
             console.log('Zero zoom init note:', err);
         }
+    }, []);
+
+    // Ensure browser path is strictly locked to /mobile so reloads or history events never revert to desktop web
+    useEffect(() => {
+        if (typeof window === 'undefined' || !window.location) return;
+
+        try {
+            if (!window.location.pathname.startsWith('/mobile')) {
+                const hash = window.location.hash || '';
+                const search = window.location.search || '';
+                window.history.replaceState(null, '', '/mobile' + search + hash);
+            }
+        } catch (_) {}
     }, []);
 
     useEffect(() => {
@@ -474,6 +484,13 @@ export default function App() {
                                         AsyncStorage.setItem('@abumafhal_last_screen', currentRoute.name).catch(() => {});
                                         if (typeof window !== 'undefined' && window.localStorage) {
                                             window.localStorage.setItem('@abumafhal_last_screen', currentRoute.name);
+
+                                            // STRICT LOCK: Ensure browser address bar never reverts to desktop web
+                                            if (!window.location.pathname.startsWith('/mobile')) {
+                                                const currentHash = window.location.hash || '';
+                                                window.history.replaceState(null, '', '/mobile' + currentHash);
+                                            }
+
                                             if (currentRoute.name === 'AdminDashboard') {
                                                 if (window.location.hash !== '#admin') window.location.hash = 'admin';
                                             } else if (currentRoute.name === 'VendorDashboard') {

@@ -10,11 +10,17 @@ import { WishlistProvider } from './context/WishlistContext';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 
-const isMobileDevice = 
-  /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(navigator.userAgent) || 
-  (typeof window !== 'undefined' && window.innerWidth <= 768);
-const isForcedWeb = typeof window !== 'undefined' && 
-  (window.location.search.indexOf('force=web') !== -1 || window.location.search.indexOf('force=desktop') !== -1);
+const ua = (typeof navigator !== 'undefined' ? (navigator.userAgent || navigator.vendor || window.opera || '') : '');
+const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Silk/i.test(ua);
+const isTouch = (typeof window !== 'undefined') && (('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (navigator.msMaxTouchPoints > 0));
+const isSmallScreen = (typeof window !== 'undefined') && ((window.innerWidth && window.innerWidth <= 820) || (window.screen && window.screen.width <= 820));
+
+const isMobileDevice = isMobileUA || (isTouch && isSmallScreen);
+const isForcedWeb = typeof window !== 'undefined' && (
+  window.location.search.indexOf('force=web') !== -1 || 
+  window.location.search.indexOf('force=desktop') !== -1 ||
+  (() => { try { return sessionStorage.getItem('abumafhal_force_web') === 'true'; } catch (_) { return false; } })()
+);
 const isAlreadyMobile = typeof window !== 'undefined' && window.location.pathname.startsWith('/mobile');
 
 if (isMobileDevice && !isForcedWeb && !isAlreadyMobile) {

@@ -3,7 +3,7 @@
     "outputDirectory": "dist",
     "headers": [
         {
-            "source": "/",
+            "source": "/(.*)",
             "headers": [
                 {
                     "key": "Vary",
@@ -19,10 +19,214 @@
                 {
                     "type": "header",
                     "key": "User-Agent",
-                    "value": "(?i).*(android|iphone|ipad|ipod|opera mini|iemobile|mobile).*"
+                    "value": ".*(Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile|android|iphone|ipad|ipod|mobile).*"
                 }
             ],
             "destination": "/mobile",
+            "permanent": false
+        },
+        {
+            "source": "/shop",
+            "has": [
+                {
+                    "type": "header",
+                    "key": "User-Agent",
+                    "value": ".*(Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile|android|iphone|ipad|ipod|mobile).*"
+                }
+            ],
+            "destination": "/mobile#shop",
+            "permanent": false
+        },
+        {
+            "source": "/stores",
+            "has": [
+                {
+                    "type": "header",
+                    "key": "User-Agent",
+                    "value": ".*(Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile|android|iphone|ipad|ipod|mobile).*"
+                }
+            ],
+            "destination": "/mobile#stores",
+            "permanent": false
+        },
+        {
+            "source": "/cart",
+            "has": [
+                {
+                    "type": "header",
+                    "key": "User-Agent",
+                    "value": ".*(Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile|android|iphone|ipad|ipod|mobile).*"
+                }
+            ],
+            "destination": "/mobile#cart",
+            "permanent": false
+        },
+        {
+            "source": "/checkout",
+            "has": [
+                {
+                    "type": "header",
+                    "key": "User-Agent",
+                    "value": ".*(Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile|android|iphone|ipad|ipod|mobile).*"
+                }
+            ],
+            "destination": "/mobile#checkout",
+            "permanent": false
+        },
+        {
+            "source": "/admin",
+            "has": [
+                {
+                    "type": "header",
+                    "key": "User-Agent",
+                    "value": ".*(Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile|android|iphone|ipad|ipod|mobile).*"
+                }
+            ],
+            "destination": "/mobile#admin",
+            "permanent": false
+        },
+        {
+            "source": "/admin/(.*)",
+            "has": [
+                {
+                    "type": "header",
+                    "key": "User-Agent",
+                    "value": ".*(Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile|android|iphone|ipad|ipod|mobile).*"
+                }
+            ],
+            "destination": "/mobile#admin",
+            "permanent": false
+        },
+        {
+            "source": "/vendor",
+            "has": [
+                {
+                    "type": "header",
+                    "key": "User-Agent",
+                    "value": ".*(Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile|android|iphone|ipad|ipod|mobile).*"
+                }
+            ],
+            "destination": "/mobile#vendor",
+            "permanent": false
+        },
+        {
+            "source": "/vendor/(.*)",
+            "has": [
+                {
+                    "type": "header",
+                    "key": "User-Agent",
+                    "value": ".*(Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile|android|iphone|ipad|ipod|mobile).*"
+                }
+            ],
+            "destination": "/mobile#vendor",
+            "permanent": false
+        },
+        {
+            "source": "/driver",
+            "has": [
+                {
+                    "type": "header",
+                    "key": "User-Agent",
+                    "value": ".*(Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile|android|iphone|ipad|ipod|mobile).*"
+                }
+            ],
+            "destination": "/mobile#driver",
+            "permanent": false
+        },
+        {
+            "source": "/driver/(.*)",
+            "has": [
+                {
+                    "type": "header",
+                    "key": "User-Agent",
+                    "value": ".*(Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile|android|iphone|ipad|ipod|mobile).*"
+                }
+            ],
+            "destination": "/mobile#driver",
+            "permanent": false
+        },
+        {
+            "source": "/orders",
+            "has": [
+                {
+                    "type": "header",
+                    "key": "User-Agent",
+                    "value": ".*(Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile|android|iphone|ipad|ipod|mobile).*"
+                }
+            ],
+            "destination": "/mobile#orders",
+            "permanent": false
+        },
+        {
+            "source": "/login",
+            "has": [
+                {
+                    "type": "header",
+                    "key": "User-Agent",
+                    "value": ".*(Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile|android|iphone|ipad|ipod|mobile).*"
+                }
+            ],
+            "destination": "/mobile#auth",
+            "permanent": false
+        },
+        {
+            "source": "/register",
+            "has": [
+                {
+                    "type": "header",
+                    "key": "User-Agent",
+                    "value": ".*(Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile|android|iphone|ipad|ipod|mobile).*"
+                }
+            ],
+            "destination": "/mobile#auth",
+            "permanent": false
+        },
+        {
+            "source": "/auth",
+            "has": [
+                {
+                    "type": "header",
+                    "key": "User-Agent",
+                    "value": ".*(Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile|android|iphone|ipad|ipod|mobile).*"
+                }
+            ],
+            "destination": "/mobile#auth",
+            "permanent": false
+        },
+        {
+            "source": "/profile",
+            "has": [
+                {
+                    "type": "header",
+                    "key": "User-Agent",
+                    "value": ".*(Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile|android|iphone|ipad|ipod|mobile).*"
+                }
+            ],
+            "destination": "/mobile#profile",
+            "permanent": false
+        },
+        {
+            "source": "/wishlist",
+            "has": [
+                {
+                    "type": "header",
+                    "key": "User-Agent",
+                    "value": ".*(Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile|android|iphone|ipad|ipod|mobile).*"
+                }
+            ],
+            "destination": "/mobile#wishlist",
+            "permanent": false
+        },
+        {
+            "source": "/wallet",
+            "has": [
+                {
+                    "type": "header",
+                    "key": "User-Agent",
+                    "value": ".*(Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile|android|iphone|ipad|ipod|mobile).*"
+                }
+            ],
+            "destination": "/mobile#wallet",
             "permanent": false
         }
     ],
