@@ -133,7 +133,7 @@ const Stores = () => {
       const officialStore = {
         id: adminProfile?.id || 'official-abumafhal',
         name: adminProfile?.business_name || 'Abu Mafhal Official Store',
-        tagline: 'Your Marketplace, Your Choice — Verified Mall',
+        tagline: adminAddr.tagline || 'Official Flagship Mall • 100% Genuine Guaranteed',
         category: adminProfile?.business_category || 'Official Mall & Flagship Store',
         rating: 5.0,
         reviews: '3.8K',
@@ -147,7 +147,14 @@ const Stores = () => {
         is_recommended: true,
         isRecommended: true,
         phone: adminProfile?.phone || adminProfile?.phone_number || '2349021486162',
+        whatsapp: adminAddr.whatsapp || adminProfile?.phone || '2349021486162',
+        email: adminAddr.email || adminProfile?.email || 'support@abumafhal.com',
         address: adminAddr.address || adminProfile?.address || 'Main Commercial Plaza, Gashua, Yobe State, Nigeria',
+        working_hours: adminAddr.working_hours || 'Mon - Sat: 8:00 AM - 8:00 PM',
+        policy: adminAddr.policy || '7 Days Nationwide Return Policy • 100% Buyer Protection',
+        instagram: adminAddr.instagram || '@abumafhal',
+        facebook: adminAddr.facebook || 'Abu Mafhal Marketplace',
+        twitter: adminAddr.twitter || '@abumafhal',
         bio: adminProfile?.about || adminAddr.about || 'The official verified flagship mall of Abu Mafhal Marketplace. Genuine brand warranty, authentic products, and 100% buyer protection across Nigeria.',
         memberSince: adminProfile?.created_at ? new Date(adminProfile.created_at).getFullYear().toString() : '2023'
       };
@@ -161,7 +168,7 @@ const Stores = () => {
         return {
           id: vp.id,
           name: vp.business_name || vp.full_name || vp.username || 'Verified Merchant',
-          tagline: 'Authentic Goods & Fast Delivery',
+          tagline: vAddr.tagline || 'Verified Merchant on Abu Mafhal',
           category: vp.business_category || vAddr.category || (vp.role === 'vendor' ? 'Verified Seller' : 'Registered Merchant'),
           rating: 4.9,
           reviews: '120+',
@@ -175,7 +182,14 @@ const Stores = () => {
           is_recommended: isRec,
           isRecommended: isRec,
           phone: vp.phone || vp.phone_number || '2349021486162',
+          whatsapp: vAddr.whatsapp || vp.phone || vp.phone_number || '',
+          email: vAddr.email || vp.email || '',
           address: vAddr.address || vp.address || vp.state || 'Nigeria',
+          working_hours: vAddr.working_hours || 'Mon - Sat: 8:00 AM - 6:00 PM',
+          policy: vAddr.policy || 'Prompt delivery and standard merchant warranty apply.',
+          instagram: vAddr.instagram || '',
+          facebook: vAddr.facebook || '',
+          twitter: vAddr.twitter || '',
           bio: vp.about || vAddr.about || `Authentic merchant verified on Abu Mafhal Marketplace since ${year}. Dedicated to high quality products and reliable customer support.`,
           memberSince: year
         };

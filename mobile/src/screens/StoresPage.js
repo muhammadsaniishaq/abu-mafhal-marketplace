@@ -703,7 +703,7 @@ export const StoresPage = ({
                                 <Ionicons name="sparkles" size={12} color="#F59E0B" />
                                 <Text style={s.vendorBannerBadgeTxt}>GROW YOUR BUSINESS</Text>
                             </View>
-                            <Text style={s.vendorBannerTitle}>Buɗe Shagonka a Abu Mafhal</Text>
+                            <Text style={s.vendorBannerTitle}>Open Your Store on Abu Mafhal</Text>
                             <Text style={s.vendorBannerSub}>
                                 Register as a verified merchant today. Reach millions of active buyers across Nigeria with zero hassle.
                             </Text>
@@ -826,6 +826,11 @@ export const StoresPage = ({
                                                 </View>
                                             )}
                                         </View>
+                                        {selectedStore.tagline ? (
+                                            <Text style={{ fontSize: 11.5, color: '#E2E8F0', fontWeight: '600', marginTop: 2 }} numberOfLines={1}>
+                                                {selectedStore.tagline}
+                                            </Text>
+                                        ) : null}
                                         <Text style={s.storeHeroCategory}>{selectedStore.category}</Text>
                                         <Text style={s.storeHeroLocation}>
                                             <Ionicons name="location-outline" size={11} color="#94A3B8" /> {selectedStore.address}
@@ -891,6 +896,16 @@ export const StoresPage = ({
                                     <Ionicons name="call" size={16} color="#0F172A" />
                                 </TouchableOpacity>
 
+                                {selectedStore.email ? (
+                                    <TouchableOpacity
+                                        onPress={() => Linking.openURL(`mailto:${selectedStore.email}`)}
+                                        style={s.storeDetailBtnCall}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Ionicons name="mail" size={16} color="#0F172A" />
+                                    </TouchableOpacity>
+                                ) : null}
+
                                 <TouchableOpacity
                                     onPress={() => handleShareStore(selectedStore)}
                                     style={s.storeDetailBtnCall}
@@ -898,6 +913,56 @@ export const StoresPage = ({
                                 >
                                     <Ionicons name="share-social-outline" size={16} color="#0F172A" />
                                 </TouchableOpacity>
+                            </View>
+
+                            {/* Store Service & Trust Chips */}
+                            <View style={{ paddingHorizontal: 16, marginTop: 12, gap: 8 }}>
+                                {selectedStore.working_hours ? (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFFFF', padding: 10, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                                        <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }}>
+                                            <Ionicons name="time-outline" size={15} color="#0E1A2E" />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '700' }}>HOURS OF OPERATION</Text>
+                                            <Text style={{ fontSize: 11.5, color: '#0E1A2E', fontWeight: '800', marginTop: 1 }}>{selectedStore.working_hours}</Text>
+                                        </View>
+                                    </View>
+                                ) : null}
+
+                                {selectedStore.policy ? (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFBEB', padding: 10, borderRadius: 12, borderWidth: 1, borderColor: '#FDE68A' }}>
+                                        <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(217, 167, 58, 0.2)', alignItems: 'center', justifyContent: 'center' }}>
+                                            <Ionicons name="shield-checkmark" size={15} color="#B45309" />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={{ fontSize: 10, color: '#92400E', fontWeight: '800' }}>BUYER WARRANTY & RETURNS</Text>
+                                            <Text style={{ fontSize: 11.5, color: '#78350F', fontWeight: '700', marginTop: 1 }}>{selectedStore.policy}</Text>
+                                        </View>
+                                    </View>
+                                ) : null}
+
+                                {(selectedStore.instagram || selectedStore.facebook || selectedStore.twitter) ? (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
+                                        {selectedStore.instagram ? (
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FDF2F8', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: '#FCE7F3' }}>
+                                                <Ionicons name="logo-instagram" size={12} color="#DB2777" />
+                                                <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#9D174D' }}>{selectedStore.instagram}</Text>
+                                            </View>
+                                        ) : null}
+                                        {selectedStore.facebook ? (
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#EFF6FF', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: '#DBEAFE' }}>
+                                                <Ionicons name="logo-facebook" size={12} color="#2563EB" />
+                                                <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#1E40AF' }}>{selectedStore.facebook}</Text>
+                                            </View>
+                                        ) : null}
+                                        {selectedStore.twitter ? (
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F0F9FF', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: '#E0F2FE' }}>
+                                                <Ionicons name="logo-twitter" size={12} color="#0284C7" />
+                                                <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#0369A1' }}>{selectedStore.twitter}</Text>
+                                            </View>
+                                        ) : null}
+                                    </View>
+                                ) : null}
                             </View>
 
                             {/* Store Bio Card */}

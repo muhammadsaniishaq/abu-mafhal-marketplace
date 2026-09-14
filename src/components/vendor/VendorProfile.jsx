@@ -213,7 +213,6 @@ const VendorProfile = () => {
       const profileUpdates = {
         id: targetUid,
         full_name: profileData.name,
-        phone: profileData.phone || profileData.businessPhone,
         avatar_url: profileData.avatar,
         business_name: profileData.businessName || profileData.name,
         about: profileData.businessDescription,
@@ -223,12 +222,51 @@ const VendorProfile = () => {
         updated_at: new Date().toISOString()
       };
 
-      const { error: profileError } = await supabase
+      const rawPhone = profileData.phone || profileData.businessPhone;
+      if (rawPhone) {
+        profileUpdates.phone = rawPhone;
+        profileUpdates.phone_number = rawPhone;
+      }
+
+      let { error: profileError } = await supabase
         .from('profiles')
         .upsert(profileUpdates, { onConflict: 'id' });
 
       if (profileError) {
-        console.warn('Profile direct sync note:', profileError);
+        console.warn('Profile direct sync retry without phone constraint:', profileError);
+        delete profileUpdates.phone;
+        await supabase
+          .from('profiles')
+          .upsert(profileUpdates, { onConflict: 'id' })
+          .catch(() => {});
+      }
+
+      // Also sync to dedicated stores table
+      try {
+        const storeData = {
+          name: profileData.businessName || profileData.name,
+          about: profileData.businessDescription,
+          cover_image: bannerUrl,
+          logo: profileData.avatar,
+          phone: rawPhone,
+          category: profileData.businessCategory || 'General Merchant',
+          address: profileData.businessAddress || profileData.businessLocation,
+          updated_at: new Date().toISOString()
+        };
+
+        const { data: existingStore } = await supabase
+          .from('stores')
+          .select('id')
+          .eq('user_id', targetUid)
+          .maybeSingle();
+
+        if (existingStore) {
+          await supabase.from('stores').update(storeData).eq('user_id', targetUid);
+        } else {
+          await supabase.from('stores').insert({ user_id: targetUid, ...storeData });
+        }
+      } catch (stErr) {
+        console.warn('stores table sync notice:', stErr.message);
       }
 
       // 2. Also update 'users' table

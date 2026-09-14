@@ -221,34 +221,17 @@ export const EditProfilePage = ({ user, onBack, onUpdateUser }) => {
                 }
             }).catch(() => {});
 
-            // 2. Update Store Profile & Profiles Table through StoreService
-            await StoreService.updateStoreProfile(user?.id, {
-                business_name: businessName || fullName,
-                business_category: businessCategory,
+            // 2. Update Store Profile & Profiles Table through StoreService safely
+            await StoreService.updateStoreProfile({
+                userId: user?.id,
+                storeName: businessName || fullName,
+                category: businessCategory,
                 about: aboutStore,
-                cover_image: coverImage,
-                avatar_url: avatarUrl,
+                coverImage: coverImage,
+                logoUrl: avatarUrl,
                 phone: phone,
                 address: location
             });
-
-            // 3. Update profiles table standard columns
-            const profileUpdates = {
-                id: user?.id,
-                full_name: fullName,
-                username: username,
-                avatar_url: avatarUrl,
-                business_name: businessName || fullName,
-                business_category: businessCategory,
-                about: aboutStore,
-                cover_image: coverImage,
-                updated_at: new Date()
-            };
-
-            await supabase
-                .from('profiles')
-                .upsert(profileUpdates, { onConflict: 'id' })
-                .catch(err => console.log('[EditProfile] Standard upsert notice:', err));
 
             Alert.alert('Success', 'Profile and Store details updated successfully!');
 
