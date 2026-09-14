@@ -19,6 +19,23 @@ import {
 const { width } = Dimensions.get('window');
 const AM_LOGO = require('../../assets/am_logo.png');
 
+const BRAND = {
+    navy: '#0A192F',
+    navyLight: '#0E223D',
+    gold: '#D9A73A',
+    goldLight: '#FEF3C7',
+    goldDark: '#B45309',
+    emerald: '#10B981',
+    emeraldLight: '#ECFDF5',
+    sky: '#0284C7',
+    skyLight: '#E0F2FE',
+    slate: '#64748B',
+    slateDark: '#0F172A',
+    bg: '#F8FAFC',
+    card: '#FFFFFF',
+    border: '#E2E8F0',
+};
+
 const fmtPrice = (n) => {
     const num = Number(n);
     if (!num) return '₦0';
@@ -36,6 +53,7 @@ export const StoresPage = ({
 }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [activeSubTab, setActiveSubTab] = useState('all_stores');
+    const [viewMode, setViewMode] = useState('list'); // 'list' | 'grid'
     const [stores, setStores] = useState([]);
     const [popularProducts, setPopularProducts] = useState([]);
     const [categories, setCategories] = useState([]);
@@ -43,7 +61,7 @@ export const StoresPage = ({
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
-    // Selected Store for Dedicated Store Detail View
+    // Selected Store for Dedicated Store Detail Modal
     const [selectedStore, setSelectedStore] = useState(null);
     const [storeSearchQuery, setStoreSearchQuery] = useState('');
     const [selectedStoreCategory, setSelectedStoreCategory] = useState('All');
@@ -55,9 +73,9 @@ export const StoresPage = ({
     const showToast = (msg) => {
         setToastMessage(msg);
         Animated.sequence([
-            Animated.timing(toastAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
-            Animated.delay(2200),
-            Animated.timing(toastAnim, { toValue: 0, duration: 250, useNativeDriver: true })
+            Animated.timing(toastAnim, { toValue: 1, duration: 220, useNativeDriver: true }),
+            Animated.delay(2000),
+            Animated.timing(toastAnim, { toValue: 0, duration: 220, useNativeDriver: true })
         ]).start();
     };
 
@@ -67,7 +85,7 @@ export const StoresPage = ({
 
         // Subscribe to real-time changes
         const channel = supabase
-            .channel('stores-realtime-sync-v2')
+            .channel('stores-realtime-sync-v3')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
                 fetchStoresAndProducts(true);
             })
@@ -99,11 +117,11 @@ export const StoresPage = ({
             if (res && res.updatedMap) setFollowedStores(res.updatedMap);
             showToast(res.isFollowed ? `Following ${storeName}` : `Unfollowed ${storeName}`);
         } catch (_) {
-            const isCurrentlyFollowed = !!followedStores[storeId];
-            const updated = { ...followedStores, [storeId]: !isCurrentlyFollowed };
+            const isCurrentlyFollowed = !followedStores[storeId];
+            const updated = { ...followedStores, [storeId]: isCurrentlyFollowed };
             setFollowedStores(updated);
             AsyncStorage.setItem(FOLLOWED_STORES_KEY, JSON.stringify(updated)).catch(() => {});
-            showToast(!isCurrentlyFollowed ? `Following ${storeName}` : `Unfollowed ${storeName}`);
+            showToast(isCurrentlyFollowed ? `Following ${storeName}` : `Unfollowed ${storeName}`);
         }
     };
 
@@ -146,7 +164,8 @@ export const StoresPage = ({
     };
 
     const handleContactWhatsApp = (store) => {
-        const phone = store.phone ? store.phone.replace(/[^0-9]/g, '') : '2349021486162';
+        const rawPhone = store.whatsapp || store.phone || '2349021486162';
+        const phone = rawPhone.replace(/[^0-9]/g, '');
         const msg = encodeURIComponent(`Hello ${store.name}, I am contacting you directly from Abu Mafhal Marketplace regarding your products.`);
         Linking.openURL(`https://wa.me/${phone}?text=${msg}`).catch(() => {
             Alert.alert('Contact Store', `Store Phone: ${store.phone || '+234 902 148 6162'}`);
@@ -154,7 +173,8 @@ export const StoresPage = ({
     };
 
     const handleCallStore = (store) => {
-        const phone = store.phone ? store.phone.replace(/[^0-9]/g, '') : '2349021486162';
+        const rawPhone = store.phone || store.whatsapp || '2349021486162';
+        const phone = rawPhone.replace(/[^0-9]/g, '');
         Linking.openURL(`tel:+${phone}`).catch(() => {
             Alert.alert('Phone Number', `+${phone}`);
         });
@@ -163,7 +183,7 @@ export const StoresPage = ({
     const handleShareStore = async (store) => {
         try {
             await Share.share({
-                message: `Check out ${store.name} on Abu Mafhal Marketplace! High quality goods with fast delivery: https://abumafhal.com/store/${store.id}`,
+                message: `Check out ${store.name} on Abu Mafhal Marketplace! Verified products with express delivery: https://abumafhal.com/mobile#store-${store.id}`,
                 title: store.name
             });
         } catch (_) {}
@@ -176,20 +196,21 @@ export const StoresPage = ({
         }
     };
 
-    // Filter stores & products by search query
+    // Filter stores & products by search query and subtabs
     const filteredStores = stores.filter(st => {
         const matchSearch = (st.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (st.category || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (st.tagline || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             (st.about || st.bio || '').toLowerCase().includes(searchQuery.toLowerCase());
         if (!matchSearch) return false;
 
-        if (activeSubTab === 'recommended') return !!st.is_recommended;
-        if (activeSubTab === 'top_rated') return Number(st.rating) >= 4.9;
+        if (activeSubTab === 'recommended') return !!st.is_recommended || !!st.isRecommended;
+        if (activeSubTab === 'top_rated') return Number(st.rating) >= 4.8;
         if (activeSubTab === 'official') return st.is_official || st.isOfficial;
         return true;
     });
 
-    const recommendedStores = stores.filter(st => !!st.is_recommended);
+    const recommendedStores = stores.filter(st => !!st.is_recommended || !!st.isRecommended);
 
     const filteredPopular = popularProducts.filter(p => {
         if (!searchQuery) return true;
@@ -227,19 +248,28 @@ export const StoresPage = ({
 
     return (
         <View style={s.container}>
-            <StatusBar barStyle="dark-content" backgroundColor="white" />
+            <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-            {/* Top Modern Header */}
+            {/* ══════════════════════════════════════════════════
+                1. TOP LUXURY MOBILE HEADER
+            ══════════════════════════════════════════════════ */}
             <View style={s.header}>
                 <View style={s.headerTop}>
                     <View style={s.brandGroup}>
-                        <Image source={AM_LOGO} style={s.logo} />
+                        <View style={s.logoFrame}>
+                            <Image source={AM_LOGO} style={s.logo} resizeMode="contain" />
+                        </View>
                         <View>
-                            <Text style={s.brandTitle}>
-                                ABU <Text style={s.brandTitleAccent}>MAFHAL</Text>
-                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Text style={s.brandTitle}>
+                                    ABU <Text style={s.brandTitleAccent}>MAFHAL</Text>
+                                </Text>
+                                <View style={s.officialMallTinyPill}>
+                                    <Text style={s.officialMallTinyTxt}>STORES</Text>
+                                </View>
+                            </View>
                             <Text style={s.brandSubtitle}>
-                                Verified Stores Directory
+                                Verified Merchants & Flagships
                             </Text>
                         </View>
                     </View>
@@ -250,17 +280,17 @@ export const StoresPage = ({
                             style={s.shopPillBtn}
                             activeOpacity={0.8}
                         >
-                            <Ionicons name="bag-handle" size={13} color="#0284C7" />
+                            <Ionicons name="bag-handle" size={13} color={BRAND.sky} />
                             <Text style={s.shopPillTxt}>Shop</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity onPress={onGoToNotifications} style={s.iconBtn}>
-                            <Ionicons name="notifications-outline" size={23} color="#0F172A" />
+                            <Ionicons name="notifications-outline" size={22} color={BRAND.slateDark} />
                             <View style={s.notifBadge} />
                         </TouchableOpacity>
 
                         <TouchableOpacity onPress={onGoToCart} style={s.iconBtn}>
-                            <Ionicons name="cart-outline" size={24} color="#0F172A" />
+                            <Ionicons name="cart-outline" size={23} color={BRAND.slateDark} />
                             {cartCount > 0 && (
                                 <View style={s.cartBadge}>
                                     <Text style={s.cartBadgeTxt}>{cartCount > 99 ? '99+' : cartCount}</Text>
@@ -270,62 +300,128 @@ export const StoresPage = ({
                     </View>
                 </View>
 
-                {/* Mobile Search Input */}
-                <View style={s.searchBar}>
-                    <Ionicons name="search-outline" size={18} color="#64748B" style={{ marginRight: 8 }} />
-                    <TextInput
-                        placeholder="Search verified stores, merchants or items..."
-                        placeholderTextColor="#94A3B8"
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                        style={s.searchInput}
-                    />
-                    {searchQuery.length > 0 && (
-                        <TouchableOpacity onPress={() => setSearchQuery('')} style={{ padding: 4 }}>
-                            <Ionicons name="close-circle" size={18} color="#94A3B8" />
-                        </TouchableOpacity>
-                    )}
+                {/* ════ SEARCH & VIEW TOGGLE CONTROLS ════ */}
+                <View style={s.searchControlsRow}>
+                    <View style={s.searchBar}>
+                        <Ionicons name="search" size={16} color={BRAND.slate} style={{ marginRight: 8 }} />
+                        <TextInput
+                            placeholder="Search verified stores, items, brands..."
+                            placeholderTextColor="#94A3B8"
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                            style={s.searchInput}
+                        />
+                        {searchQuery.length > 0 && (
+                            <TouchableOpacity onPress={() => setSearchQuery('')} style={{ padding: 4 }}>
+                                <Ionicons name="close-circle" size={18} color="#94A3B8" />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+
+                    {/* View Mode Switcher (List vs 2-Col Grid) */}
+                    <TouchableOpacity
+                        onPress={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
+                        style={s.viewModeBtn}
+                        activeOpacity={0.75}
+                    >
+                        <Ionicons
+                            name={viewMode === 'list' ? 'grid-outline' : 'list-outline'}
+                            size={18}
+                            color={BRAND.slateDark}
+                        />
+                    </TouchableOpacity>
                 </View>
             </View>
 
             <ScrollView
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 130 }}
+                contentContainerStyle={{ paddingBottom: 140 }}
                 refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0284C7']} />
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[BRAND.sky]} />
                 }
             >
-                {/* Hero Banner: Verified Stores */}
-                <View style={s.heroWrapper}>
-                    <View style={s.heroCard}>
-                        <View style={s.heroContent}>
-                            <View style={s.verifiedPill}>
-                                <Ionicons name="shield-checkmark" size={12} color="#10B981" />
-                                <Text style={s.verifiedPillTxt}>100% VERIFIED MERCHANTS</Text>
-                            </View>
-                            <Text style={s.heroTitle}>Authentic Marketplace Stores</Text>
-                            <Text style={s.heroDesc}>
-                                Buy directly from vetted Nigerian merchants with verified warranties and express delivery.
-                            </Text>
+                {/* ════ TRUST & METRICS STRIP ════ */}
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={s.trustTickerScroll}
+                >
+                    <View style={s.trustTickerItem}>
+                        <Ionicons name="shield-checkmark" size={13} color={BRAND.emerald} />
+                        <Text style={s.trustTickerTxt}>100% Vetted Merchants</Text>
+                    </View>
+                    <View style={s.trustTickerItem}>
+                        <Ionicons name="lock-closed" size={12} color={BRAND.goldDark} />
+                        <Text style={s.trustTickerTxt}>Buyer Escrow Protection</Text>
+                    </View>
+                    <View style={s.trustTickerItem}>
+                        <Ionicons name="logo-whatsapp" size={13} color="#10B981" />
+                        <Text style={s.trustTickerTxt}>Direct WhatsApp Chat</Text>
+                    </View>
+                    <View style={s.trustTickerItem}>
+                        <Ionicons name="rocket-outline" size={13} color={BRAND.sky} />
+                        <Text style={s.trustTickerTxt}>Fast Express Dispatch</Text>
+                    </View>
+                </ScrollView>
 
-                            <TouchableOpacity
-                                style={s.heroBtn}
-                                activeOpacity={0.85}
-                                onPress={() => onGoToShop && onGoToShop('')}
-                            >
-                                <Text style={s.heroBtnTxt}>Explore All Products</Text>
-                                <Ionicons name="arrow-forward" size={13} color="#0F172A" />
-                            </TouchableOpacity>
+                {/* ════ 2. "FEATURED BRANDS" STORY RINGS (Instagram / Shopee Style) ════ */}
+                {stores.length > 0 && (
+                    <View style={s.storiesWrapper}>
+                        <View style={s.storiesSectionHeader}>
+                            <Text style={s.storiesTitle}>FEATURED BRANDS</Text>
+                            <Text style={s.storiesSub}>Tap to open storefront</Text>
                         </View>
 
-                        <Image
-                            source={{ uri: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?q=80&w=400&auto=format&fit=crop' }}
-                            style={s.heroImg}
-                        />
-                    </View>
-                </View>
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={s.storiesScroll}
+                        >
+                            {stores.slice(0, 10).map((st) => {
+                                const isOfficial = st.is_official || st.isOfficial;
+                                const isRec = st.is_recommended || st.isRecommended;
 
-                {/* Sub-tabs Row */}
+                                return (
+                                    <TouchableOpacity
+                                        key={'story-' + st.id}
+                                        activeOpacity={0.8}
+                                        onPress={() => setSelectedStore(st)}
+                                        style={s.storyItem}
+                                    >
+                                        <View style={[
+                                            s.storyRing,
+                                            isOfficial && s.storyRingOfficial,
+                                            isRec && s.storyRingRec
+                                        ]}>
+                                            <View style={s.storyAvatarInner}>
+                                                {st.logo ? (
+                                                    <Image source={{ uri: st.logo }} style={s.storyImg} />
+                                                ) : isOfficial ? (
+                                                    <Image source={AM_LOGO} style={s.storyImg} resizeMode="contain" />
+                                                ) : (
+                                                    <View style={[s.storyImg, { backgroundColor: '#E0F2FE', alignItems: 'center', justifyContent: 'center' }]}>
+                                                        <Ionicons name="storefront" size={22} color={BRAND.sky} />
+                                                    </View>
+                                                )}
+                                            </View>
+
+                                            {st.isVerified && (
+                                                <View style={s.storyVerifiedBadge}>
+                                                    <Ionicons name="checkmark-sharp" size={8} color="#FFFFFF" />
+                                                </View>
+                                            )}
+                                        </View>
+                                        <Text numberOfLines={1} style={s.storyNameTxt}>
+                                            {st.name}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </ScrollView>
+                    </View>
+                )}
+
+                {/* ════ 3. SUBTABS / FILTER PILLS ROW ════ */}
                 <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
@@ -335,9 +431,9 @@ export const StoresPage = ({
                         { key: 'all_stores', label: 'All Stores', icon: 'storefront-outline' },
                         { key: 'recommended', label: '⭐ Recommended', icon: 'star' },
                         { key: 'official', label: 'Official Mall', icon: 'ribbon-outline' },
-                        { key: 'top_rated', label: 'Top Rated', icon: 'trending-up-outline' },
+                        { key: 'top_rated', label: 'Top Rated (4.8+)', icon: 'trending-up-outline' },
                         { key: 'popular_products', label: 'Popular Products', icon: 'flame-outline' },
-                        { key: 'categories', label: 'Categories', icon: 'grid-outline' },
+                        { key: 'categories', label: 'Departments', icon: 'grid-outline' },
                     ].map(tab => {
                         const active = activeSubTab === tab.key;
                         return (
@@ -345,12 +441,12 @@ export const StoresPage = ({
                                 key={tab.key}
                                 onPress={() => setActiveSubTab(tab.key)}
                                 style={[s.subTabBtn, active && s.subTabBtnActive]}
-                                activeOpacity={0.7}
+                                activeOpacity={0.75}
                             >
                                 <Ionicons
                                     name={tab.icon}
-                                    size={15}
-                                    color={active ? '#0284C7' : '#64748B'}
+                                    size={14}
+                                    color={active ? '#FFFFFF' : BRAND.slate}
                                 />
                                 <Text style={[s.subTabTxt, active && s.subTabTxtActive]}>
                                     {tab.label}
@@ -362,28 +458,28 @@ export const StoresPage = ({
 
                 {/* Loading Indicator */}
                 {loading && (
-                    <View style={{ paddingVertical: 40, alignItems: 'center' }}>
-                        <ActivityIndicator size="large" color="#0284C7" />
-                        <Text style={{ color: '#64748B', fontSize: 12, marginTop: 10, fontWeight: '600' }}>
-                            Loading live stores and verified products...
+                    <View style={{ paddingVertical: 45, alignItems: 'center' }}>
+                        <ActivityIndicator size="large" color={BRAND.sky} />
+                        <Text style={{ color: BRAND.slate, fontSize: 12, marginTop: 12, fontWeight: '700' }}>
+                            Loading live stores & authentic catalogs...
                         </Text>
                     </View>
                 )}
 
-                {/* ════ RECOMMENDED VENDORS SHOWCASE CAROUSEL ════ */}
+                {/* ════ 4. RECOMMENDED SPOTLIGHT CAROUSEL (If on All Stores) ════ */}
                 {(!loading && recommendedStores.length > 0 && activeSubTab === 'all_stores' && !searchQuery) && (
-                    <View style={{ marginTop: 14 }}>
+                    <View style={{ marginTop: 10 }}>
                         <View style={s.sectionHead}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <Ionicons name="star" size={15} color="#D9A73A" />
-                                <Text style={s.sectionTitle}>Recommended Vendors</Text>
+                                <View style={{ width: 6, height: 16, backgroundColor: BRAND.gold, borderRadius: 3 }} />
+                                <Text style={s.sectionTitle}>⭐ Recommended Spotlight</Text>
                             </View>
                             <TouchableOpacity
                                 onPress={() => setActiveSubTab('recommended')}
                                 style={s.seeAllRow}
                             >
                                 <Text style={s.seeAllTxt}>View All ({recommendedStores.length})</Text>
-                                <Ionicons name="chevron-forward" size={13} color="#0284C7" />
+                                <Ionicons name="chevron-forward" size={13} color={BRAND.sky} />
                             </TouchableOpacity>
                         </View>
 
@@ -397,68 +493,64 @@ export const StoresPage = ({
                                 return (
                                     <TouchableOpacity
                                         key={'rec-' + recStore.id}
-                                        activeOpacity={0.9}
+                                        activeOpacity={0.92}
                                         onPress={() => setSelectedStore(recStore)}
-                                        style={{
-                                            width: width * 0.65,
-                                            backgroundColor: '#FFFFFF',
-                                            borderRadius: 18,
-                                            overflow: 'hidden',
-                                            borderWidth: 1,
-                                            borderColor: '#D9A73A50',
-                                            elevation: 2,
-                                            shadowColor: '#0E1A2E',
-                                            shadowOpacity: 0.06,
-                                            shadowRadius: 6,
-                                            shadowOffset: { width: 0, height: 2 }
-                                        }}
+                                        style={s.spotlightCard}
                                     >
-                                        <View style={{ height: 85, backgroundColor: '#CBD5E1', position: 'relative' }}>
+                                        <View style={s.spotlightBannerBox}>
                                             <Image
                                                 source={{ uri: recStore.cover_image || recStore.banner || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=600&auto=format&fit=crop' }}
-                                                style={{ width: '100%', height: '100%', resizeMode: 'cover' }}
+                                                style={s.spotlightBannerImg}
                                             />
-                                            <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(14,26,46,0.2)' }} />
-                                            <View style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#D9A73A', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                                                <Ionicons name="star" size={9} color="#FFFFFF" />
-                                                <Text style={{ fontSize: 8.5, fontWeight: '800', color: '#FFFFFF' }}>RECOMMENDED</Text>
+                                            <View style={s.spotlightBannerOverlay} />
+                                            <View style={s.spotlightBadge}>
+                                                <Ionicons name="star" size={10} color="#FFFFFF" />
+                                                <Text style={s.spotlightBadgeTxt}>TOP PICK</Text>
                                             </View>
                                         </View>
 
-                                        <View style={{ padding: 12, paddingTop: 0 }}>
-                                            <View style={{ marginTop: -22, alignSelf: 'flex-start' }}>
+                                        <View style={s.spotlightBody}>
+                                            <View style={s.spotlightAvatarOverlap}>
                                                 {recStore.logo ? (
-                                                    <Image source={{ uri: recStore.logo }} style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: '#FFFFFF', backgroundColor: '#FFFFFF' }} />
+                                                    <Image source={{ uri: recStore.logo }} style={s.spotlightAvatar} />
                                                 ) : recStore.is_official || recStore.isOfficial ? (
-                                                    <Image source={AM_LOGO} style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: '#FFFFFF', backgroundColor: '#FFFFFF' }} resizeMode="contain" />
+                                                    <Image source={AM_LOGO} style={s.spotlightAvatar} resizeMode="contain" />
                                                 ) : (
-                                                    <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#F1F5F9', borderWidth: 2, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
-                                                        <Ionicons name="storefront" size={20} color="#0E1A2E" />
+                                                    <View style={[s.spotlightAvatar, { backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }]}>
+                                                        <Ionicons name="storefront" size={20} color={BRAND.navy} />
+                                                    </View>
+                                                )}
+                                                {recStore.isVerified && (
+                                                    <View style={s.spotlightVerifiedBadge}>
+                                                        <Ionicons name="checkmark-sharp" size={9} color="#FFFFFF" />
                                                     </View>
                                                 )}
                                             </View>
 
-                                            <Text style={{ fontSize: 13, fontWeight: '800', color: '#0E1A2E', marginTop: 4 }} numberOfLines={1}>
+                                            <Text style={s.spotlightName} numberOfLines={1}>
                                                 {recStore.name}
                                             </Text>
-                                            <Text style={{ fontSize: 10.5, color: '#D9A73A', fontWeight: '700', marginTop: 1 }} numberOfLines={1}>
-                                                {recStore.category}
+                                            <Text style={s.spotlightCategory} numberOfLines={1}>
+                                                {recStore.category || 'General Store'}
                                             </Text>
 
-                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
-                                                <Text style={{ fontSize: 10.5, color: '#64748B', fontWeight: '600' }}>
-                                                    {recStore.productsCount} products
-                                                </Text>
+                                            <View style={s.spotlightFooter}>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                    <Ionicons name="star" size={12} color="#F59E0B" />
+                                                    <Text style={{ fontSize: 11, fontWeight: '800', color: BRAND.slateDark }}>
+                                                        {recStore.rating || 5.0}
+                                                    </Text>
+                                                    <Text style={{ fontSize: 10.5, color: BRAND.slate, fontWeight: '600' }}>
+                                                        ({recStore.productsCount || 0} items)
+                                                    </Text>
+                                                </View>
+
                                                 <TouchableOpacity
                                                     onPress={() => toggleFollow(recStore.id, recStore.name)}
-                                                    style={{
-                                                        backgroundColor: isFollowed ? '#F1F5F9' : '#0E1A2E',
-                                                        paddingHorizontal: 8,
-                                                        paddingVertical: 4,
-                                                        borderRadius: 8
-                                                    }}
+                                                    style={[s.spotlightFollowBtn, isFollowed && s.spotlightFollowBtnActive]}
+                                                    activeOpacity={0.8}
                                                 >
-                                                    <Text style={{ fontSize: 10, fontWeight: '800', color: isFollowed ? '#0284C7' : '#FFFFFF' }}>
+                                                    <Text style={[s.spotlightFollowTxt, isFollowed && s.spotlightFollowTxtActive]}>
                                                         {isFollowed ? 'Following' : '+ Follow'}
                                                     </Text>
                                                 </TouchableOpacity>
@@ -471,16 +563,16 @@ export const StoresPage = ({
                     </View>
                 )}
 
-                {/* ════ STORES SECTION ════ */}
+                {/* ════ 5. STORES SECTION: COMPACT LUXURY VENDOR CARDS ════ */}
                 {(!loading && activeSubTab !== 'popular_products') && (
-                    <View style={{ marginTop: 8 }}>
+                    <View style={{ marginTop: 14 }}>
                         <View style={s.sectionHead}>
                             <View>
                                 <Text style={s.sectionTitle}>
-                                    {activeSubTab === 'recommended' ? '⭐ Recommended Merchants' : activeSubTab === 'top_rated' ? 'Highest Rated Stores' : activeSubTab === 'official' ? 'Official Flagship Mall' : 'Verified Stores & Merchants'}
+                                    {activeSubTab === 'recommended' ? '⭐ Recommended Merchants' : activeSubTab === 'top_rated' ? 'Highest Rated Stores' : activeSubTab === 'official' ? 'Official Flagship Mall' : 'Verified Stores Directory'}
                                 </Text>
                                 <Text style={s.sectionSub}>
-                                    {filteredStores.length} registered and authentic merchant{filteredStores.length !== 1 ? 's' : ''}
+                                    {filteredStores.length} authentic verified merchant{filteredStores.length !== 1 ? 's' : ''}
                                 </Text>
                             </View>
 
@@ -488,146 +580,292 @@ export const StoresPage = ({
                                 onPress={() => onGoToShop && onGoToShop('')}
                                 style={s.seeAllRow}
                             >
-                                <Text style={s.seeAllTxt}>All Items</Text>
-                                <Ionicons name="chevron-forward" size={13} color="#0284C7" />
+                                <Text style={s.seeAllTxt}>All Products</Text>
+                                <Ionicons name="arrow-forward" size={12} color={BRAND.sky} />
                             </TouchableOpacity>
                         </View>
 
-                        {/* Stores List */}
-                        <View style={s.storesGrid}>
-                            {filteredStores.map(store => {
-                                const isFollowed = !!followedStores[store.id];
-                                const currentFollowers = (store.baseFollowers || 100) + (isFollowed ? 1 : 0);
+                        {/* Store Cards: Dual View Mode (Rich Card vs 2-Col Grid) */}
+                        {filteredStores.length === 0 ? (
+                            <View style={s.emptyBox}>
+                                <Ionicons name="storefront-outline" size={42} color="#94A3B8" />
+                                <Text style={s.emptyTxt}>No stores found matching "{searchQuery}"</Text>
+                                <TouchableOpacity onPress={() => { setSearchQuery(''); setActiveSubTab('all_stores'); }} style={s.emptyBtn}>
+                                    <Text style={s.emptyBtnTxt}>Reset Filters</Text>
+                                </TouchableOpacity>
+                            </View>
+                        ) : viewMode === 'list' ? (
+                            // ─── RICH COMPACT MOBILE-FIRST VENDOR CARDS ───
+                            <View style={s.storesListContainer}>
+                                {filteredStores.map(store => {
+                                    const isFollowed = !!followedStores[store.id];
+                                    const currentFollowers = (store.baseFollowers || 100) + (isFollowed ? 1 : 0);
+                                    const previewProds = (store.products && Array.isArray(store.products)) ? store.products.slice(0, 3) : [];
 
-                                return (
-                                    <View key={store.id} style={s.storeCard}>
-                                        <TouchableOpacity
-                                            activeOpacity={0.92}
-                                            onPress={() => setSelectedStore(store)}
-                                            style={s.storeTopRow}
-                                        >
-                                            <View style={s.avatarBox}>
-                                                {store.logo ? (
-                                                    <Image source={{ uri: store.logo }} style={s.storeAvatar} />
-                                                ) : store.isOfficial ? (
-                                                    <Image source={AM_LOGO} style={s.storeAvatar} resizeMode="contain" />
-                                                ) : (
-                                                    <View style={s.avatarPlaceholder}>
-                                                        <Ionicons name="storefront" size={26} color="#0284C7" />
-                                                    </View>
-                                                )}
+                                    return (
+                                        <View key={store.id} style={s.modernCard}>
+                                            {/* Micro Cover Banner (68px) */}
+                                            <TouchableOpacity
+                                                activeOpacity={0.92}
+                                                onPress={() => setSelectedStore(store)}
+                                                style={s.cardCoverBox}
+                                            >
+                                                <Image
+                                                    source={{ uri: store.cover_image || store.banner || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=700&auto=format&fit=crop' }}
+                                                    style={s.cardCoverImg}
+                                                    resizeMode="cover"
+                                                />
+                                                <View style={s.cardCoverOverlay} />
 
-                                                {store.isVerified && (
-                                                    <View style={s.verifiedIconBadge}>
-                                                        <Ionicons name="checkmark-sharp" size={10} color="white" />
-                                                    </View>
-                                                )}
-                                            </View>
-
-                                            <View style={s.storeDetails}>
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-                                                    <Text numberOfLines={1} style={s.storeName}>
-                                                        {store.name}
-                                                    </Text>
-                                                    {(store.is_official || store.isOfficial) && (
-                                                        <View style={s.officialPill}>
-                                                            <Text style={s.officialPillTxt}>OFFICIAL</Text>
+                                                {/* Left Badge: Official or Recommended or Verified */}
+                                                <View style={s.cardTopBadgesLeft}>
+                                                    {(store.is_official || store.isOfficial) ? (
+                                                        <View style={s.badgeOfficial}>
+                                                            <Ionicons name="shield-checkmark" size={10} color="#FFFFFF" />
+                                                            <Text style={s.badgeOfficialTxt}>OFFICIAL MALL</Text>
                                                         </View>
-                                                    )}
-                                                    {store.is_recommended && (
-                                                        <View style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#D9A73A' }}>
-                                                            <Text style={{ fontSize: 9, fontWeight: '800', color: '#D9A73A' }}>⭐ RECOMMENDED</Text>
+                                                    ) : (store.is_recommended || store.isRecommended) ? (
+                                                        <View style={s.badgeRecommended}>
+                                                            <Ionicons name="star" size={10} color="#FFFFFF" />
+                                                            <Text style={s.badgeRecommendedTxt}>RECOMMENDED</Text>
+                                                        </View>
+                                                    ) : (
+                                                        <View style={s.badgeVerified}>
+                                                            <Ionicons name="checkmark-circle" size={10} color="#10B981" />
+                                                            <Text style={s.badgeVerifiedTxt}>VERIFIED</Text>
                                                         </View>
                                                     )}
                                                 </View>
 
-                                                <Text numberOfLines={1} style={s.storeCategory}>
-                                                    {store.category}
+                                                {/* Right: Quick Follow Toggle */}
+                                                <TouchableOpacity
+                                                    onPress={() => toggleFollow(store.id, store.name)}
+                                                    style={[s.quickFollowBtn, isFollowed && s.quickFollowBtnActive]}
+                                                    activeOpacity={0.8}
+                                                >
+                                                    <Ionicons
+                                                        name={isFollowed ? "heart" : "heart-outline"}
+                                                        size={14}
+                                                        color={isFollowed ? "#EF4444" : "#FFFFFF"}
+                                                    />
+                                                </TouchableOpacity>
+                                            </TouchableOpacity>
+
+                                            {/* Store Identity & Meta Row */}
+                                            <View style={s.cardBody}>
+                                                <View style={s.cardIdentityRow}>
+                                                    {/* Overlapping Avatar */}
+                                                    <TouchableOpacity
+                                                        activeOpacity={0.9}
+                                                        onPress={() => setSelectedStore(store)}
+                                                        style={s.cardAvatarWrap}
+                                                    >
+                                                        {store.logo ? (
+                                                            <Image source={{ uri: store.logo }} style={s.cardAvatar} />
+                                                        ) : (store.is_official || store.isOfficial) ? (
+                                                            <Image source={AM_LOGO} style={s.cardAvatar} resizeMode="contain" />
+                                                        ) : (
+                                                            <View style={[s.cardAvatar, { backgroundColor: '#E0F2FE', alignItems: 'center', justifyContent: 'center' }]}>
+                                                                <Ionicons name="storefront" size={24} color={BRAND.sky} />
+                                                            </View>
+                                                        )}
+                                                        {store.isVerified && (
+                                                            <View style={s.cardVerifiedIcon}>
+                                                                <Ionicons name="checkmark-sharp" size={10} color="#FFFFFF" />
+                                                            </View>
+                                                        )}
+                                                    </TouchableOpacity>
+
+                                                    <TouchableOpacity
+                                                        activeOpacity={0.9}
+                                                        onPress={() => setSelectedStore(store)}
+                                                        style={s.cardTitleCol}
+                                                    >
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                                            <Text numberOfLines={1} style={s.cardStoreName}>
+                                                                {store.name}
+                                                            </Text>
+                                                            <Ionicons name="checkmark-circle" size={14} color={BRAND.sky} />
+                                                        </View>
+
+                                                        <Text numberOfLines={1} style={s.cardCategoryTxt}>
+                                                            {store.category || 'Verified Marketplace Store'}
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                </View>
+
+                                                {/* Micro-Stats Inline Strip */}
+                                                <View style={s.cardStatsStrip}>
+                                                    <View style={s.cardStatItem}>
+                                                        <Ionicons name="star" size={12} color="#F59E0B" />
+                                                        <Text style={s.cardStatBold}>{store.rating || 5.0}</Text>
+                                                        <Text style={s.cardStatDim}>({store.reviews || 0})</Text>
+                                                    </View>
+                                                    <Text style={s.cardStatDot}>•</Text>
+                                                    <View style={s.cardStatItem}>
+                                                        <Ionicons name="cube-outline" size={12} color={BRAND.slate} />
+                                                        <Text style={s.cardStatBold}>{store.productsCount || 0}</Text>
+                                                        <Text style={s.cardStatDim}>Products</Text>
+                                                    </View>
+                                                    <Text style={s.cardStatDot}>•</Text>
+                                                    <View style={s.cardStatItem}>
+                                                        <Ionicons name="people-outline" size={12} color={BRAND.slate} />
+                                                        <Text style={s.cardStatBold}>{currentFollowers}</Text>
+                                                        <Text style={s.cardStatDim}>Followers</Text>
+                                                    </View>
+                                                </View>
+
+                                                {/* ─── MINI 3-PRODUCT PREVIEW STRIP (Shopify / TikTok Shop style) ─── */}
+                                                {previewProds.length > 0 && (
+                                                    <View style={s.miniPreviewStrip}>
+                                                        {previewProds.map((prod, pIdx) => (
+                                                            <TouchableOpacity
+                                                                key={'p-prev-' + prod.id + '-' + pIdx}
+                                                                activeOpacity={0.88}
+                                                                onPress={() => onProductClick && onProductClick(prod)}
+                                                                style={s.miniPreviewItem}
+                                                            >
+                                                                <Image
+                                                                    source={{ uri: getProductImage(prod) }}
+                                                                    style={s.miniPreviewImg}
+                                                                />
+                                                                <View style={s.miniPreviewPriceTag}>
+                                                                    <Text style={s.miniPreviewPriceTxt} numberOfLines={1}>
+                                                                        {fmtPrice(prod.price)}
+                                                                    </Text>
+                                                                </View>
+                                                            </TouchableOpacity>
+                                                        ))}
+                                                    </View>
+                                                )}
+
+                                                {/* Card Action Buttons: WhatsApp & Visit Store */}
+                                                <View style={s.cardActionRow}>
+                                                    <TouchableOpacity
+                                                        onPress={() => handleContactWhatsApp(store)}
+                                                        style={s.actionWhatsAppBtn}
+                                                        activeOpacity={0.8}
+                                                    >
+                                                        <Ionicons name="logo-whatsapp" size={15} color="#10B981" />
+                                                        <Text style={s.actionWhatsAppTxt}>WhatsApp</Text>
+                                                    </TouchableOpacity>
+
+                                                    <TouchableOpacity
+                                                        onPress={() => handleCallStore(store)}
+                                                        style={s.actionCallBtn}
+                                                        activeOpacity={0.8}
+                                                    >
+                                                        <Ionicons name="call-outline" size={15} color={BRAND.slateDark} />
+                                                    </TouchableOpacity>
+
+                                                    <TouchableOpacity
+                                                        onPress={() => setSelectedStore(store)}
+                                                        style={s.actionVisitBtn}
+                                                        activeOpacity={0.85}
+                                                    >
+                                                        <Text style={s.actionVisitTxt}>Visit Store</Text>
+                                                        <Ionicons name="arrow-forward" size={13} color="#FFFFFF" />
+                                                    </TouchableOpacity>
+                                                </View>
+                                            </View>
+                                        </View>
+                                    );
+                                })}
+                            </View>
+                        ) : (
+                            // ─── 2-COLUMN COMPACT MOBILE GRID ───
+                            <View style={s.storesGridContainer}>
+                                {filteredStores.map(store => {
+                                    return (
+                                        <TouchableOpacity
+                                            key={'grid-' + store.id}
+                                            activeOpacity={0.9}
+                                            onPress={() => setSelectedStore(store)}
+                                            style={s.gridStoreCard}
+                                        >
+                                            <View style={s.gridBannerBox}>
+                                                <Image
+                                                    source={{ uri: store.cover_image || store.banner || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=500&auto=format&fit=crop' }}
+                                                    style={s.gridBannerImg}
+                                                />
+                                                <View style={s.gridBannerOverlay} />
+                                                {(store.is_official || store.isOfficial) && (
+                                                    <View style={s.gridOfficialBadge}>
+                                                        <Text style={s.gridOfficialTxt}>OFFICIAL</Text>
+                                                    </View>
+                                                )}
+                                            </View>
+
+                                            <View style={s.gridBody}>
+                                                <View style={s.gridAvatarWrap}>
+                                                    {store.logo ? (
+                                                        <Image source={{ uri: store.logo }} style={s.gridAvatar} />
+                                                    ) : (store.is_official || store.isOfficial) ? (
+                                                        <Image source={AM_LOGO} style={s.gridAvatar} resizeMode="contain" />
+                                                    ) : (
+                                                        <View style={[s.gridAvatar, { backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }]}>
+                                                            <Ionicons name="storefront" size={18} color={BRAND.navy} />
+                                                        </View>
+                                                    )}
+                                                    {store.isVerified && (
+                                                        <View style={s.gridVerifiedBadge}>
+                                                            <Ionicons name="checkmark-sharp" size={8} color="#FFFFFF" />
+                                                        </View>
+                                                    )}
+                                                </View>
+
+                                                <Text style={s.gridStoreName} numberOfLines={1}>
+                                                    {store.name}
+                                                </Text>
+                                                <Text style={s.gridCategory} numberOfLines={1}>
+                                                    {store.category || 'Store'}
                                                 </Text>
 
-                                                <View style={s.storeMetaRow}>
-                                                    <View style={s.metaItem}>
-                                                        <Ionicons name="star" size={12} color="#F59E0B" />
-                                                        <Text style={s.metaTxtBold}>{store.rating}</Text>
-                                                        <Text style={s.metaTxtDim}>({store.reviews})</Text>
+                                                <View style={s.gridMetaRow}>
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                                                        <Ionicons name="star" size={11} color="#F59E0B" />
+                                                        <Text style={{ fontSize: 10.5, fontWeight: '800', color: BRAND.slateDark }}>{store.rating || 5.0}</Text>
                                                     </View>
-                                                    <Text style={s.metaDot}>•</Text>
-                                                    <View style={s.metaItem}>
-                                                        <Ionicons name="cube-outline" size={12} color="#64748B" />
-                                                        <Text style={s.metaTxtDim}>{store.productsCount} Items</Text>
-                                                    </View>
-                                                    <Text style={s.metaDot}>•</Text>
-                                                    <View style={s.metaItem}>
-                                                        <Ionicons name="people-outline" size={12} color="#64748B" />
-                                                        <Text style={s.metaTxtDim}>{currentFollowers}</Text>
+                                                    <Text style={{ fontSize: 10, color: BRAND.slate, fontWeight: '600' }}>
+                                                        {store.productsCount || 0} items
+                                                    </Text>
+                                                </View>
+
+                                                <View style={s.gridActionRow}>
+                                                    <View style={s.gridVisitBtn}>
+                                                        <Text style={s.gridVisitTxt}>View Store</Text>
                                                     </View>
                                                 </View>
                                             </View>
                                         </TouchableOpacity>
-
-                                        {/* Action Buttons */}
-                                        <View style={s.storeActionRow}>
-                                            <TouchableOpacity
-                                                onPress={() => toggleFollow(store.id, store.name)}
-                                                style={[s.btnFollow, isFollowed && s.btnFollowing]}
-                                                activeOpacity={0.8}
-                                            >
-                                                <Ionicons
-                                                    name={isFollowed ? "checkmark-circle" : "add"}
-                                                    size={14}
-                                                    color={isFollowed ? "#0284C7" : "#0F172A"}
-                                                />
-                                                <Text style={[s.btnFollowTxt, isFollowed && s.btnFollowingTxt]}>
-                                                    {isFollowed ? 'Following' : 'Follow'}
-                                                </Text>
-                                            </TouchableOpacity>
-
-                                            <TouchableOpacity
-                                                onPress={() => handleContactWhatsApp(store)}
-                                                style={s.btnContact}
-                                                activeOpacity={0.8}
-                                            >
-                                                <Ionicons name="logo-whatsapp" size={14} color="#10B981" />
-                                                <Text style={s.btnContactTxt}>WhatsApp</Text>
-                                            </TouchableOpacity>
-
-                                            <TouchableOpacity
-                                                onPress={() => setSelectedStore(store)}
-                                                style={s.btnViewStore}
-                                                activeOpacity={0.8}
-                                            >
-                                                <Text style={s.btnViewStoreTxt}>View Store</Text>
-                                                <Ionicons name="chevron-forward" size={12} color="white" />
-                                            </TouchableOpacity>
-                                        </View>
-                                    </View>
-                                );
-                            })}
-                        </View>
+                                    );
+                                })}
+                            </View>
+                        )}
                     </View>
                 )}
 
-                {/* ════ POPULAR PRODUCTS SECTION ════ */}
+                {/* ════ 6. POPULAR PRODUCTS IN STORE SECTION ════ */}
                 {!loading && (
-                    <View style={{ marginTop: 24 }}>
+                    <View style={{ marginTop: 22 }}>
                         <View style={s.sectionHead}>
                             <View>
-                                <Text style={s.sectionTitle}>Popular Products in Store</Text>
-                                <Text style={s.sectionSub}>Authentic live products from verified sellers</Text>
+                                <Text style={s.sectionTitle}>Trending Store Catalog</Text>
+                                <Text style={s.sectionSub}>Live products from verified merchants</Text>
                             </View>
 
                             <TouchableOpacity
                                 onPress={() => onGoToShop && onGoToShop('')}
                                 style={s.seeAllRow}
                             >
-                                <Text style={s.seeAllTxt}>See All</Text>
-                                <Ionicons name="chevron-forward" size={13} color="#0284C7" />
+                                <Text style={s.seeAllTxt}>Shop All</Text>
+                                <Ionicons name="chevron-forward" size={13} color={BRAND.sky} />
                             </TouchableOpacity>
                         </View>
 
                         {filteredPopular.length === 0 ? (
                             <View style={s.emptyBox}>
-                                <Ionicons name="bag-remove-outline" size={38} color="#94A3B8" />
+                                <Ionicons name="bag-remove-outline" size={36} color="#94A3B8" />
                                 <Text style={s.emptyTxt}>No products match your search</Text>
                             </View>
                         ) : (
@@ -677,7 +915,6 @@ export const StoresPage = ({
                                                     )}
                                                 </View>
 
-                                                {/* Add to Cart Quick Button */}
                                                 <TouchableOpacity
                                                     style={s.quickCartBtn}
                                                     activeOpacity={0.8}
@@ -695,36 +932,34 @@ export const StoresPage = ({
                     </View>
                 )}
 
-                {/* ════ BECOME A VENDOR PROMO CARD ════ */}
+                {/* ════ 7. BECOME A VENDOR CALLOUT ════ */}
                 <View style={s.vendorBannerWrapper}>
                     <View style={s.vendorBannerCard}>
-                        <View style={s.vendorBannerLeft}>
-                            <View style={s.vendorBannerBadge}>
-                                <Ionicons name="sparkles" size={12} color="#F59E0B" />
-                                <Text style={s.vendorBannerBadgeTxt}>GROW YOUR BUSINESS</Text>
-                            </View>
-                            <Text style={s.vendorBannerTitle}>Open Your Store on Abu Mafhal</Text>
-                            <Text style={s.vendorBannerSub}>
-                                Register as a verified merchant today. Reach millions of active buyers across Nigeria with zero hassle.
-                            </Text>
-
-                            <TouchableOpacity
-                                style={s.vendorBannerBtn}
-                                activeOpacity={0.85}
-                                onPress={() => onNavigate ? onNavigate('VendorRegister') : Alert.alert('Register', 'Please visit Account > Become a Vendor to register your business.')}
-                            >
-                                <Text style={s.vendorBannerBtnTxt}>Start Selling Now</Text>
-                                <Ionicons name="arrow-forward" size={14} color="#0F172A" />
-                            </TouchableOpacity>
+                        <View style={s.vendorBannerBadge}>
+                            <Ionicons name="sparkles" size={12} color="#F59E0B" />
+                            <Text style={s.vendorBannerBadgeTxt}>MERCHANT EXPANSION</Text>
                         </View>
+                        <Text style={s.vendorBannerTitle}>Open Your Store on Abu Mafhal</Text>
+                        <Text style={s.vendorBannerSub}>
+                            Register your business today. Reach buyers across Nigeria with zero listing friction and verified seller badges.
+                        </Text>
+
+                        <TouchableOpacity
+                            style={s.vendorBannerBtn}
+                            activeOpacity={0.85}
+                            onPress={() => onNavigate ? onNavigate('VendorRegister') : Alert.alert('Register', 'Please visit Account > Become a Vendor to register your business.')}
+                        >
+                            <Text style={s.vendorBannerBtnTxt}>Start Selling Now</Text>
+                            <Ionicons name="arrow-forward" size={14} color="#0F172A" />
+                        </TouchableOpacity>
                     </View>
                 </View>
 
-                {/* ════ CATEGORIES PILLS ════ */}
+                {/* ════ 8. MARKETPLACE DEPARTMENTS ════ */}
                 {categories.length > 0 && (
-                    <View style={{ marginTop: 24, paddingHorizontal: 16 }}>
+                    <View style={{ marginTop: 22, paddingHorizontal: 16 }}>
                         <Text style={s.sectionTitle}>Marketplace Departments</Text>
-                        <Text style={s.sectionSub}>Shop items organized by verified departments</Text>
+                        <Text style={s.sectionSub}>Shop items organized by verified categories</Text>
 
                         <View style={[s.catPillGrid, { marginTop: 12 }]}>
                             {categories.map(cat => (
@@ -734,7 +969,7 @@ export const StoresPage = ({
                                     activeOpacity={0.8}
                                     onPress={() => onGoToShop && onGoToShop(cat.name)}
                                 >
-                                    <Ionicons name="pricetag-outline" size={13} color="#0284C7" />
+                                    <Ionicons name="pricetag-outline" size={13} color={BRAND.sky} />
                                     <Text style={s.catPillTxt}>{cat.name}</Text>
                                 </TouchableOpacity>
                             ))}
@@ -744,7 +979,7 @@ export const StoresPage = ({
             </ScrollView>
 
             {/* ══════════════════════════════════════════════════
-                DEDICATED STORE DETAIL VIEW (MODAL)
+                9. DEDICATED STOREFRONT MODAL (Luxury Store Experience)
             ══════════════════════════════════════════════════ */}
             <Modal
                 visible={!!selectedStore}
@@ -755,7 +990,7 @@ export const StoresPage = ({
                     <View style={s.modalContainer}>
                         <StatusBar barStyle="light-content" backgroundColor="#0A192F" />
 
-                        {/* Top Sticky Bar */}
+                        {/* Top Sticky Header */}
                         <View style={s.modalHeader}>
                             <TouchableOpacity
                                 onPress={() => setSelectedStore(null)}
@@ -770,21 +1005,30 @@ export const StoresPage = ({
                                 {selectedStore.name}
                             </Text>
 
-                            <TouchableOpacity
-                                onPress={() => { setSelectedStore(null); onGoToCart && onGoToCart(); }}
-                                style={s.modalCartBtn}
-                            >
-                                <Ionicons name="cart-outline" size={22} color="white" />
-                                {cartCount > 0 && (
-                                    <View style={s.modalCartBadge}>
-                                        <Text style={s.modalCartBadgeTxt}>{cartCount}</Text>
-                                    </View>
-                                )}
-                            </TouchableOpacity>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                <TouchableOpacity
+                                    onPress={() => handleShareStore(selectedStore)}
+                                    style={s.modalIconBtn}
+                                >
+                                    <Ionicons name="share-social-outline" size={20} color="white" />
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    onPress={() => { setSelectedStore(null); onGoToCart && onGoToCart(); }}
+                                    style={s.modalCartBtn}
+                                >
+                                    <Ionicons name="cart-outline" size={22} color="white" />
+                                    {cartCount > 0 && (
+                                        <View style={s.modalCartBadge}>
+                                            <Text style={s.modalCartBadgeTxt}>{cartCount}</Text>
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
                         </View>
 
-                        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
-                            {/* Store Hero Profile */}
+                        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 80 }}>
+                            {/* Store Hero Banner */}
                             <View style={s.storeHeroBox}>
                                 <Image
                                     source={{ uri: selectedStore.cover_image || selectedStore.banner || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=900&auto=format&fit=crop' }}
@@ -797,10 +1041,10 @@ export const StoresPage = ({
                                     <View style={s.storeHeroAvatarWrap}>
                                         {selectedStore.logo ? (
                                             <Image source={{ uri: selectedStore.logo }} style={s.storeHeroAvatar} />
-                                        ) : selectedStore.isOfficial ? (
+                                        ) : (selectedStore.is_official || selectedStore.isOfficial) ? (
                                             <Image source={AM_LOGO} style={s.storeHeroAvatar} resizeMode="contain" />
                                         ) : (
-                                            <View style={[s.storeHeroAvatar, { backgroundColor: '#0284C7', alignItems: 'center', justifyContent: 'center' }]}>
+                                            <View style={[s.storeHeroAvatar, { backgroundColor: BRAND.sky, alignItems: 'center', justifyContent: 'center' }]}>
                                                 <Ionicons name="storefront" size={32} color="white" />
                                             </View>
                                         )}
@@ -819,8 +1063,8 @@ export const StoresPage = ({
                                                     <Text style={s.officialPillTxt}>OFFICIAL</Text>
                                                 </View>
                                             )}
-                                            {selectedStore.is_recommended && (
-                                                <View style={{ backgroundColor: '#D9A73A', paddingHorizontal: 7, paddingVertical: 2.5, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                                            {(selectedStore.is_recommended || selectedStore.isRecommended) && (
+                                                <View style={{ backgroundColor: BRAND.gold, paddingHorizontal: 7, paddingVertical: 2.5, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 3 }}>
                                                     <Ionicons name="star" size={10} color="#FFFFFF" />
                                                     <Text style={{ fontSize: 9, fontWeight: '800', color: '#FFFFFF' }}>RECOMMENDED</Text>
                                                 </View>
@@ -831,9 +1075,9 @@ export const StoresPage = ({
                                                 {selectedStore.tagline}
                                             </Text>
                                         ) : null}
-                                        <Text style={s.storeHeroCategory}>{selectedStore.category}</Text>
+                                        <Text style={s.storeHeroCategory}>{selectedStore.category || 'Verified Marketplace Merchant'}</Text>
                                         <Text style={s.storeHeroLocation}>
-                                            <Ionicons name="location-outline" size={11} color="#94A3B8" /> {selectedStore.address}
+                                            <Ionicons name="location-outline" size={11} color="#94A3B8" /> {selectedStore.address || 'Nigeria'}
                                         </Text>
                                     </View>
                                 </View>
@@ -842,16 +1086,16 @@ export const StoresPage = ({
                             {/* Store Stats Strip */}
                             <View style={s.storeStatsCard}>
                                 <View style={s.statBox}>
-                                    <Text style={s.statVal}>{selectedStore.productsCount}</Text>
+                                    <Text style={s.statVal}>{selectedStore.productsCount || 0}</Text>
                                     <Text style={s.statLbl}>Products</Text>
                                 </View>
                                 <View style={s.statDivider} />
                                 <View style={s.statBox}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
                                         <Ionicons name="star" size={14} color="#F59E0B" />
-                                        <Text style={s.statVal}>{selectedStore.rating}</Text>
+                                        <Text style={s.statVal}>{selectedStore.rating || 5.0}</Text>
                                     </View>
-                                    <Text style={s.statLbl}>{selectedStore.reviews} Reviews</Text>
+                                    <Text style={s.statLbl}>{selectedStore.reviews || 0} Reviews</Text>
                                 </View>
                                 <View style={s.statDivider} />
                                 <View style={s.statBox}>
@@ -862,7 +1106,7 @@ export const StoresPage = ({
                                 </View>
                             </View>
 
-                            {/* Store Action Buttons */}
+                            {/* Action Buttons Strip */}
                             <View style={s.storeDetailActionRow}>
                                 <TouchableOpacity
                                     onPress={() => toggleFollow(selectedStore.id, selectedStore.name)}
@@ -872,7 +1116,7 @@ export const StoresPage = ({
                                     <Ionicons
                                         name={followedStores[selectedStore.id] ? "checkmark-circle" : "add"}
                                         size={16}
-                                        color={followedStores[selectedStore.id] ? "#0284C7" : "white"}
+                                        color={followedStores[selectedStore.id] ? BRAND.sky : "white"}
                                     />
                                     <Text style={[s.storeDetailBtnFollowTxt, followedStores[selectedStore.id] && s.storeDetailBtnFollowingTxt]}>
                                         {followedStores[selectedStore.id] ? 'Following' : 'Follow Store'}
@@ -893,7 +1137,7 @@ export const StoresPage = ({
                                     style={s.storeDetailBtnCall}
                                     activeOpacity={0.8}
                                 >
-                                    <Ionicons name="call" size={16} color="#0F172A" />
+                                    <Ionicons name="call" size={16} color={BRAND.navy} />
                                 </TouchableOpacity>
 
                                 {selectedStore.email ? (
@@ -902,41 +1146,33 @@ export const StoresPage = ({
                                         style={s.storeDetailBtnCall}
                                         activeOpacity={0.8}
                                     >
-                                        <Ionicons name="mail" size={16} color="#0F172A" />
+                                        <Ionicons name="mail" size={16} color={BRAND.navy} />
                                     </TouchableOpacity>
                                 ) : null}
-
-                                <TouchableOpacity
-                                    onPress={() => handleShareStore(selectedStore)}
-                                    style={s.storeDetailBtnCall}
-                                    activeOpacity={0.8}
-                                >
-                                    <Ionicons name="share-social-outline" size={16} color="#0F172A" />
-                                </TouchableOpacity>
                             </View>
 
-                            {/* Store Service & Trust Chips */}
+                            {/* Store Policies & Operating Hours */}
                             <View style={{ paddingHorizontal: 16, marginTop: 12, gap: 8 }}>
                                 {selectedStore.working_hours ? (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFFFF', padding: 10, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                                        <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }}>
-                                            <Ionicons name="time-outline" size={15} color="#0E1A2E" />
+                                    <View style={s.policyCard}>
+                                        <View style={s.policyIconBox}>
+                                            <Ionicons name="time-outline" size={15} color={BRAND.navy} />
                                         </View>
                                         <View style={{ flex: 1 }}>
-                                            <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '700' }}>HOURS OF OPERATION</Text>
-                                            <Text style={{ fontSize: 11.5, color: '#0E1A2E', fontWeight: '800', marginTop: 1 }}>{selectedStore.working_hours}</Text>
+                                            <Text style={s.policyLbl}>HOURS OF OPERATION</Text>
+                                            <Text style={s.policyVal}>{selectedStore.working_hours}</Text>
                                         </View>
                                     </View>
                                 ) : null}
 
                                 {selectedStore.policy ? (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFBEB', padding: 10, borderRadius: 12, borderWidth: 1, borderColor: '#FDE68A' }}>
-                                        <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(217, 167, 58, 0.2)', alignItems: 'center', justifyContent: 'center' }}>
+                                    <View style={[s.policyCard, { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }]}>
+                                        <View style={[s.policyIconBox, { backgroundColor: 'rgba(217, 167, 58, 0.2)' }]}>
                                             <Ionicons name="shield-checkmark" size={15} color="#B45309" />
                                         </View>
                                         <View style={{ flex: 1 }}>
-                                            <Text style={{ fontSize: 10, color: '#92400E', fontWeight: '800' }}>BUYER WARRANTY & RETURNS</Text>
-                                            <Text style={{ fontSize: 11.5, color: '#78350F', fontWeight: '700', marginTop: 1 }}>{selectedStore.policy}</Text>
+                                            <Text style={[s.policyLbl, { color: '#92400E' }]}>BUYER WARRANTY & RETURNS</Text>
+                                            <Text style={[s.policyVal, { color: '#78350F' }]}>{selectedStore.policy}</Text>
                                         </View>
                                     </View>
                                 ) : null}
@@ -944,19 +1180,19 @@ export const StoresPage = ({
                                 {(selectedStore.instagram || selectedStore.facebook || selectedStore.twitter) ? (
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
                                         {selectedStore.instagram ? (
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FDF2F8', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: '#FCE7F3' }}>
+                                            <View style={s.socialChip}>
                                                 <Ionicons name="logo-instagram" size={12} color="#DB2777" />
                                                 <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#9D174D' }}>{selectedStore.instagram}</Text>
                                             </View>
                                         ) : null}
                                         {selectedStore.facebook ? (
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#EFF6FF', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: '#DBEAFE' }}>
+                                            <View style={[s.socialChip, { backgroundColor: '#EFF6FF', borderColor: '#DBEAFE' }]}>
                                                 <Ionicons name="logo-facebook" size={12} color="#2563EB" />
                                                 <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#1E40AF' }}>{selectedStore.facebook}</Text>
                                             </View>
                                         ) : null}
                                         {selectedStore.twitter ? (
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F0F9FF', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: '#E0F2FE' }}>
+                                            <View style={[s.socialChip, { backgroundColor: '#F0F9FF', borderColor: '#E0F2FE' }]}>
                                                 <Ionicons name="logo-twitter" size={12} color="#0284C7" />
                                                 <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#0369A1' }}>{selectedStore.twitter}</Text>
                                             </View>
@@ -965,13 +1201,13 @@ export const StoresPage = ({
                                 ) : null}
                             </View>
 
-                            {/* Store Bio Card */}
+                            {/* Store Bio */}
                             <View style={s.storeBioCard}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                    <Ionicons name="information-circle-outline" size={16} color="#0284C7" />
-                                    <Text style={s.storeBioTitle}>About This Store</Text>
+                                    <Ionicons name="information-circle-outline" size={16} color={BRAND.sky} />
+                                    <Text style={s.storeBioTitle}>About This Merchant</Text>
                                 </View>
-                                <Text style={s.storeBioTxt}>{selectedStore.about || selectedStore.bio}</Text>
+                                <Text style={s.storeBioTxt}>{selectedStore.about || selectedStore.bio || 'Verified merchant on Abu Mafhal Marketplace.'}</Text>
                             </View>
 
                             {/* Store Catalog Section */}
@@ -980,7 +1216,7 @@ export const StoresPage = ({
                                 <Text style={s.storeCatalogSub}>Authentic products sold directly by {selectedStore.name}</Text>
                             </View>
 
-                            {/* Store Search & Category Pills */}
+                            {/* In-Store Search Box */}
                             <View style={s.storeSearchBox}>
                                 <Ionicons name="search" size={16} color="#94A3B8" style={{ marginRight: 6 }} />
                                 <TextInput
@@ -997,63 +1233,58 @@ export const StoresPage = ({
                                 )}
                             </View>
 
+                            {/* Store Category Pills */}
                             {storeCategories.length > 1 && (
                                 <ScrollView
                                     horizontal
                                     showsHorizontalScrollIndicator={false}
-                                    contentContainerStyle={s.storeCatScroll}
+                                    contentContainerStyle={s.storeCategoryScroll}
                                 >
-                                    {storeCategories.map(cat => (
-                                        <TouchableOpacity
-                                            key={cat}
-                                            onPress={() => setSelectedStoreCategory(cat)}
-                                            style={[s.storeCatPill, selectedStoreCategory === cat && s.storeCatPillActive]}
-                                        >
-                                            <Text style={[s.storeCatPillTxt, selectedStoreCategory === cat && s.storeCatPillTxtActive]}>
-                                                {cat}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    ))}
+                                    {storeCategories.map(cat => {
+                                        const active = selectedStoreCategory === cat;
+                                        return (
+                                            <TouchableOpacity
+                                                key={cat}
+                                                onPress={() => setSelectedStoreCategory(cat)}
+                                                style={[s.storeCatBtn, active && s.storeCatBtnActive]}
+                                            >
+                                                <Text style={[s.storeCatTxt, active && s.storeCatTxtActive]}>
+                                                    {cat}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
                                 </ScrollView>
                             )}
 
-                            {/* Store Products Grid */}
-                            {storeFilteredProducts.length === 0 ? (
-                                <View style={s.storeEmptyBox}>
-                                    <Ionicons name="bag-handle-outline" size={48} color="#94A3B8" />
-                                    <Text style={s.storeEmptyTitle}>No Products Found</Text>
-                                    <Text style={s.storeEmptySub}>
-                                        {storeSearchQuery ? 'No products match your search in this store.' : 'This merchant currently has no approved products listed. Contact them directly on WhatsApp for requests.'}
-                                    </Text>
-                                    <TouchableOpacity
-                                        onPress={() => handleContactWhatsApp(selectedStore)}
-                                        style={s.storeEmptyContactBtn}
-                                    >
-                                        <Ionicons name="logo-whatsapp" size={16} color="white" />
-                                        <Text style={s.storeEmptyContactBtnTxt}>Chat With Seller</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            ) : (
-                                <View style={s.storeProductsGrid}>
-                                    {storeFilteredProducts.map(prod => {
-                                        const hasDiscount = Number(prod.compare_at_price) > Number(prod.price);
+                            {/* Store Products 2-Column Grid */}
+                            <View style={s.storeGridContainer}>
+                                {storeFilteredProducts.length === 0 ? (
+                                    <View style={s.storeEmptyBox}>
+                                        <Ionicons name="file-tray-outline" size={40} color="#94A3B8" />
+                                        <Text style={s.storeEmptyTitle}>No Products Found</Text>
+                                        <Text style={s.storeEmptySub}>No items match your search in this store catalog.</Text>
+                                    </View>
+                                ) : (
+                                    storeFilteredProducts.map(item => {
+                                        const hasDiscount = Number(item.compare_at_price) > Number(item.price);
                                         const discountPercent = hasDiscount
-                                            ? Math.round(((Number(prod.compare_at_price) - Number(prod.price)) / Number(prod.compare_at_price)) * 100)
+                                            ? Math.round(((Number(item.compare_at_price) - Number(item.price)) / Number(item.compare_at_price)) * 100)
                                             : null;
 
                                         return (
                                             <TouchableOpacity
-                                                key={prod.id}
+                                                key={'store-prod-' + item.id}
                                                 activeOpacity={0.88}
                                                 onPress={() => {
                                                     setSelectedStore(null);
-                                                    onProductClick && onProductClick(prod);
+                                                    onProductClick && onProductClick(item);
                                                 }}
                                                 style={s.storeGridCard}
                                             >
                                                 <View style={s.storeGridImgBox}>
                                                     <Image
-                                                        source={{ uri: getProductImage(prod) }}
+                                                        source={{ uri: getProductImage(item) }}
                                                         style={s.storeGridImg}
                                                         resizeMode="cover"
                                                     />
@@ -1066,23 +1297,22 @@ export const StoresPage = ({
 
                                                 <View style={s.storeGridInfo}>
                                                     <Text style={s.prodCategory} numberOfLines={1}>
-                                                        {prod.category || 'General'}
+                                                        {item.category || 'Catalog'}
                                                     </Text>
                                                     <Text style={s.storeGridName} numberOfLines={2}>
-                                                        {prod.name}
+                                                        {item.name}
                                                     </Text>
-
                                                     <View style={s.prodPriceRow}>
-                                                        <Text style={s.prodPrice}>{fmtPrice(prod.price)}</Text>
+                                                        <Text style={s.prodPrice}>{fmtPrice(item.price)}</Text>
                                                         {hasDiscount && (
-                                                            <Text style={s.prodOldPrice}>{fmtPrice(prod.compare_at_price)}</Text>
+                                                            <Text style={s.prodOldPrice}>{fmtPrice(item.compare_at_price)}</Text>
                                                         )}
                                                     </View>
 
                                                     <TouchableOpacity
                                                         style={s.quickCartBtn}
                                                         activeOpacity={0.8}
-                                                        onPress={() => handleAddToCartItem(prod)}
+                                                        onPress={() => handleAddToCartItem(item)}
                                                     >
                                                         <Ionicons name="cart" size={13} color="white" />
                                                         <Text style={s.quickCartBtnTxt}>+ Cart</Text>
@@ -1090,9 +1320,9 @@ export const StoresPage = ({
                                                 </View>
                                             </TouchableOpacity>
                                         );
-                                    })}
-                                </View>
-                            )}
+                                    })
+                                )}
+                            </View>
                         </ScrollView>
                     </View>
                 )}
@@ -1101,7 +1331,7 @@ export const StoresPage = ({
             {/* ════ FLOATING TOAST NOTIFICATION ════ */}
             {toastMessage.length > 0 && (
                 <Animated.View style={[s.toastContainer, { opacity: toastAnim }]}>
-                    <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+                    <Ionicons name="checkmark-circle" size={18} color={BRAND.emerald} />
                     <Text style={s.toastTxt}>{toastMessage}</Text>
                 </Animated.View>
             )}
@@ -1115,9 +1345,9 @@ const s = StyleSheet.create({
         backgroundColor: '#F8FAFC'
     },
     header: {
-        backgroundColor: 'white',
-        paddingTop: Platform.OS === 'ios' ? 52 : (StatusBar.currentHeight || 24) + 10,
-        paddingBottom: 14,
+        backgroundColor: '#FFFFFF',
+        paddingTop: Platform.OS === 'ios' ? 50 : (StatusBar.currentHeight || 20) + 8,
+        paddingBottom: 12,
         paddingHorizontal: 16,
         borderBottomWidth: 1,
         borderBottomColor: '#F1F5F9',
@@ -1127,26 +1357,48 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 12
+        marginBottom: 10
     },
     brandGroup: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 9
     },
+    logoFrame: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: '#0A192F',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1.5,
+        borderColor: BRAND.gold,
+        overflow: 'hidden'
+    },
     logo: {
-        width: 32,
-        height: 32,
-        borderRadius: 8
+        width: 26,
+        height: 26
     },
     brandTitle: {
         fontSize: 14.5,
         fontWeight: '900',
         color: '#0A192F',
-        letterSpacing: 0.5
+        letterSpacing: 0.3
     },
     brandTitleAccent: {
-        color: '#0284C7'
+        color: BRAND.gold
+    },
+    officialMallTinyPill: {
+        backgroundColor: '#0A192F',
+        paddingHorizontal: 5,
+        paddingVertical: 1.5,
+        borderRadius: 5
+    },
+    officialMallTinyTxt: {
+        color: BRAND.gold,
+        fontSize: 8,
+        fontWeight: '900',
+        letterSpacing: 0.5
     },
     brandSubtitle: {
         fontSize: 10,
@@ -1172,7 +1424,7 @@ const s = StyleSheet.create({
     shopPillTxt: {
         fontSize: 11,
         fontWeight: '800',
-        color: '#0284C7'
+        color: BRAND.sky
     },
     iconBtn: {
         padding: 5,
@@ -1204,13 +1456,21 @@ const s = StyleSheet.create({
         fontSize: 9,
         fontWeight: '900'
     },
+    searchControlsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8
+    },
     searchBar: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#F1F5F9',
         borderRadius: 14,
         paddingHorizontal: 12,
-        height: 42
+        height: 42,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
     },
     searchInput: {
         flex: 1,
@@ -1219,103 +1479,145 @@ const s = StyleSheet.create({
         fontWeight: '600',
         padding: 0
     },
-    heroWrapper: {
-        paddingHorizontal: 16,
-        paddingTop: 14
-    },
-    heroCard: {
-        backgroundColor: '#0A192F',
-        borderRadius: 20,
-        padding: 16,
-        flexDirection: 'row',
-        alignItems: 'center',
-        overflow: 'hidden',
-        position: 'relative'
-    },
-    heroContent: {
-        flex: 1,
-        zIndex: 2
-    },
-    verifiedPill: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        backgroundColor: 'rgba(16, 185, 129, 0.15)',
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 8,
-        alignSelf: 'flex-start',
-        marginBottom: 8,
+    viewModeBtn: {
+        width: 42,
+        height: 42,
+        borderRadius: 14,
+        backgroundColor: '#F1F5F9',
         borderWidth: 1,
-        borderColor: 'rgba(16, 185, 129, 0.3)'
+        borderColor: '#E2E8F0',
+        alignItems: 'center',
+        justifyContent: 'center'
     },
-    verifiedPillTxt: {
-        color: '#10B981',
-        fontSize: 9,
-        fontWeight: '900',
-        letterSpacing: 0.5
+    trustTickerScroll: {
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        gap: 8,
+        backgroundColor: '#F8FAFC'
     },
-    heroTitle: {
-        color: 'white',
-        fontSize: 16,
-        fontWeight: '900',
-        lineHeight: 20,
-        marginBottom: 4
-    },
-    heroDesc: {
-        color: '#94A3B8',
-        fontSize: 10.5,
-        lineHeight: 14,
-        marginBottom: 12
-    },
-    heroBtn: {
+    trustTickerItem: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 5,
-        backgroundColor: 'white',
-        paddingHorizontal: 12,
-        paddingVertical: 7,
-        borderRadius: 12,
-        alignSelf: 'flex-start'
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 10,
+        paddingVertical: 4.5,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
     },
-    heroBtnTxt: {
-        color: '#0F172A',
-        fontSize: 11,
-        fontWeight: '900'
+    trustTickerTxt: {
+        fontSize: 10.5,
+        fontWeight: '700',
+        color: '#334155'
     },
-    heroImg: {
-        width: 100,
-        height: 100,
-        borderRadius: 14,
-        opacity: 0.85
+    storiesWrapper: {
+        backgroundColor: '#FFFFFF',
+        paddingVertical: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9'
+    },
+    storiesSectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        marginBottom: 8
+    },
+    storiesTitle: {
+        fontSize: 10.5,
+        fontWeight: '900',
+        color: BRAND.navy,
+        letterSpacing: 0.6
+    },
+    storiesSub: {
+        fontSize: 10,
+        color: '#64748B',
+        fontWeight: '600'
+    },
+    storiesScroll: {
+        paddingHorizontal: 14,
+        gap: 12
+    },
+    storyItem: {
+        alignItems: 'center',
+        width: 66
+    },
+    storyRing: {
+        width: 58,
+        height: 58,
+        borderRadius: 29,
+        padding: 2.5,
+        borderWidth: 2,
+        borderColor: '#E2E8F0',
+        position: 'relative'
+    },
+    storyRingOfficial: {
+        borderColor: BRAND.navy,
+        backgroundColor: '#0A192F10'
+    },
+    storyRingRec: {
+        borderColor: BRAND.gold,
+        backgroundColor: '#D9A73A15'
+    },
+    storyAvatarInner: {
+        width: '100%',
+        height: '100%',
+        borderRadius: 26,
+        overflow: 'hidden',
+        backgroundColor: '#F8FAFC'
+    },
+    storyImg: {
+        width: '100%',
+        height: '100%'
+    },
+    storyVerifiedBadge: {
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        backgroundColor: BRAND.sky,
+        width: 15,
+        height: 15,
+        borderRadius: 7.5,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1.5,
+        borderColor: '#FFFFFF'
+    },
+    storyNameTxt: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#1E293B',
+        marginTop: 4,
+        textAlign: 'center'
     },
     subTabsScroll: {
         paddingHorizontal: 16,
-        paddingVertical: 14,
+        paddingVertical: 10,
         gap: 8
     },
     subTabBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        backgroundColor: 'white',
-        paddingHorizontal: 14,
-        paddingVertical: 8,
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 13,
+        paddingVertical: 7.5,
         borderRadius: 14,
         borderWidth: 1,
         borderColor: '#E2E8F0'
     },
     subTabBtnActive: {
-        backgroundColor: '#E0F2FE',
-        borderColor: '#0284C7'
+        backgroundColor: BRAND.navy,
+        borderColor: BRAND.navy
     },
     subTabTxt: {
-        fontSize: 12,
+        fontSize: 11.5,
         fontWeight: '700',
         color: '#64748B'
     },
     subTabTxtActive: {
-        color: '#0284C7',
+        color: '#FFFFFF',
         fontWeight: '900'
     },
     sectionHead: {
@@ -1340,187 +1642,503 @@ const s = StyleSheet.create({
     seeAllRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 2
+        gap: 3
     },
     seeAllTxt: {
         fontSize: 12,
-        color: '#0284C7',
+        color: BRAND.sky,
         fontWeight: '800'
     },
-    storesGrid: {
-        paddingHorizontal: 16,
-        gap: 12
-    },
-    storeCard: {
-        backgroundColor: 'white',
+    spotlightCard: {
+        width: width * 0.68,
+        backgroundColor: '#FFFFFF',
         borderRadius: 18,
-        padding: 14,
+        overflow: 'hidden',
         borderWidth: 1,
-        borderColor: '#F1F5F9',
-        shadowColor: '#0F172A',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
+        borderColor: '#D9A73A40',
+        elevation: 2,
+        shadowColor: '#0E1A2E',
+        shadowOpacity: 0.06,
         shadowRadius: 6,
-        elevation: 2
+        shadowOffset: { width: 0, height: 2 }
     },
-    storeTopRow: {
-        flexDirection: 'row',
-        gap: 12,
-        marginBottom: 12
-    },
-    avatarBox: {
+    spotlightBannerBox: {
+        height: 80,
+        backgroundColor: '#CBD5E1',
         position: 'relative'
     },
-    storeAvatar: {
-        width: 50,
-        height: 50,
-        borderRadius: 14,
-        backgroundColor: '#F8FAFC'
+    spotlightBannerImg: {
+        width: '100%',
+        height: '100%',
+        resizeMode: 'cover'
     },
-    avatarPlaceholder: {
-        width: 50,
-        height: 50,
-        borderRadius: 14,
-        backgroundColor: '#E0F2FE',
+    spotlightBannerOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(14,26,46,0.25)'
+    },
+    spotlightBadge: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        backgroundColor: BRAND.gold,
+        paddingHorizontal: 6,
+        paddingVertical: 2.5,
+        borderRadius: 6,
+        flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center'
+        gap: 3
     },
-    verifiedIconBadge: {
+    spotlightBadgeTxt: {
+        fontSize: 8.5,
+        fontWeight: '900',
+        color: '#FFFFFF'
+    },
+    spotlightBody: {
+        padding: 12,
+        paddingTop: 0
+    },
+    spotlightAvatarOverlap: {
+        marginTop: -22,
+        alignSelf: 'flex-start',
+        position: 'relative'
+    },
+    spotlightAvatar: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        borderWidth: 2,
+        borderColor: '#FFFFFF',
+        backgroundColor: '#FFFFFF'
+    },
+    spotlightVerifiedBadge: {
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        backgroundColor: BRAND.sky,
+        width: 14,
+        height: 14,
+        borderRadius: 7,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1.5,
+        borderColor: '#FFFFFF'
+    },
+    spotlightName: {
+        fontSize: 13,
+        fontWeight: '900',
+        color: '#0E1A2E',
+        marginTop: 4
+    },
+    spotlightCategory: {
+        fontSize: 10.5,
+        color: BRAND.goldDark,
+        fontWeight: '700',
+        marginTop: 1
+    },
+    spotlightFooter: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 10,
+        paddingTop: 8,
+        borderTopWidth: 1,
+        borderTopColor: '#F1F5F9'
+    },
+    spotlightFollowBtn: {
+        backgroundColor: '#0E1A2E',
+        paddingHorizontal: 9,
+        paddingVertical: 4,
+        borderRadius: 8
+    },
+    spotlightFollowBtnActive: {
+        backgroundColor: '#F1F5F9'
+    },
+    spotlightFollowTxt: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: '#FFFFFF'
+    },
+    spotlightFollowTxtActive: {
+        color: BRAND.sky
+    },
+    storesListContainer: {
+        paddingHorizontal: 16,
+        gap: 14
+    },
+    modernCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 2
+    },
+    cardCoverBox: {
+        height: 70,
+        position: 'relative',
+        backgroundColor: '#0A192F'
+    },
+    cardCoverImg: {
+        width: '100%',
+        height: '100%'
+    },
+    cardCoverOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(10, 25, 47, 0.4)'
+    },
+    cardTopBadgesLeft: {
+        position: 'absolute',
+        top: 8,
+        left: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6
+    },
+    badgeOfficial: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3.5,
+        backgroundColor: BRAND.navy,
+        paddingHorizontal: 7,
+        paddingVertical: 2.5,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: BRAND.gold
+    },
+    badgeOfficialTxt: {
+        color: BRAND.gold,
+        fontSize: 8.5,
+        fontWeight: '900',
+        letterSpacing: 0.5
+    },
+    badgeRecommended: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+        backgroundColor: BRAND.gold,
+        paddingHorizontal: 7,
+        paddingVertical: 2.5,
+        borderRadius: 6
+    },
+    badgeRecommendedTxt: {
+        color: '#FFFFFF',
+        fontSize: 8.5,
+        fontWeight: '900',
+        letterSpacing: 0.5
+    },
+    badgeVerified: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+        backgroundColor: 'rgba(255,255,255,0.95)',
+        paddingHorizontal: 7,
+        paddingVertical: 2.5,
+        borderRadius: 6
+    },
+    badgeVerifiedTxt: {
+        color: '#065F46',
+        fontSize: 8.5,
+        fontWeight: '900',
+        letterSpacing: 0.5
+    },
+    quickFollowBtn: {
+        position: 'absolute',
+        top: 8,
+        right: 10,
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: 'rgba(10, 25, 47, 0.65)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.2)'
+    },
+    quickFollowBtnActive: {
+        backgroundColor: 'rgba(255,255,255,0.95)',
+        borderColor: '#EF4444'
+    },
+    cardBody: {
+        paddingHorizontal: 14,
+        paddingBottom: 14,
+        paddingTop: 0
+    },
+    cardIdentityRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        marginTop: -22,
+        gap: 12
+    },
+    cardAvatarWrap: {
+        position: 'relative'
+    },
+    cardAvatar: {
+        width: 48,
+        height: 48,
+        borderRadius: 14,
+        backgroundColor: '#FFFFFF',
+        borderWidth: 2.5,
+        borderColor: '#FFFFFF'
+    },
+    cardVerifiedIcon: {
         position: 'absolute',
         bottom: -2,
         right: -2,
-        backgroundColor: '#0284C7',
+        backgroundColor: BRAND.sky,
         width: 16,
         height: 16,
         borderRadius: 8,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1.5,
-        borderColor: 'white'
+        borderColor: '#FFFFFF'
     },
-    verifiedIconBadgeLarge: {
-        position: 'absolute',
-        bottom: 0,
-        right: 0,
-        backgroundColor: '#0284C7',
-        width: 22,
-        height: 22,
-        borderRadius: 11,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 2,
-        borderColor: 'white'
-    },
-    storeDetails: {
+    cardTitleCol: {
         flex: 1,
-        justifyContent: 'center'
+        marginTop: 24
     },
-    storeName: {
-        fontSize: 14,
+    cardStoreName: {
+        fontSize: 14.5,
         fontWeight: '900',
-        color: '#0F172A'
+        color: '#0F172A',
+        letterSpacing: -0.2
     },
-    officialPill: {
-        backgroundColor: '#F59E0B',
-        paddingHorizontal: 5,
-        paddingVertical: 1.5,
-        borderRadius: 5
-    },
-    officialPillTxt: {
-        color: 'white',
-        fontSize: 8.5,
-        fontWeight: '900',
-        letterSpacing: 0.5
-    },
-    storeCategory: {
+    cardCategoryTxt: {
         fontSize: 11,
         color: '#64748B',
         fontWeight: '600',
-        marginTop: 1,
-        marginBottom: 3
+        marginTop: 1
     },
-    storeMetaRow: {
+    cardStatsStrip: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 5
+        gap: 6,
+        marginTop: 8,
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+        backgroundColor: '#F8FAFC',
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: '#F1F5F9'
     },
-    metaItem: {
+    cardStatItem: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 3
     },
-    metaTxtBold: {
+    cardStatBold: {
         fontSize: 11,
         fontWeight: '800',
         color: '#0F172A'
     },
-    metaTxtDim: {
+    cardStatDim: {
         fontSize: 10.5,
         color: '#64748B',
         fontWeight: '600'
     },
-    metaDot: {
-        color: '#CBD5E1',
-        fontSize: 11
+    cardStatDot: {
+        fontSize: 9,
+        color: '#CBD5E1'
     },
-    storeActionRow: {
+    miniPreviewStrip: {
         flexDirection: 'row',
         gap: 8,
-        borderTopWidth: 1,
-        borderTopColor: '#F8FAFC',
-        paddingTop: 10
+        marginTop: 10
     },
-    btnFollow: {
+    miniPreviewItem: {
         flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 4,
+        height: 64,
+        borderRadius: 12,
+        overflow: 'hidden',
         backgroundColor: '#F1F5F9',
-        paddingVertical: 8,
-        borderRadius: 10
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        position: 'relative'
     },
-    btnFollowing: {
-        backgroundColor: '#E0F2FE'
+    miniPreviewImg: {
+        width: '100%',
+        height: '100%'
     },
-    btnFollowTxt: {
-        fontSize: 11,
+    miniPreviewPriceTag: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: 'rgba(10, 25, 47, 0.75)',
+        paddingVertical: 2,
+        paddingHorizontal: 4,
+        alignItems: 'center'
+    },
+    miniPreviewPriceTxt: {
+        fontSize: 9,
         fontWeight: '800',
-        color: '#0F172A'
+        color: '#FFFFFF'
     },
-    btnFollowingTxt: {
-        color: '#0284C7'
-    },
-    btnContact: {
-        flex: 1.1,
+    cardActionRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
+        gap: 8,
+        marginTop: 12,
+        paddingTop: 10,
+        borderTopWidth: 1,
+        borderTopColor: '#F1F5F9'
+    },
+    actionWhatsAppBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
         gap: 4,
         backgroundColor: '#ECFDF5',
         borderWidth: 1,
         borderColor: '#A7F3D0',
+        paddingHorizontal: 12,
         paddingVertical: 8,
-        borderRadius: 10
+        borderRadius: 12
     },
-    btnContactTxt: {
+    actionWhatsAppTxt: {
         fontSize: 11,
         fontWeight: '900',
         color: '#059669'
     },
-    btnViewStore: {
-        flex: 1.2,
+    actionCallBtn: {
+        width: 34,
+        height: 34,
+        borderRadius: 12,
+        backgroundColor: '#F1F5F9',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    actionVisitBtn: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 4,
-        backgroundColor: '#0A192F',
+        gap: 5,
+        backgroundColor: BRAND.navy,
         paddingVertical: 8,
-        borderRadius: 10
+        borderRadius: 12
     },
-    btnViewStoreTxt: {
-        color: 'white',
-        fontSize: 11,
+    actionVisitTxt: {
+        color: '#FFFFFF',
+        fontSize: 11.5,
+        fontWeight: '900'
+    },
+    storesGridContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        paddingHorizontal: 12,
+        gap: 10
+    },
+    gridStoreCard: {
+        width: (width - 44) / 2,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        elevation: 2,
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 5
+    },
+    gridBannerBox: {
+        height: 52,
+        backgroundColor: '#0A192F',
+        position: 'relative'
+    },
+    gridBannerImg: {
+        width: '100%',
+        height: '100%'
+    },
+    gridBannerOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(10, 25, 47, 0.35)'
+    },
+    gridOfficialBadge: {
+        position: 'absolute',
+        top: 5,
+        left: 5,
+        backgroundColor: BRAND.navy,
+        paddingHorizontal: 5,
+        paddingVertical: 1.5,
+        borderRadius: 4,
+        borderWidth: 1,
+        borderColor: BRAND.gold
+    },
+    gridOfficialTxt: {
+        color: BRAND.gold,
+        fontSize: 7.5,
+        fontWeight: '900'
+    },
+    gridBody: {
+        padding: 10,
+        paddingTop: 0
+    },
+    gridAvatarWrap: {
+        marginTop: -16,
+        alignSelf: 'flex-start',
+        position: 'relative'
+    },
+    gridAvatar: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: '#FFFFFF',
+        borderWidth: 2,
+        borderColor: '#FFFFFF'
+    },
+    gridVerifiedBadge: {
+        position: 'absolute',
+        bottom: -2,
+        right: -2,
+        backgroundColor: BRAND.sky,
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#FFFFFF'
+    },
+    gridStoreName: {
+        fontSize: 12.5,
+        fontWeight: '900',
+        color: '#0F172A',
+        marginTop: 4
+    },
+    gridCategory: {
+        fontSize: 10,
+        color: '#64748B',
+        fontWeight: '600',
+        marginTop: 1
+    },
+    gridMetaRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginTop: 6,
+        paddingTop: 6,
+        borderTopWidth: 1,
+        borderTopColor: '#F1F5F9'
+    },
+    gridActionRow: {
+        marginTop: 8
+    },
+    gridVisitBtn: {
+        backgroundColor: '#0A192F',
+        paddingVertical: 6,
+        borderRadius: 8,
+        alignItems: 'center'
+    },
+    gridVisitTxt: {
+        color: '#FFFFFF',
+        fontSize: 10.5,
         fontWeight: '900'
     },
     productsScroll: {
@@ -1570,7 +2188,7 @@ const s = StyleSheet.create({
     prodCategory: {
         fontSize: 9,
         fontWeight: '800',
-        color: '#0284C7',
+        color: BRAND.sky,
         textTransform: 'uppercase',
         marginBottom: 2
     },
@@ -1591,7 +2209,7 @@ const s = StyleSheet.create({
     prodPrice: {
         fontSize: 12.5,
         fontWeight: '900',
-        color: '#0284C7'
+        color: BRAND.sky
     },
     prodOldPrice: {
         fontSize: 9.5,
@@ -1603,74 +2221,70 @@ const s = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         gap: 4,
-        backgroundColor: '#0A192F',
-        paddingVertical: 5,
+        backgroundColor: BRAND.navy,
+        paddingVertical: 6,
         borderRadius: 8
     },
     quickCartBtnTxt: {
         color: 'white',
-        fontSize: 10,
+        fontSize: 10.5,
         fontWeight: '900'
     },
     vendorBannerWrapper: {
         paddingHorizontal: 16,
-        marginTop: 24
+        marginTop: 22
     },
     vendorBannerCard: {
-        backgroundColor: '#0F172A',
+        backgroundColor: '#0A192F',
         borderRadius: 20,
         padding: 18,
-        borderWidth: 1,
-        borderColor: '#1E293B',
         position: 'relative',
-        overflow: 'hidden'
-    },
-    vendorBannerLeft: {
-        zIndex: 2
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: BRAND.gold
     },
     vendorBannerBadge: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
-        backgroundColor: 'rgba(245, 158, 11, 0.15)',
+        backgroundColor: 'rgba(217, 167, 58, 0.2)',
         paddingHorizontal: 8,
         paddingVertical: 3,
-        borderRadius: 7,
+        borderRadius: 6,
         alignSelf: 'flex-start',
         marginBottom: 8
     },
     vendorBannerBadgeTxt: {
-        color: '#F59E0B',
-        fontSize: 9,
+        fontSize: 8.5,
         fontWeight: '900',
-        letterSpacing: 0.5
+        color: BRAND.gold
     },
     vendorBannerTitle: {
-        color: 'white',
         fontSize: 16,
         fontWeight: '900',
+        color: '#FFFFFF',
         marginBottom: 4
     },
     vendorBannerSub: {
-        color: '#94A3B8',
         fontSize: 11,
+        color: '#94A3B8',
         lineHeight: 16,
-        marginBottom: 14
+        marginBottom: 12
     },
     vendorBannerBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
-        backgroundColor: 'white',
+        gap: 5,
+        backgroundColor: '#FFFFFF',
         paddingHorizontal: 14,
         paddingVertical: 8,
-        borderRadius: 12,
+        borderRadius: 10,
         alignSelf: 'flex-start'
     },
     vendorBannerBtnTxt: {
-        color: '#0F172A',
         fontSize: 11.5,
-        fontWeight: '900'
+        fontWeight: '900',
+        color: '#0A192F'
     },
     catPillGrid: {
         flexDirection: 'row',
@@ -1681,12 +2295,12 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 5,
-        backgroundColor: 'white',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
+        backgroundColor: '#FFFFFF',
         paddingHorizontal: 12,
         paddingVertical: 7,
-        borderRadius: 12
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
     },
     catPillTxt: {
         fontSize: 11,
@@ -1694,30 +2308,40 @@ const s = StyleSheet.create({
         color: '#334155'
     },
     emptyBox: {
-        paddingVertical: 24,
+        paddingVertical: 35,
         alignItems: 'center',
-        gap: 6
+        gap: 8
     },
     emptyTxt: {
         fontSize: 12,
-        color: '#94A3B8',
+        color: '#64748B',
         fontWeight: '600'
     },
-
-    // ── Dedicated Store Detail View Modal ─────────────────────────
+    emptyBtn: {
+        backgroundColor: BRAND.navy,
+        paddingHorizontal: 14,
+        paddingVertical: 7,
+        borderRadius: 8,
+        marginTop: 4
+    },
+    emptyBtnTxt: {
+        color: '#FFFFFF',
+        fontSize: 11,
+        fontWeight: '800'
+    },
     modalContainer: {
         flex: 1,
         backgroundColor: '#F8FAFC'
     },
     modalHeader: {
-        backgroundColor: '#0A192F',
-        paddingTop: Platform.OS === 'ios' ? 48 : (StatusBar.currentHeight || 24) + 6,
-        paddingBottom: 12,
-        paddingHorizontal: 16,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        zIndex: 10
+        backgroundColor: BRAND.navy,
+        paddingTop: Platform.OS === 'ios' ? 50 : (StatusBar.currentHeight || 20) + 8,
+        paddingBottom: 14,
+        paddingHorizontal: 16,
+        zIndex: 20
     },
     modalBackBtn: {
         flexDirection: 'row',
@@ -1727,19 +2351,22 @@ const s = StyleSheet.create({
     modalBackTxt: {
         color: 'white',
         fontSize: 13,
-        fontWeight: '800'
+        fontWeight: '700'
     },
     modalHeaderTitle: {
         flex: 1,
-        textAlign: 'center',
         color: 'white',
-        fontSize: 13.5,
+        fontSize: 14,
         fontWeight: '900',
-        marginHorizontal: 10
+        textAlign: 'center',
+        marginHorizontal: 12
+    },
+    modalIconBtn: {
+        padding: 4
     },
     modalCartBtn: {
-        padding: 4,
-        position: 'relative'
+        position: 'relative',
+        padding: 4
     },
     modalCartBadge: {
         position: 'absolute',
@@ -1759,85 +2386,112 @@ const s = StyleSheet.create({
         fontWeight: '900'
     },
     storeHeroBox: {
+        height: 160,
         position: 'relative',
-        backgroundColor: '#0A192F',
-        paddingBottom: 16
+        backgroundColor: BRAND.navy
     },
     storeHeroBanner: {
         width: '100%',
-        height: 120,
-        opacity: 0.6
+        height: '100%'
     },
     storeHeroOverlay: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(10, 25, 47, 0.45)'
+        backgroundColor: 'rgba(10, 25, 47, 0.65)'
     },
     storeHeroProfileRow: {
+        position: 'absolute',
+        bottom: 14,
+        left: 16,
+        right: 16,
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 16,
-        marginTop: -30,
-        gap: 12
+        gap: 14
     },
     storeHeroAvatarWrap: {
         position: 'relative'
     },
     storeHeroAvatar: {
-        width: 68,
-        height: 68,
-        borderRadius: 20,
-        backgroundColor: 'white',
+        width: 62,
+        height: 62,
+        borderRadius: 18,
         borderWidth: 3,
+        borderColor: '#FFFFFF',
+        backgroundColor: '#FFFFFF'
+    },
+    verifiedIconBadgeLarge: {
+        position: 'absolute',
+        bottom: -2,
+        right: -2,
+        backgroundColor: BRAND.sky,
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 2,
         borderColor: 'white'
     },
     storeHeroNameCol: {
-        flex: 1,
-        paddingTop: 24
+        flex: 1
     },
     storeHeroName: {
-        color: 'white',
         fontSize: 16,
+        fontWeight: '900',
+        color: '#FFFFFF'
+    },
+    officialPill: {
+        backgroundColor: BRAND.gold,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 5
+    },
+    officialPillTxt: {
+        color: '#FFFFFF',
+        fontSize: 8.5,
         fontWeight: '900'
     },
     storeHeroCategory: {
-        color: '#38BDF8',
         fontSize: 11,
+        color: BRAND.gold,
         fontWeight: '700',
-        marginTop: 1
+        marginTop: 2
     },
     storeHeroLocation: {
-        color: '#94A3B8',
         fontSize: 10,
-        fontWeight: '500',
+        color: '#94A3B8',
+        fontWeight: '600',
         marginTop: 2
     },
     storeStatsCard: {
-        backgroundColor: 'white',
-        marginHorizontal: 16,
-        marginTop: 12,
-        borderRadius: 16,
-        paddingVertical: 12,
-        paddingHorizontal: 16,
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-around',
+        backgroundColor: '#FFFFFF',
+        marginHorizontal: 16,
+        marginTop: -10,
+        borderRadius: 16,
+        paddingVertical: 12,
         borderWidth: 1,
-        borderColor: '#F1F5F9',
-        elevation: 2
+        borderColor: '#E2E8F0',
+        elevation: 3,
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 6
     },
     statBox: {
+        flex: 1,
         alignItems: 'center'
     },
     statVal: {
         fontSize: 15,
         fontWeight: '900',
-        color: '#0F172A'
+        color: BRAND.navy
     },
     statLbl: {
         fontSize: 10,
         color: '#64748B',
-        fontWeight: '600',
-        marginTop: 2
+        fontWeight: '700',
+        marginTop: 1
     },
     statDivider: {
         width: 1,
@@ -1848,21 +2502,23 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-        marginHorizontal: 16,
-        marginTop: 12
+        paddingHorizontal: 16,
+        marginTop: 14
     },
     storeDetailBtnFollow: {
-        flex: 1.4,
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 6,
-        backgroundColor: '#0284C7',
+        gap: 5,
+        backgroundColor: BRAND.navy,
         paddingVertical: 10,
         borderRadius: 12
     },
     storeDetailBtnFollowing: {
-        backgroundColor: '#E0F2FE'
+        backgroundColor: '#E0F2FE',
+        borderWidth: 1,
+        borderColor: BRAND.sky
     },
     storeDetailBtnFollowTxt: {
         color: 'white',
@@ -1870,10 +2526,10 @@ const s = StyleSheet.create({
         fontWeight: '900'
     },
     storeDetailBtnFollowingTxt: {
-        color: '#0284C7'
+        color: BRAND.sky
     },
     storeDetailBtnWhatsApp: {
-        flex: 1.4,
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
@@ -1891,34 +2547,75 @@ const s = StyleSheet.create({
         width: 42,
         height: 42,
         borderRadius: 12,
-        backgroundColor: 'white',
+        backgroundColor: '#FFFFFF',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
         alignItems: 'center',
-        justifyContent: 'center',
+        justifyContent: 'center'
+    },
+    policyCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: '#FFFFFF',
+        padding: 10,
+        borderRadius: 12,
         borderWidth: 1,
         borderColor: '#E2E8F0'
     },
+    policyIconBox: {
+        width: 28,
+        height: 28,
+        borderRadius: 8,
+        backgroundColor: '#F1F5F9',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    policyLbl: {
+        fontSize: 9.5,
+        color: '#64748B',
+        fontWeight: '800',
+        letterSpacing: 0.3
+    },
+    policyVal: {
+        fontSize: 11.5,
+        color: BRAND.navy,
+        fontWeight: '800',
+        marginTop: 1
+    },
+    socialChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#FDF2F8',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: '#FCE7F3'
+    },
     storeBioCard: {
-        backgroundColor: 'white',
+        backgroundColor: '#FFFFFF',
         marginHorizontal: 16,
         marginTop: 12,
         borderRadius: 14,
         padding: 12,
         borderWidth: 1,
-        borderColor: '#F1F5F9'
+        borderColor: '#E2E8F0'
     },
     storeBioTitle: {
         fontSize: 12,
-        fontWeight: '800',
-        color: '#0F172A'
+        fontWeight: '900',
+        color: BRAND.navy
     },
     storeBioTxt: {
-        fontSize: 11,
+        fontSize: 11.5,
         color: '#475569',
         lineHeight: 16
     },
     storeCatalogHeader: {
         paddingHorizontal: 16,
-        marginTop: 20,
+        marginTop: 18,
         marginBottom: 8
     },
     storeCatalogTitle: {
@@ -1929,53 +2626,54 @@ const s = StyleSheet.create({
     storeCatalogSub: {
         fontSize: 11,
         color: '#64748B',
+        fontWeight: '500',
         marginTop: 1
     },
     storeSearchBox: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'white',
+        backgroundColor: '#FFFFFF',
         marginHorizontal: 16,
         borderRadius: 12,
         paddingHorizontal: 12,
         height: 40,
         borderWidth: 1,
-        borderColor: '#E2E8F0',
-        marginTop: 8
+        borderColor: '#E2E8F0'
     },
     storeSearchInput: {
         flex: 1,
         fontSize: 12,
         color: '#0F172A',
+        fontWeight: '600',
         padding: 0
     },
-    storeCatScroll: {
+    storeCategoryScroll: {
         paddingHorizontal: 16,
         paddingVertical: 10,
-        gap: 6
+        gap: 8
     },
-    storeCatPill: {
-        backgroundColor: 'white',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
+    storeCatBtn: {
+        backgroundColor: '#FFFFFF',
         paddingHorizontal: 12,
-        paddingVertical: 5,
-        borderRadius: 10
+        paddingVertical: 6,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
     },
-    storeCatPillActive: {
-        backgroundColor: '#0284C7',
-        borderColor: '#0284C7'
+    storeCatBtnActive: {
+        backgroundColor: BRAND.navy,
+        borderColor: BRAND.navy
     },
-    storeCatPillTxt: {
+    storeCatTxt: {
         fontSize: 11,
-        color: '#64748B',
-        fontWeight: '700'
+        fontWeight: '700',
+        color: '#64748B'
     },
-    storeCatPillTxtActive: {
-        color: 'white',
+    storeCatTxtActive: {
+        color: '#FFFFFF',
         fontWeight: '900'
     },
-    storeProductsGrid: {
+    storeGridContainer: {
         flexDirection: 'row',
         flexWrap: 'wrap',
         paddingHorizontal: 12,
@@ -2015,7 +2713,8 @@ const s = StyleSheet.create({
     storeEmptyBox: {
         padding: 40,
         alignItems: 'center',
-        gap: 8
+        gap: 8,
+        width: '100%'
     },
     storeEmptyTitle: {
         fontSize: 15,
@@ -2027,21 +2726,6 @@ const s = StyleSheet.create({
         color: '#64748B',
         textAlign: 'center',
         lineHeight: 16
-    },
-    storeEmptyContactBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        backgroundColor: '#10B981',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 10,
-        marginTop: 8
-    },
-    storeEmptyContactBtnTxt: {
-        color: 'white',
-        fontSize: 11.5,
-        fontWeight: '900'
     },
     toastContainer: {
         position: 'absolute',
