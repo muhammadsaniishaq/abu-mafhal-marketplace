@@ -124,6 +124,10 @@ export const MainApp = ({ route, navigation, user, onLogout, cartLines, onUpdate
                         }}
                         onGoToCart={() => setActiveTab('cart')}
                         cartCount={cartLines.length}
+                        onProductClick={(product) => handleNavigate('ProductDetails', { product })}
+                        onAddToCart={onAddToCart}
+                        onGoToShop={(category) => handleNavigate('shop', { category })}
+                        onNavigate={handleNavigate}
                     />
                 )}
                 {activeTab === 'stores' && (
