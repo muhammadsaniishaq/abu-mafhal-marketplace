@@ -8,6 +8,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
+import { StoreService } from '../services/storeService';
 import {
     FOLLOWED_STORES_KEY,
     getFollowedStoreMap,
@@ -109,18 +110,8 @@ export const StoresPage = ({
     const fetchStoresAndProducts = async (isSilent = false) => {
         if (!isSilent) setLoading(true);
         try {
-            const [profilesRes, productsRes, categoriesRes] = await Promise.allSettled([
-                supabase
-                    .from('profiles')
-                    .select('id, full_name, username, business_name, avatar_url, role, phone, created_at')
-                    .or('role.eq.vendor,role.eq.seller,business_name.not.is.null')
-                    .limit(50),
-                supabase
-                    .from('products')
-                    .select('id, name, description, price, compare_at_price, image_url, images, category, rating, reviews, stock, total_sales, is_active, status, vendor_id, created_at')
-                    .eq('status', 'approved')
-                    .order('created_at', { ascending: false })
-                    .limit(100),
+            const [realStores, categoriesRes] = await Promise.allSettled([
+                StoreService.fetchStores(),
                 supabase
                     .from('categories')
                     .select('id, name, slug, icon, is_active')
@@ -128,57 +119,19 @@ export const StoresPage = ({
                     .order('display_order', { ascending: true })
             ]);
 
-            const realProducts = (productsRes.status === 'fulfilled' && productsRes.value?.data) ? productsRes.value.data : [];
+            const storesList = (realStores.status === 'fulfilled' && Array.isArray(realStores.value)) ? realStores.value : [];
             const realCategories = (categoriesRes.status === 'fulfilled' && categoriesRes.value?.data) ? categoriesRes.value.data : [];
             setCategories(realCategories);
-            setPopularProducts(realProducts);
+            setStores(storesList);
 
-            // Official Flagship Store (Always Verified, Active, and Houses Flagship Goods)
-            const officialStoreProducts = realProducts.filter(p => !p.vendor_id || p.vendor_id === 'official-abumafhal');
-            const officialStore = {
-                id: 'official-abumafhal',
-                name: 'Abu Mafhal Official Store',
-                category: 'Official Mall & Flagship Store',
-                rating: 5.0,
-                reviews: '3.8K',
-                baseFollowers: 1250,
-                products: officialStoreProducts.length > 0 ? officialStoreProducts : realProducts,
-                productsCount: officialStoreProducts.length > 0 ? officialStoreProducts.length : realProducts.length,
-                logo: null,
-                banner: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=900&auto=format&fit=crop',
-                isVerified: true,
-                isOfficial: true,
-                phone: '2349021486162',
-                address: 'Main Commercial Plaza, Gashua, Yobe State, Nigeria',
-                bio: 'The official verified flagship mall of Abu Mafhal Marketplace. Genuine brand warranty, authentic products, and 100% buyer protection across Nigeria.',
-                memberSince: '2023'
-            };
-
-            const vendorProfiles = (profilesRes.status === 'fulfilled' && profilesRes.value?.data) ? profilesRes.value.data : [];
-            const mappedVendors = vendorProfiles.map(vp => {
-                const storeProds = realProducts.filter(p => p.vendor_id === vp.id);
-                const year = vp.created_at ? new Date(vp.created_at).getFullYear() : '2024';
-                return {
-                    id: vp.id,
-                    name: vp.business_name || vp.full_name || vp.username || 'Verified Merchant',
-                    category: vp.role === 'vendor' ? 'Verified Seller' : 'Registered Merchant',
-                    rating: 4.9,
-                    reviews: '120+',
-                    baseFollowers: 140,
-                    products: storeProds,
-                    productsCount: storeProds.length,
-                    logo: vp.avatar_url || null,
-                    banner: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?q=80&w=900&auto=format&fit=crop',
-                    isVerified: true,
-                    isOfficial: false,
-                    phone: vp.phone || '2349021486162',
-                    address: 'Verified Merchant Center, Nigeria',
-                    bio: `Authentic merchant verified on Abu Mafhal Marketplace since ${year}. Providing top quality goods with trusted direct delivery.`,
-                    memberSince: year
-                };
+            // Collect all real products from stores
+            const allProds = [];
+            storesList.forEach(st => {
+                if (Array.isArray(st.products)) {
+                    allProds.push(...st.products);
+                }
             });
-
-            setStores([officialStore, ...mappedVendors]);
+            setPopularProducts(allProds);
         } catch (err) {
             console.log('StoresPage Fetch Error:', err);
         } finally {
@@ -225,14 +178,18 @@ export const StoresPage = ({
 
     // Filter stores & products by search query
     const filteredStores = stores.filter(st => {
-        const matchSearch = st.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            st.category.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchSearch = (st.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (st.category || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (st.about || st.bio || '').toLowerCase().includes(searchQuery.toLowerCase());
         if (!matchSearch) return false;
 
+        if (activeSubTab === 'recommended') return !!st.is_recommended;
         if (activeSubTab === 'top_rated') return Number(st.rating) >= 4.9;
-        if (activeSubTab === 'official') return st.isOfficial;
+        if (activeSubTab === 'official') return st.is_official || st.isOfficial;
         return true;
     });
+
+    const recommendedStores = stores.filter(st => !!st.is_recommended);
 
     const filteredPopular = popularProducts.filter(p => {
         if (!searchQuery) return true;
@@ -376,8 +333,9 @@ export const StoresPage = ({
                 >
                     {[
                         { key: 'all_stores', label: 'All Stores', icon: 'storefront-outline' },
+                        { key: 'recommended', label: '⭐ Recommended', icon: 'star' },
                         { key: 'official', label: 'Official Mall', icon: 'ribbon-outline' },
-                        { key: 'top_rated', label: 'Top Rated', icon: 'star-outline' },
+                        { key: 'top_rated', label: 'Top Rated', icon: 'trending-up-outline' },
                         { key: 'popular_products', label: 'Popular Products', icon: 'flame-outline' },
                         { key: 'categories', label: 'Categories', icon: 'grid-outline' },
                     ].map(tab => {
@@ -412,13 +370,114 @@ export const StoresPage = ({
                     </View>
                 )}
 
+                {/* ════ RECOMMENDED VENDORS SHOWCASE CAROUSEL ════ */}
+                {(!loading && recommendedStores.length > 0 && activeSubTab === 'all_stores' && !searchQuery) && (
+                    <View style={{ marginTop: 14 }}>
+                        <View style={s.sectionHead}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Ionicons name="star" size={15} color="#D9A73A" />
+                                <Text style={s.sectionTitle}>Recommended Vendors</Text>
+                            </View>
+                            <TouchableOpacity
+                                onPress={() => setActiveSubTab('recommended')}
+                                style={s.seeAllRow}
+                            >
+                                <Text style={s.seeAllTxt}>View All ({recommendedStores.length})</Text>
+                                <Ionicons name="chevron-forward" size={13} color="#0284C7" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={{ paddingHorizontal: 16, gap: 12, paddingBottom: 6 }}
+                        >
+                            {recommendedStores.map(recStore => {
+                                const isFollowed = !!followedStores[recStore.id];
+                                return (
+                                    <TouchableOpacity
+                                        key={'rec-' + recStore.id}
+                                        activeOpacity={0.9}
+                                        onPress={() => setSelectedStore(recStore)}
+                                        style={{
+                                            width: width * 0.65,
+                                            backgroundColor: '#FFFFFF',
+                                            borderRadius: 18,
+                                            overflow: 'hidden',
+                                            borderWidth: 1,
+                                            borderColor: '#D9A73A50',
+                                            elevation: 2,
+                                            shadowColor: '#0E1A2E',
+                                            shadowOpacity: 0.06,
+                                            shadowRadius: 6,
+                                            shadowOffset: { width: 0, height: 2 }
+                                        }}
+                                    >
+                                        <View style={{ height: 85, backgroundColor: '#CBD5E1', position: 'relative' }}>
+                                            <Image
+                                                source={{ uri: recStore.cover_image || recStore.banner || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=600&auto=format&fit=crop' }}
+                                                style={{ width: '100%', height: '100%', resizeMode: 'cover' }}
+                                            />
+                                            <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(14,26,46,0.2)' }} />
+                                            <View style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#D9A73A', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                                                <Ionicons name="star" size={9} color="#FFFFFF" />
+                                                <Text style={{ fontSize: 8.5, fontWeight: '800', color: '#FFFFFF' }}>RECOMMENDED</Text>
+                                            </View>
+                                        </View>
+
+                                        <View style={{ padding: 12, paddingTop: 0 }}>
+                                            <View style={{ marginTop: -22, alignSelf: 'flex-start' }}>
+                                                {recStore.logo ? (
+                                                    <Image source={{ uri: recStore.logo }} style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: '#FFFFFF', backgroundColor: '#FFFFFF' }} />
+                                                ) : recStore.is_official || recStore.isOfficial ? (
+                                                    <Image source={AM_LOGO} style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: '#FFFFFF', backgroundColor: '#FFFFFF' }} resizeMode="contain" />
+                                                ) : (
+                                                    <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#F1F5F9', borderWidth: 2, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
+                                                        <Ionicons name="storefront" size={20} color="#0E1A2E" />
+                                                    </View>
+                                                )}
+                                            </View>
+
+                                            <Text style={{ fontSize: 13, fontWeight: '800', color: '#0E1A2E', marginTop: 4 }} numberOfLines={1}>
+                                                {recStore.name}
+                                            </Text>
+                                            <Text style={{ fontSize: 10.5, color: '#D9A73A', fontWeight: '700', marginTop: 1 }} numberOfLines={1}>
+                                                {recStore.category}
+                                            </Text>
+
+                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                                                <Text style={{ fontSize: 10.5, color: '#64748B', fontWeight: '600' }}>
+                                                    {recStore.productsCount} products
+                                                </Text>
+                                                <TouchableOpacity
+                                                    onPress={() => toggleFollow(recStore.id, recStore.name)}
+                                                    style={{
+                                                        backgroundColor: isFollowed ? '#F1F5F9' : '#0E1A2E',
+                                                        paddingHorizontal: 8,
+                                                        paddingVertical: 4,
+                                                        borderRadius: 8
+                                                    }}
+                                                >
+                                                    <Text style={{ fontSize: 10, fontWeight: '800', color: isFollowed ? '#0284C7' : '#FFFFFF' }}>
+                                                        {isFollowed ? 'Following' : '+ Follow'}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                        </View>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </ScrollView>
+                    </View>
+                )}
+
                 {/* ════ STORES SECTION ════ */}
                 {(!loading && activeSubTab !== 'popular_products') && (
                     <View style={{ marginTop: 8 }}>
                         <View style={s.sectionHead}>
                             <View>
                                 <Text style={s.sectionTitle}>
-                                    {activeSubTab === 'top_rated' ? 'Highest Rated Stores' : activeSubTab === 'official' ? 'Official Flagship Mall' : 'Verified Stores & Merchants'}
+                                    {activeSubTab === 'recommended' ? '⭐ Recommended Merchants' : activeSubTab === 'top_rated' ? 'Highest Rated Stores' : activeSubTab === 'official' ? 'Official Flagship Mall' : 'Verified Stores & Merchants'}
                                 </Text>
                                 <Text style={s.sectionSub}>
                                     {filteredStores.length} registered and authentic merchant{filteredStores.length !== 1 ? 's' : ''}
@@ -466,13 +525,18 @@ export const StoresPage = ({
                                             </View>
 
                                             <View style={s.storeDetails}>
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
                                                     <Text numberOfLines={1} style={s.storeName}>
                                                         {store.name}
                                                     </Text>
-                                                    {store.isOfficial && (
+                                                    {(store.is_official || store.isOfficial) && (
                                                         <View style={s.officialPill}>
                                                             <Text style={s.officialPillTxt}>OFFICIAL</Text>
+                                                        </View>
+                                                    )}
+                                                    {store.is_recommended && (
+                                                        <View style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#D9A73A' }}>
+                                                            <Text style={{ fontSize: 9, fontWeight: '800', color: '#D9A73A' }}>⭐ RECOMMENDED</Text>
                                                         </View>
                                                     )}
                                                 </View>
@@ -723,7 +787,7 @@ export const StoresPage = ({
                             {/* Store Hero Profile */}
                             <View style={s.storeHeroBox}>
                                 <Image
-                                    source={{ uri: selectedStore.banner }}
+                                    source={{ uri: selectedStore.cover_image || selectedStore.banner || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=900&auto=format&fit=crop' }}
                                     style={s.storeHeroBanner}
                                     resizeMode="cover"
                                 />
@@ -748,11 +812,17 @@ export const StoresPage = ({
                                     </View>
 
                                     <View style={s.storeHeroNameCol}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                                             <Text style={s.storeHeroName} numberOfLines={1}>{selectedStore.name}</Text>
-                                            {selectedStore.isOfficial && (
+                                            {(selectedStore.is_official || selectedStore.isOfficial) && (
                                                 <View style={s.officialPill}>
                                                     <Text style={s.officialPillTxt}>OFFICIAL</Text>
+                                                </View>
+                                            )}
+                                            {selectedStore.is_recommended && (
+                                                <View style={{ backgroundColor: '#D9A73A', paddingHorizontal: 7, paddingVertical: 2.5, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                                                    <Ionicons name="star" size={10} color="#FFFFFF" />
+                                                    <Text style={{ fontSize: 9, fontWeight: '800', color: '#FFFFFF' }}>RECOMMENDED</Text>
                                                 </View>
                                             )}
                                         </View>
@@ -836,7 +906,7 @@ export const StoresPage = ({
                                     <Ionicons name="information-circle-outline" size={16} color="#0284C7" />
                                     <Text style={s.storeBioTitle}>About This Store</Text>
                                 </View>
-                                <Text style={s.storeBioTxt}>{selectedStore.bio}</Text>
+                                <Text style={s.storeBioTxt}>{selectedStore.about || selectedStore.bio}</Text>
                             </View>
 
                             {/* Store Catalog Section */}

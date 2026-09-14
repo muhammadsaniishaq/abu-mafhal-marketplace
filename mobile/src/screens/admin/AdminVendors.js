@@ -4,6 +4,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { NotificationService } from '../../lib/notifications';
 import { WhatsAppActionModal } from '../../components/WhatsAppActionModal';
+import { StoreService } from '../../services/storeService';
+import * as ImagePicker from 'expo-image-picker';
+import { UploadService } from '../../services/uploadService';
 
 const NAVY = '#0E1A2E';
 const GOLD = '#D9A73A';
@@ -14,7 +17,7 @@ export const AdminVendors = () => {
     const [applications, setApplications] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'pending', 'approved', 'rejected'
+    const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'pending', 'approved', 'rejected', 'recommended'
     const [searchQuery, setSearchQuery] = useState('');
 
     const [whatsappVisible, setWhatsappVisible] = useState(false);
@@ -26,6 +29,20 @@ export const AdminVendors = () => {
     const [rejectionReason, setRejectionReason] = useState('');
     const [appToReject, setAppToReject] = useState(null);
 
+    // Store Profile Edit Modal State
+    const [editModalVisible, setEditModalVisible] = useState(false);
+    const [editingStore, setEditingStore] = useState(null);
+    const [editStoreName, setEditStoreName] = useState('');
+    const [editAbout, setEditAbout] = useState('');
+    const [editCoverImage, setEditCoverImage] = useState('');
+    const [editLogoUrl, setEditLogoUrl] = useState('');
+    const [editPhone, setEditPhone] = useState('');
+    const [editCategory, setEditCategory] = useState('');
+    const [editAddress, setEditAddress] = useState('');
+    const [editIsRecommended, setEditIsRecommended] = useState(false);
+    const [savingStore, setSavingStore] = useState(false);
+    const [uploadingImage, setUploadingImage] = useState(false);
+
     useEffect(() => {
         fetchApplications();
     }, []);
@@ -33,30 +50,54 @@ export const AdminVendors = () => {
     const fetchApplications = async () => {
         try {
             setLoading(true);
-            const { data, error } = await supabase
-                .from('vendor_applications')
-                .select('*, profiles(email, full_name, phone, avatar_url)')
-                .order('created_at', { ascending: false })
-                .limit(100);
+            const localCache = await StoreService.getLocalMetadataCache();
 
-            if (!error && data && data.length > 0) {
-                setApplications(data);
-            } else {
-                // Fallback to real vendors in profiles
-                const { data: vendorProfiles, error: profError } = await supabase
-                    .from('profiles')
-                    .select('*')
-                    .eq('role', 'vendor')
-                    .order('created_at', { ascending: false });
+            // 1. Fetch real merchant and admin profiles
+            const { data: allProfiles, error: profError } = await supabase
+                .from('profiles')
+                .select('*')
+                .order('created_at', { ascending: false });
 
-                if (!profError && vendorProfiles) {
-                    const mapped = vendorProfiles.map(p => ({
+            // 2. Fetch applications if table exists
+            let appData = [];
+            try {
+                const { data, error } = await supabase
+                    .from('vendor_applications')
+                    .select('*, profiles(email, full_name, phone, avatar_url)')
+                    .order('created_at', { ascending: false })
+                    .limit(100);
+                if (!error && Array.isArray(data)) appData = data;
+            } catch (_) {}
+
+            const storesList = [];
+
+            // Add real merchant profiles
+            if (allProfiles && Array.isArray(allProfiles)) {
+                allProfiles.forEach(p => {
+                    const isStore = p.role === 'admin' || p.role === 'vendor' || (typeof p.business_name === 'string' && p.business_name.trim().length > 0);
+                    if (!isStore) return;
+
+                    const local = localCache[p.id] || {};
+                    let addrMeta = null;
+                    if (p.address && p.address.startsWith('{')) {
+                        try { addrMeta = JSON.parse(p.address); } catch (_) {}
+                    }
+
+                    const isOfficial = p.role === 'admin';
+                    const isRec = p.is_recommended !== undefined ? !!p.is_recommended : (addrMeta?.is_recommended || local.is_recommended || isOfficial);
+
+                    storesList.push({
                         id: p.id,
                         user_id: p.id,
-                        business_name: p.business_name || p.full_name || 'Vendor Store',
-                        business_category: 'General Merchant',
-                        business_address: p.address || p.state || 'Nigeria',
-                        phone: p.phone || p.phone_number,
+                        business_name: p.business_name || (isOfficial ? 'Abu Mafhal Official Store' : (p.full_name || 'Merchant Store')),
+                        business_category: p.business_category || addrMeta?.category || (isOfficial ? 'Official Mall & Flagship Store' : 'General Merchant'),
+                        business_address: addrMeta?.address || p.address || p.state || 'Nigeria',
+                        phone: p.phone || p.phone_number || '2349021486162',
+                        about: p.about || addrMeta?.about || local.about || '',
+                        cover_image: p.cover_image || addrMeta?.cover_image || local.cover_image || '',
+                        logo_url: p.avatar_url || local.logo || null,
+                        is_recommended: !!isRec,
+                        is_official: isOfficial,
                         status: p.suspended ? 'rejected' : 'approved',
                         created_at: p.created_at,
                         profiles: {
@@ -65,18 +106,120 @@ export const AdminVendors = () => {
                             phone: p.phone || p.phone_number,
                             avatar_url: p.avatar_url
                         }
-                    }));
-                    setApplications(mapped);
-                } else {
-                    setApplications([]);
-                }
+                    });
+                });
             }
+
+            // Also merge any pending applications that aren't yet active stores
+            appData.forEach(app => {
+                const alreadyAdded = storesList.some(s => s.user_id === app.user_id);
+                if (!alreadyAdded) {
+                    storesList.push({
+                        ...app,
+                        user_id: app.user_id || app.id,
+                        is_recommended: false,
+                        is_official: false
+                    });
+                }
+            });
+
+            setApplications(storesList);
         } catch (err) {
             console.error('AdminVendors fetch error:', err);
             setApplications([]);
         } finally {
             setLoading(false);
             setRefreshing(false);
+        }
+    };
+
+    const handleToggleRecommended = async (item) => {
+        try {
+            const nextState = !item.is_recommended;
+            await StoreService.toggleRecommendedVendor(item.user_id || item.id, nextState);
+            setApplications(prev => prev.map(a => (a.id === item.id ? { ...a, is_recommended: nextState } : a)));
+            if (selectedApp?.id === item.id) {
+                setSelectedApp(prev => ({ ...prev, is_recommended: nextState }));
+            }
+            Alert.alert('Recommended Vendors', nextState ? `Marked "${item.business_name}" as Recommended!` : `Removed "${item.business_name}" from Recommended.`);
+        } catch (err) {
+            Alert.alert('Error', 'Failed to toggle recommendation: ' + err.message);
+        }
+    };
+
+    const openEditStoreModal = (app) => {
+        setEditingStore(app);
+        setEditStoreName(app.business_name || '');
+        setEditAbout(app.about || '');
+        setEditCoverImage(app.cover_image || '');
+        setEditLogoUrl(app.logo_url || app.profiles?.avatar_url || '');
+        setEditPhone(app.phone || app.profiles?.phone || '');
+        setEditCategory(app.business_category || 'General Merchant');
+        setEditAddress(app.business_address || '');
+        setEditIsRecommended(!!app.is_recommended);
+        setEditModalVisible(true);
+    };
+
+    const handlePickImageForStore = async (type) => {
+        try {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Permission Denied', 'Please grant photo gallery permission.');
+                return;
+            }
+            const res = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: type === 'banner' ? [16, 7] : [1, 1],
+                quality: 0.8
+            });
+            if (!res.canceled && res.assets && res.assets[0]) {
+                const asset = res.assets[0];
+                setUploadingImage(true);
+                try {
+                    const uploaded = await UploadService.uploadFile(asset, 'vendor-docs', type === 'banner' ? 'covers' : 'logos');
+                    if (type === 'banner') setEditCoverImage(uploaded);
+                    else setEditLogoUrl(uploaded);
+                } catch (_) {
+                    if (type === 'banner') setEditCoverImage(asset.uri);
+                    else setEditLogoUrl(asset.uri);
+                }
+            }
+        } catch (err) {
+            Alert.alert('Error', err.message);
+        } finally {
+            setUploadingImage(false);
+        }
+    };
+
+    const handleSaveStoreProfile = async () => {
+        if (!editingStore) return;
+        if (!editStoreName.trim()) {
+            Alert.alert('Validation', 'Please provide a store name.');
+            return;
+        }
+
+        try {
+            setSavingStore(true);
+            await StoreService.updateStoreProfile({
+                userId: editingStore.user_id || editingStore.id,
+                storeName: editStoreName.trim(),
+                about: editAbout.trim(),
+                coverImage: editCoverImage.trim(),
+                logoUrl: editLogoUrl.trim(),
+                phone: editPhone.trim(),
+                category: editCategory.trim(),
+                address: editAddress.trim(),
+                isRecommended: editIsRecommended
+            });
+
+            Alert.alert('Success', 'Store profile and branding updated successfully!');
+            setEditModalVisible(false);
+            fetchApplications();
+        } catch (err) {
+            Alert.alert('Error', err.message || 'Failed to update store.');
+        } finally {
+            setSavingStore(false);
         }
     };
 
@@ -208,7 +351,9 @@ export const AdminVendors = () => {
     };
 
     const filteredApplications = applications.filter(app => {
-        const matchesStatus = statusFilter === 'all' || app.status === statusFilter;
+        const matchesStatus = statusFilter === 'all' 
+            ? true 
+            : (statusFilter === 'recommended' ? !!app.is_recommended : app.status === statusFilter);
         const name = (app.business_name || app.profiles?.full_name || '').toLowerCase();
         const email = (app.profiles?.email || '').toLowerCase();
         const phone = (app.phone || app.profiles?.phone || '').toLowerCase();
@@ -248,46 +393,102 @@ export const AdminVendors = () => {
 
     const renderDetail = () => (
         <ScrollView style={{ flex: 1, backgroundColor: '#F8FAFC' }} contentContainerStyle={{ padding: 16, paddingBottom: 60 }}>
-            <TouchableOpacity 
-                onPress={() => setView('list')} 
-                style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 8, alignSelf: 'flex-start', backgroundColor: '#FFFFFF', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' }}
-            >
-                <Ionicons name="arrow-back" size={18} color={NAVY} />
-                <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY }}>Back to Vendors List</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <TouchableOpacity 
+                    onPress={() => setView('list')} 
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFFFF', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' }}
+                >
+                    <Ionicons name="arrow-back" size={18} color={NAVY} />
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY }}>Back to List</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    onPress={() => openEditStoreModal(selectedApp)}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: NAVY, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: GOLD }}
+                >
+                    <Ionicons name="create-outline" size={16} color={GOLD} />
+                    <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontWeight: '800' }}>Edit Store</Text>
+                </TouchableOpacity>
+            </View>
 
             {/* Business Profile Card */}
             <View style={{
                 backgroundColor: '#FFFFFF',
                 borderRadius: 22,
-                padding: 20,
-                alignItems: 'center',
+                overflow: 'hidden',
                 marginBottom: 20,
                 borderWidth: 1,
-                borderColor: 'rgba(217, 167, 58, 0.35)',
-                shadowColor: NAVY,
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.05,
-                shadowRadius: 6,
+                borderColor: selectedApp.is_recommended ? GOLD : '#E2E8F0',
                 elevation: 2
             }}>
-                <Image
-                    source={{ uri: selectedApp.logo_url || selectedApp.profiles?.avatar_url || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=150' }}
-                    style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#F8FAFC', borderWidth: 2, borderColor: GOLD }}
-                />
-                <Text style={{ fontSize: 20, fontWeight: '900', color: NAVY, marginTop: 10 }}>{selectedApp.business_name}</Text>
-                <Text style={{ color: '#64748B', fontSize: 12, marginTop: 2 }}>{selectedApp.business_category}</Text>
-                <View style={{ marginTop: 10 }}>
-                    <StatusBadge status={selectedApp.status} />
+                {/* Cover Banner */}
+                <View style={{ height: 110, backgroundColor: '#CBD5E1', position: 'relative' }}>
+                    <Image
+                        source={{ uri: selectedApp.cover_image || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=900&auto=format&fit=crop' }}
+                        style={{ width: '100%', height: '100%', resizeMode: 'cover' }}
+                    />
+                    <View style={{ position: 'absolute', top: 10, right: 10, flexDirection: 'row', gap: 6 }}>
+                        {selectedApp.is_official && (
+                            <View style={{ backgroundColor: NAVY, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: GOLD }}>
+                                <Text style={{ color: GOLD, fontSize: 9.5, fontWeight: '900' }}>OFFICIAL MALL</Text>
+                            </View>
+                        )}
+                        {selectedApp.is_recommended && (
+                            <View style={{ backgroundColor: GOLD, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                                <Text style={{ color: '#FFFFFF', fontSize: 9.5, fontWeight: '900' }}>⭐ RECOMMENDED</Text>
+                            </View>
+                        )}
+                    </View>
+                </View>
+
+                {/* Profile Header */}
+                <View style={{ padding: 16, alignItems: 'center' }}>
+                    <View style={{ marginTop: -40, marginBottom: 6 }}>
+                        <Image
+                            source={{ uri: selectedApp.logo_url || selectedApp.profiles?.avatar_url || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=150' }}
+                            style={{ width: 70, height: 70, borderRadius: 35, backgroundColor: '#FFFFFF', borderWidth: 3, borderColor: '#FFFFFF' }}
+                        />
+                    </View>
+                    <Text style={{ fontSize: 18, fontWeight: '900', color: NAVY }}>{selectedApp.business_name}</Text>
+                    <Text style={{ color: GOLD, fontSize: 12, fontWeight: '700', marginTop: 2 }}>{selectedApp.business_category}</Text>
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, alignItems: 'center' }}>
+                        <StatusBadge status={selectedApp.status} />
+                        <TouchableOpacity
+                            onPress={() => handleToggleRecommended(selectedApp)}
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 4,
+                                paddingHorizontal: 10,
+                                paddingVertical: 4,
+                                borderRadius: 10,
+                                backgroundColor: selectedApp.is_recommended ? '#FEF3C7' : '#F1F5F9',
+                                borderWidth: 1,
+                                borderColor: selectedApp.is_recommended ? GOLD : '#CBD5E1'
+                            }}
+                        >
+                            <Ionicons name={selectedApp.is_recommended ? "star" : "star-outline"} size={12} color={selectedApp.is_recommended ? GOLD : "#64748B"} />
+                            <Text style={{ fontSize: 10, fontWeight: '800', color: selectedApp.is_recommended ? GOLD : "#64748B" }}>
+                                {selectedApp.is_recommended ? "RECOMMENDED" : "RECOMMEND"}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </View>
 
-            {/* Detail Sections */}
+            {/* About Store Section */}
+            <Section title="About This Store (Customer Bio)">
+                <Text style={{ fontSize: 13, color: '#334155', lineHeight: 19 }}>
+                    {selectedApp.about || 'No custom store description provided yet. Click "Edit Store" to write one.'}
+                </Text>
+            </Section>
+
+            {/* Owner Information */}
             <Section title="Owner Information">
                 <InfoRow label="Full Name" value={selectedApp.profiles?.full_name} />
                 <InfoRow label="Email" value={selectedApp.profiles?.email} />
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 }}>
-                    <Text style={{ color: '#64748B', fontSize: 12.5, fontWeight: '600' }}>Phone Number</Text>
+                    <Text style={{ color: '#64748B', fontSize: 12.5, fontWeight: '600' }}>Phone / WhatsApp</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         <Text style={{ fontWeight: '700', color: NAVY, fontSize: 13 }}>
                             {selectedApp.phone || selectedApp.profiles?.phone || 'None'}
@@ -309,31 +510,7 @@ export const AdminVendors = () => {
                         ) : null}
                     </View>
                 </View>
-                <InfoRow label="NIN" value={selectedApp.nin} />
-                <InfoRow label="BVN" value={selectedApp.bvn} />
-            </Section>
-
-            <Section title="Business Details">
-                <Text style={{ fontSize: 13, color: '#475569', lineHeight: 18, marginBottom: 12 }}>
-                    {selectedApp.business_description || 'No business description provided.'}
-                </Text>
-                <InfoRow label="Business Address" value={selectedApp.business_address} />
-                <InfoRow label="CAC Number" value={selectedApp.cac_number} />
-                <InfoRow label="TIN Number" value={selectedApp.tin_number} />
-            </Section>
-
-            <Section title="Bank Details">
-                <InfoRow label="Bank Name" value={selectedApp.bank_name} />
-                <InfoRow label="Account Number" value={selectedApp.account_number} />
-                <InfoRow label="Account Name" value={selectedApp.account_name} />
-            </Section>
-
-            <Section title="Verification Documents">
-                <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
-                    {selectedApp.nin_url && <DocCard label="NIN Document" url={selectedApp.nin_url} icon="card-outline" />}
-                    {selectedApp.cac_url && <DocCard label="CAC Certificate" url={selectedApp.cac_url} icon="business-outline" />}
-                    {selectedApp.video_url && <DocCard label="Store Video" url={selectedApp.video_url} icon="videocam-outline" color={GOLD} />}
-                </View>
+                <InfoRow label="Store Location" value={selectedApp.business_address} />
             </Section>
 
             {/* Action Buttons */}
@@ -357,17 +534,14 @@ export const AdminVendors = () => {
     );
 
     const renderItem = ({ item }) => (
-        <TouchableOpacity
-            onPress={() => { setSelectedApp(item); setView('detail'); }}
+        <View
             style={{
-                flexDirection: 'row',
                 padding: 14,
                 backgroundColor: '#FFFFFF',
-                marginBottom: 10,
+                marginBottom: 12,
                 borderRadius: 18,
                 borderWidth: 1,
-                borderColor: '#E2E8F0',
-                alignItems: 'center',
+                borderColor: item.is_recommended ? GOLD : '#E2E8F0',
                 shadowColor: NAVY,
                 shadowOffset: { width: 0, height: 2 },
                 shadowOpacity: 0.04,
@@ -375,21 +549,78 @@ export const AdminVendors = () => {
                 elevation: 1
             }}
         >
-            <Image
-                source={{ uri: item.logo_url || item.profiles?.avatar_url || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=150' }}
-                style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#F8FAFC', borderWidth: 1.5, borderColor: GOLD }}
-            />
-            <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={{ fontWeight: '800', color: NAVY, fontSize: 14 }} numberOfLines={1}>
-                    {item.business_name}
-                </Text>
-                <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>{item.business_category}</Text>
-                <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>
-                    Applied on: {new Date(item.created_at).toLocaleDateString()}
-                </Text>
+            <TouchableOpacity
+                onPress={() => { setSelectedApp(item); setView('detail'); }}
+                style={{ flexDirection: 'row', alignItems: 'center' }}
+            >
+                <Image
+                    source={{ uri: item.logo_url || item.profiles?.avatar_url || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=150' }}
+                    style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: '#F8FAFC', borderWidth: 1.5, borderColor: item.is_recommended ? GOLD : '#CBD5E1' }}
+                />
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={{ fontWeight: '800', color: NAVY, fontSize: 14 }} numberOfLines={1}>
+                            {item.business_name}
+                        </Text>
+                        {item.is_recommended && (
+                            <View style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: GOLD }}>
+                                <Text style={{ fontSize: 9, fontWeight: '800', color: GOLD }}>⭐ RECOMMENDED</Text>
+                            </View>
+                        )}
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>{item.business_category}</Text>
+                    <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>
+                        Phone: {item.phone || 'None'} • {item.is_official ? 'Official Store' : 'Vendor'}
+                    </Text>
+                </View>
+                <StatusBadge status={item.status} />
+            </TouchableOpacity>
+
+            {/* Quick Action Dock */}
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                <TouchableOpacity
+                    onPress={() => handleToggleRecommended(item)}
+                    style={{
+                        flex: 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 4,
+                        paddingVertical: 7,
+                        borderRadius: 10,
+                        backgroundColor: item.is_recommended ? '#FEF3C7' : '#F8FAFC',
+                        borderWidth: 1,
+                        borderColor: item.is_recommended ? GOLD : '#E2E8F0'
+                    }}
+                >
+                    <Ionicons name={item.is_recommended ? "star" : "star-outline"} size={13} color={item.is_recommended ? GOLD : "#64748B"} />
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: item.is_recommended ? GOLD : '#475569' }}>
+                        {item.is_recommended ? "Recommended" : "Recommend"}
+                    </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    onPress={() => openEditStoreModal(item)}
+                    style={{
+                        flex: 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 4,
+                        paddingVertical: 7,
+                        borderRadius: 10,
+                        backgroundColor: NAVY,
+                        borderWidth: 1,
+                        borderColor: GOLD + '60'
+                    }}
+                >
+                    <Ionicons name="create-outline" size={13} color={GOLD} />
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>
+                        Edit Profile
+                    </Text>
+                </TouchableOpacity>
             </View>
-            <StatusBadge status={item.status} />
-        </TouchableOpacity>
+        </View>
     );
 
     return (
@@ -401,10 +632,10 @@ export const AdminVendors = () => {
                     {/* Header & Filter Area */}
                     <View style={{ padding: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderColor: '#E2E8F0' }}>
                         <Text style={{ fontSize: 18, fontWeight: '900', color: NAVY }}>
-                            Vendors Console
+                            Vendors & Stores Console
                         </Text>
                         <Text style={{ color: '#64748B', fontSize: 11.5, marginTop: 2 }}>
-                            Review and manage merchant applications and live stores
+                            Manage real merchant stores, branding, and recommended vendors
                         </Text>
 
                         {/* Search Bar */}
@@ -421,7 +652,7 @@ export const AdminVendors = () => {
                         }}>
                             <Ionicons name="search" size={16} color="#94A3B8" />
                             <TextInput
-                                placeholder="Search vendor by name, email or phone..."
+                                placeholder="Search store by name, category, phone..."
                                 value={searchQuery}
                                 onChangeText={setSearchQuery}
                                 style={{ flex: 1, marginLeft: 8, fontSize: 12.5, color: NAVY }}
@@ -434,9 +665,9 @@ export const AdminVendors = () => {
                             )}
                         </View>
 
-                        {/* Status Pills */}
-                        <View style={{ flexDirection: 'row', gap: 6, marginTop: 12 }}>
-                            {['all', 'pending', 'approved', 'rejected'].map(st => {
+                        {/* Status & Recommendation Filter Pills */}
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginTop: 12 }}>
+                            {['all', 'recommended', 'approved', 'pending', 'rejected'].map(st => {
                                 const active = statusFilter === st;
                                 return (
                                     <TouchableOpacity
@@ -457,18 +688,18 @@ export const AdminVendors = () => {
                                             color: active ? GOLD : '#64748B',
                                             textTransform: 'capitalize'
                                         }}>
-                                            {st === 'all' ? 'All' : st}
+                                            {st === 'recommended' ? '⭐ Recommended' : (st === 'all' ? 'All Stores' : st)}
                                         </Text>
                                     </TouchableOpacity>
                                 );
                             })}
-                        </View>
+                        </ScrollView>
                     </View>
 
                     {loading && !refreshing ? (
                         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
                             <ActivityIndicator size="large" color={GOLD} />
-                            <Text style={{ marginTop: 12, fontSize: 12, fontWeight: '700', color: '#64748B' }}>Loading vendor applications...</Text>
+                            <Text style={{ marginTop: 12, fontSize: 12, fontWeight: '700', color: '#64748B' }}>Loading real vendor stores...</Text>
                         </View>
                     ) : (
                         <FlatList
@@ -483,7 +714,7 @@ export const AdminVendors = () => {
                                 <View style={{ alignItems: 'center', marginTop: 40, opacity: 0.7 }}>
                                     <Ionicons name="storefront-outline" size={48} color="#94A3B8" />
                                     <Text style={{ color: '#64748B', marginTop: 10, fontWeight: '700', fontSize: 13 }}>
-                                        No vendors found matching this filter or search.
+                                        No vendors found matching this filter.
                                     </Text>
                                 </View>
                             }
@@ -491,6 +722,149 @@ export const AdminVendors = () => {
                     )}
                 </>
             )}
+
+            {/* Store Profile Edit Modal */}
+            <Modal
+                animationType="slide"
+                transparent={true}
+                visible={editModalVisible}
+                onRequestClose={() => setEditModalVisible(false)}
+            >
+                <View style={{ flex: 1, backgroundColor: 'rgba(14, 26, 46, 0.7)', justifyContent: 'flex-end' }}>
+                    <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '85%' }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                            <Text style={{ fontSize: 17, fontWeight: '900', color: NAVY }}>Edit Store Profile & Branding</Text>
+                            <TouchableOpacity onPress={() => setEditModalVisible(false)}>
+                                <Ionicons name="close" size={22} color="#64748B" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 30 }}>
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: NAVY, marginBottom: 4 }}>Store Name</Text>
+                            <TextInput
+                                style={{ borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 10, marginBottom: 12, fontSize: 13, backgroundColor: '#F8FAFC' }}
+                                value={editStoreName}
+                                onChangeText={setEditStoreName}
+                                placeholder="Store name..."
+                            />
+
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: NAVY, marginBottom: 4 }}>Category</Text>
+                            <TextInput
+                                style={{ borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 10, marginBottom: 12, fontSize: 13, backgroundColor: '#F8FAFC' }}
+                                value={editCategory}
+                                onChangeText={setEditCategory}
+                                placeholder="Business category..."
+                            />
+
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: NAVY, marginBottom: 4 }}>About Your Store / Bio</Text>
+                            <TextInput
+                                style={{ borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 10, height: 75, textAlignVertical: 'top', marginBottom: 12, fontSize: 13, backgroundColor: '#F8FAFC' }}
+                                value={editAbout}
+                                onChangeText={setEditAbout}
+                                placeholder="Describe store goods, warranty, delivery..."
+                                multiline
+                            />
+
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: NAVY, marginBottom: 4 }}>Cover Banner Image</Text>
+                            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 6 }}>
+                                <TouchableOpacity
+                                    onPress={() => handlePickImageForStore('banner')}
+                                    style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}
+                                >
+                                    <Text style={{ fontSize: 11, fontWeight: '700', color: NAVY }}>Upload Banner</Text>
+                                </TouchableOpacity>
+                            </View>
+                            <TextInput
+                                style={{ borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 10, marginBottom: 12, fontSize: 12, backgroundColor: '#F8FAFC' }}
+                                value={editCoverImage}
+                                onChangeText={setEditCoverImage}
+                                placeholder="Or paste banner image URL..."
+                            />
+
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: NAVY, marginBottom: 4 }}>Store Logo</Text>
+                            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 6 }}>
+                                <TouchableOpacity
+                                    onPress={() => handlePickImageForStore('logo')}
+                                    style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}
+                                >
+                                    <Text style={{ fontSize: 11, fontWeight: '700', color: NAVY }}>Upload Logo</Text>
+                                </TouchableOpacity>
+                            </View>
+                            <TextInput
+                                style={{ borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 10, marginBottom: 12, fontSize: 12, backgroundColor: '#F8FAFC' }}
+                                value={editLogoUrl}
+                                onChangeText={setEditLogoUrl}
+                                placeholder="Or paste logo image URL..."
+                            />
+
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: NAVY, marginBottom: 4 }}>Phone / WhatsApp</Text>
+                            <TextInput
+                                style={{ borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 10, marginBottom: 12, fontSize: 13, backgroundColor: '#F8FAFC' }}
+                                value={editPhone}
+                                onChangeText={setEditPhone}
+                                placeholder="Contact phone..."
+                                keyboardType="phone-pad"
+                            />
+
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: NAVY, marginBottom: 4 }}>Store Address</Text>
+                            <TextInput
+                                style={{ borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 10, marginBottom: 16, fontSize: 13, backgroundColor: '#F8FAFC' }}
+                                value={editAddress}
+                                onChangeText={setEditAddress}
+                                placeholder="Physical location..."
+                            />
+
+                            {/* Recommended Toggle */}
+                            <TouchableOpacity
+                                onPress={() => setEditIsRecommended(!editIsRecommended)}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    padding: 12,
+                                    backgroundColor: editIsRecommended ? '#FEF3C7' : '#F8FAFC',
+                                    borderRadius: 12,
+                                    borderWidth: 1,
+                                    borderColor: editIsRecommended ? GOLD : '#E2E8F0',
+                                    marginBottom: 16
+                                }}
+                            >
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                    <Ionicons name={editIsRecommended ? "star" : "star-outline"} size={18} color={editIsRecommended ? GOLD : "#64748B"} />
+                                    <View>
+                                        <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY }}>Recommended Vendor</Text>
+                                        <Text style={{ fontSize: 11, color: '#64748B' }}>Feature this store prominently in customer directory</Text>
+                                    </View>
+                                </View>
+                                <Ionicons
+                                    name={editIsRecommended ? "checkbox" : "square-outline"}
+                                    size={22}
+                                    color={editIsRecommended ? GOLD : "#94A3B8"}
+                                />
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                onPress={handleSaveStoreProfile}
+                                disabled={savingStore}
+                                style={{
+                                    backgroundColor: NAVY,
+                                    padding: 14,
+                                    borderRadius: 14,
+                                    alignItems: 'center',
+                                    borderWidth: 1,
+                                    borderColor: GOLD
+                                }}
+                            >
+                                {savingStore ? (
+                                    <ActivityIndicator size="small" color="#FFFFFF" />
+                                ) : (
+                                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>Save Store Changes</Text>
+                                )}
+                            </TouchableOpacity>
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
 
             {/* Rejection Modal */}
             <Modal

@@ -13,6 +13,7 @@ import { VendorProducts } from './VendorProducts';
 import { VendorOrders } from './VendorOrders';
 import { VendorWallet } from './VendorWallet';
 import { VendorFollowers } from './VendorFollowers';
+import { VendorStoreProfile } from './VendorStoreProfile';
 import { UserAvatar } from '../components/UserAvatar';
 import { getVendorFollowersList } from '../services/vendorFollowerService';
 
@@ -266,12 +267,13 @@ export const VendorDashboard = ({ user, onLogout }) => {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={{ flexDirection: 'row', marginTop: 20, paddingHorizontal: 20, gap: 8, paddingBottom: 6 }}
             >
-                {['Overview', 'Products', 'Orders', 'Wallet', 'Followers'].map(tab => {
-                    const isActive = activeTab === tab.toLowerCase();
+                {['Overview', 'Store Profile', 'Products', 'Orders', 'Wallet', 'Followers'].map(tab => {
+                    const tabKey = tab.toLowerCase().replace(/\s+/g, '_');
+                    const isActive = activeTab === tabKey || activeTab === tab.toLowerCase();
                     return (
                         <TouchableOpacity
                             key={tab}
-                            onPress={() => setActiveTab(tab.toLowerCase())}
+                            onPress={() => setActiveTab(tabKey)}
                             style={{
                                 paddingVertical: 7, paddingHorizontal: 14, borderRadius: 20,
                                 backgroundColor: isActive ? 'white' : 'rgba(255,255,255,0.1)'
@@ -296,6 +298,17 @@ export const VendorDashboard = ({ user, onLogout }) => {
                 ) : (
                     <>
                         {activeTab === 'overview' && <VendorOverview stats={stats} onSelectTab={setActiveTab} />}
+
+                        {(activeTab === 'store_profile' || activeTab === 'store profile') && (
+                            <VendorStoreProfile
+                                user={user}
+                                vendor={vendor}
+                                onBack={() => setActiveTab('overview')}
+                                onSaved={() => {
+                                    fetchDashboardData();
+                                }}
+                            />
+                        )}
 
                         {activeTab === 'products' && (
                             <VendorProducts

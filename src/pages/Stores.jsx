@@ -80,9 +80,8 @@ const Stores = () => {
       const [profilesRes, productsRes, categoriesRes] = await Promise.allSettled([
         supabase
           .from('profiles')
-          .select('id, full_name, username, business_name, avatar_url, role, phone, created_at')
-          .or('role.eq.vendor,role.eq.seller,business_name.not.is.null')
-          .limit(50),
+          .select('*')
+          .order('created_at', { ascending: true }),
         supabase
           .from('products')
           .select('id, name, description, price, compare_at_price, image_url, images, category, rating, reviews, stock, total_sales, is_active, status, vendor_id, created_at')
@@ -98,52 +97,86 @@ const Stores = () => {
 
       const realProducts = (productsRes.status === 'fulfilled' && productsRes.value?.data) ? productsRes.value.data : [];
       const realCategories = (categoriesRes.status === 'fulfilled' && categoriesRes.value?.data) ? categoriesRes.value.data : [];
+      const allProfiles = (profilesRes.status === 'fulfilled' && Array.isArray(profilesRes.value?.data)) ? profilesRes.value.data : [];
+      
       setProducts(realProducts);
       setCategories(realCategories);
 
-      // Official Flagship Store
-      const officialProds = realProducts.filter(p => !p.vendor_id || p.vendor_id === 'official-abumafhal');
+      // Group products by vendor_id
+      const productsByVendor = {};
+      const unassignedProducts = [];
+      realProducts.forEach(prod => {
+        if (prod.vendor_id) {
+          if (!productsByVendor[prod.vendor_id]) productsByVendor[prod.vendor_id] = [];
+          productsByVendor[prod.vendor_id].push(prod);
+        } else {
+          unassignedProducts.push(prod);
+        }
+      });
+
+      const adminProfile = allProfiles.find(p => p.role === 'admin') || null;
+      const vendorProfiles = allProfiles.filter(p => p.id !== adminProfile?.id && (p.role === 'vendor' || (typeof p.business_name === 'string' && p.business_name.trim().length > 0)));
+
+      // Parse metadata helper
+      const parseAddr = (addr) => {
+        if (!addr || typeof addr !== 'string') return {};
+        try {
+          if (addr.startsWith('{') && addr.endsWith('}')) return JSON.parse(addr);
+        } catch (_) {}
+        return {};
+      };
+
+      const adminAddr = parseAddr(adminProfile?.address);
+      const adminProds = [...(productsByVendor[adminProfile?.id] || []), ...unassignedProducts];
+
+      // Official Flagship Store (Always verified & recommended)
       const officialStore = {
-        id: 'official-abumafhal',
-        name: 'Abu Mafhal Official Store',
+        id: adminProfile?.id || 'official-abumafhal',
+        name: adminProfile?.business_name || 'Abu Mafhal Official Store',
         tagline: 'Your Marketplace, Your Choice — Verified Mall',
-        category: 'Official Mall & Flagship',
+        category: adminProfile?.business_category || 'Official Mall & Flagship Store',
         rating: 5.0,
         reviews: '3.8K',
         baseFollowers: 1420,
-        products: officialProds.length > 0 ? officialProds : realProducts,
-        productsCount: officialProds.length > 0 ? officialProds.length : realProducts.length,
-        avatar: AM_LOGO,
-        banner: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&q=80',
+        products: adminProds.length > 0 ? adminProds : realProducts,
+        productsCount: adminProds.length > 0 ? adminProds.length : realProducts.length,
+        avatar: adminProfile?.avatar_url || AM_LOGO,
+        banner: adminProfile?.cover_image || adminAddr.cover_image || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1200&q=80',
         verified: true,
         isOfficial: true,
-        phone: '2349021486162',
-        address: 'Main Commercial Plaza, Gashua, Yobe State, Nigeria',
-        bio: 'The official verified flagship mall of Abu Mafhal Marketplace. Genuine brand warranty, authentic products, and 100% buyer protection across Nigeria.',
-        memberSince: '2023'
+        is_recommended: true,
+        isRecommended: true,
+        phone: adminProfile?.phone || adminProfile?.phone_number || '2349021486162',
+        address: adminAddr.address || adminProfile?.address || 'Main Commercial Plaza, Gashua, Yobe State, Nigeria',
+        bio: adminProfile?.about || adminAddr.about || 'The official verified flagship mall of Abu Mafhal Marketplace. Genuine brand warranty, authentic products, and 100% buyer protection across Nigeria.',
+        memberSince: adminProfile?.created_at ? new Date(adminProfile.created_at).getFullYear().toString() : '2023'
       };
 
-      const vendorProfiles = (profilesRes.status === 'fulfilled' && profilesRes.value?.data) ? profilesRes.value.data : [];
       const mappedVendors = vendorProfiles.map(vp => {
-        const storeProds = realProducts.filter(p => p.vendor_id === vp.id);
-        const year = vp.created_at ? new Date(vp.created_at).getFullYear() : '2024';
+        const storeProds = productsByVendor[vp.id] || [];
+        const year = vp.created_at ? new Date(vp.created_at).getFullYear().toString() : '2024';
+        const vAddr = parseAddr(vp.address);
+        const isRec = vp.is_recommended !== undefined ? !!vp.is_recommended : (vAddr.is_recommended || false);
+
         return {
           id: vp.id,
           name: vp.business_name || vp.full_name || vp.username || 'Verified Merchant',
           tagline: 'Authentic Goods & Fast Delivery',
-          category: vp.role === 'vendor' ? 'Verified Seller' : 'Registered Merchant',
+          category: vp.business_category || vAddr.category || (vp.role === 'vendor' ? 'Verified Seller' : 'Registered Merchant'),
           rating: 4.9,
           reviews: '120+',
           baseFollowers: 165,
           products: storeProds,
           productsCount: storeProds.length,
           avatar: vp.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(vp.business_name || vp.full_name || 'Vendor')}&background=0A192F&color=38BDF8`,
-          banner: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=800&q=80',
+          banner: vp.cover_image || vAddr.cover_image || 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=1200&q=80',
           verified: true,
           isOfficial: false,
-          phone: vp.phone || '2349021486162',
-          address: 'Verified Merchant Center, Nigeria',
-          bio: `Authentic merchant verified on Abu Mafhal Marketplace since ${year}. Dedicated to high quality products and reliable customer support.`,
+          is_recommended: isRec,
+          isRecommended: isRec,
+          phone: vp.phone || vp.phone_number || '2349021486162',
+          address: vAddr.address || vp.address || vp.state || 'Nigeria',
+          bio: vp.about || vAddr.about || `Authentic merchant verified on Abu Mafhal Marketplace since ${year}. Dedicated to high quality products and reliable customer support.`,
           memberSince: year
         };
       });
@@ -177,6 +210,7 @@ const Stores = () => {
       store.category.toLowerCase().includes(searchQuery.toLowerCase());
     if (!matchesSearch) return false;
 
+    if (activeTab === 'recommended') return !!(store.is_recommended || store.isRecommended);
     if (activeTab === 'top_rated') return Number(store.rating) >= 4.9;
     if (activeTab === 'official') return store.isOfficial;
     return true;
@@ -243,16 +277,17 @@ const Stores = () => {
               className="shrink-0 px-5 py-2.5 bg-[#0284C7] hover:bg-sky-700 text-white font-black text-xs rounded-2xl shadow-lg shadow-sky-600/20 flex items-center gap-2 transition-all hover:-translate-y-0.5"
             >
               <Store className="w-4 h-4" />
-              <span>Open a Store / Buɗe Shago</span>
+              <span>Open a Store</span>
             </Link>
           </div>
         </div>
 
-        {/* Sub-Tabs: Popular Stores, Top Rated, Official Stores */}
+        {/* Sub-Tabs: Popular Stores, Recommended, Top Rated, Official Stores */}
         <div className="flex items-center justify-between gap-4 border-b border-slate-200/80 pb-4 overflow-x-auto">
           <div className="flex items-center gap-2 shrink-0">
             {[
               { id: 'popular', label: 'All Verified Stores' },
+              { id: 'recommended', label: '⭐ Recommended Vendors' },
               { id: 'official', label: 'Official Flagship Mall' },
               { id: 'top_rated', label: 'Top Rated Sellers' },
             ].map((tab) => (
@@ -306,11 +341,15 @@ const Stores = () => {
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                       
-                      {store.isOfficial && (
+                      {store.isOfficial ? (
                         <span className="absolute top-3 right-3 bg-amber-500 text-white text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md shadow-md">
                           OFFICIAL MALL
                         </span>
-                      )}
+                      ) : (store.is_recommended || store.isRecommended) ? (
+                        <span className="absolute top-3 right-3 bg-gradient-to-r from-amber-500 to-yellow-500 text-white text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-md shadow-md flex items-center gap-1">
+                          ⭐ RECOMMENDED
+                        </span>
+                      ) : null}
                     </div>
 
                     {/* Avatar & Store Info */}
@@ -515,6 +554,15 @@ const Stores = () => {
                     {selectedStore.verified && (
                       <CheckCircle className="w-4 h-4 fill-sky-500 text-white" />
                     )}
+                    {selectedStore.isOfficial ? (
+                      <span className="bg-amber-500 text-white text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md shadow-sm">
+                        Official Mall
+                      </span>
+                    ) : (selectedStore.is_recommended || selectedStore.isRecommended) ? (
+                      <span className="bg-gradient-to-r from-amber-500 to-yellow-500 text-white text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md shadow-sm flex items-center gap-1">
+                        ⭐ Recommended
+                      </span>
+                    ) : null}
                   </div>
                   <p className="text-xs text-sky-300 font-semibold">{selectedStore.category}</p>
                 </div>

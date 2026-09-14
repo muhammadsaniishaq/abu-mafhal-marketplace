@@ -25,6 +25,7 @@ mobile/node_modules
 logs
 *.log
 *.sql
+!CREATE_OR_UPDATE_STORES_AND_VENDORS.sql
 *.cjs
 *.mjs
 *.txt
