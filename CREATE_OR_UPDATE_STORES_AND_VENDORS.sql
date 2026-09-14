@@ -69,8 +69,7 @@ SET
     about = COALESCE(about, 'The official verified flagship store of Abu Mafhal Marketplace. Discover 100% authentic electronics, fashion, and lifestyle products with genuine warranty, swift nationwide dispatch, and buyer protection.'),
     cover_image = COALESCE(cover_image, 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=1200&auto=format&fit=crop'),
     business_category = COALESCE(business_category, 'Official Mall & Flagship Store'),
-    is_recommended = true,
-    phone = COALESCE(phone, '2349021486162')
+    is_recommended = true
 WHERE role = 'admin';
 
 -- 6. RELOAD SCHEMA CACHE
