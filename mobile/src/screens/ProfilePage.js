@@ -20,6 +20,7 @@ import { UserAvatar } from '../components/UserAvatar';
 import { useAppSettings } from '../context/AppSettingsContext';
 import {
     getFollowedStoresList,
+    getVendorFollowersList,
     toggleFollowStore,
     subscribeToFollowChanges
 } from '../services/vendorFollowerService';
@@ -107,6 +108,13 @@ const ProfilePageInner = ({
     const [followedLoading, setFollowedLoading] = useState(false);
     const [storeSearch, setStoreSearch] = useState('');
 
+    // Vendor Followers State (Admin & Vendor Only)
+    const [vendorFollowersCount, setVendorFollowersCount] = useState(0);
+    const [vendorFollowersList, setVendorFollowersList] = useState([]);
+    const [showVendorFollowersModal, setShowVendorFollowersModal] = useState(false);
+    const [followersLoading, setFollowersLoading] = useState(false);
+    const [followersSearch, setFollowersSearch] = useState('');
+
     // New Features State
     const [showVouchersModal, setShowVouchersModal] = useState(false);
     const [showMemberPassModal, setShowMemberPassModal] = useState(false);
@@ -192,13 +200,15 @@ const ProfilePageInner = ({
 
     useEffect(() => {
         loadFollowedStores();
+        loadVendorFollowers();
         const unsub = subscribeToFollowChanges(() => {
             loadFollowedStores();
+            loadVendorFollowers();
         });
         return () => {
             if (typeof unsub === 'function') unsub();
         };
-    }, [user?.id]);
+    }, [user?.id, user?.role]);
 
     const loadFollowedStores = async () => {
         try {
@@ -208,6 +218,25 @@ const ProfilePageInner = ({
         } catch (_) {
         } finally {
             setFollowedLoading(false);
+        }
+    };
+
+    const loadVendorFollowers = async () => {
+        if (!user?.id) return;
+        const roleLower = (user?.role || '').toLowerCase();
+        if (roleLower === 'admin' || roleLower === 'vendor') {
+            try {
+                setFollowersLoading(true);
+                const res = await getVendorFollowersList(user.id);
+                setVendorFollowersCount(res.totalCount || 0);
+                setVendorFollowersList(res.followers || []);
+            } catch (_) {
+            } finally {
+                setFollowersLoading(false);
+            }
+        } else {
+            setVendorFollowersCount(0);
+            setVendorFollowersList([]);
         }
     };
 
@@ -289,12 +318,22 @@ const ProfilePageInner = ({
             icon: 'storefront-outline',
             iconColor: '#B45309',
             iconBg: '#FEF9EC',
-            label: 'Followed Stores',
+            label: 'Following Stores',
             subtitle: 'Stores you follow',
             badge: followedStores.length > 0 ? `${followedStores.length}` : null,
             badgeColor: '#B45309',
             action: () => setShowFollowedModal(true)
         },
+        ...((isAdmin || isVendor) ? [{
+            icon: 'people-outline',
+            iconColor: '#059669',
+            iconBg: '#ECFDF5',
+            label: 'Store Followers',
+            subtitle: 'Customers following your store',
+            badge: vendorFollowersCount > 0 ? `${vendorFollowersCount}` : null,
+            badgeColor: '#059669',
+            action: () => setShowVendorFollowersModal(true)
+        }] : []),
         {
             icon: 'heart-outline',
             iconColor: '#BE123C',
@@ -407,7 +446,16 @@ const ProfilePageInner = ({
     const filteredFollowedStores = followedStores.filter(st => {
         if (!storeSearch) return true;
         const q = storeSearch.toLowerCase();
-        return st.name.toLowerCase().includes(q) || (st.category && st.category.toLowerCase().includes(q));
+        return (st.name || '').toLowerCase().includes(q) || (st.category && st.category.toLowerCase().includes(q));
+    });
+
+    // Filter vendor followers (for Admin & Vendor)
+    const filteredVendorFollowers = vendorFollowersList.filter(f => {
+        if (!followersSearch) return true;
+        const q = followersSearch.toLowerCase();
+        const name = (f.name || f.full_name || f.username || '').toLowerCase();
+        const email = (f.email || '').toLowerCase();
+        return name.includes(q) || email.includes(q);
     });
 
     return (
@@ -513,6 +561,21 @@ const ProfilePageInner = ({
                                         <Text style={s.editPillText}>Edit</Text>
                                     </TouchableOpacity>
 
+                                    {/* Followers Pill - Admin & Vendor Only */}
+                                    {(isAdmin || isVendor) && (
+                                        <TouchableOpacity
+                                            style={s.heroFollowersPill}
+                                            activeOpacity={0.75}
+                                            onPress={() => setShowVendorFollowersModal(true)}
+                                        >
+                                            <Ionicons name="people" size={10} color="#059669" style={{ marginRight: 3 }} />
+                                            <Text style={s.heroFollowersPillText}>
+                                                {vendorFollowersCount} {vendorFollowersCount === 1 ? 'Follower' : 'Followers'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    )}
+
+                                    {/* Following Pill - Available to ALL roles (Admin, Vendor, Buyer, Driver) */}
                                     <TouchableOpacity
                                         style={s.heroStoresPill}
                                         activeOpacity={0.75}
@@ -520,7 +583,7 @@ const ProfilePageInner = ({
                                     >
                                         <Ionicons name="storefront" size={10} color="#B45309" style={{ marginRight: 3 }} />
                                         <Text style={s.heroStoresPillText}>
-                                            {followedStores.length} {followedStores.length === 1 ? 'Store' : 'Stores'}
+                                            {followedStores.length} Following
                                         </Text>
                                     </TouchableOpacity>
                                 </View>
@@ -1104,6 +1167,125 @@ const ProfilePageInner = ({
                 </View>
             </Modal>
 
+            {/* ── STORE FOLLOWERS MODAL (ADMIN & VENDOR ONLY) ── */}
+            <Modal
+                visible={showVendorFollowersModal}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setShowVendorFollowersModal(false)}
+            >
+                <View style={s.modalOverlay}>
+                    <View style={s.modalCard}>
+                        {/* Modal Header */}
+                        <View style={s.modalHeader}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <View style={[s.modalHeaderIconWrap, { backgroundColor: '#ECFDF5' }]}>
+                                    <Ionicons name="people" size={16} color="#059669" />
+                                </View>
+                                <View>
+                                    <Text style={s.modalTitle}>Store Followers</Text>
+                                    <Text style={s.modalSubtitle}>{vendorFollowersCount} {vendorFollowersCount === 1 ? 'customer following' : 'customers following'}</Text>
+                                </View>
+                            </View>
+                            <TouchableOpacity
+                                onPress={() => setShowVendorFollowersModal(false)}
+                                style={s.modalCloseBtn}
+                                activeOpacity={0.7}
+                            >
+                                <Ionicons name="close" size={18} color="#64748B" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Search Input */}
+                        {vendorFollowersList.length > 0 && (
+                            <View style={s.storeSearchBox}>
+                                <Ionicons name="search-outline" size={15} color="#64748B" style={{ marginRight: 6 }} />
+                                <TextInput
+                                    placeholder="Search followers..."
+                                    placeholderTextColor="#94A3B8"
+                                    value={followersSearch}
+                                    onChangeText={setFollowersSearch}
+                                    style={s.storeSearchInput}
+                                />
+                                {followersSearch.length > 0 && (
+                                    <TouchableOpacity onPress={() => setFollowersSearch('')}>
+                                        <Ionicons name="close-circle" size={15} color="#94A3B8" />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        )}
+
+                        <ScrollView style={s.modalScroll} showsVerticalScrollIndicator={false}>
+                            {followersLoading ? (
+                                <View style={s.modalLoaderWrap}>
+                                    <ActivityIndicator size="small" color="#059669" />
+                                    <Text style={s.modalLoaderText}>Loading followers...</Text>
+                                </View>
+                            ) : filteredVendorFollowers.length === 0 ? (
+                                <View style={s.modalEmptyWrap}>
+                                    <View style={[s.modalEmptyIconCircle, { backgroundColor: '#ECFDF5' }]}>
+                                        <Ionicons name="people-outline" size={32} color="#059669" />
+                                    </View>
+                                    <Text style={s.modalEmptyTitle}>
+                                        {followersSearch ? 'No matching followers' : 'No Followers Yet'}
+                                    </Text>
+                                    <Text style={s.modalEmptySub}>
+                                        {followersSearch
+                                            ? 'No customer in your followers list matches that query.'
+                                            : 'Customers who follow your store will be notified of new products, offers, and store updates.'}
+                                    </Text>
+                                </View>
+                            ) : (
+                                <View style={s.storesListWrap}>
+                                    {filteredVendorFollowers.map((follower, idx) => {
+                                        const customerName = follower.name || follower.full_name || follower.username || 'Valued Customer';
+                                        const customerInitial = customerName.charAt(0).toUpperCase();
+                                        return (
+                                            <View key={follower.id || follower.user_id || idx} style={s.followerCard}>
+                                                <View style={s.followerLeft}>
+                                                    <View style={s.followerAvatarWrap}>
+                                                        {follower.avatar_url ? (
+                                                            <Image source={{ uri: follower.avatar_url }} style={s.followerAvatar} />
+                                                        ) : (
+                                                            <View style={s.followerAvatarFallback}>
+                                                                <Text style={s.followerAvatarInitial}>{customerInitial}</Text>
+                                                            </View>
+                                                        )}
+                                                        <View style={s.followerOnlineDot} />
+                                                    </View>
+                                                    <View style={{ flex: 1 }}>
+                                                        <Text style={s.followerName} numberOfLines={1}>{customerName}</Text>
+                                                        <Text style={s.followerMeta} numberOfLines={1}>
+                                                            {follower.email ? follower.email : (follower.followed_at ? `Followed ${new Date(follower.followed_at).toLocaleDateString()}` : 'Verified Customer')}
+                                                        </Text>
+                                                    </View>
+                                                </View>
+                                                <TouchableOpacity
+                                                    style={s.followerChatBtn}
+                                                    activeOpacity={0.8}
+                                                    onPress={() => {
+                                                        setShowVendorFollowersModal(false);
+                                                        if (onNavigate) {
+                                                            onNavigate('ConversationsScreen', {
+                                                                recipientId: follower.user_id || follower.id,
+                                                                recipientName: customerName
+                                                            });
+                                                        }
+                                                    }}
+                                                >
+                                                    <Ionicons name="chatbubble-ellipses-outline" size={13} color="#059669" style={{ marginRight: 4 }} />
+                                                    <Text style={s.followerChatText}>Message</Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                        );
+                                    })}
+                                </View>
+                            )}
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+
             {/* ── VOUCHERS & PROMOS MODAL (NEW FEATURE) ── */}
             <Modal
                 visible={showVouchersModal}
@@ -1467,6 +1649,21 @@ const s = StyleSheet.create({
         fontSize: 10,
         fontWeight: '800',
         color: '#92400E'
+    },
+    heroFollowersPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 5,
+        backgroundColor: '#ECFDF5',
+        borderWidth: 1,
+        borderColor: '#A7F3D0'
+    },
+    heroFollowersPillText: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: '#065F46'
     },
 
     /* Guest Card */
@@ -2249,6 +2446,85 @@ const s = StyleSheet.create({
         fontSize: 10,
         fontWeight: '800',
         color: '#DC2626'
+    },
+
+    /* Follower Card (Vendor/Admin Followers Modal) */
+    followerCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 11,
+        padding: 10,
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
+        marginBottom: 8,
+        boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.03)'
+    },
+    followerLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+        marginRight: 10
+    },
+    followerAvatarWrap: {
+        position: 'relative',
+        marginRight: 10
+    },
+    followerAvatar: {
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        backgroundColor: '#F1F5F9'
+    },
+    followerAvatarFallback: {
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        backgroundColor: '#E0E7FF',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    followerAvatarInitial: {
+        fontSize: 15,
+        fontWeight: '800',
+        color: '#3730A3'
+    },
+    followerOnlineDot: {
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: '#10B981',
+        borderWidth: 2,
+        borderColor: '#FFFFFF'
+    },
+    followerName: {
+        fontSize: 12.5,
+        fontWeight: '800',
+        color: '#0F172A'
+    },
+    followerMeta: {
+        fontSize: 10,
+        color: '#64748B',
+        marginTop: 1
+    },
+    followerChatBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 9,
+        paddingVertical: 5,
+        borderRadius: 7,
+        backgroundColor: '#ECFDF5',
+        borderWidth: 1,
+        borderColor: '#A7F3D0'
+    },
+    followerChatText: {
+        fontSize: 10.5,
+        fontWeight: '800',
+        color: '#059669'
     },
 
     /* Voucher Card & Modal Styles */

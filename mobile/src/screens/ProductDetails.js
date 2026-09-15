@@ -54,8 +54,8 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
     const [quantity, setQuantity] = useState(1);
     const [selectedVariant, setSelectedVariant] = useState(null);
     const [descExpanded, setDescExpanded] = useState(false);
-    const [vendor, setVendor] = useState(null);
-    const [loadingVend, setLoadingVend] = useState(true);
+    const [vendor, setVendor] = useState(initialProduct?.vendor || null);
+    const [loadingVend, setLoadingVend] = useState(!initialProduct?.vendor);
     const [relatedProducts, setRelatedProducts] = useState([]);
     const [reviewsList, setReviewsList] = useState([]);
     const [loadingReviews, setLoadingReviews] = useState(false);
@@ -99,8 +99,14 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                 .maybeSingle();
 
             if (data) {
-                setProduct(data);
-                fetchVendor(data);
+                const merged = {
+                    ...data,
+                    vendor_id: data.vendor_id || initialProduct?.vendor_id || initialProduct?.vendor?.userId || initialProduct?.vendor?.id,
+                    store_id: data.store_id || initialProduct?.store_id || initialProduct?.vendor?.id,
+                    vendor: initialProduct?.vendor || null
+                };
+                setProduct(merged);
+                fetchVendor(merged);
                 fetchRelatedProducts(data.category, data.id);
                 fetchReviews(data.id);
             } else if (initialProduct) {
@@ -115,9 +121,16 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
 
     // ── Fetch Real Vendor / Store Profile (Unified & 100% Consistent) ─────────
     const fetchVendor = async (currentProd) => {
+        // 1. If product already carries an authentic vendor object passed from store, respect and use it
+        if (currentProd?.vendor && currentProd.vendor.name && (currentProd.vendor.id || currentProd.vendor.userId)) {
+            setVendor(currentProd.vendor);
+            setLoadingVend(false);
+            return;
+        }
+
         setLoadingVend(true);
         try {
-            const vId = currentProd?.vendor_id || currentProd?.user_id;
+            const vId = currentProd?.vendor_id || currentProd?.store_id || currentProd?.user_id;
             const vData = await resolveVendorOrStore(vId);
             setVendor(vData);
         } catch (err) {

@@ -95,21 +95,53 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
         loadVendors();
         // Pre-select initial vendor if editing
         if (initialData?.vendor_id) {
-            supabase.from('profiles')
-                .select('id, full_name, email, avatar_url')
-                .eq('id', initialData.vendor_id)
-                .single()
-                .then(({ data }) => { if (data) setSelectedVendor(data); });
+            Promise.all([
+                supabase.from('profiles').select('id, full_name, email, avatar_url, role').eq('id', initialData.vendor_id).maybeSingle(),
+                supabase.from('stores').select('id, vendor_id, name, logo').eq('vendor_id', initialData.vendor_id).maybeSingle()
+            ]).then(([{ data: p }, { data: st }]) => {
+                if (p) {
+                    setSelectedVendor({
+                        ...p,
+                        storeName: st?.name || (p.role === 'admin' ? 'ABU MAFHAL Official Mall' : p.full_name),
+                        storeLogo: st?.logo || p.avatar_url,
+                        storeId: st?.id
+                    });
+                }
+            }).catch(() => {});
         }
     }, []);
 
     const loadVendors = async () => {
-        const { data } = await supabase
-            .from('profiles')
-            .select('id, full_name, email, avatar_url, role')
-            .or('role.eq.vendor,role.eq.admin')
-            .order('full_name');
-        if (data) setVendors(data);
+        try {
+            const [{ data: profs }, { data: storeList }] = await Promise.all([
+                supabase.from('profiles')
+                    .select('id, full_name, email, avatar_url, role')
+                    .or('role.eq.vendor,role.eq.admin')
+                    .order('full_name'),
+                supabase.from('stores')
+                    .select('id, vendor_id, name, logo')
+            ]);
+
+            const storeMap = {};
+            (storeList || []).forEach(st => {
+                if (st.vendor_id) storeMap[st.vendor_id] = st;
+            });
+
+            const enriched = (profs || []).map(p => ({
+                ...p,
+                storeName: storeMap[p.id]?.name || (p.role === 'admin' ? 'ABU MAFHAL Official Mall' : (p.full_name || 'Vendor Store')),
+                storeLogo: storeMap[p.id]?.logo || p.avatar_url,
+                storeId: storeMap[p.id]?.id
+            }));
+            setVendors(enriched);
+        } catch (_) {
+            const { data } = await supabase
+                .from('profiles')
+                .select('id, full_name, email, avatar_url, role')
+                .or('role.eq.vendor,role.eq.admin')
+                .order('full_name');
+            if (data) setVendors(data);
+        }
     };
 
     // ── Image helpers ──────────────────────────────────────────
@@ -298,7 +330,8 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
     // ── Vendor Modal ───────────────────────────────────────────
     const filteredVendors = vendors.filter(v =>
         v.full_name?.toLowerCase().includes(vendorSearch.toLowerCase()) ||
-        v.email?.toLowerCase().includes(vendorSearch.toLowerCase())
+        v.email?.toLowerCase().includes(vendorSearch.toLowerCase()) ||
+        v.storeName?.toLowerCase().includes(vendorSearch.toLowerCase())
     );
 
     // ── Tab Renderers ──────────────────────────────────────────
@@ -306,16 +339,18 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
         <View style={SS.tabContent}>
             {/* Vendor Selector */}
             <View style={SS.card}>
-                <Text style={SS.cardTitle}>Assign to Vendor / Admin</Text>
+                <Text style={SS.cardTitle}>Assign to Vendor / Admin Store</Text>
                 <TouchableOpacity onPress={() => setShowVendorModal(true)} style={SS.vendorPicker}>
-                    {selectedVendor?.avatar_url
-                        ? <Image source={{ uri: selectedVendor.avatar_url }} style={SS.vendorAvatar} />
+                    {selectedVendor?.storeLogo || selectedVendor?.avatar_url
+                        ? <Image source={{ uri: selectedVendor.storeLogo || selectedVendor.avatar_url }} style={SS.vendorAvatar} />
                         : <View style={[SS.vendorAvatar, { backgroundColor: '#EEF2FF', alignItems: 'center', justifyContent: 'center' }]}>
-                            <Ionicons name="person" size={20} color="#6366F1" />
+                            <Ionicons name="storefront" size={20} color="#6366F1" />
                           </View>
                     }
                     <View style={{ flex: 1 }}>
-                        <Text style={SS.vendorName}>{selectedVendor?.full_name || 'Select vendor / admin'}</Text>
+                        <Text style={SS.vendorName}>
+                            {selectedVendor ? (selectedVendor.storeName ? `${selectedVendor.storeName} (${selectedVendor.full_name})` : selectedVendor.full_name) : 'Select vendor / admin store'}
+                        </Text>
                         {selectedVendor && <Text style={SS.vendorEmail}>{selectedVendor.email}</Text>}
                     </View>
                     <Ionicons name="chevron-down" size={18} color="#94A3B8" />
@@ -601,12 +636,12 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
                             <TouchableOpacity onPress={() => { setSelectedVendor(item); setShowVendorModal(false); setVendorSearch(''); }}
                                 style={[SS.vendorItem, selectedVendor?.id === item.id && { backgroundColor: '#EEF2FF' }]}>
                                 <View style={[SS.vendorAvatar, { backgroundColor: '#EEF2FF', alignItems: 'center', justifyContent: 'center' }]}>
-                                    {item.avatar_url
-                                        ? <Image source={{ uri: item.avatar_url }} style={SS.vendorAvatar} />
-                                        : <Ionicons name="person" size={18} color="#6366F1" />}
+                                    {item.storeLogo || item.avatar_url
+                                        ? <Image source={{ uri: item.storeLogo || item.avatar_url }} style={SS.vendorAvatar} />
+                                        : <Ionicons name="storefront" size={18} color="#6366F1" />}
                                 </View>
                                 <View style={{ flex: 1 }}>
-                                    <Text style={SS.vendorName}>{item.full_name || 'No name'}</Text>
+                                    <Text style={SS.vendorName}>{item.storeName ? `${item.storeName} (${item.full_name})` : (item.full_name || 'No name')}</Text>
                                     <Text style={SS.vendorEmail}>{item.email}</Text>
                                 </View>
                                 <View style={[SS.roleBadge, { backgroundColor: item.role === 'admin' ? '#FEF3C7' : '#EEF2FF' }]}>

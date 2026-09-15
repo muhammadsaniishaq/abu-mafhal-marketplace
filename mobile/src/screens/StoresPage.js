@@ -676,7 +676,7 @@ export const StoresPage = ({
                             <View style={s.storesListContainer}>
                                 {filteredStores.map(store => {
                                     const isFollowed = !!followedStores[store.id];
-                                    const currentFollowers = (store.baseFollowers || 100) + (isFollowed ? 1 : 0);
+                                    const currentFollowers = (store.followersCount !== undefined ? store.followersCount : (store.baseFollowers || 0)) + (isFollowed ? 1 : 0);
                                     const previewProds = (store.products && Array.isArray(store.products)) ? store.products.slice(0, 3) : [];
 
                                     return (
@@ -799,7 +799,7 @@ export const StoresPage = ({
                                                             <TouchableOpacity
                                                                 key={'p-prev-' + prod.id + '-' + pIdx}
                                                                 activeOpacity={0.88}
-                                                                onPress={() => onProductClick && onProductClick(prod)}
+                                                                onPress={() => onProductClick && onProductClick({ ...prod, vendor: prod.vendor || store })}
                                                                 style={s.miniPreviewItem}
                                                             >
                                                                 <Image
@@ -1177,7 +1177,7 @@ export const StoresPage = ({
                                 <View style={s.statDivider} />
                                 <View style={s.statBox}>
                                     <Text style={s.statVal}>
-                                        {(selectedStore.baseFollowers || 100) + (followedStores[selectedStore.id] ? 1 : 0)}
+                                        {(selectedStore.followersCount !== undefined ? selectedStore.followersCount : (selectedStore.baseFollowers || 0)) + (followedStores[selectedStore.id] ? 1 : 0)}
                                     </Text>
                                     <Text style={s.statLbl}>Followers</Text>
                                 </View>
@@ -1372,8 +1372,28 @@ export const StoresPage = ({
                                                 key={'store-prod-' + item.id}
                                                 activeOpacity={0.88}
                                                 onPress={() => {
+                                                    const enriched = {
+                                                        ...item,
+                                                        vendor_id: item.vendor_id || selectedStore.userId || selectedStore.id,
+                                                        store_id: item.store_id || selectedStore.id,
+                                                        vendor: item.vendor || {
+                                                            id: selectedStore.id,
+                                                            userId: selectedStore.userId,
+                                                            name: selectedStore.name,
+                                                            business_name: selectedStore.name,
+                                                            role: selectedStore.is_official ? 'admin' : 'vendor',
+                                                            isOfficial: !!selectedStore.is_official,
+                                                            is_official: !!selectedStore.is_official,
+                                                            avatar: selectedStore.logo,
+                                                            logo: selectedStore.logo,
+                                                            phone: selectedStore.phone,
+                                                            whatsapp: selectedStore.whatsapp,
+                                                            tagline: selectedStore.tagline,
+                                                            about: selectedStore.about
+                                                        }
+                                                    };
                                                     setSelectedStore(null);
-                                                    onProductClick && onProductClick(item);
+                                                    onProductClick && onProductClick(enriched);
                                                 }}
                                                 style={s.storeGridCard}
                                             >

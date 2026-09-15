@@ -47,7 +47,7 @@ export const StoreService = {
             const localCache = await StoreService.getLocalMetadataCache();
 
             // 1. Fetch Real Profiles safely (avoid enum error on user_role)
-            const [profilesRes, productsRes, storesTableRes] = await Promise.allSettled([
+            const [profilesRes, productsRes, storesTableRes, followersRes] = await Promise.allSettled([
                 supabase
                     .from('profiles')
                     .select('*')
@@ -61,7 +61,10 @@ export const StoreService = {
                 supabase
                     .from('stores')
                     .select('*')
-                    .order('created_at', { ascending: false })
+                    .order('created_at', { ascending: false }),
+                supabase
+                    .from('vendor_followers')
+                    .select('vendor_id, user_id')
             ]);
 
             const allProfiles = (profilesRes.status === 'fulfilled' && Array.isArray(profilesRes.value?.data))
@@ -88,18 +91,26 @@ export const StoreService = {
                 if (st.user_id) storesByUserId[st.user_id] = st;
             });
 
-            // Group products by vendor_id
-            const productsByVendor = {};
-            const unassignedProducts = [];
+            // Map unique followers per vendor/store to eliminate any doubling
+            const followersByVendor = {};
+            const allFollowers = (followersRes.status === 'fulfilled' && Array.isArray(followersRes.value?.data))
+                ? followersRes.value.data
+                : [];
 
-            realProducts.forEach(prod => {
-                if (prod.vendor_id) {
-                    if (!productsByVendor[prod.vendor_id]) productsByVendor[prod.vendor_id] = [];
-                    productsByVendor[prod.vendor_id].push(prod);
-                } else {
-                    unassignedProducts.push(prod);
+            allFollowers.forEach(f => {
+                if (f.vendor_id && f.user_id) {
+                    if (!followersByVendor[f.vendor_id]) followersByVendor[f.vendor_id] = new Set();
+                    followersByVendor[f.vendor_id].add(f.user_id);
                 }
             });
+
+            // Helper to check if a product belongs to a specific vendor/store
+            const isVendorMatch = (prod, vpId, storeId) => {
+                if (!prod) return false;
+                return prod.vendor_id === vpId ||
+                       (storeId && (prod.vendor_id === storeId || prod.store_id === storeId)) ||
+                       prod.user_id === vpId;
+            };
 
             // Locate primary Admin profile (Official Flagship Store)
             const adminProfiles = realProfiles.filter(p => p.role === 'admin');
@@ -116,23 +127,65 @@ export const StoreService = {
             // Parse metadata from address column if present as JSON
             const adminAddrMeta = parseSafeJson(primaryAdmin?.address);
 
-            const adminProducts = [
-                ...(productsByVendor[adminId] || []),
-                ...unassignedProducts
-            ];
+            const officialStoreName = adminStoreRecord.name || primaryAdmin?.business_name || 'Abu Mafhal Official Store';
+            const officialTagline = adminStoreRecord.tagline || adminAddrMeta?.tagline || adminLocal?.tagline || 'Official Flagship Mall • 100% Genuine Guaranteed';
+            const officialAbout = adminStoreRecord.about || primaryAdmin?.about || adminAddrMeta?.about || adminLocal?.about ||
+                'The official verified flagship store of Abu Mafhal Marketplace. Genuine brand warranty, authentic products, and 100% buyer protection nationwide.';
+            const officialLogo = adminStoreRecord.logo || primaryAdmin?.avatar_url || adminLocal?.logo || null;
+            const officialPhone = adminStoreRecord.phone || adminAddrMeta?.phone || primaryAdmin?.phone || primaryAdmin?.phone_number || '08145853539';
+            const officialWhatsapp = adminStoreRecord.whatsapp || adminAddrMeta?.whatsapp || adminLocal?.whatsapp || '08145853539';
+
+            // Filter products belonging to other vendors so they are never wrongly shown under official store
+            const adminProducts = realProducts.filter(p => {
+                const belongsToOtherVendor = vendorProfiles.some(vp => {
+                    const st = storesByUserId[vp.id];
+                    return isVendorMatch(p, vp.id, st?.id);
+                });
+                return !belongsToOtherVendor;
+            }).map(p => ({
+                ...p,
+                vendor_id: adminId,
+                store_id: adminStoreRecord.id || adminId,
+                vendor_name: officialStoreName,
+                vendor_logo: officialLogo,
+                vendor: {
+                    id: adminId,
+                    userId: adminId,
+                    name: officialStoreName,
+                    business_name: officialStoreName,
+                    role: 'admin',
+                    isOfficial: true,
+                    is_official: true,
+                    avatar: officialLogo,
+                    logo: officialLogo,
+                    phone: officialPhone,
+                    whatsapp: officialWhatsapp,
+                    tagline: officialTagline,
+                    about: officialAbout
+                }
+            }));
+
+            // Calculate deduplicated unique followers for official store
+            const adminFollowerSet = new Set([
+                ...(followersByVendor[adminId] || []),
+                ...(adminStoreRecord.id ? (followersByVendor[adminStoreRecord.id] || []) : []),
+                ...(followersByVendor['official-abumafhal'] || []),
+                ...(followersByVendor['46913c66-4474-4962-82e4-b459b89d33fd'] || []),
+                ...(followersByVendor['6d3df1f5-4983-412e-a45f-db146348aac2'] || [])
+            ]);
+            const officialFollowersCount = adminFollowerSet.size;
 
             const officialStore = {
                 id: adminId,
                 userId: adminId,
-                name: adminStoreRecord.name || primaryAdmin?.business_name || 'Abu Mafhal Official Store',
-                tagline: adminStoreRecord.tagline || adminAddrMeta?.tagline || adminLocal?.tagline || 'Official Flagship Mall • 100% Genuine Guaranteed',
-                about: adminStoreRecord.about || primaryAdmin?.about || adminAddrMeta?.about || adminLocal?.about ||
-                    'The official verified flagship store of Abu Mafhal Marketplace. Genuine brand warranty, authentic products, and 100% buyer protection nationwide.',
+                name: officialStoreName,
+                tagline: officialTagline,
+                about: officialAbout,
                 cover_image: adminStoreRecord.cover_image || primaryAdmin?.cover_image || adminAddrMeta?.cover_image || adminLocal?.cover_image ||
                     'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=1200&auto=format&fit=crop',
-                logo: adminStoreRecord.logo || primaryAdmin?.avatar_url || adminLocal?.logo || null,
-                phone: adminStoreRecord.phone || adminAddrMeta?.phone || primaryAdmin?.phone || primaryAdmin?.phone_number || '08145853539',
-                whatsapp: adminStoreRecord.whatsapp || adminAddrMeta?.whatsapp || adminLocal?.whatsapp || '08145853539',
+                logo: officialLogo,
+                phone: officialPhone,
+                whatsapp: officialWhatsapp,
                 email: adminStoreRecord.email || adminAddrMeta?.email || primaryAdmin?.email || 'support@abumafhal.com',
                 category: adminStoreRecord.category || primaryAdmin?.business_category || 'Official Mall & Flagship Store',
                 address: adminAddrMeta?.address || primaryAdmin?.address || 'Main Commercial Center, Gashua, Yobe State, Nigeria',
@@ -146,8 +199,11 @@ export const StoreService = {
                 is_official: true,
                 rating: 5.0,
                 reviews: '1.2k+',
-                products: adminProducts.length > 0 ? adminProducts : realProducts,
-                productsCount: adminProducts.length > 0 ? adminProducts.length : realProducts.length,
+                followersCount: officialFollowersCount,
+                baseFollowers: officialFollowersCount,
+                followers: officialFollowersCount,
+                products: adminProducts,
+                productsCount: adminProducts.length,
                 memberSince: primaryAdmin?.created_at ? new Date(primaryAdmin.created_at).getFullYear().toString() : '2024'
             };
 
@@ -159,9 +215,6 @@ export const StoreService = {
                 const localMeta = localCache[vp.id] || {};
                 const addrMeta = parseSafeJson(vp.address);
 
-                const vProds = productsByVendor[vp.id] || [];
-                const year = vp.created_at ? new Date(vp.created_at).getFullYear().toString() : '2024';
-
                 const storeName = storeRec.name || vp.business_name || vp.full_name || vp.username || 'Verified Merchant Store';
                 const tagline = storeRec.tagline || addrMeta?.tagline || localMeta?.tagline || 'Verified Merchant on Abu Mafhal';
                 const aboutBio = storeRec.about || vp.about || addrMeta?.about || localMeta?.about ||
@@ -169,6 +222,43 @@ export const StoreService = {
 
                 const coverImage = storeRec.cover_image || vp.cover_image || addrMeta?.cover_image || localMeta?.cover_image ||
                     'https://images.unsplash.com/photo-1472851294608-062f824d29cc?q=80&w=1200&auto=format&fit=crop';
+
+                const storeLogo = storeRec.logo || vp.avatar_url || localMeta?.logo || null;
+                const storePhone = storeRec.phone || vp.phone || vp.phone_number || addrMeta?.phone || '';
+                const storeWhatsapp = storeRec.whatsapp || vp.whatsapp || addrMeta?.whatsapp || localMeta?.whatsapp || '';
+
+                // Strictly assign only products that belong to this vendor
+                const vProds = realProducts.filter(p => isVendorMatch(p, vp.id, storeRec.id)).map(p => ({
+                    ...p,
+                    vendor_id: vp.id,
+                    store_id: storeRec.id || vp.id,
+                    vendor_name: storeName,
+                    vendor_logo: storeLogo,
+                    vendor: {
+                        id: vp.id,
+                        userId: vp.id,
+                        name: storeName,
+                        business_name: storeName,
+                        role: vp.role || 'vendor',
+                        isOfficial: false,
+                        is_official: false,
+                        avatar: storeLogo,
+                        logo: storeLogo,
+                        phone: storePhone,
+                        whatsapp: storeWhatsapp,
+                        tagline: tagline,
+                        about: aboutBio
+                    }
+                }));
+
+                const year = vp.created_at ? new Date(vp.created_at).getFullYear().toString() : '2024';
+
+                // Calculate deduplicated unique followers for this vendor
+                const vendorFollowerSet = new Set([
+                    ...(followersByVendor[vp.id] || []),
+                    ...(storeRec.id ? (followersByVendor[storeRec.id] || []) : [])
+                ]);
+                const vendorFollowersCount = vendorFollowerSet.size;
 
                 const isRec = storeRec.is_recommended !== undefined
                     ? !!storeRec.is_recommended
@@ -181,9 +271,9 @@ export const StoreService = {
                     tagline: tagline,
                     about: aboutBio,
                     cover_image: coverImage,
-                    logo: storeRec.logo || vp.avatar_url || localMeta?.logo || null,
-                    phone: storeRec.phone || vp.phone || vp.phone_number || addrMeta?.phone || '',
-                    whatsapp: storeRec.whatsapp || vp.whatsapp || addrMeta?.whatsapp || localMeta?.whatsapp || '',
+                    logo: storeLogo,
+                    phone: storePhone,
+                    whatsapp: storeWhatsapp,
                     email: storeRec.email || vp.email || addrMeta?.email || '',
                     category: storeRec.category || vp.business_category || addrMeta?.category || localMeta?.category || 'Verified Merchant',
                     address: storeRec.address || vp.address || vp.state || addrMeta?.address || 'Nigeria',
@@ -197,6 +287,9 @@ export const StoreService = {
                     is_official: false,
                     rating: 4.9,
                     reviews: `${Math.max(12, vProds.length * 4)}+`,
+                    followersCount: vendorFollowersCount,
+                    baseFollowers: vendorFollowersCount,
+                    followers: vendorFollowersCount,
                     products: vProds,
                     productsCount: vProds.length,
                     memberSince: year

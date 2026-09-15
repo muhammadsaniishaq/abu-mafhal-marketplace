@@ -195,7 +195,33 @@ export const AdminProducts = ({ navigation, onBack }) => {
             if (error) {
                 Alert.alert('Error Loading Products', error.message);
             } else {
-                setProducts(data || []);
+                const prodList = data || [];
+                const vendorIds = Array.from(new Set(prodList.map(p => p.vendor_id).filter(Boolean)));
+                let nameMap = {};
+                if (vendorIds.length > 0) {
+                    try {
+                        const [{ data: profs }, { data: storeList }] = await Promise.all([
+                            supabase.from('profiles').select('id, full_name, email, role').in('id', vendorIds),
+                            supabase.from('stores').select('id, vendor_id, name, logo').in('vendor_id', vendorIds)
+                        ]);
+                        (profs || []).forEach(p => {
+                            nameMap[p.id] = p.role === 'admin' ? 'ABU MAFHAL Official Mall' : (p.full_name || 'Vendor');
+                        });
+                        (storeList || []).forEach(st => {
+                            if (st.vendor_id && st.name) {
+                                nameMap[st.vendor_id] = st.name;
+                            }
+                        });
+                    } catch (_) {}
+                }
+
+                const enriched = prodList.map(p => ({
+                    ...p,
+                    vendor_name: p.vendor_id
+                        ? (nameMap[p.vendor_id] || (p.vendor_id === '6d3df1f5-4983-412e-a45f-db146348aac2' ? 'ABU MAFHAL Official' : 'Vendor Product'))
+                        : 'ABU MAFHAL Official'
+                }));
+                setProducts(enriched);
             }
         } catch (e) {
             Alert.alert('Network Error', 'Could not load products. Pull down to retry.');

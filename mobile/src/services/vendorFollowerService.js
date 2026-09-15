@@ -150,38 +150,21 @@ export const toggleFollowStore = async (storeId, storeName = 'Store', userId = n
 
     // Persist to Supabase
     try {
+        const canonicalDbVendorId = isOfficialTarget ? '6d3df1f5-4983-412e-a45f-db146348aac2' : String(storeId);
+
         if (willFollow) {
             await supabase
                 .from('vendor_followers')
                 .upsert(
-                    { vendor_id: String(storeId), user_id: activeUid },
+                    { vendor_id: canonicalDbVendorId, user_id: activeUid },
                     { onConflict: 'vendor_id,user_id' }
                 );
-            // If official store, also persist primary admin profile id to ensure compatibility
-            if (isOfficialTarget && storeId !== '6d3df1f5-4983-412e-a45f-db146348aac2') {
-                await supabase
-                    .from('vendor_followers')
-                    .upsert(
-                        { vendor_id: '6d3df1f5-4983-412e-a45f-db146348aac2', user_id: activeUid },
-                        { onConflict: 'vendor_id,user_id' }
-                    )
-                    .catch(() => {});
-            }
         } else {
             await supabase
                 .from('vendor_followers')
                 .delete()
-                .eq('vendor_id', String(storeId))
+                .in('vendor_id', isOfficialTarget ? OFFICIAL_STORE_ALIASES : [String(storeId)])
                 .eq('user_id', activeUid);
-
-            if (isOfficialTarget) {
-                await supabase
-                    .from('vendor_followers')
-                    .delete()
-                    .in('vendor_id', OFFICIAL_STORE_ALIASES)
-                    .eq('user_id', activeUid)
-                    .catch(() => {});
-            }
         }
     } catch (dbErr) {
         console.log('[vendorFollowerService] Supabase sync warning:', dbErr);
@@ -216,13 +199,18 @@ export const getFollowedStoresList = async (userId = null) => {
         if (followedIds.length === 0) return [];
 
         const stores = [];
-        const seenStoreIds = new Set();
+        const seenStoreKeys = new Set();
         for (const fId of followedIds) {
             try {
                 const storeInfo = await resolveVendorOrStore(fId);
-                if (storeInfo && !seenStoreIds.has(storeInfo.id)) {
-                    seenStoreIds.add(storeInfo.id);
-                    stores.push(storeInfo);
+                if (storeInfo) {
+                    const canonicalKey = (storeInfo.isOfficial || storeInfo.is_official)
+                        ? 'official'
+                        : (storeInfo.userId || storeInfo.id);
+                    if (!seenStoreKeys.has(canonicalKey)) {
+                        seenStoreKeys.add(canonicalKey);
+                        stores.push(storeInfo);
+                    }
                 }
             } catch (_) {}
         }
@@ -235,18 +223,20 @@ export const getFollowedStoresList = async (userId = null) => {
 };
 
 /**
- * Fetch all followers of a specific vendor store
+ * Fetch all followers of a specific vendor store with strict deduplication
  */
 export const getVendorFollowersList = async (vendorId) => {
     if (!vendorId) return { followers: [], totalCount: 0 };
 
     try {
-        const { data, error } = await supabase
+        const isOfficialTarget = OFFICIAL_STORE_ALIASES.includes(String(vendorId));
+        let query = supabase
             .from('vendor_followers')
             .select(`
                 id,
                 created_at,
                 user_id,
+                vendor_id,
                 profiles:user_id (
                     id,
                     full_name,
@@ -256,28 +246,41 @@ export const getVendorFollowersList = async (vendorId) => {
                     phone,
                     created_at
                 )
-            `)
-            .eq('vendor_id', String(vendorId))
-            .order('created_at', { ascending: false });
+            `);
+
+        if (isOfficialTarget) {
+            query = query.in('vendor_id', OFFICIAL_STORE_ALIASES);
+        } else {
+            query = query.eq('vendor_id', String(vendorId));
+        }
+
+        const { data, error } = await query.order('created_at', { ascending: false });
 
         if (error) {
             console.log('getVendorFollowersList error:', error);
             return { followers: [], totalCount: 0 };
         }
 
-        const followers = (data || []).map(row => {
-            const prof = row.profiles || {};
-            return {
-                id: row.id,
-                userId: row.user_id,
-                fullName: prof.full_name || prof.username || 'Customer',
-                username: prof.username || 'customer',
-                avatarUrl: prof.avatar_url || null,
-                phone: prof.phone || null,
-                role: prof.role || 'buyer',
-                followedAt: row.created_at,
-                isVip: prof.role === 'vendor'
-            };
+        // Strictly deduplicate by buyer user_id to prevent any doubling
+        const seenUserIds = new Set();
+        const followers = [];
+
+        (data || []).forEach(row => {
+            if (row.user_id && !seenUserIds.has(row.user_id)) {
+                seenUserIds.add(row.user_id);
+                const prof = row.profiles || {};
+                followers.push({
+                    id: row.id,
+                    userId: row.user_id,
+                    fullName: prof.full_name || prof.username || 'Customer',
+                    username: prof.username || 'customer',
+                    avatarUrl: prof.avatar_url || null,
+                    phone: prof.phone || null,
+                    role: prof.role || 'buyer',
+                    followedAt: row.created_at,
+                    isVip: prof.role === 'vendor'
+                });
+            }
         });
 
         return {
