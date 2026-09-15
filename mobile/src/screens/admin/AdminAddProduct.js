@@ -337,57 +337,99 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
     // ── Tab Renderers ──────────────────────────────────────────
     const renderVital = () => (
         <View style={SS.tabContent}>
-            {/* Vendor Selector */}
-            <View style={SS.card}>
-                <Text style={SS.cardTitle}>Assign to Vendor / Admin Store</Text>
-                <TouchableOpacity onPress={() => setShowVendorModal(true)} style={SS.vendorPicker}>
-                    {selectedVendor?.storeLogo || selectedVendor?.avatar_url
-                        ? <Image source={{ uri: selectedVendor.storeLogo || selectedVendor.avatar_url }} style={SS.vendorAvatar} />
-                        : <View style={[SS.vendorAvatar, { backgroundColor: '#EEF2FF', alignItems: 'center', justifyContent: 'center' }]}>
-                            <Ionicons name="storefront" size={20} color="#6366F1" />
-                          </View>
-                    }
-                    <View style={{ flex: 1 }}>
-                        <Text style={SS.vendorName}>
-                            {selectedVendor ? (selectedVendor.storeName ? `${selectedVendor.storeName} (${selectedVendor.full_name})` : selectedVendor.full_name) : 'Select vendor / admin store'}
-                        </Text>
-                        {selectedVendor && <Text style={SS.vendorEmail}>{selectedVendor.email}</Text>}
-                    </View>
-                    <Ionicons name="chevron-down" size={18} color="#94A3B8" />
-                </TouchableOpacity>
-            </View>
 
-            <View style={SS.card}>
-                <ToggleRow label="Digital Product" desc="No physical shipping needed (e.g. E-books, Keys)"
-                    icon="cloud-download" value={form.isDigital} onChange={v => set('isDigital', v)} color="#8B5CF6" />
-            </View>
-
+            {/* Card 1: Core fields — Name, Brand, Price, Stock */}
             <View style={SS.card}>
                 <Inp label="Product Name *" field="name" form={form} onSet={onSet} placeholder="e.g. Premium Wireless Earbuds" />
-                <Inp label="Brand" field="brand" form={form} onSet={onSet} placeholder="e.g. Sony, Samsung, Local Brand" />
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <View style={{ flex: 1 }}>
+                        <Inp label="Brand" field="brand" form={form} onSet={onSet} placeholder="e.g. Sony" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Inp label="Stock Qty *" field="stock" form={form} onSet={onSet} placeholder="0" numeric />
+                    </View>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <View style={{ flex: 1 }}>
+                        <Inp label="Price (₦) *" field="price" form={form} onSet={onSet} placeholder="0.00" numeric />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Inp label="Original Price (₦)" field="originalPrice" form={form} onSet={onSet} placeholder="0.00" numeric />
+                    </View>
+                </View>
             </View>
 
+            {/* Card 2: Category */}
             <View style={SS.card}>
                 <Text style={SS.cardTitle}>Category</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingTop: 4 }}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 6, paddingVertical: 2 }}>
                     {CATEGORIES.map(cat => (
                         <TouchableOpacity key={cat.label} onPress={() => set('category', cat.label)}
                             style={[SS.catChip, form.category === cat.label && { backgroundColor: cat.color, borderColor: cat.color }]}>
-                            <Ionicons name={cat.icon} size={14} color={form.category === cat.label ? 'white' : cat.color} />
+                            <Ionicons name={cat.icon} size={12} color={form.category === cat.label ? 'white' : cat.color} />
                             <Text style={[SS.catLabel, form.category === cat.label && { color: 'white' }]}>{cat.label}</Text>
                         </TouchableOpacity>
                     ))}
                 </ScrollView>
             </View>
 
+            {/* Card 3: Description + AI */}
             <View style={SS.card}>
-                <Inp label="Description *" field="description" form={form} onSet={onSet}
-                    placeholder="Detailed product information..." multi hint="Clear description improves conversions" />
-                <TouchableOpacity onPress={() => handleAI('description')} style={SS.aiBtnRow}>
-                    {aiLoading ? <ActivityIndicator size="small" color="#8B5CF6" />
-                               : <Ionicons name="sparkles" size={16} color="#8B5CF6" />}
-                    <Text style={SS.aiBtnTxt}>Rewrite with Gemini AI</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <Text style={SS.cardTitle}>Description *</Text>
+                    <TouchableOpacity onPress={() => handleAI('description')}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F3E8FF', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#C084FC' }}>
+                        {aiLoading
+                            ? <ActivityIndicator size="small" color="#8B5CF6" />
+                            : <Ionicons name="sparkles" size={13} color="#8B5CF6" />}
+                        <Text style={{ color: '#7C3AED', fontWeight: '800', fontSize: 11 }}>AI Write</Text>
+                    </TouchableOpacity>
+                </View>
+                <TextInput
+                    style={[SS.inpBox, { height: 80, textAlignVertical: 'top', paddingTop: 9 }]}
+                    value={form.description}
+                    onChangeText={v => onSet('description', v)}
+                    placeholder="Detailed product information..."
+                    placeholderTextColor="#94A3B8"
+                    multiline
+                />
+            </View>
+
+            {/* Card 4: Vendor + Status (compact) */}
+            <View style={SS.card}>
+                <TouchableOpacity onPress={() => setShowVendorModal(true)}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 }}>
+                    <View style={{ width: 32, height: 32, borderRadius: 9, backgroundColor: '#EEF2FF', alignItems: 'center', justifyContent: 'center' }}>
+                        {selectedVendor?.storeLogo || selectedVendor?.avatar_url
+                            ? <Image source={{ uri: selectedVendor.storeLogo || selectedVendor.avatar_url }} style={{ width: 32, height: 32, borderRadius: 9 }} />
+                            : <Ionicons name="storefront" size={16} color="#6366F1" />}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.5 }}>VENDOR</Text>
+                        <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#0E1A2E' }} numberOfLines={1}>
+                            {selectedVendor ? (selectedVendor.storeName || selectedVendor.full_name) : 'Tap to select vendor'}
+                        </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
                 </TouchableOpacity>
+
+                <View style={{ height: 1, backgroundColor: '#F1F5F9', marginVertical: 8 }} />
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View>
+                        <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.5 }}>STATUS</Text>
+                        <Text style={{ fontSize: 12.5, fontWeight: '700', color: form.status === 'approved' ? '#059669' : '#B45309' }}>
+                            {form.status === 'approved' ? '✓ Published' : '⏸ Draft'}
+                        </Text>
+                    </View>
+                    <Switch
+                        value={form.status === 'approved'}
+                        onValueChange={v => set('status', v ? 'approved' : 'draft')}
+                        trackColor={{ false: '#E2E8F0', true: '#059669' }}
+                        thumbColor="white"
+                    />
+                </View>
             </View>
         </View>
     );
@@ -395,40 +437,33 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
     const renderOffer = () => (
         <View style={SS.tabContent}>
             <View style={SS.card}>
-                <Text style={SS.cardTitle}>Pricing</Text>
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                    <View style={{ flex: 1 }}><Inp label="Selling Price (₦) *" field="price" form={form} onSet={onSet} placeholder="0.00" numeric /></View>
-                    <View style={{ flex: 1 }}><Inp label="Original Price (₦)" field="originalPrice" form={form} onSet={onSet} placeholder="0.00" numeric /></View>
-                </View>
-                <View style={{ flexDirection: 'row', gap: 12 }}>
+                <Text style={SS.cardTitle}>Extra Pricing Info</Text>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
                     <View style={{ flex: 1 }}><Inp label="Cost Price (internal)" field="cost" form={form} onSet={onSet} placeholder="0.00" numeric /></View>
-                    <View style={{ flex: 1 }}><Inp label="Stock Qty" field="stock" form={form} onSet={onSet} placeholder="0" numeric /></View>
+                    <View style={{ flex: 1 }}><Inp label="Max Qty Per Order" field="maxQuantity" form={form} onSet={onSet} placeholder="e.g. 5" numeric /></View>
                 </View>
-                <Inp label="SKU" field="sku" form={form} onSet={onSet} placeholder="PROD-001" hint="Unique product identifier" />
-                <Inp label="Barcode / GTIN" field="barcode" form={form} onSet={onSet} placeholder="EAN-13 or UPC" />
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <View style={{ flex: 1 }}><Inp label="SKU" field="sku" form={form} onSet={onSet} placeholder="PROD-001" /></View>
+                    <View style={{ flex: 1 }}><Inp label="Barcode" field="barcode" form={form} onSet={onSet} placeholder="EAN-13 / UPC" /></View>
+                </View>
+                <Inp label="Low Stock Alert At" field="lowStockThreshold" form={form} onSet={onSet} placeholder="5" numeric hint="Alert when stock falls below this number" />
             </View>
 
             <View style={SS.card}>
-                <Text style={SS.cardTitle}>Free Shipping</Text>
-                <ToggleRow label="Enable Free Shipping"
-                    desc={form.freeShipping ? 'Customers pay ₦0 shipping' : 'Customers pay shipping fee'}
-                    icon="airplane" value={form.freeShipping}
-                    onChange={v => set('freeShipping', v)} color="#10B981" />
+                <ToggleRow label="Free Shipping" desc={form.freeShipping ? 'Customers pay ₦0' : 'Standard shipping fee applies'}
+                    icon="airplane" value={form.freeShipping} onChange={v => set('freeShipping', v)} color="#10B981" />
+                <ToggleRow label="Allow Backorders" desc="Let customers order even when out of stock"
+                    icon="refresh" value={form.allowBackorders} onChange={v => set('allowBackorders', v)} color="#F59E0B" />
+                <ToggleRow label="Digital Product" desc="No physical shipping needed"
+                    icon="cloud-download" value={form.isDigital} onChange={v => set('isDigital', v)} color="#8B5CF6" />
             </View>
 
             <View style={SS.card}>
                 <Text style={SS.cardTitle}>Sale Schedule</Text>
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                    <View style={{ flex: 1 }}><Inp label="Start Date (YYYY-MM-DD)" field="saleStart" form={form} onSet={onSet} placeholder="2025-01-01" /></View>
-                    <View style={{ flex: 1 }}><Inp label="End Date (YYYY-MM-DD)" field="saleEnd" form={form} onSet={onSet} placeholder="2025-12-31" /></View>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <View style={{ flex: 1 }}><Inp label="Start (YYYY-MM-DD)" field="saleStart" form={form} onSet={onSet} placeholder="2025-01-01" /></View>
+                    <View style={{ flex: 1 }}><Inp label="End (YYYY-MM-DD)" field="saleEnd" form={form} onSet={onSet} placeholder="2025-12-31" /></View>
                 </View>
-            </View>
-
-            <View style={SS.card}>
-                <Text style={SS.cardTitle}>Visibility Status</Text>
-                <ToggleRow label="Published" desc={form.status === 'approved' ? 'Visible to all customers' : 'Hidden draft'}
-                    icon="eye" value={form.status === 'approved'}
-                    onChange={v => set('status', v ? 'approved' : 'draft')} color="#3B82F6" />
             </View>
 
             <TouchableOpacity onPress={() => handleAI('seo')} style={SS.aiBtnFull}>
