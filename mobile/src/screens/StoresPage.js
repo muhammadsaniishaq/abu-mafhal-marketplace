@@ -43,6 +43,7 @@ const fmtPrice = (n) => {
 };
 
 export const StoresPage = ({
+    user = null,
     onGoToCart,
     onGoToNotifications,
     cartCount = 0,
@@ -58,7 +59,7 @@ export const StoresPage = ({
     const [popularProducts, setPopularProducts] = useState([]);
     const [categories, setCategories] = useState([]);
     const [followedStores, setFollowedStores] = useState({});
-    const [currentUser, setCurrentUser] = useState(null);
+    const [currentUser, setCurrentUser] = useState(user || null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
@@ -133,25 +134,37 @@ export const StoresPage = ({
         } catch (_) {}
     };
 
+    useEffect(() => {
+        if (user) {
+            setCurrentUser(prev => ({ ...(prev || {}), ...user }));
+        }
+    }, [user]);
+
     const isOwnStore = (store) => {
         if (!store || !currentUser) return false;
-        const uid = currentUser.id;
-        const role = (currentUser.role || '').toLowerCase();
+        const uid = String(currentUser.id || '').trim();
+        const role = String(currentUser.role || currentUser.user_metadata?.role || '').toLowerCase();
         const isAdmin = role === 'admin';
 
         const officialAliases = [
             '46913c66-4474-4962-82e4-b459b89d33fd',
             '6d3df1f5-4983-412e-a45f-db146348aac2',
             'official-abumafhal',
-            'official'
+            'official',
+            'admin'
         ];
-        const isOfficial = store.is_official || store.isOfficial || officialAliases.includes(String(store.id)) || officialAliases.includes(String(store.vendor_id));
+        const isOfficial = !!(
+            store.is_official ||
+            store.isOfficial ||
+            officialAliases.includes(String(store.id)) ||
+            officialAliases.includes(String(store.vendor_id)) ||
+            officialAliases.includes(String(store.userId)) ||
+            (store.name && String(store.name).toLowerCase().includes('abu mafhal') && isAdmin)
+        );
         if (isOfficial && isAdmin) return true;
 
-        if (String(store.vendor_id || store.vendorId || store.user_id || store.userId || '') === String(uid)) {
-            return true;
-        }
-        if (String(store.id) === String(uid)) {
+        const storeOwnerId = String(store.vendor_id || store.vendorId || store.user_id || store.userId || store.id || '');
+        if (storeOwnerId === uid) {
             return true;
         }
         return false;
@@ -166,8 +179,9 @@ export const StoresPage = ({
             return;
         }
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) {
+            const { data: { user: authUser } } = await supabase.auth.getUser();
+            const activeUser = authUser || currentUser;
+            if (!activeUser) {
                 Alert.alert(
                     'Login Required',
                     'Please login to follow your favorite stores and receive exclusive updates.',
@@ -179,13 +193,13 @@ export const StoresPage = ({
                 return;
             }
 
-            const res = await toggleFollowStore(storeId, storeName, user.id);
-            if (res?.isSelfFollow) {
-                Alert.alert('Notice', res.message || 'Ba za ka iya bin shagon kanka ba.');
-                return;
-            }
+            const res = await toggleFollowStore(storeId, storeName, activeUser.id);
             if (res?.updatedMap) {
                 setFollowedStores(res.updatedMap);
+            }
+            if (res?.isSelfFollow) {
+                Alert.alert('Notice', res.message || 'Ba za ka iya bin (follow) shagon kanka ba.');
+                return;
             }
             showToast(res.isFollowed ? `Following ${storeName}` : `Unfollowed ${storeName}`);
         } catch (err) {
@@ -665,15 +679,22 @@ export const StoresPage = ({
                                                     </Text>
                                                 </View>
 
-                                                <TouchableOpacity
-                                                    onPress={() => toggleFollow(recStore.id, recStore.name)}
-                                                    style={[s.spotlightFollowBtn, isFollowed && s.spotlightFollowBtnActive]}
-                                                    activeOpacity={0.8}
-                                                >
-                                                    <Text style={[s.spotlightFollowTxt, isFollowed && s.spotlightFollowTxtActive]}>
-                                                        {isFollowed ? 'Following' : '+ Follow'}
-                                                    </Text>
-                                                </TouchableOpacity>
+                                                {isOwnStore(recStore) ? (
+                                                    <View style={s.spotlightOwnStoreBadge}>
+                                                        <Ionicons name="person" size={10} color="#FCD34D" />
+                                                        <Text style={s.spotlightOwnStoreTxt}>Your Store</Text>
+                                                    </View>
+                                                ) : (
+                                                    <TouchableOpacity
+                                                        onPress={() => toggleFollow(recStore.id, recStore.name, recStore)}
+                                                        style={[s.spotlightFollowBtn, isFollowed && s.spotlightFollowBtnActive]}
+                                                        activeOpacity={0.8}
+                                                    >
+                                                        <Text style={[s.spotlightFollowTxt, isFollowed && s.spotlightFollowTxtActive]}>
+                                                            {isFollowed ? 'Following' : '+ Follow'}
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                )}
                                             </View>
                                         </View>
                                     </TouchableOpacity>
@@ -1932,6 +1953,22 @@ const s = StyleSheet.create({
     },
     spotlightFollowTxtActive: {
         color: BRAND.sky
+    },
+    spotlightOwnStoreBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+        backgroundColor: '#0A192F',
+        paddingHorizontal: 8,
+        paddingVertical: 3.5,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#D4AF37'
+    },
+    spotlightOwnStoreTxt: {
+        fontSize: 9.5,
+        fontWeight: '800',
+        color: '#FCD34D'
     },
     storesListContainer: {
         paddingHorizontal: 16,

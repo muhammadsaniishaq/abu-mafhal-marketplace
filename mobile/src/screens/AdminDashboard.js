@@ -918,44 +918,8 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                 </ScrollView>
             </LinearGradient>
 
-            {/* ── SUB-SCREEN NAVIGATION BAR (IF INSIDE A SUB-SCREEN) ── */}
-            {activeTab !== 'overview' && (
-                <View style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    paddingHorizontal: 16,
-                    paddingVertical: 10,
-                    backgroundColor: '#FFFFFF',
-                    borderBottomWidth: 1,
-                    borderColor: '#E2E8F0'
-                }}>
-                    <TouchableOpacity
-                        onPress={() => setActiveTab('overview')}
-                        style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
-                    >
-                        <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }}>
-                            <Ionicons name="chevron-back" size={16} color={NAVY} />
-                        </View>
-                        <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY }}>
-                            Back to Dashboard
-                        </Text>
-                    </TouchableOpacity>
 
-                    <View style={{
-                        paddingHorizontal: 8,
-                        paddingVertical: 3,
-                        borderRadius: 6,
-                        backgroundColor: 'rgba(217, 167, 58, 0.15)',
-                        borderWidth: 1,
-                        borderColor: 'rgba(217, 167, 58, 0.3)'
-                    }}>
-                        <Text style={{ fontSize: 10, fontWeight: '800', color: GOLD, textTransform: 'uppercase' }}>
-                            {activeTab.replace(/_/g, ' ')}
-                        </Text>
-                    </View>
-                </View>
-            )}
+
 
             {/* ── MAIN CONTENT AREA ── */}
             <View style={{ flex: 1 }}>

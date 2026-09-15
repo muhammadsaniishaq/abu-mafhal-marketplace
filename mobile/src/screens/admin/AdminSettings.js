@@ -820,7 +820,7 @@ export const AdminSettings = ({ navigation }) => {
             <StatusBar barStyle={darkMode ? 'light-content' : 'dark-content'} backgroundColor={T.card} />
 
             {/* ════ HEADER ════ */}
-            <View style={[S.header, { backgroundColor: T.card, borderColor: T.border, paddingTop: insets.top + 8 }]}>
+            <View style={[S.header, { backgroundColor: T.card, borderColor: T.border, paddingTop: 8 }]}>
 
                 {/* Row 1: Nav + Title + Actions */}
                 <View style={S.hRow}>

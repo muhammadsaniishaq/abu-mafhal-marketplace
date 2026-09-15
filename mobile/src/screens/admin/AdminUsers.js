@@ -405,7 +405,7 @@ export const AdminUsers = ({ navigation: propNav }) => {
             <StatusBar barStyle="dark-content" />
 
             {/* HEADER */}
-            <View style={[S.hdr, { paddingTop: insets.top + 10 }]}>
+            <View style={[S.hdr, { paddingTop: 10 }]}>
 
                 {/* Top row */}
                 <View style={S.hdrRow}>

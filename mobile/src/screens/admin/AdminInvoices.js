@@ -488,7 +488,7 @@ const s = StyleSheet.create({
     header: {
         backgroundColor: '#FFFFFF',
         paddingHorizontal: 20,
-        paddingTop: Platform.OS === 'ios' ? 20 : 16,
+        paddingTop: 10,
         paddingBottom: 16,
         flexDirection: 'row',
         alignItems: 'center',

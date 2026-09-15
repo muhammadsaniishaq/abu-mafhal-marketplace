@@ -618,7 +618,7 @@ export const AdminHomeSettings = ({ navigation, onBack }) => {
             <Toast visible={toast.visible} message={toast.message} type={toast.type} onHide={() => setToast(t => ({ ...t, visible: false }))} />
 
             {/* Header */}
-            <View style={{ paddingHorizontal: 16, paddingTop: Platform.OS === 'ios' ? 48 : 20, paddingBottom: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderColor: '#E2E8F0' }}>
+            <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderColor: '#E2E8F0' }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                         {(navigation?.canGoBack?.() || onBack) && (

@@ -132,6 +132,7 @@ export const MainApp = ({ route, navigation, user, onLogout, cartLines, onUpdate
                 )}
                 {activeTab === 'stores' && (
                     <StoresPage
+                        user={user}
                         onGoToCart={() => setActiveTab('cart')}
                         onGoToNotifications={() => setActiveTab('notifications')}
                         cartCount={cartLines.length}

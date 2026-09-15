@@ -394,17 +394,28 @@ export default function App() {
                     window.location.hash = '';
                 } catch (_) {}
             }
-
-            setTimeout(() => {
-                if (navigationRef.isReady()) {
-                    navigationRef.reset({
-                        index: 0,
-                        routes: [{ name: 'Landing' }],
-                    });
-                }
-            }, 50);
+            // Navigation to Landing is handled by the useEffect below that watches user state
         }
     };
+
+    // Whenever user becomes null (logout or session expiry), navigate to Landing page
+    useEffect(() => {
+        if (!user && !loading) {
+            const timer = setTimeout(() => {
+                if (navigationRef.isReady()) {
+                    const currentRoute = navigationRef.getCurrentRoute();
+                    // Only reset to Landing if we're not already there or on Auth
+                    if (currentRoute?.name && currentRoute.name !== 'Landing' && currentRoute.name !== 'Auth') {
+                        navigationRef.reset({
+                            index: 0,
+                            routes: [{ name: 'Landing' }],
+                        });
+                    }
+                }
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [user, loading]);
 
     const handleUpdateQty = (id, change) => {
         setCartLines(prev => prev.map(item => item.id === id ? { ...item, quantity: Math.max(1, item.quantity + change) } : item));
@@ -464,7 +475,7 @@ export default function App() {
                 }
                 return 'Main';
             }
-            if (last === 'Main') return 'Main';
+            // No stored user = always go to Landing (never to Main)
             return 'Landing';
         } catch (_) {}
         return user ? 'Main' : 'Landing';

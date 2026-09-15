@@ -340,7 +340,7 @@ export const AdminSupport = () => {
     }, [tickets, search, filter]);
 
     const renderHeader = () => (
-        <View style={[s.header, { paddingTop: Platform.OS === 'ios' ? insets.top + 10 : 16 }]}>
+        <View style={[s.header, { paddingTop: 10 }]}>
             <View style={s.headerRow}>
                 <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>

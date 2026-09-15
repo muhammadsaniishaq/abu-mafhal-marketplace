@@ -729,7 +729,7 @@ export const AdminCoupons = () => {
             <StatusBar barStyle="dark-content" />
 
             {/* LIGHT HEADER */}
-            <View style={[S.hdr, { paddingTop: Platform.OS === 'ios' ? insets.top + 10 : 16 }]}>
+            <View style={[S.hdr, { paddingTop: 10 }]}>
                 <View style={S.hdrRow}>
                     <View style={S.hdrTitleWrap}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>

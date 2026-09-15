@@ -9,7 +9,9 @@ const getUserFollowKey = (uid) => `@abumafhal_followed_stores_user_${uid}`;
 const OFFICIAL_STORE_ALIASES = [
     '46913c66-4474-4962-82e4-b459b89d33fd', // store table UUID
     '6d3df1f5-4983-412e-a45f-db146348aac2', // admin profile UUID
-    'official-abumafhal'                     // legacy slug
+    'official-abumafhal',                     // legacy slug
+    'official',
+    'admin'
 ];
 
 // Purge legacy global keys that previously leaked follow state across all users
@@ -37,9 +39,94 @@ const notifyFollowChanges = (updatedMap) => {
 };
 
 /**
+ * Resolve all canonical alias IDs that identify a target store
+ * (e.g. stores table UUID, vendor profile UUID, and official store slugs)
+ */
+export const getAllStoreTargetIds = async (storeId) => {
+    if (!storeId) return [];
+    const strId = String(storeId).trim();
+    const result = new Set([strId]);
+
+    // Check if official store
+    if (OFFICIAL_STORE_ALIASES.includes(strId) || strId.toLowerCase().includes('official') || strId.toLowerCase().includes('abu mafhal')) {
+        OFFICIAL_STORE_ALIASES.forEach(a => result.add(a));
+        return Array.from(result);
+    }
+
+    try {
+        const { data: storeRows } = await supabase
+            .from('stores')
+            .select('id, user_id')
+            .or(`id.eq.${strId},user_id.eq.${strId}`);
+
+        if (Array.isArray(storeRows) && storeRows.length > 0) {
+            storeRows.forEach(row => {
+                if (row.id) result.add(String(row.id));
+                if (row.user_id) result.add(String(row.user_id));
+            });
+        }
+    } catch (_) {}
+
+    return Array.from(result);
+};
+
+/**
+ * Check if the active user is the owner of this store.
+ * Vendors own their own store, and Admins own the Official Abu Mafhal Store.
+ */
+export const isUserStoreOwner = async (storeId, userId) => {
+    if (!storeId || !userId) return false;
+    const strStoreId = String(storeId).trim();
+    const strUserId = String(userId).trim();
+
+    // 1. Direct ID match (vendor profile id as store id)
+    if (strStoreId === strUserId) return true;
+
+    // 2. Check if official store and user is admin
+    const isOfficialTarget = OFFICIAL_STORE_ALIASES.includes(strStoreId) || strStoreId === 'official' || strStoreId === 'admin';
+    try {
+        const { data: prof } = await supabase.from('profiles').select('role').eq('id', strUserId).maybeSingle();
+        const role = (prof?.role || '').toLowerCase();
+        if (role === 'admin' && isOfficialTarget) return true;
+    } catch (_) {}
+
+    // 3. Check if stores table has user_id == userId for this store row
+    try {
+        const { data: storeRows } = await supabase
+            .from('stores')
+            .select('id, user_id')
+            .or(`id.eq.${strStoreId},user_id.eq.${strStoreId}`);
+
+        if (Array.isArray(storeRows) && storeRows.length > 0) {
+            for (const row of storeRows) {
+                if (String(row.user_id) === strUserId) return true;
+            }
+        }
+    } catch (_) {}
+
+    // 4. Check if current user owns any store row matching storeId
+    try {
+        const { data: myStores } = await supabase
+            .from('stores')
+            .select('id, user_id')
+            .eq('user_id', strUserId);
+
+        if (Array.isArray(myStores) && myStores.length > 0) {
+            for (const s of myStores) {
+                if (String(s.id) === strStoreId || String(s.user_id) === strStoreId) {
+                    return true;
+                }
+            }
+        }
+    } catch (_) {}
+
+    return false;
+};
+
+/**
  * Fetch map of followed store IDs: { [storeId]: true }
  * Strictly scoped to the authenticated user.
- * Guests / unauthenticated users follow NO stores ({}) by definition.
+ * Automatically purges any self-follows for admins and vendors.
  */
 export const getFollowedStoreMap = async (userId = null) => {
     let activeUid = userId;
@@ -50,7 +137,6 @@ export const getFollowedStoreMap = async (userId = null) => {
         } catch (_) {}
     }
 
-    // Unauthenticated visitors do not follow any store
     if (!activeUid) {
         return {};
     }
@@ -64,33 +150,76 @@ export const getFollowedStoreMap = async (userId = null) => {
     } catch (_) {}
 
     try {
+        // Collect all forbidden self-store IDs for this user
+        let userRole = '';
+        try {
+            const { data: prof } = await supabase.from('profiles').select('role').eq('id', activeUid).maybeSingle();
+            if (prof?.role) userRole = prof.role.toLowerCase();
+        } catch (_) {}
+
+        const forbiddenSelfIds = new Set([String(activeUid)]);
+        if (userRole === 'admin') {
+            OFFICIAL_STORE_ALIASES.forEach(alias => forbiddenSelfIds.add(alias));
+        }
+
+        try {
+            const { data: ownedStores } = await supabase.from('stores').select('id, user_id').eq('user_id', activeUid);
+            if (Array.isArray(ownedStores)) {
+                ownedStores.forEach(s => {
+                    if (s.id) forbiddenSelfIds.add(String(s.id));
+                    if (s.user_id) forbiddenSelfIds.add(String(s.user_id));
+                });
+            }
+        } catch (_) {}
+
+        // Fetch from Supabase
         const { data, error } = await supabase
             .from('vendor_followers')
             .select('vendor_id')
             .eq('user_id', activeUid);
 
         if (!error && Array.isArray(data)) {
-            // Fresh map strictly from DB for this user
             const freshMap = {};
             let isOfficialFollowed = false;
+            const rogueDbFollows = [];
 
             data.forEach(item => {
-                if (item.vendor_id) {
-                    freshMap[item.vendor_id] = true;
-                    if (OFFICIAL_STORE_ALIASES.includes(item.vendor_id)) {
-                        isOfficialFollowed = true;
+                const vid = String(item.vendor_id);
+                if (vid) {
+                    if (forbiddenSelfIds.has(vid)) {
+                        rogueDbFollows.push(vid);
+                    } else {
+                        freshMap[vid] = true;
+                        if (OFFICIAL_STORE_ALIASES.includes(vid)) {
+                            isOfficialFollowed = true;
+                        }
                     }
                 }
             });
 
-            // Synchronize all official store aliases so all screens match
-            if (isOfficialFollowed) {
+            // Asynchronously delete any self-follow rows from DB
+            if (rogueDbFollows.length > 0) {
+                supabase
+                    .from('vendor_followers')
+                    .delete()
+                    .in('vendor_id', rogueDbFollows)
+                    .eq('user_id', activeUid)
+                    .then(() => {})
+                    .catch(() => {});
+            }
+
+            // Clean local map of any self-follows
+            forbiddenSelfIds.forEach(fid => {
+                delete localMap[fid];
+            });
+
+            // Synchronize all official store aliases if buyer followed official store
+            if (isOfficialFollowed && userRole !== 'admin') {
                 OFFICIAL_STORE_ALIASES.forEach(alias => {
                     freshMap[alias] = true;
                 });
             }
 
-            // Persist back to this user's isolated local storage
             AsyncStorage.setItem(storageKey, JSON.stringify(freshMap)).catch(() => {});
             return freshMap;
         }
@@ -100,42 +229,9 @@ export const getFollowedStoreMap = async (userId = null) => {
 };
 
 /**
- * Check if the active user is the owner of this store.
- * Vendors own their own store, and Admins own the Official Abu Mafhal Store.
- */
-export const isUserStoreOwner = async (storeId, userId) => {
-    if (!storeId || !userId) return false;
-    const strStoreId = String(storeId);
-    const strUserId = String(userId);
-
-    // 1. Direct ID match (vendor profile id as store id)
-    if (strStoreId === strUserId) return true;
-
-    // 2. Check if official store and user is admin
-    const isOfficial = OFFICIAL_STORE_ALIASES.includes(strStoreId);
-    if (isOfficial) {
-        try {
-            const { data: prof } = await supabase.from('profiles').select('role').eq('id', strUserId).maybeSingle();
-            if ((prof?.role || '').toLowerCase() === 'admin') return true;
-        } catch (_) {}
-    }
-
-    // 3. Check if stores table has vendor_id == userId
-    try {
-        const { data: storeRow } = await supabase
-            .from('stores')
-            .select('id, vendor_id')
-            .eq('id', strStoreId)
-            .maybeSingle();
-        if (storeRow && String(storeRow.vendor_id) === strUserId) return true;
-    } catch (_) {}
-
-    return false;
-};
-
-/**
  * Toggle follow status for a store
  * Requires authentication. If guest, returns { requiresAuth: true }.
+ * 100% blocks self-follow and guarantees unfollow cleans all aliases.
  */
 export const toggleFollowStore = async (storeId, storeName = 'Store', userId = null) => {
     let activeUid = userId;
@@ -154,49 +250,61 @@ export const toggleFollowStore = async (storeId, storeName = 'Store', userId = n
         };
     }
 
+    // Resolve all possible aliases representing this target store
+    const targetAliases = await getAllStoreTargetIds(storeId);
+
     // Prevent vendor or admin from following their own store
     const isOwner = await isUserStoreOwner(storeId, activeUid);
     if (isOwner) {
-        // Clean up any stale follow in local storage
         const storageKey = getUserFollowKey(activeUid);
         const currentMap = await getFollowedStoreMap(activeUid);
-        if (currentMap[storeId]) {
-            const cleaned = { ...currentMap };
-            delete cleaned[storeId];
-            await AsyncStorage.setItem(storageKey, JSON.stringify(cleaned)).catch(() => {});
-            notifyFollowChanges(cleaned);
-        }
+        const cleaned = { ...currentMap };
+
+        targetAliases.forEach(alias => {
+            delete cleaned[alias];
+        });
+        delete cleaned[String(storeId)];
+
+        await AsyncStorage.setItem(storageKey, JSON.stringify(cleaned)).catch(() => {});
+        notifyFollowChanges(cleaned);
+
+        // Actively delete any self-follow rows from Supabase
+        try {
+            await supabase
+                .from('vendor_followers')
+                .delete()
+                .in('vendor_id', targetAliases)
+                .eq('user_id', activeUid);
+        } catch (_) {}
+
         return {
             requiresAuth: false,
             isSelfFollow: true,
             isFollowed: false,
+            updatedMap: cleaned,
             message: 'Ba za ka iya bin (follow) shagon kanka ba.'
         };
     }
 
     const storageKey = getUserFollowKey(activeUid);
     const currentMap = await getFollowedStoreMap(activeUid);
-    const isCurrentlyFollowed = !!currentMap[storeId];
-    const willFollow = !isCurrentlyFollowed;
 
-    const isOfficialTarget = OFFICIAL_STORE_ALIASES.includes(String(storeId));
+    // Check if ANY alias is currently marked as followed
+    const isCurrentlyFollowed = targetAliases.some(alias => !!currentMap[alias]) || !!currentMap[String(storeId)];
+    const willFollow = !isCurrentlyFollowed;
 
     // Optimistic user-isolated update
     const updatedMap = { ...currentMap };
     if (willFollow) {
-        updatedMap[storeId] = true;
-        if (isOfficialTarget) {
-            OFFICIAL_STORE_ALIASES.forEach(alias => {
-                updatedMap[alias] = true;
-            });
-        }
+        targetAliases.forEach(alias => {
+            updatedMap[alias] = true;
+        });
     } else {
-        delete updatedMap[storeId];
-        if (isOfficialTarget) {
-            OFFICIAL_STORE_ALIASES.forEach(alias => {
-                delete updatedMap[alias];
-            });
-        }
+        // Unfollow: delete ALL aliases from the map
+        targetAliases.forEach(alias => {
+            delete updatedMap[alias];
+        });
+        delete updatedMap[String(storeId)];
     }
 
     await AsyncStorage.setItem(storageKey, JSON.stringify(updatedMap)).catch(() => {});
@@ -204,7 +312,7 @@ export const toggleFollowStore = async (storeId, storeName = 'Store', userId = n
 
     // Persist to Supabase
     try {
-        const canonicalDbVendorId = isOfficialTarget ? '6d3df1f5-4983-412e-a45f-db146348aac2' : String(storeId);
+        const canonicalDbVendorId = targetAliases[0] || String(storeId);
 
         if (willFollow) {
             await supabase
@@ -214,10 +322,11 @@ export const toggleFollowStore = async (storeId, storeName = 'Store', userId = n
                     { onConflict: 'vendor_id,user_id' }
                 );
         } else {
+            // Delete ALL aliases for this store from Supabase
             await supabase
                 .from('vendor_followers')
                 .delete()
-                .in('vendor_id', isOfficialTarget ? OFFICIAL_STORE_ALIASES : [String(storeId)])
+                .in('vendor_id', targetAliases)
                 .eq('user_id', activeUid);
         }
     } catch (dbErr) {

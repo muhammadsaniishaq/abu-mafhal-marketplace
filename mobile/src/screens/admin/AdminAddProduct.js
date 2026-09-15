@@ -667,7 +667,7 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
             <StatusBar barStyle="dark-content" backgroundColor="white" />
 
             {/* Header */}
-            <View style={[SS.header, { paddingTop: insets.top + 8 }]}>
+            <View style={[SS.header, { paddingTop: 8 }]}>
                 <TouchableOpacity onPress={onCancel} style={SS.iconBtn}>
                     <Ionicons name="close" size={22} color="#0E1A2E" />
                 </TouchableOpacity>

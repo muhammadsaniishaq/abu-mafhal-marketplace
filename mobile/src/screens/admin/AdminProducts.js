@@ -276,7 +276,7 @@ export const AdminProducts = ({ navigation, onBack }) => {
         <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
 
             {/* Header */}
-            <View style={[SS.header, { paddingTop: insets.top + 8 }]}>
+            <View style={[SS.header, { paddingTop: 8 }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
                     {(navigation?.canGoBack?.() || onBack) && (
                         <TouchableOpacity onPress={onBack || (() => navigation.goBack())} style={SS.iconBtn}>

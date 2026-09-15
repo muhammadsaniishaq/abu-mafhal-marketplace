@@ -243,9 +243,8 @@ const ProfilePageInner = ({
     const handleUnfollowStore = async (storeId, storeName) => {
         try {
             await toggleFollowStore(storeId, storeName, user?.id);
-            const officialAliases = ['46913c66-4474-4962-82e4-b459b89d33fd', '6d3df1f5-4983-412e-a45f-db146348aac2', 'official-abumafhal'];
-            const isOfficial = officialAliases.includes(String(storeId));
-            setFollowedStores(prev => prev.filter(s => isOfficial ? !officialAliases.includes(String(s.id)) : s.id !== storeId));
+            const freshList = await getFollowedStoresList(user?.id);
+            setFollowedStores(freshList || []);
         } catch (_) {}
     };
 

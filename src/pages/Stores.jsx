@@ -57,47 +57,113 @@ const Stores = () => {
 
   const isOwnStore = (store) => {
     if (!store || !user) return false;
-    const uid = user.id;
-    const role = (profile?.role || user?.role || user?.user_metadata?.role || '').toLowerCase();
+    const uid = String(user.id || '').trim();
+    const role = String(profile?.role || user?.role || user?.user_metadata?.role || '').toLowerCase();
     const isAdmin = role === 'admin';
 
     const officialAliases = [
       '46913c66-4474-4962-82e4-b459b89d33fd',
       '6d3df1f5-4983-412e-a45f-db146348aac2',
       'official-abumafhal',
-      'official'
+      'official',
+      'admin'
     ];
-    const isOfficial = store.isOfficial || store.is_official || officialAliases.includes(String(store.id)) || officialAliases.includes(String(store.vendor_id));
+    const isOfficial = !!(
+      store.isOfficial ||
+      store.is_official ||
+      officialAliases.includes(String(store.id)) ||
+      officialAliases.includes(String(store.vendor_id)) ||
+      officialAliases.includes(String(store.userId)) ||
+      (store.name && String(store.name).toLowerCase().includes('abu mafhal') && isAdmin)
+    );
     if (isOfficial && isAdmin) return true;
 
-    if (String(store.vendor_id || store.vendorId || store.user_id || store.userId || '') === String(uid)) return true;
-    if (String(store.id) === String(uid)) return true;
+    const storeOwnerId = String(store.vendor_id || store.vendorId || store.user_id || store.userId || store.id || '');
+    if (storeOwnerId === uid) return true;
     return false;
   };
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(FOLLOWED_STORES_KEY);
-      if (raw) setFollowedStores(JSON.parse(raw));
-    } catch (_) {}
+    const loadUserFollows = async () => {
+      if (!user) {
+        setFollowedStores({});
+        return;
+      }
+      const userKey = `${FOLLOWED_STORES_KEY}_${user.id}`;
+      try {
+        const raw = localStorage.getItem(userKey);
+        if (raw) setFollowedStores(JSON.parse(raw));
+      } catch (_) {}
 
+      try {
+        const { data, error } = await supabase
+          .from('vendor_followers')
+          .select('vendor_id')
+          .eq('user_id', user.id);
+        if (!error && Array.isArray(data)) {
+          const map = {};
+          data.forEach(item => {
+            if (item.vendor_id) map[item.vendor_id] = true;
+          });
+          setFollowedStores(map);
+          try {
+            localStorage.setItem(userKey, JSON.stringify(map));
+          } catch (_) {}
+        }
+      } catch (_) {}
+    };
+
+    loadUserFollows();
     fetchStoresAndData();
-  }, []);
+  }, [user?.id]);
 
-  const toggleFollow = (storeId, storeName, storeObj = null) => {
-    if (storeObj && isOwnStore(storeObj)) {
-      showToast('Ba za ka iya bin (follow) shagon kanka ba.');
+  const toggleFollow = async (storeId, storeName, storeObj = null) => {
+    if (!user) {
+      navigate('/login');
       return;
     }
+    const targetObj = storeObj || stores.find(s => s.id === storeId) || { id: storeId };
+    if (isOwnStore(targetObj)) {
+      showToast('Ba za ka iya bin (follow) shagon kanka ba.');
+      setFollowedStores(prev => {
+        const copy = { ...prev };
+        delete copy[storeId];
+        return copy;
+      });
+      return;
+    }
+
+    const isCurrentlyFollowed = !!followedStores[storeId];
+    const willFollow = !isCurrentlyFollowed;
+
     setFollowedStores(prev => {
-      const isFollowed = !prev[storeId];
-      const updated = { ...prev, [storeId]: isFollowed };
+      const updated = { ...prev };
+      if (willFollow) {
+        updated[storeId] = true;
+      } else {
+        delete updated[storeId];
+      }
       try {
-        localStorage.setItem(FOLLOWED_STORES_KEY, JSON.stringify(updated));
+        localStorage.setItem(`${FOLLOWED_STORES_KEY}_${user.id}`, JSON.stringify(updated));
       } catch (_) {}
-      showToast(isFollowed ? `Now following ${storeName}` : `Unfollowed ${storeName}`);
+      showToast(willFollow ? `Now following ${storeName}` : `Unfollowed ${storeName}`);
       return updated;
     });
+
+    try {
+      if (willFollow) {
+        await supabase.from('vendor_followers').upsert(
+          { vendor_id: String(storeId), user_id: user.id },
+          { onConflict: 'vendor_id,user_id' }
+        );
+      } else {
+        await supabase.from('vendor_followers').delete()
+          .eq('vendor_id', String(storeId))
+          .eq('user_id', user.id);
+      }
+    } catch (e) {
+      console.log('toggleFollow web sync warning:', e);
+    }
   };
 
   const fetchStoresAndData = async () => {

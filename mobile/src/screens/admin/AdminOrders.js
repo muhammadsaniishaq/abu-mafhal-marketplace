@@ -619,7 +619,7 @@ export const AdminOrders = ({ navigation, onBack }) => {
     return (
         <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
             {/* ── Stats Header ── */}
-            <View style={{ backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingTop: Platform.OS === 'ios' ? 48 : 20, paddingBottom: 16, borderBottomWidth: 1, borderColor: '#E2E8F0' }}>
+            <View style={{ backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16, borderBottomWidth: 1, borderColor: '#E2E8F0' }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                         {(navigation?.canGoBack?.() || onBack) && (
