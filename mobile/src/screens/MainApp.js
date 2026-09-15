@@ -98,8 +98,8 @@ export const MainApp = ({ route, navigation, user, onLogout, cartLines, onUpdate
                     onLogout={onLogout}
                     onBack={() => setActiveTab('home')}
                     onOpenVendorRegister={onOpenVendorRegister}
-                    onOpenVendor={onOpenVendor}
-                    onOpenAdmin={onOpenAdmin}
+                    onOpenVendor={onOpenVendor || (() => handleNavigate('VendorDashboard'))}
+                    onOpenAdmin={onOpenAdmin || (() => handleNavigate('AdminDashboard'))}
                     onNavigate={handleNavigate}
                     onUpdateUser={onUpdateUser}
                 />}

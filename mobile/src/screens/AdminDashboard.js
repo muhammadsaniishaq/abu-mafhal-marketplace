@@ -144,8 +144,29 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                 }
             }
         } catch (_) {}
-        if (navigation && navigation.navigate) {
-            navigation.navigate('Main', { screen: 'home' });
+
+        if (navigation) {
+            if (typeof navigation.canGoBack === 'function' && navigation.canGoBack()) {
+                navigation.goBack();
+                return;
+            }
+            if (typeof navigation.reset === 'function') {
+                navigation.reset({
+                    index: 0,
+                    routes: [{ name: 'Main', params: { screen: 'home' } }]
+                });
+                return;
+            }
+            if (typeof navigation.navigate === 'function') {
+                navigation.navigate('Main', { screen: 'home' });
+                return;
+            }
+        }
+        if (typeof window !== 'undefined') {
+            window.location.hash = '';
+            if (window.location.pathname.includes('admin')) {
+                window.location.pathname = '/mobile';
+            }
         }
     }, [navigation]);
 
@@ -827,21 +848,22 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                     {activeTab === 'overview' ? (
                         <TouchableOpacity
                             onPress={handleBackToHome}
-                            activeOpacity={0.7}
+                            activeOpacity={0.75}
                             style={{
                                 flexDirection: 'row',
                                 alignItems: 'center',
-                                gap: 4,
-                                backgroundColor: 'rgba(217, 167, 58, 0.18)',
-                                paddingHorizontal: 9,
-                                paddingVertical: 5,
-                                borderRadius: 9,
-                                borderWidth: 1,
+                                gap: 6,
+                                backgroundColor: 'rgba(217, 167, 58, 0.25)',
+                                paddingHorizontal: 11,
+                                paddingVertical: 6,
+                                borderRadius: 10,
+                                borderWidth: 1.5,
                                 borderColor: GOLD
                             }}
                         >
-                            <Ionicons name="storefront-outline" size={13} color={GOLD} />
-                            <Text style={{ color: GOLD, fontSize: 11, fontWeight: '800' }}>Store</Text>
+                            <Ionicons name="arrow-back" size={14} color="#FFFFFF" />
+                            <Ionicons name="storefront" size={13} color={GOLD} />
+                            <Text style={{ color: '#FFFFFF', fontSize: 11.5, fontWeight: '800' }}>Koma Shago</Text>
                         </TouchableOpacity>
                     ) : (
                         <TouchableOpacity

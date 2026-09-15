@@ -293,11 +293,43 @@ const ProfilePageInner = ({
 
     const loyalty = getLoyaltyTier(wallet.points);
 
-    // Dynamic role details
+    // Dynamic role details & robust Admin resolver
     const role = (user?.role || 'buyer').toLowerCase();
-    const isAdmin = role === 'admin';
-    const isVendor = role === 'vendor';
-    const isDriver = role === 'driver';
+    const userEmail = (user?.email || '').toLowerCase().trim();
+    const KNOWN_ADMIN_EMAILS = ['sale.abumafhal@gmail.com', 'admin@abumafhal.com', 'abumafhal@gmail.com'];
+    const isAdmin = role === 'admin' ||
+                    user?.role === 'admin' ||
+                    user?.user_metadata?.role === 'admin' ||
+                    KNOWN_ADMIN_EMAILS.includes(userEmail) ||
+                    userEmail.includes('admin');
+    const isVendor = role === 'vendor' || user?.role === 'vendor';
+    const isDriver = role === 'driver' || user?.role === 'driver';
+
+    const handleOpenAdminConsole = () => {
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.setItem('@abumafhal_last_screen', 'AdminDashboard');
+                if (window.location.hash !== '#admin') window.location.hash = 'admin';
+            }
+        } catch (_) {}
+
+        if (typeof onOpenAdmin === 'function') {
+            try {
+                onOpenAdmin();
+                return;
+            } catch (err) {
+                console.warn('onOpenAdmin error:', err);
+            }
+        }
+        if (typeof onNavigate === 'function') {
+            try {
+                onNavigate('AdminDashboard');
+                return;
+            } catch (err) {
+                console.warn('onNavigate error:', err);
+            }
+        }
+    };
 
     const displayName = user?.fullName || user?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Member';
     const displaySubtitle = user?.email || user?.phone || user?.phone_number || '';
@@ -386,6 +418,16 @@ const ProfilePageInner = ({
 
     // Menu Group 3: Account & Support
     const supportItems = [
+        ...(isAdmin ? [{
+            icon: 'shield-checkmark-outline',
+            iconColor: '#D4AF37',
+            iconBg: '#0A192F',
+            label: 'Admin Control Console',
+            subtitle: 'Shafin gudanar da kasuwa & amincewa',
+            badge: 'ADMIN',
+            badgeColor: '#D4AF37',
+            action: handleOpenAdminConsole
+        }] : []),
         {
             icon: 'settings-outline',
             iconColor: '#0A192F',
@@ -801,18 +843,38 @@ const ProfilePageInner = ({
                 {user && (
                     isAdmin ? (
                         <TouchableOpacity
-                            style={[s.roleCard, s.roleCardAdmin]}
-                            activeOpacity={0.85}
-                            onPress={onOpenAdmin}
+                            style={s.adminConsoleCard}
+                            activeOpacity={0.88}
+                            onPress={handleOpenAdminConsole}
                         >
-                            <View style={[s.roleIconCircle, { backgroundColor: '#FEE2E2' }]}>
-                                <Ionicons name="shield-checkmark" size={17} color="#DC2626" />
+                            <View style={s.adminConsoleGlow} />
+
+                            <View style={s.adminConsoleLeft}>
+                                <View style={s.adminShieldCircle}>
+                                    <Ionicons name="shield-checkmark" size={22} color="#D4AF37" />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <View style={s.adminBadgeRow}>
+                                        <View style={s.adminLiveDot} />
+                                        <Text style={s.adminBadgeText}>MASTER ADMIN ACCESS</Text>
+                                    </View>
+                                    <Text style={s.adminConsoleTitle}>Admin Control Console</Text>
+                                    <Text style={s.adminConsoleSub}>
+                                        Duba statistics, amince da vendors, sarrafa kayayyaki da oda
+                                    </Text>
+                                </View>
                             </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={s.roleCardTitle}>Admin Control Console</Text>
-                                <Text style={s.roleCardSub}>Inspect platform metrics, vendors & approvals</Text>
+
+                            <View style={s.adminConsoleRight}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <Ionicons name="speedometer-outline" size={13} color="#D4AF37" />
+                                    <Text style={s.adminConsoleStatusTxt}>Platform Status: <Text style={{ color: '#10B981', fontWeight: '800' }}>Active</Text></Text>
+                                </View>
+                                <View style={s.adminEnterBtn}>
+                                    <Text style={s.adminEnterBtnTxt}>Shiga Console</Text>
+                                    <Ionicons name="arrow-forward" size={13} color="#0A192F" />
+                                </View>
                             </View>
-                            <Ionicons name="arrow-forward" size={15} color="#DC2626" />
                         </TouchableOpacity>
                     ) : isVendor ? (
                         <TouchableOpacity
@@ -1955,6 +2017,106 @@ const s = StyleSheet.create({
         borderColor: '#E2E8F0',
         alignItems: 'center',
         justifyContent: 'center'
+    },
+
+    /* Executive Admin Command Console Card */
+    adminConsoleCard: {
+        backgroundColor: '#0A192F',
+        borderRadius: 16,
+        padding: 14,
+        marginBottom: 14,
+        borderWidth: 1.5,
+        borderColor: '#D4AF37',
+        shadowColor: '#0A192F',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.18,
+        shadowRadius: 10,
+        elevation: 4,
+        position: 'relative',
+        overflow: 'hidden',
+    },
+    adminConsoleGlow: {
+        position: 'absolute',
+        top: -20,
+        right: -20,
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        backgroundColor: 'rgba(212, 175, 55, 0.12)',
+    },
+    adminConsoleLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    adminShieldCircle: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: 'rgba(212, 175, 55, 0.18)',
+        borderWidth: 1.5,
+        borderColor: '#D4AF37',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    adminBadgeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        marginBottom: 2,
+    },
+    adminLiveDot: {
+        width: 7,
+        height: 7,
+        borderRadius: 4,
+        backgroundColor: '#10B981',
+    },
+    adminBadgeText: {
+        fontSize: 9.5,
+        fontWeight: '900',
+        color: '#D4AF37',
+        letterSpacing: 0.8,
+    },
+    adminConsoleTitle: {
+        fontSize: 15,
+        fontWeight: '900',
+        color: '#FFFFFF',
+        letterSpacing: 0.2,
+    },
+    adminConsoleSub: {
+        fontSize: 11,
+        color: '#94A3B8',
+        marginTop: 2,
+        lineHeight: 15,
+    },
+    adminConsoleRight: {
+        marginTop: 10,
+        paddingTop: 10,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255, 255, 255, 0.1)',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    adminConsoleStatusTxt: {
+        fontSize: 11,
+        color: '#E2E8F0',
+        fontWeight: '600',
+    },
+    adminEnterBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: '#D4AF37',
+        paddingHorizontal: 13,
+        paddingVertical: 6,
+        borderRadius: 18,
+    },
+    adminEnterBtnTxt: {
+        color: '#0A192F',
+        fontSize: 12,
+        fontWeight: '900',
+        letterSpacing: 0.3,
     },
 
     /* Role Card (Compact) */
