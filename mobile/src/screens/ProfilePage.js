@@ -423,7 +423,7 @@ const ProfilePageInner = ({
             iconColor: '#D4AF37',
             iconBg: '#0A192F',
             label: 'Admin Control Console',
-            subtitle: 'Shafin gudanar da kasuwa & amincewa',
+            subtitle: 'Platform metrics, vendor approvals & control',
             badge: 'ADMIN',
             badgeColor: '#D4AF37',
             action: handleOpenAdminConsole
@@ -860,7 +860,7 @@ const ProfilePageInner = ({
                                     </View>
                                     <Text style={s.adminConsoleTitle}>Admin Control Console</Text>
                                     <Text style={s.adminConsoleSub}>
-                                        Duba statistics, amince da vendors, sarrafa kayayyaki da oda
+                                        Inspect platform metrics, approve vendors, manage products & orders
                                     </Text>
                                 </View>
                             </View>
@@ -871,7 +871,7 @@ const ProfilePageInner = ({
                                     <Text style={s.adminConsoleStatusTxt}>Platform Status: <Text style={{ color: '#10B981', fontWeight: '800' }}>Active</Text></Text>
                                 </View>
                                 <View style={s.adminEnterBtn}>
-                                    <Text style={s.adminEnterBtnTxt}>Shiga Console</Text>
+                                    <Text style={s.adminEnterBtnTxt}>Access Console</Text>
                                     <Ionicons name="arrow-forward" size={13} color="#0A192F" />
                                 </View>
                             </View>
