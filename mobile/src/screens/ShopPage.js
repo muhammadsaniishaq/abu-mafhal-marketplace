@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     View, Text, TouchableOpacity, SafeAreaView, TextInput,
     FlatList, Image, ImageBackground, Animated,
-    StyleSheet, Platform, StatusBar, RefreshControl, ScrollView
+    StyleSheet, Platform, StatusBar, RefreshControl, ScrollView, ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { WIDTH, COLUMN_WIDTH } from '../styles/theme';
 import { useComparison } from '../context/ComparisonContext';
 import { supabase } from '../lib/supabase';
@@ -15,6 +16,14 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { CountdownTimer } from '../components/CountdownTimer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// ─── Theme ────────────────────────────────────────────────────────────────────
+const NAVY = '#0E1A2E';
+const NAVY2 = '#162235';
+const GOLD = '#D9A73A';
+const GOLD_LIGHT = 'rgba(217,167,58,0.15)';
+const GOLD_BORDER = 'rgba(217,167,58,0.3)';
+const BG = '#F4F6FA';
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmtPrice = (n) => {
     const num = Number(n);
@@ -24,39 +33,161 @@ const fmtPrice = (n) => {
     return `₦${num}`;
 };
 
-const DEFAULT_CATS = [
-    { label: 'All',     icon: 'apps-outline', slug: 'All' },
-];
+const getImageUrl = (item) => {
+    const fallback = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=400&auto=format&fit=crop';
+    if (!item) return fallback;
+    if (typeof item === 'string') {
+        if (item.startsWith('http')) return item;
+        try {
+            const parsed = JSON.parse(item);
+            if (Array.isArray(parsed) && parsed[0]) return parsed[0];
+            if (typeof parsed === 'string' && parsed.startsWith('http')) return parsed;
+        } catch (_) {}
+        return item;
+    }
+    if (item.image_url) return item.image_url;
+    const images = item.images;
+    if (Array.isArray(images) && images.length > 0) return images[0];
+    if (typeof images === 'string') {
+        try {
+            const p = JSON.parse(images);
+            if (Array.isArray(p) && p.length > 0) return p[0];
+        } catch (_) { return images; }
+    }
+    return fallback;
+};
 
-
-// ─── Shimmer Skeleton ──────────────────────────────────────────────────────────
+// ─── Shimmer Skeleton ─────────────────────────────────────────────────────────
 const SkeletonCard = () => {
     const shimmer = useRef(new Animated.Value(0)).current;
     useEffect(() => {
         Animated.loop(
             Animated.sequence([
-                Animated.timing(shimmer, { toValue: 1, duration: 900, useNativeDriver: true }),
-                Animated.timing(shimmer, { toValue: 0, duration: 900, useNativeDriver: true }),
+                Animated.timing(shimmer, { toValue: 1, duration: 800, useNativeDriver: true }),
+                Animated.timing(shimmer, { toValue: 0, duration: 800, useNativeDriver: true }),
             ])
         ).start();
     }, []);
-    const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.85] });
+    const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0.85] });
     return (
         <Animated.View style={[sk.card, { opacity }]}>
             <View style={sk.img} />
-            <View style={{ padding: 10, gap: 6 }}>
+            <View style={{ padding: 10, gap: 7 }}>
                 <View style={sk.line} />
-                <View style={[sk.line, { width: '55%' }]} />
-                <View style={[sk.line, { width: '38%', backgroundColor: '#C7D2FE' }]} />
+                <View style={[sk.line, { width: '60%' }]} />
+                <View style={[sk.line, { width: '40%', backgroundColor: GOLD_BORDER, height: 8 }]} />
             </View>
         </Animated.View>
     );
 };
 const sk = StyleSheet.create({
-    card: { width: COLUMN_WIDTH, backgroundColor: '#F0F4F9', borderRadius: 16, marginBottom: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#E8EDF5' },
-    img:  { height: 140, backgroundColor: '#E2E8F0' },
-    line: { height: 10, borderRadius: 5, backgroundColor: '#E2E8F0', width: '80%' },
+    card: { width: COLUMN_WIDTH, backgroundColor: '#E8EDF5', borderRadius: 18, marginBottom: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#DDE3EE' },
+    img:  { height: 140, backgroundColor: '#D8E0EC' },
+    line: { height: 10, borderRadius: 5, backgroundColor: '#CDD5E2', width: '80%' },
 });
+
+// ─── Product Card ─────────────────────────────────────────────────────────────
+const ProductCard = ({ item, onPress, onAddToCart, onWishlist, inWishlist, inCompare, onCompare }) => {
+    const pressAnim = useRef(new Animated.Value(1)).current;
+
+    const onPressIn  = () => Animated.spring(pressAnim, { toValue: 0.96, useNativeDriver: true, tension: 200 }).start();
+    const onPressOut = () => Animated.spring(pressAnim, { toValue: 1,    useNativeDriver: true, tension: 200 }).start();
+
+    const stock = item.stock_quantity ?? item.stock;
+    const isOutStock = stock != null && stock === 0;
+    const isLowStock = stock != null && stock > 0 && stock <= 5;
+    const isFreeShip = Number(item.price) >= 50000;
+
+    const hasDiscount = Number(item.compare_at_price) > Number(item.price);
+    const discountPct = hasDiscount
+        ? Math.round(((Number(item.compare_at_price) - Number(item.price)) / Number(item.compare_at_price)) * 100)
+        : (item.discount > 0 ? item.discount : null);
+    const oldPrice = hasDiscount
+        ? item.compare_at_price
+        : (item.original_price || (item.discount > 0 ? Number(item.price) * (1 + Number(item.discount) / 100) : null));
+
+    return (
+        <Animated.View style={[S.card, { transform: [{ scale: pressAnim }] }]}>
+            <TouchableOpacity
+                activeOpacity={1}
+                onPressIn={onPressIn}
+                onPressOut={onPressOut}
+                onPress={() => onPress(item)}
+            >
+                {/* IMAGE */}
+                <View style={S.imgBox}>
+                    <Image source={{ uri: getImageUrl(item) }} style={S.imgFull} resizeMode="cover" />
+
+                    {/* Dark gradient overlay bottom */}
+                    <LinearGradient
+                        colors={['transparent', 'rgba(14,26,46,0.35)']}
+                        style={S.imgGradient}
+                    />
+
+                    {isOutStock && (
+                        <View style={S.outOverlay}>
+                            <View style={S.outPill}><Text style={S.outTxt}>OUT OF STOCK</Text></View>
+                        </View>
+                    )}
+
+                    {/* Badge */}
+                    {discountPct ? (
+                        <LinearGradient colors={['#EF4444', '#DC2626']} style={S.badge}>
+                            <Text style={S.badgeTxt}>-{discountPct}%</Text>
+                        </LinearGradient>
+                    ) : (item.isNew || item.is_new) ? (
+                        <LinearGradient colors={[GOLD, '#C4922A']} style={S.badge}>
+                            <Text style={S.badgeTxt}>NEW</Text>
+                        </LinearGradient>
+                    ) : null}
+
+                    {/* Action icons */}
+                    <View style={S.iconStack}>
+                        <TouchableOpacity style={[S.iconBtn, inWishlist && S.iconBtnHeart]} onPress={() => onWishlist(item.id)}>
+                            <Ionicons name={inWishlist ? 'heart' : 'heart-outline'} size={13} color={inWishlist ? '#EF4444' : NAVY} />
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[S.iconBtn, inCompare && S.iconBtnCompare]} onPress={() => onCompare(item)}>
+                            <Ionicons name={inCompare ? 'git-compare' : 'git-compare-outline'} size={13} color={inCompare ? GOLD : NAVY} />
+                        </TouchableOpacity>
+                    </View>
+
+                    {isFreeShip && !isOutStock && (
+                        <View style={S.freeTag}>
+                            <Ionicons name="bicycle-outline" size={9} color="#059669" />
+                            <Text style={S.freeTxt}>FREE</Text>
+                        </View>
+                    )}
+                </View>
+
+                {/* INFO */}
+                <View style={S.info}>
+                    <Text style={S.cardTitle} numberOfLines={1}>{item?.name || 'Product'}</Text>
+
+                    <View style={S.ratingRow}>
+                        <Ionicons name="star" size={9} color={GOLD} />
+                        <Text style={S.ratingVal}>{item.rating?.toFixed(1) || '5.0'}</Text>
+                        <Text style={S.ratingCnt}>({item.reviews ?? 0})</Text>
+                        {isLowStock && (
+                            <View style={S.stockPill}><Text style={S.stockWarn}>{stock} left</Text></View>
+                        )}
+                    </View>
+
+                    <View style={S.priceCartRow}>
+                        <View>
+                            <Text style={S.price}>{fmtPrice(item.price)}</Text>
+                            {oldPrice && <Text style={S.oldPrice}>{fmtPrice(oldPrice)}</Text>}
+                        </View>
+                        {!isOutStock && (
+                            <TouchableOpacity style={S.cartBtn} onPress={() => onAddToCart(item)}>
+                                <Ionicons name="bag-add-outline" size={14} color="white" />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                </View>
+            </TouchableOpacity>
+        </Animated.View>
+    );
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductClick, onCompareClick, initialQuery, initialCategory }) => {
@@ -64,134 +195,96 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
 
     const [products,         setProducts]         = useState([]);
     const [filteredProducts, setFilteredProducts] = useState([]);
-    const [categories,       setCategories]       = useState(DEFAULT_CATS);
+    const [categories,       setCategories]       = useState([{ label: 'All', icon: 'apps-outline', slug: 'All' }]);
     const [loading,          setLoading]          = useState(true);
     const [refreshing,       setRefreshing]       = useState(false);
     const [activeCategory,   setActiveCategory]   = useState(initialCategory || 'All');
     const [searchQuery,      setSearchQuery]      = useState(initialQuery || '');
     const [sortBy,           setSortBy]           = useState('default');
     const [wishlist,         setWishlist]         = useState([]);
-    const [showVoiceModal,   setShowVoiceModal]   = useState(false);
     const [recording,        setRecording]        = useState(null);
+    const [showVoiceModal,   setShowVoiceModal]   = useState(false);
     const [showScrollTop,    setShowScrollTop]    = useState(false);
 
     // Banners
-    const [banners,          setBanners]          = useState([]);
-    const [promoBanners,     setPromoBanners]     = useState([]);
-    const [currentPromoIdx,  setCurrentPromoIdx]  = useState(0);
-    const promoFlatListRef = useRef(null);
-    const promoScrollX     = useRef(new Animated.Value(0)).current;
-    const scrollX          = useRef(new Animated.Value(0)).current;
-    const slideRef         = useRef(null);
-    const flatListRef      = useRef(null);
+    const [banners,      setBanners]      = useState([]);
+    const [promoBanners, setPromoBanners] = useState([]);
+    const [currentBannerIdx, setCurrentBannerIdx] = useState(0);
 
-    // Toast & animations
-    const [toast,   setToast]   = useState({ visible: false, message: '', icon: 'checkmark-circle' });
-    const fadeAnim  = useRef(new Animated.Value(0)).current;
-    const fabScale  = useRef(new Animated.Value(1)).current;
+    // Toast & anims
+    const [toast, setToast] = useState({ visible: false, message: '', icon: 'checkmark-circle' });
+    const fadeAnim   = useRef(new Animated.Value(0)).current;
+    const fabScale   = useRef(new Animated.Value(1)).current;
     const topBtnAnim = useRef(new Animated.Value(0)).current;
+    const bannerRef  = useRef(null);
+    const flatListRef = useRef(null);
+    const scrollX     = useRef(new Animated.Value(0)).current;
 
-    // ── Effects ───────────────────────────────────────────────────────────────
-    useEffect(() => { fetchData(); }, []);
+    const SHOP_CACHE_KEY = '@abumafhal_shop_cache_v4';
+    const PROD_FIELDS = 'id,name,price,original_price,compare_at_price,image_url,images,category,rating,reviews,status,discount,stock,stock_quantity,is_featured,is_new,brand,isNew,total_sales';
 
+    // ── Initial load from cache then fetch ────────────────────────────────────
     useEffect(() => {
-        if (banners.length > 1) {
-            const t = setInterval(() => {
-                setBanners(prev => {
-                    slideRef.current?.scrollTo({ x: ((banners.indexOf(prev[0]) + 1) % banners.length) * (WIDTH - 32), animated: true });
-                    return prev;
-                });
-            }, 3000);
-            return () => clearInterval(t);
-        }
-    }, [banners.length]);
-
-    useEffect(() => {
-        if (promoBanners.length > 1) {
-            const t = setInterval(() => {
-                setCurrentPromoIdx(prev => {
-                    const next = (prev + 1) % promoBanners.length;
-                    promoFlatListRef.current?.scrollToIndex({ index: next, animated: true });
-                    return next;
-                });
-            }, 4000);
-            return () => clearInterval(t);
-        }
-    }, [promoBanners.length]);
-
-    useEffect(() => { filterProducts(); }, [activeCategory, searchQuery, products, sortBy]);
-
-    useEffect(() => {
-        if (initialQuery !== undefined) {
-            setSearchQuery(initialQuery);
-        }
-    }, [initialQuery]);
-
-    useEffect(() => {
-        if (initialCategory !== undefined) {
-            setActiveCategory(initialCategory || 'All');
-        }
-    }, [initialCategory]);
-
-    const SHOP_CACHE_KEY = '@abumafhal_shop_cache_v3';
-    const PROD_FIELDS = 'id, name, price, original_price, compare_at_price, image_url, images, category, rating, reviews, status, discount, stock, stock_quantity, is_featured, is_new, brand, isNew, total_sales';
-
-    useEffect(() => {
-        // 1. Instant cache load
-        (async () => {
+        let mounted = true;
+        const boot = async () => {
             try {
                 const cached = await AsyncStorage.getItem(SHOP_CACHE_KEY);
                 if (cached) {
                     const parsed = JSON.parse(cached);
-                    if (parsed.products?.length) setProducts(parsed.products);
-                    if (parsed.banners?.length) setBanners(parsed.banners);
-                    if (parsed.promoBanners?.length) setPromoBanners(parsed.promoBanners);
-                    setLoading(false);
+                    if (mounted) {
+                        if (parsed.products?.length) setProducts(parsed.products);
+                        if (parsed.banners?.length)  setBanners(parsed.banners);
+                        if (parsed.promoBanners?.length) setPromoBanners(parsed.promoBanners);
+                        setLoading(false);
+                    }
                 }
             } catch (_) {}
-            fetchData();
-        })();
-
-        return () => {
-            recording?.stopAndUnloadAsync().catch(() => {});
+            if (mounted) fetchData();
         };
+        boot();
+        return () => { mounted = false; recording?.stopAndUnloadAsync().catch(() => {}); };
     }, []);
 
-    // Scroll-to-top visibility
-    const onScroll = (e) => {
-        const y = e.nativeEvent.contentOffset.y;
-        const shouldShow = y > 300;
-        if (shouldShow !== showScrollTop) {
-            setShowScrollTop(shouldShow);
-            Animated.spring(topBtnAnim, { toValue: shouldShow ? 1 : 0, useNativeDriver: true, tension: 80, friction: 8 }).start();
-        }
-    };
+    // ── Auto-advance banner ───────────────────────────────────────────────────
+    useEffect(() => {
+        if (banners.length <= 1) return;
+        const t = setInterval(() => {
+            setCurrentBannerIdx(prev => {
+                const next = (prev + 1) % banners.length;
+                bannerRef.current?.scrollToIndex({ index: next, animated: true });
+                return next;
+            });
+        }, 3500);
+        return () => clearInterval(t);
+    }, [banners.length]);
 
-    // ── Realtime Listener ───────────────────────────────────────────────────
+    // ── Realtime ──────────────────────────────────────────────────────────────
     useEffect(() => {
         const channel = supabase
-            .channel('shop-screen-realtime')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
-                fetchData(true);
-            })
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, () => {
-                fetchData(true);
-            })
+            .channel('shop-realtime-v2')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => fetchData(true))
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, () => fetchData(true))
             .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
+        return () => supabase.removeChannel(channel);
     }, []);
 
-    // ── Data ──────────────────────────────────────────────────────────────────
+    // ── Filter whenever deps change ───────────────────────────────────────────
+    useEffect(() => { filterProducts(); }, [activeCategory, searchQuery, products, sortBy]);
+
+    useEffect(() => { if (initialQuery !== undefined) setSearchQuery(initialQuery); }, [initialQuery]);
+    useEffect(() => { if (initialCategory !== undefined) setActiveCategory(initialCategory || 'All'); }, [initialCategory]);
+
+    // ── Fetch data ────────────────────────────────────────────────────────────
     const fetchData = async (isRefresh = false) => {
-        if (!isRefresh && products.length === 0) setLoading(true);
         try {
             const [bannersRes, promoRes, prodRes, catRes, userRes] = await Promise.allSettled([
                 supabase.from('banners').select('*').eq('is_active', true).order('display_order'),
                 supabase.from('banners').select('*').eq('section', 'promo').eq('is_active', true).order('created_at', { ascending: false }),
-                supabase.from('products').select(PROD_FIELDS).eq('status', 'approved').order('created_at', { ascending: false }).limit(80),
+                supabase.from('products')
+                    .select(PROD_FIELDS)
+                    .eq('status', 'approved')
+                    .order('created_at', { ascending: false })
+                    .limit(120),
                 supabase.from('categories').select('*').eq('is_active', true).order('display_order', { ascending: true }),
                 supabase.auth.getUser()
             ]);
@@ -209,8 +302,8 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
                     try { const parsed = JSON.parse(p.action_link); if (parsed && typeof parsed === 'object') linkData = { ...linkData, ...parsed }; } catch (_) {}
                     return { ...p, linkData };
                 }).filter(p => {
-                    const loc = p.linkData.locations?.includes('shop');
-                    const exp = p.linkData?.timerEnd ? (isNaN(new Date(p.linkData.timerEnd)) || new Date() <= new Date(p.linkData.timerEnd)) : true;
+                    const loc = p.linkData?.locations?.includes('shop');
+                    const exp = p.linkData?.timerEnd ? (!isNaN(new Date(p.linkData.timerEnd)) && new Date() <= new Date(p.linkData.timerEnd)) : true;
                     return loc && exp;
                 });
                 setPromoBanners(newPromos);
@@ -218,40 +311,34 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
 
             let newProducts = products;
             if (prodRes.status === 'fulfilled' && prodRes.value?.data) {
-                newProducts = prodRes.value.data.map(p => ({
+                newProducts = (prodRes.value.data || []).map(p => ({
                     ...p,
                     rating: p.rating || 5,
-                    reviews: p.reviews || 0
+                    reviews: p.reviews || 0,
                 }));
                 setProducts(newProducts);
             }
 
-            if (catRes.status === 'fulfilled' && catRes.value?.data && catRes.value.data.length > 0) {
-                const liveCats = [
+            if (catRes.status === 'fulfilled' && catRes.value?.data?.length > 0) {
+                setCategories([
                     { label: 'All', icon: 'apps-outline', slug: 'All' },
                     ...catRes.value.data.map(c => ({
                         label: c.name,
                         slug: c.slug || c.name,
                         icon: c.icon || 'pricetag-outline'
                     }))
-                ];
-                setCategories(liveCats);
+                ]);
             }
 
-            // Save to local cache for instant reload next time
             AsyncStorage.setItem(SHOP_CACHE_KEY, JSON.stringify({
-                products: newProducts,
-                banners: newBanners,
-                promoBanners: newPromos,
-                savedAt: Date.now()
+                products: newProducts, banners: newBanners, promoBanners: newPromos, savedAt: Date.now()
             })).catch(() => {});
 
-            // Fetch wishlist if authenticated
             if (userRes.status === 'fulfilled' && userRes.value?.data?.user) {
                 const uid = userRes.value.data.user.id;
-                supabase.from('wishlists').select('items').eq('id', uid).maybeSingle().then(({ data: wData }) => {
-                    if (wData?.items) setWishlist(wData.items);
-                }).catch(() => {});
+                supabase.from('wishlists').select('items').eq('id', uid).maybeSingle()
+                    .then(({ data: wData }) => { if (wData?.items) setWishlist(wData.items); })
+                    .catch(() => {});
             }
         } catch (err) {
             console.log('ShopPage fetchData error:', err);
@@ -269,7 +356,7 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
             const needle = activeCategory.toLowerCase().trim();
             r = r.filter(p => {
                 const cat = (p.category || '').toLowerCase().trim();
-                const nm = (p.name || '').toLowerCase();
+                const nm  = (p.name || '').toLowerCase();
                 return cat === needle || cat.includes(needle) || needle.includes(cat) || nm.includes(needle);
             });
         }
@@ -277,56 +364,32 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
             const sq = searchQuery.toLowerCase().trim();
             r = r.filter(p =>
                 (p.name || '').toLowerCase().includes(sq) ||
-                (p.category || '').toLowerCase().includes(sq)
+                (p.category || '').toLowerCase().includes(sq) ||
+                (p.brand || '').toLowerCase().includes(sq)
             );
         }
         if (sortBy === 'priceLow')  r.sort((a, b) => parseFloat(a.price || 0) - parseFloat(b.price || 0));
         if (sortBy === 'priceHigh') r.sort((a, b) => parseFloat(b.price || 0) - parseFloat(a.price || 0));
         if (sortBy === 'reviews')   r.sort((a, b) => (b.reviews || 0) - (a.reviews || 0));
+        if (sortBy === 'newest')    r.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
         setFilteredProducts(r);
-    };
-
-    const getImageUrl = (item) => {
-        if (!item) return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=400&auto=format&fit=crop';
-        if (typeof item === 'string') {
-            if (item.startsWith('http')) return item;
-            try {
-                const parsed = JSON.parse(item);
-                if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
-                if (typeof parsed === 'string' && parsed.startsWith('http')) return parsed;
-            } catch (_) {}
-            return item;
-        }
-        if (item.image_url) return item.image_url;
-        const images = item.images;
-        if (Array.isArray(images) && images.length > 0) return images[0];
-        if (typeof images === 'string') {
-            try {
-                const p = JSON.parse(images);
-                if (Array.isArray(p) && p.length > 0) return p[0];
-                if (typeof p === 'string' && p.startsWith('http')) return p;
-            } catch (_) {
-                return images;
-            }
-        }
-        return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=400&auto=format&fit=crop';
     };
 
     // ── Toast ─────────────────────────────────────────────────────────────────
     const showToast = (message, icon = 'checkmark-circle') => {
         setToast({ visible: true, message, icon });
         Animated.sequence([
-            Animated.timing(fadeAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
-            Animated.delay(2000),
-            Animated.timing(fadeAnim, { toValue: 0, duration: 250, useNativeDriver: true }),
+            Animated.timing(fadeAnim, { toValue: 1, duration: 220, useNativeDriver: true }),
+            Animated.delay(1800),
+            Animated.timing(fadeAnim, { toValue: 0, duration: 220, useNativeDriver: true }),
         ]).start(() => setToast(t => ({ ...t, visible: false })));
     };
 
     // ── Actions ───────────────────────────────────────────────────────────────
     const handleAddToCart = (item) => {
         Animated.sequence([
-            Animated.spring(fabScale, { toValue: 1.3, useNativeDriver: true, tension: 200 }),
-            Animated.spring(fabScale, { toValue: 1,   useNativeDriver: true, tension: 200 }),
+            Animated.spring(fabScale, { toValue: 1.25, useNativeDriver: true, tension: 200 }),
+            Animated.spring(fabScale, { toValue: 1, useNativeDriver: true, tension: 200 }),
         ]).start();
         addToCart(item);
         showToast(`${item.name} added to cart`, 'bag-add');
@@ -343,22 +406,16 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
         } catch (e) { console.log('wishlist err', e); }
     };
 
-    // ── Voice / Image ──────────────────────────────────────────────────────────
+    // ── Voice search ──────────────────────────────────────────────────────────
     const handleVoiceSearch = async () => {
         try {
-            if (recording) {
-                await stopRecording();
-            } else {
-                const perm = await Audio.requestPermissionsAsync();
-                if (!perm.granted) {
-                    showToast('Microphone permission required', 'mic-off');
-                    return;
-                }
-                await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-                const { recording: rec } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-                setRecording(rec); setShowVoiceModal(true);
-                setTimeout(() => stopRecording(rec), 4000);
-            }
+            if (recording) { await stopRecording(); return; }
+            const perm = await Audio.requestPermissionsAsync();
+            if (!perm.granted) { showToast('Microphone permission required', 'mic-off'); return; }
+            await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+            const { recording: rec } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+            setRecording(rec); setShowVoiceModal(true);
+            setTimeout(() => stopRecording(rec), 4000);
         } catch (e) { console.log('voice error', e); setShowVoiceModal(false); }
     };
 
@@ -376,13 +433,11 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
         } catch (e) { showToast('Processing error', 'alert-circle'); }
     };
 
+    // ── Image search ──────────────────────────────────────────────────────────
     const handleImageSearch = async () => {
         try {
             const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (!perm.granted) {
-                showToast('Photo library permission required', 'images');
-                return;
-            }
+            if (!perm.granted) { showToast('Photo library permission required', 'images'); return; }
             const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.5, base64: true });
             if (!res.canceled && res.assets[0].base64) {
                 showToast('Analyzing image…', 'scan');
@@ -393,70 +448,64 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
         } catch (e) { showToast('Gallery Error', 'alert-circle'); }
     };
 
-    // ── Render Helpers ─────────────────────────────────────────────────────────
-    const SORT_LABELS = { default: 'Default', priceLow: 'Price ↑', priceHigh: 'Price ↓', reviews: 'Top Rated' };
-    const nextSort = () => setSortBy(p => p === 'default' ? 'priceLow' : p === 'priceLow' ? 'priceHigh' : p === 'priceHigh' ? 'reviews' : 'default');
-
-    const hotDeals = products.filter(p => (Number(p.compare_at_price) > Number(p.price)) || Number(p.discount) > 0).slice(0, 10);
-
-    const renderPromoDots = () => {
-        if (promoBanners.length <= 1) return null;
-        return (
-            <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 8 }}>
-                {promoBanners.map((_, i) => {
-                    const w  = promoScrollX.interpolate({ inputRange: [(i-1)*(WIDTH-24), i*(WIDTH-24), (i+1)*(WIDTH-24)], outputRange: [4, 14, 4], extrapolate: 'clamp' });
-                    const op = promoScrollX.interpolate({ inputRange: [(i-1)*(WIDTH-24), i*(WIDTH-24), (i+1)*(WIDTH-24)], outputRange: [0.3, 1, 0.3], extrapolate: 'clamp' });
-                    return <Animated.View key={i} style={{ height: 3.5, width: w, borderRadius: 2, backgroundColor: '#0284C7', marginHorizontal: 2, opacity: op }} />;
-                })}
-            </View>
-        );
+    // ── Scroll to top ─────────────────────────────────────────────────────────
+    const onScroll = (e) => {
+        const y = e.nativeEvent.contentOffset.y;
+        const shouldShow = y > 400;
+        if (shouldShow !== showScrollTop) {
+            setShowScrollTop(shouldShow);
+            Animated.spring(topBtnAnim, { toValue: shouldShow ? 1 : 0, useNativeDriver: true, tension: 80, friction: 8 }).start();
+        }
     };
 
-    // ── 🔥 HOT DEALS horizontal strip ─────────────────────────────────────────
+    // ── Sort ──────────────────────────────────────────────────────────────────
+    const SORT_LABELS = { default: 'Default', priceLow: 'Price ↑', priceHigh: 'Price ↓', reviews: 'Top Rated', newest: 'Newest' };
+    const nextSort = () => setSortBy(p =>
+        p === 'default' ? 'priceLow' : p === 'priceLow' ? 'priceHigh' : p === 'priceHigh' ? 'reviews' : p === 'reviews' ? 'newest' : 'default'
+    );
+
+    const hotDeals = products.filter(p => (Number(p.compare_at_price) > Number(p.price)) || Number(p.discount) > 0).slice(0, 12);
+
+    // ── HOT DEALS strip ───────────────────────────────────────────────────────
     const renderHotDeals = () => {
         if (hotDeals.length === 0) return null;
         return (
-            <View style={styles.sectionBlock}>
-                {/* Section Header */}
-                <View style={styles.sectionHeader}>
-                    <View style={styles.sectionTitleRow}>
-                        <View style={styles.sectionAccent} />
-                        <Text style={styles.sectionTitle}>🔥 Hot Deals</Text>
+            <View style={{ marginTop: 18, marginBottom: 4 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <View style={{ width: 4, height: 18, borderRadius: 2, backgroundColor: GOLD }} />
+                        <Text style={{ fontSize: 15, fontWeight: '900', color: NAVY }}>🔥 Hot Deals</Text>
                     </View>
                     <TouchableOpacity onPress={() => setSortBy('priceLow')}>
-                        <Text style={styles.seeAll}>See all</Text>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: GOLD }}>See all</Text>
                     </TouchableOpacity>
                 </View>
 
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 14, gap: 10 }}>
                     {hotDeals.map(item => {
-                        const dealHasDiscount = Number(item.compare_at_price) > Number(item.price);
-                        const dealDiscountVal = dealHasDiscount
+                        const dHasDisc = Number(item.compare_at_price) > Number(item.price);
+                        const dPct = dHasDisc
                             ? Math.round(((Number(item.compare_at_price) - Number(item.price)) / Number(item.compare_at_price)) * 100)
-                            : (item.discount || 15);
-                        const dealOldPriceVal = dealHasDiscount
-                            ? item.compare_at_price
-                            : (item.original_price || (item.discount > 0 ? Number(item.price) * (1 + Number(item.discount) / 100) : null));
+                            : (item.discount || 10);
+                        const dOld = dHasDisc ? item.compare_at_price : (item.original_price || null);
 
                         return (
-                            <TouchableOpacity key={item.id} style={styles.dealCard} activeOpacity={0.84} onPress={() => onProductClick(item)}>
-                                <Image
-                                    source={{ uri: getImageUrl(item) }}
-                                    style={styles.dealImg}
-                                    resizeMode="cover"
-                                />
-                                {/* Discount badge */}
-                                <View style={styles.dealBadge}>
-                                    <Text style={styles.dealBadgeTxt}>-{dealDiscountVal}%</Text>
-                                </View>
-                                {/* Info */}
-                                <View style={styles.dealInfo}>
-                                    <Text style={styles.dealName} numberOfLines={1}>{item.name}</Text>
+                            <TouchableOpacity
+                                key={item.id}
+                                style={S.dealCard}
+                                activeOpacity={0.84}
+                                onPress={() => onProductClick(item)}
+                            >
+                                <Image source={{ uri: getImageUrl(item) }} style={S.dealImg} resizeMode="cover" />
+                                <LinearGradient colors={['transparent', 'rgba(14,26,46,0.6)']} style={S.dealGrad} />
+                                <LinearGradient colors={['#EF4444', '#DC2626']} style={S.dealBadge}>
+                                    <Text style={S.dealBadgeTxt}>-{dPct}%</Text>
+                                </LinearGradient>
+                                <View style={S.dealInfo}>
+                                    <Text style={S.dealName} numberOfLines={1}>{item.name}</Text>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                                        <Text style={styles.dealPrice}>{fmtPrice(item.price)}</Text>
-                                        {dealOldPriceVal && (
-                                            <Text style={styles.dealOld}>{fmtPrice(dealOldPriceVal)}</Text>
-                                        )}
+                                        <Text style={S.dealPrice}>{fmtPrice(item.price)}</Text>
+                                        {dOld && <Text style={S.dealOld}>{fmtPrice(dOld)}</Text>}
                                     </View>
                                 </View>
                             </TouchableOpacity>
@@ -467,294 +516,212 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
         );
     };
 
-    // ── Product Card ───────────────────────────────────────────────────────────
-    const renderProduct = ({ item }) => {
-        if (!item) return null;
-        const inWishlist = wishlist.includes(item.id);
-        const inCompare  = isInComparison(item.id);
-        const isFreeShip = Number(item.price) >= 50000;
-        const isLowStock = item.stock != null && item.stock > 0 && item.stock <= 5;
-        const isOutStock = item.stock != null && item.stock === 0;
-
-        const hasCompare = Number(item.compare_at_price) > Number(item.price);
-        const discountPercent = hasCompare
-            ? Math.round(((Number(item.compare_at_price) - Number(item.price)) / Number(item.compare_at_price)) * 100)
-            : (item.discount > 0 ? item.discount : null);
-        const oldPrice = hasCompare
-            ? item.compare_at_price
-            : (item.original_price || (item.discount > 0 ? Number(item.price) * (1 + Number(item.discount) / 100) : null));
-
+    // ── Banner carousel ───────────────────────────────────────────────────────
+    const renderBanners = () => {
+        if (banners.length === 0) return null;
         return (
-            <TouchableOpacity style={styles.card} activeOpacity={0.84} onPress={() => onProductClick(item)}>
-                {/* IMAGE */}
-                <View style={styles.imgBox}>
-                    <Image
-                        source={{ uri: getImageUrl(item) }}
-                        style={styles.imgFull}
-                        resizeMode="cover"
-                    />
-                    <View style={styles.imgBottomFade} />
-
-                    {isOutStock && (
-                        <View style={styles.outOverlay}>
-                            <View style={styles.outPill}><Text style={styles.outTxt}>OUT OF STOCK</Text></View>
-                        </View>
-                    )}
-
-                    {discountPercent ? (
-                        <View style={styles.badge}><Text style={styles.badgeTxt}>-{discountPercent}%</Text></View>
-                    ) : (item.isNew || item.is_new) ? (
-                        <View style={[styles.badge, { backgroundColor: '#6366F1' }]}><Text style={styles.badgeTxt}>NEW</Text></View>
-                    ) : null}
-
-                    {/* Icon stack */}
-                    <View style={styles.iconStack}>
-                        <TouchableOpacity style={[styles.iconBtn, inWishlist && styles.iconBtnHeart]} onPress={() => toggleWishlist(item.id)}>
-                            <Ionicons name={inWishlist ? 'heart' : 'heart-outline'} size={13} color={inWishlist ? '#EF4444' : '#64748B'} />
+            <View style={{ marginTop: 10 }}>
+                <FlatList
+                    ref={bannerRef}
+                    data={banners}
+                    horizontal
+                    pagingEnabled
+                    showsHorizontalScrollIndicator={false}
+                    snapToInterval={WIDTH - 28}
+                    decelerationRate="fast"
+                    keyExtractor={b => b.id.toString()}
+                    onMomentumScrollEnd={e => {
+                        const i = Math.round(e.nativeEvent.contentOffset.x / (WIDTH - 28));
+                        setCurrentBannerIdx(i);
+                    }}
+                    renderItem={({ item: banner }) => (
+                        <TouchableOpacity
+                            activeOpacity={0.9}
+                            style={{ width: WIDTH - 28, height: 120, marginHorizontal: 14, borderRadius: 18, overflow: 'hidden' }}
+                        >
+                            <ImageBackground
+                                source={{ uri: banner.image_url || 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?q=80&w=800' }}
+                                style={{ width: '100%', height: '100%' }}
+                                imageStyle={{ borderRadius: 18 }}
+                                resizeMode="cover"
+                            >
+                                <LinearGradient colors={['rgba(14,26,46,0.1)', 'rgba(14,26,46,0.5)']} style={{ ...StyleSheet.absoluteFillObject, borderRadius: 18 }} />
+                            </ImageBackground>
                         </TouchableOpacity>
-                        <TouchableOpacity style={[styles.iconBtn, inCompare && styles.iconBtnCompare]} onPress={() => addToComparison(item)}>
-                            <Ionicons name={inCompare ? 'git-compare' : 'git-compare-outline'} size={13} color={inCompare ? '#6366F1' : '#64748B'} />
-                        </TouchableOpacity>
-                    </View>
-
-                    {isFreeShip && !isOutStock && (
-                        <View style={styles.freeTag}>
-                            <Ionicons name="bicycle-outline" size={9} color="#059669" />
-                            <Text style={styles.freeTxt}>FREE</Text>
-                        </View>
                     )}
-                </View>
-
-                {/* INFO */}
-                <View style={styles.info}>
-                    <Text style={styles.cardTitle} numberOfLines={1}>{item?.name || 'Product'}</Text>
-
-                    <View style={styles.ratingRow}>
-                        <Ionicons name="star" size={9} color="#FBBF24" />
-                        <Text style={styles.ratingVal}>{item.rating?.toFixed(1) || '5.0'}</Text>
-                        <Text style={styles.ratingCnt}> ({item.reviews ?? 0})</Text>
-                        {isLowStock && (
-                            <View style={styles.stockPill}><Text style={styles.stockWarn}>{item.stock} left</Text></View>
-                        )}
+                />
+                {/* Dot indicators */}
+                {banners.length > 1 && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 8, gap: 4 }}>
+                        {banners.map((_, i) => (
+                            <View key={i} style={{
+                                height: 4, borderRadius: 2,
+                                width: i === currentBannerIdx ? 16 : 4,
+                                backgroundColor: i === currentBannerIdx ? GOLD : 'rgba(14,26,46,0.2)',
+                            }} />
+                        ))}
                     </View>
-
-                    <View style={styles.priceCartRow}>
-                        <View>
-                            <Text style={styles.price}>{fmtPrice(item.price)}</Text>
-                            {oldPrice && <Text style={styles.oldPrice}>{fmtPrice(oldPrice)}</Text>}
-                        </View>
-                        {!isOutStock && (
-                            <TouchableOpacity style={styles.cartBtn} onPress={() => handleAddToCart(item)}>
-                                <Ionicons name="bag-add-outline" size={14} color="white" />
-                            </TouchableOpacity>
-                        )}
-                    </View>
-                </View>
-            </TouchableOpacity>
+                )}
+            </View>
         );
     };
 
-    // ── Empty ──────────────────────────────────────────────────────────────────
-    const renderEmpty = () => (
-        <View style={styles.emptyBox}>
-            <View style={styles.emptyIcon}>
-                <Ionicons name="search-outline" size={40} color="#A5B4FC" />
-            </View>
-            <Text style={styles.emptyTitle}>No products found</Text>
-            <Text style={styles.emptySub}>Try adjusting your filters or search term.</Text>
-            <TouchableOpacity onPress={() => { setActiveCategory('All'); setSearchQuery(''); }} style={styles.clearBtn}>
-                <Ionicons name="refresh-outline" size={14} color="white" />
-                <Text style={{ color: 'white', fontWeight: '700', fontSize: 12 }}>Clear Filters</Text>
-            </TouchableOpacity>
-        </View>
-    );
-
-    // ── Memoized banners header ────────────────────────────────────────────────
-    const memoizedHeader = React.useMemo(() => (
-        <View style={{ marginBottom: 4 }}>
-            {banners.length > 0 && (
-                <>
-                    <Animated.ScrollView
-                        ref={slideRef} horizontal pagingEnabled showsHorizontalScrollIndicator={false}
-                        style={{ marginHorizontal: 12, marginTop: 10, height: 115, borderRadius: 14, overflow: 'hidden' }}
-                        onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: false })}
-                        onMomentumScrollEnd={e => { const i = Math.round(e.nativeEvent.contentOffset.x / (WIDTH - 24)); }}
-                        scrollEventThrottle={16}
-                    >
-                        {banners.map(banner => (
-                            <TouchableOpacity key={banner.id} activeOpacity={0.9} style={{ width: WIDTH - 24, height: 115 }}>
-                                <ImageBackground
-                                    source={{ uri: banner.image_url || 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?q=80&w=800' }}
-                                    style={{ width: '100%', height: '100%' }}
-                                    imageStyle={{ borderRadius: 14 }}
-                                    resizeMode="cover"
-                                />
-                            </TouchableOpacity>
-                        ))}
-                    </Animated.ScrollView>
-                    <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 8 }}>
-                        {banners.map((_, i) => {
-                            const w  = scrollX.interpolate({ inputRange: [(i-1)*(WIDTH-24), i*(WIDTH-24), (i+1)*(WIDTH-24)], outputRange: [4, 14, 4], extrapolate: 'clamp' });
-                            const op = scrollX.interpolate({ inputRange: [(i-1)*(WIDTH-24), i*(WIDTH-24), (i+1)*(WIDTH-24)], outputRange: [0.3, 1, 0.3], extrapolate: 'clamp' });
-                            return <Animated.View key={i} style={{ height: 3.5, width: w, borderRadius: 2, backgroundColor: '#0284C7', marginHorizontal: 2, opacity: op }} />;
-                        })}
-                    </View>
-                </>
-            )}
-
-            {promoBanners.length > 0 && (
-                <View style={{ marginTop: 10 }}>
-                    <FlatList
-                        ref={promoFlatListRef} data={promoBanners} horizontal pagingEnabled
-                        showsHorizontalScrollIndicator={false} snapToInterval={WIDTH} decelerationRate="fast"
-                        scrollEventThrottle={16}
-                        onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: promoScrollX } } }], { useNativeDriver: false })}
-                        onMomentumScrollEnd={e => { const i = Math.round(e.nativeEvent.contentOffset.x / WIDTH); setCurrentPromoIdx(i); }}
-                        keyExtractor={item => item.id.toString()}
-                        renderItem={({ item: promo }) => (
-                            <TouchableOpacity activeOpacity={0.9}
-                                onPress={() => {
-                                    if (promo.linkData?.productId) {
-                                        supabase.from('products').select('*').eq('id', promo.linkData.productId).single()
-                                            .then(({ data }) => { if (data) onProductClick({ ...data, promoDiscount: promo.linkData.discountValue ? { type: promo.linkData.discountType || 'percent', value: promo.linkData.discountValue } : null }); })
-                                            .catch(() => {});
-                                    }
-                                }}
-                                style={{ width: WIDTH - 24, marginHorizontal: 12, borderRadius: 14, overflow: 'hidden', height: 95, backgroundColor: '#0F172A' }}
-                            >
-                                <Image source={{ uri: promo.image_url }} style={{ width: '100%', height: '100%', position: 'absolute', opacity: 0.45 }} resizeMode="cover" />
-                                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,23,42,0.45)' }} />
-                                <View style={{ padding: 12, justifyContent: 'center', height: '100%' }}>
-                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                        <View style={{ flex: 1 }}>
-                                            <View style={{ backgroundColor: '#EF4444', alignSelf: 'flex-start', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5, marginBottom: 4 }}>
-                                                <Text style={{ color: 'white', fontWeight: '900', fontSize: 8.5, letterSpacing: 0.6 }}>{promo.subtitle?.toUpperCase() || 'LIMITED OFFER'}</Text>
-                                            </View>
-                                            <Text style={{ fontSize: 14, fontWeight: '900', color: 'white', lineHeight: 18, paddingRight: 6 }} numberOfLines={1}>{promo.title || 'Special Promotion'}</Text>
-                                        </View>
-                                        {promo.linkData?.timerEnd && (
-                                            <View style={{ backgroundColor: 'rgba(255,255,255,0.12)', padding: 6, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', alignItems: 'center' }}>
-                                                <Text style={{ color: 'white', fontSize: 7.5, fontWeight: '800', marginBottom: 2, letterSpacing: 0.6 }}>ENDS IN</Text>
-                                                <CountdownTimer targetDate={promo.linkData.timerEnd} lightMode />
-                                            </View>
-                                        )}
-                                    </View>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
-                                        <Text style={{ color: '#F8FAFC', fontWeight: '700', fontSize: 11 }}>{promo.linkData?.text || 'Explore Offer'}</Text>
-                                        <Ionicons name="arrow-forward" size={10} color="#F8FAFC" />
-                                    </View>
-                                </View>
-                            </TouchableOpacity>
-                        )}
-                    />
-                    {renderPromoDots()}
-                </View>
-            )}
-        </View>
-    ), [banners, promoBanners, scrollX, promoScrollX]);
-
-    // ── Sub-header ─────────────────────────────────────────────────────────────
+    // ── Sub header ────────────────────────────────────────────────────────────
     const renderSubHeader = () => (
-        <View style={styles.subHeader}>
-            {/* "ALL PRODUCTS" decorated label */}
-            <View style={styles.sectionTitleRow}>
-                <View style={styles.sectionAccent} />
-                <Text style={styles.sectionTitle}>📦 All Products</Text>
-                <View style={styles.countBubble}>
-                    <Text style={styles.countBubbleTxt}>{filteredProducts.length}</Text>
+        <View style={S.subHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ width: 4, height: 18, borderRadius: 2, backgroundColor: GOLD }} />
+                <Text style={{ fontSize: 14, fontWeight: '900', color: NAVY }}>All Products</Text>
+                <View style={S.countBubble}>
+                    <Text style={S.countBubbleTxt}>{filteredProducts.length}</Text>
                 </View>
             </View>
-            <TouchableOpacity style={[styles.sortPill, sortBy !== 'default' && styles.sortPillActive]} onPress={nextSort}>
-                <Ionicons name="swap-vertical-outline" size={12} color={sortBy !== 'default' ? 'white' : '#64748B'} />
-                <Text style={[styles.sortTxt, sortBy !== 'default' && { color: 'white' }]}>{SORT_LABELS[sortBy]}</Text>
+            <TouchableOpacity style={[S.sortPill, sortBy !== 'default' && S.sortPillActive]} onPress={nextSort}>
+                <Ionicons name="swap-vertical-outline" size={12} color={sortBy !== 'default' ? NAVY : '#64748B'} />
+                <Text style={[S.sortTxt, sortBy !== 'default' && { color: NAVY }]}>{SORT_LABELS[sortBy]}</Text>
             </TouchableOpacity>
         </View>
     );
 
-    // ── Main Render ────────────────────────────────────────────────────────────
+    // ── Product render ────────────────────────────────────────────────────────
+    const renderProduct = useCallback(({ item }) => {
+        if (!item) return null;
+        return (
+            <ProductCard
+                item={item}
+                onPress={onProductClick}
+                onAddToCart={handleAddToCart}
+                onWishlist={toggleWishlist}
+                inWishlist={wishlist.includes(item.id)}
+                inCompare={isInComparison(item.id)}
+                onCompare={addToComparison}
+            />
+        );
+    }, [wishlist, isInComparison]);
+
+    // ── Empty state ───────────────────────────────────────────────────────────
+    const renderEmpty = () => (
+        <View style={{ alignItems: 'center', paddingTop: 60, paddingHorizontal: 24 }}>
+            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: GOLD_LIGHT, alignItems: 'center', justifyContent: 'center', marginBottom: 16, borderWidth: 1.5, borderColor: GOLD_BORDER }}>
+                <Ionicons name="search-outline" size={36} color={GOLD} />
+            </View>
+            <Text style={{ color: NAVY, fontSize: 16, fontWeight: '900', marginBottom: 6 }}>No products found</Text>
+            <Text style={{ color: '#94A3B8', fontSize: 12, textAlign: 'center', lineHeight: 18 }}>
+                Try adjusting your filters or search term.
+            </Text>
+            <TouchableOpacity
+                onPress={() => { setActiveCategory('All'); setSearchQuery(''); }}
+                style={{ marginTop: 18, backgroundColor: NAVY, paddingHorizontal: 22, paddingVertical: 10, borderRadius: 22, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: GOLD_BORDER }}
+            >
+                <Ionicons name="refresh-outline" size={14} color={GOLD} />
+                <Text style={{ color: GOLD, fontWeight: '800', fontSize: 12 }}>Clear Filters</Text>
+            </TouchableOpacity>
+        </View>
+    );
+
+    // ─────────────────────────────────────────────────────────────────────────
     return (
-        <View style={styles.container}>
-            <SafeAreaView style={styles.safe}>
+        <View style={{ flex: 1, backgroundColor: BG }}>
+            <StatusBar barStyle="light-content" backgroundColor={NAVY} />
 
-                {/* ── MODERN COMPACT FIRST-MOBILE HEADER ── */}
-                <View style={styles.header}>
-                    <TouchableOpacity onPress={onBack} style={styles.iconCircle} activeOpacity={0.8}>
-                        <Ionicons name="arrow-back" size={18} color="#0F172A" />
-                    </TouchableOpacity>
+            {/* ── NAVY & GOLD HEADER ── */}
+            <LinearGradient
+                colors={[NAVY, NAVY2]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={S.header}
+            >
+                <SafeAreaView style={{ paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0 }}>
 
-                    {/* Center: compact search bar */}
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                        <View style={styles.searchBar}>
-                            <Ionicons name="search-outline" size={14} color="#94A3B8" />
-                            <TextInput
-                                placeholder="Search catalog..."
-                                placeholderTextColor="#94A3B8"
-                                style={styles.searchInput}
-                                value={searchQuery}
-                                onChangeText={setSearchQuery}
-                            />
-                            {searchQuery.length === 0 ? (
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                    <TouchableOpacity onPress={handleVoiceSearch} hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}>
-                                        <Ionicons name="mic-outline" size={15} color="#0284C7" />
-                                    </TouchableOpacity>
-                                    <TouchableOpacity onPress={handleImageSearch} hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}>
-                                        <Ionicons name="camera-outline" size={15} color="#0284C7" />
-                                    </TouchableOpacity>
-                                </View>
-                            ) : (
-                                <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                                    <Ionicons name="close-circle" size={14} color="#94A3B8" />
-                                </TouchableOpacity>
-                            )}
+                    {/* Top row: back + title + cart */}
+                    <View style={S.headerTop}>
+                        <TouchableOpacity onPress={onBack} style={S.iconCircle} activeOpacity={0.8}>
+                            <Ionicons name="arrow-back" size={18} color={GOLD} />
+                        </TouchableOpacity>
+
+                        <View style={{ flex: 1, alignItems: 'center' }}>
+                            <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '900', letterSpacing: -0.3 }}>
+                                Abu <Text style={{ color: GOLD }}>Mafhal</Text> Shop
+                            </Text>
+                            <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9.5, fontWeight: '600', letterSpacing: 1 }}>
+                                {loading ? 'Loading...' : `${filteredProducts.length} Products Available`}
+                            </Text>
+                        </View>
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                            {/* Compare */}
+                            <TouchableOpacity onPress={onCompareClick} style={[S.iconCircle, { borderColor: GOLD_BORDER }]} activeOpacity={0.8}>
+                                <Ionicons name="git-compare-outline" size={16} color={GOLD} />
+                                {comparisonCount > 0 && (
+                                    <View style={S.headerBadge}>
+                                        <Text style={{ color: NAVY, fontSize: 7, fontWeight: '900' }}>{comparisonCount}</Text>
+                                    </View>
+                                )}
+                            </TouchableOpacity>
+
+                            {/* Cart */}
+                            <TouchableOpacity onPress={onGoToCart} style={[S.iconCircle, { borderColor: GOLD_BORDER }]} activeOpacity={0.8}>
+                                <Ionicons name="cart-outline" size={17} color={GOLD} />
+                                {cartCount > 0 && (
+                                    <View style={[S.headerBadge, { backgroundColor: '#EF4444' }]}>
+                                        <Text style={{ color: 'white', fontSize: 7, fontWeight: '900' }}>{cartCount > 99 ? '99+' : cartCount}</Text>
+                                    </View>
+                                )}
+                            </TouchableOpacity>
                         </View>
                     </View>
 
-                    {/* Compare */}
-                    <TouchableOpacity onPress={onCompareClick} style={styles.iconCircle} activeOpacity={0.8}>
-                        <Ionicons name="git-compare-outline" size={17} color="#0F172A" />
-                        {comparisonCount > 0 && (
-                            <View style={styles.compareBadge}>
-                                <Text style={{ color: 'white', fontSize: 8, fontWeight: '900' }}>{comparisonCount}</Text>
+                    {/* Search bar */}
+                    <View style={S.searchBar}>
+                        <Ionicons name="search-outline" size={15} color="rgba(255,255,255,0.5)" />
+                        <TextInput
+                            placeholder="Search phones, fashion, electronics..."
+                            placeholderTextColor="rgba(255,255,255,0.4)"
+                            style={S.searchInput}
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                        />
+                        {searchQuery.length === 0 ? (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <TouchableOpacity onPress={handleVoiceSearch} hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
+                                    <Ionicons name="mic-outline" size={16} color={GOLD} />
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={handleImageSearch} hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
+                                    <Ionicons name="camera-outline" size={16} color={GOLD} />
+                                </TouchableOpacity>
                             </View>
-                        )}
-                    </TouchableOpacity>
-
-                    {/* Cart */}
-                    <TouchableOpacity onPress={onGoToCart} style={styles.iconCircle} activeOpacity={0.8}>
-                        <Ionicons name="cart-outline" size={18} color="#0F172A" />
-                        {cartCount > 0 && (
-                            <View style={styles.cartBadge}>
-                                <Text style={{ color: 'white', fontSize: 8, fontWeight: '900' }}>{cartCount > 99 ? '99+' : cartCount}</Text>
-                            </View>
-                        )}
-                    </TouchableOpacity>
-                </View>
-
-                {/* ── Category Micro-Pills (Compact First-Mobile) ── */}
-                <FlatList
-                    horizontal
-                    data={categories}
-                    keyExtractor={(i, idx) => (i.slug || i.label || idx.toString())}
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.catScroll}
-                    renderItem={({ item: cat }) => {
-                        const active = activeCategory === cat.label || activeCategory === cat.slug;
-                        return (
-                            <TouchableOpacity
-                                style={[styles.chip, active && styles.chipActive]}
-                                onPress={() => setActiveCategory(cat.label)}
-                                activeOpacity={0.8}
-                            >
-                                <Ionicons name={cat.icon || 'pricetag-outline'} size={11} color={active ? '#FFFFFF' : '#0284C7'} />
-                                <Text style={[styles.chipTxt, active && styles.chipTxtActive]}>{cat.label}</Text>
+                        ) : (
+                            <TouchableOpacity onPress={() => setSearchQuery('')}>
+                                <Ionicons name="close-circle" size={16} color="rgba(255,255,255,0.5)" />
                             </TouchableOpacity>
-                        );
-                    }}
-                />
-            </SafeAreaView>
+                        )}
+                    </View>
 
-            {/* ── Product Grid ── */}
+                    {/* Category pills */}
+                    <FlatList
+                        horizontal
+                        data={categories}
+                        keyExtractor={(item, idx) => (item.slug || item.label || idx.toString())}
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: 12, paddingTop: 4, gap: 7, alignItems: 'center' }}
+                        renderItem={({ item: cat }) => {
+                            const active = activeCategory === cat.label || activeCategory === cat.slug;
+                            return (
+                                <TouchableOpacity
+                                    style={[S.chip, active && S.chipActive]}
+                                    onPress={() => setActiveCategory(cat.label)}
+                                    activeOpacity={0.8}
+                                >
+                                    <Ionicons name={cat.icon || 'pricetag-outline'} size={11} color={active ? NAVY : 'rgba(255,255,255,0.7)'} />
+                                    <Text style={[S.chipTxt, active && S.chipTxtActive]}>{cat.label}</Text>
+                                </TouchableOpacity>
+                            );
+                        }}
+                    />
+                </SafeAreaView>
+            </LinearGradient>
+
+            {/* ── PRODUCT GRID ── */}
             {loading ? (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 14, paddingTop: 16, gap: 12 }}>
                     {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
@@ -763,83 +730,84 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
                 <FlatList
                     ref={flatListRef}
                     data={filteredProducts}
-                    keyExtractor={(item, i) => i.toString()}
+                    keyExtractor={(item, i) => item?.id?.toString() || i.toString()}
                     renderItem={renderProduct}
                     onScroll={onScroll}
                     scrollEventThrottle={16}
+                    numColumns={2}
+                    columnWrapperStyle={{ justifyContent: 'space-between', paddingHorizontal: 14 }}
                     ListHeaderComponent={
                         <View>
-                            {memoizedHeader}
+                            {renderBanners()}
                             {renderHotDeals()}
-                            {!loading && renderSubHeader()}
+                            {renderSubHeader()}
                         </View>
                     }
                     ListEmptyComponent={renderEmpty}
-                    numColumns={2}
-                    columnWrapperStyle={filteredProducts.length > 0
-                        ? { justifyContent: 'space-between', paddingHorizontal: 14 }
-                        : null}
-                    contentContainerStyle={{ paddingTop: 6, paddingBottom: 110, flexGrow: 1 }}
+                    contentContainerStyle={{ paddingTop: 6, paddingBottom: 120, flexGrow: 1 }}
                     showsVerticalScrollIndicator={false}
                     refreshControl={
                         <RefreshControl
                             refreshing={refreshing}
                             onRefresh={onRefresh}
-                            colors={['#6366F1']}
-                            tintColor="#6366F1"
+                            colors={[GOLD, NAVY]}
+                            tintColor={GOLD}
                         />
                     }
                 />
             )}
 
             {/* ── FLOATING CART FAB ── */}
-            {onGoToCart && (
-                <Animated.View style={[styles.fabCart, { transform: [{ scale: fabScale }] }]}>
-                    <TouchableOpacity style={styles.fabInner} onPress={onGoToCart} activeOpacity={0.85}>
-                        <Ionicons name="bag-outline" size={22} color="white" />
+            <Animated.View style={[S.fabCart, { transform: [{ scale: fabScale }] }]}>
+                <TouchableOpacity style={S.fabInner} onPress={onGoToCart} activeOpacity={0.85}>
+                    <LinearGradient colors={[GOLD, '#C4922A']} style={S.fabGrad}>
+                        <Ionicons name="cart-outline" size={22} color={NAVY} />
                         {(cartCount ?? 0) > 0 && (
-                            <View style={styles.fabBadge}>
-                                <Text style={styles.fabBadgeTxt}>{cartCount}</Text>
+                            <View style={S.fabBadge}>
+                                <Text style={S.fabBadgeTxt}>{cartCount}</Text>
                             </View>
                         )}
-                    </TouchableOpacity>
-                </Animated.View>
-            )}
-
-            {/* ── SCROLL TO TOP ── */}
-            <Animated.View style={[styles.scrollTopBtn, {
-                opacity: topBtnAnim,
-                transform: [{ scale: topBtnAnim }],
-            }]}>
-                <TouchableOpacity
-                    style={styles.scrollTopInner}
-                    onPress={() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true })}
-                >
-                    <Ionicons name="chevron-up" size={20} color="white" />
+                    </LinearGradient>
                 </TouchableOpacity>
             </Animated.View>
 
-            {/* ── Voice modal ── */}
+            {/* ── SCROLL TO TOP ── */}
+            <Animated.View style={[S.scrollTopBtn, { opacity: topBtnAnim, transform: [{ scale: topBtnAnim }] }]}>
+                <TouchableOpacity
+                    style={S.scrollTopInner}
+                    onPress={() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true })}
+                >
+                    <Ionicons name="chevron-up" size={20} color={GOLD} />
+                </TouchableOpacity>
+            </Animated.View>
+
+            {/* ── Voice Modal ── */}
             {showVoiceModal && (
-                <View style={styles.voiceOverlay}>
-                    <View style={styles.voiceCard}>
-                        <View style={styles.voicePulse}>
-                            <Ionicons name="mic" size={32} color="white" />
-                        </View>
-                        <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A', marginTop: 14 }}>Listening…</Text>
+                <View style={S.voiceOverlay}>
+                    <View style={S.voiceCard}>
+                        <LinearGradient colors={[NAVY, NAVY2]} style={S.voicePulse}>
+                            <Ionicons name="mic" size={32} color={GOLD} />
+                        </LinearGradient>
+                        <Text style={{ fontSize: 16, fontWeight: '900', color: NAVY, marginTop: 14 }}>Listening…</Text>
                         <Text style={{ color: '#64748B', fontSize: 12, marginTop: 4 }}>Say "Phones" or "Fashion"</Text>
+                        <View style={{ flexDirection: 'row', gap: 4, marginTop: 14 }}>
+                            {[1, 2, 3, 4, 5].map(i => {
+                                const h = [12, 20, 28, 20, 12][i - 1];
+                                return <View key={i} style={{ width: 4, height: h, backgroundColor: GOLD, borderRadius: 2 }} />;
+                            })}
+                        </View>
                     </View>
                 </View>
             )}
 
             {/* ── Toast ── */}
             {toast.visible && (
-                <Animated.View style={[styles.toast, {
+                <Animated.View style={[S.toast, {
                     opacity: fadeAnim,
                     transform: [{ translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }]
                 }]}>
-                    <Ionicons name={toast.icon} size={18} color="#10B981" />
-                    <Text style={styles.toastTxt}>{toast.message}</Text>
+                    <Ionicons name={toast.icon} size={16} color={GOLD} />
+                    <Text style={S.toastTxt}>{toast.message}</Text>
                 </Animated.View>
             )}
         </View>
@@ -847,282 +815,218 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F8FAFC' },
-    safe: {
-        backgroundColor: '#FFFFFF',
-        paddingTop: Platform.OS === 'android' && StatusBar.currentHeight ? StatusBar.currentHeight : 0,
+const S = StyleSheet.create({
+
+    // Header
+    header: {
         borderBottomWidth: 1,
-        borderBottomColor: '#F1F5F9',
+        borderBottomColor: GOLD_BORDER,
+        shadowColor: NAVY,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 12,
+        elevation: 8,
         zIndex: 20,
     },
-
-    // ── Header ────────────────────────────────────────────────────────────────
-    header: {
+    headerTop: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 12,
-        paddingTop: 8,
-        paddingBottom: 6,
-        backgroundColor: '#FFFFFF',
-        gap: 7,
+        paddingHorizontal: 14,
+        paddingTop: 10,
+        paddingBottom: 8,
+        gap: 10,
     },
     iconCircle: {
-        width: 34,
-        height: 34,
+        width: 34, height: 34,
         borderRadius: 10,
-        backgroundColor: '#F8FAFC',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        position: 'relative',
-        flexShrink: 0,
+        backgroundColor: 'rgba(255,255,255,0.08)',
+        alignItems: 'center', justifyContent: 'center',
+        borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+        position: 'relative', flexShrink: 0,
     },
-    compareBadge: {
-        position: 'absolute',
-        top: -3,
-        right: -3,
-        backgroundColor: '#0284C7',
-        borderRadius: 7,
-        minWidth: 15,
-        height: 15,
-        alignItems: 'center',
-        justifyContent: 'center',
+    headerBadge: {
+        position: 'absolute', top: -3, right: -3,
+        backgroundColor: GOLD,
+        borderRadius: 7, minWidth: 15, height: 15,
+        alignItems: 'center', justifyContent: 'center',
         paddingHorizontal: 2,
     },
-    cartBadge: {
-        position: 'absolute',
-        top: -3,
-        right: -3,
-        backgroundColor: '#EF4444',
-        borderRadius: 7,
-        minWidth: 15,
-        height: 15,
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingHorizontal: 2,
-    },
+
+    // Search
     searchBar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F8FAFC',
-        borderRadius: 10,
-        paddingHorizontal: 9,
-        height: 34,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        gap: 6,
+        flexDirection: 'row', alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.08)',
+        borderRadius: 12,
+        paddingHorizontal: 12, height: 40,
+        marginHorizontal: 14, marginBottom: 10,
+        borderWidth: 1, borderColor: GOLD_BORDER,
+        gap: 8,
     },
     searchInput: {
-        flex: 1,
-        fontSize: 12,
-        fontWeight: '500',
-        color: '#0F172A',
-        paddingVertical: 0,
-        minWidth: 0,
+        flex: 1, fontSize: 12.5, fontWeight: '500',
+        color: '#FFFFFF', paddingVertical: 0, minWidth: 0,
     },
 
-    // ── Category Micro-Pills (Compact First-Mobile) ───────────────────────────
-    catScroll: {
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        gap: 6,
-        alignItems: 'center',
-    },
+    // Category chips
     chip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 8,
-        backgroundColor: '#F8FAFC',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        height: 28,
+        flexDirection: 'row', alignItems: 'center', gap: 4,
+        paddingHorizontal: 11, paddingVertical: 5,
+        borderRadius: 10,
+        backgroundColor: 'rgba(255,255,255,0.07)',
+        borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+        height: 30,
     },
     chipActive: {
-        backgroundColor: '#0284C7',
-        borderColor: '#0284C7',
+        backgroundColor: GOLD, borderColor: GOLD,
     },
-    chipTxt: {
-        fontSize: 11,
-        fontWeight: '600',
-        color: '#64748B',
-    },
-    chipTxtActive: {
-        color: '#FFFFFF',
-        fontWeight: '700',
-    },
+    chipTxt: { fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.75)' },
+    chipTxtActive: { color: NAVY, fontWeight: '800' },
 
-    // ── Section blocks ────────────────────────────────────────────────────────
-    sectionBlock: { marginTop: 18, marginBottom: 4 },
-    sectionHeader: {
-        flexDirection: 'row', alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 14, marginBottom: 12,
-    },
-    sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-    sectionAccent: {
-        width: 4, height: 18, borderRadius: 2,
-        backgroundColor: '#0284C7',
-    },
-    sectionTitle: { fontSize: 15, fontWeight: '900', color: '#0F172A' },
-    seeAll: { fontSize: 12, fontWeight: '700', color: '#0284C7' },
-
-    // Product count bubble
-    countBubble: {
-        backgroundColor: '#E0F2FE',
-        paddingHorizontal: 7, paddingVertical: 2,
-        borderRadius: 10, marginLeft: 4,
-    },
-    countBubbleTxt: { fontSize: 11, fontWeight: '800', color: '#0284C7' },
-
-    // ── Sub header ────────────────────────────────────────────────────────────
+    // Sub-header
     subHeader: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        paddingHorizontal: 14, paddingVertical: 12,
+        paddingHorizontal: 16, paddingVertical: 12,
         backgroundColor: 'white',
         borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#EEF2F8',
-        marginBottom: 10, marginTop: 8,
+        marginBottom: 10, marginTop: 16,
     },
+    countBubble: {
+        backgroundColor: GOLD_LIGHT, paddingHorizontal: 8, paddingVertical: 2,
+        borderRadius: 10, borderWidth: 1, borderColor: GOLD_BORDER,
+    },
+    countBubbleTxt: { fontSize: 11, fontWeight: '800', color: GOLD },
     sortPill: {
         flexDirection: 'row', alignItems: 'center', gap: 4,
         paddingHorizontal: 10, paddingVertical: 6,
         borderRadius: 14, backgroundColor: '#F1F5F9',
         borderWidth: 1, borderColor: '#E9EDF5',
     },
-    sortPillActive: { backgroundColor: '#0F172A', borderColor: '#0F172A' },
+    sortPillActive: { backgroundColor: GOLD, borderColor: GOLD },
     sortTxt: { fontSize: 11, fontWeight: '700', color: '#64748B' },
 
-    // ── Hot Deals card ────────────────────────────────────────────────────────
-    dealCard: {
-        width: 140,
-        backgroundColor: 'white',
-        borderRadius: 16,
-        overflow: 'hidden',
-        borderWidth: 1, borderColor: '#F1F5F9',
-        elevation: 3, shadowColor: '#0F172A',
-        shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.06, shadowRadius: 6,
-    },
-    dealImg:   { width: '100%', height: 100 },
-    dealBadge: {
-        position: 'absolute', top: 7, left: 7,
-        backgroundColor: '#EF4444',
-        paddingHorizontal: 6, paddingVertical: 3,
-        borderRadius: 7,
-    },
-    dealBadgeTxt: { color: 'white', fontSize: 9, fontWeight: '900' },
-    dealInfo:  { padding: 9 },
-    dealName:  { fontSize: 11, fontWeight: '700', color: '#0F172A', marginBottom: 4 },
-    dealPrice: { fontSize: 13, fontWeight: '900', color: '#0284C7' },
-    dealOld:   { fontSize: 10, color: '#94A3B8', textDecorationLine: 'line-through' },
-
-    // ── Product card ──────────────────────────────────────────────────────────
+    // Product card
     card: {
-        width: COLUMN_WIDTH,
-        backgroundColor: 'white',
-        marginBottom: 12,
-        borderRadius: 18,
+        width: COLUMN_WIDTH, marginBottom: 12,
+        backgroundColor: 'white', borderRadius: 20,
         overflow: 'hidden',
-        borderWidth: 1, borderColor: '#F1F5F9',
-        elevation: 3,
-        shadowColor: '#0F172A',
-        shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 10,
+        borderWidth: 1, borderColor: '#EEF2F8',
+        elevation: 4,
+        shadowColor: NAVY,
+        shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.07, shadowRadius: 12,
     },
-    imgBox:       { height: 140, position: 'relative', overflow: 'hidden', backgroundColor: '#F8FAFC' },
-    imgFull:      { width: '100%', height: '100%' },
-    imgBottomFade:{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 45, backgroundColor: 'rgba(255,255,255,0.15)' },
+    imgBox: { height: 145, position: 'relative', overflow: 'hidden', backgroundColor: '#F0F4FA' },
+    imgFull: { width: '100%', height: '100%' },
+    imgGradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 60 },
 
-    badge:    { position: 'absolute', top: 8, left: 8, backgroundColor: '#EF4444', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8, zIndex: 10 },
+    badge: {
+        position: 'absolute', top: 8, left: 8,
+        paddingHorizontal: 7, paddingVertical: 3,
+        borderRadius: 8, zIndex: 10,
+    },
     badgeTxt: { color: 'white', fontSize: 9, fontWeight: '900', letterSpacing: 0.3 },
 
-    iconStack:    { position: 'absolute', top: 8, right: 8, flexDirection: 'column', gap: 5, zIndex: 10 },
-    iconBtn:      { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.92)', alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.12, shadowRadius: 3 },
-    iconBtnHeart: { backgroundColor: 'rgba(239,68,68,0.1)' },
-    iconBtnCompare: { backgroundColor: 'rgba(2,132,199,0.1)' },
+    iconStack: { position: 'absolute', top: 8, right: 8, flexDirection: 'column', gap: 5, zIndex: 10 },
+    iconBtn: {
+        width: 28, height: 28, borderRadius: 14,
+        backgroundColor: 'rgba(255,255,255,0.92)',
+        alignItems: 'center', justifyContent: 'center',
+        elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.12, shadowRadius: 3,
+    },
+    iconBtnHeart:   { backgroundColor: 'rgba(239,68,68,0.1)' },
+    iconBtnCompare: { backgroundColor: GOLD_LIGHT },
 
-    freeTag: { position: 'absolute', bottom: 8, left: 8, flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(16,185,129,0.15)', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(16,185,129,0.25)' },
+    freeTag: {
+        position: 'absolute', bottom: 8, left: 8,
+        flexDirection: 'row', alignItems: 'center', gap: 3,
+        backgroundColor: 'rgba(16,185,129,0.15)',
+        paddingHorizontal: 6, paddingVertical: 3,
+        borderRadius: 6, borderWidth: 1, borderColor: 'rgba(16,185,129,0.25)',
+    },
     freeTxt: { fontSize: 8, fontWeight: '800', color: '#059669' },
 
-    outOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,23,42,0.62)', alignItems: 'center', justifyContent: 'center', zIndex: 20 },
-    outPill:    { backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
+    outOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(14,26,46,0.65)', alignItems: 'center', justifyContent: 'center', zIndex: 20 },
+    outPill:    { backgroundColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
     outTxt:     { color: 'white', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
 
     info:      { paddingHorizontal: 10, paddingTop: 10, paddingBottom: 12 },
-    cardTitle: { fontSize: 12, fontWeight: '700', color: '#0F172A', lineHeight: 16, marginBottom: 5 },
+    cardTitle: { fontSize: 12, fontWeight: '700', color: NAVY, lineHeight: 16, marginBottom: 5 },
 
     ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: 8 },
-    ratingVal: { fontSize: 10, fontWeight: '800', color: '#F59E0B', marginLeft: 2 },
+    ratingVal: { fontSize: 10, fontWeight: '800', color: GOLD, marginLeft: 2 },
     ratingCnt: { fontSize: 10, color: '#94A3B8' },
     stockPill: { marginLeft: 4, backgroundColor: 'rgba(239,68,68,0.1)', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 5 },
     stockWarn: { fontSize: 9, color: '#DC2626', fontWeight: '700' },
 
     priceCartRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
-    price:        { fontSize: 14, fontWeight: '900', color: '#0284C7', lineHeight: 18 },
-    oldPrice:     { fontSize: 10, color: '#94A3B8', textDecorationLine: 'line-through', marginTop: 1 },
+    price:    { fontSize: 14, fontWeight: '900', color: NAVY, lineHeight: 18 },
+    oldPrice: { fontSize: 10, color: '#94A3B8', textDecorationLine: 'line-through', marginTop: 1 },
 
     cartBtn: {
-        width: 32, height: 32, borderRadius: 16,
-        backgroundColor: '#0F172A',
+        width: 34, height: 34, borderRadius: 17,
+        backgroundColor: NAVY,
         alignItems: 'center', justifyContent: 'center',
-        elevation: 5, shadowColor: '#0F172A',
+        elevation: 5, shadowColor: NAVY,
         shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6,
+        borderWidth: 1, borderColor: GOLD_BORDER,
     },
 
-    // ── Empty ─────────────────────────────────────────────────────────────────
-    emptyBox:   { alignItems: 'center', padding: 44, marginTop: 20 },
-    emptyIcon:  { width: 80, height: 80, borderRadius: 40, backgroundColor: '#E0F2FE', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-    emptyTitle: { color: '#0F172A', fontSize: 16, fontWeight: '800' },
-    emptySub:   { color: '#94A3B8', fontSize: 12, textAlign: 'center', marginTop: 6, lineHeight: 18 },
-    clearBtn:   { marginTop: 18, backgroundColor: '#0284C7', paddingHorizontal: 22, paddingVertical: 10, borderRadius: 22, flexDirection: 'row', alignItems: 'center', gap: 6 },
+    // Hot deals
+    dealCard: {
+        width: 145, backgroundColor: 'white',
+        borderRadius: 18, overflow: 'hidden',
+        borderWidth: 1, borderColor: '#EEF2F8',
+        elevation: 4, shadowColor: NAVY,
+        shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.07, shadowRadius: 8,
+    },
+    dealImg:   { width: '100%', height: 105 },
+    dealGrad:  { position: 'absolute', top: 0, left: 0, right: 0, height: 105 },
+    dealBadge: { position: 'absolute', top: 8, left: 8, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 7 },
+    dealBadgeTxt: { color: 'white', fontSize: 9, fontWeight: '900' },
+    dealInfo:  { padding: 9 },
+    dealName:  { fontSize: 11, fontWeight: '700', color: NAVY, marginBottom: 4 },
+    dealPrice: { fontSize: 13, fontWeight: '900', color: GOLD },
+    dealOld:   { fontSize: 10, color: '#94A3B8', textDecorationLine: 'line-through' },
 
-    // ── Floating Cart FAB ────────────────────────────────────────────────────
+    // FAB Cart
     fabCart: {
         position: 'absolute', bottom: 28, right: 20,
         elevation: 10, zIndex: 90,
-        shadowColor: '#0F172A', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 12,
+        shadowColor: NAVY, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 12,
     },
-    fabInner: {
-        width: 58, height: 58, borderRadius: 29,
-        backgroundColor: '#0F172A',
-        alignItems: 'center', justifyContent: 'center',
-    },
+    fabInner: { width: 58, height: 58, borderRadius: 29, overflow: 'hidden' },
+    fabGrad:  { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
     fabBadge: {
-        position: 'absolute', top: -2, right: -2,
+        position: 'absolute', top: 0, right: 0,
         backgroundColor: '#EF4444', borderRadius: 10,
-        minWidth: 20, height: 20,
+        minWidth: 18, height: 18,
         alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3,
         borderWidth: 2, borderColor: 'white',
     },
-    fabBadgeTxt: { color: 'white', fontSize: 10, fontWeight: '900' },
+    fabBadgeTxt: { color: 'white', fontSize: 9, fontWeight: '900' },
 
-    // ── Scroll to top ────────────────────────────────────────────────────────
-    scrollTopBtn: {
-        position: 'absolute', bottom: 100, right: 20,
-        elevation: 8, zIndex: 89,
-    },
+    // Scroll to top
+    scrollTopBtn: { position: 'absolute', bottom: 100, right: 20, elevation: 8, zIndex: 89 },
     scrollTopInner: {
         width: 40, height: 40, borderRadius: 20,
-        backgroundColor: '#0A192F',
-        alignItems: 'center', justifyContent: 'center',
-        shadowColor: '#0A192F', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8,
+        backgroundColor: NAVY, alignItems: 'center', justifyContent: 'center',
+        borderWidth: 1, borderColor: GOLD_BORDER,
+        shadowColor: NAVY, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8,
     },
 
-    // ── Voice ─────────────────────────────────────────────────────────────────
-    voiceOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.65)', alignItems: 'center', justifyContent: 'center', zIndex: 50 },
-    voiceCard:    { backgroundColor: 'white', padding: 30, borderRadius: 26, alignItems: 'center', width: 230 },
-    voicePulse:   { width: 76, height: 76, borderRadius: 38, backgroundColor: '#0284C7', alignItems: 'center', justifyContent: 'center' },
+    // Voice
+    voiceOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center', zIndex: 50 },
+    voiceCard:  { backgroundColor: 'white', padding: 30, borderRadius: 28, alignItems: 'center', width: 230, borderWidth: 2, borderColor: GOLD_BORDER },
+    voicePulse: { width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center' },
 
-    // ── Toast ─────────────────────────────────────────────────────────────────
+    // Toast
     toast: {
         position: 'absolute', bottom: 40, alignSelf: 'center',
-        backgroundColor: 'rgba(15,23,42,0.95)',
+        backgroundColor: NAVY,
         paddingHorizontal: 18, paddingVertical: 11,
         borderRadius: 30, flexDirection: 'row', alignItems: 'center', gap: 8,
         elevation: 10, zIndex: 100,
-        shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 10,
+        borderWidth: 1, borderColor: GOLD_BORDER,
+        shadowColor: NAVY, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 10,
     },
     toastTxt: { color: 'white', fontWeight: '700', fontSize: 12, letterSpacing: 0.3 },
 });
