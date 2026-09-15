@@ -418,7 +418,12 @@ export default function App() {
     }, [user, loading]);
 
     const handleUpdateQty = (id, change) => {
-        setCartLines(prev => prev.map(item => item.id === id ? { ...item, quantity: Math.max(1, item.quantity + change) } : item));
+        setCartLines(prev => prev.map(item => {
+            if (item.id !== id) return item;
+            const current = parseInt(item.quantity || item.qty || 1, 10) || 1;
+            const updated = Math.max(1, current + change);
+            return { ...item, quantity: updated, qty: updated };
+        }));
     };
     const handleRemoveCart = (id) => setCartLines(prev => prev.filter(item => item.id !== id));
     const handleAddToCart = (product) => {
