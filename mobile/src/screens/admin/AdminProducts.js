@@ -88,13 +88,13 @@ const ProductCard = ({ item, onEdit, onDelete, index }) => {
                             <Text style={[SS.actionBtnSTxt, { color: '#B45309' }]}>Edit</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
-                            onPress={() => Alert.alert('Archive', `Hide "${item.name}" from buyers?`, [
+                            onPress={() => Alert.alert('Delete Product', `Are you sure you want to delete "${item.name}"?`, [
                                 { text: 'Cancel', style: 'cancel' },
-                                { text: 'Archive', style: 'destructive', onPress: () => onDelete(item.id) }
+                                { text: 'Delete', style: 'destructive', onPress: () => onDelete(item.id) }
                             ])}
-                            style={SS.actionBtnS}>
-                            <Ionicons name="archive-outline" size={11} color="#EF4444" />
-                            <Text style={[SS.actionBtnSTxt, { color: '#EF4444' }]}>Archive</Text>
+                            style={[SS.actionBtnS, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
+                            <Ionicons name="trash-outline" size={11} color="#DC2626" />
+                            <Text style={[SS.actionBtnSTxt, { color: '#DC2626' }]}>Delete</Text>
                         </TouchableOpacity>
                         {item.category && (
                             <Text style={{ fontSize: 9.5, color: '#94A3B8', fontWeight: '600' }}>{item.category}</Text>
@@ -169,12 +169,33 @@ export const AdminProducts = ({ navigation, onBack }) => {
     }, []);
 
     const handleDelete = useCallback(async (id) => {
-        const { error } = await supabase.from('products').update({ status: 'archived' }).eq('id', id);
-        if (!error) {
-            setProducts(prev => prev.filter(p => p.id !== id));
-            Alert.alert('Archived ✓', 'Product hidden from buyers.');
-        } else {
-            Alert.alert('Error', error.message);
+        try {
+            // 1. Attempt hard delete from database
+            const { error: delError } = await supabase.from('products').delete().eq('id', id);
+            if (!delError) {
+                setProducts(prev => prev.filter(p => p.id !== id));
+                Alert.alert('Deleted ✅', 'Product successfully removed from store.');
+                return;
+            }
+
+            console.warn('Hard delete prevented (FK/order constraint), archiving instead:', delError?.message);
+
+            // 2. Fallback: If foreign keys prevent hard delete (order_items, reviews), archive & deactivate
+            const { error: archError } = await supabase.from('products').update({ 
+                status: 'archived', 
+                is_active: false,
+                stock: 0,
+                stock_quantity: 0 
+            }).eq('id', id);
+
+            if (!archError) {
+                setProducts(prev => prev.filter(p => p.id !== id));
+                Alert.alert('Archived & Removed ✅', 'Product has past order history, so it was safely hidden and removed from active catalog.');
+            } else {
+                throw archError;
+            }
+        } catch (err) {
+            Alert.alert('Delete Failed ❌', err?.message || 'Could not delete product.');
         }
     }, []);
 

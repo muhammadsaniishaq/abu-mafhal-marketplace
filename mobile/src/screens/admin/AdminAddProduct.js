@@ -368,6 +368,49 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
         }
     };
 
+    const handleDeleteProduct = () => {
+        Alert.alert(
+            'Delete Product ⚠️',
+            `Are you sure you want to delete "${form.name}"? This action cannot be undone.`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        setLoading(true);
+                        try {
+                            const { error: delErr } = await supabase.from('products').delete().eq('id', initialData.id);
+                            if (!delErr) {
+                                Alert.alert('Deleted ✅', 'Product successfully removed.');
+                                onSuccess();
+                                return;
+                            }
+
+                            const { error: arcErr } = await supabase.from('products').update({
+                                status: 'archived',
+                                is_active: false,
+                                stock: 0,
+                                stock_quantity: 0
+                            }).eq('id', initialData.id);
+
+                            if (!arcErr) {
+                                Alert.alert('Archived ✅', 'Product has past orders, so it was safely hidden from store.');
+                                onSuccess();
+                            } else {
+                                throw arcErr;
+                            }
+                        } catch (e) {
+                            Alert.alert('Delete Failed ❌', e.message || 'Could not delete product.');
+                        } finally {
+                            setLoading(false);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     // ── Tab Renderers ──────────────────────────────────────────
     const renderVital = () => (
         <View style={SS.tabContent}>
@@ -1090,6 +1133,13 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
                     <Text style={SS.headerTitle}>{isEditing ? '✏️ Edit Product' : '+ New Product'}</Text>
                     <Text style={SS.headerSub}>{isEditing ? 'Modify product details' : 'Create a new listing'}</Text>
                 </View>
+
+                {isEditing && (
+                    <TouchableOpacity onPress={handleDeleteProduct} disabled={loading}
+                        style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(239, 68, 68, 0.15)', alignItems: 'center', justifyContent: 'center', marginRight: 8, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.3)' }}>
+                        <Ionicons name="trash-outline" size={15} color="#F87171" />
+                    </TouchableOpacity>
+                )}
 
                 <Animated.View style={{ transform: [{ scale: saveAnim }] }}>
                     <TouchableOpacity onPress={handleSubmit} disabled={loading}
