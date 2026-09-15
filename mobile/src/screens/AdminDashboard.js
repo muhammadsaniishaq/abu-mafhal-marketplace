@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
     View, Text, TouchableOpacity, ScrollView, Alert, 
-    ActivityIndicator, Image, StatusBar, Platform, RefreshControl, Dimensions 
+    ActivityIndicator, Image, StatusBar, Platform, RefreshControl, Dimensions, BackHandler 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
@@ -135,6 +135,35 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
     const [recentOrders, setRecentOrders] = useState([]);
     const [recentProducts, setRecentProducts] = useState([]);
 
+    const handleBackToHome = useCallback(() => {
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.setItem('@abumafhal_last_screen', 'Main');
+                if (window.location.hash === '#admin' || window.location.hash === 'admin') {
+                    window.location.hash = '';
+                }
+            }
+        } catch (_) {}
+        if (navigation && navigation.navigate) {
+            navigation.navigate('Main', { screen: 'home' });
+        }
+    }, [navigation]);
+
+    // Hardware Back Button on Android
+    useEffect(() => {
+        const onBackPress = () => {
+            if (activeTab !== 'overview') {
+                setActiveTab('overview');
+                return true;
+            }
+            handleBackToHome();
+            return true;
+        };
+
+        const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+        return () => sub.remove();
+    }, [activeTab, handleBackToHome]);
+
     useEffect(() => {
         fetchAdminData();
         try {
@@ -149,45 +178,44 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
 
     const fetchAdminData = async () => {
         try {
-            // 1. Products Query
-            const { data: productsData } = await supabase
-                .from('products')
-                .select('id, name, price, stock, stock_quantity, images, image_url, status, is_active, created_at')
-                .neq('status', 'archived')
-                .order('created_at', { ascending: false });
+            const [productsRes, ordersRes, profilesRes, bannersRes] = await Promise.allSettled([
+                supabase
+                    .from('products')
+                    .select('id, name, price, stock, stock_quantity, images, image_url, status, is_active, created_at')
+                    .neq('status', 'archived')
+                    .order('created_at', { ascending: false })
+                    .limit(100),
+                supabase
+                    .from('orders')
+                    .select('id, total_amount, status, created_at, user:profiles(full_name, email)')
+                    .order('created_at', { ascending: false })
+                    .limit(50),
+                supabase
+                    .from('profiles')
+                    .select('id, role, status')
+                    .limit(500),
+                supabase
+                    .from('banners')
+                    .select('id, is_active')
+                    .limit(50)
+            ]);
 
-            const prods = productsData || [];
+            const prods = productsRes.status === 'fulfilled' && productsRes.value.data ? productsRes.value.data : [];
             const totalProducts = prods.length;
             const activeProducts = prods.filter(p => p.is_active !== false && p.status !== 'rejected').length;
             const lowStockCount = prods.filter(p => (p.stock_quantity ?? p.stock ?? 0) < 5).length;
 
-            // 2. Orders Query
-            const { data: ordersData } = await supabase
-                .from('orders')
-                .select('id, total_amount, status, created_at, user:profiles(full_name, email)')
-                .order('created_at', { ascending: false });
-
-            const ordersList = ordersData || [];
+            const ordersList = ordersRes.status === 'fulfilled' && ordersRes.value.data ? ordersRes.value.data : [];
             const totalOrders = ordersList.length;
             const pendingOrders = ordersList.filter(o => o.status === 'pending' || o.status === 'processing').length;
             const totalRevenue = ordersList.reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
 
-            // 3. Profiles Query
-            const { data: profilesData } = await supabase
-                .from('profiles')
-                .select('id, full_name, email, phone, role, status, suspended, business_name, created_at')
-                .order('created_at', { ascending: false });
-
-            const profs = profilesData || [];
+            const profs = profilesRes.status === 'fulfilled' && profilesRes.value.data ? profilesRes.value.data : [];
             const totalUsers = profs.length;
             const totalVendors = profs.filter(u => u.role === 'vendor').length;
 
-            // 4. Banners Query
-            const { data: bannersData } = await supabase
-                .from('banners')
-                .select('id, is_active');
-
-            const totalBanners = (bannersData || []).filter(b => b.is_active !== false).length;
+            const bannersList = bannersRes.status === 'fulfilled' && bannersRes.value.data ? bannersRes.value.data : [];
+            const totalBanners = bannersList.filter(b => b.is_active !== false).length;
 
             setStats({
                 totalRevenue,
@@ -693,58 +721,60 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
 
     // ─── TAB CONTENT SWITCHER (ALL 26 SCREENS HANDLED LIVE) ────────────────────
     const renderContent = () => {
+        const handleBack = () => setActiveTab('overview');
+
         switch (activeTab) {
             // Commerce & Catalog
             case 'products':
-                return <AdminProducts navigation={navigation} />;
+                return <AdminProducts navigation={navigation} onBack={handleBack} />;
             case 'orders':
-                return <AdminOrders navigation={navigation} />;
+                return <AdminOrders navigation={navigation} onBack={handleBack} />;
             case 'categories':
-                return <AdminCategories navigation={navigation} />;
+                return <AdminCategories navigation={navigation} onBack={handleBack} />;
             case 'brands':
-                return <AdminBrands navigation={navigation} />;
+                return <AdminBrands navigation={navigation} onBack={handleBack} />;
             case 'invoices':
-                return <AdminInvoices navigation={navigation} />;
+                return <AdminInvoices navigation={navigation} onBack={handleBack} />;
             case 'abandoned_carts':
-                return <AdminAbandonedCarts navigation={navigation} />;
+                return <AdminAbandonedCarts navigation={navigation} onBack={handleBack} />;
 
             // Stakeholders & Users
             case 'users':
-                return <AdminUsers navigation={navigation} />;
+                return <AdminUsers navigation={navigation} onBack={handleBack} />;
             case 'vendors':
-                return <AdminVendors navigation={navigation} />;
+                return <AdminVendors navigation={navigation} onBack={handleBack} />;
             case 'payouts':
-                return <AdminPayouts navigation={navigation} />;
+                return <AdminPayouts navigation={navigation} onBack={handleBack} />;
             case 'referrals':
-                return <AdminReferrals navigation={navigation} />;
+                return <AdminReferrals navigation={navigation} onBack={handleBack} />;
 
             // Marketing & Promotions
             case 'banners':
-                return <AdminBanners navigation={navigation} />;
+                return <AdminBanners navigation={navigation} onBack={handleBack} />;
             case 'promo_banners':
-                return <AdminPromoBanners navigation={navigation} />;
+                return <AdminPromoBanners navigation={navigation} onBack={handleBack} />;
             case 'flash_sales':
-                return <AdminFlashSales navigation={navigation} />;
+                return <AdminFlashSales navigation={navigation} onBack={handleBack} />;
             case 'coupons':
-                return <AdminCoupons navigation={navigation} />;
+                return <AdminCoupons navigation={navigation} onBack={handleBack} />;
             case 'broadcast':
-                return <AdminBroadcast navigation={navigation} />;
+                return <AdminBroadcast navigation={navigation} onBack={handleBack} />;
 
             // Finance & Intelligence
             case 'analytics':
-                return <AdminAnalytics navigation={navigation} />;
+                return <AdminAnalytics navigation={navigation} onBack={handleBack} />;
             case 'financials':
-                return <AdminFinancials navigation={navigation} />;
+                return <AdminFinancials navigation={navigation} onBack={handleBack} />;
             case 'audit_logs':
-                return <AdminAuditLogs navigation={navigation} />;
+                return <AdminAuditLogs navigation={navigation} onBack={handleBack} />;
 
             // Care & Moderation
             case 'support':
-                return <AdminSupport navigation={navigation} />;
+                return <AdminSupport navigation={navigation} onBack={handleBack} />;
             case 'disputes':
-                return <AdminDisputes navigation={navigation} />;
+                return <AdminDisputes navigation={navigation} onBack={handleBack} />;
             case 'reviews':
-                return <AdminReviews navigation={navigation} />;
+                return <AdminReviews navigation={navigation} onBack={handleBack} />;
 
             // Platform & Content
             case 'store_profile':
@@ -753,16 +783,16 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                         user={user}
                         vendor={null}
                         isAdminStore={true}
-                        onBack={() => setActiveTab('overview')}
+                        onBack={handleBack}
                         onSaved={() => fetchAdminData()}
                     />
                 );
             case 'home_settings':
-                return <AdminHomeSettings navigation={navigation} />;
+                return <AdminHomeSettings navigation={navigation} onBack={handleBack} />;
             case 'cms':
-                return <AdminCMS navigation={navigation} />;
+                return <AdminCMS navigation={navigation} onBack={handleBack} />;
             case 'settings':
-                return <AdminSettings navigation={navigation} />;
+                return <AdminSettings navigation={navigation} onBack={handleBack} />;
 
             default:
                 return renderOverview();
@@ -773,77 +803,96 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
         <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
             <StatusBar barStyle="light-content" backgroundColor={NAVY} />
 
-            {/* ── TOP HEADER (NAVY & GOLD) ── */}
+            {/* ── COMPACT TOP HEADER (NAVY & GOLD) ── */}
             <LinearGradient
                 colors={[NAVY, '#162235']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
                 style={{ 
-                    paddingTop: Platform.OS === 'ios' ? 48 : 38, 
-                    paddingBottom: 10,
+                    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 4 : (Platform.OS === 'ios' ? 44 : 8), 
+                    paddingBottom: 6,
                     borderBottomWidth: 1,
                     borderColor: 'rgba(217, 167, 58, 0.25)'
                 }}
             >
-                {/* Brand & Actions */}
+                {/* Brand & Actions Single Compact Row */}
                 <View style={{ 
                     flexDirection: 'row', 
                     justifyContent: 'space-between', 
                     alignItems: 'center', 
-                    paddingHorizontal: 16,
-                    marginBottom: 12
+                    paddingHorizontal: 12,
+                    paddingBottom: 8
                 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    {/* Left: Home/Back to buyer shop */}
+                    {activeTab === 'overview' ? (
+                        <TouchableOpacity
+                            onPress={handleBackToHome}
+                            activeOpacity={0.7}
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 4,
+                                backgroundColor: 'rgba(217, 167, 58, 0.18)',
+                                paddingHorizontal: 9,
+                                paddingVertical: 5,
+                                borderRadius: 9,
+                                borderWidth: 1,
+                                borderColor: GOLD
+                            }}
+                        >
+                            <Ionicons name="storefront-outline" size={13} color={GOLD} />
+                            <Text style={{ color: GOLD, fontSize: 11, fontWeight: '800' }}>Store</Text>
+                        </TouchableOpacity>
+                    ) : (
+                        <TouchableOpacity
+                            onPress={() => setActiveTab('overview')}
+                            activeOpacity={0.7}
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 4,
+                                backgroundColor: 'rgba(255, 255, 255, 0.12)',
+                                paddingHorizontal: 9,
+                                paddingVertical: 5,
+                                borderRadius: 9,
+                                borderWidth: 1,
+                                borderColor: 'rgba(255, 255, 255, 0.2)'
+                            }}
+                        >
+                            <Ionicons name="arrow-back" size={13} color="#FFFFFF" />
+                            <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>Dashboard</Text>
+                        </TouchableOpacity>
+                    )}
+
+                    {/* Middle: Brand Emblem & Title */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <View style={{
-                            width: 36, 
-                            height: 36, 
-                            borderRadius: 10, 
-                            backgroundColor: 'rgba(217, 167, 58, 0.12)', 
+                            width: 26, 
+                            height: 26, 
+                            borderRadius: 7, 
+                            backgroundColor: 'rgba(217, 167, 58, 0.15)', 
                             borderWidth: 1, 
-                            borderColor: 'rgba(217, 167, 58, 0.3)', 
+                            borderColor: 'rgba(217, 167, 58, 0.35)', 
                             overflow: 'hidden',
                             alignItems: 'center', 
                             justifyContent: 'center',
                         }}>
-                            <Image source={AM_LOGO} style={{ width: 28, height: 28 }} resizeMode="contain" />
+                            <Image source={AM_LOGO} style={{ width: 18, height: 18 }} resizeMode="contain" />
                         </View>
-                        <View>
-                            <Text style={{ fontSize: 16, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.3 }}>
-                                Abu Mafhal <Text style={{ color: GOLD }}>Admin</Text>
-                            </Text>
-                            <Text style={{ fontSize: 8.5, color: '#94A3B8', fontWeight: '700', letterSpacing: 1 }}>
-                                MOBILE COMMAND CONSOLE
-                            </Text>
-                        </View>
+                        <Text style={{ fontSize: 14, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.2 }}>
+                            Abu Mafhal <Text style={{ color: GOLD }}>Admin</Text>
+                        </Text>
                     </View>
 
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        {activeTab !== 'overview' && (
-                            <TouchableOpacity
-                                onPress={() => setActiveTab('overview')}
-                                style={{
-                                    paddingHorizontal: 10,
-                                    paddingVertical: 5,
-                                    borderRadius: 10,
-                                    backgroundColor: 'rgba(217, 167, 58, 0.15)',
-                                    borderWidth: 1,
-                                    borderColor: 'rgba(217, 167, 58, 0.3)',
-                                    flexDirection: 'row',
-                                    alignItems: 'center',
-                                    gap: 4
-                                }}
-                            >
-                                <Ionicons name="arrow-back" size={12} color={GOLD} />
-                                <Text style={{ color: GOLD, fontSize: 10.5, fontWeight: '800' }}>Dashboard</Text>
-                            </TouchableOpacity>
-                        )}
-
+                    {/* Right: AI Copilot & Logout */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <TouchableOpacity 
                             onPress={() => setShowAiModal(true)}
+                            activeOpacity={0.7}
                             style={{ 
-                                width: 34, 
-                                height: 34, 
-                                borderRadius: 10, 
+                                width: 30, 
+                                height: 30, 
+                                borderRadius: 8, 
                                 backgroundColor: 'rgba(217, 167, 58, 0.15)', 
                                 alignItems: 'center', 
                                 justifyContent: 'center',
@@ -852,15 +901,16 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                             }}
                             title="AI Copilot"
                         >
-                            <Ionicons name="sparkles" size={16} color={GOLD} />
+                            <Ionicons name="sparkles" size={14} color={GOLD} />
                         </TouchableOpacity>
 
                         <TouchableOpacity 
                             onPress={handleLogoutPrompt}
+                            activeOpacity={0.7}
                             style={{ 
-                                width: 34, 
-                                height: 34, 
-                                borderRadius: 10, 
+                                width: 30, 
+                                height: 30, 
+                                borderRadius: 8, 
                                 backgroundColor: 'rgba(239, 68, 68, 0.15)', 
                                 alignItems: 'center', 
                                 justifyContent: 'center',
@@ -869,7 +919,7 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                             }}
                             title="Log Out"
                         >
-                            <Ionicons name="log-out-outline" size={16} color="#F87171" />
+                            <Ionicons name="log-out-outline" size={14} color="#F87171" />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -878,7 +928,7 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                 <ScrollView 
                     horizontal 
                     showsHorizontalScrollIndicator={false} 
-                    contentContainerStyle={{ paddingHorizontal: 16, gap: 7 }}
+                    contentContainerStyle={{ paddingHorizontal: 12, gap: 5, paddingBottom: 2 }}
                 >
                     {QUICK_TABS.map((tab) => {
                         const isActive = activeTab === tab.id;
@@ -890,10 +940,10 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                                 style={{ 
                                     flexDirection: 'row',
                                     alignItems: 'center',
-                                    gap: 5,
-                                    paddingHorizontal: 12, 
-                                    paddingVertical: 6, 
-                                    borderRadius: 12, 
+                                    gap: 4,
+                                    paddingHorizontal: 9, 
+                                    paddingVertical: 4, 
+                                    borderRadius: 9, 
                                     backgroundColor: isActive ? GOLD : 'rgba(255, 255, 255, 0.08)',
                                     borderWidth: 1, 
                                     borderColor: isActive ? GOLD : 'rgba(255, 255, 255, 0.12)'
@@ -901,14 +951,13 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                             >
                                 <Ionicons 
                                     name={isActive ? tab.activeIcon : tab.icon} 
-                                    size={13} 
+                                    size={12} 
                                     color={isActive ? NAVY : '#FFFFFF'} 
                                 />
                                 <Text style={{ 
                                     color: isActive ? NAVY : '#FFFFFF', 
-                                    fontWeight: isActive ? '900' : '700', 
-                                    fontSize: 11,
-                                    letterSpacing: 0.2
+                                    fontSize: 10.5, 
+                                    fontWeight: isActive ? '800' : '600' 
                                 }}>
                                     {tab.label}
                                 </Text>

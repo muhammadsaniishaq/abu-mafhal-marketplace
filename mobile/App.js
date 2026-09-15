@@ -511,6 +511,10 @@ export default function App() {
                                                 if (window.location.hash !== '#vendor') window.location.hash = 'vendor';
                                             } else if (currentRoute.name === 'DriverDashboard') {
                                                 if (window.location.hash !== '#driver') window.location.hash = 'driver';
+                                            } else {
+                                                if (window.location.hash === '#admin' || window.location.hash === '#vendor' || window.location.hash === '#driver') {
+                                                    window.location.hash = '';
+                                                }
                                             }
                                         }
                                     }
