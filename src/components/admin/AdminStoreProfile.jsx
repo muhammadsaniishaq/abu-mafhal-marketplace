@@ -37,8 +37,8 @@ const AdminStoreProfile = () => {
   const [about, setAbout] = useState('');
   const [coverImage, setCoverImage] = useState('https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=1200&auto=format&fit=crop');
   const [logoUrl, setLogoUrl] = useState('');
-  const [phone, setPhone] = useState('2349021486162');
-  const [whatsapp, setWhatsapp] = useState('2349021486162');
+  const [phone, setPhone] = useState('08145853539');
+  const [whatsapp, setWhatsapp] = useState('08145853539');
   const [email, setEmail] = useState('support@abumafhal.com');
   const [address, setAddress] = useState('Main Commercial Plaza, Gashua, Yobe State, Nigeria');
   const [workingHours, setWorkingHours] = useState('Mon - Sat: 8:00 AM - 8:00 PM');

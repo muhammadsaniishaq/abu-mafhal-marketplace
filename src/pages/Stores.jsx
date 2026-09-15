@@ -146,8 +146,8 @@ const Stores = () => {
         isOfficial: true,
         is_recommended: true,
         isRecommended: true,
-        phone: adminProfile?.phone || adminProfile?.phone_number || '2349021486162',
-        whatsapp: adminAddr.whatsapp || adminProfile?.phone || '2349021486162',
+        phone: adminProfile?.phone || adminProfile?.phone_number || '08145853539',
+        whatsapp: adminAddr.whatsapp || adminProfile?.phone || '08145853539',
         email: adminAddr.email || adminProfile?.email || 'support@abumafhal.com',
         address: adminAddr.address || adminProfile?.address || 'Main Commercial Plaza, Gashua, Yobe State, Nigeria',
         working_hours: adminAddr.working_hours || 'Mon - Sat: 8:00 AM - 8:00 PM',
@@ -181,7 +181,7 @@ const Stores = () => {
           isOfficial: false,
           is_recommended: isRec,
           isRecommended: isRec,
-          phone: vp.phone || vp.phone_number || '2349021486162',
+          phone: vp.phone || vp.phone_number || '08145853539',
           whatsapp: vAddr.whatsapp || vp.phone || vp.phone_number || '',
           email: vAddr.email || vp.email || '',
           address: vAddr.address || vp.address || vp.state || 'Nigeria',
@@ -205,7 +205,7 @@ const Stores = () => {
 
   const handleWhatsAppContact = (store, e) => {
     if (e) e.stopPropagation();
-    const rawPhone = store.whatsapp || store.phone || '2349021486162';
+    const rawPhone = store.whatsapp || store.phone || '08145853539';
     const phone = rawPhone.replace(/[^0-9]/g, '');
     const msg = encodeURIComponent(`Hello ${store.name}, I am contacting you directly from Abu Mafhal Marketplace regarding your products.`);
     window.open(`https://wa.me/${phone}?text=${msg}`, '_blank');

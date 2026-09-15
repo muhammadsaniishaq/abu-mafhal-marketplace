@@ -214,7 +214,9 @@ const ProfilePageInner = ({
     const handleUnfollowStore = async (storeId, storeName) => {
         try {
             await toggleFollowStore(storeId, storeName, user?.id);
-            setFollowedStores(prev => prev.filter(s => s.id !== storeId));
+            const officialAliases = ['46913c66-4474-4962-82e4-b459b89d33fd', '6d3df1f5-4983-412e-a45f-db146348aac2', 'official-abumafhal'];
+            const isOfficial = officialAliases.includes(String(storeId));
+            setFollowedStores(prev => prev.filter(s => isOfficial ? !officialAliases.includes(String(s.id)) : s.id !== storeId));
         } catch (_) {}
     };
 
@@ -1075,7 +1077,7 @@ const ProfilePageInner = ({
                                                     style={s.actionWhatsAppBtn}
                                                     activeOpacity={0.8}
                                                     onPress={() => {
-                                                        const phone = store.phone ? store.phone.replace(/[^0-9]/g, '') : '2349021486162';
+                                                        const phone = store.phone ? store.phone.replace(/[^0-9]/g, '') : '08145853539';
                                                         const text = encodeURIComponent(`Hello ${store.name}, I am contacting you directly from Abu Mafhal Marketplace.`);
                                                         Linking.openURL(`https://wa.me/${phone}?text=${text}`).catch(() => {});
                                                     }}

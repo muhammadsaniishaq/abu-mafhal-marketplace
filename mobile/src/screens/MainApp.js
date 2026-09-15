@@ -91,7 +91,7 @@ export const MainApp = ({ route, navigation, user, onLogout, cartLines, onUpdate
                     initialQuery={route?.params?.query}
                     initialCategory={route?.params?.category}
                 />}
-                {activeTab === 'cart' && <CartPage cart={cartLines} onBack={() => setActiveTab('home')} onUpdateQty={onUpdateQty} onRemove={onRemoveCart} onClear={onClearCart} />}
+                {activeTab === 'cart' && <CartPage cart={cartLines} user={user} onBack={() => setActiveTab('home')} onUpdateQty={onUpdateQty} onRemove={onRemoveCart} onClear={onClearCart} />}
                 {activeTab === 'wishlist' && <WishlistPage onBack={() => setActiveTab('home')} onAddToCart={onAddToCart} onProductClick={(product) => handleNavigate('ProductDetails', { product })} />}
                 {activeTab === 'profile' && <ProfilePage
                     user={user}

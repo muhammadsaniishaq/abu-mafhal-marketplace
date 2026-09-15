@@ -92,7 +92,7 @@ export const AdminVendors = () => {
                         business_name: p.business_name || (isOfficial ? 'Abu Mafhal Official Store' : (p.full_name || 'Merchant Store')),
                         business_category: p.business_category || addrMeta?.category || (isOfficial ? 'Official Mall & Flagship Store' : 'General Merchant'),
                         business_address: addrMeta?.address || p.address || p.state || 'Nigeria',
-                        phone: p.phone || p.phone_number || '2349021486162',
+                        phone: p.phone || p.phone_number || '08145853539',
                         about: p.about || addrMeta?.about || local.about || '',
                         cover_image: p.cover_image || addrMeta?.cover_image || local.cover_image || '',
                         logo_url: p.avatar_url || local.logo || null,

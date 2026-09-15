@@ -10,6 +10,7 @@ import { useComparison } from '../context/ComparisonContext';
 import { Video, ResizeMode } from 'expo-av';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
+import { resolveVendorOrStore } from '../services/vendorResolver';
 
 const { width } = Dimensions.get('window');
 const AM_LOGO = require('../../assets/am_logo.png');
@@ -112,70 +113,15 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
         }
     };
 
-    // ── Fetch Real Vendor / Store Profile ─────────────────────────────────────
+    // ── Fetch Real Vendor / Store Profile (Unified & 100% Consistent) ─────────
     const fetchVendor = async (currentProd) => {
         setLoadingVend(true);
-        const vId = currentProd?.vendor_id || currentProd?.user_id;
-
-        const officialStore = {
-            id: 'official',
-            name: 'Abu Mafhal Official',
-            business_name: 'Abu Mafhal Official',
-            role: 'admin',
-            isOfficial: true,
-            is_verified: true,
-            rating: 4.8,
-            reviews: '256',
-            phone: '2349021486162',
-            whatsapp: '2349021486162',
-            avatar: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=200&auto=format&fit=crop',
-            tagline: 'Verified Seller • 100% Genuine Tech & Audio'
-        };
-
-        if (!vId || vId === 'admin') {
-            setVendor(officialStore);
-            setLoadingVend(false);
-            return;
-        }
-
         try {
-            const [profileRes, storeRes] = await Promise.all([
-                supabase.from('profiles').select('*').eq('id', vId).maybeSingle(),
-                supabase.from('stores').select('*').eq('user_id', vId).maybeSingle()
-            ]);
-
-            const data = profileRes?.data;
-            const store = storeRes?.data;
-
-            if (data || store) {
-                const parseAddr = (addr) => {
-                    if (!addr || typeof addr !== 'string') return {};
-                    try {
-                        if (addr.startsWith('{') && addr.endsWith('}')) return JSON.parse(addr);
-                    } catch (_) {}
-                    return {};
-                };
-                const vAddr = parseAddr(data?.address);
-
-                setVendor({
-                    id: vId,
-                    name: store?.name || data?.business_name || data?.full_name || 'Marketplace Seller',
-                    business_name: store?.name || data?.business_name || data?.full_name || 'Marketplace Seller',
-                    role: data?.role || 'vendor',
-                    isOfficial: data?.role === 'admin',
-                    is_verified: true,
-                    rating: store?.rating || 4.8,
-                    reviews: '256',
-                    phone: store?.phone || data?.phone || data?.phone_number || '2349021486162',
-                    whatsapp: store?.whatsapp || vAddr.whatsapp || store?.phone || data?.phone || data?.phone_number || '2349021486162',
-                    avatar: store?.logo || data?.avatar_url || officialStore.avatar,
-                    tagline: store?.about || vAddr.tagline || store?.category || 'Verified Seller'
-                });
-            } else {
-                setVendor(officialStore);
-            }
-        } catch {
-            setVendor(officialStore);
+            const vId = currentProd?.vendor_id || currentProd?.user_id;
+            const vData = await resolveVendorOrStore(vId);
+            setVendor(vData);
+        } catch (err) {
+            console.log('[ProductDetails] fetchVendor error:', err);
         } finally {
             setLoadingVend(false);
         }
@@ -267,7 +213,9 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
     // ── Gallery Images Parser ─────────────────────────────────────────────────
     const getImages = () => {
         const list = [];
-        if (product?.image_url) list.push(product.image_url);
+        if (product?.image_url && typeof product.image_url === 'string') {
+            list.push(product.image_url);
+        }
         if (Array.isArray(product?.images)) {
             product.images.forEach(img => {
                 if (img && typeof img === 'string' && !list.includes(img)) list.push(img);
@@ -287,15 +235,7 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
             }
         }
         if (list.length === 0) {
-            list.push('https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=700&auto=format&fit=crop');
-        }
-        // Ensure at least 4-5 thumbnails for rich gallery experience as shown in mockup
-        if (list.length === 1) {
-            list.push(
-                'https://images.unsplash.com/photo-1484704849700-f032a568e944?q=80&w=600&auto=format&fit=crop',
-                'https://images.unsplash.com/photo-1546435770-a3e426bf472b?q=80&w=600&auto=format&fit=crop',
-                'https://images.unsplash.com/photo-1583394838336-acd977736f90?q=80&w=600&auto=format&fit=crop'
-            );
+            list.push('https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=600&auto=format&fit=crop');
         }
         return list;
     };
@@ -303,12 +243,12 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
     const images = getImages();
 
     // ── Price & Discounts ─────────────────────────────────────────────────────
-    const currentPrice = Number(selectedVariant?.price || product?.price || 45000);
-    const comparePrice = Number(product?.compare_at_price || Math.round(currentPrice * 1.38));
+    const currentPrice = Number(selectedVariant?.price || product?.price || 0);
+    const comparePrice = Number(product?.compare_at_price || 0);
     const hasDiscount = comparePrice > currentPrice;
-    const discountPercent = hasDiscount ? Math.round(((comparePrice - currentPrice) / comparePrice) * 100) : 28;
+    const discountPercent = hasDiscount ? Math.round(((comparePrice - currentPrice) / comparePrice) * 100) : 0;
 
-    const stock = product?.stock !== undefined ? Number(product.stock) : 12;
+    const stock = product?.stock !== undefined ? Number(product.stock) : (product?.stock_quantity !== undefined ? Number(product.stock_quantity) : 1);
     const isOutOfStock = stock <= 0;
 
     // ── Variants ──────────────────────────────────────────────────────────────
@@ -444,13 +384,13 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
             // Open full ChatScreen with live messages, typing indicator, and realtime subscriptions
             navigation.navigate('ChatScreen', {
                 vendorId: targetId,
-                vendorName: vendor?.name || 'Merchant',
+                vendorName: vendor?.name || 'ABU MAFHAL',
                 vendorAvatar: vendor?.avatar || null,
                 productId: product?.id,
                 productName: product?.name,
                 productPrice: currentPrice,
                 productImage: images[0] || product?.image_url,
-                vendorRole: vendor?.role || 'Vendor',
+                vendorRole: vendor?.role || (vendor?.isOfficial ? 'Official Store' : 'Verified Seller'),
             });
         } catch (chatError) {
             console.log('handleOpenLiveChat error:', chatError);
@@ -461,7 +401,7 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
     };
 
     const handleWhatsAppVendor = (customMsg = '') => {
-        const rawPhone = vendor?.whatsapp || vendor?.phone || '2349021486162';
+        const rawPhone = vendor?.whatsapp || vendor?.phone || '08145853539';
         const phone = rawPhone.replace(/[^0-9]/g, '');
         const defaultText = `Hello ${vendor?.name || 'Seller'}, I am inquiring about "${product?.name}" (${fmtPrice(currentPrice)}) on Abu Mafhal Marketplace. Is it available for express delivery?`;
         const msg = encodeURIComponent(customMsg || defaultText);
@@ -471,9 +411,8 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
     };
 
     const subtitleText = product?.short_description ||
-        (product?.category?.toLowerCase()?.includes('phone') || product?.category?.toLowerCase()?.includes('headphone') || product?.category?.toLowerCase()?.includes('audio')
-            ? 'Premium Sound. All Day Comfort.'
-            : 'Premium Sound. All Day Comfort.');
+        (product?.brand ? `${product.brand} • Premium Quality` :
+        (product?.condition ? `${product.condition} • 100% Authentic` : '100% Genuine Quality Guaranteed'));
 
     if (!product) {
         return (
@@ -564,10 +503,8 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                     </TouchableOpacity>
                     <Ionicons name="chevron-forward" size={12} color="#94A3B8" />
                     <TouchableOpacity onPress={() => navigation.navigate('Main', { screen: 'shop', category: product.category })}>
-                        <Text style={s.breadcrumbLink}>{product.category || 'Electronics'}</Text>
+                        <Text style={s.breadcrumbLink}>{product.category || 'Shop'}</Text>
                     </TouchableOpacity>
-                    <Ionicons name="chevron-forward" size={12} color="#94A3B8" />
-                    <Text style={s.breadcrumbLink}>Audio</Text>
                     <Ionicons name="chevron-forward" size={12} color="#94A3B8" />
                     <Text style={s.breadcrumbActive} numberOfLines={1}>
                         {product.name}
@@ -682,20 +619,26 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                     ══════════════════════════════════════════════════ */}
                     <View style={s.sellerCard}>
                         <View style={s.sellerAvatarWrap}>
-                            <Image
-                                source={{ uri: vendor?.avatar || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=200&auto=format&fit=crop' }}
-                                style={s.sellerAvatar}
-                            />
+                            {vendor?.avatar ? (
+                                <Image
+                                    source={{ uri: vendor.avatar }}
+                                    style={s.sellerAvatar}
+                                />
+                            ) : (
+                                <View style={[s.sellerAvatar, { backgroundColor: BRAND.navy, alignItems: 'center', justifyContent: 'center' }]}>
+                                    <Ionicons name={vendor?.isOfficial ? "shield-checkmark" : "storefront"} size={22} color={BRAND.gold} />
+                                </View>
+                            )}
                         </View>
 
                         <View style={{ flex: 1, marginLeft: 10 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                                 <Text numberOfLines={1} style={s.sellerName}>
-                                    {vendor?.name || 'Marketplace Seller'}
+                                    {vendor?.name || 'ABU MAFHAL'}
                                 </Text>
                                 <Ionicons name="checkmark-circle" size={16} color={BRAND.sky} />
                             </View>
-                            <Text style={s.sellerVerifiedTxt}>Verified Seller</Text>
+                            <Text style={s.sellerVerifiedTxt}>{vendor?.isOfficial ? 'Official Flagship Store' : 'Verified Merchant'}</Text>
                         </View>
 
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -729,9 +672,11 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                             {hasDiscount && (
                                 <Text style={s.comparePrice}>{fmtPrice(comparePrice)}</Text>
                             )}
-                            <View style={s.greenDiscBadge}>
-                                <Text style={s.greenDiscTxt}>{discountPercent}% OFF</Text>
-                            </View>
+                            {discountPercent > 0 && (
+                                <View style={s.greenDiscBadge}>
+                                    <Text style={s.greenDiscTxt}>{discountPercent}% OFF</Text>
+                                </View>
+                            )}
                         </View>
 
                         <View style={s.stockContainer}>
@@ -748,35 +693,35 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                     </View>
 
                     {/* ══════════════════════════════════════════════════
-                        7. FOUR HIGHLIGHT BADGES (Exact to Mockup)
+                        7. FOUR HIGHLIGHT BADGES (Guaranteed Features)
                     ══════════════════════════════════════════════════ */}
                     <View style={s.highlightsRow}>
                         <View style={s.highlightItem}>
                             <View style={s.highlightIconBox}>
-                                <Ionicons name="headset-outline" size={20} color={BRAND.slateDark} />
+                                <Ionicons name="shield-checkmark-outline" size={20} color={BRAND.emeraldDark} />
                             </View>
-                            <Text style={s.highlightTxt}>High Quality{'\n'}Sound</Text>
+                            <Text style={s.highlightTxt}>100% Authentic{'\n'}Guaranteed</Text>
                         </View>
 
                         <View style={s.highlightItem}>
                             <View style={s.highlightIconBox}>
-                                <Ionicons name="battery-charging-outline" size={20} color={BRAND.slateDark} />
+                                <Ionicons name="flash-outline" size={20} color={BRAND.navy} />
                             </View>
-                            <Text style={s.highlightTxt}>Long Battery{'\n'}Life</Text>
+                            <Text style={s.highlightTxt}>Nationwide{'\n'}Dispatch</Text>
                         </View>
 
                         <View style={s.highlightItem}>
                             <View style={s.highlightIconBox}>
-                                <Ionicons name="mic-outline" size={20} color={BRAND.slateDark} />
+                                <Ionicons name="lock-closed-outline" size={20} color={BRAND.sky} />
                             </View>
-                            <Text style={s.highlightTxt}>Built-in{'\n'}Microphone</Text>
+                            <Text style={s.highlightTxt}>Escrow Safe{'\n'}Protection</Text>
                         </View>
 
                         <View style={s.highlightItem}>
                             <View style={s.highlightIconBox}>
-                                <Ionicons name="leaf-outline" size={20} color={BRAND.slateDark} />
+                                <Ionicons name="repeat-outline" size={20} color={BRAND.goldDark} />
                             </View>
-                            <Text style={s.highlightTxt}>Comfortable{'\n'}Design</Text>
+                            <Text style={s.highlightTxt}>7 Days Return{'\n'}Policy</Text>
                         </View>
                     </View>
 
@@ -891,15 +836,21 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                         <View style={s.chatHeadRow}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
                                 <View style={s.chatAvatarWrap}>
-                                    <Image
-                                        source={{ uri: vendor?.avatar || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=200&auto=format&fit=crop' }}
-                                        style={s.chatAvatar}
-                                    />
+                                    {vendor?.avatar ? (
+                                        <Image
+                                            source={{ uri: vendor.avatar }}
+                                            style={s.chatAvatar}
+                                        />
+                                    ) : (
+                                        <View style={[s.chatAvatar, { backgroundColor: BRAND.navy, alignItems: 'center', justifyContent: 'center' }]}>
+                                            <Ionicons name={vendor?.isOfficial ? "shield-checkmark" : "storefront"} size={18} color={BRAND.gold} />
+                                        </View>
+                                    )}
                                     <View style={s.chatLiveDot} />
                                 </View>
                                 <View>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                        <Text style={s.chatVendorTitle}>{vendor?.name || 'Marketplace Seller'}</Text>
+                                        <Text style={s.chatVendorTitle}>{vendor?.name || 'ABU MAFHAL'}</Text>
                                         <Ionicons name="checkmark-circle" size={13} color={BRAND.sky} />
                                     </View>
                                     <Text style={s.chatLiveSub}>● Online Now • Instant Reply</Text>
@@ -999,7 +950,7 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                     {descExpanded && (
                         <View style={s.accordionContent}>
                             <Text style={s.descriptionText}>
-                                {product.description || 'Wireless Headphones Pro Max delivering premium acoustic sound with all day comfort. Features active noise reduction, ultra-long battery performance, deep dynamic bass, and an ergonomic lightweight headband.'}
+                                {product.description || 'Authentic product verified on Abu Mafhal Marketplace. Contact the seller directly via Live Chat for inquiries, bulk pricing, or custom delivery arrangements.'}
                             </Text>
                         </View>
                     )}

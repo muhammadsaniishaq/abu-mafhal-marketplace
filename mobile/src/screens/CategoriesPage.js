@@ -423,7 +423,7 @@ export const CategoriesPage = ({
 
     const doWA = (cat) => {
         const m = encodeURIComponent(`Assalamu Alaikum Abu Mafhal, I need assistance finding products under "${cat?.name || "Categories"}".`);
-        Linking.openURL(`https://wa.me/2349021486162?text=${m}`).catch(() => {});
+        Linking.openURL(`https://wa.me/2348145853539?text=${m}`).catch(() => {});
     };
 
     const doAdd = (p) => {

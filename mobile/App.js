@@ -33,6 +33,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ComparisonProvider } from './src/context/ComparisonContext';
+import { clearFollowedStoresCache } from './src/services/vendorFollowerService';
 
 // Screens
 import { ProductComparison } from './src/screens/ProductComparison';
@@ -256,6 +257,7 @@ export default function App() {
                 fetchUserProfile(session.user.id, session.user);
             } else if (event === 'SIGNED_OUT') {
                 setUser(null);
+                clearFollowedStoresCache();
                 AsyncStorage.removeItem(USER_STORAGE_KEY).catch(() => {});
                 AsyncStorage.removeItem('@abumafhal_last_screen').catch(() => {});
                 if (typeof window !== 'undefined') {
@@ -369,6 +371,7 @@ export default function App() {
             console.error('Logout error:', e);
         } finally {
             setUser(null);
+            clearFollowedStoresCache();
             await AsyncStorage.removeItem(USER_STORAGE_KEY).catch(() => {});
             await AsyncStorage.removeItem('@abumafhal_last_screen').catch(() => {});
 

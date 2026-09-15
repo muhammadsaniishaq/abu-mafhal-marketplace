@@ -26,7 +26,7 @@ const OrderTracking = () => {
     product: {
       name: 'Oraimo FreePods 4 Wireless Earbuds',
       variant: 'Black | 1 Piece',
-      seller: 'TechWorld Store',
+      seller: 'ABU MAFHAL',
       price: 24500,
       quantity: 1,
       image: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=250&q=80',

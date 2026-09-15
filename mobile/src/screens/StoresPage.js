@@ -98,30 +98,55 @@ export const StoresPage = ({
             if (updatedMap) setFollowedStores(updatedMap);
         });
 
+        const { data: authSub } = supabase.auth.onAuthStateChange((_event, session) => {
+            if (session?.user) {
+                getFollowedStoreMap(session.user.id).then(map => setFollowedStores(map || {}));
+            } else {
+                setFollowedStores({});
+            }
+        });
+
         return () => {
             supabase.removeChannel(channel);
             if (typeof unsub === 'function') unsub();
+            if (authSub?.subscription?.unsubscribe) authSub.subscription.unsubscribe();
         };
     }, []);
 
     const loadFollowedState = async () => {
         try {
-            const map = await getFollowedStoreMap();
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
+                setFollowedStores({});
+                return;
+            }
+            const map = await getFollowedStoreMap(user.id);
             if (map) setFollowedStores(map);
         } catch (_) {}
     };
 
     const toggleFollow = async (storeId, storeName) => {
         try {
-            const res = await toggleFollowStore(storeId, storeName);
-            if (res && res.updatedMap) setFollowedStores(res.updatedMap);
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
+                Alert.alert(
+                    'Login Required',
+                    'Please login to follow your favorite stores and receive exclusive updates.',
+                    [
+                        { text: 'Login', onPress: () => { if (onNavigate) onNavigate('auth'); } },
+                        { text: 'Cancel', style: 'cancel' }
+                    ]
+                );
+                return;
+            }
+
+            const res = await toggleFollowStore(storeId, storeName, user.id);
+            if (res?.updatedMap) {
+                setFollowedStores(res.updatedMap);
+            }
             showToast(res.isFollowed ? `Following ${storeName}` : `Unfollowed ${storeName}`);
-        } catch (_) {
-            const isCurrentlyFollowed = !followedStores[storeId];
-            const updated = { ...followedStores, [storeId]: isCurrentlyFollowed };
-            setFollowedStores(updated);
-            AsyncStorage.setItem(FOLLOWED_STORES_KEY, JSON.stringify(updated)).catch(() => {});
-            showToast(isCurrentlyFollowed ? `Following ${storeName}` : `Unfollowed ${storeName}`);
+        } catch (err) {
+            console.log('toggleFollow error:', err);
         }
     };
 
@@ -164,16 +189,68 @@ export const StoresPage = ({
     };
 
     const handleContactWhatsApp = (store) => {
-        const rawPhone = store.whatsapp || store.phone || '2349021486162';
-        const phone = rawPhone.replace(/[^0-9]/g, '');
+        const rawPhone = store.whatsapp || store.phone || '08145853539';
+        let phone = rawPhone.replace(/[^0-9]/g, '');
+        if (phone.startsWith('0') && phone.length === 11) {
+            phone = '234' + phone.slice(1);
+        }
         const msg = encodeURIComponent(`Hello ${store.name}, I am contacting you directly from Abu Mafhal Marketplace regarding your products.`);
         Linking.openURL(`https://wa.me/${phone}?text=${msg}`).catch(() => {
-            Alert.alert('Contact Store', `Store Phone: ${store.phone || '+234 902 148 6162'}`);
+            Alert.alert('Contact Store', `Store Phone: ${store.phone || store.whatsapp || '+234 814 585 3539'}`);
         });
     };
 
+    const handleOpenSocial = (platform, rawValue, storeName) => {
+        if (!rawValue) return;
+        const val = String(rawValue).trim();
+        if (!val) return;
+
+        let url = '';
+        if (platform === 'whatsapp') {
+            let phone = val.replace(/[^0-9]/g, '');
+            if (phone.startsWith('0') && phone.length === 11) {
+                phone = '234' + phone.slice(1);
+            }
+            if (phone.length >= 7) {
+                const msg = encodeURIComponent(`Hello ${storeName || 'Merchant'}, I am contacting you from Abu Mafhal Marketplace.`);
+                url = `https://wa.me/${phone}?text=${msg}`;
+            }
+        } else if (platform === 'instagram') {
+            let handle = val.replace(/^@+/, '').trim();
+            if (handle.startsWith('http://') || handle.startsWith('https://')) {
+                url = handle;
+            } else {
+                handle = handle.replace(/^(?:https?:\/\/)?(?:www\.)?instagram\.com\//i, '').replace(/\/$/, '');
+                if (handle) url = `https://instagram.com/${handle}`;
+            }
+        } else if (platform === 'facebook') {
+            let handle = val.trim();
+            if (handle.startsWith('http://') || handle.startsWith('https://')) {
+                url = handle;
+            } else {
+                handle = handle.replace(/^(?:https?:\/\/)?(?:www\.)?facebook\.com\//i, '').replace(/\/$/, '');
+                if (handle) url = `https://facebook.com/${handle}`;
+            }
+        } else if (platform === 'twitter') {
+            let handle = val.replace(/^@+/, '').trim();
+            if (handle.startsWith('http://') || handle.startsWith('https://')) {
+                url = handle;
+            } else {
+                handle = handle.replace(/^(?:https?:\/\/)?(?:www\.)?(?:twitter|x)\.com\//i, '').replace(/\/$/, '');
+                if (handle) url = `https://x.com/${handle}`;
+            }
+        }
+
+        if (url) {
+            Linking.openURL(url).catch(err => {
+                console.warn('[StoresPage] Could not open social link:', url, err);
+                Alert.alert('Social Link', `Unable to open link: ${url}`);
+            });
+        }
+    };
+
     const handleCallStore = (store) => {
-        const rawPhone = store.phone || store.whatsapp || '2349021486162';
+        const rawPhone = store.phone || store.whatsapp || '08145853539';
         const phone = rawPhone.replace(/[^0-9]/g, '');
         Linking.openURL(`tel:+${phone}`).catch(() => {
             Alert.alert('Phone Number', `+${phone}`);
@@ -1177,25 +1254,43 @@ export const StoresPage = ({
                                     </View>
                                 ) : null}
 
-                                {(selectedStore.instagram || selectedStore.facebook || selectedStore.twitter) ? (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
+                                {(selectedStore.whatsapp || selectedStore.instagram || selectedStore.facebook || selectedStore.twitter) ? (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 }}>
+                                        {selectedStore.whatsapp ? (
+                                            <TouchableOpacity
+                                                activeOpacity={0.75}
+                                                onPress={() => handleOpenSocial('whatsapp', selectedStore.whatsapp, selectedStore.name)}
+                                                style={s.socialIconBtn}
+                                            >
+                                                <Ionicons name="logo-whatsapp" size={19} color="#16A34A" />
+                                            </TouchableOpacity>
+                                        ) : null}
                                         {selectedStore.instagram ? (
-                                            <View style={s.socialChip}>
-                                                <Ionicons name="logo-instagram" size={12} color="#DB2777" />
-                                                <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#9D174D' }}>{selectedStore.instagram}</Text>
-                                            </View>
+                                            <TouchableOpacity
+                                                activeOpacity={0.75}
+                                                onPress={() => handleOpenSocial('instagram', selectedStore.instagram, selectedStore.name)}
+                                                style={[s.socialIconBtn, { backgroundColor: '#FDF2F8', borderColor: '#FBCFE8' }]}
+                                            >
+                                                <Ionicons name="logo-instagram" size={19} color="#DB2777" />
+                                            </TouchableOpacity>
                                         ) : null}
                                         {selectedStore.facebook ? (
-                                            <View style={[s.socialChip, { backgroundColor: '#EFF6FF', borderColor: '#DBEAFE' }]}>
-                                                <Ionicons name="logo-facebook" size={12} color="#2563EB" />
-                                                <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#1E40AF' }}>{selectedStore.facebook}</Text>
-                                            </View>
+                                            <TouchableOpacity
+                                                activeOpacity={0.75}
+                                                onPress={() => handleOpenSocial('facebook', selectedStore.facebook, selectedStore.name)}
+                                                style={[s.socialIconBtn, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}
+                                            >
+                                                <Ionicons name="logo-facebook" size={19} color="#2563EB" />
+                                            </TouchableOpacity>
                                         ) : null}
                                         {selectedStore.twitter ? (
-                                            <View style={[s.socialChip, { backgroundColor: '#F0F9FF', borderColor: '#E0F2FE' }]}>
-                                                <Ionicons name="logo-twitter" size={12} color="#0284C7" />
-                                                <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#0369A1' }}>{selectedStore.twitter}</Text>
-                                            </View>
+                                            <TouchableOpacity
+                                                activeOpacity={0.75}
+                                                onPress={() => handleOpenSocial('twitter', selectedStore.twitter, selectedStore.name)}
+                                                style={[s.socialIconBtn, { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' }]}
+                                            >
+                                                <Ionicons name="logo-twitter" size={18} color="#0F172A" />
+                                            </TouchableOpacity>
                                         ) : null}
                                     </View>
                                 ) : null}
@@ -2749,5 +2844,20 @@ const s = StyleSheet.create({
         color: 'white',
         fontSize: 12,
         fontWeight: '700'
+    },
+    socialIconBtn: {
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        backgroundColor: '#DCFCE7',
+        borderWidth: 1.5,
+        borderColor: '#86EFAC',
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOpacity: 0.08,
+        shadowOffset: { width: 0, height: 2 },
+        shadowRadius: 3,
+        elevation: 2,
     }
 });

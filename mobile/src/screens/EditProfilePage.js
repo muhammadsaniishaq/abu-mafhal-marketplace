@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, SafeAreaView, Alert, ActivityIndicator, Image, Platform } from 'react-native';
+import {
+    View, Text, TextInput, TouchableOpacity, ScrollView,
+    SafeAreaView, Alert, ActivityIndicator, Image, Platform, StyleSheet, StatusBar
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { styles } from '../styles/theme';
 import { supabase } from '../lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { UserAvatar } from '../components/UserAvatar';
 import { StoreService } from '../services/storeService';
 
@@ -32,9 +33,8 @@ export const EditProfilePage = ({ user, onBack, onUpdateUser }) => {
     const [gender, setGender] = useState(user?.gender || user?.user_metadata?.gender || '');
     const [bio, setBio] = useState(user?.bio || user?.user_metadata?.bio || '');
     const [username, setUsername] = useState(user?.username || user?.user_metadata?.username || '');
-    const [location, setLocation] = useState(user?.location || user?.user_metadata?.location || '');
+    const [location, setLocation] = useState(user?.location || user?.address || user?.user_metadata?.location || '');
     const [dob, setDob] = useState(user?.dob || user?.user_metadata?.dob || null);
-    const [showDatePicker, setShowDatePicker] = useState(false);
     const [avatarUrl, setAvatarUrl] = useState(user?.avatar_url || user?.user_metadata?.avatar_url || null);
 
     // Store & Business Branding Info
@@ -46,6 +46,15 @@ export const EditProfilePage = ({ user, onBack, onUpdateUser }) => {
     const [businessCategory, setBusinessCategory] = useState(
         user?.business_category || (user?.role === 'admin' ? 'Official Mall & Flagship Store' : 'General Merchant')
     );
+    const [tagline, setTagline] = useState(user?.tagline || '');
+    const [workingHours, setWorkingHours] = useState(user?.working_hours || '');
+    const [policy, setPolicy] = useState(user?.policy || '');
+
+    // Social Media Handles
+    const [whatsapp, setWhatsapp] = useState(user?.whatsapp || '');
+    const [instagram, setInstagram] = useState(user?.instagram || '');
+    const [facebook, setFacebook] = useState(user?.facebook || '');
+    const [twitter, setTwitter] = useState(user?.twitter || '');
 
     const [loading, setLoading] = useState(false);
     const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -61,35 +70,55 @@ export const EditProfilePage = ({ user, onBack, onUpdateUser }) => {
     const loadLatestProfile = async () => {
         if (!user?.id) return;
         try {
-            const { data, error } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', user.id)
-                .single();
+            // Load both profiles and stores table
+            const [profRes, storeRes] = await Promise.allSettled([
+                supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(),
+                supabase.from('stores').select('*').eq('user_id', user.id).maybeSingle()
+            ]);
 
-            if (data && !error) {
-                if (data.full_name) setFullName(data.full_name);
-                if (data.phone) setPhone(data.phone);
-                if (data.avatar_url) setAvatarUrl(data.avatar_url);
-                if (data.username) setUsername(data.username);
-                if (data.business_name) setBusinessName(data.business_name);
-                if (data.business_category) setBusinessCategory(data.business_category);
-                if (data.cover_image) setCoverImage(data.cover_image);
-                if (data.about) setAboutStore(data.about);
+            const p = profRes.status === 'fulfilled' && profRes.value?.data ? profRes.value.data : null;
+            const s = storeRes.status === 'fulfilled' && storeRes.value?.data ? storeRes.value.data : null;
 
-                // Check JSON address fallback
-                if (data.address && data.address.startsWith('{')) {
-                    try {
-                        const parsed = JSON.parse(data.address);
-                        if (!data.about && parsed.about) setAboutStore(parsed.about);
-                        if (!data.cover_image && parsed.cover_image) setCoverImage(parsed.cover_image);
-                        if (!data.business_category && parsed.category) setBusinessCategory(parsed.category);
-                        if (!data.business_name && parsed.business_name) setBusinessName(parsed.business_name);
-                    } catch (_) {}
-                }
+            if (p) {
+                if (p.full_name) setFullName(p.full_name);
+                if (p.phone || p.phone_number) setPhone(p.phone || p.phone_number);
+                if (p.avatar_url) setAvatarUrl(p.avatar_url);
+                if (p.username) setUsername(p.username);
+                if (p.gender) setGender(p.gender);
+                if (p.dob) setDob(p.dob);
+                if (p.address || p.state) setLocation(p.address || p.state);
+                if (p.business_name) setBusinessName(p.business_name);
+                if (p.business_category) setBusinessCategory(p.business_category);
+                if (p.about) setAboutStore(p.about);
+                if (p.cover_image) setCoverImage(p.cover_image);
+                if (p.tagline) setTagline(p.tagline);
+                if (p.whatsapp) setWhatsapp(p.whatsapp);
+                if (p.instagram) setInstagram(p.instagram);
+                if (p.facebook) setFacebook(p.facebook);
+                if (p.twitter) setTwitter(p.twitter);
+                if (p.working_hours) setWorkingHours(p.working_hours);
+                if (p.policy) setPolicy(p.policy);
+            }
+
+            // Prefer explicit store table details if present
+            if (s) {
+                if (s.name) setBusinessName(s.name);
+                if (s.category) setBusinessCategory(s.category);
+                if (s.about) setAboutStore(s.about);
+                if (s.cover_image) setCoverImage(s.cover_image);
+                if (s.logo) setAvatarUrl(s.logo);
+                if (s.tagline) setTagline(s.tagline);
+                if (s.whatsapp) setWhatsapp(s.whatsapp);
+                if (s.instagram) setInstagram(s.instagram);
+                if (s.facebook) setFacebook(s.facebook);
+                if (s.twitter) setTwitter(s.twitter);
+                if (s.working_hours) setWorkingHours(s.working_hours);
+                if (s.policy) setPolicy(s.policy);
+                if (s.address) setLocation(s.address);
+                if (s.phone && !phone) setPhone(s.phone);
             }
         } catch (err) {
-            console.log('[EditProfile] Profile load error:', err);
+            console.log('[EditProfile] Profile load note:', err);
         }
     };
 
@@ -98,13 +127,13 @@ export const EditProfilePage = ({ user, onBack, onUpdateUser }) => {
         try {
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (status !== 'granted') {
-                Alert.alert('Permission Denied', 'Please enable media library access in settings.');
+                Alert.alert('Permission Required', 'Please allow gallery access to upload a profile photo.');
                 return;
             }
 
-            let result = await ImagePicker.launchImageLibraryAsync({
+            const result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                quality: 0.6,
+                quality: 0.7,
                 base64: true,
                 allowsEditing: true,
                 aspect: [1, 1]
@@ -113,7 +142,7 @@ export const EditProfilePage = ({ user, onBack, onUpdateUser }) => {
             if (!result.canceled && result.assets?.[0]) {
                 const asset = result.assets[0];
                 if (!asset.base64) {
-                    Alert.alert('Error', 'Image data missing. Please try again.');
+                    Alert.alert('Error', 'Image data could not be read. Please try another image.');
                     return;
                 }
                 uploadImageFile(asset, 'avatar');
@@ -123,18 +152,18 @@ export const EditProfilePage = ({ user, onBack, onUpdateUser }) => {
         }
     };
 
-    // Pick Cover Banner from Gallery
+    // Pick Store Cover Banner from Gallery
     const pickCover = async () => {
         try {
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (status !== 'granted') {
-                Alert.alert('Permission Denied', 'Please enable media library access in settings.');
+                Alert.alert('Permission Required', 'Please allow gallery access to upload a cover banner.');
                 return;
             }
 
-            let result = await ImagePicker.launchImageLibraryAsync({
+            const result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                quality: 0.7,
+                quality: 0.75,
                 base64: true,
                 allowsEditing: true,
                 aspect: [16, 9]
@@ -143,7 +172,7 @@ export const EditProfilePage = ({ user, onBack, onUpdateUser }) => {
             if (!result.canceled && result.assets?.[0]) {
                 const asset = result.assets[0];
                 if (!asset.base64) {
-                    Alert.alert('Error', 'Image data missing. Please try again.');
+                    Alert.alert('Error', 'Image data could not be read. Please try another image.');
                     return;
                 }
                 uploadImageFile(asset, 'cover');
@@ -187,206 +216,255 @@ export const EditProfilePage = ({ user, onBack, onUpdateUser }) => {
         }
     };
 
-    const onDateChange = (event, selectedDate) => {
-        const currentDate = selectedDate || dob;
-        setShowDatePicker(Platform.OS === 'ios');
-        if (selectedDate) {
-            const formatted = currentDate.toISOString().split('T')[0];
-            setDob(formatted);
-        }
-    };
-
     const handleSave = async () => {
-        if (!fullName) {
-            Alert.alert('Error', 'Full Name is required.');
+        if (!fullName || !fullName.trim()) {
+            Alert.alert('Required Field', 'Full Name is required.');
             return;
         }
 
         setLoading(true);
         try {
+            const cleanFullName = fullName.trim();
+            const cleanPhone = phone ? phone.trim() : '';
+            const cleanStoreName = businessName ? businessName.trim() : cleanFullName;
+            const cleanAddress = location ? location.trim() : '';
+            const cleanWhatsapp = whatsapp ? whatsapp.trim() : (cleanPhone || '');
+            const cleanInstagram = instagram ? instagram.replace(/^@/, '').trim() : '';
+            const cleanFacebook = facebook ? facebook.trim() : '';
+            const cleanTwitter = twitter ? twitter.replace(/^@/, '').trim() : '';
+            const cleanTagline = tagline ? tagline.trim() : '';
+            const cleanHours = workingHours ? workingHours.trim() : '';
+            const cleanPolicy = policy ? policy.trim() : '';
+            const cleanBio = aboutStore ? aboutStore.trim() : '';
+
             // 1. Update Auth Metadata
             await supabase.auth.updateUser({
                 data: {
-                    full_name: fullName,
-                    phone_number: phone,
+                    full_name: cleanFullName,
+                    phone_number: cleanPhone,
                     avatar_url: avatarUrl,
-                    bio: bio,
-                    dob: dob,
                     username: username,
-                    location: location,
+                    location: cleanAddress,
                     gender: gender,
-                    business_name: businessName,
-                    about: aboutStore,
+                    business_name: cleanStoreName,
+                    about: cleanBio,
                     cover_image: coverImage
                 }
             }).catch(() => {});
 
-            // 2. Update Store Profile & Profiles Table through StoreService safely
+            // 2. Update profiles & stores table through StoreService
             await StoreService.updateStoreProfile({
                 userId: user?.id,
-                storeName: businessName || fullName,
+                fullName: cleanFullName,
+                storeName: cleanStoreName,
                 category: businessCategory,
-                about: aboutStore,
+                about: cleanBio,
                 coverImage: coverImage,
                 logoUrl: avatarUrl,
-                phone: phone,
-                address: location
+                phone: cleanPhone,
+                whatsapp: cleanWhatsapp,
+                address: cleanAddress,
+                tagline: cleanTagline,
+                workingHours: cleanHours,
+                policy: cleanPolicy,
+                instagram: cleanInstagram,
+                facebook: cleanFacebook,
+                twitter: cleanTwitter,
+                username: username,
+                gender: gender,
+                dob: dob
             });
 
-            Alert.alert('Success', 'Profile and Store details updated successfully!');
+            // 3. Notify app parent state
+            const updatedUserObj = {
+                ...user,
+                full_name: cleanFullName,
+                fullName: cleanFullName,
+                phone: cleanPhone,
+                phoneNumber: cleanPhone,
+                avatar_url: avatarUrl,
+                username: username,
+                gender: gender,
+                location: cleanAddress,
+                address: cleanAddress,
+                business_name: cleanStoreName,
+                business_category: businessCategory,
+                about: cleanBio,
+                cover_image: coverImage,
+                tagline: cleanTagline,
+                whatsapp: cleanWhatsapp,
+                instagram: cleanInstagram,
+                facebook: cleanFacebook,
+                twitter: cleanTwitter,
+                working_hours: cleanHours,
+                policy: cleanPolicy
+            };
 
             if (onUpdateUser) {
-                onUpdateUser({
-                    ...user,
-                    full_name: fullName,
-                    fullName: fullName,
-                    phone: phone,
-                    phoneNumber: phone,
-                    avatar_url: avatarUrl,
-                    business_name: businessName,
-                    about: aboutStore,
-                    cover_image: coverImage
-                });
+                onUpdateUser(updatedUserObj);
             }
 
+            Alert.alert('Saved Successfully', 'Your profile and store details have been updated and verified!');
             onBack();
         } catch (error) {
-            Alert.alert('Error', error.message || 'Failed to update profile');
+            Alert.alert('Save Failed', error.message || 'Unable to save profile changes. Please try again.');
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <View style={styles.container}>
-            {/* Top Navigation Bar */}
-            <View style={styles.topHeader}>
-                <SafeAreaView style={styles.safeArea}>
-                    <View style={[styles.headerRow, { justifyContent: 'space-between' }]}>
-                        <TouchableOpacity onPress={onBack} style={{ padding: 6 }}>
-                            <Ionicons name="arrow-back" size={24} color="#0F172A" />
-                        </TouchableOpacity>
-                        <Text style={styles.sectionTitle}>
+        <View style={s.container}>
+            <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+
+            {/* ════ TOP HEADER (FIXED, CLEAN, NO OVERLAP) ════ */}
+            <SafeAreaView style={s.safeTop}>
+                <View style={s.headerRow}>
+                    <TouchableOpacity
+                        onPress={onBack}
+                        style={s.headerBtn}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                        <Ionicons name="arrow-back" size={20} color="#0F172A" />
+                    </TouchableOpacity>
+
+                    <View style={{ flex: 1, marginHorizontal: 10 }}>
+                        <Text numberOfLines={1} style={s.headerTitle}>
                             {isStoreOwner ? 'Edit Profile & Store' : 'Edit Profile'}
                         </Text>
-                        <TouchableOpacity onPress={handleSave} disabled={loading} style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#0284C7', borderRadius: 12 }}>
-                            {loading ? (
-                                <ActivityIndicator size="small" color="white" />
-                            ) : (
-                                <Text style={{ color: 'white', fontWeight: '800', fontSize: 13 }}>Save</Text>
-                            )}
-                        </TouchableOpacity>
+                        <Text numberOfLines={1} style={s.headerSub}>
+                            {isStoreOwner ? 'Manage your storefront & verified identity' : 'Manage account settings'}
+                        </Text>
                     </View>
-                </SafeAreaView>
-            </View>
 
-            <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
-                
-                {/* ══════════════════════════════════════════════════════════
-                    STORE & BUSINESS BRANDING (FOR VENDORS & ADMINS)
-                ══════════════════════════════════════════════════════════ */}
-                <View style={{ backgroundColor: 'white', borderRadius: 24, padding: 18, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 24, shadowColor: '#0F172A', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' }}>
-                                <Ionicons name="storefront" size={18} color="#0284C7" />
+                    <TouchableOpacity
+                        onPress={handleSave}
+                        disabled={loading}
+                        style={[s.saveBtn, loading && { opacity: 0.7 }]}
+                        activeOpacity={0.8}
+                    >
+                        {loading ? (
+                            <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                            <Text style={s.saveBtnText}>Save</Text>
+                        )}
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
+
+            <ScrollView
+                contentContainerStyle={s.scrollContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+            >
+                {/* ════ 1. STORE & BUSINESS BRANDING (FOR VENDORS & ADMINS) ════ */}
+                <View style={s.card}>
+                    <View style={s.cardHeader}>
+                        <View style={s.cardHeaderLeft}>
+                            <View style={s.cardIconBox}>
+                                <Ionicons name="storefront" size={16} color="#0A192F" />
                             </View>
                             <View>
-                                <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A' }}>Store & Business Branding</Text>
-                                <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600' }}>Customize how customers see your store</Text>
+                                <Text style={s.cardTitle}>Store & Business Branding</Text>
+                                <Text style={s.cardSub}>How buyers view your store nationwide</Text>
                             </View>
                         </View>
                         {user?.role === 'admin' ? (
-                            <View style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
-                                <Text style={{ fontSize: 10, fontWeight: '900', color: '#D97706' }}>OFFICIAL MALL</Text>
+                            <View style={s.adminBadge}>
+                                <Text style={s.adminBadgeText}>OFFICIAL MALL</Text>
                             </View>
                         ) : (
-                            <View style={{ backgroundColor: '#ECFDF5', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
-                                <Text style={{ fontSize: 10, fontWeight: '900', color: '#059669' }}>VERIFIED STORE</Text>
+                            <View style={s.verifiedBadge}>
+                                <Text style={s.verifiedBadgeText}>VERIFIED STORE</Text>
                             </View>
                         )}
                     </View>
 
-                    {/* Store Cover Image Banner Preview & Upload */}
-                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#334155', marginBottom: 6 }}>
-                        Store Cover Banner Image
-                    </Text>
-                    <View style={{ height: 130, borderRadius: 18, overflow: 'hidden', backgroundColor: '#0F172A', position: 'relative', marginBottom: 12 }}>
+                    {/* Store Cover Banner */}
+                    <Text style={s.fieldLabel}>Store Cover Banner Image</Text>
+                    <View style={s.coverBox}>
                         {coverImage ? (
-                            <Image source={{ uri: coverImage }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                            <Image source={{ uri: coverImage }} style={s.coverImg} resizeMode="cover" />
                         ) : (
-                            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#1E293B', padding: 12 }}>
-                                <Ionicons name="images-outline" size={32} color="#94A3B8" />
-                                <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '700', marginTop: 4 }}>No Cover Image Set</Text>
+                            <View style={s.coverPlaceholder}>
+                                <Ionicons name="images-outline" size={28} color="#94A3B8" />
+                                <Text style={s.coverPlaceholderText}>No Cover Image Set</Text>
                             </View>
                         )}
-                        <View style={{ position: 'absolute', bottom: 8, right: 8, flexDirection: 'row', gap: 6 }}>
+                        <View style={s.coverActionOverlay}>
                             <TouchableOpacity
                                 onPress={pickCover}
                                 disabled={uploadingCover}
-                                style={{ backgroundColor: 'rgba(15, 23, 42, 0.85)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                                style={s.coverPickBtn}
+                                activeOpacity={0.8}
                             >
                                 {uploadingCover ? (
-                                    <ActivityIndicator size="small" color="white" />
+                                    <ActivityIndicator size="small" color="#FFFFFF" />
                                 ) : (
                                     <>
-                                        <Ionicons name="camera" size={13} color="white" />
-                                        <Text style={{ color: 'white', fontSize: 11, fontWeight: '800' }}>Choose Photo</Text>
+                                        <Ionicons name="camera" size={13} color="#FFFFFF" />
+                                        <Text style={s.coverPickBtnText}>Upload Banner</Text>
                                     </>
                                 )}
                             </TouchableOpacity>
                         </View>
                     </View>
 
-                    {/* Manual Cover Banner URL input */}
-                    <View style={{ marginBottom: 14 }}>
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', marginBottom: 4 }}>
-                            Or Paste Direct Cover Image URL
-                        </Text>
+                    {/* Direct Banner URL input */}
+                    <View style={s.inputGroup}>
+                        <Text style={s.subLabel}>Or Paste Direct Banner Image URL</Text>
                         <TextInput
-                            style={[styles.modernInput, { fontSize: 12, height: 44 }]}
+                            style={s.input}
                             value={coverImage}
                             onChangeText={setCoverImage}
-                            placeholder="https://images.unsplash.com/... or image link"
+                            placeholder="https://... image link"
+                            placeholderTextColor="#94A3B8"
                             autoCapitalize="none"
                         />
                     </View>
 
-                    {/* Store / Business Name */}
-                    <View style={{ marginBottom: 14 }}>
-                        <Text style={{ fontSize: 12, fontWeight: '800', color: '#334155', marginBottom: 6 }}>
-                            Store / Brand Name *
-                        </Text>
+                    {/* Store / Brand Name */}
+                    <View style={s.inputGroup}>
+                        <Text style={s.fieldLabel}>Store / Brand Name *</Text>
                         <TextInput
-                            style={styles.modernInput}
+                            style={s.input}
                             value={businessName}
                             onChangeText={setBusinessName}
-                            placeholder={user?.role === 'admin' ? 'Abu Mafhal Official Store' : 'e.g. Kano Tech & Gadgets Hub'}
+                            placeholder={user?.role === 'admin' ? 'Abu Mafhal Official Store' : 'e.g. Kano Tech Hub'}
+                            placeholderTextColor="#94A3B8"
                         />
                     </View>
 
-                    {/* Business Category */}
-                    <View style={{ marginBottom: 14 }}>
-                        <Text style={{ fontSize: 12, fontWeight: '800', color: '#334155', marginBottom: 6 }}>
-                            Store Category
-                        </Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingVertical: 4 }}>
+                    {/* Store Tagline */}
+                    <View style={s.inputGroup}>
+                        <Text style={s.fieldLabel}>Store Tagline / Slogan</Text>
+                        <TextInput
+                            style={s.input}
+                            value={tagline}
+                            onChangeText={setTagline}
+                            placeholder="e.g. 100% Genuine Tech • Nationwide Express Dispatch"
+                            placeholderTextColor="#94A3B8"
+                        />
+                    </View>
+
+                    {/* Store Category */}
+                    <View style={s.inputGroup}>
+                        <Text style={s.fieldLabel}>Store Category</Text>
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={s.categoryScroll}
+                        >
                             {CATEGORY_PRESETS.map((cat) => {
                                 const selected = businessCategory === cat;
                                 return (
                                     <TouchableOpacity
                                         key={cat}
                                         onPress={() => setBusinessCategory(cat)}
-                                        style={{
-                                            paddingHorizontal: 12,
-                                            paddingVertical: 7,
-                                            borderRadius: 12,
-                                            borderWidth: 1,
-                                            borderColor: selected ? '#0284C7' : '#CBD5E1',
-                                            backgroundColor: selected ? '#E0F2FE' : '#F8FAFC'
-                                        }}
+                                        style={[s.catPill, selected && s.catPillActive]}
+                                        activeOpacity={0.75}
                                     >
-                                        <Text style={{ fontSize: 11, fontWeight: selected ? '800' : '600', color: selected ? '#0369A1' : '#475569' }}>
+                                        <Text style={[s.catPillText, selected && s.catPillTextActive]}>
                                             {cat}
                                         </Text>
                                     </TouchableOpacity>
@@ -395,137 +473,257 @@ export const EditProfilePage = ({ user, onBack, onUpdateUser }) => {
                         </ScrollView>
                     </View>
 
-                    {/* About Your Store / Bio */}
-                    <View style={{ marginBottom: 6 }}>
-                        <Text style={{ fontSize: 12, fontWeight: '800', color: '#334155', marginBottom: 6 }}>
-                            About Your Store (Store Bio & Policy)
-                        </Text>
+                    {/* Store Bio / About */}
+                    <View style={s.inputGroup}>
+                        <Text style={s.fieldLabel}>About Your Store (Bio & Warranty Commitment)</Text>
                         <TextInput
-                            style={[styles.modernInput, { height: 90, textAlignVertical: 'top', fontSize: 12 }]}
+                            style={s.inputMultiline}
                             value={aboutStore}
                             onChangeText={setAboutStore}
-                            placeholder="Tell buyers what your store sells, brand warranty, delivery locations, and customer commitment..."
+                            placeholder="Describe your products, warranty guarantees, delivery locations, and business background..."
+                            placeholderTextColor="#94A3B8"
                             multiline
+                            numberOfLines={3}
+                        />
+                    </View>
+
+                    {/* Operating Hours */}
+                    <View style={s.inputGroup}>
+                        <Text style={s.fieldLabel}>Working Hours / Dispatch Days</Text>
+                        <TextInput
+                            style={s.input}
+                            value={workingHours}
+                            onChangeText={setWorkingHours}
+                            placeholder="e.g. Mon - Sat: 8:00 AM - 8:00 PM"
+                            placeholderTextColor="#94A3B8"
+                        />
+                    </View>
+
+                    {/* Return Policy */}
+                    <View style={s.inputGroup}>
+                        <Text style={s.fieldLabel}>Store Return & Refund Policy</Text>
+                        <TextInput
+                            style={s.input}
+                            value={policy}
+                            onChangeText={setPolicy}
+                            placeholder="e.g. 7 Days Nationwide Return Policy • 100% Escrow Protection"
+                            placeholderTextColor="#94A3B8"
                         />
                     </View>
                 </View>
 
-                {/* ══════════════════════════════════════════════════════════
-                    PERSONAL CREDENTIALS & AVATAR
-                ══════════════════════════════════════════════════════════ */}
-                <View style={{ backgroundColor: 'white', borderRadius: 24, padding: 18, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 24 }}>
-                    <Text style={{ fontSize: 15, fontWeight: '900', color: '#0F172A', marginBottom: 14 }}>
-                        Account & Personal Details
-                    </Text>
+                {/* ════ 2. SOCIAL MEDIA & DIRECT CHANNELS (CLEARLY ORGANIZED) ════ */}
+                <View style={s.card}>
+                    <View style={s.cardHeader}>
+                        <View style={s.cardHeaderLeft}>
+                            <View style={[s.cardIconBox, { backgroundColor: '#ECFDF5' }]}>
+                                <Ionicons name="share-social" size={16} color="#059669" />
+                            </View>
+                            <View>
+                                <Text style={s.cardTitle}>Social Media & Direct Channels</Text>
+                                <Text style={s.cardSub}>Displayed as clean icons on your store view</Text>
+                            </View>
+                        </View>
+                    </View>
+
+                    {/* WhatsApp */}
+                    <View style={s.inputGroup}>
+                        <Text style={s.fieldLabel}>WhatsApp (Direct Customer Chat)</Text>
+                        <View style={s.iconInputRow}>
+                            <View style={[s.inputIconWrap, { backgroundColor: '#ECFDF5' }]}>
+                                <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
+                            </View>
+                            <TextInput
+                                style={s.iconInput}
+                                value={whatsapp}
+                                onChangeText={setWhatsapp}
+                                placeholder="e.g. 08145853539 or +234..."
+                                placeholderTextColor="#94A3B8"
+                                keyboardType="phone-pad"
+                            />
+                        </View>
+                    </View>
+
+                    {/* Instagram */}
+                    <View style={s.inputGroup}>
+                        <Text style={s.fieldLabel}>Instagram Handle</Text>
+                        <View style={s.iconInputRow}>
+                            <View style={[s.inputIconWrap, { backgroundColor: '#FDF2F8' }]}>
+                                <Ionicons name="logo-instagram" size={18} color="#E1306C" />
+                            </View>
+                            <TextInput
+                                style={s.iconInput}
+                                value={instagram}
+                                onChangeText={setInstagram}
+                                placeholder="e.g. @abumafhal or store_name"
+                                placeholderTextColor="#94A3B8"
+                                autoCapitalize="none"
+                            />
+                        </View>
+                    </View>
+
+                    {/* Facebook */}
+                    <View style={s.inputGroup}>
+                        <Text style={s.fieldLabel}>Facebook Page / Handle</Text>
+                        <View style={s.iconInputRow}>
+                            <View style={[s.inputIconWrap, { backgroundColor: '#EFF6FF' }]}>
+                                <Ionicons name="logo-facebook" size={18} color="#1877F2" />
+                            </View>
+                            <TextInput
+                                style={s.iconInput}
+                                value={facebook}
+                                onChangeText={setFacebook}
+                                placeholder="e.g. Abu Mafhal Marketplace"
+                                placeholderTextColor="#94A3B8"
+                            />
+                        </View>
+                    </View>
+
+                    {/* X / Twitter */}
+                    <View style={s.inputGroup}>
+                        <Text style={s.fieldLabel}>X / Twitter Handle</Text>
+                        <View style={s.iconInputRow}>
+                            <View style={[s.inputIconWrap, { backgroundColor: '#F8FAFC' }]}>
+                                <Ionicons name="logo-twitter" size={18} color="#0F172A" />
+                            </View>
+                            <TextInput
+                                style={s.iconInput}
+                                value={twitter}
+                                onChangeText={setTwitter}
+                                placeholder="e.g. @abumafhal"
+                                placeholderTextColor="#94A3B8"
+                                autoCapitalize="none"
+                            />
+                        </View>
+                    </View>
+                </View>
+
+                {/* ════ 3. PERSONAL CREDENTIALS & AVATAR ════ */}
+                <View style={s.card}>
+                    <View style={s.cardHeader}>
+                        <View style={s.cardHeaderLeft}>
+                            <View style={[s.cardIconBox, { backgroundColor: '#F1F5F9' }]}>
+                                <Ionicons name="person" size={16} color="#0F172A" />
+                            </View>
+                            <View>
+                                <Text style={s.cardTitle}>Account & Contact Person</Text>
+                                <Text style={s.cardSub}>Verified owner & contact details</Text>
+                            </View>
+                        </View>
+                    </View>
 
                     {/* Avatar Upload */}
-                    <View style={{ alignItems: 'center', marginBottom: 20 }}>
-                        <TouchableOpacity onPress={pickAvatar} style={{ position: 'relative' }}>
-                            <UserAvatar sourceUrl={avatarUrl} size={90} border="#0284C7" />
+                    <View style={s.avatarSection}>
+                        <TouchableOpacity onPress={pickAvatar} style={s.avatarWrap} activeOpacity={0.85}>
+                            <UserAvatar sourceUrl={avatarUrl} size={84} border="#0284C7" />
                             {uploadingAvatar && (
-                                <View style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 45, justifyContent: 'center', alignItems: 'center' }}>
-                                    <ActivityIndicator color="white" />
+                                <View style={s.avatarLoadingOverlay}>
+                                    <ActivityIndicator color="#FFFFFF" size="small" />
                                 </View>
                             )}
-                            <View style={{ position: 'absolute', bottom: 0, right: 0, backgroundColor: '#0284C7', padding: 7, borderRadius: 20, borderWidth: 2, borderColor: 'white' }}>
-                                <Ionicons name="camera" size={14} color="white" />
+                            <View style={s.avatarCameraBadge}>
+                                <Ionicons name="camera" size={13} color="#FFFFFF" />
                             </View>
                         </TouchableOpacity>
-                        <Text style={{ marginTop: 8, color: '#64748B', fontSize: 12, fontWeight: '600' }}>Tap to change logo/avatar</Text>
+                        <Text style={s.avatarHint}>Tap to change store logo / personal avatar</Text>
                     </View>
 
                     {/* Full Name */}
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Full Name / Contact Person</Text>
+                    <View style={s.inputGroup}>
+                        <Text style={s.fieldLabel}>Full Name / Contact Person *</Text>
                         <TextInput
-                            style={styles.modernInput}
+                            style={s.input}
                             value={fullName}
                             onChangeText={setFullName}
                             placeholder="e.g. Muhammad Sani Ishaq"
+                            placeholderTextColor="#94A3B8"
                         />
                     </View>
 
                     {/* Username */}
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Username</Text>
+                    <View style={s.inputGroup}>
+                        <Text style={s.fieldLabel}>Username</Text>
                         <TextInput
-                            style={styles.modernInput}
+                            style={s.input}
                             value={username}
                             onChangeText={setUsername}
                             placeholder="@username"
+                            placeholderTextColor="#94A3B8"
                             autoCapitalize="none"
                         />
                     </View>
 
-                    {/* Phone / WhatsApp */}
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Phone Number (WhatsApp Direct)</Text>
+                    {/* Phone Number */}
+                    <View style={s.inputGroup}>
+                        <Text style={s.fieldLabel}>Primary Phone Number</Text>
                         <TextInput
-                            style={styles.modernInput}
+                            style={s.input}
                             value={phone}
                             onChangeText={setPhone}
-                            placeholder="e.g. 2349021486162"
+                            placeholder="e.g. 08145853539"
+                            placeholderTextColor="#94A3B8"
                             keyboardType="phone-pad"
                         />
                     </View>
 
-                    {/* Location / Address */}
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Store Location / Physical Address</Text>
+                    {/* Physical Address */}
+                    <View style={s.inputGroup}>
+                        <Text style={s.fieldLabel}>Physical Store / Delivery Address</Text>
                         <TextInput
-                            style={styles.modernInput}
+                            style={s.input}
                             value={location}
                             onChangeText={setLocation}
-                            placeholder="e.g. Commercial Hub, Gashua, Yobe State, Nigeria"
+                            placeholder="e.g. Main Commercial Plaza, Gashua, Yobe State, Nigeria"
+                            placeholderTextColor="#94A3B8"
                         />
                     </View>
 
                     {/* Gender */}
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Gender</Text>
-                        <View style={{ flexDirection: 'row', gap: 12 }}>
-                            {['Male', 'Female'].map((option) => (
-                                <TouchableOpacity
-                                    key={option}
-                                    onPress={() => setGender(option)}
-                                    style={{
-                                        flex: 1, padding: 12, borderRadius: 12, borderWidth: 1,
-                                        borderColor: gender === option ? '#0284C7' : '#E2E8F0',
-                                        backgroundColor: gender === option ? '#F0F9FF' : 'white',
-                                        alignItems: 'center'
-                                    }}
-                                >
-                                    <Text style={{ fontWeight: '700', color: gender === option ? '#0284C7' : '#64748B', fontSize: 13 }}>
-                                        {option}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
+                    <View style={s.inputGroup}>
+                        <Text style={s.fieldLabel}>Gender</Text>
+                        <View style={{ flexDirection: 'row', gap: 10 }}>
+                            {['Male', 'Female'].map((option) => {
+                                const active = gender === option;
+                                return (
+                                    <TouchableOpacity
+                                        key={option}
+                                        onPress={() => setGender(option)}
+                                        style={[s.genderBtn, active && s.genderBtnActive]}
+                                        activeOpacity={0.75}
+                                    >
+                                        <Text style={[s.genderBtnText, active && s.genderBtnTextActive]}>
+                                            {option}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
                         </View>
                     </View>
 
                     {/* Email Read-Only */}
-                    <View style={[styles.inputGroup, { opacity: 0.7 }]}>
-                        <Text style={styles.label}>Email Address</Text>
+                    <View style={[s.inputGroup, { opacity: 0.75 }]}>
+                        <Text style={s.fieldLabel}>Registered Email (Secure)</Text>
                         <TextInput
-                            style={[styles.modernInput, { backgroundColor: '#F8FAFC' }]}
+                            style={[s.input, { backgroundColor: '#F8FAFC' }]}
                             value={user?.email}
                             editable={false}
                         />
                     </View>
                 </View>
 
-                {/* Bottom Save Button */}
+                {/* ════ BOTTOM SAVE ACTION BUTTON ════ */}
                 <TouchableOpacity
-                    style={[styles.modernBtn, { height: 54, backgroundColor: '#0A192F' }]}
+                    style={[s.bigSaveBtn, loading && { opacity: 0.7 }]}
                     onPress={handleSave}
                     disabled={loading}
+                    activeOpacity={0.85}
                 >
                     {loading ? (
-                        <ActivityIndicator color="white" />
+                        <ActivityIndicator color="#FFFFFF" size="small" />
                     ) : (
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            <Ionicons name="checkmark-circle" size={18} color="#38BDF8" />
-                            <Text style={[styles.modernBtnText, { fontSize: 15, fontWeight: '900' }]}>Save Profile & Store</Text>
+                            <Ionicons name="checkmark-circle" size={19} color="#38BDF8" />
+                            <Text style={s.bigSaveBtnText}>Save Profile & Store Changes</Text>
                         </View>
                     )}
                 </TouchableOpacity>
@@ -534,3 +732,354 @@ export const EditProfilePage = ({ user, onBack, onUpdateUser }) => {
         </View>
     );
 };
+
+const s = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: '#F8FAFC'
+    },
+    safeTop: {
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E2E8F0',
+        paddingTop: Platform.OS === 'android' ? 12 : 4
+    },
+    headerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        minHeight: 52
+    },
+    headerBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: '#F1F5F9',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    headerTitle: {
+        fontSize: 15,
+        fontWeight: '800',
+        color: '#0F172A',
+        letterSpacing: -0.2
+    },
+    headerSub: {
+        fontSize: 10,
+        color: '#64748B',
+        marginTop: 1
+    },
+    saveBtn: {
+        backgroundColor: '#0A192F',
+        paddingHorizontal: 14,
+        paddingVertical: 7,
+        borderRadius: 9,
+        borderWidth: 1,
+        borderColor: '#D4AF37'
+    },
+    saveBtnText: {
+        color: '#FCD34D',
+        fontWeight: '800',
+        fontSize: 12.5
+    },
+    scrollContent: {
+        paddingHorizontal: 14,
+        paddingTop: 12,
+        paddingBottom: 80
+    },
+    card: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 14,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        marginBottom: 14,
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.04,
+        shadowRadius: 4,
+        elevation: 1
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 14,
+        paddingBottom: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9'
+    },
+    cardHeaderLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        flex: 1
+    },
+    cardIconBox: {
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        backgroundColor: '#FEF9EC',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#FDE68A'
+    },
+    cardTitle: {
+        fontSize: 13.5,
+        fontWeight: '800',
+        color: '#0F172A'
+    },
+    cardSub: {
+        fontSize: 10,
+        color: '#64748B',
+        marginTop: 1
+    },
+    adminBadge: {
+        backgroundColor: '#FEF3C7',
+        paddingHorizontal: 7,
+        paddingVertical: 3,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: '#FDE68A'
+    },
+    adminBadgeText: {
+        fontSize: 8.5,
+        fontWeight: '900',
+        color: '#92400E',
+        letterSpacing: 0.4
+    },
+    verifiedBadge: {
+        backgroundColor: '#ECFDF5',
+        paddingHorizontal: 7,
+        paddingVertical: 3,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: '#A7F3D0'
+    },
+    verifiedBadgeText: {
+        fontSize: 8.5,
+        fontWeight: '900',
+        color: '#059669',
+        letterSpacing: 0.4
+    },
+    coverBox: {
+        height: 120,
+        borderRadius: 12,
+        overflow: 'hidden',
+        backgroundColor: '#0A192F',
+        position: 'relative',
+        marginBottom: 10,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    coverImg: {
+        width: '100%',
+        height: '100%'
+    },
+    coverPlaceholder: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#1E293B'
+    },
+    coverPlaceholderText: {
+        color: '#94A3B8',
+        fontSize: 10.5,
+        fontWeight: '600',
+        marginTop: 4
+    },
+    coverActionOverlay: {
+        position: 'absolute',
+        bottom: 8,
+        right: 8
+    },
+    coverPickBtn: {
+        backgroundColor: 'rgba(10, 25, 47, 0.88)',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 7,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.2)'
+    },
+    coverPickBtnText: {
+        color: '#FFFFFF',
+        fontSize: 10.5,
+        fontWeight: '800'
+    },
+    inputGroup: {
+        marginBottom: 11
+    },
+    fieldLabel: {
+        fontSize: 11.5,
+        fontWeight: '700',
+        color: '#334155',
+        marginBottom: 5
+    },
+    subLabel: {
+        fontSize: 10,
+        fontWeight: '600',
+        color: '#64748B',
+        marginBottom: 4
+    },
+    input: {
+        height: 42,
+        borderRadius: 9,
+        borderWidth: 1,
+        borderColor: '#CBD5E1',
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 12,
+        fontSize: 12.5,
+        color: '#0F172A'
+    },
+    inputMultiline: {
+        minHeight: 74,
+        borderRadius: 9,
+        borderWidth: 1,
+        borderColor: '#CBD5E1',
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 12,
+        paddingTop: 8,
+        paddingBottom: 8,
+        fontSize: 12.5,
+        color: '#0F172A',
+        textAlignVertical: 'top'
+    },
+    categoryScroll: {
+        gap: 6,
+        paddingVertical: 3
+    },
+    catPill: {
+        paddingHorizontal: 11,
+        paddingVertical: 6,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#CBD5E1',
+        backgroundColor: '#F8FAFC'
+    },
+    catPillActive: {
+        borderColor: '#0284C7',
+        backgroundColor: '#E0F2FE'
+    },
+    catPillText: {
+        fontSize: 10.5,
+        fontWeight: '600',
+        color: '#475569'
+    },
+    catPillTextActive: {
+        fontWeight: '800',
+        color: '#0369A1'
+    },
+    iconInputRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        height: 42,
+        borderRadius: 9,
+        borderWidth: 1,
+        borderColor: '#CBD5E1',
+        backgroundColor: '#FFFFFF',
+        overflow: 'hidden'
+    },
+    inputIconWrap: {
+        width: 40,
+        height: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRightWidth: 1,
+        borderRightColor: '#F1F5F9'
+    },
+    iconInput: {
+        flex: 1,
+        height: '100%',
+        paddingHorizontal: 10,
+        fontSize: 12.5,
+        color: '#0F172A'
+    },
+    avatarSection: {
+        alignItems: 'center',
+        marginBottom: 14
+    },
+    avatarWrap: {
+        position: 'relative'
+    },
+    avatarLoadingOverlay: {
+        position: 'absolute',
+        top: 0,
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: 'rgba(0,0,0,0.45)',
+        borderRadius: 42,
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    avatarCameraBadge: {
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        backgroundColor: '#0A192F',
+        borderWidth: 2,
+        borderColor: '#FFFFFF',
+        width: 26,
+        height: 26,
+        borderRadius: 13,
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    avatarHint: {
+        fontSize: 10.5,
+        fontWeight: '600',
+        color: '#64748B',
+        marginTop: 6
+    },
+    genderBtn: {
+        flex: 1,
+        paddingVertical: 9,
+        borderRadius: 9,
+        borderWidth: 1,
+        borderColor: '#CBD5E1',
+        backgroundColor: '#FFFFFF',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    genderBtnActive: {
+        borderColor: '#0284C7',
+        backgroundColor: '#F0F9FF'
+    },
+    genderBtnText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#64748B'
+    },
+    genderBtnTextActive: {
+        color: '#0284C7',
+        fontWeight: '800'
+    },
+    bigSaveBtn: {
+        height: 48,
+        borderRadius: 11,
+        backgroundColor: '#0A192F',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#D4AF37',
+        marginTop: 4,
+        marginBottom: 16,
+        shadowColor: '#0A192F',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.15,
+        shadowRadius: 6,
+        elevation: 2
+    },
+    bigSaveBtnText: {
+        fontSize: 13.5,
+        fontWeight: '900',
+        color: '#FCD34D',
+        letterSpacing: 0.3
+    }
+});

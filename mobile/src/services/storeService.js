@@ -131,8 +131,8 @@ export const StoreService = {
                 cover_image: adminStoreRecord.cover_image || primaryAdmin?.cover_image || adminAddrMeta?.cover_image || adminLocal?.cover_image ||
                     'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=1200&auto=format&fit=crop',
                 logo: adminStoreRecord.logo || primaryAdmin?.avatar_url || adminLocal?.logo || null,
-                phone: adminStoreRecord.phone || adminAddrMeta?.phone || primaryAdmin?.phone || primaryAdmin?.phone_number || '2349021486162',
-                whatsapp: adminStoreRecord.whatsapp || adminAddrMeta?.whatsapp || adminLocal?.whatsapp || '2349021486162',
+                phone: adminStoreRecord.phone || adminAddrMeta?.phone || primaryAdmin?.phone || primaryAdmin?.phone_number || '08145853539',
+                whatsapp: adminStoreRecord.whatsapp || adminAddrMeta?.whatsapp || adminLocal?.whatsapp || '08145853539',
                 email: adminStoreRecord.email || adminAddrMeta?.email || primaryAdmin?.email || 'support@abumafhal.com',
                 category: adminStoreRecord.category || primaryAdmin?.business_category || 'Official Mall & Flagship Store',
                 address: adminAddrMeta?.address || primaryAdmin?.address || 'Main Commercial Center, Gashua, Yobe State, Nigeria',
@@ -182,16 +182,16 @@ export const StoreService = {
                     about: aboutBio,
                     cover_image: coverImage,
                     logo: storeRec.logo || vp.avatar_url || localMeta?.logo || null,
-                    phone: storeRec.phone || addrMeta?.phone || vp.phone || vp.phone_number || '',
-                    whatsapp: storeRec.whatsapp || addrMeta?.whatsapp || localMeta?.whatsapp || '',
-                    email: storeRec.email || addrMeta?.email || vp.email || '',
+                    phone: storeRec.phone || vp.phone || vp.phone_number || addrMeta?.phone || '',
+                    whatsapp: storeRec.whatsapp || vp.whatsapp || addrMeta?.whatsapp || localMeta?.whatsapp || '',
+                    email: storeRec.email || vp.email || addrMeta?.email || '',
                     category: storeRec.category || vp.business_category || addrMeta?.category || localMeta?.category || 'Verified Merchant',
-                    address: addrMeta?.address || vp.address || vp.state || 'Nigeria',
-                    working_hours: storeRec.working_hours || addrMeta?.working_hours || localMeta?.working_hours || 'Mon - Sat: 8:00 AM - 6:00 PM',
-                    policy: storeRec.policy || addrMeta?.policy || localMeta?.policy || 'Prompt delivery and standard merchant warranty apply.',
-                    instagram: storeRec.instagram || addrMeta?.instagram || localMeta?.instagram || '',
-                    facebook: storeRec.facebook || addrMeta?.facebook || localMeta?.facebook || '',
-                    twitter: storeRec.twitter || addrMeta?.twitter || localMeta?.twitter || '',
+                    address: storeRec.address || vp.address || vp.state || addrMeta?.address || 'Nigeria',
+                    working_hours: storeRec.working_hours || vp.working_hours || addrMeta?.working_hours || localMeta?.working_hours || 'Mon - Sat: 8:00 AM - 6:00 PM',
+                    policy: storeRec.policy || vp.policy || addrMeta?.policy || localMeta?.policy || 'Prompt delivery and standard merchant warranty apply.',
+                    instagram: storeRec.instagram || vp.instagram || addrMeta?.instagram || localMeta?.instagram || '',
+                    facebook: storeRec.facebook || vp.facebook || addrMeta?.facebook || localMeta?.facebook || '',
+                    twitter: storeRec.twitter || vp.twitter || addrMeta?.twitter || localMeta?.twitter || '',
                     is_recommended: !!isRec,
                     is_verified: true,
                     is_official: false,
@@ -319,10 +319,31 @@ export const StoreService = {
                 business_category: category,
                 about: about,
                 cover_image: coverImage,
+                tagline: tagline || null,
+                whatsapp: whatsapp || null,
+                working_hours: workingHours || null,
+                policy: policy || null,
+                instagram: instagram || null,
+                facebook: facebook || null,
+                twitter: twitter || null,
                 is_recommended: !!isRecommended,
-                address: addressFallback,
+                address: address || null,
+                state: address || null,
                 updated_at: new Date().toISOString()
             };
+
+            if (opts.fullName || opts.full_name) {
+                profilePayload.full_name = (opts.fullName || opts.full_name).trim();
+            }
+            if (opts.username) {
+                profilePayload.username = opts.username.trim();
+            }
+            if (opts.gender) {
+                profilePayload.gender = opts.gender;
+            }
+            if (opts.dob) {
+                profilePayload.dob = opts.dob;
+            }
 
             // Only attempt direct phone column update if phone is valid and not conflicting
             if (phone && phone.trim()) {
@@ -345,14 +366,13 @@ export const StoreService = {
                     .eq('id', targetUserId);
 
                 if (retryError) {
-                    console.warn('[StoreService] Second profile retry with core columns only:', retryError.message);
-                    // Minimal fallback
+                    console.warn('[StoreService] Second profile retry with essential columns only:', retryError.message);
                     await supabase
                         .from('profiles')
                         .update({
                             business_name: storeName,
                             avatar_url: logoUrl,
-                            address: addressFallback,
+                            about: about,
                             updated_at: new Date().toISOString()
                         })
                         .eq('id', targetUserId);
@@ -367,8 +387,16 @@ export const StoreService = {
                     cover_image: coverImage,
                     logo: logoUrl,
                     phone: phone || whatsapp,
+                    whatsapp: whatsapp || phone,
+                    email: email || null,
                     category: category,
                     address: address,
+                    tagline: tagline || null,
+                    working_hours: workingHours || null,
+                    policy: policy || null,
+                    instagram: instagram || null,
+                    facebook: facebook || null,
+                    twitter: twitter || null,
                     is_recommended: !!isRecommended,
                     updated_at: new Date().toISOString()
                 };

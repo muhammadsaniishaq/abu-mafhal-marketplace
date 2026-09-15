@@ -7,6 +7,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { UserAvatar } from '../components/UserAvatar';
+import { resolveVendorOrStore } from '../services/vendorResolver';
 
 const BRAND = {
     navy: '#0A192F',
@@ -91,25 +92,24 @@ export const ConversationsScreen = ({ navigation }) => {
 
                 const partnerIds = Object.keys(groups);
                 if (partnerIds.length > 0) {
-                    const [profRes, storeRes] = await Promise.all([
-                        supabase.from('profiles').select('id, full_name, business_name, avatar_url, role, is_online').in('id', partnerIds),
-                        supabase.from('stores').select('user_id, name, logo').in('user_id', partnerIds)
-                    ]);
-
-                    const profiles = profRes.data || [];
-                    const stores = storeRes.data || [];
-
-                    // Merge store data into profile data for the UI
-                    profiles.forEach(p => {
-                        const s = stores.find(st => st.user_id === p.id);
-                        if (groups[p.id]) {
-                            groups[p.id].partnerProfile = {
-                                ...p,
-                                business_name: s?.name || p.business_name,
-                                avatar_url: s?.logo || p.avatar_url
-                            };
-                        }
-                    });
+                    await Promise.all(
+                        partnerIds.map(async (pId) => {
+                            try {
+                                const vData = await resolveVendorOrStore(pId);
+                                if (groups[pId] && vData) {
+                                    groups[pId].partnerProfile = {
+                                        id: vData.id,
+                                        full_name: vData.name,
+                                        business_name: vData.name,
+                                        avatar_url: vData.avatar || vData.logo,
+                                        role: vData.role,
+                                        is_official: vData.isOfficial,
+                                        is_online: true
+                                    };
+                                }
+                            } catch (_) {}
+                        })
+                    );
                 }
 
                 const list = Object.values(groups);
@@ -169,8 +169,8 @@ export const ConversationsScreen = ({ navigation }) => {
     const renderItem = ({ item }) => {
         const profile = item.partnerProfile || { full_name: 'Verified Merchant', avatar_url: null };
         const msg = item.lastMessage;
-        const displayName = profile.business_name || profile.full_name || 'Marketplace Seller';
-        const isSupport = profile.role === 'admin' || displayName.toLowerCase().includes('support');
+        const displayName = profile.business_name || profile.full_name || 'ABU MAFHAL';
+        const isSupport = profile.role === 'admin' || profile.is_official || displayName.toLowerCase().includes('support');
         const isMe = msg.sender_id === currentUser?.id;
         const timeStr = formatTimestamp(msg.created_at);
 
@@ -181,7 +181,7 @@ export const ConversationsScreen = ({ navigation }) => {
                     vendorId: item.partnerId,
                     vendorName: displayName,
                     vendorAvatar: profile.avatar_url,
-                    vendorRole: profile.role || (isSupport ? 'Admin' : 'Vendor')
+                    vendorRole: isSupport ? 'Official Store' : (profile.role || 'Vendor')
                 })}
                 activeOpacity={0.7}
             >

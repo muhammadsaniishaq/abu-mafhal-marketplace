@@ -18,7 +18,7 @@ const PAYMENT_METHODS = [
     { id: 'pod', name: 'Pay on Delivery', icon: 'car-outline', color: '#F97316' },
 ];
 
-export const CartPage = ({ cart = [], onUpdateQty, onRemove, onBack, onClear }) => {
+export const CartPage = ({ cart = [], user = null, onUpdateQty, onRemove, onBack, onClear }) => {
     const navigation = useNavigation();
     const [selectedPayment, setSelectedPayment] = useState('paystack');
 
@@ -339,13 +339,13 @@ export const CartPage = ({ cart = [], onUpdateQty, onRemove, onBack, onClear }) 
                             </View>
 
                             <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#0F172A', marginTop: 4 }}>
-                                Muhammad Sani Isyaku
+                                {user?.full_name || user?.fullName || user?.email?.split('@')[0] || 'My Shipping Address'}
                             </Text>
                             <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>
-                                No. 12, Gashua Road, Gashua, Yobe State, Nigeria
+                                {user?.address || 'Set default delivery address in Account Settings'}
                             </Text>
                             <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 1 }}>
-                                +234 810 123 4567
+                                {user?.phone || user?.phone_number || 'Tap Edit to set contact phone'}
                             </Text>
                         </View>
                     </View>

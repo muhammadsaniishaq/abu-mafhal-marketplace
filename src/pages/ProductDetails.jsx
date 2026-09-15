@@ -95,8 +95,8 @@ const ProductDetails = () => {
       is_verified: true,
       rating: 5.0,
       reviews: '3.8K+',
-      phone: '2349021486162',
-      whatsapp: '2349021486162',
+      phone: '08145853539',
+      whatsapp: '08145853539',
       avatar: null,
       tagline: 'Official Flagship Mall • 100% Genuine Guaranteed'
     };
@@ -133,8 +133,8 @@ const ProductDetails = () => {
           is_verified: true,
           rating: 4.9,
           reviews: '120+',
-          phone: data.phone || data.phone_number || '2349021486162',
-          whatsapp: vAddr.whatsapp || data.phone || data.phone_number || '2349021486162',
+          phone: data.phone || data.phone_number || '08145853539',
+          whatsapp: vAddr.whatsapp || data.phone || data.phone_number || '08145853539',
           avatar: data.avatar_url || null,
           tagline: vAddr.tagline || 'Verified Marketplace Merchant'
         });
@@ -192,7 +192,7 @@ const ProductDetails = () => {
 
   const handleVendorWhatsApp = () => {
     if (!vendor || !product) return;
-    const rawNum = (vendor.whatsapp || vendor.phone || '2349021486162').replace(/[^0-9]/g, '');
+    const rawNum = (vendor.whatsapp || vendor.phone || '08145853539').replace(/[^0-9]/g, '');
     const cleanNum = rawNum.startsWith('0') ? '234' + rawNum.substring(1) : rawNum.startsWith('234') ? rawNum : '234' + rawNum;
     const msg = encodeURIComponent(
       `Hello ${vendor.name || 'Seller'}, I am interested in purchasing:\n\n*${product.name}*\nPrice: ₦${Number(product.price).toLocaleString()}\nProduct ID: ${product.id}\n\nPlease confirm availability and delivery.`

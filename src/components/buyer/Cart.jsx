@@ -37,7 +37,7 @@ const Cart = () => {
       id: 'item-2',
       title: 'Smart Watch',
       subtitle: 'Bluetooth Calling, Fitness Tracker',
-      seller: 'TechWorld Store',
+      seller: 'ABU MAFHAL',
       size: null,
       color: 'Black',
       price: 45000,

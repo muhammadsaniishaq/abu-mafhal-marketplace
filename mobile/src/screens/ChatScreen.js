@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
+import { resolveVendorOrStore } from '../services/vendorResolver';
 
 const BRAND = {
     navy: '#0A192F',
@@ -57,12 +58,12 @@ export const ChatScreen = ({ route, navigation }) => {
     const isSupport = vendorId === 'admin' || vendorId === 'admin_support' || vendorName?.toLowerCase()?.includes('support');
 
     const [targetProfile, setTargetProfile] = useState({
-        full_name: isSupport ? 'Abu Mafhal Support' : (vendorName || 'Merchant'),
+        full_name: vendorName || (isSupport ? 'Abu Mafhal Support' : 'ABU MAFHAL'),
         avatar_url: vendorAvatar || null,
-        role: isSupport ? 'Support Team' : (vendorRole || 'Verified Seller'),
+        role: vendorRole || (isSupport ? 'Official Support' : 'Verified Seller'),
         is_online: true,
-        phone: '2349021486162',
-        whatsapp: '2349021486162'
+        phone: '08145853539',
+        whatsapp: '08145853539'
     });
 
     const flatListRef = useRef(null);
@@ -91,30 +92,18 @@ export const ChatScreen = ({ route, navigation }) => {
             }
             setCurrentUser(user);
 
-            // Resolve target UUID if passed as 'admin' or string
-            let resolvedId = targetId;
-            if (!resolvedId || resolvedId === 'admin' || resolvedId === 'official') {
-                const { data: adminProf } = await supabase
-                    .from('profiles')
-                    .select('id, full_name, business_name, avatar_url, role, phone')
-                    .eq('role', 'admin')
-                    .limit(1)
-                    .maybeSingle();
-
-                if (adminProf?.id) {
-                    resolvedId = adminProf.id;
-                    setTargetId(adminProf.id);
-                    setTargetProfile(prev => ({
-                        ...prev,
-                        full_name: adminProf.business_name || adminProf.full_name || 'Abu Mafhal Support',
-                        avatar_url: adminProf.avatar_url || prev.avatar_url,
-                        role: 'Support Team',
-                        phone: adminProf.phone || prev.phone
-                    }));
-                }
-            } else {
-                fetchTargetProfile(resolvedId);
-            }
+            // Resolve target vendor/store using unified resolver
+            const vData = await resolveVendorOrStore(targetId);
+            const resolvedId = vData.userId || vData.id;
+            setTargetId(resolvedId);
+            setTargetProfile({
+                full_name: vData.name,
+                avatar_url: vData.avatar || vData.logo,
+                role: vData.isOfficial ? 'Official Flagship Store' : (vData.role || 'Verified Seller'),
+                is_online: true,
+                phone: vData.phone || '08145853539',
+                whatsapp: vData.whatsapp || vData.phone || '08145853539'
+            });
 
             if (resolvedId && resolvedId !== 'admin') {
                 fetchMessages(user.id, resolvedId);
@@ -132,33 +121,16 @@ export const ChatScreen = ({ route, navigation }) => {
 
     const fetchTargetProfile = async (id) => {
         try {
-            const [profileRes, storeRes] = await Promise.all([
-                supabase.from('profiles').select('id, full_name, business_name, avatar_url, role, phone, is_online, address').eq('id', id).maybeSingle(),
-                supabase.from('stores').select('name, logo, phone, whatsapp').eq('user_id', id).maybeSingle()
-            ]);
-
-            const data = profileRes?.data;
-            const store = storeRes?.data;
-
-            if (data || store) {
-                let wa = store?.whatsapp || data?.phone;
-                try {
-                    if (data?.address && typeof data.address === 'string' && data.address.startsWith('{')) {
-                        const parsed = JSON.parse(data.address);
-                        if (parsed.whatsapp) wa = parsed.whatsapp;
-                    }
-                } catch (_) {}
-
-                setTargetProfile(prev => ({
-                    ...prev,
-                    full_name: store?.name || data?.business_name || data?.full_name || prev.full_name,
-                    avatar_url: store?.logo || data?.avatar_url || prev.avatar_url,
-                    role: data?.role === 'admin' ? 'Support Team' : 'Verified Seller',
-                    is_online: data?.is_online !== undefined ? data.is_online : true,
-                    phone: store?.phone || data?.phone || prev.phone,
-                    whatsapp: wa || prev.whatsapp
-                }));
-            }
+            const vData = await resolveVendorOrStore(id);
+            setTargetProfile(prev => ({
+                ...prev,
+                full_name: vData.name,
+                avatar_url: vData.avatar || vData.logo || prev.avatar_url,
+                role: vData.isOfficial ? 'Official Flagship Store' : (vData.role || 'Verified Seller'),
+                is_online: true,
+                phone: vData.phone || prev.phone,
+                whatsapp: vData.whatsapp || prev.whatsapp
+            }));
         } catch (e) {
             console.log('fetchTargetProfile error:', e);
         }
@@ -334,7 +306,7 @@ export const ChatScreen = ({ route, navigation }) => {
     };
 
     const handleDirectWhatsApp = () => {
-        const raw = targetProfile.whatsapp || targetProfile.phone || '2349021486162';
+        const raw = targetProfile.whatsapp || targetProfile.phone || '08145853539';
         const phone = raw.replace(/[^0-9]/g, '');
         const pContext = productName ? ` about "${productName}" (${fmtPrice(productPrice)})` : '';
         const msg = encodeURIComponent(`Hello ${targetProfile.full_name}, I am chatting with you from Abu Mafhal Marketplace${pContext}.`);
@@ -361,10 +333,16 @@ export const ChatScreen = ({ route, navigation }) => {
         return (
             <View style={[s.msgWrapper, isMe ? s.msgWrapperMe : s.msgWrapperThem]}>
                 {!isMe && (
-                    <Image
-                        source={{ uri: targetProfile.avatar_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=200&auto=format&fit=crop' }}
-                        style={s.themAvatar}
-                    />
+                    targetProfile.avatar_url ? (
+                        <Image
+                            source={{ uri: targetProfile.avatar_url }}
+                            style={s.themAvatar}
+                        />
+                    ) : (
+                        <View style={[s.themAvatar, { backgroundColor: BRAND.navy, alignItems: 'center', justifyContent: 'center' }]}>
+                            <Ionicons name="storefront" size={13} color={BRAND.gold} />
+                        </View>
+                    )
                 )}
 
                 <View style={{ maxWidth: '78%' }}>
@@ -377,7 +355,13 @@ export const ChatScreen = ({ route, navigation }) => {
                                 activeOpacity={0.8}
                                 onPress={() => navigation.navigate('ProductDetails', { id: embeddedProduct.id, product: embeddedProduct })}
                             >
-                                <Image source={{ uri: embeddedProduct.image_url || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=300' }} style={s.embedImg} />
+                                {embeddedProduct.image_url ? (
+                                    <Image source={{ uri: embeddedProduct.image_url }} style={s.embedImg} />
+                                ) : (
+                                    <View style={[s.embedImg, { backgroundColor: BRAND.slateLight, alignItems: 'center', justifyContent: 'center' }]}>
+                                        <Ionicons name="cube-outline" size={16} color={BRAND.slate} />
+                                    </View>
+                                )}
                                 <View style={s.embedInfo}>
                                     <Text numberOfLines={1} style={s.embedTitle}>{embeddedProduct.name}</Text>
                                     <Text style={s.embedPrice}>{fmtPrice(embeddedProduct.price)}</Text>
@@ -432,10 +416,16 @@ export const ChatScreen = ({ route, navigation }) => {
                 {/* Partner Avatar & Presence */}
                 <View style={s.partnerBox}>
                     <View style={s.avatarWrap}>
-                        <Image
-                            source={{ uri: targetProfile.avatar_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=200&auto=format&fit=crop' }}
-                            style={s.avatarImg}
-                        />
+                        {targetProfile.avatar_url ? (
+                            <Image
+                                source={{ uri: targetProfile.avatar_url }}
+                                style={s.avatarImg}
+                            />
+                        ) : (
+                            <View style={[s.avatarImg, { backgroundColor: BRAND.navyMid, alignItems: 'center', justifyContent: 'center' }]}>
+                                <Ionicons name="storefront" size={18} color={BRAND.gold} />
+                            </View>
+                        )}
                         <View style={[s.statusDot, !targetProfile.is_online && { backgroundColor: '#94A3B8' }]} />
                     </View>
 
@@ -481,7 +471,7 @@ export const ChatScreen = ({ route, navigation }) => {
                 <View style={s.productBar}>
                     {productImage && (
                         <Image
-                            source={{ uri: typeof productImage === 'string' && productImage.startsWith('http') ? productImage : 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=300' }}
+                            source={{ uri: typeof productImage === 'string' && productImage.startsWith('http') ? productImage : 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=300' }}
                             style={s.productImg}
                         />
                     )}
