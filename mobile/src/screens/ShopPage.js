@@ -284,20 +284,24 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
                     .select(PROD_FIELDS)
                     .eq('status', 'approved')
                     .order('created_at', { ascending: false })
-                    .limit(120),
+                    .limit(200),
                 supabase.from('categories').select('*').eq('is_active', true).order('display_order', { ascending: true }),
                 supabase.auth.getUser()
             ]);
 
-            let newBanners = banners;
-            if (bannersRes.status === 'fulfilled' && bannersRes.value?.data) {
-                newBanners = bannersRes.value.data.filter(b => !b.section || b.section === 'shop' || b.section === 'all' || b.section === '');
-                setBanners(newBanners);
+            // ── Banners ───────────────────────────────────────────────────────
+            let freshBanners = [];
+            if (bannersRes.status === 'fulfilled' && bannersRes.value?.data?.length) {
+                freshBanners = bannersRes.value.data.filter(
+                    b => !b.section || b.section === 'shop' || b.section === 'all' || b.section === ''
+                );
+                setBanners(freshBanners);
             }
 
-            let newPromos = promoBanners;
-            if (promoRes.status === 'fulfilled' && promoRes.value?.data) {
-                newPromos = promoRes.value.data.map(p => {
+            // ── Promo banners ─────────────────────────────────────────────────
+            let freshPromos = [];
+            if (promoRes.status === 'fulfilled' && promoRes.value?.data?.length) {
+                freshPromos = promoRes.value.data.map(p => {
                     let linkData = { text: p.action_link || '', locations: ['home'] };
                     try { const parsed = JSON.parse(p.action_link); if (parsed && typeof parsed === 'object') linkData = { ...linkData, ...parsed }; } catch (_) {}
                     return { ...p, linkData };
@@ -306,19 +310,41 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
                     const exp = p.linkData?.timerEnd ? (!isNaN(new Date(p.linkData.timerEnd)) && new Date() <= new Date(p.linkData.timerEnd)) : true;
                     return loc && exp;
                 });
-                setPromoBanners(newPromos);
+                setPromoBanners(freshPromos);
             }
 
-            let newProducts = products;
-            if (prodRes.status === 'fulfilled' && prodRes.value?.data) {
-                newProducts = (prodRes.value.data || []).map(p => ({
-                    ...p,
-                    rating: p.rating || 5,
-                    reviews: p.reviews || 0,
-                }));
-                setProducts(newProducts);
+            // ── Products ──────────────────────────────────────────────────────
+            let freshProducts = [];
+            if (prodRes.status === 'fulfilled') {
+                const rows = prodRes.value?.data;
+                if (rows && rows.length > 0) {
+                    freshProducts = rows.map(p => ({
+                        ...p,
+                        rating: p.rating || 5,
+                        reviews: p.reviews || 0,
+                    }));
+                    setProducts(freshProducts);
+                } else {
+                    // Also try without status filter as fallback
+                    const fallbackRes = await supabase
+                        .from('products')
+                        .select(PROD_FIELDS)
+                        .order('created_at', { ascending: false })
+                        .limit(200);
+                    if (fallbackRes.data?.length) {
+                        freshProducts = fallbackRes.data.map(p => ({
+                            ...p,
+                            rating: p.rating || 5,
+                            reviews: p.reviews || 0,
+                        }));
+                        setProducts(freshProducts);
+                    }
+                }
+            } else {
+                console.log('ShopPage: prodRes failed:', prodRes.reason);
             }
 
+            // ── Categories ───────────────────────────────────────────────────
             if (catRes.status === 'fulfilled' && catRes.value?.data?.length > 0) {
                 setCategories([
                     { label: 'All', icon: 'apps-outline', slug: 'All' },
@@ -330,10 +356,17 @@ export const ShopPage = ({ onBack, cartCount, onGoToCart, addToCart, onProductCl
                 ]);
             }
 
-            AsyncStorage.setItem(SHOP_CACHE_KEY, JSON.stringify({
-                products: newProducts, banners: newBanners, promoBanners: newPromos, savedAt: Date.now()
-            })).catch(() => {});
+            // ── Cache ─────────────────────────────────────────────────────────
+            if (freshProducts.length > 0) {
+                AsyncStorage.setItem(SHOP_CACHE_KEY, JSON.stringify({
+                    products: freshProducts,
+                    banners: freshBanners,
+                    promoBanners: freshPromos,
+                    savedAt: Date.now()
+                })).catch(() => {});
+            }
 
+            // ── Wishlist ──────────────────────────────────────────────────────
             if (userRes.status === 'fulfilled' && userRes.value?.data?.user) {
                 const uid = userRes.value.data.user.id;
                 supabase.from('wishlists').select('items').eq('id', uid).maybeSingle()
