@@ -91,18 +91,25 @@ export const ConversationsScreen = ({ navigation }) => {
 
                 const partnerIds = Object.keys(groups);
                 if (partnerIds.length > 0) {
-                    const { data: profiles } = await supabase
-                        .from('profiles')
-                        .select('id, full_name, business_name, avatar_url, role, is_online')
-                        .in('id', partnerIds);
+                    const [profRes, storeRes] = await Promise.all([
+                        supabase.from('profiles').select('id, full_name, business_name, avatar_url, role, is_online').in('id', partnerIds),
+                        supabase.from('stores').select('user_id, name, logo').in('user_id', partnerIds)
+                    ]);
 
-                    if (profiles) {
-                        profiles.forEach(p => {
-                            if (groups[p.id]) {
-                                groups[p.id].partnerProfile = p;
-                            }
-                        });
-                    }
+                    const profiles = profRes.data || [];
+                    const stores = storeRes.data || [];
+
+                    // Merge store data into profile data for the UI
+                    profiles.forEach(p => {
+                        const s = stores.find(st => st.user_id === p.id);
+                        if (groups[p.id]) {
+                            groups[p.id].partnerProfile = {
+                                ...p,
+                                business_name: s?.name || p.business_name,
+                                avatar_url: s?.logo || p.avatar_url
+                            };
+                        }
+                    });
                 }
 
                 const list = Object.values(groups);

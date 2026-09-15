@@ -139,13 +139,15 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
         }
 
         try {
-            const { data } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', vId)
-                .maybeSingle();
+            const [profileRes, storeRes] = await Promise.all([
+                supabase.from('profiles').select('*').eq('id', vId).maybeSingle(),
+                supabase.from('stores').select('*').eq('user_id', vId).maybeSingle()
+            ]);
 
-            if (data) {
+            const data = profileRes?.data;
+            const store = storeRes?.data;
+
+            if (data || store) {
                 const parseAddr = (addr) => {
                     if (!addr || typeof addr !== 'string') return {};
                     try {
@@ -153,21 +155,21 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                     } catch (_) {}
                     return {};
                 };
-                const vAddr = parseAddr(data.address);
+                const vAddr = parseAddr(data?.address);
 
                 setVendor({
-                    id: data.id,
-                    name: data.business_name || data.full_name || 'Marketplace Seller',
-                    business_name: data.business_name || data.full_name || 'Marketplace Seller',
-                    role: data.role || 'vendor',
-                    isOfficial: data.role === 'admin',
+                    id: vId,
+                    name: store?.name || data?.business_name || data?.full_name || 'Marketplace Seller',
+                    business_name: store?.name || data?.business_name || data?.full_name || 'Marketplace Seller',
+                    role: data?.role || 'vendor',
+                    isOfficial: data?.role === 'admin',
                     is_verified: true,
-                    rating: 4.8,
+                    rating: store?.rating || 4.8,
                     reviews: '256',
-                    phone: data.phone || data.phone_number || '2349021486162',
-                    whatsapp: vAddr.whatsapp || data.phone || data.phone_number || '2349021486162',
-                    avatar: data.avatar_url || officialStore.avatar,
-                    tagline: vAddr.tagline || 'Verified Seller'
+                    phone: store?.phone || data?.phone || data?.phone_number || '2349021486162',
+                    whatsapp: store?.whatsapp || vAddr.whatsapp || store?.phone || data?.phone || data?.phone_number || '2349021486162',
+                    avatar: store?.logo || data?.avatar_url || officialStore.avatar,
+                    tagline: store?.about || vAddr.tagline || store?.category || 'Verified Seller'
                 });
             } else {
                 setVendor(officialStore);
