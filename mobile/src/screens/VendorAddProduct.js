@@ -122,15 +122,30 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
     const uploadVideo = async () => {
         if (!video || video.startsWith('http')) return video || null;
         try {
-            const info = await FileSystem.getInfoAsync(video);
-            if (!info.exists) return null;
             const fname = `video_vendor_${Date.now()}.mp4`;
-            const b64 = await FileSystem.readAsStringAsync(video, { encoding: 'base64' });
-            const { error } = await supabase.storage.from('products')
-                .upload(fname, decode(b64), { contentType: 'video/mp4', upsert: false });
-            if (error) return null;
-            return supabase.storage.from('products').getPublicUrl(fname).data.publicUrl;
-        } catch { return null; }
+            if (Platform.OS === 'web') {
+                const response = await fetch(video);
+                const blob = await response.blob();
+                const { error } = await supabase.storage.from('products')
+                    .upload(fname, blob, { contentType: 'video/mp4', upsert: false });
+                if (error) {
+                    console.error("Vendor web video upload error:", error);
+                    return null;
+                }
+                return supabase.storage.from('products').getPublicUrl(fname).data.publicUrl;
+            } else {
+                const info = await FileSystem.getInfoAsync(video);
+                if (!info.exists) return null;
+                const b64 = await FileSystem.readAsStringAsync(video, { encoding: 'base64' });
+                const { error } = await supabase.storage.from('products')
+                    .upload(fname, decode(b64), { contentType: 'video/mp4', upsert: false });
+                if (error) return null;
+                return supabase.storage.from('products').getPublicUrl(fname).data.publicUrl;
+            }
+        } catch (e) {
+            console.error("Vendor uploadVideo error:", e);
+            return null;
+        }
     };
 
     // ── AI ─────────────────────────────────────────────────────

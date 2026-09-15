@@ -255,6 +255,8 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
 
     const images = getImages();
 
+    const DEFAULT_DEMO_VIDEO = 'https://media.w3.org/2010/05/sintel/trailer.mp4';
+
     // ── Video URL Resolver ───────────────────────────────────────────────────
     const getVideoUrl = () => {
         let meta = product?.metadata;
@@ -272,7 +274,7 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                 return t;
             }
         }
-        return null;
+        return DEFAULT_DEMO_VIDEO;
     };
     const productVideoUrl = getVideoUrl();
 
@@ -562,31 +564,21 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                             </TouchableOpacity>
                         ))}
 
-                        {/* 5th Slot: Video if video exists, otherwise 5th image if available */}
-                        {productVideoUrl ? (
-                            <TouchableOpacity
-                                style={[s.thumbnailWrap, s.videoThumbWrap, showVideoModal && s.thumbnailWrapActive]}
-                                onPress={() => setShowVideoModal(true)}
-                                activeOpacity={0.8}
-                            >
-                                <Image
-                                    source={{ uri: images[0] }}
-                                    style={[s.thumbnailImg, { opacity: 0.55 }]}
-                                    resizeMode="cover"
-                                />
-                                <View style={s.videoPlayOverlay}>
-                                    <Ionicons name="play" size={16} color="#FFFFFF" />
-                                </View>
-                            </TouchableOpacity>
-                        ) : images.length > 4 ? (
-                            <TouchableOpacity
-                                style={[s.thumbnailWrap, activeImg === 4 && s.thumbnailWrapActive]}
-                                onPress={() => setActiveImg(4)}
-                                activeOpacity={0.8}
-                            >
-                                <Image source={{ uri: images[4] }} style={s.thumbnailImg} resizeMode="contain" />
-                            </TouchableOpacity>
-                        ) : null}
+                        {/* 5th Slot: Video thumbnail always visible and active */}
+                        <TouchableOpacity
+                            style={[s.thumbnailWrap, s.videoThumbWrap, showVideoModal && s.thumbnailWrapActive]}
+                            onPress={() => setShowVideoModal(true)}
+                            activeOpacity={0.8}
+                        >
+                            <Image
+                                source={{ uri: images[0] }}
+                                style={[s.thumbnailImg, { opacity: 0.55 }]}
+                                resizeMode="cover"
+                            />
+                            <View style={s.videoPlayOverlay}>
+                                <Ionicons name="play" size={16} color="#FFFFFF" />
+                            </View>
+                        </TouchableOpacity>
                     </View>
 
                     {/* Main Stage Image Box */}
@@ -623,17 +615,15 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                             />
                         </Pressable>
 
-                        {/* Floating Watch Video Button if Video Exists */}
-                        {productVideoUrl && (
-                            <TouchableOpacity
-                                style={s.floatingVideoBtn}
-                                onPress={() => setShowVideoModal(true)}
-                                activeOpacity={0.85}
-                            >
-                                <Ionicons name="play-circle" size={18} color="#FFFFFF" />
-                                <Text style={s.floatingVideoBtnTxt}>Watch Video</Text>
-                            </TouchableOpacity>
-                        )}
+                        {/* Floating Watch Video Button (Always visible) */}
+                        <TouchableOpacity
+                            style={s.floatingVideoBtn}
+                            onPress={() => setShowVideoModal(true)}
+                            activeOpacity={0.85}
+                        >
+                            <Ionicons name="play-circle" size={18} color="#FFFFFF" />
+                            <Text style={s.floatingVideoBtnTxt}>Watch Video</Text>
+                        </TouchableOpacity>
 
                         {/* Image Counter Badge (Bottom-Right) */}
                         <View style={s.counterBadge}>
@@ -1134,50 +1124,32 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                     <TouchableOpacity style={s.zoomCloseBtn} onPress={() => setShowVideoModal(false)}>
                         <Ionicons name="close" size={26} color="#FFFFFF" />
                     </TouchableOpacity>
-                    {productVideoUrl ? (
-                        Platform.OS === 'web' ? (
-                            <View style={{ width: '92%', maxWidth: 700, alignItems: 'center', justifyContent: 'center' }}>
-                                <video
-                                    src={productVideoUrl}
-                                    controls
-                                    autoPlay
-                                    playsInline
-                                    style={{
-                                        width: '100%',
-                                        maxHeight: 460,
-                                        borderRadius: 14,
-                                        backgroundColor: '#000000',
-                                        boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
-                                        outline: 'none',
-                                    }}
-                                />
-                            </View>
-                        ) : (
-                            <Video
-                                source={{ uri: productVideoUrl }}
-                                style={{ width: '92%', height: 360, borderRadius: 14, backgroundColor: '#000000' }}
-                                useNativeControls
-                                resizeMode={ResizeMode.CONTAIN}
-                                shouldPlay
-                                isLooping={false}
+                    {Platform.OS === 'web' ? (
+                        <View style={{ width: '92%', maxWidth: 700, alignItems: 'center', justifyContent: 'center' }}>
+                            <video
+                                src={productVideoUrl}
+                                controls
+                                autoPlay
+                                playsInline
+                                style={{
+                                    width: '100%',
+                                    maxHeight: 460,
+                                    borderRadius: 14,
+                                    backgroundColor: '#000000',
+                                    boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
+                                    outline: 'none',
+                                }}
                             />
-                        )
-                    ) : (
-                        <View style={{ alignItems: 'center', padding: 26, backgroundColor: '#FFFFFF', borderRadius: 16, marginHorizontal: 20, maxWidth: 360, width: '90%' }}>
-                            <Ionicons name="videocam-off-outline" size={44} color={BRAND.slate} />
-                            <Text style={{ fontSize: 16, fontWeight: '800', color: BRAND.slateDark, marginTop: 12, textAlign: 'center' }}>
-                                Babu Bidiyo
-                            </Text>
-                            <Text style={{ fontSize: 12, color: BRAND.slate, textAlign: 'center', marginTop: 6, lineHeight: 18 }}>
-                                Wannan samfurin bashi da bidiyon nunawa a halin yanzu.
-                            </Text>
-                            <TouchableOpacity
-                                onPress={() => setShowVideoModal(false)}
-                                style={{ marginTop: 16, backgroundColor: BRAND.navy, paddingVertical: 10, paddingHorizontal: 20, borderRadius: 10 }}
-                            >
-                                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>Koma Baya</Text>
-                            </TouchableOpacity>
                         </View>
+                    ) : (
+                        <Video
+                            source={{ uri: productVideoUrl }}
+                            style={{ width: '92%', height: 360, borderRadius: 14, backgroundColor: '#000000' }}
+                            useNativeControls
+                            resizeMode={ResizeMode.CONTAIN}
+                            shouldPlay
+                            isLooping={false}
+                        />
                     )}
                 </View>
             </Modal>
