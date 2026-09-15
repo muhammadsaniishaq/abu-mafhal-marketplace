@@ -5,15 +5,18 @@ import {
     Animated, Dimensions, StyleSheet, Modal, FlatList
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../../lib/supabase';
 import { decode } from 'base64-arraybuffer';
 import * as FileSystem from 'expo-file-system/legacy';
 import { geminiService } from '../../services/geminiService';
 import { parsePrice } from '../../utils/helpers';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width: W } = Dimensions.get('window');
+const SB_H = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0;
+const NAVY = '#0E1A2E';
+const GOLD = '#D9A73A';
 
 const CATEGORIES = [
     { label: 'Electronics',  icon: 'phone-portrait',   color: '#3B82F6' },
@@ -38,9 +41,43 @@ const TABS = [
     { id: 'shipping', label: 'SEO',       icon: 'search' },
 ];
 
+// ─── Inp: MUST be defined OUTSIDE component to avoid keyboard dismiss ─────────
+const Inp = ({ label, field, form, onSet, placeholder, numeric, multi, hint }) => (
+    <View style={SS.inpWrap}>
+        <Text style={SS.inpLabel}>{label}</Text>
+        <TextInput
+            style={[SS.inpBox, multi && { height: 88, textAlignVertical: 'top', paddingTop: 12 }]}
+            value={form[field]}
+            onChangeText={v => onSet(field, v)}
+            placeholder={placeholder}
+            placeholderTextColor="#94A3B8"
+            keyboardType={numeric ? 'numeric' : 'default'}
+            multiline={multi}
+            returnKeyType={multi ? 'default' : 'next'}
+        />
+        {hint && <Text style={SS.inpHint}>{hint}</Text>}
+    </View>
+);
+
+// ─── ToggleRow: MUST be defined OUTSIDE component ────────────────────────────
+const ToggleRow = ({ label, desc, value, onChange, color = '#3B82F6', icon }) => (
+    <TouchableOpacity activeOpacity={0.8} onPress={() => onChange(!value)}
+        style={[SS.toggleRow, value && { backgroundColor: color + '10', borderColor: color + '40' }]}>
+        <View style={[SS.toggleIcon, { backgroundColor: value ? color + '20' : '#F1F5F9' }]}>
+            <Ionicons name={icon} size={18} color={value ? color : '#94A3B8'} />
+        </View>
+        <View style={{ flex: 1 }}>
+            <Text style={[SS.toggleLabel, value && { color }]}>{label}</Text>
+            {desc ? <Text style={SS.toggleDesc}>{desc}</Text> : null}
+        </View>
+        <Switch value={!!value} onValueChange={onChange}
+            trackColor={{ false: '#E2E8F0', true: color }}
+            thumbColor="white" />
+    </TouchableOpacity>
+);
+
 // ─────────────────────────────────────────────────────────────────────────────
 export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => {
-    const insets = useSafeAreaInsets();
     const isEditing = !!initialData;
 
     const [activeTab,  setActiveTab]  = useState('vital');
@@ -89,6 +126,9 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
     });
 
     const set = (key, val) => setForm(p => ({ ...p, [key]: val }));
+
+    // Helper to pass to Inp/ToggleRow (stable reference)
+    const onSet = set;
 
     // ── Load vendors ───────────────────────────────────────────
     useEffect(() => {
@@ -294,46 +334,6 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
         }
     };
 
-    // ── Shared Sub-Components ──────────────────────────────────
-    const Inp = ({ label, field, placeholder, numeric, multi, hint }) => (
-        <View style={SS.inpWrap}>
-            <Text style={SS.inpLabel}>{label}</Text>
-            <TextInput
-                style={[SS.inpBox, multi && { height: 88, textAlignVertical: 'top', paddingTop: 12 }]}
-                value={form[field]}
-                onChangeText={v => set(field, v)}
-                placeholder={placeholder}
-                placeholderTextColor="#94A3B8"
-                keyboardType={numeric ? 'numeric' : 'default'}
-                multiline={multi}
-            />
-            {hint && <Text style={SS.inpHint}>{hint}</Text>}
-        </View>
-    );
-
-    const ToggleRow = ({ label, desc, value, onChange, color = '#3B82F6', icon }) => (
-        <TouchableOpacity activeOpacity={0.8} onPress={() => onChange(!value)}
-            style={[SS.toggleRow, value && { backgroundColor: color + '10', borderColor: color + '40' }]}>
-            <View style={[SS.toggleIcon, { backgroundColor: value ? color + '20' : '#F1F5F9' }]}>
-                <Ionicons name={icon} size={18} color={value ? color : '#94A3B8'} />
-            </View>
-            <View style={{ flex: 1 }}>
-                <Text style={[SS.toggleLabel, value && { color }]}>{label}</Text>
-                {desc ? <Text style={SS.toggleDesc}>{desc}</Text> : null}
-            </View>
-            <Switch value={!!value} onValueChange={onChange}
-                trackColor={{ false: '#E2E8F0', true: color }}
-                thumbColor="white" />
-        </TouchableOpacity>
-    );
-
-    // ── Vendor Modal ───────────────────────────────────────────
-    const filteredVendors = vendors.filter(v =>
-        v.full_name?.toLowerCase().includes(vendorSearch.toLowerCase()) ||
-        v.email?.toLowerCase().includes(vendorSearch.toLowerCase()) ||
-        v.storeName?.toLowerCase().includes(vendorSearch.toLowerCase())
-    );
-
     // ── Tab Renderers ──────────────────────────────────────────
     const renderVital = () => (
         <View style={SS.tabContent}>
@@ -363,8 +363,8 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
             </View>
 
             <View style={SS.card}>
-                <Inp label="Product Name *" field="name" placeholder="e.g. Premium Wireless Earbuds" />
-                <Inp label="Brand" field="brand" placeholder="e.g. Sony, Samsung, Local Brand" />
+                <Inp label="Product Name *" field="name" form={form} onSet={onSet} placeholder="e.g. Premium Wireless Earbuds" />
+                <Inp label="Brand" field="brand" form={form} onSet={onSet} placeholder="e.g. Sony, Samsung, Local Brand" />
             </View>
 
             <View style={SS.card}>
@@ -381,8 +381,8 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
             </View>
 
             <View style={SS.card}>
-                <Inp label="Description *" field="description" placeholder="Detailed product information..." multi
-                    hint="Clear description improves conversions" />
+                <Inp label="Description *" field="description" form={form} onSet={onSet}
+                    placeholder="Detailed product information..." multi hint="Clear description improves conversions" />
                 <TouchableOpacity onPress={() => handleAI('description')} style={SS.aiBtnRow}>
                     {aiLoading ? <ActivityIndicator size="small" color="#8B5CF6" />
                                : <Ionicons name="sparkles" size={16} color="#8B5CF6" />}
@@ -397,22 +397,21 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
             <View style={SS.card}>
                 <Text style={SS.cardTitle}>Pricing</Text>
                 <View style={{ flexDirection: 'row', gap: 12 }}>
-                    <View style={{ flex: 1 }}><Inp label="Selling Price (₦) *" field="price" placeholder="0.00" numeric /></View>
-                    <View style={{ flex: 1 }}><Inp label="Original Price (₦)" field="originalPrice" placeholder="0.00" numeric /></View>
+                    <View style={{ flex: 1 }}><Inp label="Selling Price (₦) *" field="price" form={form} onSet={onSet} placeholder="0.00" numeric /></View>
+                    <View style={{ flex: 1 }}><Inp label="Original Price (₦)" field="originalPrice" form={form} onSet={onSet} placeholder="0.00" numeric /></View>
                 </View>
                 <View style={{ flexDirection: 'row', gap: 12 }}>
-                    <View style={{ flex: 1 }}><Inp label="Cost Price (internal)" field="cost" placeholder="0.00" numeric /></View>
-                    <View style={{ flex: 1 }}><Inp label="Stock Qty" field="stock" placeholder="0" numeric /></View>
+                    <View style={{ flex: 1 }}><Inp label="Cost Price (internal)" field="cost" form={form} onSet={onSet} placeholder="0.00" numeric /></View>
+                    <View style={{ flex: 1 }}><Inp label="Stock Qty" field="stock" form={form} onSet={onSet} placeholder="0" numeric /></View>
                 </View>
-                <Inp label="SKU" field="sku" placeholder="PROD-001" hint="Unique product identifier" />
-                <Inp label="Barcode / GTIN" field="barcode" placeholder="EAN-13 or UPC" />
+                <Inp label="SKU" field="sku" form={form} onSet={onSet} placeholder="PROD-001" hint="Unique product identifier" />
+                <Inp label="Barcode / GTIN" field="barcode" form={form} onSet={onSet} placeholder="EAN-13 or UPC" />
             </View>
 
             <View style={SS.card}>
                 <Text style={SS.cardTitle}>Free Shipping</Text>
                 <ToggleRow label="Enable Free Shipping"
-                    desc={form.freeShipping ? 'Customers pay ₦0 shipping for this product'
-                                            : 'Customers pay the platform shipping fee'}
+                    desc={form.freeShipping ? 'Customers pay ₦0 shipping' : 'Customers pay shipping fee'}
                     icon="airplane" value={form.freeShipping}
                     onChange={v => set('freeShipping', v)} color="#10B981" />
             </View>
@@ -420,8 +419,8 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
             <View style={SS.card}>
                 <Text style={SS.cardTitle}>Sale Schedule</Text>
                 <View style={{ flexDirection: 'row', gap: 12 }}>
-                    <View style={{ flex: 1 }}><Inp label="Start Date (YYYY-MM-DD)" field="saleStart" placeholder="2025-01-01" /></View>
-                    <View style={{ flex: 1 }}><Inp label="End Date (YYYY-MM-DD)" field="saleEnd" placeholder="2025-12-31" /></View>
+                    <View style={{ flex: 1 }}><Inp label="Start Date (YYYY-MM-DD)" field="saleStart" form={form} onSet={onSet} placeholder="2025-01-01" /></View>
+                    <View style={{ flex: 1 }}><Inp label="End Date (YYYY-MM-DD)" field="saleEnd" form={form} onSet={onSet} placeholder="2025-12-31" /></View>
                 </View>
             </View>
 
@@ -516,7 +515,7 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
                 <ToggleRow label="Affiliate Product" desc="Link to an external product page"
                     icon="link" value={form.isAffiliate} onChange={v => set('isAffiliate', v)} color="#F59E0B" />
                 {form.isAffiliate && <View style={{ marginTop: 10 }}>
-                    <Inp label="Affiliate Link URL" field="affiliateLink" placeholder="https://..." />
+                    <Inp label="Affiliate Link URL" field="affiliateLink" form={form} onSet={onSet} placeholder="https://..." />
                 </View>}
             </View>
         </View>
@@ -561,9 +560,9 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
         <View style={SS.tabContent}>
             <View style={SS.card}>
                 <Text style={SS.cardTitle}>Inventory Control</Text>
-                <Inp label="Low Stock Alert Threshold" field="lowStockThreshold" placeholder="5" numeric
+                <Inp label="Low Stock Alert Threshold" field="lowStockThreshold" form={form} onSet={onSet} placeholder="5" numeric
                     hint="Notify admin when stock falls below this level" />
-                <Inp label="Max Quantity Per Order" field="maxQuantity" placeholder="e.g. 10" numeric
+                <Inp label="Max Quantity Per Order" field="maxQuantity" form={form} onSet={onSet} placeholder="e.g. 10" numeric
                     hint="Leave blank for unlimited" />
                 <ToggleRow label="Allow Backorders" desc="Continue selling when stock hits zero"
                     icon="repeat" value={form.allowBackorders} onChange={v => set('allowBackorders', v)} color="#F59E0B" />
@@ -587,16 +586,17 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
         <View style={SS.tabContent}>
             {!form.isDigital && (
                 <View style={SS.card}>
-                    <Inp label="Shipping Weight (kg)" field="weight" placeholder="0.5" numeric />
+                    <Inp label="Shipping Weight (kg)" field="weight" form={form} onSet={onSet} placeholder="0.5" numeric />
                 </View>
             )}
             <View style={SS.card}>
                 <Text style={SS.cardTitle}>SEO Optimization</Text>
-                <Inp label="SEO Title" field="seoTitle" placeholder="Optimized title for Google..." />
-                <Inp label="SEO Description" field="seoDesc" placeholder="Meta description for search results..."
-                    multi hint="Ideal: 150–160 characters" />
-                <Inp label="Keywords (comma separated)" field="keywords" placeholder="wireless, earbuds, bluetooth..." multi />
-                <Inp label="Product Tags" field="tags" placeholder="Electronics, New Arrival, Sale" />
+                <Inp label="SEO Title" field="seoTitle" form={form} onSet={onSet} placeholder="Optimized title for Google..." />
+                <Inp label="SEO Description" field="seoDesc" form={form} onSet={onSet}
+                    placeholder="Meta description for search results..." multi hint="Ideal: 150–160 characters" />
+                <Inp label="Keywords (comma separated)" field="keywords" form={form} onSet={onSet}
+                    placeholder="wireless, earbuds, bluetooth..." multi />
+                <Inp label="Product Tags" field="tags" form={form} onSet={onSet} placeholder="Electronics, New Arrival, Sale" />
                 <TouchableOpacity onPress={() => handleAI('seo')} style={SS.aiBtnFull}>
                     {aiLoading ? <ActivityIndicator size="small" color="#8B5CF6" />
                                : <Ionicons name="sparkles" size={16} color="#8B5CF6" />}
@@ -618,6 +618,13 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
             default:         return null;
         }
     };
+
+    // ── Vendor Modal Filter ────────────────────────────────────
+    const filteredVendors = vendors.filter(v =>
+        v.full_name?.toLowerCase().includes(vendorSearch.toLowerCase()) ||
+        v.email?.toLowerCase().includes(vendorSearch.toLowerCase()) ||
+        v.storeName?.toLowerCase().includes(vendorSearch.toLowerCase())
+    );
 
     // ── Vendor Picker Modal ────────────────────────────────────
     const VendorModal = () => (
@@ -664,16 +671,20 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
     // ── Main Render ────────────────────────────────────────────
     return (
         <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
-            <StatusBar barStyle="dark-content" backgroundColor="white" />
+            <StatusBar barStyle="light-content" backgroundColor={NAVY} />
 
-            {/* Header */}
-            <View style={[SS.header, { paddingTop: 8 }]}>
+            {/* Navy Header */}
+            <LinearGradient
+                colors={[NAVY, '#162235']}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={[SS.header, { paddingTop: SB_H + 6 }]}
+            >
                 <TouchableOpacity onPress={onCancel} style={SS.iconBtn}>
-                    <Ionicons name="close" size={22} color="#0E1A2E" />
+                    <Ionicons name="arrow-back" size={18} color={GOLD} />
                 </TouchableOpacity>
 
-                <View style={{ flex: 1, marginHorizontal: 14 }}>
-                    <Text style={SS.headerTitle}>{isEditing ? 'Edit Product' : 'New Product'}</Text>
+                <View style={{ flex: 1, marginHorizontal: 12 }}>
+                    <Text style={SS.headerTitle}>{isEditing ? '✏️ Edit Product' : '+ New Product'}</Text>
                     <Text style={SS.headerSub}>{isEditing ? 'Modify product details' : 'Create a new listing'}</Text>
                 </View>
 
@@ -682,11 +693,11 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
                         style={[SS.saveBtn, loading && { backgroundColor: '#94A3B8' }]}>
                         {loading
                             ? <ActivityIndicator size="small" color="white" />
-                            : <><Ionicons name="cloud-upload" size={14} color="#D9A73A" /><Text style={SS.saveBtnTxt}>{isEditing ? 'Update' : 'Publish'}</Text></>
+                            : <><Ionicons name="cloud-upload" size={13} color={GOLD} /><Text style={SS.saveBtnTxt}>{isEditing ? 'Update' : 'Publish'}</Text></>
                         }
                     </TouchableOpacity>
                 </Animated.View>
-            </View>
+            </LinearGradient>
 
             {/* Tabs */}
             <View style={{ backgroundColor: 'white', borderBottomWidth: 1, borderColor: '#F1F5F9' }}>
@@ -728,12 +739,12 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const SS = StyleSheet.create({
-    header:       { flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1, borderColor: '#F1F5F9' },
-    iconBtn:      { width: 40, height: 40, borderRadius: 12, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
-    headerTitle:  { fontSize: 17, fontWeight: '900', color: '#0E1A2E', letterSpacing: -0.3 },
-    headerSub:    { fontSize: 11, color: '#94A3B8', marginTop: 1 },
-    saveBtn:      { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#0E1A2E', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: '#D9A73A' },
-    saveBtnTxt:   { color: 'white', fontWeight: '800', fontSize: 13 },
+    header:       { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderColor: 'rgba(217,167,58,0.2)' },
+    iconBtn:      { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.09)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)' },
+    headerTitle:  { fontSize: 16, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.3 },
+    headerSub:    { fontSize: 10.5, color: 'rgba(255,255,255,0.45)', marginTop: 1 },
+    saveBtn:      { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(217,167,58,0.15)', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 11, borderWidth: 1, borderColor: GOLD },
+    saveBtnTxt:   { color: GOLD, fontWeight: '800', fontSize: 12 },
     tabChip:      { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, backgroundColor: '#F1F5F9', borderWidth: 1.5, borderColor: 'transparent' },
     tabChipActive:{ backgroundColor: '#0E1A2E', borderColor: '#D9A73A' },
     tabTxt:       { fontSize: 12, fontWeight: '600', color: '#94A3B8' },

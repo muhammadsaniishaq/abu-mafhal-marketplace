@@ -2,14 +2,17 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     View, Text, TouchableOpacity, Image, TextInput, Alert,
     ActivityIndicator, FlatList, RefreshControl, Platform,
-    StyleSheet, Animated, Dimensions
+    StyleSheet, Animated, Dimensions, StatusBar
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../../lib/supabase';
 import { AdminAddProduct } from './AdminAddProduct';
 
 const { width: W } = Dimensions.get('window');
+const SB_HEIGHT = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0;
+const NAVY = '#0E1A2E';
+const GOLD = '#D9A73A';
 
 const STATUS_META = {
     approved: { bg: '#ECFDF5', text: '#059669', border: '#A7F3D0', icon: 'checkmark-circle' },
@@ -171,7 +174,6 @@ const StatsStrip = ({ products }) => {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export const AdminProducts = ({ navigation, onBack }) => {
-    const insets = useSafeAreaInsets();
 
     const [view,            setView]            = useState('list');
     const [selectedProduct, setSelectedProduct] = useState(null);
@@ -274,18 +276,25 @@ export const AdminProducts = ({ navigation, onBack }) => {
 
     return (
         <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+            <StatusBar barStyle="light-content" backgroundColor={NAVY} />
 
-            {/* Header */}
-            <View style={[SS.header, { paddingTop: 8 }]}>
+            {/* ── Navy Header ── */}
+            <LinearGradient
+                colors={[NAVY, '#162235']}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={[SS.header, { paddingTop: SB_HEIGHT + 8 }]}
+            >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
                     {(navigation?.canGoBack?.() || onBack) && (
                         <TouchableOpacity onPress={onBack || (() => navigation.goBack())} style={SS.iconBtn}>
-                            <Ionicons name="arrow-back" size={20} color="#0E1A2E" />
+                            <Ionicons name="arrow-back" size={18} color={GOLD} />
                         </TouchableOpacity>
                     )}
                     <View>
                         <Text style={SS.headerTitle}>Product Catalog</Text>
-                        <Text style={SS.headerSub}>Manage all live inventory</Text>
+                        <Text style={SS.headerSub}>
+                            {loading ? 'Loading...' : `${filtered.length} of ${products.length} products`}
+                        </Text>
                     </View>
                 </View>
 
@@ -293,18 +302,18 @@ export const AdminProducts = ({ navigation, onBack }) => {
                     onPress={() => { setSelectedProduct(null); setView('add'); }}
                     style={SS.addBtn}
                 >
-                    <Ionicons name="add" size={18} color="#D9A73A" />
+                    <Ionicons name="add" size={16} color={GOLD} />
                     <Text style={SS.addBtnTxt}>Add New</Text>
                 </TouchableOpacity>
-            </View>
+            </LinearGradient>
 
-            {/* Stats Strip */}
+            {/* Stats Strip — compact */}
             {!loading && products.length > 0 && <StatsStrip products={products} />}
 
             {/* Search & Filters */}
             <View style={SS.toolbar}>
                 <View style={SS.searchBox}>
-                    <Ionicons name="search" size={17} color="#94A3B8" />
+                    <Ionicons name="search" size={15} color="#94A3B8" />
                     <TextInput
                         placeholder="Search products..."
                         placeholderTextColor="#94A3B8"
@@ -315,12 +324,12 @@ export const AdminProducts = ({ navigation, onBack }) => {
                     />
                     {search.length > 0 && (
                         <TouchableOpacity onPress={() => setSearch('')}>
-                            <Ionicons name="close-circle" size={17} color="#CBD5E1" />
+                            <Ionicons name="close-circle" size={16} color="#CBD5E1" />
                         </TouchableOpacity>
                     )}
                 </View>
 
-                <View style={{ flexDirection: 'row', gap: 6, marginTop: 10 }}>
+                <View style={{ flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
                     {FILTERS.map(f => {
                         const active = stockFilter === f.key;
                         return (
@@ -385,44 +394,48 @@ export const AdminProducts = ({ navigation, onBack }) => {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const SS = StyleSheet.create({
-    header:       { backgroundColor: 'white', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1, borderColor: '#F1F5F9' },
-    iconBtn:      { width: 40, height: 40, borderRadius: 12, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
-    headerTitle:  { fontSize: 19, fontWeight: '900', color: '#0E1A2E', letterSpacing: -0.4 },
-    headerSub:    { fontSize: 11, color: '#94A3B8', marginTop: 1 },
-    addBtn:       { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#0E1A2E', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14, borderWidth: 1, borderColor: '#D9A73A' },
-    addBtnTxt:    { color: 'white', fontWeight: '800', fontSize: 13 },
+    // Header — navy gradient
+    header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderColor: 'rgba(217,167,58,0.25)' },
+    iconBtn:      { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.09)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)' },
+    headerTitle:  { fontSize: 17, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.3 },
+    headerSub:    { fontSize: 10, color: 'rgba(255,255,255,0.48)', marginTop: 1 },
+    addBtn:       { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(217,167,58,0.15)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: GOLD },
+    addBtnTxt:    { color: GOLD, fontWeight: '800', fontSize: 12 },
 
+    // Stats — compact single-row
     statsStrip:   { flexDirection: 'row', backgroundColor: 'white', borderBottomWidth: 1, borderColor: '#F1F5F9' },
-    statCell:     { flex: 1, alignItems: 'center', paddingVertical: 12, gap: 3 },
-    statIcon:     { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
-    statValue:    { fontSize: 17, fontWeight: '900' },
-    statLabel:    { fontSize: 9, color: '#94A3B8', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+    statCell:     { flex: 1, alignItems: 'center', paddingVertical: 9, gap: 2 },
+    statIcon:     { width: 24, height: 24, borderRadius: 7, alignItems: 'center', justifyContent: 'center', marginBottom: 1 },
+    statValue:    { fontSize: 15, fontWeight: '900' },
+    statLabel:    { fontSize: 8.5, color: '#94A3B8', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },
 
-    toolbar:      { backgroundColor: 'white', paddingHorizontal: 14, paddingTop: 12, paddingBottom: 14, borderBottomWidth: 1, borderColor: '#F1F5F9' },
-    searchBox:    { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 14, paddingHorizontal: 12, height: 44, gap: 8, borderWidth: 1, borderColor: '#E2E8F0' },
-    searchInput:  { flex: 1, fontSize: 14, fontWeight: '600', color: '#0E1A2E', height: '100%' },
-    filterPill:   { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: '#F1F5F9', borderWidth: 1.5, borderColor: '#E2E8F0' },
-    filterTxt:    { fontSize: 12, fontWeight: '700', color: '#64748B' },
+    // Toolbar
+    toolbar:      { backgroundColor: 'white', paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10, borderBottomWidth: 1, borderColor: '#F1F5F9' },
+    searchBox:    { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 12, paddingHorizontal: 11, height: 40, gap: 7, borderWidth: 1, borderColor: '#E2E8F0' },
+    searchInput:  { flex: 1, fontSize: 13.5, fontWeight: '600', color: '#0E1A2E', height: '100%' },
+    filterPill:   { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 18, backgroundColor: '#F1F5F9', borderWidth: 1.5, borderColor: '#E2E8F0' },
+    filterTxt:    { fontSize: 11.5, fontWeight: '700', color: '#64748B' },
 
-    card:         { backgroundColor: 'white', borderRadius: 18, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 },
-    thumbWrap:    { width: 74, height: 74, borderRadius: 14, overflow: 'hidden', backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
+    // Product card
+    card:         { backgroundColor: 'white', borderRadius: 16, padding: 13, marginBottom: 10, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 6, elevation: 2 },
+    thumbWrap:    { width: 70, height: 70, borderRadius: 12, overflow: 'hidden', backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
     thumb:        { width: '100%', height: '100%' },
     discBadge:    { position: 'absolute', top: 0, left: 0, backgroundColor: '#EF4444', paddingHorizontal: 5, paddingVertical: 3, borderBottomRightRadius: 8 },
     outBadge:     { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(239,68,68,0.85)', alignItems: 'center', paddingVertical: 3 },
-    prodName:     { fontSize: 14, fontWeight: '800', color: '#0E1A2E', flex: 1, lineHeight: 20 },
-    priceMain:    { fontSize: 16, fontWeight: '900', color: '#0E1A2E', letterSpacing: -0.3 },
-    priceOld:     { fontSize: 12, color: '#94A3B8', fontWeight: '600', textDecorationLine: 'line-through' },
-    statusPill:   { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1 },
-    statusTxt:    { fontSize: 10, fontWeight: '800', textTransform: 'capitalize' },
-    infoChip:     { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
-    infoChipTxt:  { fontSize: 11, fontWeight: '600', color: '#64748B', maxWidth: 100 },
-    actionRow:    { flexDirection: 'row', gap: 8, paddingTop: 12, borderTopWidth: 1, borderColor: '#F1F5F9' },
-    actionBtn:    { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 9, borderRadius: 12, borderWidth: 1 },
-    actionBtnTxt: { fontSize: 13, fontWeight: '800' },
+    prodName:     { fontSize: 13.5, fontWeight: '800', color: '#0E1A2E', flex: 1, lineHeight: 19 },
+    priceMain:    { fontSize: 15, fontWeight: '900', color: '#0E1A2E', letterSpacing: -0.2 },
+    priceOld:     { fontSize: 11, color: '#94A3B8', fontWeight: '600', textDecorationLine: 'line-through' },
+    statusPill:   { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7, borderWidth: 1 },
+    statusTxt:    { fontSize: 9.5, fontWeight: '800', textTransform: 'capitalize' },
+    infoChip:     { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
+    infoChipTxt:  { fontSize: 10.5, fontWeight: '600', color: '#64748B', maxWidth: 95 },
+    actionRow:    { flexDirection: 'row', gap: 7, paddingTop: 10, borderTopWidth: 1, borderColor: '#F1F5F9' },
+    actionBtn:    { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 8, borderRadius: 11, borderWidth: 1 },
+    actionBtnTxt: { fontSize: 12.5, fontWeight: '800' },
     editBtn:      { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' },
     archiveBtn:   { backgroundColor: '#FEF2F2', borderColor: '#FECACA' },
 
-    emptyIcon:    { width: 88, height: 88, borderRadius: 44, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#E2E8F0' },
-    emptyTitle:   { fontSize: 16, fontWeight: '800', color: '#0E1A2E', textAlign: 'center' },
-    emptySub:     { fontSize: 13, color: '#94A3B8', textAlign: 'center', maxWidth: W * 0.7 },
+    emptyIcon:    { width: 80, height: 80, borderRadius: 40, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#E2E8F0' },
+    emptyTitle:   { fontSize: 15, fontWeight: '800', color: '#0E1A2E', textAlign: 'center' },
+    emptySub:     { fontSize: 12.5, color: '#94A3B8', textAlign: 'center', maxWidth: W * 0.72 },
 });
