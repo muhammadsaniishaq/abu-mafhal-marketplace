@@ -86,7 +86,7 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
     const [images,     setImages]     = useState(
         initialData?.images?.map(uri => ({ uri, status: 'success', url: uri })) || []
     );
-    const [video, setVideo] = useState(initialData?.metadata?.video || null);
+    const [video, setVideo] = useState(initialData?.metadata?.video || initialData?.video_url || null);
     const [vendors, setVendors]         = useState([]);
     const [vendorSearch, setVendorSearch] = useState('');
     const [showVendorModal, setShowVendorModal] = useState(false);
