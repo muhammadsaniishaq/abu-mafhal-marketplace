@@ -91,18 +91,11 @@ const ProductCard = ({ item, onEdit, onDelete }) => {
                     <Text style={[SS.actionBtnTxt, { color: '#B45309' }]}>Edit</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                    onPress={() => Alert.alert(
-                        'Archive Product',
-                        `Archive "${item.name}"? It will be hidden from buyers.`,
-                        [
-                            { text: 'Cancel', style: 'cancel' },
-                            { text: 'Archive', style: 'destructive', onPress: () => onDelete(item.id) }
-                        ]
-                    )}
+                    onPress={() => onDelete(item.id)}
                     style={[SS.actionBtn, SS.deleteBtn]}
                 >
-                    <Ionicons name="archive-outline" size={14} color="#EF4444" />
-                    <Text style={[SS.actionBtnTxt, { color: '#EF4444' }]}>Archive</Text>
+                    <Ionicons name="trash-outline" size={14} color="#EF4444" />
+                    <Text style={[SS.actionBtnTxt, { color: '#EF4444' }]}>Delete</Text>
                 </TouchableOpacity>
             </View>
         </Animated.View>

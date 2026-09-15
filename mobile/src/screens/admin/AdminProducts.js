@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     View, Text, TouchableOpacity, Image, TextInput, Alert,
     ActivityIndicator, FlatList, RefreshControl, Platform,
-    StyleSheet, Animated, Dimensions, StatusBar
+    StyleSheet, Animated, Dimensions, StatusBar, Modal
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -88,10 +88,7 @@ const ProductCard = ({ item, onEdit, onDelete, index }) => {
                             <Text style={[SS.actionBtnSTxt, { color: '#B45309' }]}>Edit</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
-                            onPress={() => Alert.alert('Delete Product', `Are you sure you want to delete "${item.name}"?`, [
-                                { text: 'Cancel', style: 'cancel' },
-                                { text: 'Delete', style: 'destructive', onPress: () => onDelete(item.id) }
-                            ])}
+                            onPress={() => onDelete(item)}
                             style={[SS.actionBtnS, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
                             <Ionicons name="trash-outline" size={11} color="#DC2626" />
                             <Text style={[SS.actionBtnSTxt, { color: '#DC2626' }]}>Delete</Text>
@@ -168,36 +165,82 @@ export const AdminProducts = ({ navigation, onBack }) => {
         }
     }, []);
 
-    const handleDelete = useCallback(async (id) => {
+    const [productToDelete, setProductToDelete] = useState(null);
+    const [deleting, setDeleting] = useState(false);
+
+    const handleDelete = useCallback((product) => {
+        setProductToDelete(product);
+    }, []);
+
+    const confirmDeleteProduct = useCallback(async () => {
+        if (!productToDelete) return;
+        const id = productToDelete.id;
+        setDeleting(true);
         try {
-            // 1. Attempt hard delete from database
-            const { error: delError } = await supabase.from('products').delete().eq('id', id);
-            if (!delError) {
+            // 1. First attempt hard delete with .select() to verify rows actually deleted
+            const { data: delData, error: delError } = await supabase
+                .from('products')
+                .delete()
+                .eq('id', id)
+                .select('id');
+
+            if (!delError && delData && delData.length > 0) {
                 setProducts(prev => prev.filter(p => p.id !== id));
-                Alert.alert('Deleted ✅', 'Product successfully removed from store.');
+                setProductToDelete(null);
+                if (Platform.OS === 'web') alert('Product successfully deleted.');
+                else Alert.alert('Deleted ✅', 'Product successfully removed from store.');
                 return;
             }
 
-            console.warn('Hard delete prevented (FK/order constraint), archiving instead:', delError?.message);
+            console.warn('Hard delete affected 0 rows (FK or RLS), falling back to archive:', delError?.message);
 
-            // 2. Fallback: If foreign keys prevent hard delete (order_items, reviews), archive & deactivate
-            const { error: archError } = await supabase.from('products').update({ 
-                status: 'archived', 
-                is_active: false,
-                stock: 0,
-                stock_quantity: 0 
-            }).eq('id', id);
+            // 2. Fallback: Archive & deactivate product so it immediately vanishes from store
+            const { data: archData, error: archError } = await supabase
+                .from('products')
+                .update({ 
+                    status: 'archived', 
+                    is_active: false,
+                    stock: 0,
+                    stock_quantity: 0 
+                })
+                .eq('id', id)
+                .select('id');
 
-            if (!archError) {
+            if (!archError && archData && archData.length > 0) {
                 setProducts(prev => prev.filter(p => p.id !== id));
-                Alert.alert('Archived & Removed ✅', 'Product has past order history, so it was safely hidden and removed from active catalog.');
-            } else {
-                throw archError;
+                setProductToDelete(null);
+                if (Platform.OS === 'web') alert('Product archived & removed from store.');
+                else Alert.alert('Archived & Removed ✅', 'Product has past order history, so it was safely hidden and removed from active catalog.');
+                return;
             }
+
+            // 3. Fallback without .select()
+            const { error: simpleArcError } = await supabase
+                .from('products')
+                .update({ 
+                    status: 'archived', 
+                    is_active: false,
+                    stock: 0,
+                    stock_quantity: 0 
+                })
+                .eq('id', id);
+
+            if (!simpleArcError) {
+                setProducts(prev => prev.filter(p => p.id !== id));
+                setProductToDelete(null);
+                if (Platform.OS === 'web') alert('Product archived & removed from store.');
+                else Alert.alert('Archived & Removed ✅', 'Product removed from active catalog.');
+                return;
+            }
+
+            throw delError || archError || simpleArcError || new Error('Could not delete product.');
         } catch (err) {
-            Alert.alert('Delete Failed ❌', err?.message || 'Could not delete product.');
+            if (Platform.OS === 'web') alert('Delete Failed: ' + (err?.message || 'Could not delete product.'));
+            else Alert.alert('Delete Failed ❌', err?.message || 'Could not delete product.');
+        } finally {
+            setDeleting(false);
         }
-    }, []);
+    }, [productToDelete]);
 
     const handleEdit = useCallback((product) => {
         setSelectedProduct(product);
@@ -352,6 +395,53 @@ export const AdminProducts = ({ navigation, onBack }) => {
                     }
                 />
             )}
+
+            {/* ── IN-APP DELETE CONFIRMATION MODAL (100% CROSS-PLATFORM) ── */}
+            <Modal
+                visible={!!productToDelete}
+                transparent
+                animationType="fade"
+                onRequestClose={() => !deleting && setProductToDelete(null)}
+            >
+                <View style={SS.modalOverlay}>
+                    <View style={SS.modalBox}>
+                        <View style={SS.modalIconCircle}>
+                            <Ionicons name="trash" size={26} color="#DC2626" />
+                        </View>
+                        <Text style={SS.modalHead}>Delete Product</Text>
+                        <Text style={SS.modalBody}>
+                            Are you sure you want to delete{' '}
+                            <Text style={{ fontWeight: '800', color: '#0F172A' }}>
+                                "{productToDelete?.name}"
+                            </Text>
+                            ? This will remove the item from your store.
+                        </Text>
+                        <View style={SS.modalActions}>
+                            <TouchableOpacity
+                                disabled={deleting}
+                                onPress={() => setProductToDelete(null)}
+                                style={SS.modalCancel}
+                            >
+                                <Text style={SS.modalCancelTxt}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                disabled={deleting}
+                                onPress={confirmDeleteProduct}
+                                style={SS.modalConfirm}
+                            >
+                                {deleting ? (
+                                    <ActivityIndicator size="small" color="#FFFFFF" />
+                                ) : (
+                                    <>
+                                        <Ionicons name="trash-outline" size={14} color="#FFFFFF" />
+                                        <Text style={SS.modalConfirmTxt}>Delete Now</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 };
@@ -391,4 +481,83 @@ const SS = StyleSheet.create({
     emptyIcon:     { width: 72, height: 72, borderRadius: 36, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#E2E8F0' },
     emptyTitle:    { fontSize: 14.5, fontWeight: '800', color: '#0E1A2E', textAlign: 'center' },
     emptySub:      { fontSize: 12, color: '#94A3B8', textAlign: 'center', maxWidth: W * 0.72 },
+
+    // In-app Delete Modal
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.65)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 20,
+    },
+    modalBox: {
+        width: '100%',
+        maxWidth: 360,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 18,
+        padding: 22,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 16,
+        elevation: 8,
+    },
+    modalIconCircle: {
+        width: 52,
+        height: 52,
+        borderRadius: 26,
+        backgroundColor: '#FEE2E2',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 12,
+    },
+    modalHead: {
+        fontSize: 17,
+        fontWeight: '900',
+        color: '#0F172A',
+        marginBottom: 8,
+    },
+    modalBody: {
+        fontSize: 13,
+        color: '#64748B',
+        textAlign: 'center',
+        lineHeight: 18,
+        marginBottom: 20,
+    },
+    modalActions: {
+        flexDirection: 'row',
+        gap: 10,
+        width: '100%',
+    },
+    modalCancel: {
+        flex: 1,
+        paddingVertical: 11,
+        borderRadius: 10,
+        backgroundColor: '#F1F5F9',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    modalCancelTxt: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#64748B',
+    },
+    modalConfirm: {
+        flex: 1.2,
+        paddingVertical: 11,
+        borderRadius: 10,
+        backgroundColor: '#DC2626',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+    },
+    modalConfirmTxt: {
+        fontSize: 13,
+        fontWeight: '800',
+        color: '#FFFFFF',
+    },
 });

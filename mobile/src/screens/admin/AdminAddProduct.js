@@ -91,6 +91,8 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
     const [vendorSearch, setVendorSearch] = useState('');
     const [showVendorModal, setShowVendorModal] = useState(false);
     const [selectedVendor, setSelectedVendor] = useState(null);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [deleting, setDeleting] = useState(false);
 
     const saveAnim = useRef(new Animated.Value(1)).current;
 
@@ -369,46 +371,68 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
     };
 
     const handleDeleteProduct = () => {
-        Alert.alert(
-            'Delete Product ⚠️',
-            `Are you sure you want to delete "${form.name}"? This action cannot be undone.`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: async () => {
-                        setLoading(true);
-                        try {
-                            const { error: delErr } = await supabase.from('products').delete().eq('id', initialData.id);
-                            if (!delErr) {
-                                Alert.alert('Deleted ✅', 'Product successfully removed.');
-                                onSuccess();
-                                return;
-                            }
+        setShowDeleteModal(true);
+    };
 
-                            const { error: arcErr } = await supabase.from('products').update({
-                                status: 'archived',
-                                is_active: false,
-                                stock: 0,
-                                stock_quantity: 0
-                            }).eq('id', initialData.id);
+    const confirmDeleteProduct = async () => {
+        if (!initialData?.id) return;
+        setDeleting(true);
+        try {
+            // 1. Attempt hard delete with .select()
+            const { data: delData, error: delErr } = await supabase
+                .from('products')
+                .delete()
+                .eq('id', initialData.id)
+                .select('id');
 
-                            if (!arcErr) {
-                                Alert.alert('Archived ✅', 'Product has past orders, so it was safely hidden from store.');
-                                onSuccess();
-                            } else {
-                                throw arcErr;
-                            }
-                        } catch (e) {
-                            Alert.alert('Delete Failed ❌', e.message || 'Could not delete product.');
-                        } finally {
-                            setLoading(false);
-                        }
-                    }
-                }
-            ]
-        );
+            if (!delErr && delData && delData.length > 0) {
+                setShowDeleteModal(false);
+                if (Platform.OS === 'web') alert('Product successfully deleted.');
+                else Alert.alert('Deleted ✅', 'Product successfully removed.');
+                onSuccess();
+                return;
+            }
+
+            console.warn('Hard delete in edit affected 0 rows, archiving instead:', delErr?.message);
+
+            // 2. Fallback: Archive product
+            const { data: arcData, error: arcErr } = await supabase.from('products').update({
+                status: 'archived',
+                is_active: false,
+                stock: 0,
+                stock_quantity: 0
+            }).eq('id', initialData.id).select('id');
+
+            if (!arcErr && arcData && arcData.length > 0) {
+                setShowDeleteModal(false);
+                if (Platform.OS === 'web') alert('Product archived & removed from store.');
+                else Alert.alert('Archived ✅', 'Product has past orders, so it was safely hidden from store.');
+                onSuccess();
+                return;
+            }
+
+            // 3. Fallback without select
+            const { error: simpleArcErr } = await supabase.from('products').update({
+                status: 'archived',
+                is_active: false,
+                stock: 0
+            }).eq('id', initialData.id);
+
+            if (!simpleArcErr) {
+                setShowDeleteModal(false);
+                if (Platform.OS === 'web') alert('Product archived & removed from store.');
+                else Alert.alert('Archived ✅', 'Product has been removed from store.');
+                onSuccess();
+                return;
+            }
+
+            throw delErr || arcErr || simpleArcErr || new Error('Could not delete product.');
+        } catch (e) {
+            if (Platform.OS === 'web') alert('Delete Failed: ' + (e.message || 'Could not delete product.'));
+            else Alert.alert('Delete Failed ❌', e.message || 'Could not delete product.');
+        } finally {
+            setDeleting(false);
+        }
     };
 
     // ── Tab Renderers ──────────────────────────────────────────
@@ -1186,6 +1210,49 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
             )}
 
             <VendorModal />
+
+            {/* ── IN-APP DELETE CONFIRMATION MODAL ── */}
+            <Modal
+                visible={showDeleteModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => !deleting && setShowDeleteModal(false)}
+            >
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+                    <View style={{ width: '100%', maxWidth: 360, backgroundColor: '#FFFFFF', borderRadius: 18, padding: 22, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 16, elevation: 8 }}>
+                        <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+                            <Ionicons name="trash" size={26} color="#DC2626" />
+                        </View>
+                        <Text style={{ fontSize: 17, fontWeight: '900', color: '#0F172A', marginBottom: 8 }}>Delete Product</Text>
+                        <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center', lineHeight: 18, marginBottom: 20 }}>
+                            Are you sure you want to permanently delete <Text style={{ fontWeight: '800', color: '#0F172A' }}>"{form.name}"</Text>? This action cannot be undone.
+                        </Text>
+                        <View style={{ flexDirection: 'row', gap: 10, width: '100%' }}>
+                            <TouchableOpacity
+                                disabled={deleting}
+                                onPress={() => setShowDeleteModal(false)}
+                                style={{ flex: 1, paddingVertical: 11, borderRadius: 10, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}
+                            >
+                                <Text style={{ fontSize: 13, fontWeight: '700', color: '#64748B' }}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                disabled={deleting}
+                                onPress={confirmDeleteProduct}
+                                style={{ flex: 1.2, paddingVertical: 11, borderRadius: 10, backgroundColor: '#DC2626', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                            >
+                                {deleting ? (
+                                    <ActivityIndicator size="small" color="#FFFFFF" />
+                                ) : (
+                                    <>
+                                        <Ionicons name="trash-outline" size={14} color="#FFFFFF" />
+                                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>Delete Now</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 };

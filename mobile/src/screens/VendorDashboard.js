@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, SafeAreaView, Image, ActivityIndicator, FlatList, StyleSheet, BackHandler, Modal, TextInput, Alert, RefreshControl } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, SafeAreaView, Image, ActivityIndicator, FlatList, StyleSheet, BackHandler, Modal, TextInput, Alert, RefreshControl, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { styles } from '../styles/theme';
 import { supabase } from '../lib/supabase';
@@ -171,22 +171,47 @@ export const VendorDashboard = ({ user, onLogout }) => {
     };
 
     const handleDeleteProduct = async (id) => {
-        Alert.alert('Delete Product', 'Are you sure?', [
-            { text: 'Cancel', style: 'cancel' },
-            {
-                text: 'Delete',
-                style: 'destructive',
-                onPress: async () => {
-                    const { error } = await supabase.from('products').update({ status: 'archived' }).eq('id', id);
-                    if (!error) {
-                        setProducts(products.filter(p => p.id !== id));
-                        Alert.alert('Success', 'Product archived');
-                    } else {
-                        Alert.alert('Error', error.message);
-                    }
+        const executeArchive = async () => {
+            try {
+                // First try hard delete
+                const { data: delData, error: delErr } = await supabase.from('products').delete().eq('id', id).select('id');
+                if (!delErr && delData && delData.length > 0) {
+                    setProducts(prev => prev.filter(p => p.id !== id));
+                    if (Platform.OS === 'web') alert('Product removed successfully');
+                    else Alert.alert('Success', 'Product deleted');
+                    return;
                 }
+
+                // Fallback: archive
+                const { error } = await supabase.from('products').update({ status: 'archived', is_active: false, stock: 0 }).eq('id', id);
+                if (!error) {
+                    setProducts(prev => prev.filter(p => p.id !== id));
+                    if (Platform.OS === 'web') alert('Product archived & removed from store');
+                    else Alert.alert('Success', 'Product archived');
+                } else {
+                    if (Platform.OS === 'web') alert('Error: ' + error.message);
+                    else Alert.alert('Error', error.message);
+                }
+            } catch (err) {
+                if (Platform.OS === 'web') alert('Delete Failed: ' + err.message);
+                else Alert.alert('Error', err.message);
             }
-        ]);
+        };
+
+        if (Platform.OS === 'web') {
+            if (typeof window !== 'undefined' && window.confirm) {
+                if (window.confirm('Are you sure you want to delete/archive this product?')) {
+                    executeArchive();
+                }
+            } else {
+                executeArchive();
+            }
+        } else {
+            Alert.alert('Delete Product', 'Are you sure you want to remove this product?', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Delete', style: 'destructive', onPress: executeArchive }
+            ]);
+        }
     };
 
     const handleEditProduct = (product) => {
