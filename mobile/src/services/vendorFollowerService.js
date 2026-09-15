@@ -100,6 +100,40 @@ export const getFollowedStoreMap = async (userId = null) => {
 };
 
 /**
+ * Check if the active user is the owner of this store.
+ * Vendors own their own store, and Admins own the Official Abu Mafhal Store.
+ */
+export const isUserStoreOwner = async (storeId, userId) => {
+    if (!storeId || !userId) return false;
+    const strStoreId = String(storeId);
+    const strUserId = String(userId);
+
+    // 1. Direct ID match (vendor profile id as store id)
+    if (strStoreId === strUserId) return true;
+
+    // 2. Check if official store and user is admin
+    const isOfficial = OFFICIAL_STORE_ALIASES.includes(strStoreId);
+    if (isOfficial) {
+        try {
+            const { data: prof } = await supabase.from('profiles').select('role').eq('id', strUserId).maybeSingle();
+            if ((prof?.role || '').toLowerCase() === 'admin') return true;
+        } catch (_) {}
+    }
+
+    // 3. Check if stores table has vendor_id == userId
+    try {
+        const { data: storeRow } = await supabase
+            .from('stores')
+            .select('id, vendor_id')
+            .eq('id', strStoreId)
+            .maybeSingle();
+        if (storeRow && String(storeRow.vendor_id) === strUserId) return true;
+    } catch (_) {}
+
+    return false;
+};
+
+/**
  * Toggle follow status for a store
  * Requires authentication. If guest, returns { requiresAuth: true }.
  */
@@ -117,6 +151,26 @@ export const toggleFollowStore = async (storeId, storeName = 'Store', userId = n
             requiresAuth: true,
             isFollowed: false,
             message: 'Please login to follow this store.'
+        };
+    }
+
+    // Prevent vendor or admin from following their own store
+    const isOwner = await isUserStoreOwner(storeId, activeUid);
+    if (isOwner) {
+        // Clean up any stale follow in local storage
+        const storageKey = getUserFollowKey(activeUid);
+        const currentMap = await getFollowedStoreMap(activeUid);
+        if (currentMap[storeId]) {
+            const cleaned = { ...currentMap };
+            delete cleaned[storeId];
+            await AsyncStorage.setItem(storageKey, JSON.stringify(cleaned)).catch(() => {});
+            notifyFollowChanges(cleaned);
+        }
+        return {
+            requiresAuth: false,
+            isSelfFollow: true,
+            isFollowed: false,
+            message: 'Ba za ka iya bin (follow) shagon kanka ba.'
         };
     }
 

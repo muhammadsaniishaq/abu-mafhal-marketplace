@@ -58,6 +58,7 @@ export const StoresPage = ({
     const [popularProducts, setPopularProducts] = useState([]);
     const [categories, setCategories] = useState([]);
     const [followedStores, setFollowedStores] = useState({});
+    const [currentUser, setCurrentUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
@@ -117,15 +118,53 @@ export const StoresPage = ({
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) {
+                setCurrentUser(null);
                 setFollowedStores({});
                 return;
             }
+            let userRole = (user.user_metadata?.role || '').toLowerCase();
+            if (!userRole) {
+                const { data: prof } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+                if (prof?.role) userRole = (prof.role || '').toLowerCase();
+            }
+            setCurrentUser({ ...user, role: userRole });
             const map = await getFollowedStoreMap(user.id);
             if (map) setFollowedStores(map);
         } catch (_) {}
     };
 
-    const toggleFollow = async (storeId, storeName) => {
+    const isOwnStore = (store) => {
+        if (!store || !currentUser) return false;
+        const uid = currentUser.id;
+        const role = (currentUser.role || '').toLowerCase();
+        const isAdmin = role === 'admin';
+
+        const officialAliases = [
+            '46913c66-4474-4962-82e4-b459b89d33fd',
+            '6d3df1f5-4983-412e-a45f-db146348aac2',
+            'official-abumafhal',
+            'official'
+        ];
+        const isOfficial = store.is_official || store.isOfficial || officialAliases.includes(String(store.id)) || officialAliases.includes(String(store.vendor_id));
+        if (isOfficial && isAdmin) return true;
+
+        if (String(store.vendor_id || store.vendorId || store.user_id || store.userId || '') === String(uid)) {
+            return true;
+        }
+        if (String(store.id) === String(uid)) {
+            return true;
+        }
+        return false;
+    };
+
+    const toggleFollow = async (storeId, storeName, storeObj = null) => {
+        if (storeObj && isOwnStore(storeObj)) {
+            Alert.alert(
+                'Notice',
+                'Ba za ka iya bin (follow) shagon kanka ba / You cannot follow your own store.'
+            );
+            return;
+        }
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) {
@@ -141,6 +180,10 @@ export const StoresPage = ({
             }
 
             const res = await toggleFollowStore(storeId, storeName, user.id);
+            if (res?.isSelfFollow) {
+                Alert.alert('Notice', res.message || 'Ba za ka iya bin shagon kanka ba.');
+                return;
+            }
             if (res?.updatedMap) {
                 setFollowedStores(res.updatedMap);
             }
@@ -714,18 +757,25 @@ export const StoresPage = ({
                                                     )}
                                                 </View>
 
-                                                {/* Right: Quick Follow Toggle */}
-                                                <TouchableOpacity
-                                                    onPress={() => toggleFollow(store.id, store.name)}
-                                                    style={[s.quickFollowBtn, isFollowed && s.quickFollowBtnActive]}
-                                                    activeOpacity={0.8}
-                                                >
-                                                    <Ionicons
-                                                        name={isFollowed ? "heart" : "heart-outline"}
-                                                        size={14}
-                                                        color={isFollowed ? "#EF4444" : "#FFFFFF"}
-                                                    />
-                                                </TouchableOpacity>
+                                                {/* Right: Quick Follow Toggle or Own Store Badge */}
+                                                {isOwnStore(store) ? (
+                                                    <View style={s.ownStoreBadgeTop}>
+                                                        <Ionicons name="person" size={10} color="#FCD34D" />
+                                                        <Text style={s.ownStoreBadgeTxt}>Your Store</Text>
+                                                    </View>
+                                                ) : (
+                                                    <TouchableOpacity
+                                                        onPress={() => toggleFollow(store.id, store.name, store)}
+                                                        style={[s.quickFollowBtn, isFollowed && s.quickFollowBtnActive]}
+                                                        activeOpacity={0.8}
+                                                    >
+                                                        <Ionicons
+                                                            name={isFollowed ? "heart" : "heart-outline"}
+                                                            size={14}
+                                                            color={isFollowed ? "#EF4444" : "#FFFFFF"}
+                                                        />
+                                                    </TouchableOpacity>
+                                                )}
                                             </TouchableOpacity>
 
                                             {/* Store Identity & Meta Row */}
@@ -1185,20 +1235,27 @@ export const StoresPage = ({
 
                             {/* Action Buttons Strip */}
                             <View style={s.storeDetailActionRow}>
-                                <TouchableOpacity
-                                    onPress={() => toggleFollow(selectedStore.id, selectedStore.name)}
-                                    style={[s.storeDetailBtnFollow, followedStores[selectedStore.id] && s.storeDetailBtnFollowing]}
-                                    activeOpacity={0.8}
-                                >
-                                    <Ionicons
-                                        name={followedStores[selectedStore.id] ? "checkmark-circle" : "add"}
-                                        size={16}
-                                        color={followedStores[selectedStore.id] ? BRAND.sky : "white"}
-                                    />
-                                    <Text style={[s.storeDetailBtnFollowTxt, followedStores[selectedStore.id] && s.storeDetailBtnFollowingTxt]}>
-                                        {followedStores[selectedStore.id] ? 'Following' : 'Follow Store'}
-                                    </Text>
-                                </TouchableOpacity>
+                                {isOwnStore(selectedStore) ? (
+                                    <View style={s.storeDetailBtnOwnStore}>
+                                        <Ionicons name="person-circle" size={17} color="#FCD34D" />
+                                        <Text style={s.storeDetailBtnOwnStoreTxt}>Your Store</Text>
+                                    </View>
+                                ) : (
+                                    <TouchableOpacity
+                                        onPress={() => toggleFollow(selectedStore.id, selectedStore.name, selectedStore)}
+                                        style={[s.storeDetailBtnFollow, followedStores[selectedStore.id] && s.storeDetailBtnFollowing]}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Ionicons
+                                            name={followedStores[selectedStore.id] ? "checkmark-circle" : "add"}
+                                            size={16}
+                                            color={followedStores[selectedStore.id] ? BRAND.sky : "white"}
+                                        />
+                                        <Text style={[s.storeDetailBtnFollowTxt, followedStores[selectedStore.id] && s.storeDetailBtnFollowingTxt]}>
+                                            {followedStores[selectedStore.id] ? 'Following' : 'Follow Store'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
 
                                 <TouchableOpacity
                                     onPress={() => handleContactWhatsApp(selectedStore)}
@@ -1977,6 +2034,25 @@ const s = StyleSheet.create({
         backgroundColor: 'rgba(255,255,255,0.95)',
         borderColor: '#EF4444'
     },
+    ownStoreBadgeTop: {
+        position: 'absolute',
+        top: 8,
+        right: 10,
+        backgroundColor: '#0A192F',
+        borderRadius: 14,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        borderWidth: 1,
+        borderColor: '#D4AF37'
+    },
+    ownStoreBadgeTxt: {
+        color: '#FCD34D',
+        fontSize: 9,
+        fontWeight: '800'
+    },
     cardBody: {
         paddingHorizontal: 14,
         paddingBottom: 14,
@@ -2642,6 +2718,23 @@ const s = StyleSheet.create({
     },
     storeDetailBtnFollowingTxt: {
         color: BRAND.sky
+    },
+    storeDetailBtnOwnStore: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 5,
+        backgroundColor: '#0A192F',
+        borderWidth: 1.5,
+        borderColor: '#D4AF37',
+        paddingVertical: 10,
+        borderRadius: 12
+    },
+    storeDetailBtnOwnStoreTxt: {
+        color: '#FCD34D',
+        fontSize: 12,
+        fontWeight: '900'
     },
     storeDetailBtnWhatsApp: {
         flex: 1,

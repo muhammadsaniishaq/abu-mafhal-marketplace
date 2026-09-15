@@ -9,6 +9,7 @@ import {
 import { supabase } from '../config/supabase';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
+import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/common/Navbar';
 
 const FOLLOWED_STORES_KEY = 'abumafhal_followed_stores_web_v2';
@@ -30,6 +31,7 @@ const getImg = (product) => {
 
 const Stores = () => {
   const navigate = useNavigate();
+  const { user, profile } = useAuth();
   const { cart, addToCart } = useCart();
   const { wishlist, toggleWishlist } = useWishlist();
 
@@ -53,6 +55,26 @@ const Stores = () => {
     setTimeout(() => setToastMsg(''), 2500);
   };
 
+  const isOwnStore = (store) => {
+    if (!store || !user) return false;
+    const uid = user.id;
+    const role = (profile?.role || user?.role || user?.user_metadata?.role || '').toLowerCase();
+    const isAdmin = role === 'admin';
+
+    const officialAliases = [
+      '46913c66-4474-4962-82e4-b459b89d33fd',
+      '6d3df1f5-4983-412e-a45f-db146348aac2',
+      'official-abumafhal',
+      'official'
+    ];
+    const isOfficial = store.isOfficial || store.is_official || officialAliases.includes(String(store.id)) || officialAliases.includes(String(store.vendor_id));
+    if (isOfficial && isAdmin) return true;
+
+    if (String(store.vendor_id || store.vendorId || store.user_id || store.userId || '') === String(uid)) return true;
+    if (String(store.id) === String(uid)) return true;
+    return false;
+  };
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem(FOLLOWED_STORES_KEY);
@@ -62,7 +84,11 @@ const Stores = () => {
     fetchStoresAndData();
   }, []);
 
-  const toggleFollow = (storeId, storeName) => {
+  const toggleFollow = (storeId, storeName, storeObj = null) => {
+    if (storeObj && isOwnStore(storeObj)) {
+      showToast('Ba za ka iya bin (follow) shagon kanka ba.');
+      return;
+    }
     setFollowedStores(prev => {
       const isFollowed = !prev[storeId];
       const updated = { ...prev, [storeId]: isFollowed };
@@ -518,14 +544,20 @@ const Stores = () => {
                         )}
                       </div>
 
-                      {/* Right Quick Follow Heart */}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); toggleFollow(store.id, store.name); }}
-                        className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-black/40 backdrop-blur-sm text-white hover:bg-black/60 flex items-center justify-center transition-all"
-                        title={isFollowed ? 'Unfollow' : 'Follow'}
-                      >
-                        <Heart className={`w-3.5 h-3.5 ${isFollowed ? 'fill-rose-500 text-rose-500' : ''}`} />
-                      </button>
+                      {/* Right Quick Follow Heart or Own Store Badge */}
+                      {isOwnStore(store) ? (
+                        <div className="absolute top-2.5 right-2.5 px-2.5 py-0.5 rounded-full bg-slate-900/90 border border-amber-500/60 text-amber-400 text-[10px] font-bold flex items-center gap-1 shadow-sm">
+                          <CheckCircle className="w-2.5 h-2.5 text-amber-400" /> Your Store
+                        </div>
+                      ) : (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleFollow(store.id, store.name, store); }}
+                          className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-black/40 backdrop-blur-sm text-white hover:bg-black/60 flex items-center justify-center transition-all"
+                          title={isFollowed ? 'Unfollow' : 'Follow'}
+                        >
+                          <Heart className={`w-3.5 h-3.5 ${isFollowed ? 'fill-rose-500 text-rose-500' : ''}`} />
+                        </button>
+                      )}
                     </div>
 
                     {/* Store Identity & Overlapping Avatar */}
@@ -849,16 +881,22 @@ const Stores = () => {
                 </div>
 
                 <div className="hidden sm:flex items-center gap-2 pb-1">
-                  <button
-                    onClick={() => toggleFollow(selectedStore.id, selectedStore.name)}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${
-                      followedStores[selectedStore.id]
-                        ? 'bg-sky-100 text-sky-700 border-sky-300'
-                        : 'bg-white/90 text-slate-800 border-white hover:bg-white'
-                    }`}
-                  >
-                    {followedStores[selectedStore.id] ? 'Following' : '+ Follow'}
-                  </button>
+                  {isOwnStore(selectedStore) ? (
+                    <div className="px-3.5 py-2 rounded-xl text-xs font-bold border border-amber-500/60 bg-slate-900/95 text-amber-400 flex items-center gap-1.5 shadow-sm">
+                      <CheckCircle className="w-3.5 h-3.5 text-amber-400" /> Your Store
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => toggleFollow(selectedStore.id, selectedStore.name, selectedStore)}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${
+                        followedStores[selectedStore.id]
+                          ? 'bg-sky-100 text-sky-700 border-sky-300'
+                          : 'bg-white/90 text-slate-800 border-white hover:bg-white'
+                      }`}
+                    >
+                      {followedStores[selectedStore.id] ? 'Following' : '+ Follow'}
+                    </button>
+                  )}
 
                   <button
                     onClick={(e) => handleWhatsAppContact(selectedStore, e)}
@@ -890,16 +928,22 @@ const Stores = () => {
 
               {/* Mobile Action Buttons */}
               <div className="flex sm:hidden items-center gap-2 w-full pt-1">
-                <button
-                  onClick={() => toggleFollow(selectedStore.id, selectedStore.name)}
-                  className={`flex-1 py-2 rounded-xl text-xs font-bold border text-center transition-all ${
-                    followedStores[selectedStore.id]
-                      ? 'bg-sky-100 text-sky-700 border-sky-300'
-                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  {followedStores[selectedStore.id] ? 'Following' : '+ Follow'}
-                </button>
+                {isOwnStore(selectedStore) ? (
+                  <div className="flex-1 py-2 rounded-xl text-xs font-bold border border-amber-500/60 bg-slate-900 text-amber-400 text-center flex items-center justify-center gap-1.5 shadow-sm">
+                    <CheckCircle className="w-3.5 h-3.5 text-amber-400" /> Your Store
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => toggleFollow(selectedStore.id, selectedStore.name, selectedStore)}
+                    className={`flex-1 py-2 rounded-xl text-xs font-bold border text-center transition-all ${
+                      followedStores[selectedStore.id]
+                        ? 'bg-sky-100 text-sky-700 border-sky-300'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {followedStores[selectedStore.id] ? 'Following' : '+ Follow'}
+                  </button>
+                )}
 
                 <button
                   onClick={(e) => handleWhatsAppContact(selectedStore, e)}
