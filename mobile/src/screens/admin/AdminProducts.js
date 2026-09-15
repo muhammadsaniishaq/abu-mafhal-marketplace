@@ -46,129 +46,64 @@ const ProductCard = ({ item, onEdit, onDelete, index }) => {
 
     return (
         <Animated.View style={[SS.card, { transform: [{ scale: Animated.multiply(scaleAnim, pressAnim) }] }]}>
-            <TouchableOpacity activeOpacity={1} onPressIn={onPressIn} onPressOut={onPressOut} style={{ gap: 12 }}>
+            <TouchableOpacity activeOpacity={1} onPressIn={onPressIn} onPressOut={onPressOut}
+                style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
 
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                    {/* Image */}
-                    <View style={SS.thumbWrap}>
-                        <Image
-                            source={{ uri: item.images?.[0] || item.image_url || 'https://placehold.co/80' }}
-                            style={SS.thumb}
-                            resizeMode="cover"
-                        />
-                        {hasDisc && (
-                            <View style={SS.discBadge}>
-                                <Text style={{ color: 'white', fontSize: 9, fontWeight: '900' }}>{discPct}%</Text>
-                            </View>
-                        )}
-                        {isOut && (
-                            <View style={SS.outBadge}>
-                                <Text style={{ color: 'white', fontSize: 7.5, fontWeight: '900' }}>OUT</Text>
-                            </View>
-                        )}
-                    </View>
-
-                    {/* Content */}
-                    <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                            <Text style={SS.prodName} numberOfLines={2}>{item.name}</Text>
-                            <View style={[SS.statusPill, { backgroundColor: sMeta.bg, borderColor: sMeta.border }]}>
-                                <Ionicons name={sMeta.icon} size={10} color={sMeta.text} />
-                                <Text style={[SS.statusTxt, { color: sMeta.text }]}>{sKey}</Text>
-                            </View>
+                {/* Thumbnail */}
+                <View style={SS.thumbWrap}>
+                    <Image
+                        source={{ uri: item.images?.[0] || item.image_url || 'https://placehold.co/64' }}
+                        style={SS.thumb} resizeMode="cover"
+                    />
+                    {hasDisc && (
+                        <View style={SS.discBadge}>
+                            <Text style={{ color: 'white', fontSize: 8, fontWeight: '900' }}>{discPct}%</Text>
                         </View>
-
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                            <Text style={SS.priceMain}>₦{(item.price || 0).toLocaleString()}</Text>
-                            {hasDisc && (
-                                <Text style={SS.priceOld}>₦{item.compare_at_price.toLocaleString()}</Text>
-                            )}
+                    )}
+                    {isOut && (
+                        <View style={SS.outBadge}>
+                            <Text style={{ color: 'white', fontSize: 7, fontWeight: '900' }}>OUT</Text>
                         </View>
-
-                        {item.vendor_id && (
-                            <View style={[SS.infoChip, { marginTop: 4 }]}>
-                                <Ionicons name="storefront-outline" size={10} color="#6366F1" />
-                                <Text style={[SS.infoChipTxt, { color: '#6366F1' }]} numberOfLines={1}>
-                                    {item.vendor_name || 'Vendor Product'}
-                                </Text>
-                            </View>
-                        )}
-
-                        <View style={{ flexDirection: 'row', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
-                            <View style={[SS.infoChip, isOut && { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
-                                <Ionicons name="cube-outline" size={10} color={isOut ? '#EF4444' : '#64748B'} />
-                                <Text style={[SS.infoChipTxt, isOut && { color: '#EF4444' }]}>
-                                    {stock} in stock
-                                </Text>
-                            </View>
-                            {isLow && !isOut && (
-                                <View style={[SS.infoChip, { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }]}>
-                                    <Ionicons name="warning" size={10} color="#D9A73A" />
-                                    <Text style={[SS.infoChipTxt, { color: '#D9A73A' }]}>Low</Text>
-                                </View>
-                            )}
-                            {item.category ? (
-                                <View style={SS.infoChip}>
-                                    <Ionicons name="grid-outline" size={10} color="#64748B" />
-                                    <Text style={SS.infoChipTxt}>{item.category}</Text>
-                                </View>
-                            ) : null}
-                        </View>
-                    </View>
+                    )}
                 </View>
 
-                {/* Action Row */}
-                <View style={SS.actionRow}>
-                    <TouchableOpacity onPress={() => onEdit(item)} style={[SS.actionBtn, SS.editBtn]}>
-                        <Ionicons name="create-outline" size={14} color="#D9A73A" />
-                        <Text style={[SS.actionBtnTxt, { color: '#B45309' }]}>Edit</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        onPress={() => Alert.alert(
-                            'Archive Product',
-                            `This will hide "${item.name}" from all buyers. Continue?`,
-                            [
+                {/* Content */}
+                <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6 }}>
+                        <Text style={SS.prodName} numberOfLines={1}>{item.name}</Text>
+                        <View style={[SS.statusPill, { backgroundColor: sMeta.bg, borderColor: sMeta.border }]}>
+                            <Text style={[SS.statusTxt, { color: sMeta.text }]}>{sKey}</Text>
+                        </View>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                        <Text style={SS.priceMain}>₦{(item.price || 0).toLocaleString()}</Text>
+                        {hasDisc && <Text style={SS.priceOld}>₦{item.compare_at_price.toLocaleString()}</Text>}
+                        {isLow && !isOut && <Text style={{ fontSize: 9.5, color: '#D9A73A', fontWeight: '800' }}>⚠ Low</Text>}
+                    </View>
+
+                    <View style={{ flexDirection: 'row', gap: 6, marginTop: 5, alignItems: 'center' }}>
+                        <TouchableOpacity onPress={() => onEdit(item)} style={SS.actionBtnS}>
+                            <Ionicons name="create-outline" size={11} color="#B45309" />
+                            <Text style={[SS.actionBtnSTxt, { color: '#B45309' }]}>Edit</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={() => Alert.alert('Archive', `Hide "${item.name}" from buyers?`, [
                                 { text: 'Cancel', style: 'cancel' },
                                 { text: 'Archive', style: 'destructive', onPress: () => onDelete(item.id) }
-                            ]
+                            ])}
+                            style={SS.actionBtnS}>
+                            <Ionicons name="archive-outline" size={11} color="#EF4444" />
+                            <Text style={[SS.actionBtnSTxt, { color: '#EF4444' }]}>Archive</Text>
+                        </TouchableOpacity>
+                        {item.category && (
+                            <Text style={{ fontSize: 9.5, color: '#94A3B8', fontWeight: '600' }}>{item.category}</Text>
                         )}
-                        style={[SS.actionBtn, SS.archiveBtn]}
-                    >
-                        <Ionicons name="archive-outline" size={14} color="#EF4444" />
-                        <Text style={[SS.actionBtnTxt, { color: '#EF4444' }]}>Archive</Text>
-                    </TouchableOpacity>
+                        <Text style={{ fontSize: 9.5, color: isOut ? '#EF4444' : '#94A3B8', fontWeight: '600', marginLeft: 'auto' }}>{stock} pcs</Text>
+                    </View>
                 </View>
             </TouchableOpacity>
         </Animated.View>
-    );
-};
-
-// ── Stats Strip ───────────────────────────────────────────────────────────────
-const StatsStrip = ({ products }) => {
-    const total     = products.length;
-    const live      = products.filter(p => p.status === 'approved').length;
-    const outCount  = products.filter(p => (p.stock_quantity ?? p.stock ?? 0) === 0).length;
-    const lowCount  = products.filter(p => { const s = p.stock_quantity ?? p.stock ?? 0; return s > 0 && s <= 5; }).length;
-
-    const items = [
-        { label: 'Total',     value: total,    color: '#6366F1', icon: 'grid'           },
-        { label: 'Live',      value: live,     color: '#059669', icon: 'checkmark-done' },
-        { label: 'Low Stock', value: lowCount, color: '#D9A73A', icon: 'warning'        },
-        { label: 'Out',       value: outCount, color: '#EF4444', icon: 'close-circle'   },
-    ];
-
-    return (
-        <View style={SS.statsStrip}>
-            {items.map((item, i) => (
-                <View key={i} style={[SS.statCell, i < items.length - 1 && { borderRightWidth: 1, borderColor: '#F1F5F9' }]}>
-                    <View style={[SS.statIcon, { backgroundColor: item.color + '18' }]}>
-                        <Ionicons name={item.icon} size={14} color={item.color} />
-                    </View>
-                    <Text style={[SS.statValue, { color: item.color }]}>{item.value}</Text>
-                    <Text style={SS.statLabel}>{item.label}</Text>
-                </View>
-            ))}
-        </View>
     );
 };
 
@@ -278,37 +213,45 @@ export const AdminProducts = ({ navigation, onBack }) => {
         <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
             <StatusBar barStyle="light-content" backgroundColor={NAVY} />
 
-            {/* ── Navy Header ── */}
+            {/* ── Compact Navy Header with inline stats ── */}
             <LinearGradient
                 colors={[NAVY, '#162235']}
                 start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                style={[SS.header, { paddingTop: SB_HEIGHT + 8 }]}
+                style={[SS.header, { paddingTop: SB_HEIGHT + 6 }]}
             >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                {/* Row 1: back + title + add btn */}
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     {(navigation?.canGoBack?.() || onBack) && (
                         <TouchableOpacity onPress={onBack || (() => navigation.goBack())} style={SS.iconBtn}>
                             <Ionicons name="arrow-back" size={18} color={GOLD} />
                         </TouchableOpacity>
                     )}
-                    <View>
-                        <Text style={SS.headerTitle}>Product Catalog</Text>
-                        <Text style={SS.headerSub}>
-                            {loading ? 'Loading...' : `${filtered.length} of ${products.length} products`}
-                        </Text>
-                    </View>
+                    <Text style={[SS.headerTitle, { flex: 1, marginLeft: onBack || navigation?.canGoBack?.() ? 10 : 0 }]}>Product Catalog</Text>
+                    <TouchableOpacity
+                        onPress={() => { setSelectedProduct(null); setView('add'); }}
+                        style={SS.addBtn}
+                    >
+                        <Ionicons name="add" size={15} color={GOLD} />
+                        <Text style={SS.addBtnTxt}>Add</Text>
+                    </TouchableOpacity>
                 </View>
 
-                <TouchableOpacity
-                    onPress={() => { setSelectedProduct(null); setView('add'); }}
-                    style={SS.addBtn}
-                >
-                    <Ionicons name="add" size={16} color={GOLD} />
-                    <Text style={SS.addBtnTxt}>Add New</Text>
-                </TouchableOpacity>
+                {/* Row 2: inline stats pills */}
+                {!loading && products.length > 0 && (
+                    <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
+                        {[
+                            { label: `${products.length} Total`,   color: 'rgba(255,255,255,0.55)' },
+                            { label: `${products.filter(p => p.status === 'approved').length} Live`, color: '#34D399' },
+                            { label: `${products.filter(p => { const s = p.stock_quantity ?? p.stock ?? 0; return s > 0 && s <= 5; }).length} Low`, color: GOLD },
+                            { label: `${products.filter(p => (p.stock_quantity ?? p.stock ?? 0) === 0).length} Out`, color: '#F87171' },
+                        ].map((s, i) => (
+                            <View key={i} style={SS.statPill}>
+                                <Text style={[SS.statPillTxt, { color: s.color }]}>{s.label}</Text>
+                            </View>
+                        ))}
+                    </View>
+                )}
             </LinearGradient>
-
-            {/* Stats Strip — compact */}
-            {!loading && products.length > 0 && <StatsStrip products={products} />}
 
             {/* Search & Filters */}
             <View style={SS.toolbar}>
@@ -394,48 +337,37 @@ export const AdminProducts = ({ navigation, onBack }) => {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const SS = StyleSheet.create({
-    // Header — navy gradient
-    header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderColor: 'rgba(217,167,58,0.25)' },
-    iconBtn:      { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.09)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)' },
-    headerTitle:  { fontSize: 17, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.3 },
-    headerSub:    { fontSize: 10, color: 'rgba(255,255,255,0.48)', marginTop: 1 },
-    addBtn:       { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(217,167,58,0.15)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: GOLD },
-    addBtnTxt:    { color: GOLD, fontWeight: '800', fontSize: 12 },
-
-    // Stats — compact single-row
-    statsStrip:   { flexDirection: 'row', backgroundColor: 'white', borderBottomWidth: 1, borderColor: '#F1F5F9' },
-    statCell:     { flex: 1, alignItems: 'center', paddingVertical: 9, gap: 2 },
-    statIcon:     { width: 24, height: 24, borderRadius: 7, alignItems: 'center', justifyContent: 'center', marginBottom: 1 },
-    statValue:    { fontSize: 15, fontWeight: '900' },
-    statLabel:    { fontSize: 8.5, color: '#94A3B8', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },
+    // Header
+    header:        { paddingHorizontal: 14, paddingBottom: 10, borderBottomWidth: 1, borderColor: 'rgba(217,167,58,0.2)' },
+    iconBtn:       { width: 32, height: 32, borderRadius: 9, backgroundColor: 'rgba(255,255,255,0.09)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)' },
+    headerTitle:   { fontSize: 16, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.3 },
+    addBtn:        { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(217,167,58,0.18)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, borderWidth: 1, borderColor: GOLD },
+    addBtnTxt:     { color: GOLD, fontWeight: '800', fontSize: 12 },
+    statPill:      { backgroundColor: 'rgba(255,255,255,0.09)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
+    statPillTxt:   { fontSize: 10.5, fontWeight: '700' },
 
     // Toolbar
-    toolbar:      { backgroundColor: 'white', paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10, borderBottomWidth: 1, borderColor: '#F1F5F9' },
-    searchBox:    { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 12, paddingHorizontal: 11, height: 40, gap: 7, borderWidth: 1, borderColor: '#E2E8F0' },
-    searchInput:  { flex: 1, fontSize: 13.5, fontWeight: '600', color: '#0E1A2E', height: '100%' },
-    filterPill:   { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 18, backgroundColor: '#F1F5F9', borderWidth: 1.5, borderColor: '#E2E8F0' },
-    filterTxt:    { fontSize: 11.5, fontWeight: '700', color: '#64748B' },
+    toolbar:       { backgroundColor: 'white', paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8, borderBottomWidth: 1, borderColor: '#F1F5F9' },
+    searchBox:     { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 10, paddingHorizontal: 10, height: 36, gap: 6, borderWidth: 1, borderColor: '#E2E8F0' },
+    searchInput:   { flex: 1, fontSize: 13, fontWeight: '600', color: '#0E1A2E', height: '100%' },
+    filterPill:    { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 16, backgroundColor: '#F1F5F9', borderWidth: 1.5, borderColor: '#E2E8F0' },
+    filterTxt:     { fontSize: 11, fontWeight: '700', color: '#64748B' },
 
-    // Product card
-    card:         { backgroundColor: 'white', borderRadius: 16, padding: 13, marginBottom: 10, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 6, elevation: 2 },
-    thumbWrap:    { width: 70, height: 70, borderRadius: 12, overflow: 'hidden', backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
-    thumb:        { width: '100%', height: '100%' },
-    discBadge:    { position: 'absolute', top: 0, left: 0, backgroundColor: '#EF4444', paddingHorizontal: 5, paddingVertical: 3, borderBottomRightRadius: 8 },
-    outBadge:     { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(239,68,68,0.85)', alignItems: 'center', paddingVertical: 3 },
-    prodName:     { fontSize: 13.5, fontWeight: '800', color: '#0E1A2E', flex: 1, lineHeight: 19 },
-    priceMain:    { fontSize: 15, fontWeight: '900', color: '#0E1A2E', letterSpacing: -0.2 },
-    priceOld:     { fontSize: 11, color: '#94A3B8', fontWeight: '600', textDecorationLine: 'line-through' },
-    statusPill:   { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7, borderWidth: 1 },
-    statusTxt:    { fontSize: 9.5, fontWeight: '800', textTransform: 'capitalize' },
-    infoChip:     { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
-    infoChipTxt:  { fontSize: 10.5, fontWeight: '600', color: '#64748B', maxWidth: 95 },
-    actionRow:    { flexDirection: 'row', gap: 7, paddingTop: 10, borderTopWidth: 1, borderColor: '#F1F5F9' },
-    actionBtn:    { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 8, borderRadius: 11, borderWidth: 1 },
-    actionBtnTxt: { fontSize: 12.5, fontWeight: '800' },
-    editBtn:      { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' },
-    archiveBtn:   { backgroundColor: '#FEF2F2', borderColor: '#FECACA' },
+    // Ultra-compact product card
+    card:          { backgroundColor: 'white', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 7, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 4, elevation: 1 },
+    thumbWrap:     { width: 56, height: 56, borderRadius: 10, overflow: 'hidden', backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
+    thumb:         { width: '100%', height: '100%' },
+    discBadge:     { position: 'absolute', top: 0, left: 0, backgroundColor: '#EF4444', paddingHorizontal: 4, paddingVertical: 2, borderBottomRightRadius: 6 },
+    outBadge:      { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(239,68,68,0.85)', alignItems: 'center', paddingVertical: 2 },
+    prodName:      { fontSize: 13, fontWeight: '800', color: '#0E1A2E', flex: 1, lineHeight: 18 },
+    priceMain:     { fontSize: 13.5, fontWeight: '900', color: '#0E1A2E' },
+    priceOld:      { fontSize: 10.5, color: '#94A3B8', fontWeight: '600', textDecorationLine: 'line-through' },
+    statusPill:    { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1 },
+    statusTxt:     { fontSize: 9, fontWeight: '800', textTransform: 'capitalize' },
+    actionBtnS:    { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 7, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#F8FAFC' },
+    actionBtnSTxt: { fontSize: 10.5, fontWeight: '700' },
 
-    emptyIcon:    { width: 80, height: 80, borderRadius: 40, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#E2E8F0' },
-    emptyTitle:   { fontSize: 15, fontWeight: '800', color: '#0E1A2E', textAlign: 'center' },
-    emptySub:     { fontSize: 12.5, color: '#94A3B8', textAlign: 'center', maxWidth: W * 0.72 },
+    emptyIcon:     { width: 72, height: 72, borderRadius: 36, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#E2E8F0' },
+    emptyTitle:    { fontSize: 14.5, fontWeight: '800', color: '#0E1A2E', textAlign: 'center' },
+    emptySub:      { fontSize: 12, color: '#94A3B8', textAlign: 'center', maxWidth: W * 0.72 },
 });
