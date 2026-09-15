@@ -58,7 +58,7 @@ const getImgUri = (item) => {
     return FALLBACK_IMG;
 };
 
-const SB_KEY = '@abumafhal_shop_v5';
+const SB_KEY = '@abumafhal_shop_v6';
 
 // ─── Skeleton Card ────────────────────────────────────────────────────────────
 const SkeletonCard = () => {
@@ -203,7 +203,7 @@ export const ShopPage = ({
     const bannerRef   = useRef(null);
     const flatListRef = useRef(null);
 
-    const PROD_FIELDS = 'id,name,price,original_price,compare_at_price,image_url,images,category,rating,reviews,status,discount,stock,stock_quantity,is_featured,is_new,brand,isNew,total_sales,created_at';
+    const PROD_FIELDS = 'id,name,price,original_price,compare_at_price,image_url,images,category,rating,reviews,average_rating,status,is_active,stock,stock_quantity,is_new,brand,total_sales,created_at';
 
     // ── Filter products (derived from allProducts) ─────────────────────────────
     const applyFilter = useCallback((prods, cat, query, sort) => {
@@ -237,27 +237,28 @@ export const ShopPage = ({
     // ── Fetch data ─────────────────────────────────────────────────────────────
     const fetchData = useCallback(async () => {
         try {
-            // Fetch products — try with status filter first, then without
+            // Fetch products — try with active/approved products first, with robust fallback
             let products = [];
 
             const { data: prodData, error: prodErr } = await supabase
                 .from('products')
                 .select(PROD_FIELDS)
-                .eq('status', 'approved')
+                .neq('status', 'archived')
                 .order('created_at', { ascending: false })
                 .limit(200);
 
             if (prodErr) {
-                console.log('ShopPage: prodErr with filter:', prodErr.message);
+                console.log('ShopPage: prodErr with PROD_FIELDS:', prodErr.message);
             }
 
             if (prodData && prodData.length > 0) {
                 products = prodData;
             } else {
-                // Fallback: get any products regardless of status
+                // Robust Fallback: select('*') without relying on explicit column list
                 const { data: fallback, error: fbErr } = await supabase
                     .from('products')
-                    .select(PROD_FIELDS)
+                    .select('*')
+                    .neq('status', 'archived')
                     .order('created_at', { ascending: false })
                     .limit(200);
 
@@ -269,7 +270,7 @@ export const ShopPage = ({
 
             const enriched = products.map(p => ({
                 ...p,
-                rating: p.rating || 5,
+                rating: p.rating || p.average_rating || 5,
                 reviews: p.reviews || 0,
             }));
 
@@ -461,7 +462,7 @@ export const ShopPage = ({
     );
 
     const hotDeals = useMemo(() =>
-        allProducts.filter(p => (Number(p.compare_at_price) > Number(p.price)) || Number(p.discount) > 0).slice(0, 12),
+        allProducts.filter(p => (Number(p.compare_at_price) > Number(p.price)) || (Number(p.original_price) > Number(p.price)) || Number(p.discount) > 0).slice(0, 12),
         [allProducts]
     );
 
