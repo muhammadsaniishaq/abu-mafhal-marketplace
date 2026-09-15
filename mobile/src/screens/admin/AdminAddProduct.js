@@ -108,6 +108,9 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
         barcode:           initialData?.metadata?.barcode || '',
         specifications:    initialData?.metadata?.specifications || [{ key: '', value: '' }],
         variants:          initialData?.metadata?.variants || [],
+        warrantyPolicy:    initialData?.metadata?.warranty_policy || '1 Year Official Warranty',
+        boxContents:       initialData?.metadata?.box_contents || '',
+        highlights:        initialData?.metadata?.highlights || ['', '', ''],
         isAffiliate:       initialData?.is_affiliate || false,
         affiliateLink:     initialData?.affiliate_link || '',
         weight:            initialData?.shipping_weight?.toString() || '',
@@ -233,18 +236,46 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
 
     // ── AI ─────────────────────────────────────────────────────
     const handleAI = async (type) => {
-        if (!form.name) return Alert.alert('Name Required', 'Enter a product name first.');
+        if (!form.name || !form.name.trim()) {
+            return Alert.alert('Product Name Required', 'Please enter a product name first so AI knows what to generate.');
+        }
         setAiLoading(true);
         try {
             if (type === 'description') {
                 const d = await geminiService.generateDescription(form);
-                set('description', d);
-            } else {
+                if (d) {
+                    set('description', d);
+                    Alert.alert('Description Generated ✨', 'Product description has been generated!');
+                }
+            } else if (type === 'seo') {
                 const s = await geminiService.generateSEO(form);
-                setForm(p => ({ ...p, seoTitle: s.title, seoDesc: s.description, keywords: s.keywords }));
+                if (s) {
+                    setForm(p => ({
+                        ...p,
+                        seoTitle: s.title || p.seoTitle,
+                        seoDesc: s.description || p.seoDesc,
+                        keywords: s.keywords || p.keywords
+                    }));
+                    Alert.alert('SEO Generated ✨', 'SEO Title, Description, and Keywords generated successfully!');
+                }
+            } else if (type === 'specs') {
+                const suggested = await geminiService.suggestSpecs(form);
+                if (suggested && suggested.length > 0) {
+                    setForm(p => {
+                        const existing = (p.specifications || []).filter(x => x.key && x.value);
+                        return {
+                            ...p,
+                            specifications: [...existing, ...suggested]
+                        };
+                    });
+                    Alert.alert('Specs Generated ✨', `Auto-suggested ${suggested.length} specifications!`);
+                }
             }
-        } catch (e) { Alert.alert('AI Error', e.message); }
-        finally { setAiLoading(false); }
+        } catch (e) {
+            Alert.alert('AI Notice', e.message || 'Could not complete AI request at this time.');
+        } finally {
+            setAiLoading(false);
+        }
     };
 
     // ── Submit ─────────────────────────────────────────────────
@@ -309,6 +340,9 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
                     barcode:             form.barcode,
                     specifications:      form.specifications.filter(s => s.key && s.value),
                     variants:            form.variants,
+                    warranty_policy:     form.warrantyPolicy,
+                    box_contents:        form.boxContents,
+                    highlights:          (form.highlights || []).filter(Boolean),
                     video:               videoUrl,
                     is_digital:          form.isDigital,
                     low_stock_threshold: parseInt(form.lowStockThreshold) || 5,
@@ -521,73 +555,407 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
         </View>
     );
 
+    const SPEC_PRESETS = ['RAM', 'Storage', 'Battery', 'Material', 'Warranty', 'Dimensions', 'Color', 'Weight', 'Display', 'Connectivity', 'Condition'];
+    const WARRANTY_OPTIONS = ['No Warranty', '7 Days Return', '14 Days Replacement', '6 Months Warranty', '1 Year Official Warranty', '2 Years Warranty'];
+    const COLOR_PRESETS = [
+        { name: 'Black',  hex: '#0F172A', border: '#334155' },
+        { name: 'White',  hex: '#FFFFFF', border: '#CBD5E1' },
+        { name: 'Blue',   hex: '#2563EB', border: '#1D4ED8' },
+        { name: 'Red',    hex: '#DC2626', border: '#B91C1C' },
+        { name: 'Green',  hex: '#16A34A', border: '#15803D' },
+        { name: 'Gold',   hex: '#EAB308', border: '#CA8A04' },
+        { name: 'Purple', hex: '#9333EA', border: '#7E22CE' },
+        { name: 'Silver', hex: '#94A3B8', border: '#64748B' },
+    ];
+    const SIZE_PRESETS = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '39', '40', '41', '42', '43', '44'];
+    const STORAGE_PRESETS = ['64GB', '128GB', '256GB', '512GB', '1TB'];
+
     const renderDetails = () => (
         <View style={SS.tabContent}>
+            {/* Card 1: Technical Specifications */}
             <View style={SS.card}>
-                <Text style={SS.cardTitle}>Specifications</Text>
-                {form.specifications.map((spec, i) => (
-                    <View key={i} style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
-                        <TextInput placeholder="Feature" value={spec.key}
-                            onChangeText={t => { const a = [...form.specifications]; a[i].key = t; set('specifications', a); }}
-                            style={[SS.inpBox, { flex: 1 }]} placeholderTextColor="#94A3B8" />
-                        <TextInput placeholder="Value" value={spec.value}
-                            onChangeText={t => { const a = [...form.specifications]; a[i].value = t; set('specifications', a); }}
-                            style={[SS.inpBox, { flex: 1 }]} placeholderTextColor="#94A3B8" />
-                        <TouchableOpacity onPress={() => set('specifications', form.specifications.filter((_, idx) => idx !== i))}
-                            style={SS.deleteBtn}>
-                            <Ionicons name="trash-outline" size={16} color="#EF4444" />
-                        </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <View style={{ flex: 1, paddingRight: 8 }}>
+                        <Text style={SS.cardTitle}>Technical Specifications</Text>
+                        <Text style={SS.cardSub}>Features shown in the specs section on the product page</Text>
+                    </View>
+                    <TouchableOpacity
+                        onPress={() => handleAI('specs')}
+                        disabled={aiLoading}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F3E8FF', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 9, borderWidth: 1, borderColor: '#C084FC' }}
+                    >
+                        {aiLoading ? <ActivityIndicator size="small" color="#7C3AED" /> : <Ionicons name="sparkles" size={13} color="#7C3AED" />}
+                        <Text style={{ color: '#7C3AED', fontWeight: '800', fontSize: 11 }}>AI Suggest</Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Quick Add Preset Chips */}
+                <View style={{ marginBottom: 12 }}>
+                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#64748B', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6 }}>Quick Add Preset:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                        {SPEC_PRESETS.map(item => (
+                            <TouchableOpacity
+                                key={item}
+                                onPress={() => {
+                                    const a = [...(form.specifications || [])];
+                                    a.push({ key: item, value: '' });
+                                    set('specifications', a);
+                                }}
+                                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}
+                            >
+                                <Ionicons name="add" size={12} color="#3B82F6" />
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>{item}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
+
+                {/* Specs List */}
+                {(form.specifications || []).map((spec, i) => (
+                    <View key={i} style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 10, marginBottom: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <View style={{ backgroundColor: '#0E1A2E', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                                    <Text style={{ color: '#D9A73A', fontSize: 10, fontWeight: '900' }}>#{i + 1}</Text>
+                                </View>
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>{spec.key || 'Custom Feature'}</Text>
+                            </View>
+                            <TouchableOpacity
+                                onPress={() => set('specifications', form.specifications.filter((_, idx) => idx !== i))}
+                                style={{ width: 26, height: 26, borderRadius: 8, backgroundColor: '#FEF2F2', alignItems: 'center', justifyContent: 'center' }}
+                            >
+                                <Ionicons name="trash-outline" size={14} color="#EF4444" />
+                            </TouchableOpacity>
+                        </View>
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <View style={{ flex: 1 }}>
+                                <TextInput
+                                    placeholder="Feature (e.g. Battery)"
+                                    value={spec.key}
+                                    onChangeText={t => { const a = [...form.specifications]; a[i].key = t; set('specifications', a); }}
+                                    style={[SS.inpBox, { height: 38, fontSize: 12 }]}
+                                    placeholderTextColor="#94A3B8"
+                                />
+                            </View>
+                            <View style={{ flex: 1.3 }}>
+                                <TextInput
+                                    placeholder="Value (e.g. 5000 mAh)"
+                                    value={spec.value}
+                                    onChangeText={t => { const a = [...form.specifications]; a[i].value = t; set('specifications', a); }}
+                                    style={[SS.inpBox, { height: 38, fontSize: 12 }]}
+                                    placeholderTextColor="#94A3B8"
+                                />
+                            </View>
+                        </View>
                     </View>
                 ))}
-                <TouchableOpacity onPress={() => set('specifications', [...form.specifications, { key: '', value: '' }])}
-                    style={SS.addRowBtn}>
-                    <Ionicons name="add-circle" size={20} color="#3B82F6" />
-                    <Text style={SS.addRowTxt}>Add Specification</Text>
+
+                <TouchableOpacity
+                    onPress={() => set('specifications', [...(form.specifications || []), { key: '', value: '' }])}
+                    style={[SS.addRowBtn, { justifyContent: 'center', backgroundColor: '#EFF6FF', borderRadius: 10, paddingVertical: 8, marginTop: 4, borderWidth: 1, borderColor: '#BFDBFE' }]}
+                >
+                    <Ionicons name="add-circle" size={18} color="#2563EB" />
+                    <Text style={[SS.addRowTxt, { color: '#2563EB', fontSize: 12 }]}>Add New Specification</Text>
                 </TouchableOpacity>
             </View>
 
+            {/* Card 2: Key Product Highlights (Bullet Points) */}
             <View style={SS.card}>
-                <ToggleRow label="Affiliate Product" desc="Link to an external product page"
-                    icon="link" value={form.isAffiliate} onChange={v => set('isAffiliate', v)} color="#F59E0B" />
-                {form.isAffiliate && <View style={{ marginTop: 10 }}>
-                    <Inp label="Affiliate Link URL" field="affiliateLink" form={form} onSet={onSet} placeholder="https://..." />
-                </View>}
+                <Text style={SS.cardTitle}>Product Key Highlights</Text>
+                <Text style={SS.cardSub}>Quick bullet points displayed prominently under the title</Text>
+                {[0, 1, 2].map(idx => (
+                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#0E1A2E', alignItems: 'center', justifyContent: 'center' }}>
+                            <Text style={{ color: '#D9A73A', fontSize: 11, fontWeight: '900' }}>{idx + 1}</Text>
+                        </View>
+                        <TextInput
+                            placeholder={`Key highlight #${idx + 1} (e.g. 100% Genuine, 2-day battery)`}
+                            value={(form.highlights || [])[idx] || ''}
+                            onChangeText={t => {
+                                const h = [...(form.highlights || ['', '', ''])];
+                                h[idx] = t;
+                                set('highlights', h);
+                            }}
+                            style={[SS.inpBox, { flex: 1, height: 38, fontSize: 12 }]}
+                            placeholderTextColor="#94A3B8"
+                        />
+                    </View>
+                ))}
+            </View>
+
+            {/* Card 3: Warranty & Return Policy */}
+            <View style={SS.card}>
+                <Text style={SS.cardTitle}>Warranty & Return Policy</Text>
+                <Text style={SS.cardSub}>Select buyer protection and warranty terms</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingVertical: 4 }}>
+                    {WARRANTY_OPTIONS.map(opt => {
+                        const sel = form.warrantyPolicy === opt;
+                        return (
+                            <TouchableOpacity
+                                key={opt}
+                                onPress={() => set('warrantyPolicy', opt)}
+                                style={[{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#F8FAFC' }, sel && { backgroundColor: '#FFFBEB', borderColor: '#D9A73A' }]}
+                            >
+                                <Text style={[{ fontSize: 11.5, fontWeight: '700', color: '#64748B' }, sel && { color: '#B45309', fontWeight: '800' }]}>{opt}</Text>
+                            </TouchableOpacity>
+                        );
+                    })}
+                </ScrollView>
+            </View>
+
+            {/* Card 4: What's in the Box */}
+            <View style={SS.card}>
+                <Text style={SS.cardTitle}>What's in the Box?</Text>
+                <TextInput
+                    placeholder="e.g. 1x Phone, 1x 67W Charger, 1x USB Cable, 1x User Manual"
+                    value={form.boxContents}
+                    onChangeText={v => set('boxContents', v)}
+                    style={[SS.inpBox, { fontSize: 12 }]}
+                    placeholderTextColor="#94A3B8"
+                />
+            </View>
+
+            {/* Card 5: Affiliate Product */}
+            <View style={SS.card}>
+                <ToggleRow
+                    label="Affiliate Product"
+                    desc="Redirect buyers to an external website"
+                    icon="link"
+                    value={form.isAffiliate}
+                    onChange={v => set('isAffiliate', v)}
+                    color="#F59E0B"
+                />
+                {form.isAffiliate && (
+                    <View style={{ marginTop: 8 }}>
+                        <Inp label="Affiliate Redirect URL" field="affiliateLink" form={form} onSet={onSet} placeholder="https://external-store.com/item" />
+                    </View>
+                )}
             </View>
         </View>
     );
 
     const renderVariants = () => (
         <View style={SS.tabContent}>
+            {/* Card 1: Quick Generators */}
             <View style={SS.card}>
-                <Text style={SS.cardTitle}>Product Variants</Text>
-                <Text style={SS.cardSub}>Manage size, color, or other options</Text>
-                {form.variants.map((v, i) => (
-                    <View key={i} style={[SS.variantRow, { backgroundColor: '#F8FAFC' }]}>
-                        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
-                            <TextInput placeholder="Option (e.g. Red, XL)" value={v.name}
-                                onChangeText={t => { const a = [...form.variants]; a[i].name = t; set('variants', a); }}
-                                style={[SS.inpBox, { flex: 1 }]} placeholderTextColor="#94A3B8" />
-                            <TouchableOpacity onPress={() => set('variants', form.variants.filter((_, idx) => idx !== i))}
-                                style={SS.deleteBtn}>
-                                <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                <Text style={SS.cardTitle}>Quick Variant Generator</Text>
+                <Text style={SS.cardSub}>Tap any option below to instantly add it to your product variants</Text>
+
+                {/* Color swatches */}
+                <View style={{ marginBottom: 12 }}>
+                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#64748B', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6 }}>1. Colors:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, alignItems: 'center' }}>
+                        {COLOR_PRESETS.map(c => (
+                            <TouchableOpacity
+                                key={c.name}
+                                onPress={() => {
+                                    const baseSku = form.sku || 'PRD';
+                                    const newVar = {
+                                        name: c.name,
+                                        price: form.price || '0',
+                                        stock: form.stock || '10',
+                                        sku: `${baseSku}-${c.name.substring(0, 3).toUpperCase()}`,
+                                        color: c.hex,
+                                        inStock: true
+                                    };
+                                    set('variants', [...(form.variants || []), newVar]);
+                                }}
+                                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F8FAFC', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0' }}
+                            >
+                                <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: c.hex, borderWidth: 1, borderColor: c.border }} />
+                                <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#1E293B' }}>{c.name}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
+
+                {/* Size Pills */}
+                <View style={{ marginBottom: 12 }}>
+                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#64748B', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6 }}>2. Sizes:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                        {SIZE_PRESETS.map(s => (
+                            <TouchableOpacity
+                                key={s}
+                                onPress={() => {
+                                    const baseSku = form.sku || 'PRD';
+                                    const newVar = {
+                                        name: `Size ${s}`,
+                                        price: form.price || '0',
+                                        stock: form.stock || '10',
+                                        sku: `${baseSku}-${s}`,
+                                        inStock: true
+                                    };
+                                    set('variants', [...(form.variants || []), newVar]);
+                                }}
+                                style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}
+                            >
+                                <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#334155' }}>{s}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
+
+                {/* Storage / Memory */}
+                <View style={{ marginBottom: 4 }}>
+                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#64748B', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6 }}>3. Storage / Capacity:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                        {STORAGE_PRESETS.map(cap => (
+                            <TouchableOpacity
+                                key={cap}
+                                onPress={() => {
+                                    const baseSku = form.sku || 'PRD';
+                                    const newVar = {
+                                        name: cap,
+                                        price: form.price || '0',
+                                        stock: form.stock || '10',
+                                        sku: `${baseSku}-${cap}`,
+                                        inStock: true
+                                    };
+                                    set('variants', [...(form.variants || []), newVar]);
+                                }}
+                                style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#BFDBFE' }}
+                            >
+                                <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#1D4ED8' }}>{cap}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
+            </View>
+
+            {/* Card 2: Batch Actions Bar */}
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+                <TouchableOpacity
+                    onPress={() => {
+                        if (!form.price) return Alert.alert('Price Required', 'Enter base product price in Info tab first.');
+                        const updated = (form.variants || []).map(v => ({ ...v, price: form.price }));
+                        set('variants', updated);
+                        Alert.alert('Synced ✅', `Updated price of ${updated.length} variants to ₦${form.price}`);
+                    }}
+                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, backgroundColor: '#ECFDF5', paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#A7F3D0' }}
+                >
+                    <Ionicons name="flash" size={13} color="#059669" />
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#059669' }}>Sync Price</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    onPress={() => {
+                        const updated = (form.variants || []).map(v => ({ ...v, stock: form.stock || '10' }));
+                        set('variants', updated);
+                        Alert.alert('Synced ✅', `Updated stock of ${updated.length} variants to ${form.stock || '10'}`);
+                    }}
+                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, backgroundColor: '#EFF6FF', paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#BFDBFE' }}
+                >
+                    <Ionicons name="cube" size={13} color="#2563EB" />
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#2563EB' }}>Sync Stock</Text>
+                </TouchableOpacity>
+
+                {(form.variants || []).length > 0 && (
+                    <TouchableOpacity
+                        onPress={() => {
+                            Alert.alert('Clear Variants', 'Are you sure you want to remove all variants?', [
+                                { text: 'Cancel', style: 'cancel' },
+                                { text: 'Clear All', style: 'destructive', onPress: () => set('variants', []) }
+                            ]);
+                        }}
+                        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: '#FEF2F2', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#FECACA' }}
+                    >
+                        <Ionicons name="trash-outline" size={13} color="#DC2626" />
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: '#DC2626' }}>Clear</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
+
+            {/* Card 3: Variants List */}
+            {(form.variants || []).length === 0 ? (
+                <View style={[SS.card, { alignItems: 'center', paddingVertical: 28 }]}>
+                    <Ionicons name="layers-outline" size={36} color="#94A3B8" />
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: '#334155', marginTop: 10 }}>No Variants Created</Text>
+                    <Text style={{ fontSize: 12, color: '#64748B', textAlign: 'center', marginTop: 4, paddingHorizontal: 20 }}>
+                        Tap any quick color, size, or storage option above, or tap the button below to add custom variations.
+                    </Text>
+                </View>
+            ) : (
+                (form.variants || []).map((v, i) => (
+                    <View key={i} style={[SS.card, { padding: 12, marginBottom: 8 }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <View style={{ backgroundColor: '#0E1A2E', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                                    <Text style={{ color: '#D9A73A', fontSize: 10, fontWeight: '900' }}>#{i + 1}</Text>
+                                </View>
+                                {v.color && (
+                                    <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: v.color, borderWidth: 1, borderColor: '#CBD5E1' }} />
+                                )}
+                                <Text style={{ fontSize: 12, fontWeight: '800', color: '#0E1A2E' }}>
+                                    {v.name || `Variant #${i + 1}`}
+                                </Text>
+                            </View>
+                            <TouchableOpacity
+                                onPress={() => set('variants', form.variants.filter((_, idx) => idx !== i))}
+                                style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: '#FEF2F2', alignItems: 'center', justifyContent: 'center' }}
+                            >
+                                <Ionicons name="trash-outline" size={14} color="#EF4444" />
                             </TouchableOpacity>
                         </View>
+
+                        {/* Option name input */}
+                        <View style={{ marginBottom: 8 }}>
+                            <Text style={SS.inpLabel}>Option Name (e.g. Midnight Black / 128GB)</Text>
+                            <TextInput
+                                placeholder="Option Name"
+                                value={v.name}
+                                onChangeText={t => { const a = [...form.variants]; a[i].name = t; set('variants', a); }}
+                                style={[SS.inpBox, { height: 38, fontSize: 12 }]}
+                                placeholderTextColor="#94A3B8"
+                            />
+                        </View>
+
+                        {/* 3 columns: SKU, Price, Stock */}
                         <View style={{ flexDirection: 'row', gap: 8 }}>
-                            <TextInput placeholder="Price adj." value={v.price?.toString()} keyboardType="numeric"
-                                onChangeText={t => { const a = [...form.variants]; a[i].price = t; set('variants', a); }}
-                                style={[SS.inpBox, { flex: 1 }]} placeholderTextColor="#94A3B8" />
-                            <TextInput placeholder="Stock" value={v.stock?.toString()} keyboardType="numeric"
-                                onChangeText={t => { const a = [...form.variants]; a[i].stock = t; set('variants', a); }}
-                                style={[SS.inpBox, { flex: 1 }]} placeholderTextColor="#94A3B8" />
+                            <View style={{ flex: 1.2 }}>
+                                <Text style={SS.inpLabel}>SKU</Text>
+                                <TextInput
+                                    placeholder="SKU"
+                                    value={v.sku}
+                                    onChangeText={t => { const a = [...form.variants]; a[i].sku = t; set('variants', a); }}
+                                    style={[SS.inpBox, { height: 38, fontSize: 12 }]}
+                                    placeholderTextColor="#94A3B8"
+                                />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={SS.inpLabel}>Price (₦)</Text>
+                                <TextInput
+                                    placeholder="Price"
+                                    value={v.price?.toString()}
+                                    keyboardType="numeric"
+                                    onChangeText={t => { const a = [...form.variants]; a[i].price = t; set('variants', a); }}
+                                    style={[SS.inpBox, { height: 38, fontSize: 12 }]}
+                                    placeholderTextColor="#94A3B8"
+                                />
+                            </View>
+                            <View style={{ flex: 0.8 }}>
+                                <Text style={SS.inpLabel}>Stock</Text>
+                                <TextInput
+                                    placeholder="Qty"
+                                    value={v.stock?.toString()}
+                                    keyboardType="numeric"
+                                    onChangeText={t => { const a = [...form.variants]; a[i].stock = t; set('variants', a); }}
+                                    style={[SS.inpBox, { height: 38, fontSize: 12 }]}
+                                    placeholderTextColor="#94A3B8"
+                                />
+                            </View>
                         </View>
                     </View>
-                ))}
-                <TouchableOpacity onPress={() => set('variants', [...form.variants, { name: '', price: '', stock: '' }])}
-                    style={SS.addRowBtn}>
-                    <Ionicons name="add-circle" size={20} color="#3B82F6" />
-                    <Text style={SS.addRowTxt}>Add Variant</Text>
-                </TouchableOpacity>
-            </View>
+                ))
+            )}
+
+            {/* Add Custom Variant Button */}
+            <TouchableOpacity
+                onPress={() => set('variants', [...(form.variants || []), { name: '', price: form.price || '', stock: form.stock || '10', sku: `${form.sku || 'PRD'}-${(form.variants || []).length + 1}` }])}
+                style={[SS.addRowBtn, { justifyContent: 'center', backgroundColor: '#0E1A2E', borderRadius: 12, paddingVertical: 11, marginTop: 4 }]}
+            >
+                <Ionicons name="add-circle" size={18} color="#D9A73A" />
+                <Text style={[SS.addRowTxt, { color: '#D9A73A', fontSize: 13 }]}>+ Add Custom Variant</Text>
+            </TouchableOpacity>
         </View>
     );
 

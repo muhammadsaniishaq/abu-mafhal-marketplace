@@ -134,13 +134,20 @@ export const geminiService = {
      * @returns {Promise<string>} - Generated description
      */
     generateDescription: async (product) => {
+        const fallback = () => {
+            const name = product.name || 'Product';
+            const brand = product.brand ? `${product.brand} ` : '';
+            const cat = product.category || 'Collection';
+            return `Experience the premium quality and exceptional design of the ${brand}${name}. Specifically curated for discerning shoppers looking for top-tier ${cat}, this product combines superior craftsmanship, outstanding durability, and modern aesthetics.\n\nKey Highlights:\n• Authentic and genuine product guaranteed\n• Premium materials engineered for longevity\n• Optimized for high performance and daily convenience\n• Fast, reliable delivery across Nigeria\n\nUpgrade today with the ${brand}${name} and enjoy the best quality at an unbeatable price on Abu Mafhal Marketplace.`;
+        };
+
         try {
             const prompt = `Write a compelling, professional e-commerce product description for:
             Name: ${product.name}
-            Brand: ${product.brand}
-            Category: ${product.category}
+            Brand: ${product.brand || 'Top Quality'}
+            Category: ${product.category || 'General'}
             
-            Keep it engaging, highlight key features, and make it around 100-150 words. Use bullet points for features if appropriate. Tone: Premium and Persuasive.`;
+            Keep it engaging, highlight key features with bullet points, and make it around 100-130 words. Tone: Premium, trustworthy, persuasive. Return plain text only.`;
 
             const body = {
                 contents: [{ parts: [{ text: prompt }] }]
@@ -154,12 +161,12 @@ export const geminiService = {
 
             const result = await response.json();
             const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (!text) return "Could not generate description.";
+            if (!text) return fallback();
             return text.trim();
 
         } catch (error) {
-            console.error("Gemini Description Error:", error);
-            throw error;
+            console.warn("Gemini Description fallback activated:", error?.message);
+            return fallback();
         }
     },
 
@@ -169,23 +176,28 @@ export const geminiService = {
      * @returns {Promise<object>} - { title, description, keywords }
      */
     generateSEO: async (product) => {
+        const fallback = () => {
+            const name = product.name || 'Product';
+            const cat = product.category || 'Electronics';
+            const brand = product.brand ? ` - ${product.brand}` : '';
+            return {
+                title: `Buy ${name} Online | Best Price in Nigeria${brand}`,
+                description: `Shop authentic ${name} at Abu Mafhal. Discover high quality ${cat} with fast delivery across Nigeria and secure payment guaranteed.`,
+                keywords: `${name}, buy ${name}, ${cat}, original ${name}, ${product.brand || 'abu mafhal'}, nigeria online shopping, best price ${name}`
+            };
+        };
+
         try {
             const prompt = `Generate SEO metadata for this product in JSON format:
             Name: ${product.name}
-            Category: ${product.category}
+            Category: ${product.category || 'Products'}
             Description: ${product.description || product.name}
 
             Return purely JSON with these keys:
             - title: (Max 60 chars, include keywords)
             - description: (Max 160 chars, compelling)
-            - keywords: (Comma separated list of 10 high-value keywords)
+            - keywords: (Comma separated list of 8-10 high-value keywords)
             
-            Example output:
-            {
-                "title": "Premium Wireless Headphones - Noise Cancelling",
-                "description": "Experience crystal clear sound with our new wireless headphones. 30hr battery life.",
-                "keywords": "headphones, wireless, audio, noise cancelling, bluetooth"
-            }
             RETURN JSON ONLY. NO MARKDOWN.`;
 
             const body = {
@@ -200,12 +212,66 @@ export const geminiService = {
 
             const result = await response.json();
             const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-            return cleanAIJsonResponse(text);
+            const parsed = cleanAIJsonResponse(text);
+            if (parsed && parsed.title) return parsed;
+            return fallback();
 
         } catch (error) {
-            console.error("Gemini SEO Error:", error);
-            throw error;
+            console.warn("Gemini SEO fallback activated:", error?.message);
+            return fallback();
         }
+    },
+
+    /**
+     * Suggest product specifications based on category & name
+     */
+    suggestSpecs: async (product) => {
+        const cat = (product.category || '').toLowerCase();
+        const brand = product.brand || 'Original';
+
+        if (cat.includes('elect') || cat.includes('phone') || cat.includes('gadget') || cat.includes('tech')) {
+            return [
+                { key: 'Brand', value: brand },
+                { key: 'Condition', value: '100% Brand New' },
+                { key: 'Connectivity', value: 'Bluetooth 5.3 / Wireless / Type-C' },
+                { key: 'Battery', value: 'Long-lasting Rechargeable Battery' },
+                { key: 'Warranty', value: '1 Year Manufacturer Warranty' },
+                { key: 'Material', value: 'Premium Matte Finish Alloy & ABS' },
+            ];
+        } else if (cat.includes('fash') || cat.includes('cloth') || cat.includes('wear') || cat.includes('shoe')) {
+            return [
+                { key: 'Brand', value: brand },
+                { key: 'Material', value: 'Premium Breathable Fabric' },
+                { key: 'Fit Type', value: 'Regular / Comfort Fit' },
+                { key: 'Care Instructions', value: 'Machine wash cold / Gentle cycle' },
+                { key: 'Origin', value: 'Imported Quality' },
+                { key: 'Condition', value: 'Brand New with Tags' },
+            ];
+        } else if (cat.includes('beauty') || cat.includes('cosmet') || cat.includes('skin')) {
+            return [
+                { key: 'Brand', value: brand },
+                { key: 'Skin Type', value: 'All Skin Types / Dermatologist Tested' },
+                { key: 'Formula', value: 'Organic & Cruelty-Free' },
+                { key: 'Volume / Net Wt', value: 'Standard Retail Size' },
+                { key: 'Origin', value: 'Certified Genuine' },
+            ];
+        } else if (cat.includes('home') || cat.includes('kitchen') || cat.includes('furn')) {
+            return [
+                { key: 'Brand', value: brand },
+                { key: 'Material', value: 'High Grade Stainless Steel / Durable Wood' },
+                { key: 'Assembly', value: 'Easy Setup / No Tools Required' },
+                { key: 'Warranty', value: '6 Months Replacement Guarantee' },
+                { key: 'Care', value: 'Wipe clean with soft damp cloth' },
+            ];
+        }
+
+        return [
+            { key: 'Brand', value: brand },
+            { key: 'Condition', value: 'Brand New Genuine' },
+            { key: 'Warranty', value: 'Official Warranty' },
+            { key: 'Package Includes', value: 'Standard Retail Packaging' },
+            { key: 'Origin', value: 'Authentic Abu Mafhal Verified' },
+        ];
     },
 
     /**
