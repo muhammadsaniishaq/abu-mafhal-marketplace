@@ -26,6 +26,7 @@ import CheckoutAddressCard from '../components/CheckoutAddressCard';
 import { CheckoutAddressSkeleton } from '../components/CheckoutSkeleton';
 import { whatsappService } from '../services/whatsappService';
 import { ShippingCalculationEngine } from '../services/shippingService';
+import { NIGERIA_DATA } from '../data/nigeriaData';
 import { parsePrice, formatCurrency } from '../utils/helpers';
 
 const { width } = Dimensions.get('window');
@@ -169,8 +170,19 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
     const [profile, setProfile]                 = useState(null);
     const [addresses, setAddresses]             = useState(initialAddrs);
     const [selectedAddressId, setSelectedAddressId] = useState(
-        routeAddress?.id || (initialAddrs.find(a => a.is_default)?.id || initialAddrs[0]?.id || null)
+        routeAddress?.id || (initialAddrs.find(a => a.is_default)?.id || initialAddrs[0]?.id || 'lga_dest')
     );
+
+    // Step 1: LGA & Destination States
+    const [quickDestination, setQuickDestination] = useState({
+        state: 'Yobe',
+        city: 'Bade',
+        lga: 'Bade',
+        address: 'Bade / Gashua, Yobe State'
+    });
+    const [lgaModalVisible, setLgaModalVisible]           = useState(false);
+    const [lgaSearchQuery, setLgaSearchQuery]             = useState('');
+    const [activeLgaStateFilter, setActiveLgaStateFilter] = useState('Yobe');
 
     // Step 2: Payment Gateways
     const [paymentMethod, setPaymentMethod] = useState('Paystack');
@@ -282,10 +294,22 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
         { code: 'pickup',   name: 'Store Pickup',      estimated_days: 'Ready in 2 Hours',   icon: 'storefront-outline' }
     ]);
 
-    // Resolve active customer address with resilient cascade
+    // Resolve active customer address with resilient cascade (never null)
     const selectedAddrObj = useMemo(() => {
-        return addresses.find(a => a.id === selectedAddressId) || routeAddress || (addresses.length > 0 ? addresses[0] : null);
-    }, [addresses, selectedAddressId, routeAddress]);
+        const found = addresses.find(a => a.id === selectedAddressId);
+        if (found) return found;
+        if (routeAddress) return routeAddress;
+        if (addresses.length > 0) return addresses[0];
+        return {
+            id: 'lga_dest',
+            title: `${quickDestination.lga || 'Bade'} Delivery`,
+            address: quickDestination.address || `${quickDestination.lga || 'Bade'}, ${quickDestination.state || 'Yobe'}`,
+            city: quickDestination.city || quickDestination.lga || 'Bade',
+            lga: quickDestination.lga || quickDestination.city || 'Bade',
+            state: quickDestination.state || 'Yobe',
+            phone: profile?.phone || user?.phone || ''
+        };
+    }, [addresses, selectedAddressId, routeAddress, quickDestination, profile, user]);
 
     // Instant Synchronous Shipping Calculation (0ms latency, zero delay)
     const shippingCalculation = useMemo(() => {
@@ -303,18 +327,18 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
     // Dynamic Shipping Fee (Instantly computed with zero delay)
     const shippingFee = useMemo(() => {
+        if (selectedDeliveryMethod === 'pickup') return 0;
         if (shippingCalculation && typeof shippingCalculation.totalShippingFee === 'number') {
             return shippingCalculation.totalShippingFee;
         }
         const selectedAddr = selectedAddrObj;
         const allFreeShipping = cart.length > 0 && cart.every(item => item.free_shipping === true);
         if (allFreeShipping) return 0;
-        if (settings?.free_nationwide_shipping) return 0;
         if (selectedAddr?.state && settings?.shipping_fees?.[selectedAddr.state] !== undefined) {
             return Number(settings.shipping_fees[selectedAddr.state]);
         }
-        return parseFloat(settings?.default_shipping_fee) || 1500;
-    }, [shippingCalculation, selectedAddrObj, cart, settings]);
+        return parseFloat(settings?.default_shipping_fee) || 1000;
+    }, [shippingCalculation, selectedDeliveryMethod, selectedAddrObj, cart, settings]);
 
     // Tax calculation
     const taxAmount = useMemo(() => {
@@ -325,7 +349,67 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
     const taxRateLabel = (parseFloat(settings?.tax_rate) || 7.5).toFixed(1);
     const isTaxEnabled = settings?.tax_enabled !== false;
-    const isShippingFree = shippingFee === 0;
+    const isShippingFree = selectedDeliveryMethod === 'pickup' || (shippingFee === 0 && cart.length > 0 && cart.every(item => item.free_shipping === true));
+
+    // ── Local Government Area (LGA) Quick Selector Helpers ────────────────────
+    const quickStates = ['Yobe', 'Jigawa', 'Borno', 'Kano', 'Bauchi', 'Gombe', 'Kaduna', 'Abuja', 'Lagos', 'All States'];
+
+    const filteredLgaList = useMemo(() => {
+        const query = (lgaSearchQuery || '').trim().toLowerCase();
+        const stateFilter = activeLgaStateFilter;
+
+        let results = [];
+
+        NIGERIA_DATA.forEach(stateObj => {
+            const matchesStateFilter = stateFilter === 'All States' || 
+                stateObj.state.toLowerCase().includes(stateFilter.toLowerCase()) || 
+                stateFilter.toLowerCase().includes(stateObj.state.toLowerCase());
+
+            if (!matchesStateFilter) return;
+
+            stateObj.lgas.forEach(lgaName => {
+                if (query) {
+                    const matchesLga = lgaName.toLowerCase().includes(query);
+                    const matchesState = stateObj.state.toLowerCase().includes(query);
+                    if (!matchesLga && !matchesState) return;
+                }
+
+                const tierInfo = ShippingCalculationEngine.resolveLgaTier(stateObj.state, lgaName, 'Yobe', 'Bade');
+                results.push({
+                    state: stateObj.state,
+                    lga: lgaName,
+                    tierBadge: tierInfo.tier === 'intra_lga' ? 'Local (Bade)' : tierInfo.tier === 'yobe_north' ? 'Yobe North' : tierInfo.tier === 'yobe_regional' ? 'Yobe Regional' : null,
+                    standardFee: tierInfo.baseFee,
+                    estimatedDays: tierInfo.estimatedDelivery
+                });
+            });
+        });
+
+        // Ensure Bade & Gashua appear first for Yobe
+        if (stateFilter === 'Yobe' || !query) {
+            results.sort((a, b) => {
+                const aName = a.lga.toLowerCase();
+                const bName = b.lga.toLowerCase();
+                if (aName === 'bade' || aName === 'gashua') return -1;
+                if (bName === 'bade' || bName === 'gashua') return 1;
+                return 0;
+            });
+        }
+
+        return results;
+    }, [lgaSearchQuery, activeLgaStateFilter]);
+
+    const handleSelectLga = (stateName, lgaName) => {
+        setQuickDestination({
+            state: stateName,
+            city: lgaName,
+            lga: lgaName,
+            address: `${lgaName} LGA, ${stateName} State`
+        });
+        setSelectedAddressId('lga_dest');
+        setLgaModalVisible(false);
+        showToast(`Delivery location set to ${lgaName} LGA, ${stateName}`);
+    };
 
     const finalTotal = useMemo(() => {
         return Math.max(0, initialTotal + shippingFee + taxAmount - discountAmount);
@@ -890,13 +974,53 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         <View style={s.sectionHeader}>
                             <View>
                                 <Text style={s.sectionTitle}>Delivery Destination</Text>
-                                <Text style={s.sectionSub}>Select where your package should be delivered</Text>
+                                <Text style={s.sectionSub}>Select your LGA & address for structured live pricing</Text>
                             </View>
                             <TouchableOpacity 
                                 onPress={() => navigation.navigate('AddressPage')}
                                 hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                             >
-                                <Text style={s.manageLink}>+ Add New</Text>
+                                <Text style={s.manageLink}>+ Manage Addresses</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* ── Active LGA & Fulfillment Zone Card ── */}
+                        <View style={s.lgaSelectCard}>
+                            <View style={s.lgaSelectHeader}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <Ionicons name="map" size={14} color={GOLD} />
+                                    <Text style={s.lgaSelectTitle}>Local Government Area (LGA)</Text>
+                                </View>
+                                <TouchableOpacity 
+                                    style={s.changeLgaBtn}
+                                    onPress={() => setLgaModalVisible(true)}
+                                    activeOpacity={0.8}
+                                >
+                                    <Ionicons name="swap-horizontal" size={13} color={GOLD} />
+                                    <Text style={s.changeLgaBtnTxt}>Change LGA / State</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            <TouchableOpacity 
+                                style={s.lgaActiveRow}
+                                onPress={() => setLgaModalVisible(true)}
+                                activeOpacity={0.85}
+                            >
+                                <View style={s.lgaPinCircle}>
+                                    <Ionicons name="location" size={17} color={NAVY} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                        <Text style={s.lgaActiveState}>{selectedAddrObj?.state || quickDestination.state || 'Yobe State'}</Text>
+                                        <View style={s.lgaBadge}>
+                                            <Text style={s.lgaBadgeTxt}>{selectedAddrObj?.lga || selectedAddrObj?.city || quickDestination.lga || 'Bade'} LGA</Text>
+                                        </View>
+                                    </View>
+                                    <Text style={s.lgaActiveRoute} numberOfLines={1}>
+                                        {shippingCalculation?.ruleSummary || 'Intra-LGA Local Delivery (Bade / Gashua)'}
+                                    </Text>
+                                </View>
+                                <Ionicons name="chevron-forward" size={16} color={SLATE} />
                             </TouchableOpacity>
                         </View>
 
@@ -908,16 +1032,16 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                             </View>
                         ) : addresses.length === 0 ? (
                             <View style={s.emptyBox}>
-                                <Ionicons name="location-outline" size={32} color="#CBD5E1" />
-                                <Text style={s.emptyTitle}>No saved delivery addresses</Text>
-                                <Text style={s.emptySub}>Please add an address to compute accurate shipping.</Text>
+                                <Ionicons name="home-outline" size={28} color={GOLD} />
+                                <Text style={s.emptyTitle}>LGA Selected: {selectedAddrObj?.lga || quickDestination.lga} LGA</Text>
+                                <Text style={s.emptySub}>Add full street details or proceed directly with this Local Government.</Text>
                                 <TouchableOpacity
                                     style={s.addAddressBtn}
                                     onPress={() => navigation.navigate('AddressPage')}
                                     activeOpacity={0.8}
                                 >
                                     <Ionicons name="add" size={15} color={NAVY} />
-                                    <Text style={s.addAddressBtnTxt}>Add Shipping Address</Text>
+                                    <Text style={s.addAddressBtnTxt}>Save Complete Street Address</Text>
                                 </TouchableOpacity>
                             </View>
                         ) : (
@@ -959,17 +1083,15 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                 } else {
                                     const mCalc = ShippingCalculationEngine.calculateMultiVendorShippingInstant({
                                         cartItems: cart,
-                                        customerAddress: selectedAddrObj || routeAddress,
+                                        customerAddress: selectedAddrObj,
                                         deliveryMethodCode: method.code,
                                         adminSettings: settings?.shipping_settings || settings,
                                         shippingMethods: deliveryMethods
                                     });
-                                    if (mCalc?.isFreeShipping) {
-                                        methodCostLabel = 'FREE';
-                                    } else if (mCalc?.totalShippingFee) {
+                                    if (mCalc?.totalShippingFee && mCalc.totalShippingFee > 0) {
                                         methodCostLabel = formatCurrency(mCalc.totalShippingFee);
                                     } else {
-                                        const defaultFee = isExpress ? 2500 : 1500;
+                                        const defaultFee = isExpress ? 2500 : 800;
                                         methodCostLabel = formatCurrency(defaultFee);
                                     }
                                 }
@@ -1649,6 +1771,135 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         <Text style={s.loadingSub}>Please wait, securing transaction...</Text>
                     </View>
                 </View>
+            </Modal>
+
+            {/* ── LGA QUICK SELECTOR MODAL ───────────────────────────────────── */}
+            <Modal
+                visible={lgaModalVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setLgaModalVisible(false)}
+            >
+                <KeyboardAvoidingView 
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                    style={s.modalOverlay}
+                >
+                    <View style={s.lgaModalContainer}>
+                        {/* Modal Header */}
+                        <View style={s.lgaModalHeader}>
+                            <View style={{ flex: 1 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <Ionicons name="location" size={17} color={GOLD} />
+                                    <Text style={s.lgaModalTitle}>Select Local Government (LGA)</Text>
+                                </View>
+                                <Text style={s.lgaModalSub}>Choose LGA & State to calculate exact shipping fees</Text>
+                            </View>
+                            <TouchableOpacity 
+                                onPress={() => setLgaModalVisible(false)}
+                                style={s.modalCloseBtn}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            >
+                                <Ionicons name="close-circle" size={24} color={SLATE} />
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Search Input */}
+                        <View style={s.lgaSearchWrap}>
+                            <Ionicons name="search" size={16} color={SLATE} />
+                            <TextInput
+                                style={s.lgaSearchInput}
+                                placeholder="Search LGA or Town (e.g. Bade, Gashua, Damaturu, Kano)..."
+                                placeholderTextColor={MUTED}
+                                value={lgaSearchQuery}
+                                onChangeText={setLgaSearchQuery}
+                                clearButtonMode="while-editing"
+                            />
+                            {lgaSearchQuery.length > 0 && (
+                                <TouchableOpacity onPress={() => setLgaSearchQuery('')}>
+                                    <Ionicons name="close" size={16} color={SLATE} />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+
+                        {/* State Filter Chips */}
+                        <View style={s.stateTabsWrapper}>
+                            <ScrollView 
+                                horizontal 
+                                showsHorizontalScrollIndicator={false}
+                                contentContainerStyle={{ paddingHorizontal: 16, gap: 6 }}
+                            >
+                                {['Yobe', 'Jigawa', 'Borno', 'Kano', 'Bauchi', 'Gombe', 'Kaduna', 'Katsina', 'FCT Abuja', 'Lagos'].map((stateName) => {
+                                    const isSelected = activeLgaStateFilter === stateName;
+                                    return (
+                                        <TouchableOpacity
+                                            key={stateName}
+                                            style={[s.stateTabBtn, isSelected && s.stateTabBtnActive]}
+                                            onPress={() => setActiveLgaStateFilter(isSelected ? null : stateName)}
+                                            activeOpacity={0.8}
+                                        >
+                                            <Text style={[s.stateTabBtnTxt, isSelected && s.stateTabBtnTxtActive]}>
+                                                {stateName}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </ScrollView>
+                        </View>
+
+                        {/* LGA List */}
+                        <FlatList
+                            data={filteredLgaList}
+                            keyExtractor={(item, index) => `${item.state}-${item.lga}-${index}`}
+                            keyboardShouldPersistTaps="handled"
+                            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}
+                            initialNumToRender={15}
+                            maxToRenderPerBatch={20}
+                            renderItem={({ item }) => {
+                                const isCurrent = (selectedAddrObj?.lga?.toLowerCase() === item.lga.toLowerCase() ||
+                                                   quickDestination?.lga?.toLowerCase() === item.lga.toLowerCase()) &&
+                                                  (selectedAddrObj?.state?.toLowerCase() === item.state.toLowerCase() ||
+                                                   quickDestination?.state?.toLowerCase() === item.state.toLowerCase());
+                                return (
+                                    <TouchableOpacity
+                                        style={[s.lgaItemRow, isCurrent && s.lgaItemRowSelected]}
+                                        onPress={() => handleSelectLga(item.state, item.lga)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <View style={{ flex: 1 }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                                <Text style={[s.lgaItemName, isCurrent && s.lgaItemNameSelected]}>
+                                                    {item.lga} LGA
+                                                </Text>
+                                                {item.tierBadge && (
+                                                    <View style={s.lgaTierBadge}>
+                                                        <Text style={s.lgaTierBadgeTxt}>{item.tierBadge}</Text>
+                                                    </View>
+                                                )}
+                                            </View>
+                                            <Text style={s.lgaItemState}>{item.state} State • {item.estimatedDays || '1-3 days'}</Text>
+                                        </View>
+                                        <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                                            <Text style={s.lgaItemFee}>From ₦{Number(item.standardFee || 800).toLocaleString()}</Text>
+                                            {isCurrent ? (
+                                                <Ionicons name="checkmark-circle" size={18} color={EMERALD} />
+                                            ) : (
+                                                <Ionicons name="chevron-forward" size={16} color={BORDER} />
+                                            )}
+                                        </View>
+                                    </TouchableOpacity>
+                                );
+                            }}
+                            ListEmptyComponent={
+                                <View style={{ padding: 24, alignItems: 'center' }}>
+                                    <Ionicons name="search-outline" size={32} color={MUTED} />
+                                    <Text style={{ fontSize: 13, color: SLATE, marginTop: 8 }}>
+                                        No LGA found matching "{lgaSearchQuery}"
+                                    </Text>
+                                </View>
+                            }
+                        />
+                    </View>
+                </KeyboardAvoidingView>
             </Modal>
 
             {/* ── PAYMENT MODAL (WEBVIEW) ──────────────────────────────────── */}
@@ -2950,5 +3201,206 @@ const s = StyleSheet.create({
         fontSize: 13.5,
         fontWeight: '800',
         color: WHITE,
+    },
+    // ── LGA Quick Selector & Modal Styles ──
+    lgaSelectCard: {
+        backgroundColor: WHITE,
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 14,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        shadowColor: NAVY,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+        elevation: 1,
+    },
+    lgaSelectHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 8,
+        paddingBottom: 6,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+    },
+    lgaSelectTitle: {
+        fontSize: 11.5,
+        fontWeight: '700',
+        color: NAVY,
+        textTransform: 'uppercase',
+        letterSpacing: 0.4,
+    },
+    changeLgaBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#FFFDF5',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: '#FDE68A',
+    },
+    changeLgaBtnTxt: {
+        fontSize: 10.5,
+        fontWeight: '700',
+        color: '#B45309',
+    },
+    lgaActiveRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        backgroundColor: '#F8FAFC',
+        padding: 10,
+        borderRadius: 8,
+    },
+    lgaPinCircle: {
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        backgroundColor: '#EFF6FF',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    lgaActiveState: {
+        fontSize: 13,
+        fontWeight: '800',
+        color: NAVY,
+    },
+    lgaBadge: {
+        backgroundColor: '#E0E7FF',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+    },
+    lgaBadgeTxt: {
+        fontSize: 10.5,
+        fontWeight: '800',
+        color: '#3730A3',
+    },
+    lgaActiveRoute: {
+        fontSize: 11,
+        color: SLATE,
+        marginTop: 2,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(15, 23, 42, 0.65)',
+        justifyContent: 'flex-end',
+    },
+    lgaModalContainer: {
+        backgroundColor: WHITE,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        maxHeight: '85%',
+        paddingTop: 16,
+    },
+    lgaModalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingBottom: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+    },
+    lgaModalTitle: {
+        fontSize: 14.5,
+        fontWeight: '800',
+        color: NAVY,
+    },
+    lgaModalSub: {
+        fontSize: 11,
+        color: SLATE,
+        marginTop: 2,
+    },
+    modalCloseBtn: {
+        padding: 4,
+    },
+    lgaSearchWrap: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F1F5F9',
+        borderRadius: 10,
+        marginHorizontal: 16,
+        marginVertical: 10,
+        paddingHorizontal: 10,
+        height: 40,
+        gap: 8,
+    },
+    lgaSearchInput: {
+        flex: 1,
+        fontSize: 12.5,
+        color: NAVY,
+        paddingVertical: 0,
+    },
+    stateTabsWrapper: {
+        marginBottom: 8,
+    },
+    stateTabBtn: {
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 14,
+        backgroundColor: '#F1F5F9',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    stateTabBtnActive: {
+        backgroundColor: NAVY,
+        borderColor: NAVY,
+    },
+    stateTabBtnTxt: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: SLATE,
+    },
+    stateTabBtnTxtActive: {
+        color: WHITE,
+    },
+    lgaItemRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F8FAFC',
+    },
+    lgaItemRowSelected: {
+        backgroundColor: '#F0FDF4',
+        borderWidth: 1,
+        borderColor: '#BBF7D0',
+    },
+    lgaItemName: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: NAVY,
+    },
+    lgaItemNameSelected: {
+        color: '#166534',
+    },
+    lgaTierBadge: {
+        backgroundColor: '#FEF3C7',
+        paddingHorizontal: 5,
+        paddingVertical: 1.5,
+        borderRadius: 4,
+    },
+    lgaTierBadgeTxt: {
+        fontSize: 9.5,
+        fontWeight: '800',
+        color: '#92400E',
+    },
+    lgaItemState: {
+        fontSize: 10.5,
+        color: SLATE,
+        marginTop: 2,
+    },
+    lgaItemFee: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: NAVY,
     },
 });

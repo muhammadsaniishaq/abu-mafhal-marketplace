@@ -55,8 +55,9 @@ export const CartPage = ({
 
     // ── Live Shipping Rules from App Settings ─────────────────────────────────
     const shippingSettings = settings?.shipping_settings || {};
-    const freeShippingThreshold = Number(shippingSettings.free_shipping_threshold || 50000);
-    const baseShippingFee = Number(shippingSettings.base_fee || 1500) + Number(shippingSettings.handling_fee || 0);
+    const isFreeShippingEnabled = Boolean(shippingSettings.free_shipping_enabled);
+    const freeShippingThreshold = isFreeShippingEnabled ? Number(shippingSettings.free_shipping_threshold || 0) : 0;
+    const baseShippingFee = Number(shippingSettings.base_fee || 1000) + Number(shippingSettings.handling_fee || 0);
     const isFreeNationwide = Boolean(shippingSettings.free_nationwide_shipping);
 
     // ── States ────────────────────────────────────────────────────────────────
@@ -205,8 +206,8 @@ export const CartPage = ({
 
     const total = Math.max(0, subtotal + deliveryFee - (appliedPromo?.discount_type === 'shipping' ? 0 : discount));
 
-    const freeShippingProgress = freeShippingThreshold > 0 ? Math.min(1, Math.max(0, subtotal / freeShippingThreshold)) : 1;
-    const amountNeededForFreeShip = Math.max(0, freeShippingThreshold - subtotal);
+    const freeShippingProgress = freeShippingThreshold > 0 ? Math.min(1, Math.max(0, subtotal / freeShippingThreshold)) : 0;
+    const amountNeededForFreeShip = freeShippingThreshold > 0 ? Math.max(0, freeShippingThreshold - subtotal) : 0;
 
     // ── Group Cart Items by Merchant / Store ──────────────────────────────────
     const groupedCart = useMemo(() => {

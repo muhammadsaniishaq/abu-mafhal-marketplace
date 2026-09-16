@@ -69,7 +69,7 @@ const _distanceCache = new Map();
 
 // Major LGA & Commercial City Centroids (Expanded for instant lookup)
 export const NIGERIA_LGA_CENTROIDS = {
-    // Yobe State
+    // Yobe State (All 17 Local Government Areas + Commercial Centers)
     'bade': { lat: 12.8753, lon: 10.9786, state: 'Yobe' },
     'gashua': { lat: 12.8711, lon: 11.0425, state: 'Yobe' },
     'damaturu': { lat: 11.7470, lon: 11.9608, state: 'Yobe' },
@@ -78,6 +78,7 @@ export const NIGERIA_LGA_CENTROIDS = {
     'geidam': { lat: 12.8944, lon: 11.9284, state: 'Yobe' },
     'jakusko': { lat: 12.3708, lon: 10.7761, state: 'Yobe' },
     'fika': { lat: 11.2844, lon: 11.3094, state: 'Yobe' },
+    'fune': { lat: 11.6667, lon: 11.5500, state: 'Yobe' },
     'machina': { lat: 13.1367, lon: 10.0528, state: 'Yobe' },
     'nangere': { lat: 11.8672, lon: 11.0653, state: 'Yobe' },
     'yunusari': { lat: 13.0667, lon: 11.8333, state: 'Yobe' },
@@ -85,6 +86,28 @@ export const NIGERIA_LGA_CENTROIDS = {
     'karasuwa': { lat: 12.9806, lon: 10.7758, state: 'Yobe' },
     'yusufari': { lat: 13.0644, lon: 10.5847, state: 'Yobe' },
     'gujba': { lat: 11.4989, lon: 11.9339, state: 'Yobe' },
+    'gulani': { lat: 10.7333, lon: 11.7167, state: 'Yobe' },
+    'tarmuwa': { lat: 12.0167, lon: 11.8833, state: 'Yobe' },
+
+    // Jigawa State (Bordering Yobe)
+    'hadejia': { lat: 12.4497, lon: 10.0444, state: 'Jigawa' },
+    'birniwa': { lat: 12.7889, lon: 10.2333, state: 'Jigawa' },
+    'mallam madori': { lat: 12.5833, lon: 9.9833, state: 'Jigawa' },
+    'kafin hausa': { lat: 12.2417, lon: 9.9111, state: 'Jigawa' },
+    'gumel': { lat: 12.6269, lon: 9.3881, state: 'Jigawa' },
+    'dutse': { lat: 11.7562, lon: 9.3390, state: 'Jigawa' },
+    'ringim': { lat: 12.1500, lon: 9.1667, state: 'Jigawa' },
+    'kazaure': { lat: 12.6481, lon: 8.4114, state: 'Jigawa' },
+
+    // Borno State (Bordering Yobe)
+    'maiduguri': { lat: 11.8333, lon: 13.1500, state: 'Borno' },
+    'jere': { lat: 11.8500, lon: 13.1833, state: 'Borno' },
+    'biu': { lat: 10.6128, lon: 12.1947, state: 'Borno' },
+    'magumeri': { lat: 12.1167, lon: 12.8333, state: 'Borno' },
+    'gubio': { lat: 12.5000, lon: 12.7833, state: 'Borno' },
+    'mobbar': { lat: 13.1000, lon: 12.5000, state: 'Borno' },
+    'kaga': { lat: 11.8167, lon: 12.4833, state: 'Borno' },
+    'bama': { lat: 11.5222, lon: 13.6856, state: 'Borno' },
 
     // Kano State
     'kano': { lat: 12.0022, lon: 8.5920, state: 'Kano' },
@@ -96,24 +119,28 @@ export const NIGERIA_LGA_CENTROIDS = {
     'tarauni': { lat: 11.9583, lon: 8.5500, state: 'Kano' },
     'kumbotso': { lat: 11.8917, lon: 8.5083, state: 'Kano' },
     'ungogo': { lat: 12.0833, lon: 8.4833, state: 'Kano' },
-    'zaria': { lat: 11.0855, lon: 7.7199, state: 'Kaduna' },
-    'kaduna': { lat: 10.5105, lon: 7.4165, state: 'Kaduna' },
-    'kaduna north': { lat: 10.5333, lon: 7.4333, state: 'Kaduna' },
-    'kaduna south': { lat: 10.4833, lon: 7.4167, state: 'Kaduna' },
-
-    // Borno State
-    'maiduguri': { lat: 11.8333, lon: 13.1500, state: 'Borno' },
-    'jere': { lat: 11.8500, lon: 13.1833, state: 'Borno' },
-    'biu': { lat: 10.6128, lon: 12.1947, state: 'Borno' },
-
-    // Jigawa State
-    'dutse': { lat: 11.7562, lon: 9.3390, state: 'Jigawa' },
-    'hadejia': { lat: 12.4497, lon: 10.0444, state: 'Jigawa' },
+    'bichi': { lat: 12.2333, lon: 8.2333, state: 'Kano' },
+    'wudil': { lat: 11.8000, lon: 8.8500, state: 'Kano' },
 
     // Bauchi & Gombe
     'bauchi': { lat: 10.3158, lon: 9.8442, state: 'Bauchi' },
     'azare': { lat: 11.6744, lon: 10.1917, state: 'Bauchi' },
+    'katagum': { lat: 11.6744, lon: 10.1917, state: 'Bauchi' },
+    'misau': { lat: 11.3167, lon: 10.4667, state: 'Bauchi' },
+    'jama\'are': { lat: 11.6667, lon: 10.1667, state: 'Bauchi' },
+    'ningi': { lat: 11.0833, lon: 9.5667, state: 'Bauchi' },
     'gombe': { lat: 10.2897, lon: 11.1673, state: 'Gombe' },
+    'nafada': { lat: 11.0833, lon: 11.3333, state: 'Gombe' },
+    'dukku': { lat: 10.8167, lon: 10.7667, state: 'Gombe' },
+
+    // Kaduna & Katsina
+    'kaduna': { lat: 10.5105, lon: 7.4165, state: 'Kaduna' },
+    'kaduna north': { lat: 10.5333, lon: 7.4333, state: 'Kaduna' },
+    'kaduna south': { lat: 10.4833, lon: 7.4167, state: 'Kaduna' },
+    'zaria': { lat: 11.0855, lon: 7.7199, state: 'Kaduna' },
+    'katsina': { lat: 12.9855, lon: 7.6171, state: 'Katsina' },
+    'daura': { lat: 13.0333, lon: 8.3167, state: 'Katsina' },
+    'funtua': { lat: 11.5233, lon: 7.3081, state: 'Katsina' },
 
     // Abuja (FCT)
     'abuja': { lat: 9.0765, lon: 7.3986, state: 'FCT (Abuja)' },
@@ -123,6 +150,7 @@ export const NIGERIA_LGA_CENTROIDS = {
     'wuse': { lat: 9.0600, lon: 7.4700, state: 'FCT (Abuja)' },
     'maitama': { lat: 9.0800, lon: 7.4900, state: 'FCT (Abuja)' },
     'gwagwalada': { lat: 8.9431, lon: 7.0864, state: 'FCT (Abuja)' },
+    'bwari': { lat: 9.2833, lon: 7.3833, state: 'FCT (Abuja)' },
 
     // Lagos State
     'ikeja': { lat: 6.6018, lon: 3.3515, state: 'Lagos' },
@@ -133,13 +161,9 @@ export const NIGERIA_LGA_CENTROIDS = {
     'alimosho': { lat: 6.6000, lon: 3.2500, state: 'Lagos' },
     'oshodi': { lat: 6.5500, lon: 3.3500, state: 'Lagos' },
 
-    // Rivers State
+    // Rivers & Sokoto
     'port harcourt': { lat: 4.8156, lon: 7.0498, state: 'Rivers' },
     'obio-akpor': { lat: 4.8500, lon: 7.0000, state: 'Rivers' },
-
-    // Katsina & Sokoto
-    'katsina': { lat: 12.9855, lon: 7.6171, state: 'Katsina' },
-    'daura': { lat: 13.0333, lon: 8.3167, state: 'Katsina' },
     'sokoto': { lat: 13.0622, lon: 5.2339, state: 'Sokoto' },
     'sokoto north': { lat: 13.0700, lon: 5.2400, state: 'Sokoto' },
 };
@@ -150,12 +174,13 @@ export const DEFAULT_SHIPPING_SETTINGS = {
     currency: 'NGN',
     base_fee: 1000,
     price_per_km: 75,
-    min_fee: 1000,
+    min_fee: 800,
     max_fee: 25000,
-    free_shipping_threshold: 50000,
-    max_delivery_distance_km: 350,
-    handling_fee: 200,
-    remote_area_fee: 1500,
+    free_shipping_enabled: false,
+    free_shipping_threshold: null,
+    max_delivery_distance_km: 1500,
+    handling_fee: 0,
+    remote_area_fee: 0,
     vendor_handling_fee: 0,
     standard_delivery_enabled: true,
     express_delivery_enabled: true,
@@ -168,11 +193,11 @@ export const DEFAULT_SHIPPING_METHODS = [
         id: 'standard',
         name: 'Standard Delivery',
         description: 'Reliable road courier delivery across regional logistics hubs',
-        base_fee: 1000,
-        price_per_km: 75,
-        min_fee: 1000,
+        base_fee: null, // Dynamic according to Local Government Area (LGA)
+        price_per_km: null,
+        min_fee: 800,
         max_fee: 20000,
-        estimated_delivery_time: '2 - 4 Business Days',
+        estimated_delivery_time: '1 - 3 Business Days',
         is_active: true,
         display_order: 1
     },
@@ -180,9 +205,9 @@ export const DEFAULT_SHIPPING_METHODS = [
         id: 'express',
         name: 'Express Priority',
         description: 'Direct courier dispatch with priority handling',
-        base_fee: 2500,
-        price_per_km: 120,
-        min_fee: 2500,
+        base_fee: null, // Dynamic according to Local Government Area (LGA)
+        price_per_km: null,
+        min_fee: 1500,
         max_fee: 35000,
         estimated_delivery_time: '1 - 2 Business Days',
         is_active: true,
@@ -192,11 +217,11 @@ export const DEFAULT_SHIPPING_METHODS = [
         id: 'same_day',
         name: 'Same-Day City Rush',
         description: 'Direct courier delivery within the same city/LGA',
-        base_fee: 4000,
-        price_per_km: 180,
-        min_fee: 4000,
+        base_fee: null, // Dynamic according to Local Government Area (LGA)
+        price_per_km: null,
+        min_fee: 1800,
         max_fee: 45000,
-        estimated_delivery_time: 'Same Day (Within 6 Hours)',
+        estimated_delivery_time: 'Same Day (Within 2 - 4 Hours)',
         is_active: true,
         display_order: 3
     },
@@ -207,7 +232,7 @@ export const DEFAULT_SHIPPING_METHODS = [
         base_fee: 0,
         price_per_km: 0,
         min_fee: 0,
-        max_fee: 500,
+        max_fee: 0,
         estimated_delivery_time: 'Ready in 24 Hours',
         is_active: true,
         display_order: 4
@@ -391,6 +416,149 @@ export class ShippingDistanceService {
 // ─────────────────────────────────────────────────────────────────────────────
 export class ShippingCalculationEngine {
     /**
+     * Resolves structured Local Government shipping tier & baseline rates across Nigeria
+     * Primary fulfillment center is Bade / Gashua, Yobe State.
+     */
+    static resolveLgaTier(customerState = '', customerLga = '', vendorState = 'Yobe', vendorLga = 'Bade') {
+        const cState = String(customerState || '').toLowerCase().trim();
+        const cLga   = String(customerLga || '').toLowerCase().trim();
+        const vState = String(vendorState || 'Yobe').toLowerCase().trim();
+        const vLga   = String(vendorLga || 'Bade').toLowerCase().trim();
+
+        const isBadeGashua = (l) => l === 'bade' || l === 'gashua' || l.includes('bade') || l.includes('gashua');
+        const isSameLga = (cLga && vLga && cLga === vLga) || (isBadeGashua(cLga) && isBadeGashua(vLga));
+
+        // Tier 1: Intra-LGA (Bade / Gashua Local)
+        if (isSameLga || (cState === 'yobe' && isBadeGashua(cLga))) {
+            return {
+                tier: 'intra_lga',
+                tierName: 'Intra-LGA Local Delivery (Bade / Gashua)',
+                baseFee: 800,
+                minFee: 800,
+                pricePerKm: 0,
+                distanceKm: 4.5,
+                durationMinutes: 30,
+                estimatedDelivery: 'Within 2 - 4 Hours',
+                expressBaseFee: 1500,
+                sameDayBaseFee: 1800,
+                isSameLga: true,
+                isSameState: true
+            };
+        }
+
+        // Tier 2: Yobe State Local Governments (All 17 LGAs)
+        if (cState === 'yobe' || cState.includes('yobe')) {
+            const yobeNorthLgas = ['jakusko', 'karasuwa', 'nguru', 'machina', 'yusufari', 'bursari'];
+            const isNorth = yobeNorthLgas.some(l => cLga.includes(l) || l.includes(cLga));
+
+            if (isNorth) {
+                return {
+                    tier: 'yobe_north',
+                    tierName: `Yobe North Logistics Hub (${customerLga || 'LGA'})`,
+                    baseFee: 1500,
+                    minFee: 1500,
+                    pricePerKm: 2,
+                    distanceKm: 45,
+                    durationMinutes: 90,
+                    estimatedDelivery: '24 - 48 Hours',
+                    expressBaseFee: 2500,
+                    sameDayBaseFee: 3500,
+                    isSameLga: false,
+                    isSameState: true
+                };
+            }
+
+            return {
+                tier: 'yobe_regional',
+                tierName: `Yobe State Regional Logistics (${customerLga || 'LGA'})`,
+                baseFee: 2000,
+                minFee: 2000,
+                pricePerKm: 2,
+                distanceKm: 120,
+                durationMinutes: 180,
+                estimatedDelivery: '1 - 2 Business Days',
+                expressBaseFee: 3200,
+                sameDayBaseFee: 4200,
+                isSameLga: false,
+                isSameState: true
+            };
+        }
+
+        // Tier 3A: Bordering States (Jigawa & Borno)
+        if (cState.includes('jigawa') || cState.includes('borno')) {
+            const stateTitle = cState.includes('jigawa') ? 'Jigawa' : 'Borno';
+            return {
+                tier: 'border_state',
+                tierName: `Bordering State Transit (${stateTitle} - ${customerLga || 'LGA'})`,
+                baseFee: 2500,
+                minFee: 2500,
+                pricePerKm: 2,
+                distanceKm: 180,
+                durationMinutes: 240,
+                estimatedDelivery: '2 - 3 Business Days',
+                expressBaseFee: 4000,
+                sameDayBaseFee: 5500,
+                isSameLga: false,
+                isSameState: false
+            };
+        }
+
+        // Tier 3B: Key Commercial Northern Hubs (Kano, Bauchi, Gombe)
+        if (['kano', 'bauchi', 'gombe'].some(s => cState.includes(s))) {
+            const stateTitle = cState.includes('kano') ? 'Kano' : cState.includes('bauchi') ? 'Bauchi' : 'Gombe';
+            return {
+                tier: 'regional_transit',
+                tierName: `Commercial Hub Dispatch (${stateTitle} - ${customerLga || 'LGA'})`,
+                baseFee: 2800,
+                minFee: 2800,
+                pricePerKm: 2,
+                distanceKm: 280,
+                durationMinutes: 360,
+                estimatedDelivery: '2 - 3 Business Days',
+                expressBaseFee: 4500,
+                sameDayBaseFee: 6000,
+                isSameLga: false,
+                isSameState: false
+            };
+        }
+
+        // Tier 4: Other Northern States & FCT Abuja
+        const northStates = ['kaduna', 'katsina', 'sokoto', 'kebbi', 'zamfara', 'adamawa', 'taraba', 'niger', 'plateau', 'nasarawa', 'benue', 'kogi', 'abuja', 'fct'];
+        if (northStates.some(s => cState.includes(s))) {
+            return {
+                tier: 'interstate_north',
+                tierName: `Interstate Northern Transit (${customerState || 'North'})`,
+                baseFee: 3500,
+                minFee: 3500,
+                pricePerKm: 2,
+                distanceKm: 450,
+                durationMinutes: 480,
+                estimatedDelivery: '3 - 4 Business Days',
+                expressBaseFee: 5800,
+                sameDayBaseFee: 7500,
+                isSameLga: false,
+                isSameState: false
+            };
+        }
+
+        // Tier 5: Southern & Nationwide (Lagos, Rivers, Oyo, Edo, etc.)
+        return {
+            tier: 'nationwide',
+            tierName: `Nationwide Inter-State Transit (${customerState || 'Nigeria'})`,
+            baseFee: 4500,
+            minFee: 4500,
+            pricePerKm: 2,
+            distanceKm: 850,
+            durationMinutes: 720,
+            estimatedDelivery: '3 - 5 Business Days',
+            expressBaseFee: 7500,
+            sameDayBaseFee: 9500,
+            isSameLga: false,
+            isSameState: false
+        };
+    }
+
+    /**
      * Computes shipping fee for an individual vendor package according to business hierarchy
      */
     static calculateVendorPackageFee({
@@ -404,7 +572,7 @@ export class ShippingCalculationEngine {
         distanceResult = null
     }) {
         // 1. Pickup is always zero or nominal flat handling
-        if (deliveryMethod?.id === 'pickup') {
+        if (deliveryMethod?.id === 'pickup' || deliveryMethod?.code === 'pickup') {
             return {
                 vendorId: vendor?.id || 'admin_store',
                 vendorName: vendor?.name || vendor?.store_name || 'Marketplace Store',
@@ -421,34 +589,33 @@ export class ShippingCalculationEngine {
                 discount: 0,
                 finalFee: 0,
                 isFreeShipping: true,
+                ruleSummary: 'Customer Hub Pickup (FREE)',
                 calculatedAt: new Date().toISOString()
             };
         }
 
-        // 2. Check Free Shipping Threshold
-        const freeThreshold = Number(globalSettings.free_shipping_threshold) || 50000;
-        const isFreeByThreshold = packageSubtotal >= freeThreshold && freeThreshold > 0;
-        const isFree = allFreeShipping || isFreeByThreshold || globalSettings.enabled === false;
+        // 2. Check Free Shipping Threshold (Only if explicitly enabled by admin and threshold is valid)
+        const isFreeShippingEnabled = Boolean(globalSettings.free_shipping_enabled);
+        const freeThreshold = Number(globalSettings.free_shipping_threshold || 0);
+        const isFreeByThreshold = isFreeShippingEnabled && freeThreshold > 0 && packageSubtotal >= freeThreshold;
+        const isFree = (allFreeShipping === true) || isFreeByThreshold;
 
         // 3. Resolve Customer & Vendor Locations (LGA & State)
         const customerState = (customerAddress?.state || '').toLowerCase().trim();
-        const customerLga = (customerAddress?.lga || customerAddress?.city || '').toLowerCase().trim();
-        const vendorState = (vendor?.state || 'Yobe').toLowerCase().trim();
-        const vendorLga = (vendor?.lga || vendor?.city || 'Bade').toLowerCase().trim();
+        const customerLga   = (customerAddress?.lga || customerAddress?.city || '').toLowerCase().trim();
+        const vendorState   = (vendor?.state || 'Yobe').toLowerCase().trim();
+        const vendorLga     = (vendor?.lga || vendor?.city || 'Bade').toLowerCase().trim();
 
-        const isSameLga = Boolean(customerLga && vendorLga && customerLga === vendorLga);
-        const isSameState = Boolean(customerState && vendorState && customerState === vendorState);
+        // 4. Resolve Structured LGA Tier
+        const lgaTier = this.resolveLgaTier(customerState, customerLga, vendorState, vendorLga);
 
-        let distanceKm = distanceResult?.distanceKm || (isSameLga ? 4.5 : 20);
-        let distanceSource = distanceResult?.source || (isSameLga ? 'intra_lga_local' : 'estimated');
+        const isSameLga   = Boolean(lgaTier.isSameLga);
+        const isSameState = Boolean(lgaTier.isSameState);
 
-        // If customer and vendor are in the exact same Local Government, ensure localized distance
-        if (isSameLga && distanceSource !== 'road_osrm' && distanceSource !== 'exact_gps') {
-            distanceKm = 4.5; // Average intra-LGA transit distance
-            distanceSource = 'intra_lga_local';
-        }
+        let distanceKm     = distanceResult?.distanceKm || lgaTier.distanceKm;
+        let distanceSource = distanceResult?.source || (isSameLga ? 'intra_lga_local' : 'lga_tier');
 
-        // 4. Resolve Applicable Zone Override (Hierarchy: Exact LGA match > State-wide match)
+        // 5. Resolve Applicable Zone Override (Hierarchy: Exact LGA match > State-wide match)
         let matchedZone = null;
         let matchedLgaZone = null;
         let matchedStateZone = null;
@@ -471,25 +638,41 @@ export class ShippingCalculationEngine {
             matchedZone = matchedLgaZone || matchedStateZone;
         }
 
-        // 5. Resolve Pricing Parameters across Hierarchy:
-        // Priority: Vendor Custom Override > Admin LGA Zone > Admin State Zone > Delivery Method > Global Setting
-        let baseFee = Number(globalSettings.base_fee ?? 1000);
-        let pricePerKm = Number(globalSettings.price_per_km ?? 75);
-        let minFee = Number(globalSettings.min_fee ?? 1000);
-        let maxFee = Number(globalSettings.max_fee ?? 25000);
+        // 6. Resolve Pricing Parameters across Hierarchy:
+        // Priority: Vendor Custom Override > Admin LGA Zone > Admin State Zone > Delivery Method/Global Override > LGA Tier Baseline
+        let baseFee    = lgaTier.baseFee;
+        let pricePerKm = lgaTier.pricePerKm;
+        let minFee     = lgaTier.minFee;
+        let maxFee     = Number(globalSettings.max_fee ?? 25000);
         let remoteAreaFee = 0;
         let isFixedFee = false;
         let fixedFeeAmount = 0;
 
-        // Apply Delivery Method baseline
+        // Delivery Method adjustments
+        const methodId = deliveryMethod?.id || deliveryMethod?.code || 'standard';
         if (deliveryMethod) {
-            if (deliveryMethod.base_fee !== undefined) baseFee = Number(deliveryMethod.base_fee);
-            if (deliveryMethod.price_per_km !== undefined) pricePerKm = Number(deliveryMethod.price_per_km);
-            if (deliveryMethod.min_fee !== undefined) minFee = Number(deliveryMethod.min_fee);
-            if (deliveryMethod.max_fee !== undefined) maxFee = Number(deliveryMethod.max_fee);
+            if (deliveryMethod.base_fee !== undefined && deliveryMethod.base_fee !== null) baseFee = Number(deliveryMethod.base_fee);
+            if (deliveryMethod.price_per_km !== undefined && deliveryMethod.price_per_km !== null) pricePerKm = Number(deliveryMethod.price_per_km);
+            if (deliveryMethod.min_fee !== undefined && deliveryMethod.min_fee !== null) minFee = Number(deliveryMethod.min_fee);
+            if (deliveryMethod.max_fee !== undefined && deliveryMethod.max_fee !== null) maxFee = Number(deliveryMethod.max_fee);
         }
 
-        // Apply Admin Zone Override (LGA or State)
+        if (deliveryMethod?.base_fee === undefined) {
+            if (methodId === 'express') {
+                baseFee = lgaTier.expressBaseFee || Math.round(baseFee * 1.6);
+                minFee  = Math.max(minFee, baseFee);
+            } else if (methodId === 'same_day') {
+                baseFee = lgaTier.sameDayBaseFee || Math.round(baseFee * 2.0);
+                minFee  = Math.max(minFee, baseFee);
+            }
+        }
+
+        if (globalSettings) {
+            if (globalSettings.min_fee !== undefined && globalSettings.min_fee !== null) minFee = Math.max(minFee, Number(globalSettings.min_fee));
+            if (globalSettings.max_fee !== undefined && globalSettings.max_fee !== null) maxFee = Number(globalSettings.max_fee);
+        }
+
+        // Apply Admin Zone Override (LGA or State) if configured
         if (matchedZone) {
             if (matchedZone.base_fee !== null && matchedZone.base_fee !== undefined) baseFee = Number(matchedZone.base_fee);
             if (matchedZone.price_per_km !== null && matchedZone.price_per_km !== undefined) pricePerKm = Number(matchedZone.price_per_km);
@@ -516,7 +699,7 @@ export class ShippingCalculationEngine {
             ? Number(matchedZone.handling_fee)
             : (Number(globalSettings.handling_fee || 0) + Number(globalSettings.vendor_handling_fee || 0));
 
-        // 6. Compute Raw & Final Formula
+        // 7. Compute Raw & Final Formula
         let rawFee = 0;
         if (isFixedFee) {
             rawFee = fixedFeeAmount + handlingFee;
@@ -525,7 +708,7 @@ export class ShippingCalculationEngine {
             rawFee = baseFee + distanceFee + handlingFee + remoteAreaFee;
         }
 
-        // Clamping (do not clamp fixed fees below their explicit amount)
+        // Clamping (never clamp fixed fees below their explicit amount)
         const effectiveMinFee = isFixedFee ? Math.min(minFee, rawFee) : minFee;
         const clampedFee = Math.max(effectiveMinFee, Math.min(maxFee, rawFee));
         let finalFee = clampedFee;
@@ -537,7 +720,7 @@ export class ShippingCalculationEngine {
         }
 
         // Generate descriptive rule tag
-        let ruleSummary = 'Standard Distance Routing';
+        let ruleSummary = lgaTier.tierName;
         if (hasVendorOverride) {
             ruleSummary = 'Vendor Custom Rate';
         } else if (matchedLgaZone) {
@@ -545,7 +728,7 @@ export class ShippingCalculationEngine {
         } else if (matchedStateZone) {
             ruleSummary = `Admin State Zone: ${matchedStateZone.name || customerState}`;
         } else if (isSameLga) {
-            ruleSummary = 'Intra-LGA Local Delivery';
+            ruleSummary = 'Intra-LGA Local Delivery (Bade / Gashua)';
         }
 
         return {
@@ -557,9 +740,9 @@ export class ShippingCalculationEngine {
             customerState: customerState || null,
             isSameLga,
             isSameState,
-            deliveryMethod: deliveryMethod?.id || 'standard',
+            deliveryMethod: methodId,
             distanceKm,
-            durationMinutes: distanceResult?.durationMinutes || (isSameLga ? 20 : 45),
+            durationMinutes: distanceResult?.durationMinutes || lgaTier.durationMinutes,
             distanceSource,
             baseFee,
             perKmRate: pricePerKm,
@@ -570,10 +753,12 @@ export class ShippingCalculationEngine {
             discount,
             finalFee: Math.round(finalFee),
             isFreeShipping: isFree,
-            zoneApplied: matchedZone ? (matchedZone.name || matchedZone.lga || matchedZone.state) : null,
+            zoneApplied: matchedZone ? (matchedZone.name || matchedZone.lga || matchedZone.state) : lgaTier.tierName,
             zoneOverrideApplied: Boolean(matchedZone),
             isLgaZoneApplied: Boolean(matchedLgaZone),
             vendorOverrideApplied: hasVendorOverride,
+            lgaTier: lgaTier.tier,
+            estimatedDeliveryTime: lgaTier.estimatedDelivery,
             ruleSummary,
             calculatedAt: new Date().toISOString()
         };
