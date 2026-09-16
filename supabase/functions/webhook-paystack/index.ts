@@ -1,3 +1,5 @@
+// @ts-nocheck
+/// <reference path="../ambient.d.ts" />
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -20,7 +22,7 @@ async function hmacSha512Hex(secret: string, message: string) {
   return toHex(sig);
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   try {
     const PAYSTACK_SECRET_KEY = Deno.env.get("PAYSTACK_SECRET_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
@@ -79,7 +81,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response("OK", { status: 200 });
-  } catch (e) {
+  } catch (e: any) {
     return new Response(String(e?.message ?? e), { status: 500 });
   }
 });

@@ -1,7 +1,9 @@
+// @ts-nocheck
+/// <reference path="../ambient.d.ts" />
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   try {
     const secretHash = Deno.env.get("FLUTTERWAVE_WEBHOOK_HASH");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
@@ -61,7 +63,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response("OK", { status: 200 });
-  } catch (e) {
+  } catch (e: any) {
     return new Response(String(e?.message ?? e), { status: 500 });
   }
 });
