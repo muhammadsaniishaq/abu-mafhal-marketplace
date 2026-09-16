@@ -58,7 +58,7 @@ const getItemImage = (item) => {
 };
 
 export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
-    const { cart = [], total: initialTotalParam = 0 } = route.params || {};
+    const { cart = [], total: initialTotalParam = 0, selectedAddress: routeAddress = null } = route.params || {};
 
     const initialTotal = useMemo(() => {
         return cart.reduce((sum, item) => {
@@ -74,12 +74,12 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
     // Wizard Step: 1 = Shipping, 2 = Payment, 3 = Review & Confirm
     const [currentStep, setCurrentStep] = useState(1);
 
-    // Data State
-    const [loading, setLoading]                 = useState(true);
+    // Data State (Immediately pre-populated if address passed from Cart)
+    const [loading, setLoading]                 = useState(!routeAddress);
     const [user, setUser]                       = useState(null);
     const [profile, setProfile]                 = useState(null);
-    const [addresses, setAddresses]             = useState([]);
-    const [selectedAddressId, setSelectedAddressId] = useState(null);
+    const [addresses, setAddresses]             = useState(routeAddress ? [routeAddress] : []);
+    const [selectedAddressId, setSelectedAddressId] = useState(routeAddress?.id || (routeAddress ? 'selected_dest' : null));
 
     // Step 2: Payment Gateways
     const [paymentMethod, setPaymentMethod] = useState('Paystack');
@@ -164,47 +164,27 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
         }
     }, [availableMethods, paymentMethod]);
 
-    // ── Delivery Methods & Distance Engine ──────────────────────────────────
+    // ── Delivery Methods & Instant Distance Engine ──────────────────────────
     const [selectedDeliveryMethod, setSelectedDeliveryMethod] = useState('standard');
     const [deliveryMethods, setDeliveryMethods] = useState([
         { code: 'standard', name: 'Standard Delivery', estimated_days: '2-4 Business Days', icon: 'bicycle-outline' },
         { code: 'express',  name: 'Express Priority',  estimated_days: '24-48 Hours',       icon: 'flash-outline' },
         { code: 'pickup',   name: 'Store Pickup',      estimated_days: 'Ready in 2 Hours',   icon: 'storefront-outline' }
     ]);
-    const [shippingCalculation, setShippingCalculation] = useState(null);
-    const [calculatingShipping, setCalculatingShipping] = useState(false);
 
-    // Asynchronously calculate shipping whenever address, delivery method, or cart changes
-    useEffect(() => {
-        let isMounted = true;
-        const runShippingCalc = async () => {
-            const selectedAddr = addresses.find(a => a.id === selectedAddressId);
-            if (!selectedAddr) {
-                if (isMounted) setShippingCalculation(null);
-                return;
-            }
+    // Instant Synchronous Shipping Calculation (0ms latency, zero delay)
+    const shippingCalculation = useMemo(() => {
+        const selectedAddr = addresses.find(a => a.id === selectedAddressId) || routeAddress;
+        if (!selectedAddr || !cart.length) return null;
 
-            if (isMounted) setCalculatingShipping(true);
-            try {
-                const res = await ShippingCalculationEngine.calculateMultiVendorShipping({
-                    cartItems: cart,
-                    customerAddress: selectedAddr,
-                    deliveryMethodCode: selectedDeliveryMethod || 'standard',
-                    adminSettings: settings?.shipping_settings || settings
-                });
-                if (isMounted) {
-                    setShippingCalculation(res);
-                }
-            } catch (err) {
-                console.error('Shipping calculation error:', err);
-            } finally {
-                if (isMounted) setCalculatingShipping(false);
-            }
-        };
-
-        runShippingCalc();
-        return () => { isMounted = false; };
-    }, [selectedAddressId, selectedDeliveryMethod, addresses, cart, settings]);
+        return ShippingCalculationEngine.calculateMultiVendorShippingInstant({
+            cartItems: cart,
+            customerAddress: selectedAddr,
+            deliveryMethodCode: selectedDeliveryMethod || 'standard',
+            adminSettings: settings?.shipping_settings || settings,
+            shippingMethods: deliveryMethods
+        });
+    }, [selectedAddressId, selectedDeliveryMethod, addresses, cart, settings, routeAddress, deliveryMethods]);
 
     // Dynamic Shipping Fee
     const shippingFee = useMemo(() => {
@@ -286,8 +266,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
 
             if (loadedAddresses.length > 0) {
                 setAddresses(loadedAddresses);
-                const defaultAddr = loadedAddresses.find(a => a.is_default) || loadedAddresses[0];
-                if (defaultAddr) setSelectedAddressId(defaultAddr.id);
+                if (!selectedAddressId) {
+                    const defaultAddr = loadedAddresses.find(a => a.is_default) || loadedAddresses[0];
+                    if (defaultAddr) setSelectedAddressId(defaultAddr.id);
+                }
             }
             if (methodsRes.status === 'fulfilled' && methodsRes.value?.data?.length > 0) {
                 setDeliveryMethods(methodsRes.value.data);
@@ -712,12 +694,6 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                         <View style={{ marginTop: 16 }}>
                             <View style={s.methodHeaderRow}>
                                 <Text style={s.methodHeaderTitle}>Shipping Speed & Method</Text>
-                                {calculatingShipping && (
-                                    <View style={s.routingBadge}>
-                                        <ActivityIndicator size="small" color={GOLD} />
-                                        <Text style={s.routingTxt}>Routing distance...</Text>
-                                    </View>
-                                )}
                             </View>
 
                             {deliveryMethods.map((method) => {
@@ -728,14 +704,21 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                                 let methodCostLabel = '';
                                 if (isPickup) {
                                     methodCostLabel = 'FREE';
-                                } else if (shippingCalculation) {
-                                    if (isSelected) {
-                                        methodCostLabel = shippingCalculation.isFreeShipping ? 'FREE' : formatCurrency(shippingCalculation.totalShippingFee);
-                                    } else if (isExpress) {
-                                        const approxExpress = Math.round(shippingCalculation.totalShippingFee * 1.6);
-                                        methodCostLabel = formatCurrency(approxExpress);
+                                } else {
+                                    const mCalc = ShippingCalculationEngine.calculateMultiVendorShippingInstant({
+                                        cartItems: cart,
+                                        customerAddress: selectedAddrObj || routeAddress,
+                                        deliveryMethodCode: method.code,
+                                        adminSettings: settings?.shipping_settings || settings,
+                                        shippingMethods: deliveryMethods
+                                    });
+                                    if (mCalc?.isFreeShipping) {
+                                        methodCostLabel = 'FREE';
+                                    } else if (mCalc?.totalShippingFee) {
+                                        methodCostLabel = formatCurrency(mCalc.totalShippingFee);
                                     } else {
-                                        methodCostLabel = shippingCalculation.isFreeShipping ? 'FREE' : formatCurrency(shippingCalculation.totalShippingFee);
+                                        const defaultFee = isExpress ? 2500 : 1500;
+                                        methodCostLabel = formatCurrency(defaultFee);
                                     }
                                 }
 
