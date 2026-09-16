@@ -187,8 +187,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
     const [activeLgaStateFilter, setActiveLgaStateFilter] = useState('Yobe');
 
     // Step 2: Payment Gateways
-    const [paymentMethod, setPaymentMethod] = useState('Paystack');
-    const [pssPlan, setPssPlan]             = useState('3_months'); // '3_months' | '4_biweekly'
+    const [paymentMethod, setPaymentMethod]               = useState('Paystack');
+    const [pssDurationMonths, setPssDurationMonths]       = useState(3); // 1, 2, 3, 6, 10, 12
+    const [pssFrequency, setPssFrequency]                 = useState('monthly'); // 'daily' | '2_days' | '3_days' | '5_days' | 'weekly' | 'monthly'
+    const [pssScheduleExpanded, setPssScheduleExpanded]   = useState(false);
 
     // Step 3: Review & Options
     const [couponCode, setCouponCode]           = useState('');
@@ -413,9 +415,101 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
         showToast(`Delivery location set to ${lgaName} LGA, ${stateName}`);
     };
 
-    const finalTotal = useMemo(() => {
+    // Base total before BNPL surcharge
+    const baseTotal = useMemo(() => {
         return Math.max(0, initialTotal + shippingFee + taxAmount - discountAmount);
     }, [initialTotal, shippingFee, taxAmount, discountAmount]);
+
+    // Pay Small Small (BNPL) 5% Surcharge
+    const pssSurcharge = useMemo(() => {
+        if (paymentMethod !== 'pay_small_small') return 0;
+        return Math.round(baseTotal * 0.05);
+    }, [paymentMethod, baseTotal]);
+
+    const finalTotal = useMemo(() => {
+        return baseTotal + pssSurcharge;
+    }, [baseTotal, pssSurcharge]);
+
+    // Enhanced Pay Small Small Installment Engine
+    const pssPlanDetails = useMemo(() => {
+        const durationDaysMap = {
+            1: 30,
+            2: 60,
+            3: 90,
+            6: 180,
+            10: 300,
+            12: 360
+        };
+        const totalDays = durationDaysMap[pssDurationMonths] || 90;
+
+        const frequencyDaysMap = {
+            'daily': 1,
+            '2_days': 2,
+            '3_days': 3,
+            '5_days': 5,
+            'weekly': 7,
+            'monthly': 30
+        };
+        const intervalDays = frequencyDaysMap[pssFrequency] || 30;
+
+        let installmentsCount = Math.max(1, Math.floor(totalDays / intervalDays));
+        if (pssDurationMonths === 1 && pssFrequency === 'monthly') {
+            installmentsCount = 2; // 50% today, 50% in 30 days
+        }
+
+        const downPayment = Math.ceil(finalTotal / installmentsCount);
+        const remainingBalance = Math.max(0, finalTotal - downPayment);
+        const subsequentCount = Math.max(1, installmentsCount - 1);
+        const baseRecurringAmount = Math.floor(remainingBalance / subsequentCount);
+
+        const schedule = [];
+        const baseTime = Date.now();
+
+        schedule.push({
+            installment_number: 1,
+            amount: downPayment,
+            due_date: new Date(baseTime).toISOString(),
+            label: 'Due Today (Down Payment)',
+            status: 'due_today'
+        });
+
+        let allocatedSum = downPayment;
+        for (let i = 1; i < installmentsCount; i++) {
+            const dueDate = new Date(baseTime + i * intervalDays * 24 * 60 * 60 * 1000);
+            const isLast = (i === installmentsCount - 1);
+            const amount = isLast ? (finalTotal - allocatedSum) : baseRecurringAmount;
+            allocatedSum += amount;
+
+            schedule.push({
+                installment_number: i + 1,
+                amount,
+                due_date: dueDate.toISOString(),
+                label: `Installment #${i + 1}`,
+                status: 'pending'
+            });
+        }
+
+        return {
+            totalAmount: finalTotal,
+            baseTotal,
+            surcharge: pssSurcharge,
+            durationMonths: pssDurationMonths,
+            frequency: pssFrequency,
+            intervalDays,
+            totalDays,
+            installmentsCount,
+            downPayment,
+            recurringAmount: baseRecurringAmount,
+            remainingBalance,
+            schedule
+        };
+    }, [finalTotal, baseTotal, pssSurcharge, pssDurationMonths, pssFrequency]);
+
+    const dueTodayAmount = useMemo(() => {
+        if (paymentMethod === 'pod') return 0;
+        if (paymentMethod === 'pay_small_small') return pssPlanDetails.downPayment;
+        return finalTotal;
+    }, [paymentMethod, pssPlanDetails, finalTotal]);
 
     // Check if wallet balance is sufficient
     const walletBalance = Number(profile?.wallet_balance || 0);
@@ -639,7 +733,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     address_id: selectedAddressId,
                     shipping_override: addresses.find(a => a.id === selectedAddressId) || null,
                     payment_method: paymentMethod,
-                    installment_plan: paymentMethod === 'pay_small_small' ? pssPlan : null,
+                    installment_plan: paymentMethod === 'pay_small_small' ? pssPlanDetails : null,
                     coupon_code: appliedCoupon?.code || null,
                     order_notes: orderNote,
                     delivery_method: selectedDeliveryMethod || 'standard',
@@ -656,44 +750,25 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
             // Instant success (Wallet, Pay on Delivery, or Pay Small Small)
             if (checkout_url === 'success') {
-                // If BNPL, cache initial plan locally for zero-latency in PaySmallSmallPage
+                // If BNPL, cache rich plan locally for zero-latency in PaySmallSmallPage
                 if (paymentMethod === 'pay_small_small') {
                     try {
-                        const count = pssPlan === '4_biweekly' ? 4 : 3;
-                        const down = Math.round(finalTotal / count);
-                        const now = new Date();
-                        const schedule = [];
-                        schedule.push({
-                            installment_number: 1,
-                            amount: down,
-                            due_date: now.toISOString(),
-                            status: 'paid',
-                            paid_at: now.toISOString()
-                        });
-                        for (let i = 2; i <= count; i++) {
-                            const daysToAdd = pssPlan === '4_biweekly' ? (i - 1) * 14 : (i - 1) * 30;
-                            const d = new Date(now.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
-                            const instAmt = (i === count) ? (finalTotal - (down * (count - 1))) : down;
-                            schedule.push({
-                                installment_number: i,
-                                amount: instAmt,
-                                due_date: d.toISOString(),
-                                status: 'pending',
-                                paid_at: null
-                            });
-                        }
                         const newPlanItem = {
                             id: order_id,
                             orderNumber: order_id.slice(0, 8).toUpperCase(),
-                            createdAt: now.toISOString(),
+                            createdAt: new Date().toISOString(),
                             totalAmount: finalTotal,
-                            paidAmount: down,
-                            remainingAmount: finalTotal - down,
-                            planType: pssPlan,
-                            installmentsCount: count,
+                            baseTotal: pssPlanDetails.baseTotal,
+                            surcharge: pssPlanDetails.surcharge,
+                            paidAmount: pssPlanDetails.downPayment,
+                            remainingAmount: pssPlanDetails.remainingBalance,
+                            planType: `${pssPlanDetails.durationMonths}_months_${pssPlanDetails.frequency}`,
+                            durationMonths: pssPlanDetails.durationMonths,
+                            frequency: pssPlanDetails.frequency,
+                            installmentsCount: pssPlanDetails.installmentsCount,
                             installmentsPaid: 1,
                             isCompleted: false,
-                            schedule,
+                            schedule: pssPlanDetails.schedule,
                             items: cart
                         };
                         const pssCacheKey = `@abumafhal_pss_plans_${verifiedUser.id}`;
@@ -793,7 +868,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         <View style={s.successPssNotice}>
                             <Ionicons name="calendar-outline" size={16} color={GOLD} />
                             <Text style={s.successPssNoticeTxt}>
-                                Down payment of {formatCurrency(pssPlan === '4_biweekly' ? Math.round(finalTotal / 4) : Math.round(finalTotal / 3))} recorded. You can manage remaining installments in Pay Small Small.
+                                Down payment of {formatCurrency(pssPlanDetails.downPayment)} recorded. Remaining {pssPlanDetails.installmentsCount - 1} installments ({formatCurrency(pssPlanDetails.recurringAmount)} each) can be tracked easily in Pay Small Small.
                             </Text>
                         </View>
                     )}
@@ -1262,66 +1337,86 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                             );
                         })}
 
-                        {/* Pay Small Small (BNPL) Interactive Plan Selector */}
+                        {/* ── PAY SMALL SMALL (BNPL) ADVANCED PLAN SELECTOR ── */}
                         {paymentMethod === 'pay_small_small' && (
                             <View style={s.pssBox}>
                                 <View style={s.pssHeader}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                        <Ionicons name="calendar-outline" size={16} color={GOLD} />
-                                        <Text style={s.pssHeaderTitle}>Select Installment Schedule</Text>
+                                        <Ionicons name="calendar" size={16} color={GOLD} />
+                                        <Text style={s.pssHeaderTitle}>Pay Small Small Installment Plan</Text>
                                     </View>
-                                    <View style={s.pssZeroFeePill}>
-                                        <Text style={s.pssZeroFeeTxt}>0% INTEREST</Text>
+                                    <View style={s.pssSurchargePill}>
+                                        <Text style={s.pssSurchargePillTxt}>+5% SERVICE FEE</Text>
                                     </View>
                                 </View>
+                                
+                                <Text style={s.pssSectionSubtitle}>
+                                    Zaɓi tsawon lokaci da yadda kake son biya:
+                                </Text>
 
-                                <View style={s.pssPlanOptions}>
-                                    <TouchableOpacity
-                                        style={[s.pssPlanBtn, pssPlan === '3_months' && s.pssPlanBtnActive]}
-                                        onPress={() => setPssPlan('3_months')}
-                                        activeOpacity={0.8}
-                                    >
-                                        <View style={s.pssPlanBtnTop}>
-                                            <Text style={[s.pssPlanBtnTitle, pssPlan === '3_months' && s.pssPlanBtnTitleActive]}>
-                                                3 Months
-                                            </Text>
-                                            <Text style={[s.pssPlanBtnSub, pssPlan === '3_months' && s.pssPlanBtnSubActive]}>
-                                                3 Monthly Splits
-                                            </Text>
-                                        </View>
-                                        <Text style={[s.pssPlanDownVal, pssPlan === '3_months' && s.pssPlanDownValActive]}>
-                                            {formatCurrency(Math.round(finalTotal / 3))} /mo
-                                        </Text>
-                                    </TouchableOpacity>
-
-                                    <TouchableOpacity
-                                        style={[s.pssPlanBtn, pssPlan === '4_biweekly' && s.pssPlanBtnActive]}
-                                        onPress={() => setPssPlan('4_biweekly')}
-                                        activeOpacity={0.8}
-                                    >
-                                        <View style={s.pssPlanBtnTop}>
-                                            <Text style={[s.pssPlanBtnTitle, pssPlan === '4_biweekly' && s.pssPlanBtnTitleActive]}>
-                                                4 Bi-Weekly
-                                            </Text>
-                                            <Text style={[s.pssPlanBtnSub, pssPlan === '4_biweekly' && s.pssPlanBtnSubActive]}>
-                                                Every 14 Days
-                                            </Text>
-                                        </View>
-                                        <Text style={[s.pssPlanDownVal, pssPlan === '4_biweekly' && s.pssPlanDownValActive]}>
-                                            {formatCurrency(Math.round(finalTotal / 4))} /2wks
-                                        </Text>
-                                    </TouchableOpacity>
+                                {/* 1. DURATION PICKER */}
+                                <Text style={s.pssSubheaderLabel}>1. Tsawon Lokaci (Duration)</Text>
+                                <View style={s.pssChipRow}>
+                                    {[
+                                        { val: 1, label: '1 Wata (1 Mo)' },
+                                        { val: 2, label: 'Wata 2 (2 Mos)' },
+                                        { val: 3, label: 'Wata 3 (3 Mos)' },
+                                        { val: 6, label: 'Wata 6 (6 Mos)' },
+                                        { val: 10, label: 'Wata 10 (10 Mos)' },
+                                        { val: 12, label: 'Shekara 1 (12 Mos)' }
+                                    ].map(item => {
+                                        const isSelected = pssDurationMonths === item.val;
+                                        return (
+                                            <TouchableOpacity
+                                                key={item.val}
+                                                style={[s.pssChip, isSelected && s.pssChipActive]}
+                                                onPress={() => setPssDurationMonths(item.val)}
+                                                activeOpacity={0.8}
+                                            >
+                                                <Text style={[s.pssChipTxt, isSelected && s.pssChipTxtActive]}>
+                                                    {item.label}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
                                 </View>
 
-                                {/* Dynamic Installment Schedule Breakdown */}
+                                {/* 2. FREQUENCY PICKER */}
+                                <Text style={s.pssSubheaderLabel}>2. Yadda Za Ka Biya (Payment Frequency)</Text>
+                                <View style={s.pssChipRow}>
+                                    {[
+                                        { val: 'daily', label: 'Kullum (Daily)' },
+                                        { val: '2_days', label: 'Bayan Kwana 2' },
+                                        { val: '3_days', label: 'Bayan Kwana 3' },
+                                        { val: '5_days', label: 'Bayan Kwana 5' },
+                                        { val: 'weekly', label: 'Sati-Sati (Weekly)' },
+                                        { val: 'monthly', label: 'Wata-Wata (Monthly)' }
+                                    ].map(item => {
+                                        const isSelected = pssFrequency === item.val;
+                                        return (
+                                            <TouchableOpacity
+                                                key={item.val}
+                                                style={[s.pssChip, isSelected && s.pssChipActive]}
+                                                onPress={() => setPssFrequency(item.val)}
+                                                activeOpacity={0.8}
+                                            >
+                                                <Text style={[s.pssChipTxt, isSelected && s.pssChipTxtActive]}>
+                                                    {item.label}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+
+                                {/* 3. DYNAMIC METRICS SUMMARY */}
                                 <View style={s.pssBreakdown}>
                                     <View style={s.pssBreakdownRow}>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                             <View style={[s.pssDot, { backgroundColor: EMERALD }]} />
-                                            <Text style={s.pssBreakdownLabel}>Due Today (Down Payment):</Text>
+                                            <Text style={s.pssBreakdownLabel}>Za A Biya Yau (Down Payment):</Text>
                                         </View>
-                                        <Text style={[s.pssBreakdownVal, { color: EMERALD }]}>
-                                            {formatCurrency(pssPlan === '4_biweekly' ? Math.round(finalTotal / 4) : Math.round(finalTotal / 3))}
+                                        <Text style={[s.pssBreakdownVal, { color: EMERALD, fontWeight: '800' }]}>
+                                            {formatCurrency(pssPlanDetails.downPayment)}
                                         </Text>
                                     </View>
 
@@ -1329,19 +1424,83 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                             <View style={[s.pssDot, { backgroundColor: GOLD }]} />
                                             <Text style={s.pssBreakdownLabel}>
-                                                {pssPlan === '4_biweekly' ? '3 Later Splits (Every 14 days):' : '2 Later Splits (Every 30 days):'}
+                                                Biyan Kowane Zango ({pssPlanDetails.installmentsCount - 1} sauran biya):
                                             </Text>
                                         </View>
+                                        <Text style={[s.pssBreakdownVal, { fontWeight: '800' }]}>
+                                            {formatCurrency(pssPlanDetails.recurringAmount)}
+                                        </Text>
+                                    </View>
+
+                                    <View style={s.pssBreakdownRow}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                            <Ionicons name="layers-outline" size={13} color={SLATE} />
+                                            <Text style={s.pssBreakdownLabel}>Yawan Biyan Kuɗi (Total Splits):</Text>
+                                        </View>
                                         <Text style={s.pssBreakdownVal}>
-                                            {formatCurrency(pssPlan === '4_biweekly' ? Math.round(finalTotal / 4) : Math.round(finalTotal / 3))} each
+                                            {pssPlanDetails.installmentsCount} sau
+                                        </Text>
+                                    </View>
+
+                                    <View style={s.pssBreakdownRow}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                            <Ionicons name="pricetag-outline" size={13} color={SLATE} />
+                                            <Text style={s.pssBreakdownLabel}>Kudin Tsarin BNPL (+5%):</Text>
+                                        </View>
+                                        <Text style={[s.pssBreakdownVal, { color: '#B45309' }]}>
+                                            +{formatCurrency(pssSurcharge)}
                                         </Text>
                                     </View>
                                 </View>
 
+                                {/* 4. EXPANDABLE SCHEDULE PREVIEW */}
+                                <TouchableOpacity 
+                                    style={s.pssScheduleToggleBtn}
+                                    onPress={() => setPssScheduleExpanded(!pssScheduleExpanded)}
+                                    activeOpacity={0.8}
+                                >
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Ionicons name="calendar-outline" size={14} color={NAVY} />
+                                        <Text style={s.pssScheduleToggleTxt}>
+                                            {pssScheduleExpanded ? 'Boye Jadawalin Ranaku (Hide Dates)' : 'Duba Jadawalin Ranaku (View Schedule)'}
+                                        </Text>
+                                    </View>
+                                    <Ionicons name={pssScheduleExpanded ? 'chevron-up' : 'chevron-down'} size={14} color={NAVY} />
+                                </TouchableOpacity>
+
+                                {pssScheduleExpanded && (
+                                    <View style={s.pssScheduleBox}>
+                                        <Text style={s.pssScheduleTitle}>Jadawalin Biyan Kuɗi ({pssPlanDetails.installmentsCount} Splits):</Text>
+                                        {pssPlanDetails.schedule.slice(0, 10).map((inst, i) => (
+                                            <View key={i} style={s.pssScheduleRow}>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                    <View style={[s.pssScheduleNumCircle, i === 0 && { backgroundColor: EMERALD }]}>
+                                                        <Text style={s.pssScheduleNumTxt}>{inst.installment_number}</Text>
+                                                    </View>
+                                                    <View>
+                                                        <Text style={s.pssScheduleLabel}>{inst.label}</Text>
+                                                        <Text style={s.pssScheduleDate}>
+                                                            {i === 0 ? 'Nan take (Today)' : new Date(inst.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                        </Text>
+                                                    </View>
+                                                </View>
+                                                <Text style={[s.pssScheduleAmount, i === 0 && { color: EMERALD }]}>
+                                                    {formatCurrency(inst.amount)}
+                                                </Text>
+                                            </View>
+                                        ))}
+                                        {pssPlanDetails.schedule.length > 10 && (
+                                            <Text style={s.pssScheduleMoreTxt}>
+                                                + Sauran {pssPlanDetails.schedule.length - 10} biya na gaba da za a gani a Profile
+                                            </Text>
+                                        )}
+                                    </View>
+                                )}
+
                                 <View style={s.pssNoticeRow}>
                                     <Ionicons name="sparkles" size={13} color={GOLD} />
                                     <Text style={s.pssNoticeTxt}>
-                                        Order is dispatched immediately upon paying down payment today. Clear balance easily in your Profile.
+                                        Za a aiko maka da kaya nan da nan bayan biyan Down Payment na yau. Sauran kuɗin kuma za a na biya ta Profile dinka a tsari.
                                     </Text>
                                 </View>
                             </View>
@@ -1351,12 +1510,31 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         {paymentMethod === 'pod' && (
                             <View style={s.podBox}>
                                 <View style={s.podHeader}>
-                                    <Ionicons name="shield-checkmark" size={16} color="#EA580C" />
-                                    <Text style={s.podTitle}>Pay on Delivery (Cash / POS)</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Ionicons name="cash" size={18} color="#EA580C" />
+                                        <Text style={s.podTitle}>Pay on Delivery (Cash / POS) 100% Active</Text>
+                                    </View>
+                                    <View style={s.podZeroPill}>
+                                        <Text style={s.podZeroPillTxt}>₦0 YAU (FREE TODAY)</Text>
+                                    </View>
                                 </View>
                                 <Text style={s.podDesc}>
-                                    Pay <Text style={{ fontWeight: '800' }}>{formatCurrency(finalTotal)}</Text> in cash or via POS bank debit card when your package is delivered to your doorstep. Please ensure your contact phone number is accessible for delivery verification.
+                                    Ba za ka biya ko sisi ba yau! Za ka biya <Text style={{ fontWeight: '800', color: NAVY }}>{formatCurrency(finalTotal)}</Text> ne a hannu da tsabar kuɗi (Cash) ko da katin banki (POS) a lokacin da mai kawo kaya ya miƙa maka a kofar gidanka.
                                 </Text>
+                                <View style={s.podFeatureRow}>
+                                    <View style={s.podFeatureItem}>
+                                        <Ionicons name="checkmark-circle" size={14} color={EMERALD} />
+                                        <Text style={s.podFeatureTxt}>₦0 Upfront</Text>
+                                    </View>
+                                    <View style={s.podFeatureItem}>
+                                        <Ionicons name="checkmark-circle" size={14} color={EMERALD} />
+                                        <Text style={s.podFeatureTxt}>Duba Kayan Kafin Biya</Text>
+                                    </View>
+                                    <View style={s.podFeatureItem}>
+                                        <Ionicons name="checkmark-circle" size={14} color={EMERALD} />
+                                        <Text style={s.podFeatureTxt}>Cash ko POS Card</Text>
+                                    </View>
+                                </View>
                             </View>
                         )}
 
@@ -1455,9 +1633,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                         <Text style={s.recapMainTxt}>
                                             {paymentMethod === 'pay_small_small'
-                                                ? `Pay Small Small (${pssPlan === '4_biweekly' ? '4 Bi-Weekly' : '3 Months'})`
+                                                ? `Pay Small Small (${pssPlanDetails.durationMonths} Mo • ${pssPlanDetails.frequency})`
                                                 : paymentMethod === 'pod'
-                                                ? 'Pay on Delivery (POD)'
+                                                ? 'Pay on Delivery (Cash / POS)'
                                                 : paymentMethod}
                                         </Text>
                                         <View style={s.escrowSmallPill}>
@@ -1467,12 +1645,12 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                     </View>
                                     {paymentMethod === 'pay_small_small' && (
                                         <Text style={s.recapSubTxt}>
-                                            Due Today: {formatCurrency(pssPlan === '4_biweekly' ? Math.round(finalTotal / 4) : Math.round(finalTotal / 3))}
+                                            Due Today: {formatCurrency(pssPlanDetails.downPayment)} • Then {pssPlanDetails.installmentsCount - 1} splits of {formatCurrency(pssPlanDetails.recurringAmount)}
                                         </Text>
                                     )}
                                     {paymentMethod === 'pod' && (
-                                        <Text style={s.recapSubTxt}>
-                                            Cash or POS card on arrival
+                                        <Text style={[s.recapSubTxt, { color: '#EA580C', fontWeight: '700' }]}>
+                                            ₦0 upfront • Pay full {formatCurrency(finalTotal)} on arrival (Cash/POS)
                                         </Text>
                                     )}
                                 </View>
@@ -1654,16 +1832,52 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                 </View>
                             )}
 
+                            {/* Pay Small Small 5% Financing Surcharge */}
+                            {paymentMethod === 'pay_small_small' && (
+                                <View style={s.invoiceRow}>
+                                    <View>
+                                        <Text style={[s.invoiceLabel, { color: '#B45309' }]}>Pay Small Small Service Fee (+5%)</Text>
+                                        <Text style={s.invoiceSubLabel}>BNPL financing for {pssPlanDetails.durationMonths} Mo ({pssPlanDetails.frequency}) plan</Text>
+                                    </View>
+                                    <Text style={[s.invoiceValue, { color: '#B45309', fontWeight: '800' }]}>+{formatCurrency(pssSurcharge)}</Text>
+                                </View>
+                            )}
+
                             <View style={s.invoiceDivider} />
 
                             {/* Final Total */}
                             <View style={s.finalRow}>
                                 <View>
                                     <Text style={s.finalLabel}>Grand Total</Text>
-                                    <Text style={s.finalSubLabel}>All taxes & delivery included</Text>
+                                    <Text style={s.finalSubLabel}>All taxes, fees & delivery included</Text>
                                 </View>
                                 <Text style={s.finalValue}>{formatCurrency(finalTotal)}</Text>
                             </View>
+
+                            {/* Down Payment vs Due Today Callout in Invoice */}
+                            {paymentMethod === 'pay_small_small' && (
+                                <View style={{ backgroundColor: '#F0FDF4', padding: 10, borderRadius: 8, marginTop: 10, borderWidth: 1, borderColor: '#BBF7D0' }}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <Text style={{ fontSize: 12, fontWeight: '800', color: '#166534' }}>Za A Biya Yau (Due Today):</Text>
+                                        <Text style={{ fontSize: 14, fontWeight: '900', color: '#166534' }}>{formatCurrency(pssPlanDetails.downPayment)}</Text>
+                                    </View>
+                                    <Text style={{ fontSize: 10.5, color: '#15803D', marginTop: 2 }}>
+                                        Sauran {formatCurrency(pssPlanDetails.remainingBalance)} za a biya {pssPlanDetails.installmentsCount - 1} sau ({formatCurrency(pssPlanDetails.recurringAmount)} kowane {pssPlanDetails.frequency === 'daily' ? 'rana' : pssPlanDetails.frequency === 'weekly' ? 'sati' : 'wata'})
+                                    </Text>
+                                </View>
+                            )}
+
+                            {paymentMethod === 'pod' && (
+                                <View style={{ backgroundColor: '#FFF7ED', padding: 10, borderRadius: 8, marginTop: 10, borderWidth: 1, borderColor: '#FED7AA' }}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <Text style={{ fontSize: 12, fontWeight: '800', color: '#C2410C' }}>Za A Biya Yau (Due Today):</Text>
+                                        <Text style={{ fontSize: 14, fontWeight: '900', color: '#C2410C' }}>₦0</Text>
+                                    </View>
+                                    <Text style={{ fontSize: 10.5, color: '#9A3412', marginTop: 2 }}>
+                                        Za a biya cikakken kuɗin {formatCurrency(finalTotal)} ne a hannu (Cash ko POS) lokacin isowar kaya.
+                                    </Text>
+                                </View>
+                            )}
                         </View>
 
                         {/* WhatsApp Dispatch Notice */}
@@ -1681,13 +1895,25 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             <View style={s.footerBar}>
                 <View style={s.footerTotalBox}>
                     <Text style={s.footerTotalLabel}>
-                        {currentStep === 3 && paymentMethod === 'pay_small_small' ? 'Due Today (Down Payment)' : 'Total to Pay'}
+                        {paymentMethod === 'pod'
+                            ? 'Due on Delivery'
+                            : paymentMethod === 'pay_small_small'
+                            ? 'Due Today (Down Payment)'
+                            : 'Total to Pay'}
                     </Text>
                     <Text style={s.footerTotalVal}>
-                        {currentStep === 3 && paymentMethod === 'pay_small_small'
-                            ? formatCurrency(pssPlan === '4_biweekly' ? Math.round(finalTotal / 4) : Math.round(finalTotal / 3))
+                        {paymentMethod === 'pod'
+                            ? formatCurrency(finalTotal)
+                            : paymentMethod === 'pay_small_small'
+                            ? formatCurrency(pssPlanDetails.downPayment)
                             : formatCurrency(finalTotal)}
                     </Text>
+                    {paymentMethod === 'pod' && (
+                        <Text style={{ fontSize: 9.5, color: '#EA580C', fontWeight: '800' }}>₦0 upfront today</Text>
+                    )}
+                    {paymentMethod === 'pay_small_small' && (
+                        <Text style={{ fontSize: 9.5, color: '#B45309', fontWeight: '700' }}>Total: {formatCurrency(finalTotal)} (+5%)</Text>
+                    )}
                 </View>
 
                 <View style={s.footerBtnsRow}>
@@ -1728,9 +1954,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                 <Text style={s.btnNextTxt}>
                                     {currentStep === 3
                                         ? paymentMethod === 'pay_small_small'
-                                            ? 'Confirm & Split Payment'
+                                            ? `Confirm & Pay ${formatCurrency(pssPlanDetails.downPayment)}`
                                             : paymentMethod === 'pod'
-                                            ? 'Confirm Order (POD)'
+                                            ? 'Confirm Order (Pay on Delivery)'
                                             : 'Confirm & Pay'
                                         : 'Continue'}
                                 </Text>
@@ -2927,78 +3153,74 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 10,
-    },
-    pssHeaderTitle: {
-        fontSize: 12.5,
-        fontWeight: '800',
-        color: NAVY,
-    },
-    pssZeroFeePill: {
-        backgroundColor: '#FEF3C7',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 4,
-        borderWidth: 0.5,
-        borderColor: GOLD,
-    },
-    pssZeroFeeTxt: {
-        fontSize: 9,
-        fontWeight: '800',
-        color: '#B45309',
-    },
-    pssPlanOptions: {
-        flexDirection: 'row',
-        gap: 8,
-        marginBottom: 10,
-    },
-    pssPlanBtn: {
-        flex: 1,
-        backgroundColor: WHITE,
-        borderRadius: 10,
-        padding: 10,
-        borderWidth: 1,
-        borderColor: BORDER,
-    },
-    pssPlanBtnActive: {
-        borderColor: GOLD,
-        backgroundColor: '#FEF9EC',
-    },
-    pssPlanBtnTop: {
         marginBottom: 4,
     },
-    pssPlanBtnTitle: {
-        fontSize: 12,
+    pssHeaderTitle: {
+        fontSize: 13,
         fontWeight: '800',
-        color: SLATE_DARK,
-    },
-    pssPlanBtnTitleActive: {
         color: NAVY,
     },
-    pssPlanBtnSub: {
-        fontSize: 10,
-        color: SLATE,
-        marginTop: 1,
+    pssSurchargePill: {
+        backgroundColor: '#FEF3C7',
+        paddingHorizontal: 7,
+        paddingVertical: 3,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: '#F59E0B',
     },
-    pssPlanBtnSubActive: {
-        color: '#92400E',
-        fontWeight: '600',
-    },
-    pssPlanDownVal: {
-        fontSize: 13,
+    pssSurchargePillTxt: {
+        fontSize: 9.5,
         fontWeight: '900',
-        color: SLATE_DARK,
-        marginTop: 2,
+        color: '#92400E',
+        letterSpacing: 0.4,
     },
-    pssPlanDownValActive: {
-        color: GOLD,
+    pssSectionSubtitle: {
+        fontSize: 11,
+        color: SLATE,
+        marginBottom: 10,
+    },
+    pssSubheaderLabel: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: NAVY,
+        marginTop: 6,
+        marginBottom: 6,
+        textTransform: 'uppercase',
+        letterSpacing: 0.3,
+    },
+    pssChipRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
+        marginBottom: 8,
+    },
+    pssChip: {
+        backgroundColor: WHITE,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    pssChipActive: {
+        backgroundColor: NAVY,
+        borderColor: NAVY,
+    },
+    pssChipTxt: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: SLATE_DARK,
+    },
+    pssChipTxtActive: {
+        color: WHITE,
     },
     pssBreakdown: {
         backgroundColor: WHITE,
-        borderRadius: 8,
-        padding: 9,
+        borderRadius: 10,
+        padding: 10,
+        marginTop: 6,
         borderWidth: 1,
-        borderColor: '#F3E8CB',
+        borderColor: '#FDE68A',
         gap: 6,
     },
     pssBreakdownRow: {
@@ -3007,9 +3229,9 @@ const s = StyleSheet.create({
         justifyContent: 'space-between',
     },
     pssDot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
+        width: 7,
+        height: 7,
+        borderRadius: 3.5,
     },
     pssBreakdownLabel: {
         fontSize: 11,
@@ -3018,46 +3240,157 @@ const s = StyleSheet.create({
     },
     pssBreakdownVal: {
         fontSize: 11.5,
+        fontWeight: '700',
+        color: NAVY,
+    },
+    pssScheduleToggleBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#FEF3C7',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 8,
+        marginTop: 10,
+    },
+    pssScheduleToggleTxt: {
+        fontSize: 11.5,
         fontWeight: '800',
         color: NAVY,
+    },
+    pssScheduleBox: {
+        backgroundColor: WHITE,
+        borderRadius: 8,
+        padding: 10,
+        marginTop: 6,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        gap: 6,
+    },
+    pssScheduleTitle: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: NAVY,
+        marginBottom: 4,
+    },
+    pssScheduleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 4,
+        borderBottomWidth: 0.5,
+        borderBottomColor: '#F1F5F9',
+    },
+    pssScheduleNumCircle: {
+        width: 18,
+        height: 18,
+        borderRadius: 9,
+        backgroundColor: '#94A3B8',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    pssScheduleNumTxt: {
+        fontSize: 9.5,
+        fontWeight: '800',
+        color: WHITE,
+    },
+    pssScheduleLabel: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: NAVY,
+    },
+    pssScheduleDate: {
+        fontSize: 9.5,
+        color: SLATE,
+    },
+    pssScheduleAmount: {
+        fontSize: 11.5,
+        fontWeight: '800',
+        color: NAVY,
+    },
+    pssScheduleMoreTxt: {
+        fontSize: 10,
+        color: SLATE,
+        textAlign: 'center',
+        marginTop: 4,
+        fontStyle: 'italic',
     },
     pssNoticeRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 5,
-        marginTop: 8,
+        gap: 6,
+        marginTop: 10,
     },
     pssNoticeTxt: {
-        fontSize: 10,
-        color: SLATE_DARK,
+        fontSize: 10.5,
+        color: '#92400E',
         flex: 1,
-        lineHeight: 14,
+        lineHeight: 15,
     },
     // Pay on Delivery (POD) Styles
     podBox: {
         backgroundColor: '#FFF7ED',
-        borderRadius: 12,
-        padding: 12,
-        marginTop: 4,
-        marginBottom: 10,
+        borderRadius: 14,
+        padding: 14,
+        marginTop: 6,
+        marginBottom: 12,
         borderWidth: 1.5,
-        borderColor: '#F97316',
+        borderColor: '#FB923C',
+        shadowColor: '#EA580C',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 5,
+        elevation: 2,
     },
     podHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
-        marginBottom: 4,
+        justifyContent: 'space-between',
+        marginBottom: 8,
     },
     podTitle: {
-        fontSize: 12.5,
+        fontSize: 13,
         fontWeight: '800',
         color: '#9A3412',
     },
+    podZeroPill: {
+        backgroundColor: '#FFEDD5',
+        paddingHorizontal: 7,
+        paddingVertical: 2.5,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: '#F97316',
+    },
+    podZeroPillTxt: {
+        fontSize: 9.5,
+        fontWeight: '900',
+        color: '#C2410C',
+    },
     podDesc: {
-        fontSize: 11,
+        fontSize: 11.5,
         color: '#7C2D12',
-        lineHeight: 16,
+        lineHeight: 17,
+        marginBottom: 10,
+    },
+    podFeatureRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 10,
+        backgroundColor: WHITE,
+        padding: 10,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#FED7AA',
+    },
+    podFeatureItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    podFeatureTxt: {
+        fontSize: 10.5,
+        fontWeight: '700',
+        color: NAVY,
     },
     // Success Screen Notices
     successPssNotice: {

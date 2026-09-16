@@ -232,8 +232,13 @@ Deno.serve(async (req: Request) => {
             }
         }
 
-        const totalAmount = Math.max(0, subtotal + shippingFee + tax - discount);
-        console.log("Total Amount:", totalAmount);
+        const baseTotal = Math.max(0, subtotal + shippingFee + tax - discount);
+        let pssSurcharge = 0;
+        if (payment_method === "pay_small_small" || payment_method === "Pay Small Small") {
+            pssSurcharge = Math.round(baseTotal * 0.05);
+        }
+        const totalAmount = baseTotal + pssSurcharge;
+        console.log("Base Total:", baseTotal, "PSS Surcharge (5%):", pssSurcharge, "Total Amount:", totalAmount);
 
         // 5. Create Order using Service Role
 
@@ -449,13 +454,12 @@ Deno.serve(async (req: Request) => {
         }
         else if (payment_method === "pay_small_small" || payment_method === "Pay Small Small") {
             // Pay Small Small (BNPL / Flexible Installments)
-            const installmentPlan = body.installment_plan || {
-                plan_type: '3_months',
-                installments_count: 3,
-                down_payment_percentage: 33.33,
-            };
+            const clientPlan = body.installment_plan || {};
+            const durationMonths = Number(clientPlan.durationMonths || clientPlan.duration_months || 3);
+            const frequency = clientPlan.frequency || 'monthly';
+            const count = Number(clientPlan.installmentsCount || clientPlan.installments_count || 3);
 
-            const downPayment = Math.round(totalAmount * ((installmentPlan.down_payment_percentage || 33.33) / 100));
+            const downPayment = Number(clientPlan.downPayment || clientPlan.down_payment || Math.ceil(totalAmount / count));
             const remainingBalance = Math.max(0, totalAmount - downPayment);
 
             const { data: finalOrderId, error: conversionError } = await supabaseAdmin.rpc("create_order_from_session", {
@@ -470,28 +474,44 @@ Deno.serve(async (req: Request) => {
             }
 
             const now = new Date();
-            const schedule = [];
-            const count = installmentPlan.installments_count || 3;
-            const installmentAmount = Math.round(remainingBalance / Math.max(1, count - 1));
+            let schedule = clientPlan.schedule;
 
-            for (let i = 1; i < count; i++) {
-                const dueDate = new Date(now);
-                if (installmentPlan.plan_type === '4_biweekly') {
-                    dueDate.setDate(dueDate.getDate() + (i * 14));
-                } else {
-                    dueDate.setMonth(dueDate.getMonth() + i);
-                }
+            if (!Array.isArray(schedule) || schedule.length === 0) {
+                const intervalDays = Number(clientPlan.intervalDays || clientPlan.frequency_days || (frequency === 'daily' ? 1 : frequency === 'weekly' ? 7 : 30));
+                schedule = [];
                 schedule.push({
-                    installment_number: i + 1,
-                    amount: i === count - 1 ? (remainingBalance - (installmentAmount * (count - 2))) : installmentAmount,
-                    due_date: dueDate.toISOString(),
-                    status: 'pending'
+                    installment_number: 1,
+                    amount: downPayment,
+                    due_date: now.toISOString(),
+                    label: 'Due Today (Down Payment)',
+                    status: 'paid',
+                    paid_at: now.toISOString()
                 });
+                const subsequentCount = Math.max(1, count - 1);
+                const recurringAmt = Math.floor(remainingBalance / subsequentCount);
+                let allocated = downPayment;
+                for (let i = 1; i < count; i++) {
+                    const dueDate = new Date(now.getTime() + i * intervalDays * 24 * 60 * 60 * 1000);
+                    const isLast = (i === count - 1);
+                    const amt = isLast ? (totalAmount - allocated) : recurringAmt;
+                    allocated += amt;
+                    schedule.push({
+                        installment_number: i + 1,
+                        amount: amt,
+                        due_date: dueDate.toISOString(),
+                        label: `Installment #${i + 1}`,
+                        status: 'pending'
+                    });
+                }
             }
 
             const fullPlanData = {
-                ...installmentPlan,
+                ...clientPlan,
+                duration_months: durationMonths,
+                frequency,
+                installments_count: count,
                 total_amount: totalAmount,
+                pss_surcharge: pssSurcharge,
                 down_payment: downPayment,
                 remaining_balance: remainingBalance,
                 down_payment_paid: true,
@@ -507,7 +527,7 @@ Deno.serve(async (req: Request) => {
                         status: "processing",
                         delivery_method: delivery_method || "standard",
                         shipping_snapshot: finalShippingSnapshot,
-                        order_notes: `${order_notes || ''} [Pay Small Small: ${installmentPlan.plan_type || '3_months'}]`,
+                        order_notes: `${order_notes || ''} [Pay Small Small: ${durationMonths} Mo - ${frequency} (${count} splits)]`,
                         metadata: fullPlanData
                     })
                     .eq("id", finalOrderId);
@@ -519,7 +539,7 @@ Deno.serve(async (req: Request) => {
                         total_amount: totalAmount,
                         down_payment: downPayment,
                         remaining_balance: remainingBalance,
-                        plan_type: installmentPlan.plan_type || '3_months',
+                        plan_type: `${durationMonths}_months_${frequency}`,
                         status: 'active',
                         schedule
                     });
