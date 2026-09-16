@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { View, TouchableOpacity, Text } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { AppHome } from './AppHome';
 import { ShopPage } from './ShopPage';
 import { CartPage } from './CartPage';
@@ -152,15 +154,72 @@ export const MainApp = ({ route, navigation, user, onLogout, cartLines, onUpdate
                 )}
             </View>
 
-            {/* AI Assistant FAB */}
-            <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => setShowAI(true)}
-                style={{ position: 'absolute', bottom: 90, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: '#4F46E5', justifyContent: 'center', alignItems: 'center', shadowColor: '#4F46E5', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5, zIndex: 100 }}
-            >
-                <Text style={{ fontSize: 24, marginLeft: 2 }}>✨</Text>
-                <View style={{ position: 'absolute', top: 0, right: 0, width: 14, height: 14, borderRadius: 7, backgroundColor: '#10B981', borderWidth: 2, borderColor: '#4F46E5' }} />
-            </TouchableOpacity>
+            {/* ── LUXURY MODERNIZED AI ASSISTANT (VISIBLE ONLY ON HOME SCREEN) ── */}
+            {activeTab === 'home' && (
+                <TouchableOpacity
+                    activeOpacity={0.88}
+                    onPress={() => setShowAI(true)}
+                    style={{
+                        position: 'absolute',
+                        bottom: 80,
+                        right: 16,
+                        zIndex: 999,
+                        shadowColor: '#0E1A2E',
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.35,
+                        shadowRadius: 10,
+                        elevation: 8,
+                    }}
+                >
+                    <LinearGradient
+                        colors={['#0E1A2E', '#1A2942']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 7,
+                            paddingVertical: 8,
+                            paddingHorizontal: 12,
+                            borderRadius: 24,
+                            borderWidth: 1.5,
+                            borderColor: '#D9A73A',
+                        }}
+                    >
+                        <View style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: 14,
+                            backgroundColor: 'rgba(217, 167, 58, 0.18)',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderWidth: 1,
+                            borderColor: '#D9A73A',
+                        }}>
+                            <Ionicons name="sparkles" size={15} color="#D9A73A" />
+                        </View>
+                        <View style={{ marginRight: 2 }}>
+                            <Text style={{ fontSize: 11.5, fontWeight: '900', color: '#FFFFFF', letterSpacing: 0.3 }}>
+                                Ask AI
+                            </Text>
+                            <Text style={{ fontSize: 8.5, fontWeight: '800', color: '#D9A73A', letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                                Assistant
+                            </Text>
+                        </View>
+                        <View style={{
+                            width: 7,
+                            height: 7,
+                            borderRadius: 3.5,
+                            backgroundColor: '#10B981',
+                            shadowColor: '#10B981',
+                            shadowOffset: { width: 0, height: 0 },
+                            shadowOpacity: 0.9,
+                            shadowRadius: 3,
+                            elevation: 2,
+                        }} />
+                    </LinearGradient>
+                </TouchableOpacity>
+            )}
 
             <AIAssistantModal
                 visible={showAI}
