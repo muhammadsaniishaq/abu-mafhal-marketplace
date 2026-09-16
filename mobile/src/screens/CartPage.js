@@ -28,13 +28,6 @@ const BORDER      = '#E2E8F0';
 const EMERALD     = '#10B981';
 const DANGER      = '#EF4444';
 
-// Real Checkout Payment Gateways supported on Abu Mafhal
-const PAYMENT_METHODS = [
-    { id: 'Paystack',    name: 'Paystack',        icon: 'card-outline',     sub: 'Card, Transfer & USSD', color: '#00C3F8' },
-    { id: 'Flutterwave', name: 'Flutterwave',     icon: 'flash-outline',    sub: 'Cards & Mobile Money',  color: '#F5A623' },
-    { id: 'Wallet',      name: 'Abu Mafhal Wallet',icon: 'wallet-outline',   sub: 'Instant Escrow Debit',  color: '#10B981' },
-    { id: 'pod',         name: 'Pay on Delivery', icon: 'bicycle-outline',  sub: 'Cash on Arrival',       color: '#F97316' },
-];
 
 const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=400&auto=format&fit=crop';
 
@@ -67,7 +60,6 @@ export const CartPage = ({
     const isFreeNationwide = Boolean(shippingSettings.free_nationwide_shipping);
 
     // ── States ────────────────────────────────────────────────────────────────
-    const [selectedPayment, setSelectedPayment] = useState('Paystack');
     const [promoInput, setPromoInput]           = useState('');
     const [appliedPromo, setAppliedPromo]       = useState(null);
     const [promoError, setPromoError]           = useState('');
@@ -409,7 +401,6 @@ export const CartPage = ({
                 deliveryFee,
                 discount,
                 promoCode: appliedPromo?.code || null,
-                paymentMethod: selectedPayment,
                 selectedAddress: customerAddress || null
             });
         } catch (e) {
@@ -419,8 +410,7 @@ export const CartPage = ({
                 total,
                 subtotal,
                 deliveryFee,
-                discount,
-                paymentMethod: selectedPayment
+                discount
             });
         }
     };
@@ -808,49 +798,7 @@ export const CartPage = ({
                             )}
                         </View>
 
-                        {/* ── 5. PAYMENT GATEWAY PREFERENCE ───────────────────── */}
-                        <View style={{ marginBottom: 16 }}>
-                            <View style={s.payHeader}>
-                                <Text style={s.payHeaderTitle}>Preferred Payment Method</Text>
-                                <View style={s.secureBadge}>
-                                    <Ionicons name="shield-checkmark" size={11} color={EMERALD} />
-                                    <Text style={s.secureBadgeTxt}>Escrow Protected</Text>
-                                </View>
-                            </View>
-
-                            <ScrollView
-                                horizontal
-                                showsHorizontalScrollIndicator={false}
-                                contentContainerStyle={{ gap: 10, paddingVertical: 2 }}
-                            >
-                                {PAYMENT_METHODS.map((m) => {
-                                    const isSelected = selectedPayment === m.id;
-                                    return (
-                                        <TouchableOpacity
-                                            key={m.id}
-                                            onPress={() => setSelectedPayment(m.id)}
-                                            activeOpacity={0.8}
-                                            style={[s.payCard, isSelected && s.payCardSelected]}
-                                        >
-                                            {isSelected && (
-                                                <View style={s.payCheckDot}>
-                                                    <Ionicons name="checkmark" size={9} color={WHITE} />
-                                                </View>
-                                            )}
-                                            <View style={[s.payIconWrap, { backgroundColor: isSelected ? '#EFF6FF' : '#F8FAFC' }]}>
-                                                <Ionicons name={m.icon} size={18} color={m.color} />
-                                            </View>
-                                            <Text numberOfLines={1} style={[s.payName, isSelected && s.payNameSelected]}>
-                                                {m.name}
-                                            </Text>
-                                            <Text numberOfLines={1} style={s.paySub}>{m.sub}</Text>
-                                        </TouchableOpacity>
-                                    );
-                                })}
-                            </ScrollView>
-                        </View>
-
-                        {/* ── 6. DETAILED PRICE BREAKDOWN ─────────────────────── */}
+                        {/* ── 5. DETAILED PRICE BREAKDOWN ─────────────────────── */}
                         <View style={s.summaryCard}>
                             <Text style={s.summaryTitle}>Order Summary</Text>
 
@@ -1497,80 +1445,6 @@ const s = StyleSheet.create({
         fontSize: 10,
         fontWeight: '800',
         color: '#B45309',
-    },
-
-    // Payment Methods
-    payHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 8,
-        paddingHorizontal: 2,
-    },
-    payHeaderTitle: {
-        fontSize: 13,
-        fontWeight: '800',
-        color: NAVY,
-    },
-    secureBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 3,
-        backgroundColor: '#ECFDF5',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 4,
-    },
-    secureBadgeTxt: {
-        fontSize: 9.5,
-        fontWeight: '700',
-        color: '#059669',
-    },
-    payCard: {
-        width: 135,
-        backgroundColor: WHITE,
-        borderRadius: 12,
-        padding: 10,
-        borderWidth: 1.5,
-        borderColor: BORDER,
-        position: 'relative',
-    },
-    payCardSelected: {
-        borderColor: GOLD,
-        backgroundColor: '#FFFDF7',
-    },
-    payCheckDot: {
-        position: 'absolute',
-        top: 6,
-        right: 6,
-        width: 16,
-        height: 16,
-        borderRadius: 8,
-        backgroundColor: GOLD,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    payIconWrap: {
-        width: 32,
-        height: 32,
-        borderRadius: 8,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 6,
-    },
-    payName: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: SLATE_DARK,
-        marginBottom: 2,
-    },
-    payNameSelected: {
-        color: NAVY,
-        fontWeight: '800',
-    },
-    paySub: {
-        fontSize: 9.5,
-        color: SLATE,
     },
 
     // Price Breakdown Summary
