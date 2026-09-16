@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { styles } from '../styles/theme';
 import { supabase } from '../lib/supabase';
 import { NIGERIA_DATA } from '../data/nigeriaData';
+import { NIGERIA_STATE_CENTROIDS, NIGERIA_LGA_CENTROIDS } from '../services/shippingService';
 import * as Location from 'expo-location';
 
 export const AddressPage = ({ navigation, onBack }) => {
@@ -30,6 +31,8 @@ export const AddressPage = ({ navigation, onBack }) => {
         city: '', // This will hold the LGA
         state: '',
         phone: '',
+        latitude: null,
+        longitude: null,
         isDefault: false
     });
 
@@ -67,9 +70,11 @@ export const AddressPage = ({ navigation, onBack }) => {
         setFormData({
             title: addr.title,
             address: addr.address,
-            city: addr.city, // Saved LGA
+            city: addr.city || addr.lga || '', // Saved LGA
             state: addr.state,
             phone: addr.phone,
+            latitude: addr.latitude || null,
+            longitude: addr.longitude || null,
             isDefault: addr.is_default
         });
         setEditingId(addr.id);
@@ -147,6 +152,8 @@ export const AddressPage = ({ navigation, onBack }) => {
                     address: fullAddress || prev.address, // Keep previous if new is empty
                     state: matchedState || prev.state,
                     city: matchedLga || prev.city, // Only overwrite if precise match found
+                    latitude: location.coords.latitude,
+                    longitude: location.coords.longitude,
                     title: prev.title || 'Home'
                 }));
 
@@ -173,13 +180,29 @@ export const AddressPage = ({ navigation, onBack }) => {
                 return;
             }
 
+            // Check if coordinates need fallback from LGA/State centroid
+            let lat = formData.latitude;
+            let lon = formData.longitude;
+            if (!lat || !lon) {
+                if (formData.city && NIGERIA_LGA_CENTROIDS && NIGERIA_LGA_CENTROIDS[formData.city]) {
+                    lat = NIGERIA_LGA_CENTROIDS[formData.city].lat;
+                    lon = NIGERIA_LGA_CENTROIDS[formData.city].lon;
+                } else if (formData.state && NIGERIA_STATE_CENTROIDS && NIGERIA_STATE_CENTROIDS[formData.state]) {
+                    lat = NIGERIA_STATE_CENTROIDS[formData.state].lat;
+                    lon = NIGERIA_STATE_CENTROIDS[formData.state].lon;
+                }
+            }
+
             const payload = {
                 user_id: user.id,
                 title: formData.title,
                 address: formData.address,
                 city: formData.city, // Stores LGA
+                lga: formData.city,
                 state: formData.state,
                 phone: formData.phone,
+                latitude: lat ? parseFloat(lat) : null,
+                longitude: lon ? parseFloat(lon) : null,
                 is_default: formData.isDefault
             };
 
@@ -212,7 +235,7 @@ export const AddressPage = ({ navigation, onBack }) => {
             Alert.alert('Success', editingId ? 'Address updated' : 'Address added');
             setIsAdding(false);
             setEditingId(null);
-            setFormData({ title: '', address: '', city: '', state: '', phone: '', isDefault: false });
+            setFormData({ title: '', address: '', city: '', state: '', phone: '', latitude: null, longitude: null, isDefault: false });
             fetchAddresses();
 
         } catch (error) {
@@ -418,9 +441,14 @@ export const AddressPage = ({ navigation, onBack }) => {
                                         </View>
 
                                         <View style={{ flex: 1 }}>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
                                                 <Text style={localStyles.addressTitle}>{addr.title}</Text>
                                                 {addr.is_default && <View style={localStyles.badge}><Text style={localStyles.badgeText}>Default</Text></View>}
+                                                {Boolean(addr.latitude && addr.longitude) && (
+                                                    <View style={[localStyles.badge, { backgroundColor: '#ECFDF5', borderColor: '#10B981', borderWidth: 0.5 }]}>
+                                                        <Text style={[localStyles.badgeText, { color: '#059669', fontSize: 10 }]}>📍 GPS</Text>
+                                                    </View>
+                                                )}
                                             </View>
                                             <Text style={localStyles.addressText}>{addr.address}</Text>
                                             <Text style={localStyles.addressText}>{addr.city}, {addr.state}</Text>

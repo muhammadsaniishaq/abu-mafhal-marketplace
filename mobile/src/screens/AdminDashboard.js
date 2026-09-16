@@ -34,6 +34,7 @@ import { AdminDisputes } from './admin/AdminDisputes';
 import { AdminReviews } from './admin/AdminReviews';
 import { AdminCMS } from './admin/AdminCMS';
 import { AdminHomeSettings } from './admin/AdminHomeSettings';
+import { AdminShippingManagement } from './admin/AdminShippingManagement';
 import { AdminAIAssistantModal } from '../components/AdminAIAssistantModal';
 import { VendorStoreProfile } from './VendorStoreProfile';
 
@@ -50,6 +51,7 @@ const QUICK_TABS = [
     { id: 'vendors', label: 'Vendors', icon: 'storefront-outline', activeIcon: 'storefront' },
     { id: 'users', label: 'Customers', icon: 'people-outline', activeIcon: 'people' },
     { id: 'financials', label: 'Financials', icon: 'cash-outline', activeIcon: 'cash' },
+    { id: 'shipping', label: 'Shipping', icon: 'car-outline', activeIcon: 'car' },
     { id: 'analytics', label: 'Analytics', icon: 'stats-chart-outline', activeIcon: 'stats-chart' },
     { id: 'banners', label: 'Banners', icon: 'images-outline', activeIcon: 'images' },
     { id: 'settings', label: 'Settings', icon: 'settings-outline', activeIcon: 'settings' },
@@ -107,6 +109,7 @@ const MODULE_SECTIONS = [
     {
         title: 'Platform Settings & Governance',
         items: [
+            { id: 'shipping', title: 'Shipping & Distance Rates', desc: 'GPS routing, base fee, per-km rates & zones', icon: 'car-outline', color: '#0284C7', bg: '#F0F9FF' },
             { id: 'home_settings', title: 'Homepage Layout', desc: 'Configure homepage sections and widgets', icon: 'home-outline', color: '#4F46E5', bg: '#EEF2FF' },
             { id: 'cms', title: 'CMS Pages', desc: 'About Us, Terms & Conditions, Privacy Policy', icon: 'document-text-outline', color: '#475569', bg: '#F1F5F9' },
             { id: 'settings', title: 'Global Platform Settings', desc: 'Shipping fees, app configs & payment gateways', icon: 'settings-outline', color: '#0E1A2E', bg: '#F8FAFC' },
@@ -814,6 +817,8 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                 return <AdminCMS navigation={navigation} onBack={handleBack} />;
             case 'settings':
                 return <AdminSettings navigation={navigation} onBack={handleBack} />;
+            case 'shipping':
+                return <AdminShippingManagement navigation={navigation} onBack={handleBack} />;
 
             default:
                 return renderOverview();

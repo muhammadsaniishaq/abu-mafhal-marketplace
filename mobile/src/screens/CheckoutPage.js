@@ -9,6 +9,7 @@ import FlutterwaveCheckout from '../lib/flutterwave/FlutterwaveCheckout';
 import CheckoutAddressCard from '../components/CheckoutAddressCard';
 import { CheckoutAddressSkeleton, CheckoutSummarySkeleton } from '../components/CheckoutSkeleton';
 import { whatsappService } from '../services/whatsappService';
+import { ShippingCalculationEngine } from '../services/shippingService';
 
 const { width, height } = Dimensions.get('window');
 const CHECKOUT_STORAGE_KEY = '@checkout_progress_v3';
@@ -93,22 +94,63 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
         }
     };
 
+    // ── Delivery Methods & Dynamic Distance Engine ──────────────────────────
+    const [selectedDeliveryMethod, setSelectedDeliveryMethod] = useState('standard');
+    const [deliveryMethods, setDeliveryMethods] = useState([
+        { code: 'standard', name: 'Standard Delivery', estimated_days: '2-4 Business Days', icon: 'bicycle-outline' },
+        { code: 'express', name: 'Express Priority', estimated_days: '24-48 Hours', icon: 'flash-outline' },
+        { code: 'pickup', name: 'Store Pickup', estimated_days: 'Ready in 2 Hours', icon: 'storefront-outline' }
+    ]);
+    const [shippingCalculation, setShippingCalculation] = useState(null);
+    const [calculatingShipping, setCalculatingShipping] = useState(false);
+
+    // Recalculate shipping asynchronously whenever address, cart, or delivery method changes
+    useEffect(() => {
+        let isMounted = true;
+        const runShippingCalc = async () => {
+            const selectedAddr = addresses.find(a => a.id === selectedAddressId);
+            if (!selectedAddr) {
+                if (isMounted) setShippingCalculation(null);
+                return;
+            }
+
+            if (isMounted) setCalculatingShipping(true);
+            try {
+                const res = await ShippingCalculationEngine.calculateMultiVendorShipping({
+                    cartItems: cart,
+                    customerAddress: selectedAddr,
+                    deliveryMethodCode: selectedDeliveryMethod || 'standard',
+                    adminSettings: settings?.shipping_settings || settings
+                });
+                if (isMounted) {
+                    setShippingCalculation(res);
+                }
+            } catch (err) {
+                console.error('Shipping calculation error:', err);
+            } finally {
+                if (isMounted) setCalculatingShipping(false);
+            }
+        };
+
+        runShippingCalc();
+        return () => { isMounted = false; };
+    }, [selectedAddressId, selectedDeliveryMethod, addresses, cart, settings]);
+
     // ── Dynamic Shipping Fee ─────────────────────────────────────────────────
     const shippingFee = useMemo(() => {
+        if (shippingCalculation) {
+            return shippingCalculation.totalShippingFee;
+        }
+        // Fallback if calculation is in flight
         const selectedAddr = addresses.find(a => a.id === selectedAddressId);
-        // If all items in cart have free_shipping, it's free
         const allFreeShipping = cart.length > 0 && cart.every(item => item.free_shipping === true);
         if (allFreeShipping) return 0;
-        // Check admin-set free nationwide shipping
         if (settings?.free_nationwide_shipping) return 0;
-        // Per-state lookup from admin settings
-        if (selectedAddr?.state && settings?.shipping_fees) {
-            const fee = settings.shipping_fees[selectedAddr.state];
-            if (fee !== undefined) return fee;
+        if (selectedAddr?.state && settings?.shipping_fees?.[selectedAddr.state] !== undefined) {
+            return Number(settings.shipping_fees[selectedAddr.state]);
         }
-        // Fallback
         return parseFloat(settings?.default_shipping_fee) || 3000;
-    }, [selectedAddressId, addresses, cart, settings]);
+    }, [shippingCalculation, selectedAddressId, addresses, cart, settings]);
 
     // ── Tax Amount ───────────────────────────────────────────────────────────
     const taxAmount = useMemo(() => {
@@ -145,10 +187,11 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
             }
             setUser(currentUser);
 
-            const [profileRes, addrRes, savedProgress] = await Promise.allSettled([
+            const [profileRes, addrRes, savedProgress, methodsRes] = await Promise.allSettled([
                 supabase.from('profiles').select('*').eq('id', currentUser.id).maybeSingle(),
                 supabase.from('addresses').select('*').eq('user_id', currentUser.id),
-                AsyncStorage.getItem(CHECKOUT_STORAGE_KEY)
+                AsyncStorage.getItem(CHECKOUT_STORAGE_KEY),
+                supabase.from('shipping_methods').select('*').eq('is_active', true).order('sort_order', { ascending: true })
             ]);
 
             if (profileRes.status === 'fulfilled' && profileRes.value?.data) setProfile(profileRes.value.data);
@@ -156,6 +199,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                 setAddresses(addrRes.value.data);
                 const defaultAddr = addrRes.value.data.find(a => a.is_default);
                 if (defaultAddr) setSelectedAddressId(defaultAddr.id);
+            }
+            if (methodsRes.status === 'fulfilled' && methodsRes.value?.data?.length > 0) {
+                setDeliveryMethods(methodsRes.value.data);
             }
 
             if (savedProgress.status === 'fulfilled' && savedProgress.value) {
@@ -250,7 +296,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                     address_id: selectedAddressId,
                     payment_method: paymentMethod,
                     coupon_code: appliedCoupon?.code || null,
-                    order_notes: orderNote
+                    order_notes: orderNote,
+                    delivery_method: selectedDeliveryMethod || 'standard',
+                    shipping_fee: shippingFee,
+                    shipping_snapshot: shippingCalculation?.snapshot || null
                 }
             });
 
@@ -463,13 +512,114 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                             </View>
                         )}
 
+                        {/* ── DELIVERY SPEED & METHOD SELECTION ── */}
+                        <View style={{ marginTop: 24 }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                                <Text style={[localStyles.sectionTitle, { fontSize: 18, marginBottom: 0 }]}>Delivery Method</Text>
+                                {calculatingShipping && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <ActivityIndicator size="small" color="#6366F1" />
+                                        <Text style={{ fontSize: 11, color: '#6366F1', fontWeight: '700' }}>Routing...</Text>
+                                    </View>
+                                )}
+                            </View>
+
+                            {deliveryMethods.map((method) => {
+                                const isSelected = selectedDeliveryMethod === method.code;
+                                const isPickup = method.code === 'pickup';
+                                const isExpress = method.code === 'express';
+
+                                let methodCostLabel = '';
+                                if (isPickup) {
+                                    methodCostLabel = 'FREE';
+                                } else if (shippingCalculation) {
+                                    if (isSelected) {
+                                        methodCostLabel = shippingCalculation.isFreeShipping ? 'FREE' : formatCurrency(shippingCalculation.totalShippingFee);
+                                    } else if (isExpress) {
+                                        // Approximate preview for express
+                                        const approxExpress = Math.round(shippingCalculation.totalShippingFee * 1.6);
+                                        methodCostLabel = formatCurrency(approxExpress);
+                                    } else {
+                                        methodCostLabel = shippingCalculation.isFreeShipping ? 'FREE' : formatCurrency(shippingCalculation.totalShippingFee);
+                                    }
+                                }
+
+                                return (
+                                    <TouchableOpacity
+                                        key={method.code}
+                                        onPress={() => setSelectedDeliveryMethod(method.code)}
+                                        activeOpacity={0.7}
+                                        style={[
+                                            localStyles.paymentCard,
+                                            isSelected && localStyles.paymentCardActive,
+                                            { marginBottom: 10 }
+                                        ]}
+                                    >
+                                        <View style={localStyles.paymentContent}>
+                                            <View style={[localStyles.paymentIcon, { backgroundColor: isSelected ? '#EEF2FF' : '#F8FAFC' }]}>
+                                                <Ionicons
+                                                    name={method.icon || (isPickup ? 'storefront-outline' : isExpress ? 'flash-outline' : 'bicycle-outline')}
+                                                    size={22}
+                                                    color={isSelected ? '#6366F1' : '#64748B'}
+                                                />
+                                            </View>
+                                            <View style={{ flex: 1, marginLeft: 14 }}>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                    <Text style={[localStyles.paymentName, { fontSize: 15 }]}>{method.name}</Text>
+                                                    {methodCostLabel ? (
+                                                        <Text style={{ fontSize: 13, fontWeight: '800', color: methodCostLabel === 'FREE' ? '#16A34A' : '#0F172A' }}>
+                                                            {methodCostLabel}
+                                                        </Text>
+                                                    ) : null}
+                                                </View>
+                                                <Text style={localStyles.paymentSub}>{method.estimated_days || 'Fast delivery'}</Text>
+                                            </View>
+                                            <View style={[localStyles.radio, isSelected && localStyles.radioActive, { marginLeft: 12 }]}>
+                                                {isSelected && <View style={localStyles.radioInner} />}
+                                            </View>
+                                        </View>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+
+                        {/* ── MULTI-VENDOR PACKAGES NOTICE ── */}
+                        {shippingCalculation?.vendorGroups?.length > 1 && (
+                            <View style={{ backgroundColor: '#F8FAFC', borderRadius: 16, padding: 14, marginTop: 10, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                                    <Ionicons name="cube-outline" size={16} color="#6366F1" />
+                                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>
+                                        Dispatched from {shippingCalculation.vendorGroups.length} Merchant Stores
+                                    </Text>
+                                </View>
+                                <Text style={{ fontSize: 11, color: '#64748B', lineHeight: 16, marginBottom: 10 }}>
+                                    Your order contains items from separate merchants. Road distance is calculated per merchant dispatch point.
+                                </Text>
+                                {shippingCalculation.vendorGroups.map((vg, idx) => (
+                                    <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4, borderTopWidth: idx > 0 ? 1 : 0, borderTopColor: '#F1F5F9' }}>
+                                        <View>
+                                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>{vg.vendorName}</Text>
+                                            <Text style={{ fontSize: 10, color: '#94A3B8' }}>{vg.itemCount} items • ~{vg.distanceKm} km distance</Text>
+                                        </View>
+                                        <Text style={{ fontSize: 12, fontWeight: '800', color: vg.isFreeShipping ? '#16A34A' : '#0F172A' }}>
+                                            {vg.isFreeShipping ? 'FREE' : formatCurrency(vg.finalShippingFee)}
+                                        </Text>
+                                    </View>
+                                ))}
+                            </View>
+                        )}
+
                         <View style={localStyles.infoCard}>
                             <View style={[localStyles.summaryIconBox, { backgroundColor: '#EEF2FF' }]}>
-                                <Ionicons name="time" size={20} color="#6366F1" />
+                                <Ionicons name="shield-checkmark" size={20} color="#6366F1" />
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Text style={localStyles.infoTitle}>Fast Delivery</Text>
-                                <Text style={localStyles.infoSub}>Estimated arrival in 2–4 business days</Text>
+                                <Text style={localStyles.infoTitle}>Secure & Insured Fulfillment</Text>
+                                <Text style={localStyles.infoSub}>
+                                    {shippingCalculation?.totalDistanceKm
+                                        ? `Total road transit: ~${shippingCalculation.totalDistanceKm} km across Nigeria.`
+                                        : 'All deliveries are trackable and verified on dispatch.'}
+                                </Text>
                             </View>
                         </View>
                     </View>
@@ -683,7 +833,13 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                                     <Text style={localStyles.invoiceValue}>{formatCurrency(initialTotal)}</Text>
                                 </View>
                                 <View style={localStyles.invoiceRow}>
-                                    <Text style={localStyles.invoiceLabel}>Shipping & Delivery</Text>
+                                    <View>
+                                        <Text style={localStyles.invoiceLabel}>Shipping & Delivery</Text>
+                                        <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>
+                                            {selectedDeliveryMethod === 'pickup' ? 'Store Pickup' : selectedDeliveryMethod === 'express' ? 'Express Priority' : 'Standard Delivery'}
+                                            {shippingCalculation?.totalDistanceKm ? ` • ~${shippingCalculation.totalDistanceKm} km` : ''}
+                                        </Text>
+                                    </View>
                                     {isShippingFree ? (
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                             <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
@@ -694,6 +850,23 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                                         <Text style={localStyles.invoiceValue}>{formatCurrency(shippingFee)}</Text>
                                     )}
                                 </View>
+                                {shippingCalculation?.vendorGroups?.length > 1 && (
+                                    <View style={{ backgroundColor: '#F8FAFC', padding: 8, borderRadius: 8, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9' }}>
+                                        <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748B', marginBottom: 2 }}>
+                                            📦 Multi-Store Packages ({shippingCalculation.vendorGroups.length})
+                                        </Text>
+                                        {shippingCalculation.vendorGroups.map((vg, vIdx) => (
+                                            <View key={vIdx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 1.5 }}>
+                                                <Text style={{ fontSize: 10, color: '#475569' }}>
+                                                    • {vg.vendorName} (~{vg.distanceKm} km)
+                                                </Text>
+                                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#0F172A' }}>
+                                                    {vg.isFreeShipping ? 'FREE' : formatCurrency(vg.finalShippingFee)}
+                                                </Text>
+                                            </View>
+                                        ))}
+                                    </View>
+                                )}
                                 {isTaxEnabled && (
                                     <View style={localStyles.invoiceRow}>
                                         <Text style={localStyles.invoiceLabel}>VAT ({taxRateLabel}%)</Text>

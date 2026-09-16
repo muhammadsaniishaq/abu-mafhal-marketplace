@@ -26,6 +26,7 @@ logs
 *.log
 *.sql
 !CREATE_OR_UPDATE_STORES_AND_VENDORS.sql
+!CREATE_SHIPPING_SCHEMA_AND_SETTINGS.sql
 *.cjs
 *.mjs
 *.txt
@@ -38,6 +39,7 @@ bundle_response.txt
 
 # Temp / OS
 .temp
+scratch/
 .DS_Store
 Thumbs.db
 # (

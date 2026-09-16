@@ -50,7 +50,17 @@ Deno.serve(async (req) => {
         const body = await req.json();
         console.log("Payload:", JSON.stringify(body));
 
-        const { items, address_id, payment_method, coupon_code, order_notes, shipping_override } = body;
+        const {
+            items,
+            address_id,
+            payment_method,
+            coupon_code,
+            order_notes,
+            shipping_override,
+            delivery_method = "standard",
+            shipping_fee: client_shipping_fee,
+            shipping_snapshot: client_shipping_snapshot
+        } = body;
 
         if (!items || !items.length) throw new Error("Cart is empty");
 
@@ -97,13 +107,23 @@ Deno.serve(async (req) => {
             throw productsError;
         }
 
-        // Fetch Global Settings for Shipping and Tax
-        const { data: settingsData, error: settingsError } = await supabaseAdmin
-            .from("app_settings")
-            .select("settings")
-            .single();
-            
-        const appSettings = settingsData?.settings || {};
+        // Fetch Global Settings for Shipping and Tax from app_settings
+        const [shippingSettingsRes, zonesRes] = await Promise.allSettled([
+            supabaseAdmin
+                .from("app_settings")
+                .select("value")
+                .eq("key", "shipping_settings")
+                .maybeSingle(),
+            supabaseAdmin
+                .from("shipping_zones")
+                .select("*")
+                .eq("is_active", true)
+        ]);
+
+        const shippingSettings = (shippingSettingsRes.status === "fulfilled" && shippingSettingsRes.value.data?.value)
+            ? shippingSettingsRes.value.data.value
+            : {};
+        const activeZones = (zonesRes.status === "fulfilled" && zonesRes.value.data) ? zonesRes.value.data : [];
 
         let subtotal = 0;
         const orderItems = items.map((cartItem: any) => {
@@ -125,22 +145,59 @@ Deno.serve(async (req) => {
         });
         console.log("Subtotal calculated:", subtotal);
 
-        // 2. Dynamic Shipping Calculation
+        // 2. Authoritative Dynamic Shipping Calculation & Verification
         let shippingFee = 0;
         const allFreeShipping = items.every((i: any) => i.free_shipping === true);
-        
-        if (allFreeShipping || appSettings.free_nationwide_shipping) {
+        const isFreeNationwide = Boolean(shippingSettings.free_nationwide_shipping);
+        const isFreeThresholdMet = Boolean(shippingSettings.free_shipping_enabled) &&
+            subtotal >= (Number(shippingSettings.free_shipping_threshold) || 50000);
+
+        if (delivery_method === "pickup" || allFreeShipping || isFreeNationwide || isFreeThresholdMet) {
             shippingFee = 0;
-        } else if (address?.state && appSettings.shipping_fees?.[address.state] !== undefined) {
-            shippingFee = Number(appSettings.shipping_fees[address.state]);
         } else {
-            shippingFee = Number(appSettings.default_shipping_fee) || 3000;
+            // Check if there is an explicit zone override
+            const destState = (address?.state || "").trim().toLowerCase();
+            const destLga = (address?.city || address?.lga || "").trim().toLowerCase();
+            
+            const matchedZone = activeZones.find((z: any) => {
+                if (destLga && z.lga && z.lga.toLowerCase() === destLga) return true;
+                if (!z.lga && z.state && z.state.toLowerCase() === destState) return true;
+                return false;
+            });
+
+            if (matchedZone && matchedZone.fixed_fee !== null && matchedZone.fixed_fee !== undefined) {
+                shippingFee = Number(matchedZone.fixed_fee);
+            } else if (client_shipping_fee !== undefined && client_shipping_fee !== null && Number(client_shipping_fee) >= 0) {
+                // Client-calculated distance fee from centralized shippingService
+                const minFee = Number(shippingSettings.min_shipping_fee) || 500;
+                shippingFee = Math.max(minFee, Number(client_shipping_fee));
+            } else if (address?.state && shippingSettings.shipping_fees?.[address.state] !== undefined) {
+                shippingFee = Number(shippingSettings.shipping_fees[address.state]);
+            } else {
+                shippingFee = Number(shippingSettings.default_shipping_fee || shippingSettings.base_fee) || 3000;
+            }
         }
+
+        const finalShippingSnapshot = client_shipping_snapshot || {
+            totalShippingFee: shippingFee,
+            deliveryMethod: delivery_method,
+            destination: {
+                address: address?.address,
+                city: address?.city,
+                lga: address?.lga || address?.city,
+                state: address?.state,
+                latitude: address?.latitude,
+                longitude: address?.longitude
+            },
+            subtotalAtCalculation: subtotal,
+            isFreeShipping: shippingFee === 0,
+            calculatedAt: new Date().toISOString()
+        };
 
         // 3. Dynamic Tax Calculation
         let tax = 0;
-        if (appSettings.tax_enabled !== false) {
-            const taxRate = parseFloat(appSettings.tax_rate) || 7.5;
+        if (shippingSettings.tax_enabled !== false) {
+            const taxRate = parseFloat(shippingSettings.tax_rate) || 7.5;
             tax = Math.round(subtotal * (taxRate / 100));
         }
 
@@ -231,7 +288,9 @@ Deno.serve(async (req) => {
                     discount_applied: discount,
                     payment_reference: paymentRef,
                     coupon_id: couponId,
-                    order_notes: order_notes || ""
+                    order_notes: order_notes || "",
+                    delivery_method: delivery_method || "standard",
+                    shipping_snapshot: finalShippingSnapshot
                 },
             ])
             .select()
@@ -335,6 +394,16 @@ Deno.serve(async (req) => {
             if (conversionError) {
                 console.error("Session to Order Conversion Error (Wallet):", conversionError);
                 throw conversionError;
+            }
+
+            if (finalOrderId) {
+                await supabaseAdmin
+                    .from("orders")
+                    .update({
+                        delivery_method: delivery_method || "standard",
+                        shipping_snapshot: finalShippingSnapshot
+                    })
+                    .eq("id", finalOrderId);
             }
 
             checkoutUrl = "success";

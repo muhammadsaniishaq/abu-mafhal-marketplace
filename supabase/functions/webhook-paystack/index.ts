@@ -59,6 +59,23 @@ Deno.serve(async (req) => {
         return new Response("Failed to create order from session", { status: 500 });
       }
       console.log("Order created from session:", orderId);
+
+      if (orderId) {
+        const { data: sessData } = await supabase
+          .from("checkout_sessions")
+          .select("delivery_method, shipping_snapshot")
+          .eq("id", session_id)
+          .maybeSingle();
+        if (sessData) {
+          await supabase
+            .from("orders")
+            .update({
+              delivery_method: sessData.delivery_method || 'standard',
+              shipping_snapshot: sessData.shipping_snapshot || null
+            })
+            .eq("id", orderId);
+        }
+      }
     }
 
     return new Response("OK", { status: 200 });
