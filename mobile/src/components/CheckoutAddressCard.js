@@ -29,7 +29,7 @@ const CheckoutAddressCard = ({ address, onSelect, selected }) => {
             <View style={[styles.iconContainer, selected && styles.selectedIconContainer]}>
                 <Ionicons
                     name={getIcon(address.title)}
-                    size={22}
+                    size={18}
                     color={selected ? '#D9A73A' : '#64748B'}
                 />
             </View>
@@ -37,7 +37,7 @@ const CheckoutAddressCard = ({ address, onSelect, selected }) => {
             <View style={styles.content}>
                 <View style={styles.header}>
                     <Text style={[styles.title, selected && styles.selectedTitle]}>
-                        {address.title || 'Address'}
+                        {address.title || 'Delivery Address'}
                     </Text>
                     {address.is_default && (
                         <View style={styles.defaultBadge}>
@@ -50,22 +50,26 @@ const CheckoutAddressCard = ({ address, onSelect, selected }) => {
                 <View style={styles.lgaBadgeRow}>
                     {lgaName ? (
                         <View style={styles.lgaBadge}>
-                            <Ionicons name="location-sharp" size={11} color="#D9A73A" />
+                            <Ionicons name="location-sharp" size={10} color="#D9A73A" />
                             <Text style={styles.lgaBadgeText}>{lgaName} LGA</Text>
                         </View>
                     ) : null}
-                    <Text style={styles.stateBadgeText}>
-                        {address.state ? `${address.state} State` : ''}
-                    </Text>
+                    {address.state ? (
+                        <Text style={styles.stateBadgeText}>
+                            {address.state} State
+                        </Text>
+                    ) : null}
                 </View>
 
-                <Text style={styles.addressLine} numberOfLines={2}>
-                    {address.address}
-                </Text>
+                {address.address ? (
+                    <Text style={styles.addressLine} numberOfLines={2}>
+                        {address.address}
+                    </Text>
+                ) : null}
 
                 {address.phone ? (
                     <View style={styles.phoneRow}>
-                        <Ionicons name="call-outline" size={12} color="#64748B" />
+                        <Ionicons name="call-outline" size={11} color="#64748B" />
                         <Text style={styles.phoneLine}>{address.phone}</Text>
                     </View>
                 ) : null}
@@ -83,32 +87,31 @@ const CheckoutAddressCard = ({ address, onSelect, selected }) => {
 const styles = StyleSheet.create({
     card: {
         backgroundColor: '#FFFFFF',
-        borderRadius: 18,
-        padding: 16,
-        marginBottom: 12,
+        borderRadius: 14,
+        padding: 12,
+        marginBottom: 10,
         flexDirection: 'row',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         borderWidth: 1.5,
-        borderColor: '#F1F5F9',
+        borderColor: '#E2E8F0',
         shadowColor: '#0E1A2E',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 10,
-        elevation: 2,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.03,
+        shadowRadius: 4,
+        elevation: 1,
     },
     selectedCard: {
         borderColor: '#D9A73A',
-        backgroundColor: '#FAFAF9',
+        backgroundColor: '#FEFDF8',
     },
     iconContainer: {
-        width: 44,
-        height: 44,
-        borderRadius: 14,
-        backgroundColor: '#F8FAFC',
+        width: 38,
+        height: 38,
+        borderRadius: 10,
+        backgroundColor: '#F1F5F9',
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 14,
-        marginTop: 2,
+        marginRight: 10,
     },
     selectedIconContainer: {
         backgroundColor: '#0E1A2E',
@@ -119,25 +122,25 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 4,
+        marginBottom: 3,
     },
     title: {
-        fontSize: 15,
+        fontSize: 13.5,
         fontWeight: '800',
         color: '#0E1A2E',
-        marginRight: 8,
+        marginRight: 6,
     },
     selectedTitle: {
         color: '#0E1A2E',
     },
     defaultBadge: {
         backgroundColor: '#FEF3C7',
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 6,
+        paddingHorizontal: 6,
+        paddingVertical: 1.5,
+        borderRadius: 4,
     },
     defaultText: {
-        fontSize: 10,
+        fontSize: 9.5,
         fontWeight: '800',
         color: '#92400E',
         textTransform: 'uppercase',
@@ -145,66 +148,65 @@ const styles = StyleSheet.create({
     lgaBadgeRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
-        marginVertical: 4,
+        gap: 5,
+        marginVertical: 2,
         flexWrap: 'wrap',
     },
     lgaBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
+        gap: 3,
         backgroundColor: '#0E1A2E',
-        paddingHorizontal: 8,
-        paddingVertical: 2.5,
-        borderRadius: 8,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6,
     },
     lgaBadgeText: {
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: '800',
         color: '#D9A73A',
     },
     stateBadgeText: {
-        fontSize: 12,
-        fontWeight: '600',
+        fontSize: 11,
+        fontWeight: '700',
         color: '#64748B',
     },
     addressLine: {
-        fontSize: 13,
+        fontSize: 12,
         color: '#475569',
-        lineHeight: 18,
+        lineHeight: 16,
         marginTop: 2,
-        marginBottom: 6,
+        marginBottom: 3,
     },
     phoneRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
+        gap: 4,
     },
     phoneLine: {
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: '600',
         color: '#64748B',
     },
     radioContainer: {
-        marginLeft: 12,
-        marginTop: 4,
+        marginLeft: 8,
     },
     radio: {
-        width: 22,
-        height: 22,
-        borderRadius: 11,
-        borderWidth: 2,
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        borderWidth: 1.5,
         borderColor: '#CBD5E1',
         alignItems: 'center',
         justifyContent: 'center',
     },
     radioActive: {
-        borderColor: '#0E1A2E',
+        borderColor: '#D9A73A',
     },
     radioInner: {
-        width: 12,
-        height: 12,
-        borderRadius: 6,
+        width: 10,
+        height: 10,
+        borderRadius: 5,
         backgroundColor: '#D9A73A',
     },
 });
