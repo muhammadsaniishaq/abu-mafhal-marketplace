@@ -195,9 +195,26 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
             ]);
 
             if (profileRes.status === 'fulfilled' && profileRes.value?.data) setProfile(profileRes.value.data);
-            if (addrRes.status === 'fulfilled' && addrRes.value?.data) {
-                setAddresses(addrRes.value.data);
-                const defaultAddr = addrRes.value.data.find(a => a.is_default);
+            let loadedAddresses = [];
+            if (addrRes.status === 'fulfilled' && addrRes.value?.data && addrRes.value.data.length > 0) {
+                loadedAddresses = addrRes.value.data;
+            } else {
+                try {
+                    const localRaw = await AsyncStorage.getItem(`@user_addresses_${currentUser.id}`);
+                    if (localRaw) {
+                        const parsed = JSON.parse(localRaw);
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                            loadedAddresses = parsed;
+                        }
+                    }
+                } catch (e) {
+                    console.log('Local address load error in checkout:', e);
+                }
+            }
+
+            if (loadedAddresses.length > 0) {
+                setAddresses(loadedAddresses);
+                const defaultAddr = loadedAddresses.find(a => a.is_default) || loadedAddresses[0];
                 if (defaultAddr) setSelectedAddressId(defaultAddr.id);
             }
             if (methodsRes.status === 'fulfilled' && methodsRes.value?.data?.length > 0) {
@@ -294,6 +311,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                 body: {
                     items: cart,
                     address_id: selectedAddressId,
+                    shipping_override: addresses.find(a => a.id === selectedAddressId) || null,
                     payment_method: paymentMethod,
                     coupon_code: appliedCoupon?.code || null,
                     order_notes: orderNote,
