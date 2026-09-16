@@ -15,7 +15,8 @@ import {
     Modal,
     Dimensions,
     KeyboardAvoidingView,
-    Animated
+    Animated,
+    FlatList
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -42,6 +43,7 @@ const EMERALD     = '#10B981';
 const DANGER      = '#EF4444';
 const SLATE       = '#64748B';
 const SLATE_DARK  = '#0F172A';
+const MUTED       = '#94A3B8';
 const BORDER      = '#E2E8F0';
 const BG          = '#F8FAFC';
 const WHITE       = '#FFFFFF';
@@ -3404,3 +3406,6 @@ const s = StyleSheet.create({
         color: NAVY,
     },
 });
+
+export default CheckoutPage;
+
