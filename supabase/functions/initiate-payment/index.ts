@@ -642,6 +642,48 @@ Deno.serve(async (req: Request) => {
                 } else {
                     checkoutUrl = "success";
                 }
+            } else if (downPaymentMethod === "Coinbase") {
+                const coinbaseSecret = Deno.env.get("COINBASE_API_KEY");
+                if (coinbaseSecret) {
+                    try {
+                        const response = await fetch("https://api.commerce.coinbase.com/charges", {
+                            method: "POST",
+                            headers: {
+                                "X-CC-Api-Key": coinbaseSecret,
+                                "X-CC-Version": "2018-03-22",
+                                "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify({
+                                name: "Abu Mafhal Pay Small Small",
+                                description: `Down Payment for Order ${paymentRef}`,
+                                local_price: {
+                                    amount: downPayment.toString(),
+                                    currency: "NGN",
+                                },
+                                pricing_type: "fixed_price",
+                                metadata: {
+                                    session_id: session.id,
+                                    user_id: user.id,
+                                    is_pss: true,
+                                    order_id: finalOrderId,
+                                    down_payment: downPayment
+                                },
+                                redirect_url: "https://abumafhal.com/payment/success",
+                                cancel_url: "https://abumafhal.com/payment/cancel"
+                            }),
+                        });
+                        const result = await response.json();
+                        if (result.data?.hosted_url) {
+                            checkoutUrl = result.data.hosted_url;
+                        } else {
+                            checkoutUrl = "success";
+                        }
+                    } catch (_) {
+                        checkoutUrl = "success";
+                    }
+                } else {
+                    checkoutUrl = "success";
+                }
             } else {
                 checkoutUrl = "success";
             }

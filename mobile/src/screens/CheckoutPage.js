@@ -544,43 +544,44 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
     const isWalletInsufficient = paymentMethod === 'Wallet' && walletBalance < finalTotal;
     const isPssWalletInsufficient = paymentMethod === 'pay_small_small' && pssDownPaymentMethod === 'Wallet' && walletBalance < pssPlanDetails.downPayment;
 
-    // Available Down Payment Options for Pay Small Small (BNPL)
+    // Available Down Payment Options for Pay Small Small (BNPL) - Paystack, Flutterwave, Coinbase, Wallet
     const pssPaymentOptions = useMemo(() => {
         const wb = Number(profile?.wallet_balance || 0);
         const dp = pssPlanDetails.downPayment;
         return [
             {
                 id: 'Paystack',
-                name: 'Paystack (Cards & Transfer)',
-                sub: 'Instant online card, bank transfer or USSD',
+                name: 'Paystack',
+                sub: 'Cards & Transfer',
+                logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSzFzmpCa0Tav9NttiYF10t9wftJPQ0XYPBkA&s',
                 icon: 'card-outline',
-                badge: 'Online Instant',
-                accentColor: GOLD
+                accentColor: '#0AA5FF'
             },
             {
                 id: 'Flutterwave',
-                name: 'Flutterwave (Cards & Mobile Money)',
-                sub: 'Debit card or mobile money',
+                name: 'Flutterwave',
+                sub: 'Cards & Mobile',
+                logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-W6MLvD_saE20EDSZzVPspKqcKxZ89rW8uw&s',
                 icon: 'flash-outline',
-                badge: 'Mobile Money',
-                accentColor: '#3B82F6'
+                accentColor: '#F5A623'
+            },
+            {
+                id: 'Coinbase',
+                name: 'Coinbase',
+                sub: 'Web3 Crypto',
+                logo: 'https://media.licdn.com/dms/image/v2/D4E0BAQFBUuEd8VGK4w/company-logo_200_200/B4EZs3tEB3IQAI-/0/1766166118811/coinbase_logo?e=2147483647&v=beta&t=mPgscbzEhR9TBOuI9MM0BDNcbE4tvvbhF38KM3V1CAY',
+                icon: 'logo-bitcoin',
+                accentColor: '#0052FF'
             },
             {
                 id: 'Wallet',
-                name: 'Abu Mafhal Wallet',
-                sub: `Balance: ₦${wb.toLocaleString()}`,
+                name: 'Wallet',
+                sub: `₦${wb.toLocaleString()}`,
+                logo: 'https://cdn-icons-png.flaticon.com/512/855/855279.png',
                 icon: 'wallet-outline',
-                badge: wb >= dp ? 'Sufficient' : 'Top-up needed',
                 disabled: wb < dp,
+                balance: wb,
                 accentColor: EMERALD
-            },
-            {
-                id: 'pod',
-                name: 'Pay on Delivery (Down Payment)',
-                sub: 'Pay the initial down payment to courier upon arrival',
-                icon: 'cash-outline',
-                badge: 'Cash / POS',
-                accentColor: '#F97316'
             }
         ];
     }, [profile, pssPlanDetails.downPayment]);
@@ -1446,124 +1447,88 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         {/* ── PAY SMALL SMALL (BNPL) ADVANCED PLAN SELECTOR ── */}
                         {paymentMethod === 'pay_small_small' && (
                             <View style={s.pssBox}>
+                                {/* Header */}
                                 <View style={s.pssHeader}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                        <Ionicons name="calendar" size={16} color={GOLD} />
-                                        <Text style={s.pssHeaderTitle}>Pay Small Small Installment Plan</Text>
+                                        <Ionicons name="calendar" size={15} color={GOLD} />
+                                        <Text style={s.pssHeaderTitle}>Pay Small Small (BNPL)</Text>
                                     </View>
                                     <View style={s.pssSurchargePill}>
-                                        <Text style={s.pssSurchargePillTxt}>+5% FINANCING FEE</Text>
+                                        <Text style={s.pssSurchargePillTxt}>+5% FINANCING</Text>
                                     </View>
                                 </View>
-                                
-                                <Text style={s.pssSectionSubtitle}>
-                                    Configure your custom duration and installment payment frequency:
-                                </Text>
 
-                                {/* 1. DURATION DROPDOWN */}
-                                <View style={s.pssFieldGroup}>
-                                    <Text style={s.pssFieldLabel}>Installment Duration (Tenor)</Text>
+                                {/* Compact Tenor & Frequency Row */}
+                                <View style={s.pssTenorFreqRow}>
                                     <TouchableOpacity 
-                                        style={s.pssDropdown}
+                                        style={s.pssPillSelect}
                                         onPress={() => setPssDurationModalOpen(true)}
                                         activeOpacity={0.8}
                                     >
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                            <Ionicons name="time-outline" size={16} color={GOLD} />
-                                            <Text style={s.pssDropdownTxt}>
-                                                {pssDurationMonths} {pssDurationMonths === 1 ? 'Month (30 Days)' : pssDurationMonths === 12 ? 'Months (1 Year)' : `Months (${pssDurationMonths * 30} Days)`}
+                                        <Text style={s.pssPillSelectLabel}>TENOR</Text>
+                                        <View style={s.pssPillSelectContent}>
+                                            <Ionicons name="time-outline" size={13} color={GOLD} />
+                                            <Text style={s.pssPillSelectTxt}>
+                                                {pssDurationMonths} {pssDurationMonths === 1 ? 'Month' : 'Months'}
                                             </Text>
+                                            <Ionicons name="chevron-down" size={12} color={SLATE} />
                                         </View>
-                                        <Ionicons name="chevron-down" size={15} color={SLATE} />
                                     </TouchableOpacity>
-                                </View>
 
-                                {/* 2. FREQUENCY DROPDOWN */}
-                                <View style={s.pssFieldGroup}>
-                                    <Text style={s.pssFieldLabel}>Payment Frequency</Text>
                                     <TouchableOpacity 
-                                        style={s.pssDropdown}
+                                        style={s.pssPillSelect}
                                         onPress={() => setPssFrequencyModalOpen(true)}
                                         activeOpacity={0.8}
                                     >
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                            <Ionicons name="repeat-outline" size={16} color={GOLD} />
-                                            <Text style={s.pssDropdownTxt}>
-                                                {pssFrequency === 'daily' ? 'Daily (Every Day)' :
-                                                 pssFrequency === '2_days' ? 'Every 2 Days' :
-                                                 pssFrequency === '3_days' ? 'Every 3 Days' :
-                                                 pssFrequency === '5_days' ? 'Every 5 Days' :
-                                                 pssFrequency === 'weekly' ? 'Weekly (Every 7 Days)' : 'Monthly (Every 30 Days)'}
+                                        <Text style={s.pssPillSelectLabel}>FREQUENCY</Text>
+                                        <View style={s.pssPillSelectContent}>
+                                            <Ionicons name="repeat-outline" size={13} color={GOLD} />
+                                            <Text style={s.pssPillSelectTxt} numberOfLines={1}>
+                                                {pssFrequency === 'daily' ? 'Daily' :
+                                                 pssFrequency === '2_days' ? 'Every 2d' :
+                                                 pssFrequency === '3_days' ? 'Every 3d' :
+                                                 pssFrequency === '5_days' ? 'Every 5d' :
+                                                 pssFrequency === 'weekly' ? 'Weekly' : 'Monthly'}
                                             </Text>
+                                            <Ionicons name="chevron-down" size={12} color={SLATE} />
                                         </View>
-                                        <Ionicons name="chevron-down" size={15} color={SLATE} />
                                     </TouchableOpacity>
                                 </View>
 
-                                {/* 3. DYNAMIC METRICS SUMMARY */}
-                                <View style={s.pssBreakdown}>
-                                    <View style={s.pssBreakdownRow}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                            <View style={[s.pssDot, { backgroundColor: EMERALD }]} />
-                                            <Text style={s.pssBreakdownLabel}>Due Today (Down Payment):</Text>
-                                        </View>
-                                        <Text style={[s.pssBreakdownVal, { color: EMERALD, fontWeight: '800' }]}>
-                                            {formatCurrency(pssPlanDetails.downPayment)}
-                                        </Text>
+                                {/* Dual Metric Highlight Banner */}
+                                <View style={s.pssHeroBanner}>
+                                    <View style={s.pssHeroCol}>
+                                        <Text style={s.pssHeroLabel}>DUE TODAY</Text>
+                                        <Text style={s.pssHeroValueEmerald}>{formatCurrency(pssPlanDetails.downPayment)}</Text>
+                                        <Text style={s.pssHeroSub}>Initial Down Payment</Text>
                                     </View>
-
-                                    <View style={s.pssBreakdownRow}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                            <View style={[s.pssDot, { backgroundColor: GOLD }]} />
-                                            <Text style={s.pssBreakdownLabel}>
-                                                Recurring Installment ({pssPlanDetails.installmentsCount - 1} remaining):
-                                            </Text>
-                                        </View>
-                                        <Text style={[s.pssBreakdownVal, { fontWeight: '800' }]}>
-                                            {formatCurrency(pssPlanDetails.recurringAmount)}
-                                        </Text>
-                                    </View>
-
-                                    <View style={s.pssBreakdownRow}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                            <Ionicons name="layers-outline" size={13} color={SLATE} />
-                                            <Text style={s.pssBreakdownLabel}>Total Installment Splits:</Text>
-                                        </View>
-                                        <Text style={s.pssBreakdownVal}>
-                                            {pssPlanDetails.installmentsCount} payments
-                                        </Text>
-                                    </View>
-
-                                    <View style={s.pssBreakdownRow}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                            <Ionicons name="pricetag-outline" size={13} color={SLATE} />
-                                            <Text style={s.pssBreakdownLabel}>Financing Fee (+5%):</Text>
-                                        </View>
-                                        <Text style={[s.pssBreakdownVal, { color: '#B45309' }]}>
-                                            +{formatCurrency(pssSurcharge)}
-                                        </Text>
+                                    <View style={s.pssHeroDivider} />
+                                    <View style={s.pssHeroCol}>
+                                        <Text style={s.pssHeroLabel}>REMAINING</Text>
+                                        <Text style={s.pssHeroValueNavy}>{formatCurrency(pssPlanDetails.recurringAmount)}</Text>
+                                        <Text style={s.pssHeroSub}>{pssPlanDetails.installmentsCount - 1} recurring splits</Text>
                                     </View>
                                 </View>
 
-                                {/* 4. EXPANDABLE SCHEDULE PREVIEW */}
+                                {/* Expandable Schedule Toggle */}
                                 <TouchableOpacity 
                                     style={s.pssScheduleToggleBtn}
                                     onPress={() => setPssScheduleExpanded(!pssScheduleExpanded)}
                                     activeOpacity={0.8}
                                 >
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                        <Ionicons name="calendar-outline" size={14} color={NAVY} />
+                                        <Ionicons name="calendar-outline" size={13} color={NAVY} />
                                         <Text style={s.pssScheduleToggleTxt}>
-                                            {pssScheduleExpanded ? 'Hide Payment Dates' : 'View Installment Dates Schedule'}
+                                            {pssScheduleExpanded ? 'Hide Schedule' : `View ${pssPlanDetails.installmentsCount} Payment Dates`}
                                         </Text>
                                     </View>
-                                    <Ionicons name={pssScheduleExpanded ? 'chevron-up' : 'chevron-down'} size={14} color={NAVY} />
+                                    <Ionicons name={pssScheduleExpanded ? 'chevron-up' : 'chevron-down'} size={13} color={NAVY} />
                                 </TouchableOpacity>
 
                                 {pssScheduleExpanded && (
                                     <View style={s.pssScheduleBox}>
-                                        <Text style={s.pssScheduleTitle}>Payment Schedule ({pssPlanDetails.installmentsCount} Splits):</Text>
-                                        {pssPlanDetails.schedule.slice(0, 10).map((inst, i) => (
+                                        <Text style={s.pssScheduleTitle}>Schedule ({pssPlanDetails.installmentsCount} Splits):</Text>
+                                        {pssPlanDetails.schedule.slice(0, 8).map((inst, i) => (
                                             <View key={i} style={s.pssScheduleRow}>
                                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                                     <View style={[s.pssScheduleNumCircle, i === 0 && { backgroundColor: EMERALD }]}>
@@ -1572,7 +1537,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                                     <View>
                                                         <Text style={s.pssScheduleLabel}>{inst.label}</Text>
                                                         <Text style={s.pssScheduleDate}>
-                                                            {i === 0 ? 'Today (Down Payment)' : new Date(inst.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                            {i === 0 ? 'Today (Down Payment)' : new Date(inst.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                                                         </Text>
                                                     </View>
                                                 </View>
@@ -1581,89 +1546,97 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                                 </Text>
                                             </View>
                                         ))}
-                                        {pssPlanDetails.schedule.length > 10 && (
-                                            <Text style={s.pssScheduleMoreTxt}>
-                                                + Remaining {pssPlanDetails.schedule.length - 10} installments viewable in Profile
-                                            </Text>
-                                        )}
                                     </View>
                                 )}
 
-                                {/* 5. SELECT DOWN PAYMENT METHOD */}
+                                {/* 4-GRID COLUMNS DOWN PAYMENT METHOD SELECTOR */}
                                 <View style={s.pssDownPaymentSection}>
                                     <View style={s.pssDownPaymentHeader}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                            <Ionicons name="card" size={15} color={GOLD} />
-                                            <Text style={s.pssDownPaymentTitle}>Pay Down Payment With</Text>
-                                        </View>
+                                        <Text style={s.pssDownPaymentTitle}>Pay Down Payment With</Text>
                                         <View style={s.pssDueTodayTag}>
-                                            <Text style={s.pssDueTodayTagTxt}>Due Today: {formatCurrency(pssPlanDetails.downPayment)}</Text>
+                                            <Text style={s.pssDueTodayTagTxt}>Due: {formatCurrency(pssPlanDetails.downPayment)}</Text>
                                         </View>
                                     </View>
-                                    <Text style={s.pssDownPaymentSub}>
-                                        Choose how you want to pay today's initial down payment:
-                                    </Text>
 
-                                    <View style={{ marginTop: 6 }}>
+                                    {/* 4 Equal Grid Columns */}
+                                    <View style={s.pssGridRow}>
                                         {pssPaymentOptions.map((opt) => {
                                             const isSelected = pssDownPaymentMethod === opt.id;
+                                            const isDisabled = opt.disabled;
                                             return (
                                                 <TouchableOpacity
                                                     key={opt.id}
-                                                    onPress={() => setPssDownPaymentMethod(opt.id)}
-                                                    activeOpacity={0.8}
+                                                    onPress={() => {
+                                                        if (isDisabled) {
+                                                            Alert.alert(
+                                                                'Insufficient Wallet Balance',
+                                                                `Your Abu Mafhal wallet balance (₦${Number(opt.balance || 0).toLocaleString()}) is lower than today's down payment (₦${pssPlanDetails.downPayment.toLocaleString()}). Please top up your wallet or pick another payment method.`
+                                                            );
+                                                            return;
+                                                        }
+                                                        setPssDownPaymentMethod(opt.id);
+                                                    }}
+                                                    activeOpacity={0.75}
                                                     style={[
-                                                        s.pssOptCard,
-                                                        isSelected && s.pssOptCardSelected
+                                                        s.pssGridCol,
+                                                        isSelected && s.pssGridColSelected,
+                                                        isDisabled && s.pssGridColDisabled
                                                     ]}
                                                 >
-                                                    <View style={[
-                                                        s.pssOptIconBox,
-                                                        isSelected && s.pssOptIconBoxSelected,
-                                                        opt.accentColor && isSelected && { borderColor: opt.accentColor }
-                                                    ]}>
-                                                        <Ionicons 
-                                                            name={opt.icon} 
-                                                            size={18} 
-                                                            color={isSelected ? (opt.accentColor || GOLD) : SLATE} 
-                                                        />
-                                                    </View>
-                                                    <View style={{ flex: 1, marginLeft: 10 }}>
-                                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                                            <Text style={[s.pssOptName, isSelected && s.pssOptNameSelected]}>
-                                                                {opt.name}
-                                                            </Text>
-                                                            {opt.badge && (
-                                                                <View style={[
-                                                                    s.pssOptBadge,
-                                                                    isSelected && { backgroundColor: '#FEF3C7' },
-                                                                    opt.id === 'Wallet' && opt.disabled && { backgroundColor: '#FEE2E2' }
-                                                                ]}>
-                                                                    <Text style={[
-                                                                        s.pssOptBadgeTxt,
-                                                                        isSelected && { color: '#92400E' },
-                                                                        opt.id === 'Wallet' && opt.disabled && { color: '#DC2626' }
-                                                                    ]}>
-                                                                        {opt.badge}
-                                                                    </Text>
-                                                                </View>
-                                                            )}
+                                                    {isSelected && (
+                                                        <View style={s.pssGridSelectedBadge}>
+                                                            <Ionicons name="checkmark" size={9} color={WHITE} />
                                                         </View>
-                                                        <Text style={s.pssOptSub}>{opt.sub}</Text>
+                                                    )}
+                                                    <View style={[s.pssGridLogoBox, isSelected && s.pssGridLogoBoxSelected]}>
+                                                        {opt.logo ? (
+                                                            <Image source={{ uri: opt.logo }} style={s.pssGridLogoImg} />
+                                                        ) : (
+                                                            <Ionicons name={opt.icon} size={20} color={isSelected ? GOLD : SLATE} />
+                                                        )}
                                                     </View>
-                                                    <View style={[s.radioCircle, isSelected && s.radioCircleSelected, isSelected && opt.accentColor && { borderColor: opt.accentColor }]}>
-                                                        {isSelected && <View style={[s.radioDot, { backgroundColor: opt.accentColor || GOLD }]} />}
-                                                    </View>
+                                                    <Text style={[s.pssGridColName, isSelected && s.pssGridColNameSelected]} numberOfLines={1}>
+                                                        {opt.name}
+                                                    </Text>
+                                                    {opt.id === 'Wallet' ? (
+                                                        <Text style={[s.pssGridColSub, isDisabled ? { color: DANGER } : { color: EMERALD }]} numberOfLines={1}>
+                                                            {isDisabled ? 'Low ₦' : `₦${Number(opt.balance || 0) >= 1000 ? Math.floor(Number(opt.balance || 0) / 1000) + 'k' : opt.balance}`}
+                                                        </Text>
+                                                    ) : (
+                                                        <View style={[s.pssGridDot, isSelected && { backgroundColor: GOLD }]} />
+                                                    )}
                                                 </TouchableOpacity>
                                             );
                                         })}
                                     </View>
+
+                                    {/* Dynamic Feedback Text */}
+                                    <View style={s.pssSelectedMethodFeedback}>
+                                        <Ionicons 
+                                            name={
+                                                pssDownPaymentMethod === 'Wallet' ? 'wallet' :
+                                                pssDownPaymentMethod === 'Coinbase' ? 'logo-bitcoin' :
+                                                pssDownPaymentMethod === 'Flutterwave' ? 'flash' : 'card'
+                                            } 
+                                            size={12} 
+                                            color={GOLD} 
+                                        />
+                                        <Text style={s.pssSelectedMethodFeedbackTxt} numberOfLines={1}>
+                                            {pssDownPaymentMethod === 'Wallet'
+                                                ? `Direct debit of ₦${pssPlanDetails.downPayment.toLocaleString()} from Wallet`
+                                                : pssDownPaymentMethod === 'Coinbase'
+                                                ? 'Pay down payment using BTC, ETH, USDT or USDC'
+                                                : pssDownPaymentMethod === 'Flutterwave'
+                                                ? 'Pay down payment via Debit Card or Mobile Money'
+                                                : 'Pay down payment via Cards, Bank Transfer or USSD'}
+                                        </Text>
+                                    </View>
                                 </View>
 
                                 <View style={s.pssNoticeRow}>
-                                    <Ionicons name="sparkles" size={13} color={GOLD} />
+                                    <Ionicons name="sparkles" size={12} color={GOLD} />
                                     <Text style={s.pssNoticeTxt}>
-                                        Items will be dispatched promptly upon paying today's down payment. Remaining installments can be paid easily through your account profile.
+                                        Dispatched promptly upon paying today's down payment. Manage future splits in your account.
                                     </Text>
                                 </View>
                             </View>
@@ -3456,163 +3429,162 @@ const s = StyleSheet.create({
         color: '#92400E',
         letterSpacing: 0.4,
     },
-    pssSectionSubtitle: {
-        fontSize: 11,
-        color: SLATE,
-        marginBottom: 10,
-    },
-    pssSubheaderLabel: {
-        fontSize: 11,
-        fontWeight: '700',
-        color: NAVY,
-        marginTop: 6,
-        marginBottom: 6,
-        textTransform: 'uppercase',
-        letterSpacing: 0.3,
-    },
-    pssChipRow: {
+    // Compact Tenor & Frequency Styles
+    pssTenorFreqRow: {
         flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 6,
+        gap: 8,
+        marginTop: 8,
         marginBottom: 8,
     },
-    pssChip: {
-        backgroundColor: WHITE,
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-    },
-    pssChipActive: {
-        backgroundColor: NAVY,
-        borderColor: NAVY,
-    },
-    pssChipTxt: {
-        fontSize: 11,
-        fontWeight: '700',
-        color: SLATE_DARK,
-    },
-    pssChipTxtActive: {
-        color: WHITE,
-    },
-    pssBreakdown: {
+    pssPillSelect: {
+        flex: 1,
         backgroundColor: WHITE,
         borderRadius: 10,
-        padding: 10,
-        marginTop: 6,
-        borderWidth: 1,
-        borderColor: '#FDE68A',
-        gap: 6,
+        paddingHorizontal: 10,
+        paddingVertical: 7,
+        borderWidth: 1.2,
+        borderColor: '#E2E8F0',
     },
-    pssBreakdownRow: {
+    pssPillSelectLabel: {
+        fontSize: 9,
+        fontWeight: '800',
+        color: SLATE,
+        letterSpacing: 0.5,
+        textTransform: 'uppercase',
+    },
+    pssPillSelectContent: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+        marginTop: 2,
     },
-    pssDot: {
-        width: 7,
-        height: 7,
-        borderRadius: 3.5,
-    },
-    pssBreakdownLabel: {
-        fontSize: 11,
-        fontWeight: '600',
-        color: SLATE_DARK,
-    },
-    pssBreakdownVal: {
-        fontSize: 11.5,
+    pssPillSelectTxt: {
+        fontSize: 12,
         fontWeight: '700',
         color: NAVY,
+        flex: 1,
+        marginHorizontal: 4,
     },
+    // Dual Metric Hero Banner
+    pssHeroBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        paddingVertical: 9,
+        paddingHorizontal: 12,
+        borderWidth: 1.2,
+        borderColor: '#FDE68A',
+        marginTop: 2,
+        marginBottom: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.04,
+        shadowRadius: 3,
+        elevation: 1,
+    },
+    pssHeroCol: {
+        flex: 1,
+    },
+    pssHeroDivider: {
+        width: 1,
+        height: 28,
+        backgroundColor: '#E2E8F0',
+        marginHorizontal: 10,
+    },
+    pssHeroLabel: {
+        fontSize: 9,
+        fontWeight: '800',
+        color: SLATE,
+        letterSpacing: 0.4,
+    },
+    pssHeroValueEmerald: {
+        fontSize: 14,
+        fontWeight: '900',
+        color: EMERALD,
+        marginTop: 1,
+    },
+    pssHeroValueNavy: {
+        fontSize: 13.5,
+        fontWeight: '800',
+        color: NAVY,
+        marginTop: 1,
+    },
+    pssHeroSub: {
+        fontSize: 9.5,
+        color: MUTED,
+        marginTop: 1,
+    },
+    // Schedule Toggle & Preview
     pssScheduleToggleBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         backgroundColor: '#FEF3C7',
-        paddingHorizontal: 12,
-        paddingVertical: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 7,
         borderRadius: 8,
-        marginTop: 10,
+        marginBottom: 6,
     },
     pssScheduleToggleTxt: {
-        fontSize: 11.5,
+        fontSize: 11,
         fontWeight: '800',
         color: NAVY,
     },
     pssScheduleBox: {
         backgroundColor: WHITE,
         borderRadius: 8,
-        padding: 10,
-        marginTop: 6,
+        padding: 8,
+        marginBottom: 8,
         borderWidth: 1,
         borderColor: '#E2E8F0',
-        gap: 6,
+        gap: 5,
     },
     pssScheduleTitle: {
-        fontSize: 11,
+        fontSize: 10.5,
         fontWeight: '800',
         color: NAVY,
-        marginBottom: 4,
+        marginBottom: 2,
     },
     pssScheduleRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingVertical: 4,
+        paddingVertical: 3,
         borderBottomWidth: 0.5,
         borderBottomColor: '#F1F5F9',
     },
     pssScheduleNumCircle: {
-        width: 18,
-        height: 18,
-        borderRadius: 9,
+        width: 16,
+        height: 16,
+        borderRadius: 8,
         backgroundColor: '#94A3B8',
         alignItems: 'center',
         justifyContent: 'center',
     },
     pssScheduleNumTxt: {
-        fontSize: 9.5,
+        fontSize: 9,
         fontWeight: '800',
         color: WHITE,
     },
     pssScheduleLabel: {
-        fontSize: 11,
+        fontSize: 10.5,
         fontWeight: '700',
         color: NAVY,
     },
     pssScheduleDate: {
-        fontSize: 9.5,
+        fontSize: 9,
         color: SLATE,
     },
     pssScheduleAmount: {
-        fontSize: 11.5,
+        fontSize: 11,
         fontWeight: '800',
         color: NAVY,
     },
-    pssScheduleMoreTxt: {
-        fontSize: 10,
-        color: SLATE,
-        textAlign: 'center',
-        marginTop: 4,
-        fontStyle: 'italic',
-    },
-    pssNoticeRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        marginTop: 10,
-    },
-    pssNoticeTxt: {
-        fontSize: 10.5,
-        color: '#92400E',
-        flex: 1,
-        lineHeight: 15,
-    },
-    // Pay Small Small Down Payment Selector Styles
+    // Down Payment Section & 4-Grid Columns
     pssDownPaymentSection: {
-        marginTop: 14,
-        paddingTop: 12,
+        marginTop: 4,
+        paddingTop: 8,
         borderTopWidth: 1,
         borderTopColor: '#E2E8F0',
     },
@@ -3620,10 +3592,10 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 4,
+        marginBottom: 6,
     },
     pssDownPaymentTitle: {
-        fontSize: 12.5,
+        fontSize: 11.5,
         fontWeight: '800',
         color: NAVY,
     },
@@ -3631,74 +3603,128 @@ const s = StyleSheet.create({
         backgroundColor: '#ECFDF5',
         paddingHorizontal: 7,
         paddingVertical: 2,
-        borderRadius: 6,
+        borderRadius: 5,
         borderWidth: 1,
         borderColor: '#A7F3D0',
     },
     pssDueTodayTagTxt: {
-        fontSize: 10,
+        fontSize: 9.5,
         fontWeight: '800',
         color: '#065F46',
     },
-    pssDownPaymentSub: {
-        fontSize: 11,
-        color: SLATE,
-        marginBottom: 6,
-    },
-    pssOptCard: {
+    pssGridRow: {
         flexDirection: 'row',
-        alignItems: 'center',
+        gap: 6,
+        marginBottom: 8,
+    },
+    pssGridCol: {
+        flex: 1,
         backgroundColor: WHITE,
-        borderRadius: 10,
-        padding: 9,
-        marginBottom: 6,
+        borderRadius: 12,
+        paddingVertical: 9,
+        paddingHorizontal: 3,
+        alignItems: 'center',
+        justifyContent: 'center',
         borderWidth: 1.5,
         borderColor: '#E2E8F0',
+        minHeight: 78,
     },
-    pssOptCardSelected: {
+    pssGridColSelected: {
         borderColor: GOLD,
-        backgroundColor: '#FEFDF8',
+        backgroundColor: '#FEFDF6',
+        shadowColor: GOLD,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.12,
+        shadowRadius: 4,
+        elevation: 2,
     },
-    pssOptIconBox: {
-        width: 32,
-        height: 32,
-        borderRadius: 8,
+    pssGridColDisabled: {
+        opacity: 0.45,
+        backgroundColor: '#F8FAFC',
+    },
+    pssGridSelectedBadge: {
+        position: 'absolute',
+        top: 4,
+        right: 4,
+        width: 13,
+        height: 13,
+        borderRadius: 6.5,
+        backgroundColor: GOLD,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    pssGridLogoBox: {
+        width: 34,
+        height: 34,
+        borderRadius: 9,
         backgroundColor: '#F8FAFC',
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
         borderColor: '#E2E8F0',
-        flexShrink: 0,
         overflow: 'hidden',
     },
-    pssOptIconBoxSelected: {
-        backgroundColor: '#FEF9EC',
-        borderColor: GOLD,
+    pssGridLogoBoxSelected: {
+        backgroundColor: '#FFFFFF',
+        borderColor: GOLD_BORDER,
     },
-    pssOptName: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: NAVY,
+    pssGridLogoImg: {
+        width: 24,
+        height: 24,
+        resizeMode: 'contain',
     },
-    pssOptNameSelected: {
-        fontWeight: '800',
-        color: NAVY,
-    },
-    pssOptBadge: {
-        backgroundColor: '#F1F5F9',
-        paddingHorizontal: 5,
-        paddingVertical: 1,
-        borderRadius: 4,
-    },
-    pssOptBadgeTxt: {
-        fontSize: 9.5,
-        fontWeight: '700',
-        color: SLATE,
-    },
-    pssOptSub: {
+    pssGridColName: {
         fontSize: 10,
-        color: SLATE,
+        fontWeight: '700',
+        color: SLATE_DARK,
+        marginTop: 5,
+        textAlign: 'center',
+    },
+    pssGridColNameSelected: {
+        fontWeight: '900',
+        color: NAVY,
+    },
+    pssGridColSub: {
+        fontSize: 9,
+        fontWeight: '800',
         marginTop: 1,
+    },
+    pssGridDot: {
+        width: 4,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: '#E2E8F0',
+        marginTop: 3,
+    },
+    pssSelectedMethodFeedback: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: '#FEFCE8',
+        paddingHorizontal: 9,
+        paddingVertical: 6,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#FEF08A',
+        marginBottom: 6,
+    },
+    pssSelectedMethodFeedbackTxt: {
+        fontSize: 10,
+        color: '#854D0E',
+        fontWeight: '600',
+        flex: 1,
+    },
+    pssNoticeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        marginTop: 4,
+    },
+    pssNoticeTxt: {
+        fontSize: 10,
+        color: '#92400E',
+        flex: 1,
+        lineHeight: 14,
     },
     // Pay on Delivery (POD) Styles
     podBox: {
