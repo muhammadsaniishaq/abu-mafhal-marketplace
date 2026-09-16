@@ -610,7 +610,7 @@ export default function App() {
                             <Stack.Screen name="TrackOrder" component={TrackOrderPage} />
                             <Stack.Screen name="Invoice" component={InvoicePage} />
                             <Stack.Screen name="CheckoutPage">
-                                {props => <CheckoutPage {...props} onClearCart={handleClearCart} />}
+                                {props => <CheckoutPage {...props} onClearCart={handleClearCart} cartLines={cartLines} />}
                             </Stack.Screen>
                             <Stack.Screen name="AddressPage" component={AddressPage} />
                             <Stack.Screen name="ProductComparison">

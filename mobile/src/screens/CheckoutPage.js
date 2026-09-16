@@ -57,8 +57,52 @@ const getItemImage = (item) => {
     return FALLBACK_IMAGE;
 };
 
-export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
-    const { cart = [], total: initialTotalParam = 0, selectedAddress: routeAddress = null } = route.params || {};
+export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: propCartLines }) => {
+    const routeCart = route?.params?.cart;
+    const routeTotal = route?.params?.total;
+    const routeAddress = route?.params?.selectedAddress;
+
+    // Helper to get stored cart synchronously on mount/refresh
+    const getInitialCart = () => {
+        if (Array.isArray(routeCart) && routeCart.length > 0) return routeCart;
+        if (Array.isArray(propCartLines) && propCartLines.length > 0) return propCartLines;
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                const raw = window.localStorage.getItem('@abumafhal_cart_v1');
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+                }
+            }
+        } catch (_) {}
+        return [];
+    };
+
+    const [cart, setCart] = useState(getInitialCart);
+
+    // Dynamic cart synchronizer to prevent losing products on refresh or navigation
+    useEffect(() => {
+        if (cart.length === 0) {
+            if (Array.isArray(propCartLines) && propCartLines.length > 0) {
+                setCart(propCartLines);
+                return;
+            }
+            AsyncStorage.getItem('@abumafhal_cart_v1').then(raw => {
+                if (raw) {
+                    try {
+                        const parsed = JSON.parse(raw);
+                        if (Array.isArray(parsed) && parsed.length > 0) setCart(parsed);
+                    } catch (_) {}
+                }
+            }).catch(() => {});
+        }
+    }, [propCartLines]);
+
+    useEffect(() => {
+        if (Array.isArray(routeCart) && routeCart.length > 0) {
+            setCart(routeCart);
+        }
+    }, [routeCart]);
 
     const initialTotal = useMemo(() => {
         return cart.reduce((sum, item) => {
@@ -74,12 +118,59 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
     // Wizard Step: 1 = Shipping, 2 = Payment, 3 = Review & Confirm
     const [currentStep, setCurrentStep] = useState(1);
 
-    // Data State (Immediately pre-populated if address passed from Cart)
-    const [loading, setLoading]                 = useState(!routeAddress);
+    // Reliable Back to Shop / Cart Navigation
+    const handleBackToShop = useCallback(() => {
+        try {
+            if (navigation?.canGoBack && navigation.canGoBack()) {
+                navigation.goBack();
+                return;
+            }
+        } catch (_) {}
+        if (navigation?.navigate) {
+            navigation.navigate('Main', { screen: 'shop' });
+        }
+    }, [navigation]);
+
+    const handleHeaderBack = useCallback(() => {
+        if (currentStep > 1) {
+            setCurrentStep(currentStep - 1);
+        } else {
+            handleBackToShop();
+        }
+    }, [currentStep, handleBackToShop]);
+
+    // Data State (Immediately pre-populated if address passed or stored)
+    const getInitialAddresses = () => {
+        if (routeAddress) return [routeAddress];
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                const storedUser = window.localStorage.getItem('@abumafhal_user_v1');
+                const uId = storedUser ? JSON.parse(storedUser)?.id : null;
+                if (uId) {
+                    const localRaw = window.localStorage.getItem(`@user_addresses_${uId}`);
+                    if (localRaw) {
+                        const parsed = JSON.parse(localRaw);
+                        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+                    }
+                }
+                const cachedLast = window.localStorage.getItem('@abumafhal_last_selected_address');
+                if (cachedLast) {
+                    const parsedLast = JSON.parse(cachedLast);
+                    if (parsedLast && parsedLast.address) return [parsedLast];
+                }
+            }
+        } catch (_) {}
+        return [];
+    };
+
+    const initialAddrs = getInitialAddresses();
+    const [loading, setLoading]                 = useState(!routeAddress && initialAddrs.length === 0);
     const [user, setUser]                       = useState(null);
     const [profile, setProfile]                 = useState(null);
-    const [addresses, setAddresses]             = useState(routeAddress ? [routeAddress] : []);
-    const [selectedAddressId, setSelectedAddressId] = useState(routeAddress?.id || (routeAddress ? 'selected_dest' : null));
+    const [addresses, setAddresses]             = useState(initialAddrs);
+    const [selectedAddressId, setSelectedAddressId] = useState(
+        routeAddress?.id || (initialAddrs.find(a => a.is_default)?.id || initialAddrs[0]?.id || null)
+    );
 
     // Step 2: Payment Gateways
     const [paymentMethod, setPaymentMethod] = useState('Paystack');
@@ -191,9 +282,14 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
         { code: 'pickup',   name: 'Store Pickup',      estimated_days: 'Ready in 2 Hours',   icon: 'storefront-outline' }
     ]);
 
+    // Resolve active customer address with resilient cascade
+    const selectedAddrObj = useMemo(() => {
+        return addresses.find(a => a.id === selectedAddressId) || routeAddress || (addresses.length > 0 ? addresses[0] : null);
+    }, [addresses, selectedAddressId, routeAddress]);
+
     // Instant Synchronous Shipping Calculation (0ms latency, zero delay)
     const shippingCalculation = useMemo(() => {
-        const selectedAddr = addresses.find(a => a.id === selectedAddressId) || routeAddress;
+        const selectedAddr = selectedAddrObj;
         if (!selectedAddr || !cart.length) return null;
 
         return ShippingCalculationEngine.calculateMultiVendorShippingInstant({
@@ -203,14 +299,14 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
             adminSettings: settings?.shipping_settings || settings,
             shippingMethods: deliveryMethods
         });
-    }, [selectedAddressId, selectedDeliveryMethod, addresses, cart, settings, routeAddress, deliveryMethods]);
+    }, [selectedAddrObj, selectedDeliveryMethod, cart, settings, deliveryMethods]);
 
-    // Dynamic Shipping Fee
+    // Dynamic Shipping Fee (Instantly computed with zero delay)
     const shippingFee = useMemo(() => {
-        if (shippingCalculation) {
+        if (shippingCalculation && typeof shippingCalculation.totalShippingFee === 'number') {
             return shippingCalculation.totalShippingFee;
         }
-        const selectedAddr = addresses.find(a => a.id === selectedAddressId);
+        const selectedAddr = selectedAddrObj;
         const allFreeShipping = cart.length > 0 && cart.every(item => item.free_shipping === true);
         if (allFreeShipping) return 0;
         if (settings?.free_nationwide_shipping) return 0;
@@ -218,7 +314,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
             return Number(settings.shipping_fees[selectedAddr.state]);
         }
         return parseFloat(settings?.default_shipping_fee) || 1500;
-    }, [shippingCalculation, selectedAddressId, addresses, cart, settings]);
+    }, [shippingCalculation, selectedAddrObj, cart, settings]);
 
     // Tax calculation
     const taxAmount = useMemo(() => {
@@ -283,11 +379,26 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                 }
             }
 
+            // Fallback to profile address if user has saved one in profile
+            if (loadedAddresses.length === 0 && profileRes.status === 'fulfilled' && profileRes.value?.data?.address) {
+                const prof = profileRes.value.data;
+                loadedAddresses = [{
+                    id: 'profile_default_addr',
+                    title: 'Default Address',
+                    address: prof.address,
+                    city: prof.city || prof.lga || '',
+                    lga: prof.lga || prof.city || '',
+                    state: prof.state || '',
+                    phone: prof.phone || prof.phone_number || '',
+                    is_default: true
+                }];
+            }
+
             if (loadedAddresses.length > 0) {
                 setAddresses(loadedAddresses);
-                if (!selectedAddressId) {
-                    const defaultAddr = loadedAddresses.find(a => a.is_default) || loadedAddresses[0];
-                    if (defaultAddr) setSelectedAddressId(defaultAddr.id);
+                const defaultAddr = loadedAddresses.find(a => a.is_default) || loadedAddresses[0];
+                if (defaultAddr && (!selectedAddressId || !loadedAddresses.some(a => a.id === selectedAddressId))) {
+                    setSelectedAddressId(defaultAddr.id);
                 }
             }
             if (methodsRes.status === 'fulfilled' && methodsRes.value?.data?.length > 0) {
@@ -297,7 +408,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
             if (savedProgress.status === 'fulfilled' && savedProgress.value) {
                 const sp = JSON.parse(savedProgress.value);
                 if (sp.step) setCurrentStep(sp.step);
-                if (sp.addressId) setSelectedAddressId(sp.addressId);
+                if (sp.addressId && loadedAddresses.some(a => a.id === sp.addressId)) setSelectedAddressId(sp.addressId);
                 if (sp.paymentMethod) setPaymentMethod(sp.paymentMethod);
                 if (sp.note) setOrderNote(sp.note);
             }
@@ -564,8 +675,6 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
         }
     };
 
-    const selectedAddrObj = addresses.find(a => a.id === selectedAddressId);
-
     // ── SUCCESS SCREEN ────────────────────────────────────────────────────────
     if (orderSuccess) {
         return (
@@ -646,6 +755,45 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
         );
     }
 
+    // ── EMPTY BASKET STATE (Zero products or cleared basket) ──────────────────
+    if (!loading && cart.length === 0) {
+        return (
+            <SafeAreaView style={s.successSafe}>
+                <StatusBar barStyle="dark-content" backgroundColor={WHITE} />
+                <View style={s.topBar}>
+                    <TouchableOpacity
+                        onPress={handleBackToShop}
+                        style={s.backBtn}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons name="chevron-back" size={20} color={NAVY} />
+                    </TouchableOpacity>
+                    <Text style={s.headerTitle}>Checkout</Text>
+                    <View style={{ width: 36 }} />
+                </View>
+
+                <View style={s.emptyBasketWrapper}>
+                    <View style={s.emptyBasketIconCircle}>
+                        <Ionicons name="basket-outline" size={44} color={GOLD} />
+                    </View>
+                    <Text style={s.emptyBasketTitle}>Your Shopping Basket is Empty</Text>
+                    <Text style={s.emptyBasketSub}>
+                        You do not have any items in this checkout session. Please add items to your cart to proceed with order dispatch.
+                    </Text>
+                    <TouchableOpacity
+                        style={s.emptyReturnBtn}
+                        onPress={handleBackToShop}
+                        activeOpacity={0.8}
+                    >
+                        <Ionicons name="bag-handle-outline" size={16} color={WHITE} />
+                        <Text style={s.emptyReturnBtnTxt}>Return to Shop</Text>
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
     return (
         <View style={s.container}>
             <StatusBar barStyle="dark-content" backgroundColor={WHITE} />
@@ -654,12 +802,12 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
             <SafeAreaView style={s.headerSafe}>
                 <View style={s.header}>
                     <TouchableOpacity
-                        onPress={() => currentStep > 1 ? setCurrentStep(currentStep - 1) : navigation.goBack()}
+                        onPress={handleHeaderBack}
                         style={s.backBtn}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         activeOpacity={0.7}
                     >
-                        <Ionicons name={currentStep > 1 ? "arrow-back" : "close"} size={18} color={NAVY} />
+                        <Ionicons name={currentStep > 1 ? "arrow-back" : "chevron-back"} size={19} color={NAVY} />
                     </TouchableOpacity>
 
                     <View style={s.headerCenter}>
@@ -1419,7 +1567,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                 </View>
 
                 <View style={s.footerBtnsRow}>
-                    {currentStep > 1 && (
+                    {currentStep > 1 ? (
                         <TouchableOpacity
                             style={s.btnBack}
                             onPress={() => setCurrentStep(currentStep - 1)}
@@ -1427,6 +1575,15 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                             disabled={isProcessing}
                         >
                             <Text style={s.btnBackTxt}>Back</Text>
+                        </TouchableOpacity>
+                    ) : (
+                        <TouchableOpacity
+                            style={s.btnBack}
+                            onPress={handleBackToShop}
+                            activeOpacity={0.7}
+                            disabled={isProcessing}
+                        >
+                            <Text style={s.btnBackTxt}>← Shop</Text>
                         </TouchableOpacity>
                     )}
 
@@ -2741,5 +2898,57 @@ const s = StyleSheet.create({
         fontWeight: '700',
         color: EMERALD,
         marginTop: 4,
+    },
+    // Empty Basket Screen
+    emptyBasketWrapper: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 28,
+        paddingBottom: 60,
+    },
+    emptyBasketIconCircle: {
+        width: 76,
+        height: 76,
+        borderRadius: 38,
+        backgroundColor: GOLD_LIGHT,
+        borderWidth: 1.5,
+        borderColor: GOLD_BORDER,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+    },
+    emptyBasketTitle: {
+        fontSize: 17,
+        fontWeight: '800',
+        color: NAVY,
+        textAlign: 'center',
+        marginBottom: 8,
+    },
+    emptyBasketSub: {
+        fontSize: 13,
+        color: SLATE,
+        textAlign: 'center',
+        lineHeight: 19,
+        marginBottom: 24,
+    },
+    emptyReturnBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: NAVY,
+        paddingHorizontal: 22,
+        paddingVertical: 12,
+        borderRadius: 12,
+        shadowColor: NAVY,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 3,
+    },
+    emptyReturnBtnTxt: {
+        fontSize: 13.5,
+        fontWeight: '800',
+        color: WHITE,
     },
 });
