@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, ScrollView,
     Image, Alert, ActivityIndicator, StyleSheet, Dimensions,
-    Platform, KeyboardAvoidingView, StatusBar
+    Platform, KeyboardAvoidingView, StatusBar, Modal, FlatList
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../lib/supabase';
 import { StoreService } from '../services/storeService';
 import { UploadService } from '../services/uploadService';
+import { NIGERIA_DATA } from '../data/nigeriaData';
+import { NIGERIA_STATE_CENTROIDS, NIGERIA_LGA_CENTROIDS } from '../services/shippingService';
 
 const { width } = Dimensions.get('window');
 const NAVY = '#0E1A2E';
@@ -59,12 +61,29 @@ export const VendorStoreProfile = ({ user, vendor, isAdminStore = false, onBack,
     const [whatsapp, setWhatsapp] = useState('');
     const [email, setEmail] = useState('');
     const [address, setAddress] = useState('');
+    const [state, setState] = useState('Yobe');
+    const [lga, setLga] = useState('Bade');
+    const [latitude, setLatitude] = useState(12.8628);
+    const [longitude, setLongitude] = useState(10.9694);
+    const [stateModalVisible, setStateModalVisible] = useState(false);
+    const [lgaModalVisible, setLgaModalVisible] = useState(false);
+    const [stateSearch, setStateSearch] = useState('');
+    const [lgaSearch, setLgaSearch] = useState('');
     const [workingHours, setWorkingHours] = useState('Mon - Sat: 8:00 AM - 8:00 PM');
     const [policy, setPolicy] = useState('7 Days Nationwide Return Policy • 100% Genuine Guaranteed');
     const [instagram, setInstagram] = useState('');
     const [facebook, setFacebook] = useState('');
     const [twitter, setTwitter] = useState('');
     const [isRecommended, setIsRecommended] = useState(false);
+
+    const resolveVendorCoords = (selectedState, selectedLga) => {
+        const lgaKey = String(selectedLga || '').toLowerCase().trim();
+        if (lgaKey && NIGERIA_LGA_CENTROIDS[lgaKey]) {
+            return { lat: NIGERIA_LGA_CENTROIDS[lgaKey].lat, lon: NIGERIA_LGA_CENTROIDS[lgaKey].lon };
+        }
+        const stateObj = NIGERIA_STATE_CENTROIDS[selectedState] || NIGERIA_STATE_CENTROIDS['Yobe'];
+        return { lat: stateObj?.lat || 12.8628, lon: stateObj?.lon || 10.9694 };
+    };
 
     useEffect(() => {
         loadCurrentStoreData();
@@ -109,6 +128,15 @@ export const VendorStoreProfile = ({ user, vendor, isAdminStore = false, onBack,
             setEmail(storeRow?.email || parsedAddr?.email || profile?.email || local.email || '');
             setCategory(storeRow?.category || profile?.business_category || parsedAddr?.category || local.category || (isAdminStore ? 'Official Mall & Flagship Store' : 'General Merchant'));
             setAddress(storeRow?.address || parsedAddr?.address || profile?.address || local.address || 'Main Commercial Center, Gashua, Yobe State, Nigeria');
+            
+            const initialSt = storeRow?.state || parsedAddr?.state || profile?.state || local.state || 'Yobe';
+            const initialLga = storeRow?.lga || parsedAddr?.lga || local.lga || 'Bade';
+            setState(initialSt);
+            setLga(initialLga);
+            const resolvedCoords = resolveVendorCoords(initialSt, initialLga);
+            setLatitude(storeRow?.latitude || parsedAddr?.latitude || local.latitude || resolvedCoords.lat);
+            setLongitude(storeRow?.longitude || parsedAddr?.longitude || local.longitude || resolvedCoords.lon);
+
             setWorkingHours(storeRow?.working_hours || parsedAddr?.working_hours || local.working_hours || 'Mon - Sat: 8:00 AM - 8:00 PM');
             setPolicy(storeRow?.policy || parsedAddr?.policy || local.policy || '7 Days Nationwide Return Policy • 100% Genuine Guaranteed');
             setInstagram(storeRow?.instagram || parsedAddr?.instagram || local.instagram || '');
@@ -163,6 +191,27 @@ export const VendorStoreProfile = ({ user, vendor, isAdminStore = false, onBack,
         }
     };
 
+    const handleSelectState = (newState) => {
+        setState(newState);
+        const stateData = NIGERIA_DATA.find(s => s.state.toLowerCase() === newState.toLowerCase());
+        const firstLga = stateData?.lgas?.[0] || 'Bade';
+        setLga(firstLga);
+        const coords = resolveVendorCoords(newState, firstLga);
+        setLatitude(coords.lat);
+        setLongitude(coords.lon);
+        setStateModalVisible(false);
+        setStateSearch('');
+    };
+
+    const handleSelectLga = (newLga) => {
+        setLga(newLga);
+        const coords = resolveVendorCoords(state, newLga);
+        setLatitude(coords.lat);
+        setLongitude(coords.lon);
+        setLgaModalVisible(false);
+        setLgaSearch('');
+    };
+
     const handleSave = async () => {
         if (!storeName.trim()) {
             Alert.alert('Validation Error', 'Please enter your Store / Business Name.');
@@ -190,6 +239,10 @@ export const VendorStoreProfile = ({ user, vendor, isAdminStore = false, onBack,
                 email: email.trim(),
                 category: category.trim(),
                 address: address.trim(),
+                state: state.trim(),
+                lga: lga.trim(),
+                latitude: latitude ? Number(latitude) : null,
+                longitude: longitude ? Number(longitude) : null,
                 workingHours: workingHours.trim(),
                 policy: policy.trim(),
                 instagram: instagram.trim(),
@@ -200,7 +253,7 @@ export const VendorStoreProfile = ({ user, vendor, isAdminStore = false, onBack,
 
             Alert.alert(
                 'Store Updated Successfully!',
-                'Your store identity, cover banner, bio, and contact details have been updated and are live across the marketplace.'
+                'Your store identity, location, dispatch hub, bio, and contact details have been updated and are live across the marketplace.'
             );
             if (onSaved) onSaved();
         } catch (err) {
@@ -611,19 +664,72 @@ export const VendorStoreProfile = ({ user, vendor, isAdminStore = false, onBack,
                                 </View>
                             </View>
 
-                            {/* Store Location */}
+                            {/* Store State & LGA (Dropdowns) */}
+                            <View style={{ flexDirection: 'row', gap: 10 }}>
+                                <View style={[s.inputGroup, { flex: 1 }]}>
+                                    <Text style={s.label}>Store State</Text>
+                                    <TouchableOpacity 
+                                        style={s.dropdownBtn}
+                                        onPress={() => setStateModalVisible(true)}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Ionicons name="map-outline" size={15} color={GOLD} />
+                                        <Text style={s.dropdownBtnTxt} numberOfLines={1}>{state || 'Select State'}</Text>
+                                        <Ionicons name="chevron-down" size={14} color="#64748B" />
+                                    </TouchableOpacity>
+                                </View>
+
+                                <View style={[s.inputGroup, { flex: 1 }]}>
+                                    <Text style={s.label}>Store LGA</Text>
+                                    <TouchableOpacity 
+                                        style={s.dropdownBtn}
+                                        onPress={() => setLgaModalVisible(true)}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Ionicons name="location-outline" size={15} color={GOLD} />
+                                        <Text style={s.dropdownBtnTxt} numberOfLines={1}>{lga || 'Select LGA'}</Text>
+                                        <Ionicons name="chevron-down" size={14} color="#64748B" />
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+
+                            {/* Physical Store Address / Plaza */}
                             <View style={s.inputGroup}>
-                                <Text style={s.label}>Physical Store Address / Plaza</Text>
+                                <Text style={s.label}>Physical Street Address / Plaza / Landmark</Text>
                                 <View style={s.inputWrapper}>
-                                    <Ionicons name="location-outline" size={16} color="#94A3B8" style={s.inputIcon} />
+                                    <Ionicons name="business-outline" size={16} color="#94A3B8" style={s.inputIcon} />
                                     <TextInput
                                         style={s.input}
                                         value={address}
                                         onChangeText={setAddress}
-                                        placeholder="e.g. Suite 12, Commercial Plaza, Gashua, Yobe State"
+                                        placeholder="e.g. Suite 12, Commercial Plaza, Main Market"
                                         placeholderTextColor="#94A3B8"
                                     />
                                 </View>
+                            </View>
+
+                            {/* Verified Dispatch Hub / Fulfillment Origin Card */}
+                            <View style={s.originHubCard}>
+                                <View style={s.originHubHeader}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Ionicons name="navigate-circle" size={18} color="#16A34A" />
+                                        <Text style={s.originHubTitle}>Verified Dispatch Hub (Fulfillment Origin)</Text>
+                                    </View>
+                                    <View style={s.originHubBadge}>
+                                        <Text style={s.originHubBadgeTxt}>ACTIVE ORIGIN</Text>
+                                    </View>
+                                </View>
+                                <View style={s.originHubRow}>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={s.originHubLocation}>{lga} LGA, {state} State</Text>
+                                        <Text style={s.originHubCoords}>
+                                            GPS Centroid: {Number(latitude || 12.8628).toFixed(4)}° N, {Number(longitude || 10.9694).toFixed(4)}° E
+                                        </Text>
+                                    </View>
+                                </View>
+                                <Text style={s.originHubNote}>
+                                    Customer shipping fees and delivery estimates for your products will calculate with 100% precision originating from this verified location.
+                                </Text>
                             </View>
                         </View>
                     )}
@@ -793,6 +899,124 @@ export const VendorStoreProfile = ({ user, vendor, isAdminStore = false, onBack,
                     )}
                 </TouchableOpacity>
             </View>
+
+            {/* ════ STATE SELECTOR MODAL ════ */}
+            <Modal
+                visible={stateModalVisible}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setStateModalVisible(false)}
+            >
+                <View style={s.modalOverlay}>
+                    <View style={s.modalContainer}>
+                        <View style={s.modalHeader}>
+                            <View>
+                                <Text style={s.modalTitle}>Select Store State</Text>
+                                <Text style={s.modalSubtitle}>All 36 States + FCT Abuja</Text>
+                            </View>
+                            <TouchableOpacity onPress={() => setStateModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                                <Ionicons name="close-circle" size={24} color="#64748B" />
+                            </TouchableOpacity>
+                        </View>
+                        <View style={s.modalSearchBox}>
+                            <Ionicons name="search" size={16} color="#94A3B8" />
+                            <TextInput
+                                style={s.modalSearchInput}
+                                placeholder="Search state..."
+                                placeholderTextColor="#94A3B8"
+                                value={stateSearch}
+                                onChangeText={setStateSearch}
+                                autoCapitalize="words"
+                            />
+                            {stateSearch.length > 0 && (
+                                <TouchableOpacity onPress={() => setStateSearch('')}>
+                                    <Ionicons name="close" size={16} color="#94A3B8" />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                        <FlatList
+                            data={NIGERIA_DATA.map(d => d.state).filter(st => !stateSearch || st.toLowerCase().includes(stateSearch.toLowerCase()))}
+                            keyExtractor={item => item}
+                            renderItem={({ item }) => {
+                                const isSelected = item.toLowerCase() === state.toLowerCase();
+                                return (
+                                    <TouchableOpacity
+                                        style={[s.modalItem, isSelected && s.modalItemSelected]}
+                                        onPress={() => handleSelectState(item)}
+                                    >
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                            <Ionicons name="map-outline" size={16} color={isSelected ? GOLD : '#64748B'} />
+                                            <Text style={[s.modalItemText, isSelected && s.modalItemTextSelected]}>
+                                                {item} State
+                                            </Text>
+                                        </View>
+                                        {isSelected && <Ionicons name="checkmark-circle" size={18} color={GOLD} />}
+                                    </TouchableOpacity>
+                                );
+                            }}
+                        />
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ════ LGA SELECTOR MODAL ════ */}
+            <Modal
+                visible={lgaModalVisible}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setLgaModalVisible(false)}
+            >
+                <View style={s.modalOverlay}>
+                    <View style={s.modalContainer}>
+                        <View style={s.modalHeader}>
+                            <View>
+                                <Text style={s.modalTitle}>Select Store LGA</Text>
+                                <Text style={s.modalSubtitle}>{state} State Local Government Areas</Text>
+                            </View>
+                            <TouchableOpacity onPress={() => setLgaModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                                <Ionicons name="close-circle" size={24} color="#64748B" />
+                            </TouchableOpacity>
+                        </View>
+                        <View style={s.modalSearchBox}>
+                            <Ionicons name="search" size={16} color="#94A3B8" />
+                            <TextInput
+                                style={s.modalSearchInput}
+                                placeholder={`Search LGA in ${state}...`}
+                                placeholderTextColor="#94A3B8"
+                                value={lgaSearch}
+                                onChangeText={setLgaSearch}
+                                autoCapitalize="words"
+                            />
+                            {lgaSearch.length > 0 && (
+                                <TouchableOpacity onPress={() => setLgaSearch('')}>
+                                    <Ionicons name="close" size={16} color="#94A3B8" />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                        <FlatList
+                            data={(NIGERIA_DATA.find(s => s.state.toLowerCase() === state.toLowerCase())?.lgas || []).filter(lg => !lgaSearch || lg.toLowerCase().includes(lgaSearch.toLowerCase()))}
+                            keyExtractor={item => item}
+                            renderItem={({ item }) => {
+                                const isSelected = item.toLowerCase() === lga.toLowerCase();
+                                return (
+                                    <TouchableOpacity
+                                        style={[s.modalItem, isSelected && s.modalItemSelected]}
+                                        onPress={() => handleSelectLga(item)}
+                                    >
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                            <Ionicons name="location-outline" size={16} color={isSelected ? GOLD : '#64748B'} />
+                                            <Text style={[s.modalItemText, isSelected && s.modalItemTextSelected]}>
+                                                {item} LGA
+                                            </Text>
+                                        </View>
+                                        {isSelected && <Ionicons name="checkmark-circle" size={18} color={GOLD} />}
+                                    </TouchableOpacity>
+                                );
+                            }}
+                        />
+                    </View>
+                </View>
+            </Modal>
 
         </KeyboardAvoidingView>
     );
@@ -1316,5 +1540,146 @@ const s = StyleSheet.create({
         fontSize: 14,
         fontWeight: '900',
         letterSpacing: 0.3
+    },
+    dropdownBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#FFFFFF',
+        borderWidth: 1.5,
+        borderColor: BORDER,
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 12,
+        gap: 6
+    },
+    dropdownBtnTxt: {
+        flex: 1,
+        fontSize: 13,
+        fontWeight: '700',
+        color: NAVY
+    },
+    originHubCard: {
+        marginTop: 12,
+        backgroundColor: '#F0FDF4',
+        borderWidth: 1.5,
+        borderColor: '#86EFAC',
+        borderRadius: 14,
+        padding: 14,
+        gap: 6
+    },
+    originHubHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between'
+    },
+    originHubTitle: {
+        fontSize: 12.5,
+        fontWeight: '800',
+        color: '#15803D'
+    },
+    originHubBadge: {
+        backgroundColor: '#DCFCE7',
+        paddingHorizontal: 7,
+        paddingVertical: 3,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: '#86EFAC'
+    },
+    originHubBadgeTxt: {
+        fontSize: 9,
+        fontWeight: '800',
+        color: '#166534',
+        letterSpacing: 0.5
+    },
+    originHubRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 4
+    },
+    originHubLocation: {
+        fontSize: 15,
+        fontWeight: '900',
+        color: NAVY
+    },
+    originHubCoords: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: '#166534',
+        marginTop: 2
+    },
+    originHubNote: {
+        fontSize: 11,
+        color: '#15803D',
+        lineHeight: 16,
+        marginTop: 4
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end'
+    },
+    modalContainer: {
+        backgroundColor: '#FFFFFF',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        maxHeight: '80%',
+        paddingHorizontal: 16,
+        paddingTop: 16,
+        paddingBottom: Platform.OS === 'ios' ? 36 : 20
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 12
+    },
+    modalTitle: {
+        fontSize: 16,
+        fontWeight: '900',
+        color: NAVY
+    },
+    modalSubtitle: {
+        fontSize: 11,
+        color: '#64748B',
+        marginTop: 2
+    },
+    modalSearchBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F1F5F9',
+        borderRadius: 10,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+        marginBottom: 12,
+        gap: 8
+    },
+    modalSearchInput: {
+        flex: 1,
+        fontSize: 13,
+        color: NAVY,
+        padding: 0
+    },
+    modalItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 12,
+        paddingHorizontal: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9'
+    },
+    modalItemSelected: {
+        backgroundColor: 'rgba(217, 167, 58, 0.08)',
+        borderRadius: 8
+    },
+    modalItemText: {
+        fontSize: 13.5,
+        fontWeight: '600',
+        color: '#334155'
+    },
+    modalItemTextSelected: {
+        fontWeight: '800',
+        color: NAVY
     }
 });

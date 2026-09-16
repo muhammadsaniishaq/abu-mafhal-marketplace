@@ -431,83 +431,85 @@ export const CartPage = ({
                 end={{ x: 1, y: 1 }}
                 style={s.header}
             >
-                <View style={s.headerRow}>
-                    {/* Back Button */}
-                    <TouchableOpacity
-                        onPress={onBack || (() => navigation.goBack())}
-                        style={s.headerBackBtn}
-                        activeOpacity={0.7}
-                    >
-                        <Ionicons name="arrow-back" size={20} color={WHITE} />
-                    </TouchableOpacity>
-
-                    {/* Logo Emblem & Brand Title */}
-                    <View style={s.headerCenter}>
-                        <View style={s.logoCircle}>
-                            <Image source={AM_LOGO} style={s.logoImg} resizeMode="contain" />
-                        </View>
-                        <View>
-                            <Text style={s.headerTitle}>
-                                Abu <Text style={{ color: GOLD }}>Mafhal</Text> Cart
-                            </Text>
-                            <Text style={s.headerSub}>
-                                {cart.length === 0 ? 'Empty basket' : `${cart.length} ${cart.length === 1 ? 'item' : 'items'} ready for dispatch`}
-                            </Text>
-                        </View>
-                    </View>
-
-                    {/* Clear Cart Button */}
-                    {cart.length > 0 ? (
+                <View style={s.headerInner}>
+                    <View style={s.headerRow}>
+                        {/* Back Button */}
                         <TouchableOpacity
-                            onPress={handleClearCart}
-                            style={s.clearBtn}
-                            activeOpacity={0.75}
+                            onPress={onBack || (() => navigation.goBack())}
+                            style={s.headerBackBtn}
+                            activeOpacity={0.7}
                         >
-                            <Ionicons name="trash-outline" size={14} color={DANGER} />
-                            <Text style={s.clearBtnTxt}>Clear</Text>
+                            <Ionicons name="arrow-back" size={20} color={WHITE} />
                         </TouchableOpacity>
-                    ) : (
-                        <View style={{ width: 40 }} />
-                    )}
-                </View>
 
-                {/* ── DYNAMIC FREE SHIPPING PROGRESS BAR ── */}
-                {cart.length > 0 && freeShippingThreshold > 0 && (
-                    <View style={s.freeShipBanner}>
-                        <View style={s.freeShipTop}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                                <Ionicons
-                                    name={isFreeShipping ? "checkmark-circle" : "bicycle-outline"}
-                                    size={15}
-                                    color={isFreeShipping ? EMERALD : GOLD}
-                                />
-                                <Text style={s.freeShipText} numberOfLines={1}>
-                                    {isFreeShipping ? (
-                                        <Text style={{ color: EMERALD, fontWeight: '800' }}>
-                                            🎉 You unlocked FREE DELIVERY nationwide!
-                                        </Text>
-                                    ) : (
-                                        <Text style={{ color: WHITE }}>
-                                            Add <Text style={{ color: GOLD, fontWeight: '800' }}>{formatNaira(amountNeededForFreeShip)}</Text> for <Text style={{ fontWeight: '800' }}>FREE SHIPPING</Text>
-                                        </Text>
-                                    )}
+                        {/* Logo Emblem & Brand Title */}
+                        <View style={s.headerCenter}>
+                            <View style={s.logoCircle}>
+                                <Image source={AM_LOGO} style={s.logoImg} resizeMode="contain" />
+                            </View>
+                            <View>
+                                <Text style={s.headerTitle}>
+                                    Abu <Text style={{ color: GOLD }}>Mafhal</Text> Cart
+                                </Text>
+                                <Text style={s.headerSub}>
+                                    {cart.length === 0 ? 'Empty basket' : `${cart.length} ${cart.length === 1 ? 'item' : 'items'} ready for dispatch`}
                                 </Text>
                             </View>
-                            <Text style={s.freeShipGoal}>{formatNaira(freeShippingThreshold)}</Text>
                         </View>
 
-                        {/* Progress Track */}
-                        <View style={s.progressTrack}>
-                            <View style={[
-                                s.progressBar,
-                                {
-                                    width: `${Math.round(freeShippingProgress * 100)}%`,
-                                    backgroundColor: isFreeShipping ? EMERALD : GOLD
-                                }
-                            ]} />
-                        </View>
+                        {/* Clear Cart Button */}
+                        {cart.length > 0 ? (
+                            <TouchableOpacity
+                                onPress={handleClearCart}
+                                style={s.clearBtn}
+                                activeOpacity={0.75}
+                            >
+                                <Ionicons name="trash-outline" size={14} color={DANGER} />
+                                <Text style={s.clearBtnTxt}>Clear</Text>
+                            </TouchableOpacity>
+                        ) : (
+                            <View style={{ width: 40 }} />
+                        )}
                     </View>
-                )}
+
+                    {/* ── DYNAMIC FREE SHIPPING PROGRESS BAR ── */}
+                    {cart.length > 0 && freeShippingThreshold > 0 && (
+                        <View style={s.freeShipBanner}>
+                            <View style={s.freeShipTop}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                                    <Ionicons
+                                        name={isFreeShipping ? "checkmark-circle" : "bicycle-outline"}
+                                        size={15}
+                                        color={isFreeShipping ? EMERALD : GOLD}
+                                    />
+                                    <Text style={s.freeShipText} numberOfLines={1}>
+                                        {isFreeShipping ? (
+                                            <Text style={{ color: EMERALD, fontWeight: '800' }}>
+                                                🎉 You unlocked FREE DELIVERY nationwide!
+                                            </Text>
+                                        ) : (
+                                            <Text style={{ color: WHITE }}>
+                                                Add <Text style={{ color: GOLD, fontWeight: '800' }}>{formatNaira(amountNeededForFreeShip)}</Text> for <Text style={{ fontWeight: '800' }}>FREE SHIPPING</Text>
+                                            </Text>
+                                        )}
+                                    </Text>
+                                </View>
+                                <Text style={s.freeShipGoal}>{formatNaira(freeShippingThreshold)}</Text>
+                            </View>
+
+                            {/* Progress Track */}
+                            <View style={s.progressTrack}>
+                                <View style={[
+                                    s.progressBar,
+                                    {
+                                        width: `${Math.round(freeShippingProgress * 100)}%`,
+                                        backgroundColor: isFreeShipping ? EMERALD : GOLD
+                                    }
+                                ]} />
+                            </View>
+                        </View>
+                    )}
+                </View>
             </LinearGradient>
 
             {/* ── 2. SCROLLABLE CART CONTENT ───────────────────────────────── */}
@@ -862,30 +864,32 @@ export const CartPage = ({
             {/* ── 3. FIXED BOTTOM CHECKOUT ACTION BAR ───────────────────────── */}
             {cart.length > 0 && (
                 <View style={s.bottomBar}>
-                    <View style={s.bottomInfoBox}>
-                        <Text style={s.bottomPayableLabel}>Total Payable</Text>
-                        <Text style={s.bottomPayableAmount}>{formatNaira(total)}</Text>
-                        <Text style={s.bottomDeliveryNote}>
-                            {isFreeShipping ? '✓ Free Delivery' : `+ ${formatNaira(deliveryFee)} Est. Delivery`}
-                        </Text>
-                    </View>
+                    <View style={s.bottomBarInner}>
+                        <View style={s.bottomInfoBox}>
+                            <Text style={s.bottomPayableLabel}>Total Payable</Text>
+                            <Text style={s.bottomPayableAmount}>{formatNaira(total)}</Text>
+                            <Text style={s.bottomDeliveryNote}>
+                                {isFreeShipping ? '✓ Free Delivery' : `+ ${formatNaira(deliveryFee)} Est. Delivery`}
+                            </Text>
+                        </View>
 
-                    <TouchableOpacity
-                        onPress={handleProceedToCheckout}
-                        style={s.checkoutBtn}
-                        activeOpacity={0.88}
-                    >
-                        <LinearGradient
-                            colors={[GOLD, '#C4922A']}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 0 }}
-                            style={s.checkoutBtnGrad}
+                        <TouchableOpacity
+                            onPress={handleProceedToCheckout}
+                            style={s.checkoutBtn}
+                            activeOpacity={0.88}
                         >
-                            <Ionicons name="lock-closed" size={16} color={NAVY} />
-                            <Text style={s.checkoutBtnTxt}>Proceed to Checkout</Text>
-                            <Ionicons name="arrow-forward" size={16} color={NAVY} />
-                        </LinearGradient>
-                    </TouchableOpacity>
+                            <LinearGradient
+                                colors={[GOLD, '#C4922A']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 0 }}
+                                style={s.checkoutBtnGrad}
+                            >
+                                <Ionicons name="lock-closed" size={15} color={NAVY} />
+                                <Text style={s.checkoutBtnTxt}>Checkout</Text>
+                                <Ionicons name="arrow-forward" size={15} color={NAVY} />
+                            </LinearGradient>
+                        </TouchableOpacity>
+                    </View>
                 </View>
             )}
 
@@ -920,20 +924,25 @@ const s = StyleSheet.create({
     // Top Bar
     header: {
         paddingTop: Platform.OS === 'android' ? 12 : 6,
-        paddingHorizontal: 16,
-        paddingBottom: 14,
-        borderBottomLeftRadius: 20,
-        borderBottomRightRadius: 20,
+        paddingHorizontal: 14,
+        paddingBottom: 12,
+        borderBottomLeftRadius: 18,
+        borderBottomRightRadius: 18,
+        alignItems: 'center',
+    },
+    headerInner: {
+        maxWidth: 540,
+        width: '100%',
     },
     headerRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 10,
+        marginBottom: 8,
     },
     headerBackBtn: {
-        width: 36,
-        height: 36,
+        width: 34,
+        height: 34,
         borderRadius: 10,
         backgroundColor: 'rgba(255,255,255,0.12)',
         alignItems: 'center',
@@ -942,29 +951,29 @@ const s = StyleSheet.create({
     headerCenter: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
+        gap: 8,
     },
     logoCircle: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+        width: 30,
+        height: 30,
+        borderRadius: 15,
         backgroundColor: WHITE,
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 4,
+        padding: 3,
     },
     logoImg: {
-        width: 24,
-        height: 24,
+        width: 22,
+        height: 22,
     },
     headerTitle: {
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: '900',
         color: WHITE,
         letterSpacing: 0.3,
     },
     headerSub: {
-        fontSize: 11,
+        fontSize: 10.5,
         color: 'rgba(255,255,255,0.7)',
         marginTop: 1,
     },
@@ -973,12 +982,12 @@ const s = StyleSheet.create({
         alignItems: 'center',
         gap: 3,
         backgroundColor: 'rgba(239, 68, 68, 0.15)',
-        paddingHorizontal: 9,
-        paddingVertical: 6,
+        paddingHorizontal: 8,
+        paddingVertical: 5,
         borderRadius: 8,
     },
     clearBtnTxt: {
-        fontSize: 11,
+        fontSize: 10.5,
         fontWeight: '800',
         color: '#FCA5A5',
     },
@@ -986,9 +995,9 @@ const s = StyleSheet.create({
     // Free Shipping Banner
     freeShipBanner: {
         backgroundColor: 'rgba(255, 255, 255, 0.08)',
-        borderRadius: 12,
-        padding: 10,
-        marginTop: 4,
+        borderRadius: 10,
+        padding: 8,
+        marginTop: 3,
         borderWidth: 1,
         borderColor: 'rgba(255, 255, 255, 0.12)',
     },
@@ -996,31 +1005,34 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 6,
+        marginBottom: 5,
     },
     freeShipText: {
-        fontSize: 11.5,
+        fontSize: 11,
         fontWeight: '600',
     },
     freeShipGoal: {
-        fontSize: 11,
+        fontSize: 10.5,
         fontWeight: '800',
         color: 'rgba(255, 255, 255, 0.7)',
         marginLeft: 8,
     },
     progressTrack: {
-        height: 5,
+        height: 4,
         backgroundColor: 'rgba(255, 255, 255, 0.18)',
-        borderRadius: 3,
+        borderRadius: 2,
         overflow: 'hidden',
     },
     progressBar: {
         height: '100%',
-        borderRadius: 3,
+        borderRadius: 2,
     },
 
     scrollContent: {
-        padding: 14,
+        padding: 12,
+        maxWidth: 540,
+        width: '100%',
+        alignSelf: 'center',
     },
 
     // Empty Basket
@@ -1155,17 +1167,17 @@ const s = StyleSheet.create({
     itemRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 8,
+        paddingVertical: 7,
     },
     itemRowDivider: {
         borderTopWidth: 1,
         borderTopColor: '#F8FAFC',
-        paddingTop: 10,
+        paddingTop: 8,
     },
     itemImgBox: {
-        width: 64,
-        height: 64,
-        borderRadius: 10,
+        width: 58,
+        height: 58,
+        borderRadius: 8,
         backgroundColor: '#F1F5F9',
         overflow: 'hidden',
         position: 'relative',
@@ -1185,45 +1197,45 @@ const s = StyleSheet.create({
     },
     qtyTagTxt: {
         color: WHITE,
-        fontSize: 8.5,
+        fontSize: 8,
         fontWeight: '800',
     },
     itemDetails: {
         flex: 1,
-        marginHorizontal: 10,
+        marginHorizontal: 8,
     },
     itemTitle: {
-        fontSize: 13,
+        fontSize: 12.5,
         fontWeight: '700',
         color: SLATE_DARK,
-        lineHeight: 17,
-        marginBottom: 3,
+        lineHeight: 16,
+        marginBottom: 2,
     },
     variantPill: {
         backgroundColor: '#F1F5F9',
-        paddingHorizontal: 6,
-        paddingVertical: 1.5,
+        paddingHorizontal: 5,
+        paddingVertical: 1,
         borderRadius: 4,
         alignSelf: 'flex-start',
-        marginBottom: 4,
+        marginBottom: 3,
     },
     variantPillTxt: {
-        fontSize: 9.5,
+        fontSize: 9,
         fontWeight: '600',
         color: SLATE,
     },
     priceBox: {
         flexDirection: 'row',
         alignItems: 'baseline',
-        gap: 6,
+        gap: 5,
     },
     itemPrice: {
-        fontSize: 13,
+        fontSize: 12.5,
         fontWeight: '900',
         color: NAVY,
     },
     itemOldPrice: {
-        fontSize: 10.5,
+        fontSize: 10,
         color: '#94A3B8',
         textDecorationLine: 'line-through',
     },
@@ -1231,7 +1243,7 @@ const s = StyleSheet.create({
     // Stepper Controls
     itemActions: {
         alignItems: 'flex-end',
-        gap: 4,
+        gap: 3,
     },
     deleteBtn: {
         padding: 2,
@@ -1240,14 +1252,14 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#F8FAFC',
-        borderRadius: 8,
+        borderRadius: 7,
         borderWidth: 1,
         borderColor: '#E2E8F0',
         overflow: 'hidden',
     },
     stepperBtn: {
-        width: 26,
-        height: 26,
+        width: 24,
+        height: 24,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#F1F5F9',
@@ -1256,18 +1268,18 @@ const s = StyleSheet.create({
         backgroundColor: NAVY,
     },
     stepperValue: {
-        fontSize: 12,
+        fontSize: 11.5,
         fontWeight: '800',
         color: NAVY,
-        paddingHorizontal: 8,
-        minWidth: 20,
+        paddingHorizontal: 6,
+        minWidth: 18,
         textAlign: 'center',
     },
     lineTotal: {
-        fontSize: 11,
+        fontSize: 10.5,
         fontWeight: '800',
         color: SLATE,
-        marginTop: 2,
+        marginTop: 1,
     },
 
     // Address Card
@@ -1539,39 +1551,44 @@ const s = StyleSheet.create({
         backgroundColor: WHITE,
         borderTopWidth: 1,
         borderTopColor: '#F1F5F9',
-        flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        paddingBottom: Platform.OS === 'ios' ? 22 : 10,
         shadowColor: NAVY,
         shadowOffset: { width: 0, height: -3 },
         shadowOpacity: 0.08,
         shadowRadius: 8,
         elevation: 8,
     },
+    bottomBarInner: {
+        maxWidth: 540,
+        width: '100%',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
     bottomInfoBox: {
         flex: 1,
     },
     bottomPayableLabel: {
-        fontSize: 10.5,
+        fontSize: 10,
         fontWeight: '700',
         color: SLATE,
         textTransform: 'uppercase',
     },
     bottomPayableAmount: {
-        fontSize: 18,
+        fontSize: 17,
         fontWeight: '900',
         color: NAVY,
     },
     bottomDeliveryNote: {
-        fontSize: 10,
+        fontSize: 9.5,
         color: EMERALD,
         fontWeight: '700',
     },
     checkoutBtn: {
-        borderRadius: 12,
+        borderRadius: 10,
         overflow: 'hidden',
         shadowColor: GOLD,
         shadowOffset: { width: 0, height: 2 },
@@ -1582,12 +1599,12 @@ const s = StyleSheet.create({
     checkoutBtnGrad: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
-        paddingHorizontal: 18,
-        paddingVertical: 12,
+        gap: 5,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
     },
     checkoutBtnTxt: {
-        fontSize: 13.5,
+        fontSize: 13,
         fontWeight: '900',
         color: NAVY,
     },

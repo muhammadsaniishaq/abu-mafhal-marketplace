@@ -189,6 +189,10 @@ export const StoreService = {
                 email: adminStoreRecord.email || adminAddrMeta?.email || primaryAdmin?.email || 'support@abumafhal.com',
                 category: adminStoreRecord.category || primaryAdmin?.business_category || 'Official Mall & Flagship Store',
                 address: adminAddrMeta?.address || primaryAdmin?.address || 'Main Commercial Center, Gashua, Yobe State, Nigeria',
+                state: adminStoreRecord.state || adminAddrMeta?.state || 'Yobe',
+                lga: adminStoreRecord.lga || adminAddrMeta?.lga || 'Bade',
+                latitude: adminStoreRecord.latitude || 12.8628,
+                longitude: adminStoreRecord.longitude || 10.9694,
                 working_hours: adminStoreRecord.working_hours || adminAddrMeta?.working_hours || adminLocal?.working_hours || 'Mon - Sat: 8:00 AM - 8:00 PM',
                 policy: adminStoreRecord.policy || adminAddrMeta?.policy || adminLocal?.policy || '7 Days Nationwide Return Policy • 100% Buyer Protection',
                 instagram: adminStoreRecord.instagram || adminAddrMeta?.instagram || adminLocal?.instagram || '@abumafhal',
@@ -277,6 +281,10 @@ export const StoreService = {
                     email: storeRec.email || vp.email || addrMeta?.email || '',
                     category: storeRec.category || vp.business_category || addrMeta?.category || localMeta?.category || 'Verified Merchant',
                     address: storeRec.address || vp.address || vp.state || addrMeta?.address || 'Nigeria',
+                    state: storeRec.state || addrMeta?.state || vp.state || localMeta?.state || 'Yobe',
+                    lga: storeRec.lga || addrMeta?.lga || localMeta?.lga || 'Bade',
+                    latitude: storeRec.latitude || addrMeta?.latitude || localMeta?.latitude || null,
+                    longitude: storeRec.longitude || addrMeta?.longitude || localMeta?.longitude || null,
                     working_hours: storeRec.working_hours || vp.working_hours || addrMeta?.working_hours || localMeta?.working_hours || 'Mon - Sat: 8:00 AM - 6:00 PM',
                     policy: storeRec.policy || vp.policy || addrMeta?.policy || localMeta?.policy || 'Prompt delivery and standard merchant warranty apply.',
                     instagram: storeRec.instagram || vp.instagram || addrMeta?.instagram || localMeta?.instagram || '',
@@ -330,6 +338,10 @@ export const StoreService = {
                 email,
                 category,
                 address,
+                state,
+                lga,
+                latitude,
+                longitude,
                 workingHours,
                 policy,
                 instagram,
@@ -347,6 +359,10 @@ export const StoreService = {
             phone = phone || opts.phone_number || '';
             whatsapp = whatsapp || opts.whatsapp_number || phone || '';
             address = address || opts.business_address || opts.location || '';
+            state = state || opts.state || 'Yobe';
+            lga = lga || opts.lga || opts.city || 'Bade';
+            latitude = latitude !== undefined && latitude !== null ? Number(latitude) : (opts.lat ? Number(opts.lat) : null);
+            longitude = longitude !== undefined && longitude !== null ? Number(longitude) : (opts.lon ? Number(opts.lon) : null);
             workingHours = workingHours || opts.working_hours || '';
             policy = policy || opts.policies || '';
 
@@ -375,6 +391,10 @@ export const StoreService = {
                 email,
                 category,
                 address,
+                state,
+                lga,
+                latitude,
+                longitude,
                 working_hours: workingHours,
                 policy,
                 instagram,
@@ -387,6 +407,10 @@ export const StoreService = {
             // 3. Prepare full JSON metadata to guarantee persistence in profiles.address
             const metaFallbackObj = {
                 address: address || '',
+                state: state || 'Yobe',
+                lga: lga || 'Bade',
+                latitude: latitude || null,
+                longitude: longitude || null,
                 tagline: tagline || '',
                 about: about || '',
                 cover_image: coverImage || '',
@@ -421,7 +445,7 @@ export const StoreService = {
                 twitter: twitter || null,
                 is_recommended: !!isRecommended,
                 address: address || null,
-                state: address || null,
+                state: state || address || null,
                 updated_at: new Date().toISOString()
             };
 
@@ -484,6 +508,10 @@ export const StoreService = {
                     email: email || null,
                     category: category,
                     address: address,
+                    state: state,
+                    lga: lga,
+                    latitude: latitude ? Number(latitude) : null,
+                    longitude: longitude ? Number(longitude) : null,
                     tagline: tagline || null,
                     working_hours: workingHours || null,
                     policy: policy || null,

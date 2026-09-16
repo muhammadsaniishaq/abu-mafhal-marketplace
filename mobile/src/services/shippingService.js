@@ -880,7 +880,7 @@ export class ShippingCalculationEngine {
         // 3. Compute each vendor package in parallel
         const packagePromises = vendorIds.map(async (vId) => {
             const group = vendorGroups[vId];
-            const vendorStore = storesCache[vId] || { id: vId, name: 'Abu Mafhal Official Store', state: 'Yobe', city: 'Bade', lga: 'Bade' };
+            const vendorStore = storesCache[vId] || (group.items[0]?.store || group.items[0]?.vendor) || { id: vId, name: 'Abu Mafhal Official Store', state: 'Yobe', city: 'Bade', lga: 'Bade' };
 
             // Determine distance between this vendor's store LGA/GPS and customer's LGA/GPS
             const distanceRes = await ShippingDistanceService.getDrivingDistance(vendorStore, customerAddress);
@@ -1008,7 +1008,7 @@ export class ShippingCalculationEngine {
         const vendorIds = Object.keys(vendorGroups);
         const breakdowns = vendorIds.map(vId => {
             const group = vendorGroups[vId];
-            const vendorStore = storesCache[vId] || { id: vId, name: 'Abu Mafhal Official Store', state: 'Yobe', city: 'Bade', lga: 'Bade' };
+            const vendorStore = storesCache[vId] || (group.items[0]?.store || group.items[0]?.vendor) || { id: vId, name: 'Abu Mafhal Official Store', state: 'Yobe', city: 'Bade', lga: 'Bade' };
             const distanceRes = ShippingDistanceService.getDrivingDistanceInstant(vendorStore, customerAddress);
 
             return this.calculateVendorPackageFee({

@@ -185,11 +185,15 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
     const [lgaModalVisible, setLgaModalVisible]           = useState(false);
     const [lgaSearchQuery, setLgaSearchQuery]             = useState('');
     const [activeLgaStateFilter, setActiveLgaStateFilter] = useState('Yobe');
+    const [streetInputExpanded, setStreetInputExpanded]   = useState(false);
+    const [customStreetAddress, setCustomStreetAddress]   = useState('');
 
     // Step 2: Payment Gateways
     const [paymentMethod, setPaymentMethod]               = useState('Paystack');
     const [pssDurationMonths, setPssDurationMonths]       = useState(3); // 1, 2, 3, 6, 10, 12
     const [pssFrequency, setPssFrequency]                 = useState('monthly'); // 'daily' | '2_days' | '3_days' | '5_days' | 'weekly' | 'monthly'
+    const [pssDurationModalOpen, setPssDurationModalOpen]   = useState(false);
+    const [pssFrequencyModalOpen, setPssFrequencyModalOpen] = useState(false);
     const [pssScheduleExpanded, setPssScheduleExpanded]   = useState(false);
 
     // Step 3: Review & Options
@@ -300,20 +304,22 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
     // Resolve active customer address with resilient cascade (never null)
     const selectedAddrObj = useMemo(() => {
-        const found = addresses.find(a => a.id === selectedAddressId);
+        const found = addresses.find(a => a.id === selectedAddressId && a.id !== 'lga_dest');
         if (found) return found;
         if (routeAddress) return routeAddress;
-        if (addresses.length > 0) return addresses[0];
+        const fullAddr = customStreetAddress.trim() 
+            ? `${customStreetAddress.trim()}, ${quickDestination.lga || 'Bade'} LGA, ${quickDestination.state || 'Yobe'} State`
+            : (quickDestination.address || `${quickDestination.lga || 'Bade'}, ${quickDestination.state || 'Yobe'}`);
         return {
             id: 'lga_dest',
             title: `${quickDestination.lga || 'Bade'} Delivery`,
-            address: quickDestination.address || `${quickDestination.lga || 'Bade'}, ${quickDestination.state || 'Yobe'}`,
+            address: fullAddr,
             city: quickDestination.city || quickDestination.lga || 'Bade',
             lga: quickDestination.lga || quickDestination.city || 'Bade',
             state: quickDestination.state || 'Yobe',
             phone: profile?.phone || user?.phone || ''
         };
-    }, [addresses, selectedAddressId, routeAddress, quickDestination, profile, user]);
+    }, [addresses, selectedAddressId, routeAddress, quickDestination, customStreetAddress, profile, user]);
 
     // Instant Synchronous Shipping Calculation (0ms latency, zero delay)
     const shippingCalculation = useMemo(() => {
@@ -1101,45 +1107,27 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                             </TouchableOpacity>
                         </View>
 
-                        {/* Addresses List */}
-                        {loading ? (
-                            <View style={{ gap: 8 }}>
-                                <CheckoutAddressSkeleton />
-                                <CheckoutAddressSkeleton />
-                            </View>
-                        ) : addresses.length === 0 ? (
-                            <View style={s.emptyBox}>
-                                <Ionicons name="home-outline" size={28} color={GOLD} />
-                                <Text style={s.emptyTitle}>LGA Selected: {selectedAddrObj?.lga || quickDestination.lga} LGA</Text>
-                                <Text style={s.emptySub}>Add full street details or proceed directly with this Local Government.</Text>
-                                <TouchableOpacity
-                                    style={s.addAddressBtn}
-                                    onPress={() => navigation.navigate('AddressPage')}
-                                    activeOpacity={0.8}
-                                >
-                                    <Ionicons name="add" size={15} color={NAVY} />
-                                    <Text style={s.addAddressBtnTxt}>Save Complete Street Address</Text>
-                                </TouchableOpacity>
-                            </View>
-                        ) : (
-                            <View>
-                                {addresses.map(addr => (
-                                    <CheckoutAddressCard
-                                        key={addr.id}
-                                        address={addr}
-                                        selected={selectedAddressId === addr.id}
-                                        onSelect={() => setSelectedAddressId(addr.id)}
-                                    />
-                                ))}
+                        {/* Compact Street / House Details Input (Optional) */}
+                        <TouchableOpacity
+                            style={s.streetToggleBtn}
+                            onPress={() => setStreetInputExpanded(!streetInputExpanded)}
+                            activeOpacity={0.7}
+                        >
+                            <Ionicons name={streetInputExpanded ? "chevron-up-circle" : "add-circle-outline"} size={14} color={GOLD} />
+                            <Text style={s.streetToggleTxt}>
+                                {streetInputExpanded ? 'Hide Street / House Landmark' : '+ Add Street Address / House Landmark (Optional)'}
+                            </Text>
+                        </TouchableOpacity>
 
-                                <TouchableOpacity
-                                    style={s.addAnotherCompact}
-                                    onPress={() => navigation.navigate('AddressPage')}
-                                    activeOpacity={0.7}
-                                >
-                                    <Ionicons name="add-circle-outline" size={16} color={GOLD} />
-                                    <Text style={s.addAnotherTxt}>Add or edit another address</Text>
-                                </TouchableOpacity>
+                        {streetInputExpanded && (
+                            <View style={s.streetInputBox}>
+                                <TextInput
+                                    style={s.streetInput}
+                                    value={customStreetAddress}
+                                    onChangeText={setCustomStreetAddress}
+                                    placeholder="e.g. Suite 4, Commercial Plaza, Main Road"
+                                    placeholderTextColor={MUTED}
+                                />
                             </View>
                         )}
 
@@ -1346,66 +1334,52 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                         <Text style={s.pssHeaderTitle}>Pay Small Small Installment Plan</Text>
                                     </View>
                                     <View style={s.pssSurchargePill}>
-                                        <Text style={s.pssSurchargePillTxt}>+5% SERVICE FEE</Text>
+                                        <Text style={s.pssSurchargePillTxt}>+5% FINANCING FEE</Text>
                                     </View>
                                 </View>
                                 
                                 <Text style={s.pssSectionSubtitle}>
-                                    Zaɓi tsawon lokaci da yadda kake son biya:
+                                    Configure your custom duration and installment payment frequency:
                                 </Text>
 
-                                {/* 1. DURATION PICKER */}
-                                <Text style={s.pssSubheaderLabel}>1. Tsawon Lokaci (Duration)</Text>
-                                <View style={s.pssChipRow}>
-                                    {[
-                                        { val: 1, label: '1 Wata (1 Mo)' },
-                                        { val: 2, label: 'Wata 2 (2 Mos)' },
-                                        { val: 3, label: 'Wata 3 (3 Mos)' },
-                                        { val: 6, label: 'Wata 6 (6 Mos)' },
-                                        { val: 10, label: 'Wata 10 (10 Mos)' },
-                                        { val: 12, label: 'Shekara 1 (12 Mos)' }
-                                    ].map(item => {
-                                        const isSelected = pssDurationMonths === item.val;
-                                        return (
-                                            <TouchableOpacity
-                                                key={item.val}
-                                                style={[s.pssChip, isSelected && s.pssChipActive]}
-                                                onPress={() => setPssDurationMonths(item.val)}
-                                                activeOpacity={0.8}
-                                            >
-                                                <Text style={[s.pssChipTxt, isSelected && s.pssChipTxtActive]}>
-                                                    {item.label}
-                                                </Text>
-                                            </TouchableOpacity>
-                                        );
-                                    })}
+                                {/* 1. DURATION DROPDOWN */}
+                                <View style={s.pssFieldGroup}>
+                                    <Text style={s.pssFieldLabel}>Installment Duration (Tenor)</Text>
+                                    <TouchableOpacity 
+                                        style={s.pssDropdown}
+                                        onPress={() => setPssDurationModalOpen(true)}
+                                        activeOpacity={0.8}
+                                    >
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                            <Ionicons name="time-outline" size={16} color={GOLD} />
+                                            <Text style={s.pssDropdownTxt}>
+                                                {pssDurationMonths} {pssDurationMonths === 1 ? 'Month (30 Days)' : pssDurationMonths === 12 ? 'Months (1 Year)' : `Months (${pssDurationMonths * 30} Days)`}
+                                            </Text>
+                                        </View>
+                                        <Ionicons name="chevron-down" size={15} color={SLATE} />
+                                    </TouchableOpacity>
                                 </View>
 
-                                {/* 2. FREQUENCY PICKER */}
-                                <Text style={s.pssSubheaderLabel}>2. Yadda Za Ka Biya (Payment Frequency)</Text>
-                                <View style={s.pssChipRow}>
-                                    {[
-                                        { val: 'daily', label: 'Kullum (Daily)' },
-                                        { val: '2_days', label: 'Bayan Kwana 2' },
-                                        { val: '3_days', label: 'Bayan Kwana 3' },
-                                        { val: '5_days', label: 'Bayan Kwana 5' },
-                                        { val: 'weekly', label: 'Sati-Sati (Weekly)' },
-                                        { val: 'monthly', label: 'Wata-Wata (Monthly)' }
-                                    ].map(item => {
-                                        const isSelected = pssFrequency === item.val;
-                                        return (
-                                            <TouchableOpacity
-                                                key={item.val}
-                                                style={[s.pssChip, isSelected && s.pssChipActive]}
-                                                onPress={() => setPssFrequency(item.val)}
-                                                activeOpacity={0.8}
-                                            >
-                                                <Text style={[s.pssChipTxt, isSelected && s.pssChipTxtActive]}>
-                                                    {item.label}
-                                                </Text>
-                                            </TouchableOpacity>
-                                        );
-                                    })}
+                                {/* 2. FREQUENCY DROPDOWN */}
+                                <View style={s.pssFieldGroup}>
+                                    <Text style={s.pssFieldLabel}>Payment Frequency</Text>
+                                    <TouchableOpacity 
+                                        style={s.pssDropdown}
+                                        onPress={() => setPssFrequencyModalOpen(true)}
+                                        activeOpacity={0.8}
+                                    >
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                            <Ionicons name="repeat-outline" size={16} color={GOLD} />
+                                            <Text style={s.pssDropdownTxt}>
+                                                {pssFrequency === 'daily' ? 'Daily (Every Day)' :
+                                                 pssFrequency === '2_days' ? 'Every 2 Days' :
+                                                 pssFrequency === '3_days' ? 'Every 3 Days' :
+                                                 pssFrequency === '5_days' ? 'Every 5 Days' :
+                                                 pssFrequency === 'weekly' ? 'Weekly (Every 7 Days)' : 'Monthly (Every 30 Days)'}
+                                            </Text>
+                                        </View>
+                                        <Ionicons name="chevron-down" size={15} color={SLATE} />
+                                    </TouchableOpacity>
                                 </View>
 
                                 {/* 3. DYNAMIC METRICS SUMMARY */}
@@ -1413,7 +1387,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                     <View style={s.pssBreakdownRow}>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                             <View style={[s.pssDot, { backgroundColor: EMERALD }]} />
-                                            <Text style={s.pssBreakdownLabel}>Za A Biya Yau (Down Payment):</Text>
+                                            <Text style={s.pssBreakdownLabel}>Due Today (Down Payment):</Text>
                                         </View>
                                         <Text style={[s.pssBreakdownVal, { color: EMERALD, fontWeight: '800' }]}>
                                             {formatCurrency(pssPlanDetails.downPayment)}
@@ -1424,7 +1398,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                             <View style={[s.pssDot, { backgroundColor: GOLD }]} />
                                             <Text style={s.pssBreakdownLabel}>
-                                                Biyan Kowane Zango ({pssPlanDetails.installmentsCount - 1} sauran biya):
+                                                Recurring Installment ({pssPlanDetails.installmentsCount - 1} remaining):
                                             </Text>
                                         </View>
                                         <Text style={[s.pssBreakdownVal, { fontWeight: '800' }]}>
@@ -1435,17 +1409,17 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                     <View style={s.pssBreakdownRow}>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                             <Ionicons name="layers-outline" size={13} color={SLATE} />
-                                            <Text style={s.pssBreakdownLabel}>Yawan Biyan Kuɗi (Total Splits):</Text>
+                                            <Text style={s.pssBreakdownLabel}>Total Installment Splits:</Text>
                                         </View>
                                         <Text style={s.pssBreakdownVal}>
-                                            {pssPlanDetails.installmentsCount} sau
+                                            {pssPlanDetails.installmentsCount} payments
                                         </Text>
                                     </View>
 
                                     <View style={s.pssBreakdownRow}>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                             <Ionicons name="pricetag-outline" size={13} color={SLATE} />
-                                            <Text style={s.pssBreakdownLabel}>Kudin Tsarin BNPL (+5%):</Text>
+                                            <Text style={s.pssBreakdownLabel}>Financing Fee (+5%):</Text>
                                         </View>
                                         <Text style={[s.pssBreakdownVal, { color: '#B45309' }]}>
                                             +{formatCurrency(pssSurcharge)}
@@ -1462,7 +1436,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                         <Ionicons name="calendar-outline" size={14} color={NAVY} />
                                         <Text style={s.pssScheduleToggleTxt}>
-                                            {pssScheduleExpanded ? 'Boye Jadawalin Ranaku (Hide Dates)' : 'Duba Jadawalin Ranaku (View Schedule)'}
+                                            {pssScheduleExpanded ? 'Hide Payment Dates' : 'View Installment Dates Schedule'}
                                         </Text>
                                     </View>
                                     <Ionicons name={pssScheduleExpanded ? 'chevron-up' : 'chevron-down'} size={14} color={NAVY} />
@@ -1470,7 +1444,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
                                 {pssScheduleExpanded && (
                                     <View style={s.pssScheduleBox}>
-                                        <Text style={s.pssScheduleTitle}>Jadawalin Biyan Kuɗi ({pssPlanDetails.installmentsCount} Splits):</Text>
+                                        <Text style={s.pssScheduleTitle}>Payment Schedule ({pssPlanDetails.installmentsCount} Splits):</Text>
                                         {pssPlanDetails.schedule.slice(0, 10).map((inst, i) => (
                                             <View key={i} style={s.pssScheduleRow}>
                                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -1480,7 +1454,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                                     <View>
                                                         <Text style={s.pssScheduleLabel}>{inst.label}</Text>
                                                         <Text style={s.pssScheduleDate}>
-                                                            {i === 0 ? 'Nan take (Today)' : new Date(inst.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                            {i === 0 ? 'Today (Down Payment)' : new Date(inst.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                                                         </Text>
                                                     </View>
                                                 </View>
@@ -1491,7 +1465,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                         ))}
                                         {pssPlanDetails.schedule.length > 10 && (
                                             <Text style={s.pssScheduleMoreTxt}>
-                                                + Sauran {pssPlanDetails.schedule.length - 10} biya na gaba da za a gani a Profile
+                                                + Remaining {pssPlanDetails.schedule.length - 10} installments viewable in Profile
                                             </Text>
                                         )}
                                     </View>
@@ -1500,7 +1474,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                 <View style={s.pssNoticeRow}>
                                     <Ionicons name="sparkles" size={13} color={GOLD} />
                                     <Text style={s.pssNoticeTxt}>
-                                        Za a aiko maka da kaya nan da nan bayan biyan Down Payment na yau. Sauran kuɗin kuma za a na biya ta Profile dinka a tsari.
+                                        Items will be dispatched promptly upon paying today's down payment. Remaining installments can be paid easily through your account profile.
                                     </Text>
                                 </View>
                             </View>
@@ -1512,14 +1486,14 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                 <View style={s.podHeader}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                         <Ionicons name="cash" size={18} color="#EA580C" />
-                                        <Text style={s.podTitle}>Pay on Delivery (Cash / POS) 100% Active</Text>
+                                        <Text style={s.podTitle}>Pay on Delivery (Cash / POS) Active</Text>
                                     </View>
                                     <View style={s.podZeroPill}>
-                                        <Text style={s.podZeroPillTxt}>₦0 YAU (FREE TODAY)</Text>
+                                        <Text style={s.podZeroPillTxt}>₦0 UPFRONT TODAY</Text>
                                     </View>
                                 </View>
                                 <Text style={s.podDesc}>
-                                    Ba za ka biya ko sisi ba yau! Za ka biya <Text style={{ fontWeight: '800', color: NAVY }}>{formatCurrency(finalTotal)}</Text> ne a hannu da tsabar kuɗi (Cash) ko da katin banki (POS) a lokacin da mai kawo kaya ya miƙa maka a kofar gidanka.
+                                    Pay ₦0 today! You only pay the total of <Text style={{ fontWeight: '800', color: NAVY }}>{formatCurrency(finalTotal)}</Text> in Cash or with POS Card directly to the courier upon delivery at your doorstep.
                                 </Text>
                                 <View style={s.podFeatureRow}>
                                     <View style={s.podFeatureItem}>
@@ -1528,11 +1502,11 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                     </View>
                                     <View style={s.podFeatureItem}>
                                         <Ionicons name="checkmark-circle" size={14} color={EMERALD} />
-                                        <Text style={s.podFeatureTxt}>Duba Kayan Kafin Biya</Text>
+                                        <Text style={s.podFeatureTxt}>Inspect Before Paying</Text>
                                     </View>
                                     <View style={s.podFeatureItem}>
                                         <Ionicons name="checkmark-circle" size={14} color={EMERALD} />
-                                        <Text style={s.podFeatureTxt}>Cash ko POS Card</Text>
+                                        <Text style={s.podFeatureTxt}>Cash or POS on Delivery</Text>
                                     </View>
                                 </View>
                             </View>
@@ -1858,11 +1832,11 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                             {paymentMethod === 'pay_small_small' && (
                                 <View style={{ backgroundColor: '#F0FDF4', padding: 10, borderRadius: 8, marginTop: 10, borderWidth: 1, borderColor: '#BBF7D0' }}>
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <Text style={{ fontSize: 12, fontWeight: '800', color: '#166534' }}>Za A Biya Yau (Due Today):</Text>
+                                        <Text style={{ fontSize: 12, fontWeight: '800', color: '#166534' }}>Due Today (Down Payment):</Text>
                                         <Text style={{ fontSize: 14, fontWeight: '900', color: '#166534' }}>{formatCurrency(pssPlanDetails.downPayment)}</Text>
                                     </View>
                                     <Text style={{ fontSize: 10.5, color: '#15803D', marginTop: 2 }}>
-                                        Sauran {formatCurrency(pssPlanDetails.remainingBalance)} za a biya {pssPlanDetails.installmentsCount - 1} sau ({formatCurrency(pssPlanDetails.recurringAmount)} kowane {pssPlanDetails.frequency === 'daily' ? 'rana' : pssPlanDetails.frequency === 'weekly' ? 'sati' : 'wata'})
+                                        Remaining balance of {formatCurrency(pssPlanDetails.remainingBalance)} will be paid in {pssPlanDetails.installmentsCount - 1} installments ({formatCurrency(pssPlanDetails.recurringAmount)} per {pssPlanDetails.frequency === 'daily' ? 'day' : pssPlanDetails.frequency === 'weekly' ? 'week' : 'month'})
                                     </Text>
                                 </View>
                             )}
@@ -1870,11 +1844,11 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                             {paymentMethod === 'pod' && (
                                 <View style={{ backgroundColor: '#FFF7ED', padding: 10, borderRadius: 8, marginTop: 10, borderWidth: 1, borderColor: '#FED7AA' }}>
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <Text style={{ fontSize: 12, fontWeight: '800', color: '#C2410C' }}>Za A Biya Yau (Due Today):</Text>
+                                        <Text style={{ fontSize: 12, fontWeight: '800', color: '#C2410C' }}>Due Today (Upfront):</Text>
                                         <Text style={{ fontSize: 14, fontWeight: '900', color: '#C2410C' }}>₦0</Text>
                                     </View>
                                     <Text style={{ fontSize: 10.5, color: '#9A3412', marginTop: 2 }}>
-                                        Za a biya cikakken kuɗin {formatCurrency(finalTotal)} ne a hannu (Cash ko POS) lokacin isowar kaya.
+                                        Full order amount of {formatCurrency(finalTotal)} will be paid upon arrival (Cash or POS transfer).
                                     </Text>
                                 </View>
                             )}
@@ -1893,81 +1867,83 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
             {/* ── STICKY COMPACT BOTTOM ACTION BAR ──────────────────────────── */}
             <View style={s.footerBar}>
-                <View style={s.footerTotalBox}>
-                    <Text style={s.footerTotalLabel}>
-                        {paymentMethod === 'pod'
-                            ? 'Due on Delivery'
-                            : paymentMethod === 'pay_small_small'
-                            ? 'Due Today (Down Payment)'
-                            : 'Total to Pay'}
-                    </Text>
-                    <Text style={s.footerTotalVal}>
-                        {paymentMethod === 'pod'
-                            ? formatCurrency(finalTotal)
-                            : paymentMethod === 'pay_small_small'
-                            ? formatCurrency(pssPlanDetails.downPayment)
-                            : formatCurrency(finalTotal)}
-                    </Text>
-                    {paymentMethod === 'pod' && (
-                        <Text style={{ fontSize: 9.5, color: '#EA580C', fontWeight: '800' }}>₦0 upfront today</Text>
-                    )}
-                    {paymentMethod === 'pay_small_small' && (
-                        <Text style={{ fontSize: 9.5, color: '#B45309', fontWeight: '700' }}>Total: {formatCurrency(finalTotal)} (+5%)</Text>
-                    )}
-                </View>
-
-                <View style={s.footerBtnsRow}>
-                    {currentStep > 1 ? (
-                        <TouchableOpacity
-                            style={s.btnBack}
-                            onPress={() => setCurrentStep(currentStep - 1)}
-                            activeOpacity={0.7}
-                            disabled={isProcessing}
-                        >
-                            <Text style={s.btnBackTxt}>Back</Text>
-                        </TouchableOpacity>
-                    ) : (
-                        <TouchableOpacity
-                            style={s.btnBack}
-                            onPress={handleBackToShop}
-                            activeOpacity={0.7}
-                            disabled={isProcessing}
-                        >
-                            <Text style={s.btnBackTxt}>← Shop</Text>
-                        </TouchableOpacity>
-                    )}
-
-                    <TouchableOpacity
-                        style={[
-                            s.btnNext,
-                            isProcessing && { opacity: 0.7 },
-                            currentStep === 3 && !agreedToTerms && { opacity: 0.6 }
-                        ]}
-                        onPress={currentStep === 3 ? handleFinalSubmit : validateAndNext}
-                        disabled={isProcessing}
-                        activeOpacity={0.8}
-                    >
-                        {isProcessing ? (
-                            <ActivityIndicator size="small" color={WHITE} />
-                        ) : (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <Text style={s.btnNextTxt}>
-                                    {currentStep === 3
-                                        ? paymentMethod === 'pay_small_small'
-                                            ? `Confirm & Pay ${formatCurrency(pssPlanDetails.downPayment)}`
-                                            : paymentMethod === 'pod'
-                                            ? 'Confirm Order (Pay on Delivery)'
-                                            : 'Confirm & Pay'
-                                        : 'Continue'}
-                                </Text>
-                                <Ionicons
-                                    name={currentStep === 3 ? "shield-checkmark" : "arrow-forward"}
-                                    size={14}
-                                    color={WHITE}
-                                />
-                            </View>
+                <View style={s.footerInner}>
+                    <View style={s.footerTotalBox}>
+                        <Text style={s.footerTotalLabel}>
+                            {paymentMethod === 'pod'
+                                ? 'Due on Delivery'
+                                : paymentMethod === 'pay_small_small'
+                                ? 'Due Today (Down Payment)'
+                                : 'Total to Pay'}
+                        </Text>
+                        <Text style={s.footerTotalVal}>
+                            {paymentMethod === 'pod'
+                                ? formatCurrency(finalTotal)
+                                : paymentMethod === 'pay_small_small'
+                                ? formatCurrency(pssPlanDetails.downPayment)
+                                : formatCurrency(finalTotal)}
+                        </Text>
+                        {paymentMethod === 'pod' && (
+                            <Text style={{ fontSize: 9.5, color: '#EA580C', fontWeight: '800' }}>₦0 upfront today</Text>
                         )}
-                    </TouchableOpacity>
+                        {paymentMethod === 'pay_small_small' && (
+                            <Text style={{ fontSize: 9.5, color: '#B45309', fontWeight: '700' }}>Total: {formatCurrency(finalTotal)} (+5%)</Text>
+                        )}
+                    </View>
+
+                    <View style={s.footerBtnsRow}>
+                        {currentStep > 1 ? (
+                            <TouchableOpacity
+                                style={s.btnBack}
+                                onPress={() => setCurrentStep(currentStep - 1)}
+                                activeOpacity={0.7}
+                                disabled={isProcessing}
+                            >
+                                <Text style={s.btnBackTxt}>Back</Text>
+                            </TouchableOpacity>
+                        ) : (
+                            <TouchableOpacity
+                                style={s.btnBack}
+                                onPress={handleBackToShop}
+                                activeOpacity={0.7}
+                                disabled={isProcessing}
+                            >
+                                <Text style={s.btnBackTxt}>← Shop</Text>
+                            </TouchableOpacity>
+                        )}
+
+                        <TouchableOpacity
+                            style={[
+                                s.btnNext,
+                                isProcessing && { opacity: 0.7 },
+                                currentStep === 3 && !agreedToTerms && { opacity: 0.6 }
+                            ]}
+                            onPress={currentStep === 3 ? handleFinalSubmit : validateAndNext}
+                            disabled={isProcessing}
+                            activeOpacity={0.8}
+                        >
+                            {isProcessing ? (
+                                <ActivityIndicator size="small" color={WHITE} />
+                            ) : (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <Text style={s.btnNextTxt}>
+                                        {currentStep === 3
+                                            ? paymentMethod === 'pay_small_small'
+                                                ? `Confirm & Pay ${formatCurrency(pssPlanDetails.downPayment)}`
+                                                : paymentMethod === 'pod'
+                                                ? 'Confirm Order (Pay on Delivery)'
+                                                : 'Confirm & Pay'
+                                            : 'Continue'}
+                                    </Text>
+                                    <Ionicons
+                                        name={currentStep === 3 ? "shield-checkmark" : "arrow-forward"}
+                                        size={14}
+                                        color={WHITE}
+                                    />
+                                </View>
+                            )}
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </View>
 
@@ -2130,6 +2106,120 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 </KeyboardAvoidingView>
             </Modal>
 
+            {/* ── PSS DURATION MODAL ───────────────────────────────────────── */}
+            <Modal
+                visible={pssDurationModalOpen}
+                animationType="fade"
+                transparent={true}
+                onRequestClose={() => setPssDurationModalOpen(false)}
+            >
+                <TouchableOpacity 
+                    style={s.modalOverlay} 
+                    activeOpacity={1} 
+                    onPress={() => setPssDurationModalOpen(false)}
+                >
+                    <View style={s.pickerModalSheet}>
+                        <View style={s.pickerModalHeader}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Ionicons name="time" size={16} color={GOLD} />
+                                <Text style={s.pickerModalTitle}>Select Installment Duration</Text>
+                            </View>
+                            <TouchableOpacity onPress={() => setPssDurationModalOpen(false)} style={s.modalCloseBtn}>
+                                <Ionicons name="close-circle" size={22} color={SLATE} />
+                            </TouchableOpacity>
+                        </View>
+                        <ScrollView style={{ maxHeight: 320 }}>
+                            {[
+                                { months: 1, label: '1 Month', sub: 'Pay in 30 days total' },
+                                { months: 2, label: '2 Months', sub: 'Pay in 60 days total' },
+                                { months: 3, label: '3 Months', sub: 'Pay in 90 days total' },
+                                { months: 6, label: '6 Months', sub: 'Pay in 180 days total' },
+                                { months: 10, label: '10 Months', sub: 'Pay in 300 days total' },
+                                { months: 12, label: '12 Months (1 Year)', sub: 'Pay in 365 days total' },
+                            ].map((opt) => {
+                                const isSel = pssDurationMonths === opt.months;
+                                return (
+                                    <TouchableOpacity
+                                        key={opt.months}
+                                        style={[s.pickerOptionRow, isSel && s.pickerOptionRowSelected]}
+                                        onPress={() => {
+                                            setPssDurationMonths(opt.months);
+                                            setPssDurationModalOpen(false);
+                                        }}
+                                        activeOpacity={0.7}
+                                    >
+                                        <View>
+                                            <Text style={[s.pickerOptionText, isSel && s.pickerOptionTextSelected]}>
+                                                {opt.label}
+                                            </Text>
+                                            <Text style={s.pickerOptionSub}>{opt.sub}</Text>
+                                        </View>
+                                        {isSel && <Ionicons name="checkmark-circle" size={20} color={EMERALD} />}
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </ScrollView>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+
+            {/* ── PSS FREQUENCY MODAL ──────────────────────────────────────── */}
+            <Modal
+                visible={pssFrequencyModalOpen}
+                animationType="fade"
+                transparent={true}
+                onRequestClose={() => setPssFrequencyModalOpen(false)}
+            >
+                <TouchableOpacity 
+                    style={s.modalOverlay} 
+                    activeOpacity={1} 
+                    onPress={() => setPssFrequencyModalOpen(false)}
+                >
+                    <View style={s.pickerModalSheet}>
+                        <View style={s.pickerModalHeader}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Ionicons name="repeat" size={16} color={GOLD} />
+                                <Text style={s.pickerModalTitle}>Select Payment Frequency</Text>
+                            </View>
+                            <TouchableOpacity onPress={() => setPssFrequencyModalOpen(false)} style={s.modalCloseBtn}>
+                                <Ionicons name="close-circle" size={22} color={SLATE} />
+                            </TouchableOpacity>
+                        </View>
+                        <ScrollView style={{ maxHeight: 320 }}>
+                            {[
+                                { key: 'daily', label: 'Daily', sub: 'Pay a small portion every single day' },
+                                { key: '2_days', label: 'Every 2 Days', sub: 'Pay once every 48 hours' },
+                                { key: '3_days', label: 'Every 3 Days', sub: 'Pay once every 72 hours' },
+                                { key: '5_days', label: 'Every 5 Days', sub: 'Pay once every 5 days' },
+                                { key: 'weekly', label: 'Weekly', sub: 'Pay once every 7 days' },
+                                { key: 'monthly', label: 'Monthly', sub: 'Pay once every 30 days' },
+                            ].map((opt) => {
+                                const isSel = pssFrequency === opt.key;
+                                return (
+                                    <TouchableOpacity
+                                        key={opt.key}
+                                        style={[s.pickerOptionRow, isSel && s.pickerOptionRowSelected]}
+                                        onPress={() => {
+                                            setPssFrequency(opt.key);
+                                            setPssFrequencyModalOpen(false);
+                                        }}
+                                        activeOpacity={0.7}
+                                    >
+                                        <View>
+                                            <Text style={[s.pickerOptionText, isSel && s.pickerOptionTextSelected]}>
+                                                {opt.label}
+                                            </Text>
+                                            <Text style={s.pickerOptionSub}>{opt.sub}</Text>
+                                        </View>
+                                        {isSel && <Ionicons name="checkmark-circle" size={20} color={EMERALD} />}
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </ScrollView>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
+
             {/* ── PAYMENT MODAL (WEBVIEW) ──────────────────────────────────── */}
             <FlutterwaveCheckout
                 visible={showPaymentModal}
@@ -2172,6 +2262,9 @@ const s = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 14,
+        maxWidth: 540,
+        width: '100%',
+        alignSelf: 'center',
     },
     backBtn: {
         width: 34,
@@ -2224,6 +2317,9 @@ const s = StyleSheet.create({
         backgroundColor: '#FAFBFD',
         borderTopWidth: 0.5,
         borderTopColor: '#F1F5F9',
+        maxWidth: 540,
+        width: '100%',
+        alignSelf: 'center',
     },
     stepTab: {
         flexDirection: 'row',
@@ -2274,8 +2370,11 @@ const s = StyleSheet.create({
 
     // Scroll
     scrollContent: {
-        padding: 14,
-        paddingBottom: 90,
+        padding: 12,
+        paddingBottom: 95,
+        maxWidth: 540,
+        width: '100%',
+        alignSelf: 'center',
     },
 
     // Section Headers
@@ -2931,19 +3030,24 @@ const s = StyleSheet.create({
         bottom: 0,
         left: 0,
         right: 0,
-        height: 60,
         backgroundColor: WHITE,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 14,
         borderTopWidth: 1,
         borderTopColor: BORDER,
+        alignItems: 'center',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: -2 },
         shadowOpacity: 0.05,
         shadowRadius: 6,
         elevation: 8,
+    },
+    footerInner: {
+        maxWidth: 540,
+        width: '100%',
+        height: 60,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 14,
     },
     footerTotalBox: {
         justifyContent: 'center',
@@ -3631,6 +3735,9 @@ const s = StyleSheet.create({
         borderTopRightRadius: 20,
         maxHeight: '85%',
         paddingTop: 16,
+        maxWidth: 540,
+        width: '100%',
+        alignSelf: 'center',
     },
     lgaModalHeader: {
         flexDirection: 'row',
@@ -3737,6 +3844,107 @@ const s = StyleSheet.create({
         fontSize: 12,
         fontWeight: '800',
         color: NAVY,
+    },
+    pssFieldGroup: {
+        marginBottom: 8,
+    },
+    pssFieldLabel: {
+        fontSize: 10.5,
+        fontWeight: '700',
+        color: SLATE_DARK,
+        marginBottom: 4,
+        textTransform: 'uppercase',
+        letterSpacing: 0.3,
+    },
+    pssDropdown: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: WHITE,
+        borderWidth: 1,
+        borderColor: '#CBD5E1',
+        borderRadius: 8,
+        paddingHorizontal: 10,
+        height: 40,
+    },
+    pssDropdownTxt: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: NAVY,
+    },
+    streetToggleBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        marginTop: 6,
+        paddingVertical: 4,
+    },
+    streetToggleTxt: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: GOLD,
+    },
+    streetInputBox: {
+        marginTop: 6,
+    },
+    streetInput: {
+        backgroundColor: WHITE,
+        borderWidth: 1,
+        borderColor: '#CBD5E1',
+        borderRadius: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        fontSize: 11.5,
+        color: NAVY,
+    },
+    pickerModalSheet: {
+        backgroundColor: WHITE,
+        borderTopLeftRadius: 18,
+        borderTopRightRadius: 18,
+        padding: 16,
+        maxWidth: 540,
+        width: '100%',
+        alignSelf: 'center',
+    },
+    pickerModalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingBottom: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+    },
+    pickerModalTitle: {
+        fontSize: 13.5,
+        fontWeight: '800',
+        color: NAVY,
+    },
+    pickerOptionRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 10,
+        paddingHorizontal: 8,
+        borderBottomWidth: 0.5,
+        borderBottomColor: '#F1F5F9',
+        borderRadius: 6,
+    },
+    pickerOptionRowSelected: {
+        backgroundColor: '#F0FDF4',
+    },
+    pickerOptionText: {
+        fontSize: 12.5,
+        fontWeight: '700',
+        color: NAVY,
+    },
+    pickerOptionTextSelected: {
+        color: '#166534',
+        fontWeight: '800',
+    },
+    pickerOptionSub: {
+        fontSize: 10.5,
+        color: SLATE,
+        marginTop: 1,
     },
 });
 
