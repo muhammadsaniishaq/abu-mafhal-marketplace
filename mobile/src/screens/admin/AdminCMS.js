@@ -149,7 +149,7 @@ export const AdminCMS = () => {
             {loading ? (
                 <View style={{ padding: 40, alignItems: 'center' }}>
                     <ActivityIndicator size="large" color={GOLD} />
-                    <Text style={{ marginTop: 12, fontSize: 12, fontWeight: '700', color: '#64748B' }}>Ana loda shafi...</Text>
+                    <Text style={{ marginTop: 12, fontSize: 12, fontWeight: '700', color: '#64748B' }}>Loading page content...</Text>
                 </View>
             ) : (
                 <View style={{

@@ -71,12 +71,12 @@ export const AdminBroadcast = () => {
         const apiKey = settings?.gemini_api_key || process.env.EXPO_PUBLIC_GEMINI_API_KEY;
 
         if (!apiKey) {
-            showAlert('Babu API Key', 'Sanya Gemini API Key a saitunan Admin Settings domin amfani da AI.', 'error');
+            showAlert('Missing API Key', 'Configure Gemini API Key in Admin Settings to use AI.', 'error');
             return;
         }
 
         if (!aiPrompt.trim()) {
-            showAlert('Dakatar!', 'Da fatan za a rubuta dan takaitaccen bayanin abin da kake son sanarwa ga AI.', 'info');
+            showAlert('Notice', 'Please write a brief prompt of what you want to announce.', 'info');
             return;
         }
 
@@ -339,11 +339,11 @@ export const AdminBroadcast = () => {
                     <View style={s.aiBox}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                             <Ionicons name="sparkles" size={18} color={NAVY} />
-                            <Text style={s.aiBoxTitle}>Mataimakin Gemini AI (AI Writer)</Text>
+                            <Text style={s.aiBoxTitle}>Gemini AI Copilot (AI Writer)</Text>
                         </View>
                         <TextInput
                             style={s.aiInput}
-                            placeholder="Takaita abin da kake son sanarwa a nan (misali: Rangwamen sallah)..."
+                            placeholder="Summarize the announcement topic here (e.g., Weekend Flash Sale)..."
                             placeholderTextColor="#94A3B8"
                             value={aiPrompt}
                             onChangeText={setAiPrompt}
@@ -359,14 +359,14 @@ export const AdminBroadcast = () => {
                             ) : (
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                     <Ionicons name="color-wand" size={16} color={NAVY} />
-                                    <Text style={s.aiGenerateBtnText}>Rubuta Sanarwa Da AI</Text>
+                                    <Text style={s.aiGenerateBtnText}>Generate Announcement with AI</Text>
                                 </View>
                             )}
                         </TouchableOpacity>
                     </View>
 
                     {/* Optional Image Upload */}
-                    <Text style={s.label}>Hoton Sanarwa (Na Zabi)</Text>
+                    <Text style={s.label}>Broadcast Image (Optional)</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 18 }}>
                         <TouchableOpacity
                             style={s.imageBox}
@@ -384,11 +384,11 @@ export const AdminBroadcast = () => {
                         </TouchableOpacity>
                         <View style={{ flex: 1, marginLeft: 14 }}>
                             <Text style={{ fontSize: 12, color: '#64748B', lineHeight: 16 }}>
-                                Sanya hoton talla ko na kaya domin sanarwar ta fi jan hankali.
+                                Attach a promotional image or banner to enhance visibility.
                             </Text>
                             {imageUrl && (
                                 <TouchableOpacity onPress={() => { setImageUrl(null); setImageBase64(null); setImageMimeType(null); }} style={{ marginTop: 6 }}>
-                                    <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 12 }}>Cire Hoton</Text>
+                                    <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 12 }}>Remove Image</Text>
                                 </TouchableOpacity>
                             )}
                         </View>
@@ -416,7 +416,7 @@ export const AdminBroadcast = () => {
                     <Text style={s.label}>Action URL / Link (Optional)</Text>
                     <TextInput
                         style={s.textInput}
-                        placeholder="Misali: /shop/category ko https://abumafhal.com"
+                        placeholder="e.g. /shop/category or https://abumafhal.com"
                         placeholderTextColor="#94A3B8"
                         keyboardType="url"
                         autoCapitalize="none"
@@ -448,7 +448,7 @@ export const AdminBroadcast = () => {
                         ) : (
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                 <Ionicons name="send" size={18} color={NAVY} />
-                                <Text style={s.sendBroadcastBtnText}>Aika Sanarwar Ga Jama'a</Text>
+                                <Text style={s.sendBroadcastBtnText}>Send Broadcast Announcement</Text>
                             </View>
                         )}
                     </TouchableOpacity>
@@ -456,20 +456,20 @@ export const AdminBroadcast = () => {
 
                 {/* History Section */}
                 <View style={s.historyHeader}>
-                    <Text style={s.historyTitle}>Sanarwar Da Aka Aika Kusan Yanzu</Text>
-                    <Text style={s.historySub}>Tarihin sanarwar da aka riga aka fitar</Text>
+                    <Text style={s.historyTitle}>Recent Broadcast Announcements</Text>
+                    <Text style={s.historySub}>Log of previously broadcast announcements</Text>
                 </View>
 
                 {history.map((item, index) => (
                     <View key={item.id || index} style={s.historyCard}>
                         <View style={s.historyCardTop}>
                             <Text style={s.historyCardTitle} numberOfLines={1}>
-                                {item.title || 'Sanarwa'}
+                                {item.title || 'Announcement'}
                             </Text>
                             <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
                                 <View style={s.dateBadge}>
                                     <Text style={s.dateBadgeText}>
-                                        {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Yanzu'}
+                                        {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Just now'}
                                     </Text>
                                 </View>
                                 <TouchableOpacity
@@ -482,12 +482,12 @@ export const AdminBroadcast = () => {
                                     activeOpacity={0.8}
                                 >
                                     <Ionicons name="reload" size={12} color={NAVY} />
-                                    <Text style={s.resendBtnText}>Sake Aikawa</Text>
+                                    <Text style={s.resendBtnText}>Resend</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
                         <Text style={s.historyCardBody} numberOfLines={2}>
-                            {item.body || item.message || 'Babu bayani'}
+                            {item.body || item.message || 'No details'}
                         </Text>
                         {item.data?.image_url ? (
                             <Image 
@@ -502,7 +502,7 @@ export const AdminBroadcast = () => {
                 {history.length === 0 && (
                     <View style={s.emptyHistory}>
                         <Ionicons name="chatbubbles-outline" size={40} color="#CBD5E1" style={{ marginBottom: 10 }} />
-                        <Text style={{ color: '#64748B', fontWeight: '600', fontSize: 13 }}>Babu tarihin sanarwar da aka aika a baya.</Text>
+                        <Text style={{ color: '#64748B', fontWeight: '600', fontSize: 13 }}>No past broadcast announcements found.</Text>
                     </View>
                 )}
             </ScrollView>

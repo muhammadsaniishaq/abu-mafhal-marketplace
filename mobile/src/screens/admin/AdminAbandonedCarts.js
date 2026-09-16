@@ -17,7 +17,7 @@ export const AdminAbandonedCarts = () => {
     const [whatsappVisible, setWhatsappVisible] = useState(false);
     const [whatsappPhone, setWhatsappPhone] = useState('');
     const [whatsappUserId, setWhatsappUserId] = useState(null);
-    const [whatsappRecipientName, setWhatsappRecipientName] = useState('Abokin Ciniki');
+    const [whatsappRecipientName, setWhatsappRecipientName] = useState('Customer');
 
     useEffect(() => {
         fetchCarts();

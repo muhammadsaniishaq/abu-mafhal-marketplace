@@ -306,7 +306,7 @@ export const AdminAuditLogs = () => {
                 <View style={{ flex: 1 }}>
                     <View style={s.logCardTop}>
                         <Text style={s.logActionText} numberOfLines={1}>
-                            {(item.action || 'Aiki').replace(/_/g, ' ')}
+                            {(item.action || 'Action').replace(/_/g, ' ')}
                         </Text>
                         <Text style={s.logTimeText}>{timeStr}</Text>
                     </View>
@@ -339,11 +339,11 @@ export const AdminAuditLogs = () => {
                     <View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                             <Ionicons name="shield-checkmark" size={22} color={GOLD} />
-                            <Text style={s.headerTitle}>Ayyukan Tsaro (Audit Logs)</Text>
+                            <Text style={s.headerTitle}>Audit Logs & Security Trail</Text>
                             <Animated.View style={[s.liveDot, { opacity: pulseAnim }]} />
                         </View>
                         <Text style={s.headerSubtitle}>
-                            {isLive ? 'Binciken ayyuka yana aiki kai tsaye (Live)' : 'Ana kokarin sake hadawa...'}
+                            {isLive ? 'Real-time security auditing active (Live)' : 'Reconnecting live stream...'}
                         </Text>
                     </View>
 
@@ -422,7 +422,7 @@ export const AdminAuditLogs = () => {
             {loading && !refreshing ? (
                 <View style={s.centered}>
                     <ActivityIndicator size="large" color={GOLD} />
-                    <Text style={s.loadingText}>Ana binciko bayanan tsaro...</Text>
+                    <Text style={s.loadingText}>Fetching audit security logs...</Text>
                 </View>
             ) : (
                 <FlatList
@@ -436,9 +436,9 @@ export const AdminAuditLogs = () => {
                             <View style={s.emptyIconCircle}>
                                 <Ionicons name="shield-outline" size={38} color={GOLD} />
                             </View>
-                            <Text style={s.emptyTitle}>Babu Wani Aiki Da Aka Samu</Text>
+                            <Text style={s.emptyTitle}>No Audit Logs Found</Text>
                             <Text style={s.emptySub}>
-                                {searchQuery ? `Babu aikin da ya dace da "${searchQuery}"` : "Babu wani aikin da aka yi a wannan lokacin."}
+                                {searchQuery ? `No activity matching "${searchQuery}"` : "No audit activity recorded in this period."}
                             </Text>
                         </View>
                     }
@@ -470,14 +470,14 @@ export const AdminAuditLogs = () => {
                                         <Ionicons name="person-circle-outline" size={36} color={GOLD} />
                                         <View style={{ flex: 1, marginLeft: 10 }}>
                                             <Text style={s.actorName}>{selectedLog.user?.full_name || 'System Automations'}</Text>
-                                            <Text style={s.actorEmail}>{selectedLog.user?.email || selectedLog.user_id || 'Babu User ID'}</Text>
+                                            <Text style={s.actorEmail}>{selectedLog.user?.email || selectedLog.user_id || 'No User ID'}</Text>
                                         </View>
                                     </View>
 
-                                    <Text style={s.detailsSectionLabel}>CIKAKKEN BAYANIN AIKI (STRUCTURED DATA)</Text>
+                                    <Text style={s.detailsSectionLabel}>DETAILED EVENT LOG (STRUCTURED DATA)</Text>
                                     <View style={s.jsonBox}>
                                         <Text style={s.jsonText}>
-                                            {selectedLog.details ? JSON.stringify(selectedLog.details, null, 2) : 'Babu karin bayani (No Extra Payload)'}
+                                            {selectedLog.details ? JSON.stringify(selectedLog.details, null, 2) : 'No extra payload data provided'}
                                         </Text>
                                     </View>
 

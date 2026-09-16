@@ -97,7 +97,7 @@ const CategoryDiscoveryBar = ({ label, value, total, color, icon }) => {
                     </View>
                     <Text style={{ fontSize: 13, fontWeight: '700', color: NAVY }}>{label}</Text>
                 </View>
-                <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY }}>{value.toLocaleString()} kayayyaki</Text>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY }}>{value.toLocaleString()} items</Text>
             </View>
             <View style={{ height: 7, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden' }}>
                 <View style={{ height: '100%', width: `${percentage}%`, backgroundColor: color, borderRadius: 4 }} />
@@ -257,7 +257,7 @@ export const AdminAnalytics = () => {
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
                 <ActivityIndicator size="large" color={GOLD} />
                 <Text style={{ marginTop: 14, fontSize: 12, fontWeight: '800', color: '#64748B', letterSpacing: 1 }}>
-                    ANA LODA BAYANAN ANALYTICS LIVE...
+                    FETCHING LIVE ANALYTICS DATA...
                 </Text>
             </View>
         );
@@ -452,7 +452,7 @@ export const AdminAnalytics = () => {
                     ))
                 ) : (
                     <Text style={{ color: '#94A3B8', textAlign: 'center', marginVertical: 14, fontSize: 12 }}>
-                        Babu kayayyaki a halin yanzu.
+                        No product data available yet.
                     </Text>
                 )}
             </View>

@@ -30,8 +30,8 @@ const SearchModal = ({ visible, onClose, onSearch, results, onSelect }) => {
             <View style={s.modalCard}>
                 <View style={s.modalHeader}>
                     <View>
-                        <Text style={s.modalTitle}>Zaɓi Kayan Da Ake Talla (Product)</Text>
-                        <Text style={s.modalSub}>Zaɓi kaya domin a danganta shi da wannan banner ɗin</Text>
+                        <Text style={s.modalTitle}>Select Target Product</Text>
+                        <Text style={s.modalSub}>Select a product to link directly to this promotional banner</Text>
                     </View>
                     <TouchableOpacity onPress={onClose} style={s.iconButton}>
                         <Ionicons name="close" size={22} color={NAVY} />
@@ -72,7 +72,7 @@ const SearchModal = ({ visible, onClose, onSearch, results, onSelect }) => {
                                     <Text style={s.productPrice}>₦{Number(item.price || 0).toLocaleString()}</Text>
                                 </View>
                                 <View style={s.selectBadge}>
-                                    <Text style={s.selectBadgeText}>Zaɓa</Text>
+                                    <Text style={s.selectBadgeText}>Select</Text>
                                 </View>
                             </TouchableOpacity>
                         ))
@@ -239,7 +239,7 @@ export const AdminPromoBanners = () => {
         try {
             const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (!permission.granted) {
-                Alert.alert('Izini', 'Ana bukatar izini don shiga gallery.');
+                Alert.alert('Permission', 'Gallery access is required to upload banner.');
                 return;
             }
 
@@ -277,7 +277,7 @@ export const AdminPromoBanners = () => {
                 }
 
                 if (uploadRes.error) {
-                    showToast('An gaza loda hoto: ' + uploadRes.error.message, 'error');
+                    showToast('Failed to upload image: ' + uploadRes.error.message, 'error');
                     setUploadingBanner(false);
                     return;
                 }
@@ -360,9 +360,9 @@ export const AdminPromoBanners = () => {
                         text: result.buttonText || prev.linkData?.text
                     }
                 }));
-                showToast('Gemini AI ta samar da kyakkyawan take!', 'success');
+                showToast('Gemini AI successfully generated headline!', 'success');
             } else {
-                showToast('AI ba ta iya kirkirar take a yanzu ba.', 'error');
+                showToast('AI could not generate headline at this time.', 'error');
             }
         } catch (e) {
             console.error("AI Error:", e);

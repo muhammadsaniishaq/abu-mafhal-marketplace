@@ -21,7 +21,7 @@ export const AdminDisputes = () => {
     const [whatsappVisible, setWhatsappVisible] = useState(false);
     const [whatsappPhone, setWhatsappPhone] = useState('');
     const [whatsappUserId, setWhatsappUserId] = useState(null);
-    const [whatsappRecipientName, setWhatsappRecipientName] = useState('Abokin Ciniki');
+    const [whatsappRecipientName, setWhatsappRecipientName] = useState('Customer');
 
     useEffect(() => {
         fetchDisputes();
@@ -98,12 +98,12 @@ export const AdminDisputes = () => {
 
     const resolveDispute = async () => {
         Alert.alert(
-            'Kammala Sasantawa',
-            'Kana da tabbacin an warware wannan matsala (Mark as Resolved)?',
+            'Resolve Dispute',
+            'Are you sure you want to mark this dispute as resolved?',
             [
-                { text: 'A\'a (Cancel)', style: 'cancel' },
+                { text: 'Cancel', style: 'cancel' },
                 {
-                    text: 'Tabbatar',
+                    text: 'Confirm',
                     onPress: async () => {
                         const { error } = await supabase.from('disputes').update({ status: 'resolved' }).eq('id', selectedDispute.id);
                         if (!error) {
@@ -121,7 +121,7 @@ export const AdminDisputes = () => {
 
     const renderItem = ({ item }) => {
         const isResolved = item.status === 'resolved';
-        const userName = item.profiles?.full_name || item.profiles?.email || 'Abokin Ciniki';
+        const userName = item.profiles?.full_name || item.profiles?.email || 'Customer';
         const phone = item.profiles?.phone || item.profiles?.phone_number;
 
         return (
@@ -145,10 +145,10 @@ export const AdminDisputes = () => {
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
                     <View>
                         <Text style={{ fontWeight: '900', color: NAVY, fontSize: 14 }}>
-                            Korafe-korafe #{item.id.slice(0, 8)}
+                            Dispute #{item.id.slice(0, 8)}
                         </Text>
                         <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>
-                            Daga: <Text style={{ fontWeight: '700', color: NAVY }}>{userName}</Text>
+                            From: <Text style={{ fontWeight: '700', color: NAVY }}>{userName}</Text>
                         </Text>
                     </View>
 
@@ -161,13 +161,13 @@ export const AdminDisputes = () => {
                         borderColor: isResolved ? '#10B981' : GOLD
                     }}>
                         <Text style={{ fontSize: 10, fontWeight: '800', color: isResolved ? '#166534' : GOLD, textTransform: 'uppercase' }}>
-                            {isResolved ? 'AN WARWARE' : 'KORAFI NA JIRA'}
+                            {isResolved ? 'RESOLVED' : 'PENDING REVIEW'}
                         </Text>
                     </View>
                 </View>
 
                 <Text style={{ fontSize: 13, fontWeight: '700', color: NAVY, marginTop: 4 }}>
-                    Dalili: {item.reason || 'Babu dalili'}
+                    Reason: {item.reason || 'No reason specified'}
                 </Text>
 
                 {item.description ? (

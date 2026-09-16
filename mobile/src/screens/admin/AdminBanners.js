@@ -69,7 +69,7 @@ export const AdminBanners = () => {
         try {
             const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (!permissionResult.granted) {
-                Alert.alert('Izini', 'Ana bukatar izinin shiga gallery domin sa hoton banner.');
+                Alert.alert('Permission', 'Gallery access is required to upload banner image.');
                 return;
             }
 
@@ -120,7 +120,7 @@ export const AdminBanners = () => {
                 Alert.alert('Success', 'Banner image uploaded successfully!');
             }
         } catch (error) {
-            Alert.alert('Upload Error', error.message || 'An gaza loda hoto a tsarin');
+            Alert.alert('Upload Error', error.message || 'Failed to upload banner image.');
         } finally {
             setUploading(false);
         }
@@ -237,9 +237,9 @@ export const AdminBanners = () => {
                 <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         <Ionicons name="images" size={24} color={GOLD} />
-                        <Text style={s.headerTitle}>Hotunan Talla (Banners)</Text>
+                        <Text style={s.headerTitle}>Promotional Banners</Text>
                     </View>
-                    <Text style={s.headerSubtitle}>Sarrafa hero da tallace-tallacen manhaja kai tsaye</Text>
+                    <Text style={s.headerSubtitle}>Manage hero banners and store campaigns in real-time</Text>
                 </View>
                 <TouchableOpacity
                     activeOpacity={0.8}
@@ -247,7 +247,7 @@ export const AdminBanners = () => {
                     style={s.createButton}
                 >
                     <Ionicons name="add-circle" size={18} color="#FFFFFF" />
-                    <Text style={s.createButtonText}>Sabo</Text>
+                    <Text style={s.createButtonText}>+ New</Text>
                 </TouchableOpacity>
             </View>
 
@@ -259,7 +259,7 @@ export const AdminBanners = () => {
                         style={[s.filterChip, activeSectionFilter === 'all' && s.filterChipActive]}
                     >
                         <Text style={[s.filterChipText, activeSectionFilter === 'all' && s.filterChipTextActive]}>
-                            Duka ({banners.length})
+                            All ({banners.length})
                         </Text>
                     </TouchableOpacity>
                     {SECTIONS.map(sec => {
@@ -284,7 +284,7 @@ export const AdminBanners = () => {
             {loading ? (
                 <View style={s.centered}>
                     <ActivityIndicator size="large" color={GOLD} />
-                    <Text style={s.loadingText}>Ana loda hotunan talla...</Text>
+                    <Text style={s.loadingText}>Loading banners...</Text>
                 </View>
             ) : (
                 <ScrollView
@@ -297,14 +297,14 @@ export const AdminBanners = () => {
                             <View style={s.emptyIconCircle}>
                                 <Ionicons name="images-outline" size={48} color={GOLD} />
                             </View>
-                            <Text style={s.emptyStateTitle}>Babu Wani Hoton Talla</Text>
-                            <Text style={s.emptyStateSub}>Danna maɓallin '+ Sabo' domin ƙirƙirar sabon hoton talla a sashin da ka zaɓa.</Text>
+                            <Text style={s.emptyStateTitle}>No Banners Found</Text>
+                            <Text style={s.emptyStateSub}>Tap '+ New' to create a promotional banner in the selected slot.</Text>
                             <TouchableOpacity
                                 onPress={() => { resetForm(); setShowForm(true); }}
                                 style={s.emptyCreateBtn}
                             >
                                 <Ionicons name="add" size={18} color="#FFFFFF" />
-                                <Text style={s.emptyCreateBtnText}>Ƙirƙiri Banner Yanzu</Text>
+                                <Text style={s.emptyCreateBtnText}>Create Banner Now</Text>
                             </TouchableOpacity>
                         </View>
                     ) : (
@@ -323,7 +323,7 @@ export const AdminBanners = () => {
                                     {/* Order Tag */}
                                     <View style={s.orderBadge}>
                                         <Ionicons name="swap-vertical" size={12} color="#FFFFFF" />
-                                        <Text style={s.orderBadgeText}>Tsari: #{item.display_order ?? 0}</Text>
+                                        <Text style={s.orderBadgeText}>Order: #{item.display_order ?? 0}</Text>
                                     </View>
                                 </View>
 
@@ -332,7 +332,7 @@ export const AdminBanners = () => {
                                         {item.title ? (
                                             <Text style={s.cardTitle} numberOfLines={1}>{item.title}</Text>
                                         ) : (
-                                            <Text style={[s.cardTitle, { color: '#94A3B8' }]}>Babu Babban Take (No Title)</Text>
+                                            <Text style={[s.cardTitle, { color: '#94A3B8' }]}>No Title</Text>
                                         )}
                                         {item.subtitle ? (
                                             <Text style={s.cardSubtitle} numberOfLines={1}>{item.subtitle}</Text>
