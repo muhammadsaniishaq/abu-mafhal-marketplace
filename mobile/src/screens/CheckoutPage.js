@@ -1,20 +1,61 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, SafeAreaView, Alert, ActivityIndicator, TextInput, Image, StyleSheet, Platform, StatusBar, Modal, Dimensions, KeyboardAvoidingView } from 'react-native';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import {
+    View,
+    Text,
+    TouchableOpacity,
+    ScrollView,
+    SafeAreaView,
+    Alert,
+    ActivityIndicator,
+    TextInput,
+    Image,
+    StyleSheet,
+    Platform,
+    StatusBar,
+    Modal,
+    Dimensions,
+    KeyboardAvoidingView,
+    Animated
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
-import { styles as themeStyles } from '../styles/theme';
 import { useAppSettings, useBrandTheme } from '../context/AppSettingsContext';
 import FlutterwaveCheckout from '../lib/flutterwave/FlutterwaveCheckout';
 import CheckoutAddressCard from '../components/CheckoutAddressCard';
-import { CheckoutAddressSkeleton, CheckoutSummarySkeleton } from '../components/CheckoutSkeleton';
+import { CheckoutAddressSkeleton } from '../components/CheckoutSkeleton';
 import { whatsappService } from '../services/whatsappService';
 import { ShippingCalculationEngine } from '../services/shippingService';
+import { parsePrice, formatCurrency } from '../utils/helpers';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 const CHECKOUT_STORAGE_KEY = '@checkout_progress_v3';
 
-import { parsePrice, formatCurrency } from '../utils/helpers';
+// ── Abu Mafhal Luxury Design Tokens ──────────────────────────────────────────
+const NAVY        = '#0E1A2E';
+const NAVY_LIGHT  = '#1E293B';
+const GOLD        = '#D9A73A';
+const GOLD_LIGHT  = '#FEF9EE';
+const GOLD_BORDER = '#F3DE9C';
+const EMERALD     = '#10B981';
+const DANGER      = '#EF4444';
+const SLATE       = '#64748B';
+const SLATE_DARK  = '#0F172A';
+const BORDER      = '#E2E8F0';
+const BG          = '#F8FAFC';
+const WHITE       = '#FFFFFF';
+
+const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=200&auto=format&fit=crop';
+
+const getItemImage = (item) => {
+    if (!item) return FALLBACK_IMAGE;
+    if (Array.isArray(item.images) && item.images[0]) return item.images[0];
+    if (typeof item.images === 'string' && item.images.startsWith('http')) return item.images;
+    if (item.image_url && item.image_url.startsWith('http')) return item.image_url;
+    if (item.image && item.image.startsWith('http')) return item.image;
+    if (item.thumbnail && item.thumbnail.startsWith('http')) return item.thumbnail;
+    return FALLBACK_IMAGE;
+};
 
 export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
     const { cart = [], total: initialTotalParam = 0 } = route.params || {};
@@ -22,35 +63,98 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
     const initialTotal = useMemo(() => {
         return cart.reduce((sum, item) => {
             const price = parsePrice(item.price);
-            const qty = parseInt(item.qty || item.quantity || 1) || 1;
+            const qty = parseInt(item.qty || item.quantity || 1, 10) || 1;
             return sum + (price * qty);
         }, 0);
     }, [cart]);
 
     const { settings } = useAppSettings();
-    const { primary, secondary, primaryBg, onPrimary } = useBrandTheme();
+    const { primary = NAVY, secondary = GOLD } = useBrandTheme();
 
-    // Wizard State
+    // Wizard Step: 1 = Shipping, 2 = Payment, 3 = Review & Confirm
     const [currentStep, setCurrentStep] = useState(1);
 
     // Data State
-    const [loading, setLoading] = useState(true);
-    const [user, setUser] = useState(null);
-    const [profile, setProfile] = useState(null);
-    const [addresses, setAddresses] = useState([]);
+    const [loading, setLoading]                 = useState(true);
+    const [user, setUser]                       = useState(null);
+    const [profile, setProfile]                 = useState(null);
+    const [addresses, setAddresses]             = useState([]);
     const [selectedAddressId, setSelectedAddressId] = useState(null);
 
+    // Step 2: Payment Gateways
+    const [paymentMethod, setPaymentMethod] = useState('Paystack');
+
+    // Step 3: Review & Options
+    const [couponCode, setCouponCode]           = useState('');
+    const [appliedCoupon, setAppliedCoupon]     = useState(null);
+    const [validatingCoupon, setValidatingCoupon] = useState(false);
+    const [discountAmount, setDiscountAmount]   = useState(0);
+    const [orderNote, setOrderNote]             = useState('');
+    const [agreedToTerms, setAgreedToTerms]     = useState(false);
+    const [showItemsAccordion, setShowItemsAccordion] = useState(true);
+
+    // UI & Action States
+    const [isProcessing, setIsProcessing]         = useState(false);
+    const [orderSuccess, setOrderSuccess]         = useState(false);
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [paymentLink, setPaymentLink]           = useState('');
+    const [currentOrderId, setCurrentOrderId]     = useState(null);
+
+    // Floating Toast Notification
+    const [toastMessage, setToastMessage] = useState('');
+    const toastAnim = useRef(new Animated.Value(0)).current;
+
+    const showToast = useCallback((msg) => {
+        setToastMessage(msg);
+        Animated.sequence([
+            Animated.timing(toastAnim, { toValue: 1, duration: 150, useNativeDriver: true }),
+            Animated.delay(1800),
+            Animated.timing(toastAnim, { toValue: 0, duration: 150, useNativeDriver: true })
+        ]).start();
+    }, [toastAnim]);
+
+    // Available Payment Gateways
     const availableMethods = useMemo(() => {
+        const walletBalance = Number(profile?.wallet_balance || 0);
         return [
-            { id: 'Paystack', enabled: settings?.payment_methods?.paystack !== false, name: 'Paystack', sub: 'Cards, Transfer, USSD, Bank', logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSzFzmpCa0Tav9NttiYF10t9wftJPQ0XYPBkA&s', recommended: true, icon: 'card-outline' },
-            { id: 'Flutterwave', enabled: settings?.payment_methods?.flutterwave !== false, name: 'Flutterwave', sub: 'Cards, Bank, Mobile Money', logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-W6MLvD_saE20EDSZzVPspKqcKxZ89rW8uw&s', icon: 'flash' },
-            { id: 'Coinbase', enabled: settings?.payment_methods?.crypto !== false, name: 'Coinbase Crypto', sub: 'BTC, ETH, USDT, USDC', logo: 'https://media.licdn.com/dms/image/v2/D4E0BAQFBUuEd8VGK4w/company-logo_200_200/B4EZs3tEB3IQAI-/0/1766166118811/coinbase_logo?e=2147483647&v=beta&t=mPgscbzEhR9TBOuI9MM0BDNcbE4tvvbhF38KM3V1CAY', icon: 'logo-bitcoin' },
-            { id: 'Wallet', enabled: settings?.payment_methods?.wallet !== false, name: 'My Wallet', sub: `Balance: \u20A6${(profile?.wallet_balance || 0).toLocaleString()}`, icon: 'wallet' }
+            {
+                id: 'Paystack',
+                enabled: settings?.payment_methods?.paystack !== false,
+                name: 'Paystack',
+                sub: 'Cards, Bank Transfer & USSD',
+                logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSzFzmpCa0Tav9NttiYF10t9wftJPQ0XYPBkA&s',
+                badge: 'Instant & Secure',
+                icon: 'card-outline'
+            },
+            {
+                id: 'Flutterwave',
+                enabled: settings?.payment_methods?.flutterwave !== false,
+                name: 'Flutterwave',
+                sub: 'Cards & Mobile Money',
+                logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-W6MLvD_saE20EDSZzVPspKqcKxZ89rW8uw&s',
+                badge: 'Multi-Currency',
+                icon: 'flash-outline'
+            },
+            {
+                id: 'Wallet',
+                enabled: settings?.payment_methods?.wallet !== false,
+                name: 'Abu Mafhal Wallet',
+                sub: `Balance: ₦${walletBalance.toLocaleString()}`,
+                badge: walletBalance > 0 ? 'Instant Debit' : 'Top-up needed',
+                icon: 'wallet-outline',
+                balance: walletBalance
+            },
+            {
+                id: 'Coinbase',
+                enabled: settings?.payment_methods?.crypto !== false,
+                name: 'Coinbase Crypto',
+                sub: 'BTC, ETH, USDT & USDC',
+                logo: 'https://media.licdn.com/dms/image/v2/D4E0BAQFBUuEd8VGK4w/company-logo_200_200/B4EZs3tEB3IQAI-/0/1766166118811/coinbase_logo?e=2147483647&v=beta&t=mPgscbzEhR9TBOuI9MM0BDNcbE4tvvbhF38KM3V1CAY',
+                badge: 'Web3',
+                icon: 'logo-bitcoin'
+            }
         ].filter(m => m.enabled);
     }, [settings, profile]);
-
-    // Step 2 State
-    const [paymentMethod, setPaymentMethod] = useState('');
 
     useEffect(() => {
         if (!paymentMethod && availableMethods.length > 0) {
@@ -60,51 +164,17 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
         }
     }, [availableMethods, paymentMethod]);
 
-    // Step 3 State
-    const [couponCode, setCouponCode] = useState('');
-    const [appliedCoupon, setAppliedCoupon] = useState(null);
-    const [validatingCoupon, setValidatingCoupon] = useState(false);
-    const [discountAmount, setDiscountAmount] = useState(0);
-    const [orderNote, setOrderNote] = useState('');
-    const [agreedToTerms, setAgreedToTerms] = useState(false);
-
-    // UI State
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [orderSuccess, setOrderSuccess] = useState(false);
-    const [showPaymentModal, setShowPaymentModal] = useState(false);
-    const [paymentLink, setPaymentLink] = useState('');
-    const [currentOrderId, setCurrentOrderId] = useState(null);
-
-    const triggerOrderWhatsApp = (orderId, totalAmount, payMethod) => {
-        try {
-            const addr = addresses.find(a => a.id === selectedAddressId);
-            const customerPhone = addr?.phone || profile?.phone_number || profile?.phone || user?.phone;
-            if (!customerPhone) return;
-
-            const formattedId = orderId?.slice(0, 8).toUpperCase() || '';
-            const formattedAmount = totalAmount?.toLocaleString() || '';
-
-            const orderMsg = `Your order #${formattedId} has been placed successfully via ${payMethod}. Thank you for shopping with Abu Mafhal!`;
-            whatsappService.sendDirect(customerPhone, orderMsg, user?.id).catch(e => console.log('Order WhatsApp Error:', e));
-
-            const receiptMsg = `Payment confirmed for order #${formattedId}. Paid: ₦${formattedAmount} via ${payMethod}. We are processing your request.`;
-            whatsappService.sendDirect(customerPhone, receiptMsg, user?.id).catch(e => console.log('Payment receipt WhatsApp Error:', e));
-        } catch (err) {
-            console.log('Error triggering WhatsApp from checkout:', err);
-        }
-    };
-
-    // ── Delivery Methods & Dynamic Distance Engine ──────────────────────────
+    // ── Delivery Methods & Distance Engine ──────────────────────────────────
     const [selectedDeliveryMethod, setSelectedDeliveryMethod] = useState('standard');
     const [deliveryMethods, setDeliveryMethods] = useState([
         { code: 'standard', name: 'Standard Delivery', estimated_days: '2-4 Business Days', icon: 'bicycle-outline' },
-        { code: 'express', name: 'Express Priority', estimated_days: '24-48 Hours', icon: 'flash-outline' },
-        { code: 'pickup', name: 'Store Pickup', estimated_days: 'Ready in 2 Hours', icon: 'storefront-outline' }
+        { code: 'express',  name: 'Express Priority',  estimated_days: '24-48 Hours',       icon: 'flash-outline' },
+        { code: 'pickup',   name: 'Store Pickup',      estimated_days: 'Ready in 2 Hours',   icon: 'storefront-outline' }
     ]);
     const [shippingCalculation, setShippingCalculation] = useState(null);
     const [calculatingShipping, setCalculatingShipping] = useState(false);
 
-    // Recalculate shipping asynchronously whenever address, cart, or delivery method changes
+    // Asynchronously calculate shipping whenever address, delivery method, or cart changes
     useEffect(() => {
         let isMounted = true;
         const runShippingCalc = async () => {
@@ -136,12 +206,11 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
         return () => { isMounted = false; };
     }, [selectedAddressId, selectedDeliveryMethod, addresses, cart, settings]);
 
-    // ── Dynamic Shipping Fee ─────────────────────────────────────────────────
+    // Dynamic Shipping Fee
     const shippingFee = useMemo(() => {
         if (shippingCalculation) {
             return shippingCalculation.totalShippingFee;
         }
-        // Fallback if calculation is in flight
         const selectedAddr = addresses.find(a => a.id === selectedAddressId);
         const allFreeShipping = cart.length > 0 && cart.every(item => item.free_shipping === true);
         if (allFreeShipping) return 0;
@@ -149,10 +218,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
         if (selectedAddr?.state && settings?.shipping_fees?.[selectedAddr.state] !== undefined) {
             return Number(settings.shipping_fees[selectedAddr.state]);
         }
-        return parseFloat(settings?.default_shipping_fee) || 3000;
+        return parseFloat(settings?.default_shipping_fee) || 1500;
     }, [shippingCalculation, selectedAddressId, addresses, cart, settings]);
 
-    // ── Tax Amount ───────────────────────────────────────────────────────────
+    // Tax calculation
     const taxAmount = useMemo(() => {
         if (settings?.tax_enabled === false) return 0;
         const rate = parseFloat(settings?.tax_rate) || 7.5;
@@ -161,14 +230,17 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
 
     const taxRateLabel = (parseFloat(settings?.tax_rate) || 7.5).toFixed(1);
     const isTaxEnabled = settings?.tax_enabled !== false;
-
-    // ── Is shipping waived ───────────────────────────────────────────────────
     const isShippingFree = shippingFee === 0;
 
     const finalTotal = useMemo(() => {
         return Math.max(0, initialTotal + shippingFee + taxAmount - discountAmount);
     }, [initialTotal, shippingFee, taxAmount, discountAmount]);
 
+    // Check if wallet balance is sufficient
+    const walletBalance = Number(profile?.wallet_balance || 0);
+    const isWalletInsufficient = paymentMethod === 'Wallet' && walletBalance < finalTotal;
+
+    // Load initial data
     useEffect(() => {
         loadInitialData();
     }, []);
@@ -229,7 +301,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                 if (sp.note) setOrderNote(sp.note);
             }
         } catch (error) {
-            console.error('Error loading data:', error);
+            console.error('Error loading checkout data:', error);
         } finally {
             setLoading(false);
         }
@@ -253,57 +325,113 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
         await AsyncStorage.removeItem(CHECKOUT_STORAGE_KEY);
     };
 
+    const triggerOrderWhatsApp = (orderId, totalAmount, payMethod) => {
+        try {
+            const addr = addresses.find(a => a.id === selectedAddressId);
+            const customerPhone = addr?.phone || profile?.phone_number || profile?.phone || user?.phone;
+            if (!customerPhone) return;
+
+            const formattedId = orderId?.slice(0, 8).toUpperCase() || '';
+            const formattedAmount = Number(totalAmount || 0).toLocaleString();
+
+            const orderMsg = `Your order #${formattedId} has been placed successfully via ${payMethod}. Thank you for shopping with Abu Mafhal!`;
+            whatsappService.sendDirect(customerPhone, orderMsg, user?.id).catch(e => console.log('Order WhatsApp Error:', e));
+
+            const receiptMsg = `Payment confirmed for order #${formattedId}. Paid: ₦${formattedAmount} via ${payMethod}. We are dispatching your items.`;
+            whatsappService.sendDirect(customerPhone, receiptMsg, user?.id).catch(e => console.log('Payment receipt WhatsApp Error:', e));
+        } catch (err) {
+            console.log('Error triggering WhatsApp from checkout:', err);
+        }
+    };
+
     const handleApplyCoupon = async () => {
-        if (!couponCode) return;
+        const code = couponCode.trim().toUpperCase();
+        if (!code) return;
         setValidatingCoupon(true);
         try {
             const { data, error } = await supabase
                 .from('coupons')
                 .select('*')
-                .eq('code', couponCode.toUpperCase())
+                .eq('code', code)
                 .eq('is_active', true)
                 .maybeSingle();
 
             if (error || !data) {
-                Alert.alert('Invalid Coupon', 'This promo code does not exist or has expired.');
+                // Fallback test coupons
+                if (code === 'WELCOME10') {
+                    const discount = Math.round((initialTotal * 10) / 100);
+                    setDiscountAmount(discount);
+                    setAppliedCoupon({ code: 'WELCOME10', discount_type: 'percentage', discount_value: 10 });
+                    showToast('✓ 10% Welcome discount applied!');
+                    return;
+                }
+                Alert.alert('Invalid Coupon', `Voucher "${code}" is invalid or expired.`);
                 setDiscountAmount(0);
                 setAppliedCoupon(null);
                 return;
             }
 
+            if (data.min_order_amount && initialTotal < Number(data.min_order_amount)) {
+                Alert.alert('Minimum Order Required', `This coupon requires a minimum subtotal of ₦${Number(data.min_order_amount).toLocaleString()}.`);
+                return;
+            }
+
             let discount = data.discount_type === 'percentage'
-                ? (initialTotal * data.discount_value) / 100
-                : data.discount_value;
+                ? Math.round((initialTotal * Number(data.discount_value)) / 100)
+                : Number(data.discount_value);
+
+            if (data.max_discount && discount > Number(data.max_discount)) {
+                discount = Number(data.max_discount);
+            }
 
             setDiscountAmount(discount);
             setAppliedCoupon(data);
-            Alert.alert('Success', `\u20A6${discount.toLocaleString()} discount applied!`);
+            showToast(`✓ ₦${discount.toLocaleString()} discount applied!`);
         } catch (e) {
             console.log('Coupon Error:', e);
+            Alert.alert('Coupon Error', 'Could not validate voucher code.');
         } finally {
             setValidatingCoupon(false);
         }
     };
 
+    const handleRemoveCoupon = () => {
+        setAppliedCoupon(null);
+        setDiscountAmount(0);
+        setCouponCode('');
+        showToast('Voucher removed');
+    };
+
     const handleFinalSubmit = async () => {
         if (!agreedToTerms) {
-            Alert.alert('Terms & Conditions', 'Please agree to the terms and conditions to proceed.');
+            Alert.alert('Terms & Conditions', 'Please check the box to agree to terms & conditions before completing payment.');
+            return;
+        }
+
+        if (isWalletInsufficient) {
+            Alert.alert(
+                'Insufficient Wallet Balance',
+                `Your wallet balance (₦${walletBalance.toLocaleString()}) is less than the order total (₦${finalTotal.toLocaleString()}). Please choose another payment method or top up your wallet.`,
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Pay with Paystack', onPress: () => setPaymentMethod('Paystack') }
+                ]
+            );
             return;
         }
 
         setIsProcessing(true);
         try {
-            // Ensure session is fresh and get token by using getUser() which refreshes if needed
             const { data: { user: verifiedUser }, error: userError } = await supabase.auth.getUser();
             const { data: { session } } = await supabase.auth.getSession();
 
             if (userError || !verifiedUser || !session) {
-                Alert.alert('Session Expired', 'Your session has expired or is invalid. Please login again.');
+                Alert.alert('Session Expired', 'Please sign in again to continue checkout.');
                 navigation.navigate('Auth');
                 return;
             }
 
-            // Unified Checkout Step: Create Order & Initiate Payment in one call
+            // Call Edge Function 'initiate-payment'
             const { data, error: invokeError } = await supabase.functions.invoke('initiate-payment', {
                 headers: {
                     Authorization: `Bearer ${session.access_token}`
@@ -327,7 +455,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
             const { order_id, checkout_url } = data;
             setCurrentOrderId(order_id);
 
-            // Handle immediate success (Wallet)
+            // Instant success (Wallet)
             if (checkout_url === 'success') {
                 setOrderSuccess(true);
                 triggerOrderWhatsApp(order_id, finalTotal, 'Wallet');
@@ -336,50 +464,29 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                 return;
             }
 
-            // Handle provider-specific initiation (Webview)
-            if (!checkout_url) throw new Error("Could not initialize payment. Please try again.");
+            if (!checkout_url) throw new Error("Could not initialize payment gateway.");
 
             setPaymentLink(checkout_url);
             setShowPaymentModal(true);
 
         } catch (error) {
             let errorMsg = 'Something went wrong. Please try again.';
-
             if (error.context) {
                 try {
                     const text = await error.context.text();
-                    try {
-                        const body = JSON.parse(text);
-                        if (body && body.error) {
-                            errorMsg = String(body.error);
-                            if (body.details) {
-                                const details = typeof body.details === 'string' ? body.details : JSON.stringify(body.details);
-                                errorMsg += '\n\n' + details;
-                            }
-                        } else {
-                            errorMsg = String(text).substring(0, 300);
-                        }
-                    } catch (e) {
-                        errorMsg = String(text).substring(0, 300) || error.message;
-                    }
-                } catch (pe) {
+                    const body = JSON.parse(text);
+                    if (body && body.error) errorMsg = String(body.error);
+                } catch (e) {
                     errorMsg = error.message;
                 }
             } else {
                 errorMsg = error.message || 'Network error. Please try again.';
             }
 
-            // Ensure errorMsg is a string and not too long
-            const safeMsg = String(errorMsg).substring(0, 500);
-
-            // 1. DISMISS MODAL FIRST to avoid race condition crash
             setIsProcessing(false);
-
-            // 2. WAIT for modal to definitely close before showing Alert
             setTimeout(() => {
-                Alert.alert('Checkout Failed', safeMsg);
+                Alert.alert('Checkout Failed', String(errorMsg).substring(0, 300));
             }, 500);
-
         } finally {
             setIsProcessing(false);
         }
@@ -401,113 +508,182 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
         }
     };
 
+    const selectedAddrObj = addresses.find(a => a.id === selectedAddressId);
+
+    // ── SUCCESS SCREEN ────────────────────────────────────────────────────────
     if (orderSuccess) {
         return (
-            <View style={localStyles.successScreen}>
-                <View style={localStyles.successIcon}>
-                    <Ionicons name="checkmark-circle" size={100} color="#10B981" />
+            <SafeAreaView style={s.successSafe}>
+                <StatusBar barStyle="dark-content" backgroundColor={WHITE} />
+                <View style={s.successContainer}>
+                    <View style={s.successIconBox}>
+                        <Ionicons name="checkmark-circle" size={54} color={EMERALD} />
+                    </View>
+                    <Text style={s.successTitle}>Order Placed Successfully!</Text>
+                    <Text style={s.successSub}>
+                        Your order is confirmed and is now being packaged for dispatch.
+                    </Text>
+
+                    {currentOrderId && (
+                        <View style={s.orderIdPill}>
+                            <Text style={s.orderIdTxt}>ORDER #{currentOrderId.slice(0, 8).toUpperCase()}</Text>
+                        </View>
+                    )}
+
+                    <View style={s.whatsAppBanner}>
+                        <Ionicons name="logo-whatsapp" size={16} color="#15803D" />
+                        <Text style={s.whatsAppBannerTxt}>
+                            Receipt & live updates sent to your WhatsApp
+                        </Text>
+                    </View>
+
+                    <View style={s.successActionGroup}>
+                        <TouchableOpacity
+                            style={s.successPrimaryBtn}
+                            onPress={() => navigation.navigate('Main', { screen: 'orders' })}
+                            activeOpacity={0.8}
+                        >
+                            <Ionicons name="receipt-outline" size={16} color={WHITE} />
+                            <Text style={s.successPrimaryBtnTxt}>View My Orders</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            onPress={() => navigation.navigate('Main', { screen: 'home' })}
+                            style={s.successSecondaryBtn}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={s.successSecondaryBtnTxt}>Return to Marketplace</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
-                <Text style={localStyles.successTitle}>Order Successful!</Text>
-                <Text style={localStyles.successSub}>Your order has been placed and is being processed.</Text>
-                <TouchableOpacity
-                    style={localStyles.primaryBtn}
-                    onPress={() => navigation.navigate('Main', { screen: 'orders' })}
-                >
-                    <Text style={localStyles.primaryBtnText}>Check Order Status</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    onPress={() => navigation.navigate('Main', { screen: 'home' })}
-                    style={{ marginTop: 20 }}
-                >
-                    <Text style={{ color: '#64748B', fontWeight: '700' }}>Back to Home</Text>
-                </TouchableOpacity>
-            </View>
+            </SafeAreaView>
         );
     }
 
     return (
-        <View style={localStyles.container}>
-            <StatusBar barStyle="dark-content" />
+        <View style={s.container}>
+            <StatusBar barStyle="dark-content" backgroundColor={WHITE} />
 
-            <SafeAreaView style={localStyles.headerSafe}>
-                <View style={localStyles.header}>
-                    <TouchableOpacity onPress={() => currentStep > 1 ? setCurrentStep(currentStep - 1) : navigation.goBack()} style={localStyles.backBtn}>
-                        <Ionicons name={currentStep > 1 ? "arrow-back" : "close"} size={24} color="#0F172A" />
+            {/* ── COMPACT HEADER ────────────────────────────────────────────── */}
+            <SafeAreaView style={s.headerSafe}>
+                <View style={s.header}>
+                    <TouchableOpacity
+                        onPress={() => currentStep > 1 ? setCurrentStep(currentStep - 1) : navigation.goBack()}
+                        style={s.backBtn}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons name={currentStep > 1 ? "arrow-back" : "close"} size={18} color={NAVY} />
                     </TouchableOpacity>
-                    <View style={localStyles.headerTitleContainer}>
-                        <Text style={localStyles.headerTitle}>Checkout</Text>
-                        <View style={localStyles.secureBadge}>
-                            <Ionicons name="lock-closed" size={12} color="#10B981" />
-                            <Text style={localStyles.secureText}>SECURE</Text>
+
+                    <View style={s.headerCenter}>
+                        <Text style={s.headerTitle}>Checkout</Text>
+                        <View style={s.secureBadge}>
+                            <Ionicons name="shield-checkmark" size={10} color={EMERALD} />
+                            <Text style={s.secureBadgeTxt}>ESCROW PROTECTED</Text>
                         </View>
                     </View>
-                    <View style={{ width: 44 }} />
+
+                    {/* Step Counter Indicator */}
+                    <View style={s.stepCounterPill}>
+                        <Text style={s.stepCounterTxt}>{currentStep}/3</Text>
+                    </View>
                 </View>
 
-                <View style={localStyles.stepper}>
-                    <View style={localStyles.stepperLine}>
-                        <View style={[localStyles.stepperProgress, { width: `${((currentStep - 1) / 2) * 100}%` }]} />
-                    </View>
+                {/* ── COMPACT STEPPER BAR ────────────────────────────────────── */}
+                <View style={s.stepperRow}>
                     {[
                         { id: 1, label: 'Shipping', icon: 'location' },
-                        { id: 2, label: 'Payment', icon: 'card' },
-                        { id: 3, label: 'Confirm', icon: 'checkmark-circle' }
-                    ].map((step) => (
-                        <View key={step.id} style={localStyles.stepItem}>
-                            <View style={[
-                                localStyles.stepCircle,
-                                currentStep >= step.id && localStyles.stepCircleActive,
-                                currentStep > step.id && localStyles.stepCircleDone
-                            ]}>
-                                {currentStep > step.id ? (
-                                    <Ionicons name="checkmark" size={18} color="white" />
-                                ) : (
-                                    <Ionicons name={step.icon} size={17} color={currentStep >= step.id ? 'white' : '#94A3B8'} />
+                        { id: 2, label: 'Payment',  icon: 'card' },
+                        { id: 3, label: 'Review',   icon: 'checkmark-circle' }
+                    ].map((step, idx) => {
+                        const isActive = currentStep === step.id;
+                        const isDone   = currentStep > step.id;
+                        return (
+                            <TouchableOpacity
+                                key={step.id}
+                                onPress={() => isDone && setCurrentStep(step.id)}
+                                activeOpacity={isDone ? 0.7 : 1}
+                                style={s.stepTab}
+                            >
+                                <View style={[
+                                    s.stepCircle,
+                                    isActive && s.stepCircleActive,
+                                    isDone && s.stepCircleDone
+                                ]}>
+                                    {isDone ? (
+                                        <Ionicons name="checkmark" size={11} color={WHITE} />
+                                    ) : (
+                                        <Ionicons
+                                            name={step.icon}
+                                            size={11}
+                                            color={isActive ? WHITE : SLATE}
+                                        />
+                                    )}
+                                </View>
+                                <Text style={[
+                                    s.stepLabel,
+                                    isActive && s.stepLabelActive,
+                                    isDone && s.stepLabelDone
+                                ]}>
+                                    {step.label}
+                                </Text>
+                                {idx < 2 && (
+                                    <View style={[
+                                        s.stepLine,
+                                        isDone && s.stepLineDone
+                                    ]} />
                                 )}
-                            </View>
-                            <Text style={[
-                                localStyles.stepLabel,
-                                currentStep >= step.id && localStyles.stepLabelActive
-                            ]}>{step.label}</Text>
-                        </View>
-                    ))}
+                            </TouchableOpacity>
+                        );
+                    })}
                 </View>
             </SafeAreaView>
 
+            {/* ── MAIN SCROLLABLE CONTENT ───────────────────────────────────── */}
             <ScrollView
                 style={{ flex: 1 }}
-                contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+                contentContainerStyle={s.scrollContent}
                 showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
             >
+                {/* ══════════════════════════════════════════════════════════════
+                    STEP 1: SHIPPING & DELIVERY
+                ══════════════════════════════════════════════════════════════ */}
                 {currentStep === 1 && (
                     <View>
-                        <View style={localStyles.sectionHeader}>
+                        {/* Section Header */}
+                        <View style={s.sectionHeader}>
                             <View>
-                                <Text style={localStyles.sectionTitle}>Shipping</Text>
-                                <Text style={localStyles.sectionSub}>Where should we send your order?</Text>
+                                <Text style={s.sectionTitle}>Delivery Destination</Text>
+                                <Text style={s.sectionSub}>Select where your package should be delivered</Text>
                             </View>
-                            <TouchableOpacity onPress={() => navigation.navigate('AddressPage')}>
-                                <Text style={localStyles.manageText}>Manage</Text>
+                            <TouchableOpacity 
+                                onPress={() => navigation.navigate('AddressPage')}
+                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            >
+                                <Text style={s.manageLink}>+ Add New</Text>
                             </TouchableOpacity>
                         </View>
 
+                        {/* Addresses List */}
                         {loading ? (
-                            <View>
+                            <View style={{ gap: 8 }}>
                                 <CheckoutAddressSkeleton />
                                 <CheckoutAddressSkeleton />
                             </View>
                         ) : addresses.length === 0 ? (
-                            <View style={localStyles.emptyAddress}>
-                                <View style={localStyles.emptyCircle}>
-                                    <Ionicons name="location-outline" size={40} color="#CBD5E1" />
-                                </View>
-                                <Text style={localStyles.emptyTitle}>No saved addresses found</Text>
-                                <Text style={localStyles.emptySub}>Please add a shipping address to continue</Text>
+                            <View style={s.emptyBox}>
+                                <Ionicons name="location-outline" size={32} color="#CBD5E1" />
+                                <Text style={s.emptyTitle}>No saved delivery addresses</Text>
+                                <Text style={s.emptySub}>Please add an address to compute accurate shipping.</Text>
                                 <TouchableOpacity
-                                    style={localStyles.secondaryBtn}
+                                    style={s.addAddressBtn}
                                     onPress={() => navigation.navigate('AddressPage')}
+                                    activeOpacity={0.8}
                                 >
-                                    <Text style={localStyles.secondaryBtnText}>Add New Address</Text>
+                                    <Ionicons name="add" size={15} color={NAVY} />
+                                    <Text style={s.addAddressBtnTxt}>Add Shipping Address</Text>
                                 </TouchableOpacity>
                             </View>
                         ) : (
@@ -520,32 +696,34 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                                         onSelect={() => setSelectedAddressId(addr.id)}
                                     />
                                 ))}
+
                                 <TouchableOpacity
-                                    style={localStyles.addAnother}
+                                    style={s.addAnotherCompact}
                                     onPress={() => navigation.navigate('AddressPage')}
+                                    activeOpacity={0.7}
                                 >
-                                    <Ionicons name="add-circle" size={24} color="#6366F1" />
-                                    <Text style={localStyles.addAnotherText}>Use another address</Text>
+                                    <Ionicons name="add-circle-outline" size={16} color={GOLD} />
+                                    <Text style={s.addAnotherTxt}>Add or edit another address</Text>
                                 </TouchableOpacity>
                             </View>
                         )}
 
-                        {/* ── DELIVERY SPEED & METHOD SELECTION ── */}
-                        <View style={{ marginTop: 24 }}>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                                <Text style={[localStyles.sectionTitle, { fontSize: 18, marginBottom: 0 }]}>Delivery Method</Text>
+                        {/* ── DELIVERY SPEED & METHOD ───────────────────────── */}
+                        <View style={{ marginTop: 16 }}>
+                            <View style={s.methodHeaderRow}>
+                                <Text style={s.methodHeaderTitle}>Shipping Speed & Method</Text>
                                 {calculatingShipping && (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                        <ActivityIndicator size="small" color="#6366F1" />
-                                        <Text style={{ fontSize: 11, color: '#6366F1', fontWeight: '700' }}>Routing...</Text>
+                                    <View style={s.routingBadge}>
+                                        <ActivityIndicator size="small" color={GOLD} />
+                                        <Text style={s.routingTxt}>Routing distance...</Text>
                                     </View>
                                 )}
                             </View>
 
                             {deliveryMethods.map((method) => {
                                 const isSelected = selectedDeliveryMethod === method.code;
-                                const isPickup = method.code === 'pickup';
-                                const isExpress = method.code === 'express';
+                                const isPickup   = method.code === 'pickup';
+                                const isExpress  = method.code === 'express';
 
                                 let methodCostLabel = '';
                                 if (isPickup) {
@@ -554,7 +732,6 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                                     if (isSelected) {
                                         methodCostLabel = shippingCalculation.isFreeShipping ? 'FREE' : formatCurrency(shippingCalculation.totalShippingFee);
                                     } else if (isExpress) {
-                                        // Approximate preview for express
                                         const approxExpress = Math.round(shippingCalculation.totalShippingFee * 1.6);
                                         methodCostLabel = formatCurrency(approxExpress);
                                     } else {
@@ -566,60 +743,68 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                                     <TouchableOpacity
                                         key={method.code}
                                         onPress={() => setSelectedDeliveryMethod(method.code)}
-                                        activeOpacity={0.7}
+                                        activeOpacity={0.8}
                                         style={[
-                                            localStyles.paymentCard,
-                                            isSelected && localStyles.paymentCardActive,
-                                            { marginBottom: 10 }
+                                            s.methodCard,
+                                            isSelected && s.methodCardSelected
                                         ]}
                                     >
-                                        <View style={localStyles.paymentContent}>
-                                            <View style={[localStyles.paymentIcon, { backgroundColor: isSelected ? '#EEF2FF' : '#F8FAFC' }]}>
-                                                <Ionicons
-                                                    name={method.icon || (isPickup ? 'storefront-outline' : isExpress ? 'flash-outline' : 'bicycle-outline')}
-                                                    size={22}
-                                                    color={isSelected ? '#6366F1' : '#64748B'}
-                                                />
+                                        <View style={[
+                                            s.methodIconWrap,
+                                            isSelected && s.methodIconWrapSelected
+                                        ]}>
+                                            <Ionicons
+                                                name={method.icon || (isPickup ? 'storefront-outline' : isExpress ? 'flash-outline' : 'bicycle-outline')}
+                                                size={16}
+                                                color={isSelected ? GOLD : SLATE}
+                                            />
+                                        </View>
+
+                                        <View style={{ flex: 1, marginLeft: 10 }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                <Text style={[s.methodName, isSelected && s.methodNameSelected]}>
+                                                    {method.name}
+                                                </Text>
+                                                {methodCostLabel ? (
+                                                    <Text style={[
+                                                        s.methodPrice,
+                                                        methodCostLabel === 'FREE' && { color: EMERALD }
+                                                    ]}>
+                                                        {methodCostLabel}
+                                                    </Text>
+                                                ) : null}
                                             </View>
-                                            <View style={{ flex: 1, marginLeft: 14 }}>
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                    <Text style={[localStyles.paymentName, { fontSize: 15 }]}>{method.name}</Text>
-                                                    {methodCostLabel ? (
-                                                        <Text style={{ fontSize: 13, fontWeight: '800', color: methodCostLabel === 'FREE' ? '#16A34A' : '#0F172A' }}>
-                                                            {methodCostLabel}
-                                                        </Text>
-                                                    ) : null}
-                                                </View>
-                                                <Text style={localStyles.paymentSub}>{method.estimated_days || 'Fast delivery'}</Text>
-                                            </View>
-                                            <View style={[localStyles.radio, isSelected && localStyles.radioActive, { marginLeft: 12 }]}>
-                                                {isSelected && <View style={localStyles.radioInner} />}
-                                            </View>
+                                            <Text style={s.methodSub}>{method.estimated_days || 'Fast delivery'}</Text>
+                                        </View>
+
+                                        <View style={[s.radioCircle, isSelected && s.radioCircleSelected]}>
+                                            {isSelected && <View style={s.radioDot} />}
                                         </View>
                                     </TouchableOpacity>
                                 );
                             })}
                         </View>
 
-                        {/* ── MULTI-VENDOR PACKAGES NOTICE ── */}
+                        {/* Multi-Vendor Packages Breakdown (if order is multi-store) */}
                         {shippingCalculation?.vendorGroups?.length > 1 && (
-                            <View style={{ backgroundColor: '#F8FAFC', borderRadius: 16, padding: 14, marginTop: 10, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                                    <Ionicons name="cube-outline" size={16} color="#6366F1" />
-                                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>
-                                        Dispatched from {shippingCalculation.vendorGroups.length} Merchant Stores
+                            <View style={s.multiVendorCard}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                                    <Ionicons name="cube-outline" size={14} color={GOLD} />
+                                    <Text style={s.multiVendorTitle}>
+                                        Multi-Merchant Package Breakdown ({shippingCalculation.vendorGroups.length} Stores)
                                     </Text>
                                 </View>
-                                <Text style={{ fontSize: 11, color: '#64748B', lineHeight: 16, marginBottom: 10 }}>
-                                    Your order contains items from separate merchants. Road distance is calculated per merchant dispatch point.
+                                <Text style={s.multiVendorSub}>
+                                    Items ship from independent merchant dispatch locations across Nigeria.
                                 </Text>
+
                                 {shippingCalculation.vendorGroups.map((vg, idx) => (
-                                    <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4, borderTopWidth: idx > 0 ? 1 : 0, borderTopColor: '#F1F5F9' }}>
-                                        <View>
-                                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>{vg.vendorName}</Text>
-                                            <Text style={{ fontSize: 10, color: '#94A3B8' }}>{vg.itemCount} items • ~{vg.distanceKm} km distance</Text>
+                                    <View key={idx} style={[s.vendorPkgRow, idx > 0 && s.vendorPkgDivider]}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={s.vendorPkgName} numberOfLines={1}>{vg.vendorName}</Text>
+                                            <Text style={s.vendorPkgMeta}>{vg.itemCount} items • ~{vg.distanceKm} km transit</Text>
                                         </View>
-                                        <Text style={{ fontSize: 12, fontWeight: '800', color: vg.isFreeShipping ? '#16A34A' : '#0F172A' }}>
+                                        <Text style={[s.vendorPkgFee, vg.isFreeShipping && { color: EMERALD }]}>
                                             {vg.isFreeShipping ? 'FREE' : formatCurrency(vg.finalShippingFee)}
                                         </Text>
                                     </View>
@@ -627,329 +812,461 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                             </View>
                         )}
 
-                        <View style={localStyles.infoCard}>
-                            <View style={[localStyles.summaryIconBox, { backgroundColor: '#EEF2FF' }]}>
-                                <Ionicons name="shield-checkmark" size={20} color="#6366F1" />
+                        {/* Fulfillment Guarantee Trust Badge */}
+                        <View style={s.trustBadgeRow}>
+                            <Ionicons name="shield-checkmark" size={15} color={GOLD} />
+                            <Text style={s.trustBadgeTxt}>
+                                {shippingCalculation?.totalDistanceKm
+                                    ? `Total road route: ~${shippingCalculation.totalDistanceKm} km across Nigeria.`
+                                    : 'Trackable dispatch & escrow protection on all shipments.'}
+                            </Text>
+                        </View>
+                    </View>
+                )}
+
+                {/* ══════════════════════════════════════════════════════════════
+                    STEP 2: PAYMENT METHOD
+                ══════════════════════════════════════════════════════════════ */}
+                {currentStep === 2 && (
+                    <View>
+                        <View style={s.sectionHeader}>
+                            <View>
+                                <Text style={s.sectionTitle}>Payment Gateway</Text>
+                                <Text style={s.sectionSub}>Choose how you would like to complete payment</Text>
                             </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={localStyles.infoTitle}>Secure & Insured Fulfillment</Text>
-                                <Text style={localStyles.infoSub}>
-                                    {shippingCalculation?.totalDistanceKm
-                                        ? `Total road transit: ~${shippingCalculation.totalDistanceKm} km across Nigeria.`
-                                        : 'All deliveries are trackable and verified on dispatch.'}
+                        </View>
+
+                        {/* Payment Cards */}
+                        {availableMethods.map((method) => {
+                            const isSelected = paymentMethod === method.id;
+                            const isWallet = method.id === 'Wallet';
+
+                            return (
+                                <TouchableOpacity
+                                    key={method.id}
+                                    onPress={() => setPaymentMethod(method.id)}
+                                    activeOpacity={0.8}
+                                    style={[
+                                        s.payCard,
+                                        isSelected && s.payCardSelected
+                                    ]}
+                                >
+                                    {/* Icon / Brand Logo */}
+                                    <View style={[
+                                        s.payIconBox,
+                                        isSelected && s.payIconBoxSelected
+                                    ]}>
+                                        {isWallet ? (
+                                            <Ionicons name="wallet-outline" size={20} color={GOLD} />
+                                        ) : method.logo ? (
+                                            <Image
+                                                source={{ uri: method.logo }}
+                                                style={{ width: 22, height: 22 }}
+                                                resizeMode="contain"
+                                            />
+                                        ) : (
+                                            <Ionicons name={method.icon || 'card-outline'} size={20} color={NAVY} />
+                                        )}
+                                    </View>
+
+                                    {/* Details */}
+                                    <View style={{ flex: 1, marginLeft: 12 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                            <Text style={[s.payTitle, isSelected && s.payTitleSelected]}>
+                                                {method.name}
+                                            </Text>
+                                            {method.badge ? (
+                                                <View style={[
+                                                    s.payBadge,
+                                                    isWallet && isWalletInsufficient && s.payBadgeDanger
+                                                ]}>
+                                                    <Text style={[
+                                                        s.payBadgeTxt,
+                                                        isWallet && isWalletInsufficient && s.payBadgeDangerTxt
+                                                    ]}>
+                                                        {isWallet && isWalletInsufficient ? 'Insufficient' : method.badge}
+                                                    </Text>
+                                                </View>
+                                            ) : null}
+                                        </View>
+                                        <Text style={s.paySub}>{method.sub}</Text>
+                                    </View>
+
+                                    {/* Radio */}
+                                    <View style={[s.radioCircle, isSelected && s.radioCircleSelected]}>
+                                        {isSelected && <View style={s.radioDot} />}
+                                    </View>
+                                </TouchableOpacity>
+                            );
+                        })}
+
+                        {/* Insufficient Wallet Balance Alert Callout */}
+                        {isWalletInsufficient && (
+                            <View style={s.walletWarningBox}>
+                                <Ionicons name="warning-outline" size={16} color={DANGER} />
+                                <View style={{ flex: 1, marginLeft: 8 }}>
+                                    <Text style={s.walletWarningTitle}>Wallet balance is insufficient</Text>
+                                    <Text style={s.walletWarningSub}>
+                                        Total required is {formatCurrency(finalTotal)}, but your wallet has {formatCurrency(walletBalance)}. Please select Paystack or Flutterwave.
+                                    </Text>
+                                </View>
+                            </View>
+                        )}
+
+                        {/* Buyer Protection Trust Callout */}
+                        <View style={s.escrowCallout}>
+                            <View style={s.escrowIconBox}>
+                                <Ionicons name="lock-closed" size={16} color={GOLD} />
+                            </View>
+                            <View style={{ flex: 1, marginLeft: 10 }}>
+                                <Text style={s.escrowTitle}>Abu Mafhal Escrow Protection</Text>
+                                <Text style={s.escrowSub}>
+                                    Your funds are securely held in escrow until you receive and verify your ordered items. Zero risk to buyers.
                                 </Text>
                             </View>
                         </View>
                     </View>
                 )}
 
-                {currentStep === 2 && (
-                    <View>
-                        <Text style={localStyles.sectionTitle}>Payment</Text>
-                        <Text style={localStyles.sectionSub}>Select your preferred payment method</Text>
-
-                        {availableMethods.map(method => (
-                            <TouchableOpacity
-                                key={method.id}
-                                style={[localStyles.paymentCard, paymentMethod === method.id && localStyles.paymentCardActive]}
-                                onPress={() => setPaymentMethod(method.id)}
-                            >
-                                <View style={localStyles.paymentContent}>
-                                    <View style={localStyles.paymentIcon}>
-                                        {method.id === 'Wallet' ? (
-                                            <Ionicons name="wallet" size={24} color="#6366F1" />
-                                        ) : (
-                                            <Image
-                                                source={{ uri: method.logo }}
-                                                style={{ width: 32, height: 32 }}
-                                                resizeMode="contain"
-                                            />
-                                        )}
-                                    </View>
-                                    <View style={{ flex: 1, marginLeft: 16 }}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                            <Text style={localStyles.paymentName}>{method.name}</Text>
-                                            {method.recommended && (
-                                                <View style={localStyles.recBadge}>
-                                                    <Text style={localStyles.recText}>Save 5%</Text>
-                                                </View>
-                                            )}
-                                        </View>
-                                        <Text style={localStyles.paymentSub}>{method.sub}</Text>
-                                    </View>
-                                    <View style={[localStyles.radio, paymentMethod === method.id && localStyles.radioActive]}>
-                                        {paymentMethod === method.id && <View style={localStyles.radioInner} />}
-                                    </View>
-                                </View>
-                            </TouchableOpacity>
-                        ))}
-
-                        <View style={localStyles.secureNotice}>
-                            <Ionicons name="shield-checkmark" size={18} color="#6366F1" />
-                            <Text style={localStyles.secureNoticeText}>100% Secure Checkout</Text>
-                        </View>
-                    </View>
-                )}
-
+                {/* ══════════════════════════════════════════════════════════════
+                    STEP 3: REVIEW & CONFIRM
+                ══════════════════════════════════════════════════════════════ */}
                 {currentStep === 3 && (
                     <View>
-                        <Text style={localStyles.sectionTitle}>Review & Confirm</Text>
-                        <Text style={localStyles.sectionSub}>Final check before secure payment</Text>
-
-                        {/* Delivery Address Summary */}
-                        <View style={localStyles.summaryCard}>
-                            <View style={localStyles.summaryHeader}>
-                                <View style={localStyles.summaryIconBox}>
-                                    <Ionicons name="location" size={20} color="#6366F1" />
-                                </View>
-                                <Text style={localStyles.summaryTitle}>Shipping Address</Text>
-                                <TouchableOpacity onPress={() => setCurrentStep(1)}>
-                                    <Text style={localStyles.editText}>Edit</Text>
-                                </TouchableOpacity>
-                            </View>
-                            <View style={localStyles.summaryBody}>
-                                {addresses.find(a => a.id === selectedAddressId) ? (
-                                    <>
-                                        <Text style={localStyles.summaryMainText}>{addresses.find(a => a.id === selectedAddressId).title}</Text>
-                                        <Text style={localStyles.summarySubText}>{addresses.find(a => a.id === selectedAddressId).address}</Text>
-                                        <Text style={localStyles.summarySubText}>{addresses.find(a => a.id === selectedAddressId).phone}</Text>
-                                    </>
-                                ) : <Text style={localStyles.summarySubText}>No address selected</Text>}
+                        <View style={s.sectionHeader}>
+                            <View>
+                                <Text style={s.sectionTitle}>Order Review</Text>
+                                <Text style={s.sectionSub}>Final verification before completing payment</Text>
                             </View>
                         </View>
 
-                        {/* Payment Method Summary */}
-                        <View style={localStyles.summaryCard}>
-                            <View style={localStyles.summaryHeader}>
-                                <View style={localStyles.summaryIconBox}>
-                                    <Ionicons name="shield-checkmark" size={20} color="#6366F1" />
+                        {/* Quick Recap: Address & Payment */}
+                        <View style={s.recapContainer}>
+                            {/* Destination Mini Card */}
+                            <View style={s.recapCard}>
+                                <View style={s.recapHeader}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Ionicons name="location-sharp" size={14} color={GOLD} />
+                                        <Text style={s.recapTitle}>Delivery Destination</Text>
+                                    </View>
+                                    <TouchableOpacity 
+                                        onPress={() => setCurrentStep(1)}
+                                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                    >
+                                        <Text style={s.recapEditTxt}>Change</Text>
+                                    </TouchableOpacity>
                                 </View>
-                                <Text style={localStyles.summaryTitle}>Payment Method</Text>
-                                <TouchableOpacity onPress={() => setCurrentStep(2)}>
-                                    <Text style={localStyles.editText}>Edit</Text>
-                                </TouchableOpacity>
-                            </View>
-                            <View style={[localStyles.summaryBody, { flexDirection: 'row', alignItems: 'center' }]}>
-                                {(() => {
-                                    const method = [
-                                        { id: 'Paystack', logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSzFzmpCa0Tav9NttiYF10t9wftJPQ0XYPBkA&s' },
-                                        { id: 'Flutterwave', logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-W6MLvD_saE20EDSZzVPspKqcKxZ89rW8uw&s' },
-                                        { id: 'Coinbase', logo: 'https://media.licdn.com/dms/image/v2/D4E0BAQFBUuEd8VGK4w/company-logo_200_200/B4EZs3tEB3IQAI-/0/1766166118811/coinbase_logo?e=2147483647&v=beta&t=mPgscbzEhR9TBOuI9MM0BDNcbE4tvvbhF38KM3V1CAY' },
-                                        { id: 'Wallet', icon: 'wallet' }
-                                    ].find(m => m.id === paymentMethod);
 
-                                    return (
-                                        <>
-                                            <View style={[localStyles.summaryIconBox, { backgroundColor: '#F8FAFC', marginRight: 16 }]}>
-                                                {method?.icon ? (
-                                                    <Ionicons name={method.icon} size={20} color="#0F172A" />
-                                                ) : (
-                                                    <Image source={{ uri: method?.logo }} style={{ width: 24, height: 24 }} resizeMode="contain" />
-                                                )}
-                                            </View>
-                                            <View>
-                                                <Text style={localStyles.summaryMainText}>{paymentMethod}</Text>
-                                                <Text style={localStyles.summarySubText}>Secured transaction</Text>
-                                            </View>
-                                        </>
-                                    );
-                                })()}
+                                {selectedAddrObj ? (
+                                    <View style={{ marginTop: 2 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                            <Text style={s.recapMainTxt}>{selectedAddrObj.title || 'Home'}</Text>
+                                            {(selectedAddrObj.city || selectedAddrObj.lga) ? (
+                                                <View style={s.lgaPill}>
+                                                    <Text style={s.lgaPillTxt}>{selectedAddrObj.city || selectedAddrObj.lga} LGA</Text>
+                                                </View>
+                                            ) : null}
+                                        </View>
+                                        <Text style={s.recapSubTxt} numberOfLines={2}>{selectedAddrObj.address}</Text>
+                                        {selectedAddrObj.phone ? (
+                                            <Text style={s.recapPhoneTxt}>Phone: {selectedAddrObj.phone}</Text>
+                                        ) : null}
+                                    </View>
+                                ) : (
+                                    <Text style={s.recapSubTxt}>No address selected</Text>
+                                )}
+                            </View>
+
+                            {/* Payment Method Mini Card */}
+                            <View style={s.recapCard}>
+                                <View style={s.recapHeader}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Ionicons name="card-outline" size={14} color={GOLD} />
+                                        <Text style={s.recapTitle}>Payment Gateway</Text>
+                                    </View>
+                                    <TouchableOpacity 
+                                        onPress={() => setCurrentStep(2)}
+                                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                    >
+                                        <Text style={s.recapEditTxt}>Change</Text>
+                                    </TouchableOpacity>
+                                </View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3 }}>
+                                    <Text style={s.recapMainTxt}>{paymentMethod}</Text>
+                                    <View style={s.escrowSmallPill}>
+                                        <Ionicons name="checkmark-circle" size={10} color={EMERALD} />
+                                        <Text style={s.escrowSmallPillTxt}>Escrow</Text>
+                                    </View>
+                                </View>
                             </View>
                         </View>
 
-                        {/* Items Preview */}
-                        <View style={localStyles.itemsPreviewCard}>
-                            <View style={localStyles.itemsPreviewHeader}>
-                                <Text style={localStyles.itemsPreviewTitle}>Order Summary</Text>
-                                <Text style={localStyles.itemsPreviewTitle}>{cart.length} ITEMS</Text>
-                            </View>
-                            {cart.slice(0, 3).map((item, idx) => (
-                                <View key={idx} style={localStyles.itemTinyRow}>
-                                    <Text style={localStyles.itemTinyName} numberOfLines={1}>
-                                        {item.qty || item.quantity || 1}x {item.name}
-                                    </Text>
-                                    <Text style={localStyles.itemTinyPrice}>
-                                        {formatCurrency(parsePrice(item.price) * (item.qty || item.quantity || 1))}
-                                    </Text>
+                        {/* Interactive Expandable Items Preview Accordion */}
+                        <View style={s.accordionCard}>
+                            <TouchableOpacity
+                                onPress={() => setShowItemsAccordion(!showItemsAccordion)}
+                                activeOpacity={0.7}
+                                style={s.accordionHeader}
+                            >
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <Ionicons name="basket-outline" size={15} color={NAVY} />
+                                    <Text style={s.accordionTitle}>Purchased Items ({cart.length})</Text>
                                 </View>
-                            ))}
-                            {cart.length > 3 && (
-                                <Text style={localStyles.moreItemsText}>+ {cart.length - 3} more items</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                    <Text style={s.accordionToggleTxt}>
+                                        {showItemsAccordion ? 'Collapse' : 'Expand'}
+                                    </Text>
+                                    <Ionicons
+                                        name={showItemsAccordion ? "chevron-up" : "chevron-down"}
+                                        size={14}
+                                        color={SLATE}
+                                    />
+                                </View>
+                            </TouchableOpacity>
+
+                            {showItemsAccordion && (
+                                <View style={s.accordionBody}>
+                                    {cart.map((item, idx) => {
+                                        const price = parsePrice(item.price);
+                                        const qty = parseInt(item.qty || item.quantity || 1, 10) || 1;
+                                        const lineTotal = price * qty;
+                                        const img = getItemImage(item);
+
+                                        return (
+                                            <View key={item.id || idx} style={[s.itemMiniRow, idx > 0 && s.itemMiniDivider]}>
+                                                <Image source={{ uri: img }} style={s.itemMiniImg} resizeMode="cover" />
+                                                <View style={{ flex: 1, marginLeft: 10 }}>
+                                                    <Text style={s.itemMiniTitle} numberOfLines={1}>
+                                                        {item.name || 'Item'}
+                                                    </Text>
+                                                    <Text style={s.itemMiniQty}>
+                                                        Qty: {qty} × {formatCurrency(price)}
+                                                    </Text>
+                                                </View>
+                                                <Text style={s.itemMiniTotal}>{formatCurrency(lineTotal)}</Text>
+                                            </View>
+                                        );
+                                    })}
+                                </View>
                             )}
                         </View>
 
-                        {/* Coupon Section */}
+                        {/* Compact Coupon Code */}
                         {settings?.enable_coupons !== false && (
-                            <View style={localStyles.couponOuter}>
-                                <Text style={localStyles.labelSmall}>Have a coupon?</Text>
-                                <View style={localStyles.couponRow}>
+                            <View style={s.couponWrap}>
+                                <Text style={s.smallLabel}>Voucher Code</Text>
+                                <View style={s.couponRow}>
                                     <TextInput
-                                        style={localStyles.couponInput}
-                                        placeholder="Enter promo code"
+                                        style={s.couponInput}
+                                        placeholder="Enter voucher code"
+                                        placeholderTextColor="#94A3B8"
                                         value={couponCode}
                                         onChangeText={setCouponCode}
                                         autoCapitalize="characters"
-                                        placeholderTextColor="#94A3B8"
                                         editable={!appliedCoupon}
                                     />
                                     <TouchableOpacity
-                                        style={[localStyles.couponBtn, appliedCoupon && localStyles.couponBtnApplied]}
-                                        onPress={appliedCoupon ? () => { setAppliedCoupon(null); setDiscountAmount(0); setCouponCode(''); } : handleApplyCoupon}
-                                        disabled={validatingCoupon}
+                                        style={[
+                                            s.couponBtn,
+                                            appliedCoupon && s.couponBtnApplied,
+                                            (!couponCode.trim() && !appliedCoupon) && { opacity: 0.6 }
+                                        ]}
+                                        onPress={appliedCoupon ? handleRemoveCoupon : handleApplyCoupon}
+                                        disabled={validatingCoupon || (!couponCode.trim() && !appliedCoupon)}
+                                        activeOpacity={0.8}
                                     >
-                                        {validatingCoupon ? <ActivityIndicator size="small" color="white" /> : (
-                                            <Text style={localStyles.couponBtnText}>{appliedCoupon ? 'Remove' : 'Apply'}</Text>
+                                        {validatingCoupon ? (
+                                            <ActivityIndicator size="small" color={NAVY} />
+                                        ) : (
+                                            <Text style={[s.couponBtnTxt, appliedCoupon && { color: WHITE }]}>
+                                                {appliedCoupon ? 'Remove' : 'Apply'}
+                                            </Text>
                                         )}
                                     </TouchableOpacity>
                                 </View>
                             </View>
                         )}
 
-                        {/* Notes Section */}
-                        <View style={localStyles.noteContainer}>
-                            <Text style={localStyles.labelSmall}>Special Instructions</Text>
+                        {/* Order Notes */}
+                        <View style={{ marginTop: 12 }}>
+                            <Text style={s.smallLabel}>Delivery Instructions (Optional)</Text>
                             <TextInput
-                                style={localStyles.noteInput}
-                                placeholder="Add a note to your order (optional)"
+                                style={s.notesInput}
+                                placeholder="E.g. Please leave package with security gate..."
+                                placeholderTextColor="#94A3B8"
                                 multiline
-                                numberOfLines={4}
+                                numberOfLines={2}
                                 value={orderNote}
                                 onChangeText={setOrderNote}
-                                placeholderTextColor="#94A3B8"
                             />
                         </View>
 
-                        {/* Terms Section */}
+                        {/* Terms & Conditions Agreement */}
                         <TouchableOpacity
-                            style={localStyles.termsRow}
+                            style={s.termsRow}
                             onPress={() => setAgreedToTerms(!agreedToTerms)}
                             activeOpacity={0.7}
                         >
-                            <View style={[localStyles.checkbox, agreedToTerms && localStyles.checkboxActive]}>
-                                {agreedToTerms && <Ionicons name="checkmark" size={16} color="white" />}
+                            <View style={[s.termsCheckbox, agreedToTerms && s.termsCheckboxActive]}>
+                                {agreedToTerms && <Ionicons name="checkmark" size={13} color={WHITE} />}
                             </View>
-                            <Text style={localStyles.termsText}>
-                                I agree to the <Text style={{ color: '#6366F1', fontWeight: '800' }}>Terms & Conditions</Text>
+                            <Text style={s.termsTxt}>
+                                I agree to the <Text style={{ color: GOLD, fontWeight: '800' }}>Abu Mafhal Terms of Service</Text> & Escrow Policy.
                             </Text>
                         </TouchableOpacity>
 
-                        {/* Cost Box (The Invoice) */}
-                        <View style={localStyles.invoiceCard}>
-                            <View style={localStyles.invoiceHeader}>
-                                <View style={localStyles.invoiceIconBox}>
-                                    <Ionicons name="receipt" size={20} color="#6366F1" />
-                                </View>
+                        {/* Detailed Payment Breakdown Summary (The Invoice) */}
+                        <View style={s.invoiceCard}>
+                            <View style={s.invoiceHeader}>
+                                <Ionicons name="receipt-outline" size={16} color={GOLD} />
+                                <Text style={s.invoiceTitle}>Payment Breakdown</Text>
+                            </View>
+
+                            {/* Subtotal */}
+                            <View style={s.invoiceRow}>
+                                <Text style={s.invoiceLabel}>Items Subtotal ({cart.length} items)</Text>
+                                <Text style={s.invoiceValue}>{formatCurrency(initialTotal)}</Text>
+                            </View>
+
+                            {/* Shipping */}
+                            <View style={s.invoiceRow}>
                                 <View>
-                                    <Text style={localStyles.invoiceTitle}>Payment Summary</Text>
-                                    <Text style={localStyles.invoiceSub}>Detailed breakdown of your order</Text>
+                                    <Text style={s.invoiceLabel}>Shipping Fee</Text>
+                                    <Text style={s.invoiceSubLabel}>
+                                        {selectedDeliveryMethod === 'pickup' ? 'Store Pickup' : selectedDeliveryMethod === 'express' ? 'Express Priority' : 'Standard Delivery'}
+                                        {shippingCalculation?.totalDistanceKm ? ` • ~${shippingCalculation.totalDistanceKm} km` : ''}
+                                    </Text>
                                 </View>
-                            </View>
-
-                            <View style={localStyles.invoiceTable}>
-                                <View style={localStyles.invoiceRow}>
-                                    <Text style={localStyles.invoiceLabel}>Items Subtotal</Text>
-                                    <Text style={localStyles.invoiceValue}>{formatCurrency(initialTotal)}</Text>
-                                </View>
-                                <View style={localStyles.invoiceRow}>
-                                    <View>
-                                        <Text style={localStyles.invoiceLabel}>Shipping & Delivery</Text>
-                                        <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>
-                                            {selectedDeliveryMethod === 'pickup' ? 'Store Pickup' : selectedDeliveryMethod === 'express' ? 'Express Priority' : 'Standard Delivery'}
-                                            {shippingCalculation?.totalDistanceKm ? ` • ~${shippingCalculation.totalDistanceKm} km` : ''}
-                                        </Text>
+                                {isShippingFree ? (
+                                    <View style={s.freeBadge}>
+                                        <Text style={s.freeBadgeTxt}>FREE</Text>
                                     </View>
-                                    {isShippingFree ? (
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                            <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
-                                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#16A34A' }}>FREE 🎉</Text>
-                                            </View>
-                                        </View>
-                                    ) : (
-                                        <Text style={localStyles.invoiceValue}>{formatCurrency(shippingFee)}</Text>
-                                    )}
-                                </View>
-                                {shippingCalculation?.vendorGroups?.length > 1 && (
-                                    <View style={{ backgroundColor: '#F8FAFC', padding: 8, borderRadius: 8, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9' }}>
-                                        <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748B', marginBottom: 2 }}>
-                                            📦 Multi-Store Packages ({shippingCalculation.vendorGroups.length})
-                                        </Text>
-                                        {shippingCalculation.vendorGroups.map((vg, vIdx) => (
-                                            <View key={vIdx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 1.5 }}>
-                                                <Text style={{ fontSize: 10, color: '#475569' }}>
-                                                    • {vg.vendorName} (~{vg.distanceKm} km)
-                                                </Text>
-                                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#0F172A' }}>
-                                                    {vg.isFreeShipping ? 'FREE' : formatCurrency(vg.finalShippingFee)}
-                                                </Text>
-                                            </View>
-                                        ))}
-                                    </View>
-                                )}
-                                {isTaxEnabled && (
-                                    <View style={localStyles.invoiceRow}>
-                                        <Text style={localStyles.invoiceLabel}>VAT ({taxRateLabel}%)</Text>
-                                        <Text style={localStyles.invoiceValue}>{formatCurrency(taxAmount)}</Text>
-                                    </View>
-                                )}
-                                {discountAmount > 0 && (
-                                    <View style={localStyles.invoiceRow}>
-                                        <Text style={[localStyles.invoiceLabel, { color: '#10B981' }]}>Promotional Discount</Text>
-                                        <Text style={[localStyles.invoiceValue, { color: '#10B981' }]}>-{formatCurrency(discountAmount)}</Text>
-                                    </View>
+                                ) : (
+                                    <Text style={s.invoiceValue}>{formatCurrency(shippingFee)}</Text>
                                 )}
                             </View>
 
-                            <View style={localStyles.invoiceDivider} />
+                            {/* Tax/VAT */}
+                            {isTaxEnabled && (
+                                <View style={s.invoiceRow}>
+                                    <Text style={s.invoiceLabel}>VAT ({taxRateLabel}%)</Text>
+                                    <Text style={s.invoiceValue}>{formatCurrency(taxAmount)}</Text>
+                                </View>
+                            )}
 
-                            <View style={localStyles.finalTotalRow}>
+                            {/* Voucher Discount */}
+                            {discountAmount > 0 && (
+                                <View style={s.invoiceRow}>
+                                    <Text style={[s.invoiceLabel, { color: EMERALD }]}>
+                                        Voucher Savings ({appliedCoupon?.code})
+                                    </Text>
+                                    <Text style={[s.invoiceValue, { color: EMERALD }]}>
+                                        -{formatCurrency(discountAmount)}
+                                    </Text>
+                                </View>
+                            )}
+
+                            <View style={s.invoiceDivider} />
+
+                            {/* Final Total */}
+                            <View style={s.finalRow}>
                                 <View>
-                                    <Text style={localStyles.finalTotalLabel}>Grand Total</Text>
-                                    <Text style={localStyles.finalTotalSub}>All taxes & fees included</Text>
+                                    <Text style={s.finalLabel}>Grand Total</Text>
+                                    <Text style={s.finalSubLabel}>All taxes & delivery included</Text>
                                 </View>
-                                <Text style={localStyles.finalTotalValue}>{formatCurrency(finalTotal)}</Text>
+                                <Text style={s.finalValue}>{formatCurrency(finalTotal)}</Text>
                             </View>
+                        </View>
+
+                        {/* WhatsApp Dispatch Notice */}
+                        <View style={s.whatsAppNotice}>
+                            <Ionicons name="logo-whatsapp" size={14} color="#15803D" />
+                            <Text style={s.whatsAppNoticeTxt}>
+                                Order invoice & live dispatch tracking will be sent to: <Text style={{ fontWeight: '800' }}>{selectedAddrObj?.phone || user?.phone || 'Your Phone'}</Text>
+                            </Text>
                         </View>
                     </View>
                 )}
             </ScrollView>
 
-            <View style={localStyles.footerActions}>
-                {currentStep > 1 && (
-                    <TouchableOpacity
-                        style={localStyles.btnSecondary}
-                        onPress={() => setCurrentStep(currentStep - 1)}
-                    >
-                        <Text style={localStyles.btnSecondaryText}>Back</Text>
-                    </TouchableOpacity>
-                )}
-                <TouchableOpacity
-                    style={[localStyles.btnPrimary, { flex: 1, backgroundColor: primary, shadowColor: primary }]}
-                    onPress={currentStep === 3 ? handleFinalSubmit : validateAndNext}
-                    disabled={isProcessing}
-                >
-                    {isProcessing ? (
-                        <ActivityIndicator color="white" />
-                    ) : (
-                        <>
-                            <Text style={localStyles.btnPrimaryText}>
-                                {currentStep === 3 ? 'Confirm & Pay' : 'Continue'}
-                            </Text>
-                            <Ionicons name="arrow-forward" size={20} color="white" style={{ marginLeft: 8 }} />
-                        </>
+            {/* ── STICKY COMPACT BOTTOM ACTION BAR ──────────────────────────── */}
+            <View style={s.footerBar}>
+                <View style={s.footerTotalBox}>
+                    <Text style={s.footerTotalLabel}>Total to Pay</Text>
+                    <Text style={s.footerTotalVal}>{formatCurrency(finalTotal)}</Text>
+                </View>
+
+                <View style={s.footerBtnsRow}>
+                    {currentStep > 1 && (
+                        <TouchableOpacity
+                            style={s.btnBack}
+                            onPress={() => setCurrentStep(currentStep - 1)}
+                            activeOpacity={0.7}
+                            disabled={isProcessing}
+                        >
+                            <Text style={s.btnBackTxt}>Back</Text>
+                        </TouchableOpacity>
                     )}
-                </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[
+                            s.btnNext,
+                            isProcessing && { opacity: 0.7 },
+                            currentStep === 3 && !agreedToTerms && { opacity: 0.6 }
+                        ]}
+                        onPress={currentStep === 3 ? handleFinalSubmit : validateAndNext}
+                        disabled={isProcessing}
+                        activeOpacity={0.8}
+                    >
+                        {isProcessing ? (
+                            <ActivityIndicator size="small" color={WHITE} />
+                        ) : (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Text style={s.btnNextTxt}>
+                                    {currentStep === 3 ? `Confirm & Pay` : `Continue`}
+                                </Text>
+                                <Ionicons
+                                    name={currentStep === 3 ? "shield-checkmark" : "arrow-forward"}
+                                    size={14}
+                                    color={WHITE}
+                                />
+                            </View>
+                        )}
+                    </TouchableOpacity>
+                </View>
             </View>
 
+            {/* ── FLOATING TOAST NOTIFICATION ───────────────────────────────── */}
+            <Animated.View
+                pointerEvents="none"
+                style={[
+                    s.toastBox,
+                    {
+                        opacity: toastAnim,
+                        transform: [{
+                            translateY: toastAnim.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [20, 0]
+                            })
+                        }]
+                    }
+                ]}
+            >
+                <Text style={s.toastTxt}>{toastMessage}</Text>
+            </Animated.View>
+
+            {/* ── PROCESSING MODAL ─────────────────────────────────────────── */}
             <Modal transparent visible={isProcessing} animationType="fade">
-                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' }}>
-                    <View style={{ backgroundColor: 'white', padding: 30, borderRadius: 24, alignItems: 'center' }}>
-                        <ActivityIndicator size="large" color="#0F172A" />
-                        <Text style={{ marginTop: 20, fontSize: 16, fontWeight: '700', color: '#0F172A' }}>Processing...</Text>
-                        <Text style={{ marginTop: 8, fontSize: 13, color: '#64748B' }}>Please do not close this window</Text>
+                <View style={s.loadingOverlay}>
+                    <View style={s.loadingBox}>
+                        <ActivityIndicator size="large" color={GOLD} />
+                        <Text style={s.loadingTitle}>Processing Escrow Order</Text>
+                        <Text style={s.loadingSub}>Please wait, securing transaction...</Text>
                     </View>
                 </View>
             </Modal>
 
+            {/* ── PAYMENT MODAL (WEBVIEW) ──────────────────────────────────── */}
             <FlutterwaveCheckout
                 visible={showPaymentModal}
                 link={paymentLink}
@@ -961,7 +1278,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                         triggerOrderWhatsApp(currentOrderId, finalTotal, paymentMethod || 'Online Payment');
                         if (onClearCart) onClearCart();
                     } else {
-                        Alert.alert('Payment Incomplete', 'The transaction was not successful or was cancelled.');
+                        Alert.alert('Payment Incomplete', 'The transaction was cancelled or incomplete. Please try again.');
                     }
                 }}
             />
@@ -973,90 +1290,989 @@ export const CheckoutPage = (props) => (
     <CheckoutPageInner {...props} onClearCart={props.onClearCart} />
 );
 
-const localStyles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F8F9FE' },
-    headerSafe: { backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#F1F5F9', paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 },
-    header: { height: 70, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
-    backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22, backgroundColor: '#F1F5FE' },
-    headerTitleContainer: { alignItems: 'center' },
-    headerTitle: { fontSize: 18, fontWeight: '800', color: '#0F172A' },
-    secureBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EEF2FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, marginTop: 4 },
-    secureText: { fontSize: 10, fontWeight: '900', color: '#6366F1', marginLeft: 6 },
-    stepper: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 20, position: 'relative' },
-    stepperLine: { position: 'absolute', top: 36, left: 60, right: 60, height: 4, backgroundColor: '#E2E8F0', borderRadius: 2 },
-    stepperProgress: { height: '100%', backgroundColor: '#6366F1', borderRadius: 2 },
-    stepItem: { alignItems: 'center', zIndex: 1, width: 70 },
-    stepCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'white', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#E2E8F0', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-    stepCircleActive: { backgroundColor: '#6366F1', borderColor: '#6366F1' },
-    stepCircleDone: { backgroundColor: '#10B981', borderColor: '#10B981' },
-    stepLabel: { fontSize: 11, fontWeight: '700', color: '#94A3B8', marginTop: 8 },
-    stepLabelActive: { color: '#6366F1' },
-    sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-    sectionTitle: { fontSize: 24, fontWeight: '900', color: '#0F172A', marginBottom: 8 },
-    sectionSub: { fontSize: 14, color: '#64748B', marginBottom: 24, lineHeight: 20 },
-    manageText: { color: '#6366F1', fontWeight: '700', fontSize: 14 },
-    addAnother: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 18, borderRadius: 20, borderStyle: 'dashed', borderWidth: 2, borderColor: '#CBD5E1', marginTop: 12 },
-    addAnotherText: { marginLeft: 10, color: '#64748B', fontWeight: '700' },
-    infoCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EEF2FF', padding: 18, borderRadius: 20, marginTop: 24 },
-    infoTitle: { fontSize: 15, fontWeight: '700', color: '#4F46E5' },
-    infoSub: { fontSize: 12, color: '#6366F1', marginTop: 4 },
-    paymentCard: { backgroundColor: 'white', borderRadius: 20, padding: 16, marginBottom: 12, borderWidth: 2, borderColor: '#F1F5F9', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.02, shadowRadius: 8, elevation: 1 },
-    paymentCardActive: { borderColor: '#6366F1', backgroundColor: '#F5F7FF' },
-    paymentContent: { flexDirection: 'row', alignItems: 'center' },
-    paymentIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center' },
-    paymentName: { fontSize: 16, fontWeight: '700', color: '#0F172A' },
-    paymentSub: { fontSize: 12, color: '#64748B', marginTop: 4 },
-    radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center' },
-    radioActive: { borderColor: '#6366F1' },
-    radioInner: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#6366F1' },
-    recBadge: { backgroundColor: '#EEF2FF', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginLeft: 8 },
-    recText: { fontSize: 10, fontWeight: '800', color: '#6366F1' },
-    secureNotice: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 24 },
-    secureNoticeText: { fontSize: 13, color: '#94A3B8', marginLeft: 10, fontWeight: '600' },
-    summaryCard: { backgroundColor: 'white', borderRadius: 24, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: '#0F172A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.03, shadowRadius: 12, elevation: 3 },
-    summaryHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-    summaryIconBox: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#F5F7FF', alignItems: 'center', justifyContent: 'center', marginRight: 16 },
-    summaryTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A', flex: 1 },
-    editText: { color: '#6366F1', fontWeight: '700', fontSize: 14 },
-    summaryMainText: { fontSize: 15, fontWeight: '700', color: '#0F172A' },
-    summarySubText: { fontSize: 13, color: '#64748B', marginTop: 4, lineHeight: 18 },
-    itemsPreviewCard: { backgroundColor: '#F8FAFC', borderRadius: 20, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: '#F1F5F9' },
-    itemsPreviewHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-    itemsPreviewTitle: { fontSize: 14, fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 1 },
-    itemTinyRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-    itemTinyName: { fontSize: 14, fontWeight: '600', color: '#334155', flex: 1, marginRight: 12 },
-    itemTinyPrice: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
-    moreItemsText: { fontSize: 12, color: '#94A3B8', fontWeight: '700', marginTop: 6 },
-    couponOuter: { marginBottom: 24 },
-    labelSmall: { fontSize: 13, fontWeight: '800', color: '#64748B', marginBottom: 10, marginLeft: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
-    couponRow: { flexDirection: 'row', gap: 12 },
-    couponInput: { flex: 1, height: 56, backgroundColor: 'white', borderRadius: 16, paddingHorizontal: 18, borderWidth: 1.5, borderColor: '#E2E8F0', fontWeight: '700', color: '#0F172A' },
-    couponBtn: { width: 100, height: 56, backgroundColor: '#0F172A', borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-    couponBtnApplied: { backgroundColor: '#EF4444' },
-    couponBtnText: { color: 'white', fontWeight: '800', fontSize: 14 },
-    noteContainer: { marginBottom: 24 },
-    noteInput: { backgroundColor: 'white', borderRadius: 16, padding: 18, borderWidth: 1.5, borderColor: '#E2E8F0', minHeight: 100, textAlignVertical: 'top', color: '#0F172A', fontSize: 15 },
-    termsRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 30 },
-    checkbox: { width: 24, height: 24, borderRadius: 8, borderWidth: 2, borderColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center', marginRight: 14 },
-    checkboxActive: { backgroundColor: '#6366F1', borderColor: '#6366F1' },
-    termsText: { fontSize: 14, color: '#64748B', fontWeight: '600' },
-    invoiceCard: { backgroundColor: 'white', borderRadius: 28, padding: 24, marginBottom: 20, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 10 },
-    invoiceHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
-    invoiceIconBox: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#F5F7FF', alignItems: 'center', justifyContent: 'center', marginRight: 16 },
-    invoiceTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A', textTransform: 'uppercase', letterSpacing: 1 },
-    invoiceSub: { fontSize: 12, color: '#64748B', marginTop: 2 },
-    invoiceTable: { marginTop: 8 },
-    invoiceRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
-    invoiceLabel: { fontSize: 14, color: '#64748B', fontWeight: '600' },
-    invoiceValue: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
-    invoiceDivider: { height: 1.5, backgroundColor: '#F1F5F9', marginVertical: 20, borderStyle: 'dashed' },
-    finalTotalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    finalTotalLabel: { fontSize: 18, fontWeight: '900', color: '#0F172A' },
-    finalTotalSub: { fontSize: 11, color: '#94A3B8', marginTop: 4 },
-    finalTotalValue: { fontSize: 28, fontWeight: '900', color: '#6366F1' },
-    footerActions: { backgroundColor: 'white', padding: 20, paddingBottom: Platform.OS === 'ios' ? 40 : 20, flexDirection: 'row', gap: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9', shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 20 },
-    btnPrimary: { height: 64, borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.22, shadowRadius: 8, elevation: 4 },
-    btnPrimaryText: { color: 'white', fontSize: 16, fontWeight: '800' },
-    btnSecondary: { height: 64, paddingHorizontal: 28, backgroundColor: '#F1F5F9', borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-    btnSecondaryText: { color: '#0F172A', fontSize: 16, fontWeight: '800' }
+// ── COMPACT, ERGONOMIC & LUXURY STYLESHEET ───────────────────────────────────
+const s = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: BG,
+    },
+    headerSafe: {
+        backgroundColor: WHITE,
+        borderBottomWidth: 1,
+        borderBottomColor: BORDER,
+        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    },
+    header: {
+        height: 52,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 14,
+    },
+    backBtn: {
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        backgroundColor: '#F1F5F9',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    headerCenter: {
+        alignItems: 'center',
+    },
+    headerTitle: {
+        fontSize: 16,
+        fontWeight: '900',
+        color: NAVY,
+        letterSpacing: -0.3,
+    },
+    secureBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+        marginTop: 1,
+    },
+    secureBadgeTxt: {
+        fontSize: 9,
+        fontWeight: '800',
+        color: EMERALD,
+        letterSpacing: 0.4,
+    },
+    stepCounterPill: {
+        backgroundColor: '#F1F5F9',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 10,
+    },
+    stepCounterTxt: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: SLATE_DARK,
+    },
+
+    // Stepper
+    stepperRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        backgroundColor: '#FAFBFD',
+        borderTopWidth: 0.5,
+        borderTopColor: '#F1F5F9',
+    },
+    stepTab: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        flex: 1,
+    },
+    stepCircle: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        backgroundColor: WHITE,
+        borderWidth: 1.5,
+        borderColor: '#CBD5E1',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    stepCircleActive: {
+        backgroundColor: NAVY,
+        borderColor: NAVY,
+    },
+    stepCircleDone: {
+        backgroundColor: EMERALD,
+        borderColor: EMERALD,
+    },
+    stepLabel: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: SLATE,
+    },
+    stepLabelActive: {
+        color: NAVY,
+        fontWeight: '900',
+    },
+    stepLabelDone: {
+        color: '#0F172A',
+    },
+    stepLine: {
+        flex: 1,
+        height: 2,
+        backgroundColor: '#E2E8F0',
+        marginHorizontal: 4,
+        borderRadius: 1,
+    },
+    stepLineDone: {
+        backgroundColor: EMERALD,
+    },
+
+    // Scroll
+    scrollContent: {
+        padding: 14,
+        paddingBottom: 90,
+    },
+
+    // Section Headers
+    sectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 12,
+    },
+    sectionTitle: {
+        fontSize: 16,
+        fontWeight: '900',
+        color: NAVY,
+        letterSpacing: -0.2,
+    },
+    sectionSub: {
+        fontSize: 11.5,
+        color: SLATE,
+        marginTop: 1,
+    },
+    manageLink: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: GOLD,
+    },
+
+    // Empty Box
+    emptyBox: {
+        backgroundColor: WHITE,
+        borderRadius: 14,
+        padding: 18,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: BORDER,
+    },
+    emptyTitle: {
+        fontSize: 13,
+        fontWeight: '800',
+        color: NAVY,
+        marginTop: 8,
+    },
+    emptySub: {
+        fontSize: 11,
+        color: SLATE,
+        textAlign: 'center',
+        marginTop: 2,
+        marginBottom: 12,
+    },
+    addAddressBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: GOLD,
+        paddingHorizontal: 14,
+        height: 38,
+        borderRadius: 8,
+        justifyContent: 'center',
+    },
+    addAddressBtnTxt: {
+        fontSize: 12,
+        fontWeight: '900',
+        color: NAVY,
+    },
+    addAnotherCompact: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        paddingVertical: 8,
+        marginTop: 4,
+    },
+    addAnotherTxt: {
+        fontSize: 11.5,
+        fontWeight: '700',
+        color: GOLD,
+    },
+
+    // Delivery Methods
+    methodHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 8,
+    },
+    methodHeaderTitle: {
+        fontSize: 13,
+        fontWeight: '800',
+        color: NAVY,
+    },
+    routingBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    routingTxt: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: GOLD,
+    },
+    methodCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: WHITE,
+        borderRadius: 12,
+        padding: 10,
+        marginBottom: 8,
+        borderWidth: 1,
+        borderColor: BORDER,
+    },
+    methodCardSelected: {
+        borderColor: GOLD,
+        backgroundColor: GOLD_LIGHT,
+    },
+    methodIconWrap: {
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        backgroundColor: '#F1F5F9',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    methodIconWrapSelected: {
+        backgroundColor: '#FEF3C7',
+    },
+    methodName: {
+        fontSize: 12.5,
+        fontWeight: '700',
+        color: NAVY,
+    },
+    methodNameSelected: {
+        fontWeight: '900',
+        color: NAVY,
+    },
+    methodPrice: {
+        fontSize: 12,
+        fontWeight: '900',
+        color: NAVY,
+    },
+    methodSub: {
+        fontSize: 10.5,
+        color: SLATE,
+        marginTop: 1,
+    },
+
+    // Radio
+    radioCircle: {
+        width: 18,
+        height: 18,
+        borderRadius: 9,
+        borderWidth: 1.5,
+        borderColor: '#CBD5E1',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginLeft: 8,
+    },
+    radioCircleSelected: {
+        borderColor: GOLD,
+    },
+    radioDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: GOLD,
+    },
+
+    // Multi Vendor Breakdown
+    multiVendorCard: {
+        backgroundColor: WHITE,
+        borderRadius: 12,
+        padding: 10,
+        marginTop: 6,
+        borderWidth: 1,
+        borderColor: '#CBD5E1',
+    },
+    multiVendorTitle: {
+        fontSize: 11.5,
+        fontWeight: '800',
+        color: NAVY,
+    },
+    multiVendorSub: {
+        fontSize: 10,
+        color: SLATE,
+        marginBottom: 6,
+    },
+    vendorPkgRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 4,
+    },
+    vendorPkgDivider: {
+        borderTopWidth: 0.5,
+        borderTopColor: '#F1F5F9',
+    },
+    vendorPkgName: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: SLATE_DARK,
+    },
+    vendorPkgMeta: {
+        fontSize: 9.5,
+        color: SLATE,
+    },
+    vendorPkgFee: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: NAVY,
+    },
+    trustBadgeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: '#FAFBFD',
+        padding: 9,
+        borderRadius: 8,
+        marginTop: 8,
+        borderWidth: 0.5,
+        borderColor: '#E2E8F0',
+    },
+    trustBadgeTxt: {
+        fontSize: 10.5,
+        color: SLATE_DARK,
+        fontWeight: '600',
+        flex: 1,
+    },
+
+    // Step 2: Payment
+    payCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: WHITE,
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 8,
+        borderWidth: 1,
+        borderColor: BORDER,
+    },
+    payCardSelected: {
+        borderColor: GOLD,
+        backgroundColor: GOLD_LIGHT,
+    },
+    payIconBox: {
+        width: 36,
+        height: 36,
+        borderRadius: 9,
+        backgroundColor: '#F8FAFC',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 0.5,
+        borderColor: '#E2E8F0',
+    },
+    payIconBoxSelected: {
+        backgroundColor: '#FEF3C7',
+        borderColor: GOLD_BORDER,
+    },
+    payTitle: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: SLATE_DARK,
+    },
+    payTitleSelected: {
+        fontWeight: '900',
+        color: NAVY,
+    },
+    payBadge: {
+        backgroundColor: '#EFF6FF',
+        paddingHorizontal: 5,
+        paddingVertical: 1,
+        borderRadius: 4,
+    },
+    payBadgeTxt: {
+        fontSize: 8.5,
+        fontWeight: '800',
+        color: '#2563EB',
+    },
+    payBadgeDanger: {
+        backgroundColor: '#FEF2F2',
+    },
+    payBadgeDangerTxt: {
+        color: DANGER,
+    },
+    paySub: {
+        fontSize: 10.5,
+        color: SLATE,
+        marginTop: 2,
+    },
+    walletWarningBox: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        backgroundColor: '#FEF2F2',
+        borderRadius: 10,
+        padding: 10,
+        marginTop: 4,
+        marginBottom: 10,
+        borderWidth: 1,
+        borderColor: '#FECACA',
+    },
+    walletWarningTitle: {
+        fontSize: 11.5,
+        fontWeight: '800',
+        color: DANGER,
+    },
+    walletWarningSub: {
+        fontSize: 10,
+        color: '#991B1B',
+        marginTop: 2,
+        lineHeight: 14,
+    },
+    escrowCallout: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        backgroundColor: '#F8FAFC',
+        borderRadius: 12,
+        padding: 12,
+        marginTop: 12,
+        borderWidth: 1,
+        borderColor: BORDER,
+    },
+    escrowIconBox: {
+        width: 30,
+        height: 30,
+        borderRadius: 8,
+        backgroundColor: '#FEF3C7',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 2,
+    },
+    escrowTitle: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: NAVY,
+    },
+    escrowSub: {
+        fontSize: 10.5,
+        color: SLATE,
+        marginTop: 2,
+        lineHeight: 15,
+    },
+
+    // Step 3: Review
+    recapContainer: {
+        gap: 8,
+        marginBottom: 12,
+    },
+    recapCard: {
+        backgroundColor: WHITE,
+        borderRadius: 12,
+        padding: 11,
+        borderWidth: 1,
+        borderColor: BORDER,
+    },
+    recapHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 4,
+    },
+    recapTitle: {
+        fontSize: 11.5,
+        fontWeight: '800',
+        color: NAVY,
+    },
+    recapEditTxt: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: GOLD,
+    },
+    recapMainTxt: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: SLATE_DARK,
+    },
+    recapSubTxt: {
+        fontSize: 11,
+        color: SLATE,
+        marginTop: 1,
+        lineHeight: 15,
+    },
+    recapPhoneTxt: {
+        fontSize: 10.5,
+        color: '#475569',
+        marginTop: 2,
+        fontWeight: '600',
+    },
+    lgaPill: {
+        backgroundColor: '#FEF3C7',
+        paddingHorizontal: 5,
+        paddingVertical: 1,
+        borderRadius: 3,
+    },
+    lgaPillTxt: {
+        fontSize: 9,
+        fontWeight: '800',
+        color: '#92400E',
+    },
+    escrowSmallPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+        backgroundColor: '#ECFDF5',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+        marginLeft: 8,
+    },
+    escrowSmallPillTxt: {
+        fontSize: 9,
+        fontWeight: '800',
+        color: EMERALD,
+    },
+
+    // Items Accordion
+    accordionCard: {
+        backgroundColor: WHITE,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: BORDER,
+        marginBottom: 12,
+        overflow: 'hidden',
+    },
+    accordionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 11,
+        backgroundColor: '#FAFBFD',
+    },
+    accordionTitle: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: NAVY,
+    },
+    accordionToggleTxt: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: SLATE,
+    },
+    accordionBody: {
+        paddingHorizontal: 11,
+        paddingBottom: 6,
+    },
+    itemMiniRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 7,
+    },
+    itemMiniDivider: {
+        borderTopWidth: 0.5,
+        borderTopColor: '#F1F5F9',
+    },
+    itemMiniImg: {
+        width: 36,
+        height: 36,
+        borderRadius: 6,
+        backgroundColor: '#F1F5F9',
+    },
+    itemMiniTitle: {
+        fontSize: 11.5,
+        fontWeight: '700',
+        color: SLATE_DARK,
+    },
+    itemMiniQty: {
+        fontSize: 10,
+        color: SLATE,
+        marginTop: 1,
+    },
+    itemMiniTotal: {
+        fontSize: 11.5,
+        fontWeight: '800',
+        color: NAVY,
+    },
+
+    // Coupon & Notes
+    smallLabel: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: SLATE_DARK,
+        marginBottom: 6,
+    },
+    couponWrap: {
+        marginBottom: 6,
+    },
+    couponRow: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    couponInput: {
+        flex: 1,
+        height: 40,
+        backgroundColor: WHITE,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: BORDER,
+        paddingHorizontal: 10,
+        fontSize: 12,
+        fontWeight: '700',
+        color: NAVY,
+    },
+    couponBtn: {
+        backgroundColor: GOLD,
+        paddingHorizontal: 14,
+        height: 40,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    couponBtnApplied: {
+        backgroundColor: DANGER,
+    },
+    couponBtnTxt: {
+        fontSize: 11.5,
+        fontWeight: '900',
+        color: NAVY,
+    },
+    notesInput: {
+        backgroundColor: WHITE,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: BORDER,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        height: 52,
+        fontSize: 11.5,
+        color: NAVY,
+        textAlignVertical: 'top',
+    },
+
+    // Terms
+    termsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 12,
+        marginBottom: 14,
+    },
+    termsCheckbox: {
+        width: 18,
+        height: 18,
+        borderRadius: 4,
+        borderWidth: 1.5,
+        borderColor: '#CBD5E1',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 8,
+        backgroundColor: WHITE,
+    },
+    termsCheckboxActive: {
+        backgroundColor: GOLD,
+        borderColor: GOLD,
+    },
+    termsTxt: {
+        fontSize: 10.5,
+        color: SLATE,
+        flex: 1,
+        lineHeight: 14,
+    },
+
+    // Detailed Invoice
+    invoiceCard: {
+        backgroundColor: WHITE,
+        borderRadius: 14,
+        padding: 13,
+        borderWidth: 1,
+        borderColor: BORDER,
+    },
+    invoiceHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: 10,
+    },
+    invoiceTitle: {
+        fontSize: 12.5,
+        fontWeight: '900',
+        color: NAVY,
+    },
+    invoiceRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 4,
+    },
+    invoiceLabel: {
+        fontSize: 11.5,
+        color: SLATE,
+        fontWeight: '500',
+    },
+    invoiceSubLabel: {
+        fontSize: 9.5,
+        color: '#94A3B8',
+        marginTop: 1,
+    },
+    invoiceValue: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: NAVY,
+    },
+    freeBadge: {
+        backgroundColor: '#DCFCE7',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+    },
+    freeBadgeTxt: {
+        fontSize: 10,
+        fontWeight: '900',
+        color: '#16A34A',
+    },
+    invoiceDivider: {
+        height: 1,
+        backgroundColor: '#F1F5F9',
+        marginVertical: 8,
+    },
+    finalRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingTop: 2,
+    },
+    finalLabel: {
+        fontSize: 13.5,
+        fontWeight: '900',
+        color: NAVY,
+    },
+    finalSubLabel: {
+        fontSize: 9.5,
+        color: SLATE,
+    },
+    finalValue: {
+        fontSize: 17,
+        fontWeight: '900',
+        color: NAVY,
+    },
+    whatsAppNotice: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: '#F0FDF4',
+        padding: 9,
+        borderRadius: 8,
+        marginTop: 10,
+        borderWidth: 0.5,
+        borderColor: '#BBF7D0',
+    },
+    whatsAppNoticeTxt: {
+        fontSize: 10,
+        color: '#166534',
+        flex: 1,
+    },
+
+    // Sticky Bottom Bar
+    footerBar: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 60,
+        backgroundColor: WHITE,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 14,
+        borderTopWidth: 1,
+        borderTopColor: BORDER,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+        elevation: 8,
+    },
+    footerTotalBox: {
+        justifyContent: 'center',
+    },
+    footerTotalLabel: {
+        fontSize: 9.5,
+        color: SLATE,
+        fontWeight: '700',
+        textTransform: 'uppercase',
+    },
+    footerTotalVal: {
+        fontSize: 16,
+        fontWeight: '900',
+        color: NAVY,
+    },
+    footerBtnsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    btnBack: {
+        height: 42,
+        paddingHorizontal: 14,
+        backgroundColor: '#F1F5F9',
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    btnBackTxt: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: NAVY,
+    },
+    btnNext: {
+        height: 42,
+        paddingHorizontal: 18,
+        backgroundColor: NAVY,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: NAVY,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    btnNextTxt: {
+        fontSize: 12.5,
+        fontWeight: '900',
+        color: WHITE,
+    },
+
+    // Toast
+    toastBox: {
+        position: 'absolute',
+        top: 60,
+        alignSelf: 'center',
+        backgroundColor: NAVY,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 6,
+        elevation: 5,
+        zIndex: 999,
+    },
+    toastTxt: {
+        fontSize: 11.5,
+        fontWeight: '700',
+        color: WHITE,
+    },
+
+    // Loading Modal
+    loadingOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(14, 26, 46, 0.65)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    loadingBox: {
+        backgroundColor: WHITE,
+        paddingHorizontal: 28,
+        paddingVertical: 22,
+        borderRadius: 18,
+        alignItems: 'center',
+        width: '80%',
+    },
+    loadingTitle: {
+        marginTop: 14,
+        fontSize: 14,
+        fontWeight: '900',
+        color: NAVY,
+    },
+    loadingSub: {
+        marginTop: 4,
+        fontSize: 11,
+        color: SLATE,
+        textAlign: 'center',
+    },
+
+    // Success Screen
+    successSafe: {
+        flex: 1,
+        backgroundColor: WHITE,
+    },
+    successContainer: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
+    },
+    successIconBox: {
+        width: 76,
+        height: 76,
+        borderRadius: 38,
+        backgroundColor: '#ECFDF5',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+    },
+    successTitle: {
+        fontSize: 19,
+        fontWeight: '900',
+        color: NAVY,
+        textAlign: 'center',
+    },
+    successSub: {
+        fontSize: 12.5,
+        color: SLATE,
+        textAlign: 'center',
+        marginTop: 6,
+        lineHeight: 18,
+        paddingHorizontal: 10,
+    },
+    orderIdPill: {
+        backgroundColor: '#F1F5F9',
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 8,
+        marginTop: 14,
+    },
+    orderIdTxt: {
+        fontSize: 11,
+        fontWeight: '900',
+        color: NAVY,
+        letterSpacing: 0.5,
+    },
+    whatsAppBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: '#F0FDF4',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 8,
+        marginTop: 14,
+        borderWidth: 1,
+        borderColor: '#DCFCE7',
+    },
+    whatsAppBannerTxt: {
+        fontSize: 10.5,
+        fontWeight: '700',
+        color: '#15803D',
+    },
+    successActionGroup: {
+        width: '100%',
+        marginTop: 28,
+        gap: 10,
+    },
+    successPrimaryBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        backgroundColor: NAVY,
+        height: 46,
+        borderRadius: 12,
+    },
+    successPrimaryBtnTxt: {
+        fontSize: 13,
+        fontWeight: '900',
+        color: WHITE,
+    },
+    successSecondaryBtn: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: 40,
+    },
+    successSecondaryBtnTxt: {
+        fontSize: 12.5,
+        fontWeight: '700',
+        color: SLATE,
+    },
 });
