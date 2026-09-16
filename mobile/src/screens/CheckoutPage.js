@@ -196,6 +196,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
     const [pssDurationModalOpen, setPssDurationModalOpen]   = useState(false);
     const [pssFrequencyModalOpen, setPssFrequencyModalOpen] = useState(false);
     const [pssScheduleExpanded, setPssScheduleExpanded]   = useState(false);
+    const [pssDownPaymentMethod, setPssDownPaymentMethod] = useState('Paystack'); // 'Paystack' | 'Flutterwave' | 'Wallet' | 'pod'
 
     // Step 3: Review & Options
     const [couponCode, setCouponCode]           = useState('');
@@ -541,6 +542,48 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
     // Check if wallet balance is sufficient
     const walletBalance = Number(profile?.wallet_balance || 0);
     const isWalletInsufficient = paymentMethod === 'Wallet' && walletBalance < finalTotal;
+    const isPssWalletInsufficient = paymentMethod === 'pay_small_small' && pssDownPaymentMethod === 'Wallet' && walletBalance < pssPlanDetails.downPayment;
+
+    // Available Down Payment Options for Pay Small Small (BNPL)
+    const pssPaymentOptions = useMemo(() => {
+        const wb = Number(profile?.wallet_balance || 0);
+        const dp = pssPlanDetails.downPayment;
+        return [
+            {
+                id: 'Paystack',
+                name: 'Paystack (Cards & Transfer)',
+                sub: 'Instant online card, bank transfer or USSD',
+                icon: 'card-outline',
+                badge: 'Online Instant',
+                accentColor: GOLD
+            },
+            {
+                id: 'Flutterwave',
+                name: 'Flutterwave (Cards & Mobile Money)',
+                sub: 'Debit card or mobile money',
+                icon: 'flash-outline',
+                badge: 'Mobile Money',
+                accentColor: '#3B82F6'
+            },
+            {
+                id: 'Wallet',
+                name: 'Abu Mafhal Wallet',
+                sub: `Balance: ₦${wb.toLocaleString()}`,
+                icon: 'wallet-outline',
+                badge: wb >= dp ? 'Sufficient' : 'Top-up needed',
+                disabled: wb < dp,
+                accentColor: EMERALD
+            },
+            {
+                id: 'pod',
+                name: 'Pay on Delivery (Down Payment)',
+                sub: 'Pay the initial down payment to courier upon arrival',
+                icon: 'cash-outline',
+                badge: 'Cash / POS',
+                accentColor: '#F97316'
+            }
+        ];
+    }, [profile, pssPlanDetails.downPayment]);
 
     // Load initial data
     useEffect(() => {
@@ -755,6 +798,17 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             return;
         }
 
+        if (isPssWalletInsufficient) {
+            Alert.alert(
+                'Insufficient Wallet Balance for Down Payment',
+                `Your wallet balance (₦${walletBalance.toLocaleString()}) is less than the required down payment (₦${pssPlanDetails.downPayment.toLocaleString()}). Please choose Paystack, Flutterwave, or Pay on Delivery.`,
+                [
+                    { text: 'OK' }
+                ]
+            );
+            return;
+        }
+
         setIsProcessing(true);
         try {
             const { data: { user: verifiedUser }, error: userError } = await supabase.auth.getUser();
@@ -776,7 +830,11 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     address_id: selectedAddressId,
                     shipping_override: addresses.find(a => a.id === selectedAddressId) || null,
                     payment_method: paymentMethod,
-                    installment_plan: paymentMethod === 'pay_small_small' ? pssPlanDetails : null,
+                    down_payment_method: paymentMethod === 'pay_small_small' ? pssDownPaymentMethod : null,
+                    installment_plan: paymentMethod === 'pay_small_small' ? {
+                        ...pssPlanDetails,
+                        down_payment_method: pssDownPaymentMethod
+                    } : null,
                     coupon_code: appliedCoupon?.code || null,
                     order_notes: orderNote,
                     delivery_method: selectedDeliveryMethod || 'standard',
@@ -1531,6 +1589,77 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                     </View>
                                 )}
 
+                                {/* 5. SELECT DOWN PAYMENT METHOD */}
+                                <View style={s.pssDownPaymentSection}>
+                                    <View style={s.pssDownPaymentHeader}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                            <Ionicons name="card" size={15} color={GOLD} />
+                                            <Text style={s.pssDownPaymentTitle}>Pay Down Payment With</Text>
+                                        </View>
+                                        <View style={s.pssDueTodayTag}>
+                                            <Text style={s.pssDueTodayTagTxt}>Due Today: {formatCurrency(pssPlanDetails.downPayment)}</Text>
+                                        </View>
+                                    </View>
+                                    <Text style={s.pssDownPaymentSub}>
+                                        Choose how you want to pay today's initial down payment:
+                                    </Text>
+
+                                    <View style={{ marginTop: 6 }}>
+                                        {pssPaymentOptions.map((opt) => {
+                                            const isSelected = pssDownPaymentMethod === opt.id;
+                                            return (
+                                                <TouchableOpacity
+                                                    key={opt.id}
+                                                    onPress={() => setPssDownPaymentMethod(opt.id)}
+                                                    activeOpacity={0.8}
+                                                    style={[
+                                                        s.pssOptCard,
+                                                        isSelected && s.pssOptCardSelected
+                                                    ]}
+                                                >
+                                                    <View style={[
+                                                        s.pssOptIconBox,
+                                                        isSelected && s.pssOptIconBoxSelected,
+                                                        opt.accentColor && isSelected && { borderColor: opt.accentColor }
+                                                    ]}>
+                                                        <Ionicons 
+                                                            name={opt.icon} 
+                                                            size={18} 
+                                                            color={isSelected ? (opt.accentColor || GOLD) : SLATE} 
+                                                        />
+                                                    </View>
+                                                    <View style={{ flex: 1, marginLeft: 10 }}>
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                            <Text style={[s.pssOptName, isSelected && s.pssOptNameSelected]}>
+                                                                {opt.name}
+                                                            </Text>
+                                                            {opt.badge && (
+                                                                <View style={[
+                                                                    s.pssOptBadge,
+                                                                    isSelected && { backgroundColor: '#FEF3C7' },
+                                                                    opt.id === 'Wallet' && opt.disabled && { backgroundColor: '#FEE2E2' }
+                                                                ]}>
+                                                                    <Text style={[
+                                                                        s.pssOptBadgeTxt,
+                                                                        isSelected && { color: '#92400E' },
+                                                                        opt.id === 'Wallet' && opt.disabled && { color: '#DC2626' }
+                                                                    ]}>
+                                                                        {opt.badge}
+                                                                    </Text>
+                                                                </View>
+                                                            )}
+                                                        </View>
+                                                        <Text style={s.pssOptSub}>{opt.sub}</Text>
+                                                    </View>
+                                                    <View style={[s.radioCircle, isSelected && s.radioCircleSelected, isSelected && opt.accentColor && { borderColor: opt.accentColor }]}>
+                                                        {isSelected && <View style={[s.radioDot, { backgroundColor: opt.accentColor || GOLD }]} />}
+                                                    </View>
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </View>
+                                </View>
+
                                 <View style={s.pssNoticeRow}>
                                     <Ionicons name="sparkles" size={13} color={GOLD} />
                                     <Text style={s.pssNoticeTxt}>
@@ -1678,9 +1807,14 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                         </View>
                                     </View>
                                     {paymentMethod === 'pay_small_small' && (
-                                        <Text style={s.recapSubTxt}>
-                                            Due Today: {formatCurrency(pssPlanDetails.downPayment)} • Then {pssPlanDetails.installmentsCount - 1} splits of {formatCurrency(pssPlanDetails.recurringAmount)}
-                                        </Text>
+                                        <View style={{ marginTop: 2 }}>
+                                            <Text style={s.recapSubTxt}>
+                                                Due Today: <Text style={{ fontWeight: '800', color: EMERALD }}>{formatCurrency(pssPlanDetails.downPayment)}</Text> • Pay via <Text style={{ fontWeight: '800', color: NAVY }}>{pssDownPaymentMethod === 'pod' ? 'Pay on Delivery' : pssDownPaymentMethod}</Text>
+                                            </Text>
+                                            <Text style={s.recapSubTxt}>
+                                                Then {pssPlanDetails.installmentsCount - 1} installments of {formatCurrency(pssPlanDetails.recurringAmount)} ({pssPlanDetails.frequency})
+                                            </Text>
+                                        </View>
                                     )}
                                     {paymentMethod === 'pod' && (
                                         <Text style={[s.recapSubTxt, { color: '#EA580C', fontWeight: '700' }]}>
@@ -3474,6 +3608,97 @@ const s = StyleSheet.create({
         color: '#92400E',
         flex: 1,
         lineHeight: 15,
+    },
+    // Pay Small Small Down Payment Selector Styles
+    pssDownPaymentSection: {
+        marginTop: 14,
+        paddingTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: '#E2E8F0',
+    },
+    pssDownPaymentHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 4,
+    },
+    pssDownPaymentTitle: {
+        fontSize: 12.5,
+        fontWeight: '800',
+        color: NAVY,
+    },
+    pssDueTodayTag: {
+        backgroundColor: '#ECFDF5',
+        paddingHorizontal: 7,
+        paddingVertical: 2,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: '#A7F3D0',
+    },
+    pssDueTodayTagTxt: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: '#065F46',
+    },
+    pssDownPaymentSub: {
+        fontSize: 11,
+        color: SLATE,
+        marginBottom: 6,
+    },
+    pssOptCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: WHITE,
+        borderRadius: 10,
+        padding: 9,
+        marginBottom: 6,
+        borderWidth: 1.5,
+        borderColor: '#E2E8F0',
+    },
+    pssOptCardSelected: {
+        borderColor: GOLD,
+        backgroundColor: '#FEFDF8',
+    },
+    pssOptIconBox: {
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        backgroundColor: '#F8FAFC',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        flexShrink: 0,
+        overflow: 'hidden',
+    },
+    pssOptIconBoxSelected: {
+        backgroundColor: '#FEF9EC',
+        borderColor: GOLD,
+    },
+    pssOptName: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: NAVY,
+    },
+    pssOptNameSelected: {
+        fontWeight: '800',
+        color: NAVY,
+    },
+    pssOptBadge: {
+        backgroundColor: '#F1F5F9',
+        paddingHorizontal: 5,
+        paddingVertical: 1,
+        borderRadius: 4,
+    },
+    pssOptBadgeTxt: {
+        fontSize: 9.5,
+        fontWeight: '700',
+        color: SLATE,
+    },
+    pssOptSub: {
+        fontSize: 10,
+        color: SLATE,
+        marginTop: 1,
     },
     // Pay on Delivery (POD) Styles
     podBox: {

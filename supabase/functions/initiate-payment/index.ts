@@ -461,6 +461,31 @@ Deno.serve(async (req: Request) => {
 
             const downPayment = Number(clientPlan.downPayment || clientPlan.down_payment || Math.ceil(totalAmount / count));
             const remainingBalance = Math.max(0, totalAmount - downPayment);
+            const downPaymentMethod = String(clientPlan.down_payment_method || body.down_payment_method || 'Paystack');
+
+            if (downPaymentMethod === "Wallet") {
+                const { data: walletData, error: walletError } = await supabaseAdmin
+                    .from("wallets")
+                    .select("balance")
+                    .eq("user_id", user.id)
+                    .maybeSingle();
+
+                if (walletError || !walletData) throw new Error("Wallet not found for this user.");
+                if (walletData.balance < downPayment) {
+                    return new Response(JSON.stringify({
+                        error: "Insufficient Wallet Balance for Down Payment",
+                        details: `You need NGN ${downPayment.toLocaleString()}, but your balance is only NGN ${walletData.balance.toLocaleString()}.`
+                    }), {
+                        headers: { ...corsHeaders, "Content-Type": "application/json" },
+                        status: 400,
+                    });
+                }
+
+                await supabaseAdmin.rpc("decrement_wallet_balance", {
+                    p_user_id: user.id,
+                    p_amount: downPayment
+                });
+            }
 
             const { data: finalOrderId, error: conversionError } = await supabaseAdmin.rpc("create_order_from_session", {
                 p_session_id: session.id,
@@ -484,8 +509,8 @@ Deno.serve(async (req: Request) => {
                     amount: downPayment,
                     due_date: now.toISOString(),
                     label: 'Due Today (Down Payment)',
-                    status: 'paid',
-                    paid_at: now.toISOString()
+                    status: downPaymentMethod === 'pod' ? 'pending_pod' : 'paid',
+                    paid_at: downPaymentMethod === 'pod' ? null : now.toISOString()
                 });
                 const subsequentCount = Math.max(1, count - 1);
                 const recurringAmt = Math.floor(remainingBalance / subsequentCount);
@@ -514,7 +539,8 @@ Deno.serve(async (req: Request) => {
                 pss_surcharge: pssSurcharge,
                 down_payment: downPayment,
                 remaining_balance: remainingBalance,
-                down_payment_paid: true,
+                down_payment_method: downPaymentMethod,
+                down_payment_paid: downPaymentMethod !== 'pod',
                 down_payment_date: now.toISOString(),
                 schedule
             };
@@ -523,11 +549,11 @@ Deno.serve(async (req: Request) => {
                 await supabaseAdmin
                     .from("orders")
                     .update({
-                        payment_status: "installment_active",
+                        payment_status: downPaymentMethod === 'pod' ? 'installment_pending_pod' : 'installment_active',
                         status: "processing",
                         delivery_method: delivery_method || "standard",
                         shipping_snapshot: finalShippingSnapshot,
-                        order_notes: `${order_notes || ''} [Pay Small Small: ${durationMonths} Mo - ${frequency} (${count} splits)]`,
+                        order_notes: `${order_notes || ''} [Pay Small Small: ${durationMonths} Mo - ${frequency} (${count} splits) | Down Payment via ${downPaymentMethod}]`,
                         metadata: fullPlanData
                     })
                     .eq("id", finalOrderId);
@@ -548,7 +574,77 @@ Deno.serve(async (req: Request) => {
                 }
             }
 
-            checkoutUrl = "success";
+            if (downPaymentMethod === "Paystack") {
+                const paystackSecret = Deno.env.get("PAYSTACK_SECRET_KEY");
+                if (paystackSecret) {
+                    try {
+                        const response = await fetch("https://api.paystack.co/transaction/initialize", {
+                            method: "POST",
+                            headers: {
+                                Authorization: `Bearer ${paystackSecret}`,
+                                "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify({
+                                email: user.email,
+                                amount: Math.round(downPayment * 100),
+                                reference: paymentRef,
+                                metadata: { session_id: session.id, user_id: user.id, is_pss: true, order_id: finalOrderId, down_payment: downPayment },
+                            }),
+                        });
+                        const result = await response.json();
+                        if (result.status && result.data?.authorization_url) {
+                            checkoutUrl = result.data.authorization_url;
+                        } else {
+                            checkoutUrl = "success";
+                        }
+                    } catch (_) {
+                        checkoutUrl = "success";
+                    }
+                } else {
+                    checkoutUrl = "success";
+                }
+            } else if (downPaymentMethod === "Flutterwave") {
+                const flwSecret = Deno.env.get("FLUTTERWAVE_SECRET_KEY");
+                if (flwSecret) {
+                    try {
+                        const response = await fetch("https://api.flutterwave.com/v3/payments", {
+                            method: "POST",
+                            headers: {
+                                Authorization: `Bearer ${flwSecret}`,
+                                "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify({
+                                tx_ref: paymentRef,
+                                amount: downPayment,
+                                currency: "NGN",
+                                redirect_url: "https://abumafhal.com/payment/verify",
+                                customer: {
+                                    email: user.email,
+                                    name: user.user_metadata?.full_name || "Customer",
+                                },
+                                meta: { session_id: session.id, order_id: finalOrderId, is_pss: true },
+                                customizations: {
+                                    title: "Abu Mafhal Pay Small Small",
+                                    description: `Initial Down Payment (Order: ${paymentRef})`,
+                                    logo: "https://abumafhal.com/logo.png",
+                                },
+                            }),
+                        });
+                        const result = await response.json();
+                        if (result.status === "success" && result.data?.link) {
+                            checkoutUrl = result.data.link;
+                        } else {
+                            checkoutUrl = "success";
+                        }
+                    } catch (_) {
+                        checkoutUrl = "success";
+                    }
+                } else {
+                    checkoutUrl = "success";
+                }
+            } else {
+                checkoutUrl = "success";
+            }
         }
         else if (payment_method === "Coinbase") {
             const coinbaseSecret = Deno.env.get("COINBASE_API_KEY");
