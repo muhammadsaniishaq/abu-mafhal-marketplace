@@ -419,6 +419,117 @@ Deno.serve(async (req: Request) => {
 
             checkoutUrl = "success";
         }
+        else if (payment_method === "pod" || payment_method === "Pay on Delivery") {
+            // Finalize order immediately for Pay on Delivery
+            const { data: finalOrderId, error: conversionError } = await supabaseAdmin.rpc("create_order_from_session", {
+                p_session_id: session.id,
+                p_provider: "pod",
+                p_provider_ref: paymentRef
+            });
+
+            if (conversionError) {
+                console.error("Session to Order Conversion Error (POD):", conversionError);
+                throw conversionError;
+            }
+
+            if (finalOrderId) {
+                await supabaseAdmin
+                    .from("orders")
+                    .update({
+                        payment_status: "pending_pod",
+                        status: "processing",
+                        delivery_method: delivery_method || "standard",
+                        shipping_snapshot: finalShippingSnapshot,
+                        order_notes: `${order_notes || ''} [Payment: Pay on Delivery (Cash/POS)]`
+                    })
+                    .eq("id", finalOrderId);
+            }
+
+            checkoutUrl = "success";
+        }
+        else if (payment_method === "pay_small_small" || payment_method === "Pay Small Small") {
+            // Pay Small Small (BNPL / Flexible Installments)
+            const installmentPlan = body.installment_plan || {
+                plan_type: '3_months',
+                installments_count: 3,
+                down_payment_percentage: 33.33,
+            };
+
+            const downPayment = Math.round(totalAmount * ((installmentPlan.down_payment_percentage || 33.33) / 100));
+            const remainingBalance = Math.max(0, totalAmount - downPayment);
+
+            const { data: finalOrderId, error: conversionError } = await supabaseAdmin.rpc("create_order_from_session", {
+                p_session_id: session.id,
+                p_provider: "pay_small_small",
+                p_provider_ref: paymentRef
+            });
+
+            if (conversionError) {
+                console.error("Session to Order Conversion Error (BNPL):", conversionError);
+                throw conversionError;
+            }
+
+            const now = new Date();
+            const schedule = [];
+            const count = installmentPlan.installments_count || 3;
+            const installmentAmount = Math.round(remainingBalance / Math.max(1, count - 1));
+
+            for (let i = 1; i < count; i++) {
+                const dueDate = new Date(now);
+                if (installmentPlan.plan_type === '4_biweekly') {
+                    dueDate.setDate(dueDate.getDate() + (i * 14));
+                } else {
+                    dueDate.setMonth(dueDate.getMonth() + i);
+                }
+                schedule.push({
+                    installment_number: i + 1,
+                    amount: i === count - 1 ? (remainingBalance - (installmentAmount * (count - 2))) : installmentAmount,
+                    due_date: dueDate.toISOString(),
+                    status: 'pending'
+                });
+            }
+
+            const fullPlanData = {
+                ...installmentPlan,
+                total_amount: totalAmount,
+                down_payment: downPayment,
+                remaining_balance: remainingBalance,
+                down_payment_paid: true,
+                down_payment_date: now.toISOString(),
+                schedule
+            };
+
+            if (finalOrderId) {
+                await supabaseAdmin
+                    .from("orders")
+                    .update({
+                        payment_status: "installment_active",
+                        status: "processing",
+                        delivery_method: delivery_method || "standard",
+                        shipping_snapshot: finalShippingSnapshot,
+                        order_notes: `${order_notes || ''} [Pay Small Small: ${installmentPlan.plan_type || '3_months'}]`,
+                        metadata: fullPlanData
+                    })
+                    .eq("id", finalOrderId);
+
+                try {
+                    await supabaseAdmin.from("order_installments").insert({
+                        order_id: finalOrderId,
+                        user_id: user.id,
+                        total_amount: totalAmount,
+                        down_payment: downPayment,
+                        remaining_balance: remainingBalance,
+                        plan_type: installmentPlan.plan_type || '3_months',
+                        status: 'active',
+                        schedule
+                    });
+                } catch (_) {
+                    // metadata on orders is the primary reliable store
+                }
+            }
+
+            checkoutUrl = "success";
+        }
         else if (payment_method === "Coinbase") {
             const coinbaseSecret = Deno.env.get("COINBASE_API_KEY");
             if (!coinbaseSecret) throw new Error("Coinbase configuration missing (API Key)");

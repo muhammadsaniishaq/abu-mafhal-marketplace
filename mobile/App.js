@@ -51,6 +51,7 @@ import { TrackOrderPage } from './src/screens/TrackOrderPage';
 import { InvoicePage } from './src/screens/InvoicePage';
 import { CheckoutPage } from './src/screens/CheckoutPage';
 import { AddressPage } from './src/screens/AddressPage';
+import { PaySmallSmallPage } from './src/screens/PaySmallSmallPage';
 
 const Stack = createNativeStackNavigator();
 const navigationRef = createNavigationContainerRef();
@@ -77,6 +78,7 @@ const linking = {
             CheckoutPage: 'checkout',
             AddressPage: 'address',
             ProductComparison: 'compare',
+            PaySmallSmall: 'pay-small-small',
         },
     },
 };
@@ -613,6 +615,9 @@ export default function App() {
                             <Stack.Screen name="AddressPage" component={AddressPage} />
                             <Stack.Screen name="ProductComparison">
                                 {props => <ProductComparison {...props} addToCart={handleAddToCart} />}
+                            </Stack.Screen>
+                            <Stack.Screen name="PaySmallSmall">
+                                {props => <PaySmallSmallPage {...props} user={user} />}
                             </Stack.Screen>
                         </Stack.Navigator>
                     </NavigationContainer>

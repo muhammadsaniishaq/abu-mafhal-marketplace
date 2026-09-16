@@ -83,6 +83,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
 
     // Step 2: Payment Gateways
     const [paymentMethod, setPaymentMethod] = useState('Paystack');
+    const [pssPlan, setPssPlan]             = useState('3_months'); // '3_months' | '4_biweekly'
 
     // Step 3: Review & Options
     const [couponCode, setCouponCode]           = useState('');
@@ -123,7 +124,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                 name: 'Paystack',
                 sub: 'Cards, Bank Transfer & USSD',
                 logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSzFzmpCa0Tav9NttiYF10t9wftJPQ0XYPBkA&s',
-                badge: 'Instant & Secure',
+                badge: 'Cards & Transfer',
                 icon: 'card-outline'
             },
             {
@@ -132,7 +133,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                 name: 'Flutterwave',
                 sub: 'Cards & Mobile Money',
                 logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-W6MLvD_saE20EDSZzVPspKqcKxZ89rW8uw&s',
-                badge: 'Multi-Currency',
+                badge: 'Mobile Money',
                 icon: 'flash-outline'
             },
             {
@@ -143,6 +144,24 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                 badge: walletBalance > 0 ? 'Instant Debit' : 'Top-up needed',
                 icon: 'wallet-outline',
                 balance: walletBalance
+            },
+            {
+                id: 'pay_small_small',
+                enabled: settings?.payment_methods?.pay_small_small !== false,
+                name: 'Pay Small Small (BNPL)',
+                sub: 'Pay 25% or 33% today, split the rest',
+                badge: 'Flexible BNPL',
+                icon: 'calendar-outline',
+                accentColor: GOLD
+            },
+            {
+                id: 'pod',
+                enabled: settings?.payment_methods?.pod !== false,
+                name: 'Pay on Delivery (POD)',
+                sub: 'Cash or POS card upon arrival',
+                badge: 'Cash / POS',
+                icon: 'cash-outline',
+                accentColor: '#F97316'
             },
             {
                 id: 'Coinbase',
@@ -423,6 +442,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                     address_id: selectedAddressId,
                     shipping_override: addresses.find(a => a.id === selectedAddressId) || null,
                     payment_method: paymentMethod,
+                    installment_plan: paymentMethod === 'pay_small_small' ? pssPlan : null,
                     coupon_code: appliedCoupon?.code || null,
                     order_notes: orderNote,
                     delivery_method: selectedDeliveryMethod || 'standard',
@@ -437,10 +457,64 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
             const { order_id, checkout_url } = data;
             setCurrentOrderId(order_id);
 
-            // Instant success (Wallet)
+            // Instant success (Wallet, Pay on Delivery, or Pay Small Small)
             if (checkout_url === 'success') {
+                // If BNPL, cache initial plan locally for zero-latency in PaySmallSmallPage
+                if (paymentMethod === 'pay_small_small') {
+                    try {
+                        const count = pssPlan === '4_biweekly' ? 4 : 3;
+                        const down = Math.round(finalTotal / count);
+                        const now = new Date();
+                        const schedule = [];
+                        schedule.push({
+                            installment_number: 1,
+                            amount: down,
+                            due_date: now.toISOString(),
+                            status: 'paid',
+                            paid_at: now.toISOString()
+                        });
+                        for (let i = 2; i <= count; i++) {
+                            const daysToAdd = pssPlan === '4_biweekly' ? (i - 1) * 14 : (i - 1) * 30;
+                            const d = new Date(now.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+                            const instAmt = (i === count) ? (finalTotal - (down * (count - 1))) : down;
+                            schedule.push({
+                                installment_number: i,
+                                amount: instAmt,
+                                due_date: d.toISOString(),
+                                status: 'pending',
+                                paid_at: null
+                            });
+                        }
+                        const newPlanItem = {
+                            id: order_id,
+                            orderNumber: order_id.slice(0, 8).toUpperCase(),
+                            createdAt: now.toISOString(),
+                            totalAmount: finalTotal,
+                            paidAmount: down,
+                            remainingAmount: finalTotal - down,
+                            planType: pssPlan,
+                            installmentsCount: count,
+                            installmentsPaid: 1,
+                            isCompleted: false,
+                            schedule,
+                            items: cart
+                        };
+                        const pssCacheKey = `@abumafhal_pss_plans_${verifiedUser.id}`;
+                        const rawExisting = await AsyncStorage.getItem(pssCacheKey);
+                        const existingList = rawExisting ? JSON.parse(rawExisting) : [];
+                        await AsyncStorage.setItem(pssCacheKey, JSON.stringify([newPlanItem, ...existingList]));
+                    } catch (e) {
+                        console.log('Error caching PSS plan locally:', e);
+                    }
+                }
+
                 setOrderSuccess(true);
-                triggerOrderWhatsApp(order_id, finalTotal, 'Wallet');
+                const payMethodLabel = paymentMethod === 'pay_small_small'
+                    ? 'Pay Small Small (BNPL)'
+                    : paymentMethod === 'pod'
+                    ? 'Pay on Delivery (Cash/POS)'
+                    : 'Wallet';
+                triggerOrderWhatsApp(order_id, finalTotal, payMethodLabel);
                 await clearProgress();
                 if (onClearCart) onClearCart();
                 return;
@@ -519,7 +593,37 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                         </Text>
                     </View>
 
+                    {/* Custom Notice for Pay Small Small or POD */}
+                    {paymentMethod === 'pay_small_small' && (
+                        <View style={s.successPssNotice}>
+                            <Ionicons name="calendar-outline" size={16} color={GOLD} />
+                            <Text style={s.successPssNoticeTxt}>
+                                Down payment of {formatCurrency(pssPlan === '4_biweekly' ? Math.round(finalTotal / 4) : Math.round(finalTotal / 3))} recorded. You can manage remaining installments in Pay Small Small.
+                            </Text>
+                        </View>
+                    )}
+
+                    {paymentMethod === 'pod' && (
+                        <View style={s.successPodNotice}>
+                            <Ionicons name="cash-outline" size={16} color="#EA580C" />
+                            <Text style={s.successPodNoticeTxt}>
+                                Please have {formatCurrency(finalTotal)} in cash or POS card ready when our verified rider delivers your package.
+                            </Text>
+                        </View>
+                    )}
+
                     <View style={s.successActionGroup}>
+                        {paymentMethod === 'pay_small_small' && (
+                            <TouchableOpacity
+                                style={s.successPssBtn}
+                                onPress={() => navigation.navigate('PaySmallSmall')}
+                                activeOpacity={0.8}
+                            >
+                                <Ionicons name="calendar-outline" size={16} color={NAVY} />
+                                <Text style={s.successPssBtnTxt}>View BNPL Installment Ledger</Text>
+                            </TouchableOpacity>
+                        )}
+
                         <TouchableOpacity
                             style={s.successPrimaryBtn}
                             onPress={() => navigation.navigate('Main', { screen: 'orders' })}
@@ -837,7 +941,8 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                                     {/* Icon / Brand Logo */}
                                     <View style={[
                                         s.payIconBox,
-                                        isSelected && s.payIconBoxSelected
+                                        isSelected && s.payIconBoxSelected,
+                                        method.accentColor && isSelected && { borderColor: method.accentColor }
                                     ]}>
                                         {isWallet ? (
                                             <Ionicons name="wallet-outline" size={20} color={GOLD} />
@@ -848,7 +953,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                                                 resizeMode="contain"
                                             />
                                         ) : (
-                                            <Ionicons name={method.icon || 'card-outline'} size={20} color={NAVY} />
+                                            <Ionicons name={method.icon || 'card-outline'} size={20} color={method.accentColor || NAVY} />
                                         )}
                                     </View>
 
@@ -861,10 +966,12 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                                             {method.badge ? (
                                                 <View style={[
                                                     s.payBadge,
+                                                    method.accentColor ? { backgroundColor: method.accentColor === GOLD ? '#FEF9EC' : '#FFF7ED' } : null,
                                                     isWallet && isWalletInsufficient && s.payBadgeDanger
                                                 ]}>
                                                     <Text style={[
                                                         s.payBadgeTxt,
+                                                        method.accentColor ? { color: method.accentColor } : null,
                                                         isWallet && isWalletInsufficient && s.payBadgeDangerTxt
                                                     ]}>
                                                         {isWallet && isWalletInsufficient ? 'Insufficient' : method.badge}
@@ -876,12 +983,110 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                                     </View>
 
                                     {/* Radio */}
-                                    <View style={[s.radioCircle, isSelected && s.radioCircleSelected]}>
-                                        {isSelected && <View style={s.radioDot} />}
+                                    <View style={[s.radioCircle, isSelected && s.radioCircleSelected, isSelected && method.accentColor && { borderColor: method.accentColor }]}>
+                                        {isSelected && <View style={[s.radioDot, method.accentColor && { backgroundColor: method.accentColor }]} />}
                                     </View>
                                 </TouchableOpacity>
                             );
                         })}
+
+                        {/* Pay Small Small (BNPL) Interactive Plan Selector */}
+                        {paymentMethod === 'pay_small_small' && (
+                            <View style={s.pssBox}>
+                                <View style={s.pssHeader}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Ionicons name="calendar-outline" size={16} color={GOLD} />
+                                        <Text style={s.pssHeaderTitle}>Select Installment Schedule</Text>
+                                    </View>
+                                    <View style={s.pssZeroFeePill}>
+                                        <Text style={s.pssZeroFeeTxt}>0% INTEREST</Text>
+                                    </View>
+                                </View>
+
+                                <View style={s.pssPlanOptions}>
+                                    <TouchableOpacity
+                                        style={[s.pssPlanBtn, pssPlan === '3_months' && s.pssPlanBtnActive]}
+                                        onPress={() => setPssPlan('3_months')}
+                                        activeOpacity={0.8}
+                                    >
+                                        <View style={s.pssPlanBtnTop}>
+                                            <Text style={[s.pssPlanBtnTitle, pssPlan === '3_months' && s.pssPlanBtnTitleActive]}>
+                                                3 Months
+                                            </Text>
+                                            <Text style={[s.pssPlanBtnSub, pssPlan === '3_months' && s.pssPlanBtnSubActive]}>
+                                                3 Monthly Splits
+                                            </Text>
+                                        </View>
+                                        <Text style={[s.pssPlanDownVal, pssPlan === '3_months' && s.pssPlanDownValActive]}>
+                                            {formatCurrency(Math.round(finalTotal / 3))} /mo
+                                        </Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        style={[s.pssPlanBtn, pssPlan === '4_biweekly' && s.pssPlanBtnActive]}
+                                        onPress={() => setPssPlan('4_biweekly')}
+                                        activeOpacity={0.8}
+                                    >
+                                        <View style={s.pssPlanBtnTop}>
+                                            <Text style={[s.pssPlanBtnTitle, pssPlan === '4_biweekly' && s.pssPlanBtnTitleActive]}>
+                                                4 Bi-Weekly
+                                            </Text>
+                                            <Text style={[s.pssPlanBtnSub, pssPlan === '4_biweekly' && s.pssPlanBtnSubActive]}>
+                                                Every 14 Days
+                                            </Text>
+                                        </View>
+                                        <Text style={[s.pssPlanDownVal, pssPlan === '4_biweekly' && s.pssPlanDownValActive]}>
+                                            {formatCurrency(Math.round(finalTotal / 4))} /2wks
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+
+                                {/* Dynamic Installment Schedule Breakdown */}
+                                <View style={s.pssBreakdown}>
+                                    <View style={s.pssBreakdownRow}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                            <View style={[s.pssDot, { backgroundColor: EMERALD }]} />
+                                            <Text style={s.pssBreakdownLabel}>Due Today (Down Payment):</Text>
+                                        </View>
+                                        <Text style={[s.pssBreakdownVal, { color: EMERALD }]}>
+                                            {formatCurrency(pssPlan === '4_biweekly' ? Math.round(finalTotal / 4) : Math.round(finalTotal / 3))}
+                                        </Text>
+                                    </View>
+
+                                    <View style={s.pssBreakdownRow}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                            <View style={[s.pssDot, { backgroundColor: GOLD }]} />
+                                            <Text style={s.pssBreakdownLabel}>
+                                                {pssPlan === '4_biweekly' ? '3 Later Splits (Every 14 days):' : '2 Later Splits (Every 30 days):'}
+                                            </Text>
+                                        </View>
+                                        <Text style={s.pssBreakdownVal}>
+                                            {formatCurrency(pssPlan === '4_biweekly' ? Math.round(finalTotal / 4) : Math.round(finalTotal / 3))} each
+                                        </Text>
+                                    </View>
+                                </View>
+
+                                <View style={s.pssNoticeRow}>
+                                    <Ionicons name="sparkles" size={13} color={GOLD} />
+                                    <Text style={s.pssNoticeTxt}>
+                                        Order is dispatched immediately upon paying down payment today. Clear balance easily in your Profile.
+                                    </Text>
+                                </View>
+                            </View>
+                        )}
+
+                        {/* Pay on Delivery (POD) Verified Callout */}
+                        {paymentMethod === 'pod' && (
+                            <View style={s.podBox}>
+                                <View style={s.podHeader}>
+                                    <Ionicons name="shield-checkmark" size={16} color="#EA580C" />
+                                    <Text style={s.podTitle}>Pay on Delivery (Cash / POS)</Text>
+                                </View>
+                                <Text style={s.podDesc}>
+                                    Pay <Text style={{ fontWeight: '800' }}>{formatCurrency(finalTotal)}</Text> in cash or via POS bank debit card when your package is delivered to your doorstep. Please ensure your contact phone number is accessible for delivery verification.
+                                </Text>
+                            </View>
+                        )}
 
                         {/* Insufficient Wallet Balance Alert Callout */}
                         {isWalletInsufficient && (
@@ -974,12 +1179,30 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                                         <Text style={s.recapEditTxt}>Change</Text>
                                     </TouchableOpacity>
                                 </View>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3 }}>
-                                    <Text style={s.recapMainTxt}>{paymentMethod}</Text>
-                                    <View style={s.escrowSmallPill}>
-                                        <Ionicons name="checkmark-circle" size={10} color={EMERALD} />
-                                        <Text style={s.escrowSmallPillTxt}>Escrow</Text>
+                                <View style={{ marginTop: 3 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Text style={s.recapMainTxt}>
+                                            {paymentMethod === 'pay_small_small'
+                                                ? `Pay Small Small (${pssPlan === '4_biweekly' ? '4 Bi-Weekly' : '3 Months'})`
+                                                : paymentMethod === 'pod'
+                                                ? 'Pay on Delivery (POD)'
+                                                : paymentMethod}
+                                        </Text>
+                                        <View style={s.escrowSmallPill}>
+                                            <Ionicons name="checkmark-circle" size={10} color={EMERALD} />
+                                            <Text style={s.escrowSmallPillTxt}>Escrow</Text>
+                                        </View>
                                     </View>
+                                    {paymentMethod === 'pay_small_small' && (
+                                        <Text style={s.recapSubTxt}>
+                                            Due Today: {formatCurrency(pssPlan === '4_biweekly' ? Math.round(finalTotal / 4) : Math.round(finalTotal / 3))}
+                                        </Text>
+                                    )}
+                                    {paymentMethod === 'pod' && (
+                                        <Text style={s.recapSubTxt}>
+                                            Cash or POS card on arrival
+                                        </Text>
+                                    )}
                                 </View>
                             </View>
                         </View>
@@ -1048,43 +1271,52 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                                         autoCapitalize="characters"
                                         editable={!appliedCoupon}
                                     />
-                                    <TouchableOpacity
-                                        style={[
-                                            s.couponBtn,
-                                            appliedCoupon && s.couponBtnApplied,
-                                            (!couponCode.trim() && !appliedCoupon) && { opacity: 0.6 }
-                                        ]}
-                                        onPress={appliedCoupon ? handleRemoveCoupon : handleApplyCoupon}
-                                        disabled={validatingCoupon || (!couponCode.trim() && !appliedCoupon)}
-                                        activeOpacity={0.8}
-                                    >
-                                        {validatingCoupon ? (
-                                            <ActivityIndicator size="small" color={NAVY} />
-                                        ) : (
-                                            <Text style={[s.couponBtnTxt, appliedCoupon && { color: WHITE }]}>
-                                                {appliedCoupon ? 'Remove' : 'Apply'}
-                                            </Text>
-                                        )}
-                                    </TouchableOpacity>
+                                    {appliedCoupon ? (
+                                        <TouchableOpacity
+                                            style={s.couponRemoveBtn}
+                                            onPress={handleRemoveCoupon}
+                                            activeOpacity={0.7}
+                                        >
+                                            <Ionicons name="close" size={16} color={DANGER} />
+                                        </TouchableOpacity>
+                                    ) : (
+                                        <TouchableOpacity
+                                            style={[s.couponApplyBtn, (!couponCode.trim() || validatingCoupon) && s.couponApplyBtnDisabled]}
+                                            onPress={handleApplyCoupon}
+                                            disabled={!couponCode.trim() || validatingCoupon}
+                                            activeOpacity={0.8}
+                                        >
+                                            {validatingCoupon ? (
+                                                <ActivityIndicator size="small" color={WHITE} />
+                                            ) : (
+                                                <Text style={s.couponApplyBtnTxt}>Apply</Text>
+                                            )}
+                                        </TouchableOpacity>
+                                    )}
                                 </View>
+                                {appliedCoupon && (
+                                    <Text style={s.couponSuccessTxt}>
+                                        Applied: {appliedCoupon.code} (-{formatCurrency(discountAmount)})
+                                    </Text>
+                                )}
                             </View>
                         )}
 
-                        {/* Order Notes */}
-                        <View style={{ marginTop: 12 }}>
+                        {/* Order Notes (Optional) */}
+                        <View style={s.notesWrap}>
                             <Text style={s.smallLabel}>Delivery Instructions (Optional)</Text>
                             <TextInput
                                 style={s.notesInput}
-                                placeholder="E.g. Please leave package with security gate..."
+                                placeholder="E.g. Call before arrival, leave at reception..."
                                 placeholderTextColor="#94A3B8"
-                                multiline
-                                numberOfLines={2}
                                 value={orderNote}
                                 onChangeText={setOrderNote}
+                                multiline
+                                numberOfLines={2}
                             />
                         </View>
 
-                        {/* Terms & Conditions Agreement */}
+                        {/* Terms & Conditions Acceptance */}
                         <TouchableOpacity
                             style={s.termsRow}
                             onPress={() => setAgreedToTerms(!agreedToTerms)}
@@ -1094,29 +1326,30 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                                 {agreedToTerms && <Ionicons name="checkmark" size={13} color={WHITE} />}
                             </View>
                             <Text style={s.termsTxt}>
-                                I agree to the <Text style={{ color: GOLD, fontWeight: '800' }}>Abu Mafhal Terms of Service</Text> & Escrow Policy.
+                                I agree to Abu Mafhal's <Text style={s.termsLink}>Escrow Purchase Terms</Text> & Buyer Protection policy.
                             </Text>
                         </TouchableOpacity>
 
-                        {/* Detailed Payment Breakdown Summary (The Invoice) */}
+                        {/* Order Cost Breakdown Invoice Summary */}
                         <View style={s.invoiceCard}>
-                            <View style={s.invoiceHeader}>
-                                <Ionicons name="receipt-outline" size={16} color={GOLD} />
-                                <Text style={s.invoiceTitle}>Payment Breakdown</Text>
-                            </View>
+                            <Text style={s.invoiceTitle}>Payment Summary</Text>
 
                             {/* Subtotal */}
                             <View style={s.invoiceRow}>
-                                <Text style={s.invoiceLabel}>Items Subtotal ({cart.length} items)</Text>
+                                <Text style={s.invoiceLabel}>Items Subtotal ({cart.length})</Text>
                                 <Text style={s.invoiceValue}>{formatCurrency(initialTotal)}</Text>
                             </View>
 
-                            {/* Shipping */}
+                            {/* Shipping Fee */}
                             <View style={s.invoiceRow}>
                                 <View>
-                                    <Text style={s.invoiceLabel}>Shipping Fee</Text>
+                                    <Text style={s.invoiceLabel}>
+                                        Shipping ({deliveryMethods.find(m => m.code === selectedDeliveryMethod)?.name || 'Delivery'})
+                                    </Text>
                                     <Text style={s.invoiceSubLabel}>
-                                        {selectedDeliveryMethod === 'pickup' ? 'Store Pickup' : selectedDeliveryMethod === 'express' ? 'Express Priority' : 'Standard Delivery'}
+                                        {shippingCalculation?.vendorBreakdown?.length > 1
+                                            ? `${shippingCalculation.vendorBreakdown.length} vendor packages combined`
+                                            : 'Single store direct dispatch'}
                                         {shippingCalculation?.totalDistanceKm ? ` • ~${shippingCalculation.totalDistanceKm} km` : ''}
                                     </Text>
                                 </View>
@@ -1175,8 +1408,14 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
             {/* ── STICKY COMPACT BOTTOM ACTION BAR ──────────────────────────── */}
             <View style={s.footerBar}>
                 <View style={s.footerTotalBox}>
-                    <Text style={s.footerTotalLabel}>Total to Pay</Text>
-                    <Text style={s.footerTotalVal}>{formatCurrency(finalTotal)}</Text>
+                    <Text style={s.footerTotalLabel}>
+                        {currentStep === 3 && paymentMethod === 'pay_small_small' ? 'Due Today (Down Payment)' : 'Total to Pay'}
+                    </Text>
+                    <Text style={s.footerTotalVal}>
+                        {currentStep === 3 && paymentMethod === 'pay_small_small'
+                            ? formatCurrency(pssPlan === '4_biweekly' ? Math.round(finalTotal / 4) : Math.round(finalTotal / 3))
+                            : formatCurrency(finalTotal)}
+                    </Text>
                 </View>
 
                 <View style={s.footerBtnsRow}>
@@ -1206,7 +1445,13 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart }) => {
                         ) : (
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                 <Text style={s.btnNextTxt}>
-                                    {currentStep === 3 ? `Confirm & Pay` : `Continue`}
+                                    {currentStep === 3
+                                        ? paymentMethod === 'pay_small_small'
+                                            ? 'Confirm & Split Payment'
+                                            : paymentMethod === 'pod'
+                                            ? 'Confirm Order (POD)'
+                                            : 'Confirm & Pay'
+                                        : 'Continue'}
                                 </Text>
                                 <Ionicons
                                     name={currentStep === 3 ? "shield-checkmark" : "arrow-forward"}
@@ -2257,5 +2502,244 @@ const s = StyleSheet.create({
         fontSize: 12.5,
         fontWeight: '700',
         color: SLATE,
+    },
+    // Pay Small Small (BNPL) Styles
+    pssBox: {
+        backgroundColor: '#FFFDF9',
+        borderRadius: 12,
+        padding: 12,
+        marginTop: 4,
+        marginBottom: 10,
+        borderWidth: 1.5,
+        borderColor: GOLD,
+    },
+    pssHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 10,
+    },
+    pssHeaderTitle: {
+        fontSize: 12.5,
+        fontWeight: '800',
+        color: NAVY,
+    },
+    pssZeroFeePill: {
+        backgroundColor: '#FEF3C7',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+        borderWidth: 0.5,
+        borderColor: GOLD,
+    },
+    pssZeroFeeTxt: {
+        fontSize: 9,
+        fontWeight: '800',
+        color: '#B45309',
+    },
+    pssPlanOptions: {
+        flexDirection: 'row',
+        gap: 8,
+        marginBottom: 10,
+    },
+    pssPlanBtn: {
+        flex: 1,
+        backgroundColor: WHITE,
+        borderRadius: 10,
+        padding: 10,
+        borderWidth: 1,
+        borderColor: BORDER,
+    },
+    pssPlanBtnActive: {
+        borderColor: GOLD,
+        backgroundColor: '#FEF9EC',
+    },
+    pssPlanBtnTop: {
+        marginBottom: 4,
+    },
+    pssPlanBtnTitle: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: SLATE_DARK,
+    },
+    pssPlanBtnTitleActive: {
+        color: NAVY,
+    },
+    pssPlanBtnSub: {
+        fontSize: 10,
+        color: SLATE,
+        marginTop: 1,
+    },
+    pssPlanBtnSubActive: {
+        color: '#92400E',
+        fontWeight: '600',
+    },
+    pssPlanDownVal: {
+        fontSize: 13,
+        fontWeight: '900',
+        color: SLATE_DARK,
+        marginTop: 2,
+    },
+    pssPlanDownValActive: {
+        color: GOLD,
+    },
+    pssBreakdown: {
+        backgroundColor: WHITE,
+        borderRadius: 8,
+        padding: 9,
+        borderWidth: 1,
+        borderColor: '#F3E8CB',
+        gap: 6,
+    },
+    pssBreakdownRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    pssDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+    },
+    pssBreakdownLabel: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: SLATE_DARK,
+    },
+    pssBreakdownVal: {
+        fontSize: 11.5,
+        fontWeight: '800',
+        color: NAVY,
+    },
+    pssNoticeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        marginTop: 8,
+    },
+    pssNoticeTxt: {
+        fontSize: 10,
+        color: SLATE_DARK,
+        flex: 1,
+        lineHeight: 14,
+    },
+    // Pay on Delivery (POD) Styles
+    podBox: {
+        backgroundColor: '#FFF7ED',
+        borderRadius: 12,
+        padding: 12,
+        marginTop: 4,
+        marginBottom: 10,
+        borderWidth: 1.5,
+        borderColor: '#F97316',
+    },
+    podHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: 4,
+    },
+    podTitle: {
+        fontSize: 12.5,
+        fontWeight: '800',
+        color: '#9A3412',
+    },
+    podDesc: {
+        fontSize: 11,
+        color: '#7C2D12',
+        lineHeight: 16,
+    },
+    // Success Screen Notices
+    successPssNotice: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: '#FEF9EC',
+        borderRadius: 10,
+        padding: 10,
+        marginTop: 12,
+        borderWidth: 1,
+        borderColor: '#F3E8CB',
+        width: '100%',
+    },
+    successPssNoticeTxt: {
+        fontSize: 11,
+        color: '#92400E',
+        flex: 1,
+        lineHeight: 15,
+        fontWeight: '600',
+    },
+    successPodNotice: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: '#FFF7ED',
+        borderRadius: 10,
+        padding: 10,
+        marginTop: 12,
+        borderWidth: 1,
+        borderColor: '#FFEDD5',
+        width: '100%',
+    },
+    successPodNoticeTxt: {
+        fontSize: 11,
+        color: '#9A3412',
+        flex: 1,
+        lineHeight: 15,
+        fontWeight: '600',
+    },
+    successPssBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        backgroundColor: '#FEF3C7',
+        height: 44,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: GOLD,
+    },
+    successPssBtnTxt: {
+        fontSize: 12.5,
+        fontWeight: '800',
+        color: NAVY,
+    },
+    // Additional Form Component Helpers
+    notesWrap: {
+        marginTop: 10,
+    },
+    termsLink: {
+        color: GOLD,
+        fontWeight: '800',
+    },
+    couponApplyBtn: {
+        backgroundColor: NAVY,
+        paddingHorizontal: 14,
+        height: 40,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    couponApplyBtnDisabled: {
+        opacity: 0.6,
+    },
+    couponApplyBtnTxt: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: WHITE,
+    },
+    couponRemoveBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#FEE2E2',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    couponSuccessTxt: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: EMERALD,
+        marginTop: 4,
     },
 });

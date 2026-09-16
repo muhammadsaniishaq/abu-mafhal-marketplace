@@ -98,6 +98,7 @@ const ProfilePageInner = ({
     const [wallet, setWallet] = useState({ balance: 0, points: 0 });
     const [ordersCount, setOrdersCount] = useState(0);
     const [pendingOrders, setPendingOrders] = useState(0);
+    const [activeBnplCount, setActiveBnplCount] = useState(0);
     const [loading, setLoading] = useState(true);
     const [vendorApp, setVendorApp] = useState(null);
     const { settings } = useAppSettings();
@@ -284,6 +285,17 @@ const ProfilePageInner = ({
             const vData = vendorAppRes.status === 'fulfilled' ? vendorAppRes.value.data : null;
             if (vData) setVendorApp(vData);
 
+            // Fetch active Pay Small Small installments count
+            try {
+                const cachedPss = await AsyncStorage.getItem(`@abumafhal_pss_plans_${uid}`);
+                if (cachedPss) {
+                    const parsed = JSON.parse(cachedPss);
+                    if (Array.isArray(parsed)) {
+                        setActiveBnplCount(parsed.filter(p => !p.isCompleted).length);
+                    }
+                }
+            } catch (_) {}
+
         } catch (e) {
             console.log('Error loading profile data:', e);
         } finally {
@@ -397,6 +409,15 @@ const ProfilePageInner = ({
             label: 'Mafhal Pay & Wallet',
             extra: formatCurrency(wallet.balance),
             screen: 'wallet'
+        },
+        {
+            icon: 'calendar-outline',
+            iconColor: '#D9A73A',
+            iconBg: '#FEF9EE',
+            label: 'Pay Small Small (BNPL)',
+            badge: activeBnplCount > 0 ? `${activeBnplCount} Active` : '0% Interest',
+            badgeColor: '#D9A73A',
+            screen: 'PaySmallSmall'
         },
         {
             icon: 'gift-outline',

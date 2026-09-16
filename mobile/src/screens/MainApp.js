@@ -59,7 +59,7 @@ export const MainApp = ({ route, navigation, user, onLogout, cartLines, onUpdate
 
     const handleNavigate = (screen, params) => {
         console.log('[DEBUG-NAV] Navigating to:', screen);
-        if (['DriverDashboard', 'VendorDashboard', 'AdminDashboard', 'ProductDetails', 'ConversationsScreen', 'TrackOrder', 'Invoice', 'CheckoutPage', 'ProductComparison'].includes(screen)) {
+        if (['DriverDashboard', 'VendorDashboard', 'AdminDashboard', 'ProductDetails', 'ConversationsScreen', 'TrackOrder', 'Invoice', 'CheckoutPage', 'ProductComparison', 'PaySmallSmall'].includes(screen)) {
             navigation.navigate(screen, params);
         } else {
             setActiveTab(screen);
