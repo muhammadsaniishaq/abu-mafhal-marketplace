@@ -337,46 +337,63 @@ export class ShippingCalculationEngine {
             };
         }
 
-        const distanceKm = distanceResult?.distanceKm || 15;
-        const distanceSource = distanceResult?.source || 'estimated';
-
         // 2. Check Free Shipping Threshold
         const freeThreshold = Number(globalSettings.free_shipping_threshold) || 50000;
         const isFreeByThreshold = packageSubtotal >= freeThreshold && freeThreshold > 0;
         const isFree = allFreeShipping || isFreeByThreshold || globalSettings.enabled === false;
 
-        // 3. Resolve Applicable Zone Override (Hierarchy: LGA match > State match)
+        // 3. Resolve Customer & Vendor Locations (LGA & State)
         const customerState = (customerAddress?.state || '').toLowerCase().trim();
-        const customerLga = (customerAddress?.city || customerAddress?.lga || '').toLowerCase().trim();
+        const customerLga = (customerAddress?.lga || customerAddress?.city || '').toLowerCase().trim();
+        const vendorState = (vendor?.state || 'Yobe').toLowerCase().trim();
+        const vendorLga = (vendor?.lga || vendor?.city || 'Bade').toLowerCase().trim();
 
+        const isSameLga = Boolean(customerLga && vendorLga && customerLga === vendorLga);
+        const isSameState = Boolean(customerState && vendorState && customerState === vendorState);
+
+        let distanceKm = distanceResult?.distanceKm || (isSameLga ? 4.5 : 20);
+        let distanceSource = distanceResult?.source || (isSameLga ? 'intra_lga_local' : 'estimated');
+
+        // If customer and vendor are in the exact same Local Government, ensure localized distance
+        if (isSameLga && distanceSource !== 'road_osrm' && distanceSource !== 'exact_gps') {
+            distanceKm = 4.5; // Average intra-LGA transit distance
+            distanceSource = 'intra_lga_local';
+        }
+
+        // 4. Resolve Applicable Zone Override (Hierarchy: Exact LGA match > State-wide match)
         let matchedZone = null;
+        let matchedLgaZone = null;
+        let matchedStateZone = null;
+
         if (zoneOverrides && zoneOverrides.length > 0) {
-            // First search for exact LGA match
-            matchedZone = zoneOverrides.find(z => 
+            // Priority 1: Exact LGA Match in Admin Shipping Zones
+            matchedLgaZone = zoneOverrides.find(z => 
                 z.is_active !== false &&
-                z.state?.toLowerCase().trim() === customerState &&
+                (!customerState || !z.state || z.state.toLowerCase().trim() === customerState) &&
                 z.lga && z.lga.toLowerCase().trim() === customerLga
             );
 
-            // If no LGA match, search for State wide match
-            if (!matchedZone) {
-                matchedZone = zoneOverrides.find(z => 
-                    z.is_active !== false &&
-                    z.state?.toLowerCase().trim() === customerState &&
-                    !z.lga
-                );
-            }
+            // Priority 2: State-wide Match in Admin Shipping Zones
+            matchedStateZone = zoneOverrides.find(z => 
+                z.is_active !== false &&
+                z.state && z.state.toLowerCase().trim() === customerState &&
+                !z.lga
+            );
+
+            matchedZone = matchedLgaZone || matchedStateZone;
         }
 
-        // 4. Resolve Pricing Parameters across Hierarchy:
-        // Priority: Vendor Custom > Zone Override > Delivery Method > Global Setting
+        // 5. Resolve Pricing Parameters across Hierarchy:
+        // Priority: Vendor Custom Override > Admin LGA Zone > Admin State Zone > Delivery Method > Global Setting
         let baseFee = Number(globalSettings.base_fee ?? 1000);
         let pricePerKm = Number(globalSettings.price_per_km ?? 75);
         let minFee = Number(globalSettings.min_fee ?? 1000);
         let maxFee = Number(globalSettings.max_fee ?? 25000);
         let remoteAreaFee = 0;
+        let isFixedFee = false;
+        let fixedFeeAmount = 0;
 
-        // Apply Delivery Method baseline if available
+        // Apply Delivery Method baseline
         if (deliveryMethod) {
             if (deliveryMethod.base_fee !== undefined) baseFee = Number(deliveryMethod.base_fee);
             if (deliveryMethod.price_per_km !== undefined) pricePerKm = Number(deliveryMethod.price_per_km);
@@ -384,17 +401,22 @@ export class ShippingCalculationEngine {
             if (deliveryMethod.max_fee !== undefined) maxFee = Number(deliveryMethod.max_fee);
         }
 
-        // Apply Zone Overrides if present
+        // Apply Admin Zone Override (LGA or State)
         if (matchedZone) {
             if (matchedZone.base_fee !== null && matchedZone.base_fee !== undefined) baseFee = Number(matchedZone.base_fee);
             if (matchedZone.price_per_km !== null && matchedZone.price_per_km !== undefined) pricePerKm = Number(matchedZone.price_per_km);
             if (matchedZone.min_fee !== null && matchedZone.min_fee !== undefined) minFee = Number(matchedZone.min_fee);
             if (matchedZone.max_fee !== null && matchedZone.max_fee !== undefined) maxFee = Number(matchedZone.max_fee);
             if (matchedZone.remote_area_fee) remoteAreaFee = Number(matchedZone.remote_area_fee);
+            if (matchedZone.fixed_fee !== null && matchedZone.fixed_fee !== undefined && Number(matchedZone.fixed_fee) > 0) {
+                isFixedFee = true;
+                fixedFeeAmount = Number(matchedZone.fixed_fee);
+            }
         }
 
         // Apply Vendor Custom Overrides if enabled on store
-        if (vendor?.custom_shipping_enabled) {
+        const hasVendorOverride = Boolean(vendor?.custom_shipping_enabled);
+        if (hasVendorOverride) {
             if (vendor.custom_base_fee !== null && vendor.custom_base_fee !== undefined) baseFee = Number(vendor.custom_base_fee);
             if (vendor.custom_price_per_km !== null && vendor.custom_price_per_km !== undefined) pricePerKm = Number(vendor.custom_price_per_km);
             if (vendor.custom_min_fee !== null && vendor.custom_min_fee !== undefined) minFee = Number(vendor.custom_min_fee);
@@ -402,13 +424,22 @@ export class ShippingCalculationEngine {
         }
 
         // Handling Fees
-        const handlingFee = Number(globalSettings.handling_fee || 0) + Number(globalSettings.vendor_handling_fee || 0);
+        const handlingFee = (matchedZone?.handling_fee !== undefined && matchedZone?.handling_fee !== null)
+            ? Number(matchedZone.handling_fee)
+            : (Number(globalSettings.handling_fee || 0) + Number(globalSettings.vendor_handling_fee || 0));
 
-        // 5. Compute Raw & Final Formula
-        const distanceFee = Math.round(distanceKm * pricePerKm);
-        const rawFee = baseFee + distanceFee + handlingFee + remoteAreaFee;
-        const clampedFee = Math.max(minFee, Math.min(maxFee, rawFee));
+        // 6. Compute Raw & Final Formula
+        let rawFee = 0;
+        if (isFixedFee) {
+            rawFee = fixedFeeAmount + handlingFee;
+        } else {
+            const distanceFee = Math.round(distanceKm * pricePerKm);
+            rawFee = baseFee + distanceFee + handlingFee + remoteAreaFee;
+        }
 
+        // Clamping (do not clamp fixed fees below their explicit amount)
+        const effectiveMinFee = isFixedFee ? Math.min(minFee, rawFee) : minFee;
+        const clampedFee = Math.max(effectiveMinFee, Math.min(maxFee, rawFee));
         let finalFee = clampedFee;
         let discount = 0;
 
@@ -417,24 +448,45 @@ export class ShippingCalculationEngine {
             finalFee = 0;
         }
 
+        // Generate descriptive rule tag
+        let ruleSummary = 'Standard Distance Routing';
+        if (hasVendorOverride) {
+            ruleSummary = 'Vendor Custom Rate';
+        } else if (matchedLgaZone) {
+            ruleSummary = `Admin LGA Zone: ${matchedLgaZone.name || customerLga}`;
+        } else if (matchedStateZone) {
+            ruleSummary = `Admin State Zone: ${matchedStateZone.name || customerState}`;
+        } else if (isSameLga) {
+            ruleSummary = 'Intra-LGA Local Delivery';
+        }
+
         return {
             vendorId: vendor?.id || 'admin_store',
             vendorName: vendor?.name || vendor?.store_name || 'Marketplace Store',
+            vendorLga: vendorLga || null,
+            vendorState: vendorState || null,
+            customerLga: customerLga || null,
+            customerState: customerState || null,
+            isSameLga,
+            isSameState,
             deliveryMethod: deliveryMethod?.id || 'standard',
             distanceKm,
-            durationMinutes: distanceResult?.durationMinutes || 30,
+            durationMinutes: distanceResult?.durationMinutes || (isSameLga ? 20 : 45),
             distanceSource,
             baseFee,
             perKmRate: pricePerKm,
-            distanceFee,
+            distanceFee: Math.round(distanceKm * pricePerKm),
             handlingFee,
             remoteAreaFee,
             deliveryMethodFee: 0,
             discount,
             finalFee: Math.round(finalFee),
             isFreeShipping: isFree,
-            zoneApplied: matchedZone ? matchedZone.name : null,
-            vendorOverrideApplied: !!vendor?.custom_shipping_enabled,
+            zoneApplied: matchedZone ? (matchedZone.name || matchedZone.lga || matchedZone.state) : null,
+            zoneOverrideApplied: Boolean(matchedZone),
+            isLgaZoneApplied: Boolean(matchedLgaZone),
+            vendorOverrideApplied: hasVendorOverride,
+            ruleSummary,
             calculatedAt: new Date().toISOString()
         };
     }
@@ -447,22 +499,54 @@ export class ShippingCalculationEngine {
         cartItems = [],
         customerAddress,
         deliveryMethodId = 'standard',
+        deliveryMethodCode = null,
         globalSettings = DEFAULT_SHIPPING_SETTINGS,
-        shippingMethods = DEFAULT_SHIPPING_METHODS,
-        shippingZones = [],
+        shippingMethods = null,
+        shippingZones = null,
+        adminSettings = null,
         storesCache = {}
     }) {
         if (!cartItems.length) {
             return {
                 totalShippingFee: 0,
+                totalDistanceKm: 0,
                 vendorBreakdowns: [],
+                vendorGroups: [],
                 isFreeShipping: false,
-                deliveryMethod: null
+                deliveryMethod: null,
+                calculatedAt: new Date().toISOString()
             };
         }
 
-        const selectedMethod = shippingMethods.find(m => m.id === deliveryMethodId && m.is_active !== false) ||
-                               shippingMethods.find(m => m.id === 'standard') ||
+        // Normalise adminSettings parameter
+        if (adminSettings && !globalSettings.base_fee && adminSettings.base_fee) {
+            globalSettings = { ...globalSettings, ...adminSettings };
+        }
+
+        // Auto-fetch methods & zones from Supabase if not passed
+        const targetMethodId = deliveryMethodCode || deliveryMethodId || 'standard';
+        let methods = shippingMethods;
+        let zones = shippingZones;
+
+        try {
+            const supabase = await getSupabase();
+            if (supabase) {
+                if (!methods || methods.length === 0) {
+                    const { data: mData } = await supabase.from('shipping_methods').select('*').eq('is_active', true);
+                    if (mData && mData.length > 0) methods = mData;
+                }
+                if (!zones || zones.length === 0) {
+                    const { data: zData } = await supabase.from('shipping_zones').select('*').eq('is_active', true);
+                    if (zData && zData.length > 0) zones = zData;
+                }
+            }
+        } catch (_) {}
+
+        if (!methods || methods.length === 0) methods = DEFAULT_SHIPPING_METHODS;
+        if (!zones) zones = [];
+
+        const selectedMethod = methods.find(m => (m.id === targetMethodId || m.code === targetMethodId) && m.is_active !== false) ||
+                               methods.find(m => m.id === 'standard' || m.code === 'standard') ||
                                DEFAULT_SHIPPING_METHODS[0];
 
         // 1. Group items by vendor_id
@@ -486,13 +570,46 @@ export class ShippingCalculationEngine {
             }
         });
 
-        // 2. Compute each vendor package in parallel
+        // 2. Fetch live store details for merchants if not cached
         const vendorIds = Object.keys(vendorGroups);
+        try {
+            const supabase = await getSupabase();
+            if (supabase && vendorIds.length > 0) {
+                const missingIds = vendorIds.filter(id => !storesCache[id] && id !== 'official_store');
+                if (missingIds.length > 0) {
+                    const { data: storesList } = await supabase
+                        .from('stores')
+                        .select('*')
+                        .in('id', missingIds);
+                    if (storesList) {
+                        storesList.forEach(s => {
+                            storesCache[s.id] = s;
+                            if (s.user_id) storesCache[s.user_id] = s;
+                        });
+                    }
+                    const stillMissing = missingIds.filter(id => !storesCache[id]);
+                    if (stillMissing.length > 0) {
+                        const { data: storesByUser } = await supabase
+                            .from('stores')
+                            .select('*')
+                            .in('user_id', stillMissing);
+                        if (storesByUser) {
+                            storesByUser.forEach(s => {
+                                storesCache[s.user_id] = s;
+                                storesCache[s.id] = s;
+                            });
+                        }
+                    }
+                }
+            }
+        } catch (_) {}
+
+        // 3. Compute each vendor package in parallel
         const packagePromises = vendorIds.map(async (vId) => {
             const group = vendorGroups[vId];
-            const vendorStore = storesCache[vId] || { id: vId, name: 'Abu Mafhal Official Store', state: 'Yobe', city: 'Bade' };
+            const vendorStore = storesCache[vId] || { id: vId, name: 'Abu Mafhal Official Store', state: 'Yobe', city: 'Bade', lga: 'Bade' };
 
-            // Determine distance between this vendor and customer
+            // Determine distance between this vendor's store LGA/GPS and customer's LGA/GPS
             const distanceRes = await ShippingDistanceService.getDrivingDistance(vendorStore, customerAddress);
 
             return this.calculateVendorPackageFee({
@@ -502,23 +619,57 @@ export class ShippingCalculationEngine {
                 packageSubtotal: group.subtotal,
                 allFreeShipping: group.allFree,
                 globalSettings,
-                zoneOverrides: shippingZones,
+                zoneOverrides: zones,
                 distanceResult: distanceRes
             });
         });
 
         const breakdowns = await Promise.all(packagePromises);
 
-        // 3. Aggregate totals
+        // 4. Aggregate totals
         const totalShippingFee = breakdowns.reduce((sum, b) => sum + b.finalFee, 0);
-        const isFreeShipping = breakdowns.every(b => b.isFreeShipping);
+        const totalDistanceKm = breakdowns.reduce((sum, b) => Math.max(sum, b.distanceKm), 0);
+        const isFreeShipping = breakdowns.length > 0 && breakdowns.every(b => b.isFreeShipping);
+
+        // Format vendor groups for easy frontend display
+        const formattedGroups = breakdowns.map((b, idx) => ({
+            vendorId: b.vendorId,
+            vendorName: b.vendorName,
+            vendorLga: b.vendorLga,
+            customerLga: b.customerLga,
+            isSameLga: b.isSameLga,
+            distanceKm: b.distanceKm,
+            durationMinutes: b.durationMinutes,
+            distanceSource: b.distanceSource,
+            finalShippingFee: b.finalFee,
+            isFreeShipping: b.isFreeShipping,
+            ruleSummary: b.ruleSummary,
+            itemCount: vendorGroups[b.vendorId]?.items?.length || 1
+        }));
 
         return {
             totalShippingFee,
+            totalDistanceKm,
             vendorBreakdowns: breakdowns,
+            vendorGroups: formattedGroups,
             isFreeShipping,
             deliveryMethod: selectedMethod,
-            calculatedAt: new Date().toISOString()
+            calculatedAt: new Date().toISOString(),
+            snapshot: {
+                totalShippingFee,
+                totalDistanceKm,
+                deliveryMethod: selectedMethod?.id || selectedMethod?.code || 'standard',
+                vendorPackages: formattedGroups,
+                destination: {
+                    address: customerAddress?.address,
+                    city: customerAddress?.city,
+                    lga: customerAddress?.city || customerAddress?.lga,
+                    state: customerAddress?.state,
+                    latitude: customerAddress?.latitude,
+                    longitude: customerAddress?.longitude
+                },
+                calculatedAt: new Date().toISOString()
+            }
         };
     }
 }

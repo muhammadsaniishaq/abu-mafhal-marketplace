@@ -88,10 +88,12 @@ Deno.serve(async (req: Request) => {
                 throw new Error("Shipping address not found in database for this user.");
             }
             address = addressData;
-            shippingAddressString = `${address.address}, ${address.city}, ${address.state}`;
+            const lgaSuffix = address.lga ? ` (LGA: ${address.lga})` : "";
+            shippingAddressString = `${address.address}, ${address.city || ""}${lgaSuffix}, ${address.state}`;
         } else if (shipping_override) {
             address = shipping_override;
-            shippingAddressString = `${address.address}, ${address.city}, ${address.state}`;
+            const lgaSuffix = address.lga ? ` (LGA: ${address.lga})` : "";
+            shippingAddressString = `${address.address}, ${address.city || ""}${lgaSuffix}, ${address.state}`;
         } else {
             throw new Error("Shipping address is required");
         }
@@ -159,13 +161,20 @@ Deno.serve(async (req: Request) => {
         } else {
             // Check if there is an explicit zone override
             const destState = (address?.state || "").trim().toLowerCase();
-            const destLga = (address?.city || address?.lga || "").trim().toLowerCase();
+            const destLga = (address?.lga || address?.city || "").trim().toLowerCase();
             
-            const matchedZone = activeZones.find((z: any) => {
-                if (destLga && z.lga && z.lga.toLowerCase() === destLga) return true;
-                if (!z.lga && z.state && z.state.toLowerCase() === destState) return true;
-                return false;
+            // Priority 1: Exact Local Government match
+            let matchedZone = activeZones.find((z: any) => {
+                return z.lga && z.lga.toLowerCase().trim() === destLga &&
+                       (!destState || !z.state || z.state.toLowerCase().trim() === destState);
             });
+
+            // Priority 2: State-wide match (no specific LGA)
+            if (!matchedZone) {
+                matchedZone = activeZones.find((z: any) => {
+                    return !z.lga && z.state && z.state.toLowerCase().trim() === destState;
+                });
+            }
 
             if (matchedZone && matchedZone.fixed_fee !== null && matchedZone.fixed_fee !== undefined) {
                 shippingFee = Number(matchedZone.fixed_fee);
