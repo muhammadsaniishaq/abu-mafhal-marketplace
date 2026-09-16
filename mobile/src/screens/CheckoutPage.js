@@ -206,6 +206,21 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
     const [agreedToTerms, setAgreedToTerms]     = useState(false);
     const [showItemsAccordion, setShowItemsAccordion] = useState(true);
 
+    // Vendor store location resolution cache state
+    const [storesLoaded, setStoresLoaded] = useState(0);
+
+    // Fetch and cache real vendor stores whenever cart updates
+    useEffect(() => {
+        if (Array.isArray(cart) && cart.length > 0) {
+            const vendorIds = [...new Set(cart.map(i => i.vendor_id || i.vendorId).filter(Boolean))];
+            if (vendorIds.length > 0) {
+                ShippingCalculationEngine.fetchAndCacheStores(vendorIds).then(() => {
+                    setStoresLoaded(prev => prev + 1);
+                });
+            }
+        }
+    }, [cart]);
+
     // UI & Action States
     const [isProcessing, setIsProcessing]         = useState(false);
     const [orderSuccess, setOrderSuccess]         = useState(false);
@@ -336,9 +351,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             customerAddress: selectedAddr,
             deliveryMethodCode: selectedDeliveryMethod || 'standard',
             adminSettings: settings?.shipping_settings || settings,
-            shippingMethods: deliveryMethods
+            shippingMethods: deliveryMethods,
+            storesCache: ShippingCalculationEngine.IN_MEMORY_STORES_CACHE
         });
-    }, [selectedAddrObj, selectedDeliveryMethod, cart, settings, deliveryMethods]);
+    }, [selectedAddrObj, selectedDeliveryMethod, cart, settings, deliveryMethods, storesLoaded]);
 
     // Dynamic Shipping Fee (Instantly computed with zero delay)
     const shippingFee = useMemo(() => {
@@ -1076,14 +1092,14 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     <View>
                         {/* Section Header */}
                         <View style={s.sectionHeader}>
-                            <View>
+                            <View style={{ flex: 1, marginRight: 8 }}>
                                 <Text style={s.sectionTitle}>Delivery Address</Text>
-                                <Text style={s.sectionSub}>Choose your destination for accurate live calculation</Text>
+                                <Text style={s.sectionSub} numberOfLines={1}>Choose your destination for accurate live calculation</Text>
                             </View>
                             <TouchableOpacity 
                                 onPress={() => navigation.navigate('AddressPage')}
                                 hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                                style={s.manageBtnPill}
+                                style={[s.manageBtnPill, { flexShrink: 0 }]}
                                 activeOpacity={0.7}
                             >
                                 <Ionicons name="add-circle-outline" size={14} color={GOLD} />
@@ -1113,7 +1129,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                     onPress={() => navigation.navigate('AddressPage')}
                                     activeOpacity={0.7}
                                 >
-                                    <Ionicons name="add" size={15} color={GOLD} />
+                                    <View style={s.addPlusCircle}>
+                                        <Ionicons name="add" size={14} color="#B45309" />
+                                    </View>
                                     <Text style={s.addNewAddressTxt}>Add Another Delivery Address</Text>
                                 </TouchableOpacity>
                             </View>
@@ -2325,6 +2343,7 @@ const s = StyleSheet.create({
         borderRadius: 6,
         borderWidth: 1,
         borderColor: '#FDE68A',
+        flexShrink: 0,
     },
     addNewAddressRow: {
         flexDirection: 'row',
@@ -2339,6 +2358,16 @@ const s = StyleSheet.create({
         borderRadius: 12,
         backgroundColor: '#FFFDF7',
     },
+    addPlusCircle: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        backgroundColor: '#FEF3C7',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+        flexShrink: 0,
+    },
     addNewAddressTxt: {
         fontSize: 11.5,
         fontWeight: '800',
@@ -2352,6 +2381,8 @@ const s = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 2,
+        overflow: 'hidden',
+        flexShrink: 0,
     },
     shippingInfoCard: {
         backgroundColor: '#0E1A2E',

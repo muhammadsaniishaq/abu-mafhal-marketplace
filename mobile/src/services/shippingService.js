@@ -415,9 +415,62 @@ export class ShippingDistanceService {
 // 2. CENTRALIZED SHIPPING CALCULATION ENGINE
 // ─────────────────────────────────────────────────────────────────────────────
 export class ShippingCalculationEngine {
+    static IN_MEMORY_STORES_CACHE = {};
+
     /**
-     * Resolves structured Local Government shipping tier & baseline rates across Nigeria
-     * Primary fulfillment center is Bade / Gashua, Yobe State.
+     * Pre-fetches and caches vendor store profiles in memory by both id and user_id.
+     * Ensures instant zero-lag shipping calculation with real vendor origin locations.
+     */
+    static async fetchAndCacheStores(vendorIds = []) {
+        if (!Array.isArray(vendorIds) || vendorIds.length === 0) return this.IN_MEMORY_STORES_CACHE;
+        const cleanIds = vendorIds.filter(id => id && id !== 'official_store' && id !== 'admin_store');
+        if (cleanIds.length === 0) return this.IN_MEMORY_STORES_CACHE;
+
+        const missing = cleanIds.filter(id => !this.IN_MEMORY_STORES_CACHE[id]);
+        if (missing.length === 0) return this.IN_MEMORY_STORES_CACHE;
+
+        try {
+            const supabase = await getSupabase();
+            if (!supabase) return this.IN_MEMORY_STORES_CACHE;
+
+            // Fetch by store id first
+            const { data: storesList } = await supabase
+                .from('stores')
+                .select('id, user_id, name, store_name, state, lga, city, latitude, longitude, custom_shipping_enabled, custom_base_fee, custom_price_per_km, custom_min_fee, custom_max_fee')
+                .in('id', missing);
+
+            if (storesList && storesList.length > 0) {
+                storesList.forEach(s => {
+                    if (s.id) this.IN_MEMORY_STORES_CACHE[s.id] = s;
+                    if (s.user_id) this.IN_MEMORY_STORES_CACHE[s.user_id] = s;
+                });
+            }
+
+            // Also check for product.vendor_id which maps to store.user_id
+            const stillMissing = missing.filter(id => !this.IN_MEMORY_STORES_CACHE[id]);
+            if (stillMissing.length > 0) {
+                const { data: storesByUser } = await supabase
+                    .from('stores')
+                    .select('id, user_id, name, store_name, state, lga, city, latitude, longitude, custom_shipping_enabled, custom_base_fee, custom_price_per_km, custom_min_fee, custom_max_fee')
+                    .in('user_id', stillMissing);
+
+                if (storesByUser && storesByUser.length > 0) {
+                    storesByUser.forEach(s => {
+                        if (s.id) this.IN_MEMORY_STORES_CACHE[s.id] = s;
+                        if (s.user_id) this.IN_MEMORY_STORES_CACHE[s.user_id] = s;
+                    });
+                }
+            }
+        } catch (e) {
+            console.log('fetchAndCacheStores notice:', e?.message);
+        }
+
+        return this.IN_MEMORY_STORES_CACHE;
+    }
+
+    /**
+     * Resolves structured Local Government shipping tier & baseline rates across Nigeria.
+     * Evaluates actual vendor origin location (state, lga) against customer destination.
      */
     static resolveLgaTier(customerState = '', customerLga = '', vendorState = 'Yobe', vendorLga = 'Bade') {
         const cState = String(customerState || '').toLowerCase().trim();
@@ -426,13 +479,22 @@ export class ShippingCalculationEngine {
         const vLga   = String(vendorLga || 'Bade').toLowerCase().trim();
 
         const isBadeGashua = (l) => l === 'bade' || l === 'gashua' || l.includes('bade') || l.includes('gashua');
-        const isSameLga = (cLga && vLga && cLga === vLga) || (isBadeGashua(cLga) && isBadeGashua(vLga));
 
-        // Tier 1: Intra-LGA (Bade / Gashua Local)
-        if (isSameLga || (cState === 'yobe' && isBadeGashua(cLga))) {
+        // Check if customer and vendor are in the exact same state
+        const isSameState = Boolean(cState && vState && (cState === vState || cState.includes(vState) || vState.includes(cState)));
+
+        // Check if customer and vendor are in the exact same LGA
+        const isSameLga = isSameState && Boolean(
+            (cLga && vLga && (cLga === vLga || cLga.includes(vLga) || vLga.includes(cLga))) ||
+            (isBadeGashua(cLga) && isBadeGashua(vLga))
+        );
+
+        // Tier 1: Intra-LGA (Customer & Vendor in same LGA)
+        if (isSameLga) {
+            const locLabel = customerLga ? `${customerLga.toUpperCase()} Local` : 'Intra-LGA Local';
             return {
                 tier: 'intra_lga',
-                tierName: 'Intra-LGA Local Delivery (Bade / Gashua)',
+                tierName: `${locLabel} Direct Dispatch`,
                 baseFee: 800,
                 minFee: 800,
                 pricePerKm: 0,
@@ -446,50 +508,78 @@ export class ShippingCalculationEngine {
             };
         }
 
-        // Tier 2: Yobe State Local Governments (All 17 LGAs)
-        if (cState === 'yobe' || cState.includes('yobe')) {
-            const yobeNorthLgas = ['jakusko', 'karasuwa', 'nguru', 'machina', 'yusufari', 'bursari'];
-            const isNorth = yobeNorthLgas.some(l => cLga.includes(l) || l.includes(cLga));
-
-            if (isNorth) {
+        // Tier 2: Same State, Different LGA (Intra-State)
+        if (isSameState) {
+            // Yobe State Specific Corridor & Regional Hubs
+            if (cState.includes('yobe')) {
+                const yobeNorthLgas = ['jakusko', 'karasuwa', 'nguru', 'machina', 'yusufari', 'bursari', 'bade', 'gashua'];
+                const isBothNorth = yobeNorthLgas.some(l => cLga.includes(l)) && yobeNorthLgas.some(l => vLga.includes(l));
+                if (isBothNorth) {
+                    return {
+                        tier: 'yobe_north',
+                        tierName: `Yobe North Corridor (${vendorLga || 'Origin'} → ${customerLga || 'Dest'})`,
+                        baseFee: 1500,
+                        minFee: 1500,
+                        pricePerKm: 2,
+                        distanceKm: 45,
+                        durationMinutes: 90,
+                        estimatedDelivery: '24 - 48 Hours',
+                        expressBaseFee: 2500,
+                        sameDayBaseFee: 3500,
+                        isSameLga: false,
+                        isSameState: true
+                    };
+                }
                 return {
-                    tier: 'yobe_north',
-                    tierName: `Yobe North Logistics Hub (${customerLga || 'LGA'})`,
-                    baseFee: 1500,
-                    minFee: 1500,
+                    tier: 'yobe_regional',
+                    tierName: `Yobe Regional Transit (${vendorLga || 'Origin'} → ${customerLga || 'Dest'})`,
+                    baseFee: 2000,
+                    minFee: 2000,
                     pricePerKm: 2,
-                    distanceKm: 45,
-                    durationMinutes: 90,
-                    estimatedDelivery: '24 - 48 Hours',
-                    expressBaseFee: 2500,
-                    sameDayBaseFee: 3500,
+                    distanceKm: 120,
+                    durationMinutes: 180,
+                    estimatedDelivery: '1 - 2 Business Days',
+                    expressBaseFee: 3200,
+                    sameDayBaseFee: 4200,
                     isSameLga: false,
                     isSameState: true
                 };
             }
 
+            // General Intra-State (e.g. Kano to Kano, Lagos to Lagos, Borno to Borno)
+            const stateTitle = customerState || vendorState || 'Intra-State';
             return {
-                tier: 'yobe_regional',
-                tierName: `Yobe State Regional Logistics (${customerLga || 'LGA'})`,
-                baseFee: 2000,
-                minFee: 2000,
+                tier: 'intra_state',
+                tierName: `Intra-State Transit (${stateTitle} State)`,
+                baseFee: 1500,
+                minFee: 1500,
                 pricePerKm: 2,
-                distanceKm: 120,
-                durationMinutes: 180,
-                estimatedDelivery: '1 - 2 Business Days',
-                expressBaseFee: 3200,
-                sameDayBaseFee: 4200,
+                distanceKm: 50,
+                durationMinutes: 120,
+                estimatedDelivery: 'Within 24 Hours',
+                expressBaseFee: 2500,
+                sameDayBaseFee: 3500,
                 isSameLga: false,
                 isSameState: true
             };
         }
 
-        // Tier 3A: Bordering States (Jigawa & Borno)
-        if (cState.includes('jigawa') || cState.includes('borno')) {
-            const stateTitle = cState.includes('jigawa') ? 'Jigawa' : 'Borno';
+        // Tier 3: Neighboring / Bordering States
+        const borderPairs = [
+            ['yobe', 'jigawa'], ['yobe', 'borno'], ['yobe', 'bauchi'], ['yobe', 'gombe'],
+            ['kano', 'jigawa'], ['kano', 'kaduna'], ['kano', 'katsina'], ['kano', 'bauchi'],
+            ['bauchi', 'gombe'], ['bauchi', 'plateau'], ['kaduna', 'fct'], ['kaduna', 'abuja'],
+            ['lagos', 'ogun'], ['oyo', 'osun']
+        ];
+        const isBorder = borderPairs.some(([s1, s2]) => 
+            (cState.includes(s1) && vState.includes(s2)) || 
+            (cState.includes(s2) && vState.includes(s1))
+        );
+
+        if (isBorder) {
             return {
                 tier: 'border_state',
-                tierName: `Bordering State Transit (${stateTitle} - ${customerLga || 'LGA'})`,
+                tierName: `Bordering State Transit (${vendorState || 'Origin'} → ${customerState || 'Dest'})`,
                 baseFee: 2500,
                 minFee: 2500,
                 pricePerKm: 2,
@@ -503,12 +593,13 @@ export class ShippingCalculationEngine {
             };
         }
 
-        // Tier 3B: Key Commercial Northern Hubs (Kano, Bauchi, Gombe)
-        if (['kano', 'bauchi', 'gombe'].some(s => cState.includes(s))) {
-            const stateTitle = cState.includes('kano') ? 'Kano' : cState.includes('bauchi') ? 'Bauchi' : 'Gombe';
+        // Tier 4: Key Commercial Northern Hubs (Kano, Bauchi, Gombe, Kaduna, Abuja, Plateau)
+        const commercialHubs = ['kano', 'bauchi', 'gombe', 'kaduna', 'abuja', 'fct', 'jos', 'plateau'];
+        const isHubTransit = commercialHubs.some(h => cState.includes(h) || vState.includes(h));
+        if (isHubTransit) {
             return {
                 tier: 'regional_transit',
-                tierName: `Commercial Hub Dispatch (${stateTitle} - ${customerLga || 'LGA'})`,
+                tierName: `Commercial Hub Dispatch (${vendorState || 'Origin'} → ${customerState || 'Dest'})`,
                 baseFee: 2800,
                 minFee: 2800,
                 pricePerKm: 2,
@@ -522,12 +613,12 @@ export class ShippingCalculationEngine {
             };
         }
 
-        // Tier 4: Other Northern States & FCT Abuja
-        const northStates = ['kaduna', 'katsina', 'sokoto', 'kebbi', 'zamfara', 'adamawa', 'taraba', 'niger', 'plateau', 'nasarawa', 'benue', 'kogi', 'abuja', 'fct'];
-        if (northStates.some(s => cState.includes(s))) {
+        // Tier 4B: Other Northern States
+        const northStates = ['katsina', 'sokoto', 'kebbi', 'zamfara', 'adamawa', 'taraba', 'niger', 'nasarawa', 'benue', 'kogi'];
+        if (northStates.some(s => cState.includes(s) || vState.includes(s))) {
             return {
                 tier: 'interstate_north',
-                tierName: `Interstate Northern Transit (${customerState || 'North'})`,
+                tierName: `Interstate Northern Transit (${vendorState || 'Origin'} → ${customerState || 'Dest'})`,
                 baseFee: 3500,
                 minFee: 3500,
                 pricePerKm: 2,
@@ -541,10 +632,10 @@ export class ShippingCalculationEngine {
             };
         }
 
-        // Tier 5: Southern & Nationwide (Lagos, Rivers, Oyo, Edo, etc.)
+        // Tier 5: Southern & Nationwide Transit
         return {
             tier: 'nationwide',
-            tierName: `Nationwide Inter-State Transit (${customerState || 'Nigeria'})`,
+            tierName: `Interstate Transit (${vendorState || 'Origin'} → ${customerState || 'Dest'})`,
             baseFee: 4500,
             minFee: 4500,
             pricePerKm: 2,
@@ -858,6 +949,8 @@ export class ShippingCalculationEngine {
                         storesList.forEach(s => {
                             storesCache[s.id] = s;
                             if (s.user_id) storesCache[s.user_id] = s;
+                            ShippingCalculationEngine.IN_MEMORY_STORES_CACHE[s.id] = s;
+                            if (s.user_id) ShippingCalculationEngine.IN_MEMORY_STORES_CACHE[s.user_id] = s;
                         });
                     }
                     const stillMissing = missingIds.filter(id => !storesCache[id]);
@@ -870,6 +963,8 @@ export class ShippingCalculationEngine {
                             storesByUser.forEach(s => {
                                 storesCache[s.user_id] = s;
                                 storesCache[s.id] = s;
+                                ShippingCalculationEngine.IN_MEMORY_STORES_CACHE[s.user_id] = s;
+                                ShippingCalculationEngine.IN_MEMORY_STORES_CACHE[s.id] = s;
                             });
                         }
                     }
@@ -880,7 +975,10 @@ export class ShippingCalculationEngine {
         // 3. Compute each vendor package in parallel
         const packagePromises = vendorIds.map(async (vId) => {
             const group = vendorGroups[vId];
-            const vendorStore = storesCache[vId] || (group.items[0]?.store || group.items[0]?.vendor) || { id: vId, name: 'Abu Mafhal Official Store', state: 'Yobe', city: 'Bade', lga: 'Bade' };
+            const vendorStore = storesCache[vId] || 
+                                ShippingCalculationEngine.IN_MEMORY_STORES_CACHE[vId] || 
+                                (group.items[0]?.store || group.items[0]?.vendor) || 
+                                { id: vId, name: 'Abu Mafhal Official Store', state: 'Yobe', city: 'Bade', lga: 'Bade' };
 
             // Determine distance between this vendor's store LGA/GPS and customer's LGA/GPS
             const distanceRes = await ShippingDistanceService.getDrivingDistance(vendorStore, customerAddress);
@@ -1008,7 +1106,10 @@ export class ShippingCalculationEngine {
         const vendorIds = Object.keys(vendorGroups);
         const breakdowns = vendorIds.map(vId => {
             const group = vendorGroups[vId];
-            const vendorStore = storesCache[vId] || (group.items[0]?.store || group.items[0]?.vendor) || { id: vId, name: 'Abu Mafhal Official Store', state: 'Yobe', city: 'Bade', lga: 'Bade' };
+            const vendorStore = storesCache[vId] || 
+                                ShippingCalculationEngine.IN_MEMORY_STORES_CACHE[vId] || 
+                                (group.items[0]?.store || group.items[0]?.vendor) || 
+                                { id: vId, name: 'Abu Mafhal Official Store', state: 'Yobe', city: 'Bade', lga: 'Bade' };
             const distanceRes = ShippingDistanceService.getDrivingDistanceInstant(vendorStore, customerAddress);
 
             return this.calculateVendorPackageFee({

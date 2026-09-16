@@ -11,6 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { parsePrice } from '../utils/helpers';
 import { useAppSettings } from '../context/AppSettingsContext';
+import { ShippingCalculationEngine } from '../services/shippingService';
 
 const { width } = Dimensions.get('window');
 const AM_LOGO = require('../../assets/am_logo.png');
@@ -180,11 +181,45 @@ export const CartPage = ({
         }, 0);
     }, [cart]);
 
+    // Vendor store location resolution cache state
+    const [storesLoaded, setStoresLoaded] = useState(0);
+
+    // Fetch and cache real vendor stores whenever cart updates
+    useEffect(() => {
+        if (Array.isArray(cart) && cart.length > 0) {
+            const vendorIds = [...new Set(cart.map(i => i.vendor_id || i.vendorId).filter(Boolean))];
+            if (vendorIds.length > 0) {
+                ShippingCalculationEngine.fetchAndCacheStores(vendorIds).then(() => {
+                    setStoresLoaded(prev => prev + 1);
+                });
+            }
+        }
+    }, [cart]);
+
     const allFreeShippingProducts = cart.length > 0 && cart.every(i => i.free_shipping === true);
     const isFreeShippingByThreshold = subtotal >= freeShippingThreshold && freeShippingThreshold > 0;
     const isFreeShipping = isFreeNationwide || allFreeShippingProducts || isFreeShippingByThreshold || (appliedPromo?.discount_type === 'shipping');
 
-    const deliveryFee = cart.length === 0 ? 0 : (isFreeShipping ? 0 : baseShippingFee);
+    // Calculate exact multi-vendor shipping identical to CheckoutPage
+    const liveShippingResult = useMemo(() => {
+        if (!cart.length || !customerAddress) return null;
+        return ShippingCalculationEngine.calculateMultiVendorShippingInstant({
+            cartItems: cart,
+            customerAddress,
+            deliveryMethodCode: 'standard',
+            adminSettings: settings?.shipping_settings || settings,
+            storesCache: ShippingCalculationEngine.IN_MEMORY_STORES_CACHE
+        });
+    }, [cart, customerAddress, settings, storesLoaded]);
+
+    const deliveryFee = useMemo(() => {
+        if (cart.length === 0) return 0;
+        if (isFreeShipping) return 0;
+        if (liveShippingResult && typeof liveShippingResult.totalShippingFee === 'number') {
+            return liveShippingResult.totalShippingFee;
+        }
+        return baseShippingFee;
+    }, [cart.length, isFreeShipping, liveShippingResult, baseShippingFee]);
 
     const discount = useMemo(() => {
         if (!appliedPromo || cart.length === 0) return 0;

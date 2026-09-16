@@ -112,6 +112,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 10,
+        flexShrink: 0,
+        overflow: 'hidden',
     },
     selectedIconContainer: {
         backgroundColor: '#0E1A2E',
@@ -190,6 +192,7 @@ const styles = StyleSheet.create({
     },
     radioContainer: {
         marginLeft: 8,
+        flexShrink: 0,
     },
     radio: {
         width: 20,
@@ -199,6 +202,7 @@ const styles = StyleSheet.create({
         borderColor: '#CBD5E1',
         alignItems: 'center',
         justifyContent: 'center',
+        flexShrink: 0,
     },
     radioActive: {
         borderColor: '#D9A73A',
