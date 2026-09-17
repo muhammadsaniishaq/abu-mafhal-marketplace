@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { styles } from '../styles/theme';
 import { LinearGradient } from 'expo-linear-gradient';
+import { whatsappService } from '../services/whatsappService';
 
 const TICKET_CATEGORIES = ['Order Issue', 'Payment', 'Technical', 'General'];
 
@@ -140,6 +141,46 @@ export const SupportPage = ({ user, onBack }) => {
                         Create a new ticket and our support team will get back to you with a resolution as soon as possible.
                     </Text>
                 </LinearGradient>
+
+                {/* 24/7 WhatsApp Live Concierge */}
+                <TouchableOpacity
+                    style={{
+                        backgroundColor: '#F0FDF4',
+                        borderWidth: 1.5,
+                        borderColor: '#86EFAC',
+                        borderRadius: 18,
+                        padding: 16,
+                        marginBottom: 24,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 14,
+                        elevation: 2,
+                        shadowColor: '#16A34A',
+                        shadowOpacity: 0.1,
+                        shadowRadius: 6,
+                    }}
+                    onPress={() => {
+                        const msg = 'Hello Abu Mafhal Support Team, I need live assistance with my marketplace account/order.';
+                        whatsappService.openWhatsApp('2348145853539', msg);
+                    }}
+                    activeOpacity={0.85}
+                >
+                    <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#16A34A', alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons name="logo-whatsapp" size={22} color="#FFFFFF" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={{ fontSize: 15, fontWeight: '800', color: '#15803D' }}>24/7 WhatsApp Support</Text>
+                            <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                                <Text style={{ fontSize: 9, fontWeight: '900', color: '#16A34A' }}>ONLINE</Text>
+                            </View>
+                        </View>
+                        <Text style={{ fontSize: 12, color: '#166534', marginTop: 2 }}>
+                            Instant response from our verified support desk
+                        </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color="#16A34A" />
+                </TouchableOpacity>
 
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                     <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A' }}>My Tickets</Text>

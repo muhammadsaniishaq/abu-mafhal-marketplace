@@ -15,6 +15,7 @@ import {
     toggleFollowStore,
     subscribeToFollowChanges
 } from '../services/vendorFollowerService';
+import { whatsappService } from '../services/whatsappService';
 
 const { width } = Dimensions.get('window');
 const AM_LOGO = require('../../assets/am_logo.png');
@@ -246,15 +247,9 @@ export const StoresPage = ({
     };
 
     const handleContactWhatsApp = (store) => {
-        const rawPhone = store.whatsapp || store.phone || '08145853539';
-        let phone = rawPhone.replace(/[^0-9]/g, '');
-        if (phone.startsWith('0') && phone.length === 11) {
-            phone = '234' + phone.slice(1);
-        }
-        const msg = encodeURIComponent(`Hello ${store.name}, I am contacting you directly from Abu Mafhal Marketplace regarding your products.`);
-        Linking.openURL(`https://wa.me/${phone}?text=${msg}`).catch(() => {
-            Alert.alert('Contact Store', `Store Phone: ${store.phone || store.whatsapp || '+234 814 585 3539'}`);
-        });
+        const rawPhone = store.whatsapp || store.phone || '2348145853539';
+        const msg = `Hello ${store.name || 'Merchant'}, I am contacting you directly from Abu Mafhal Marketplace regarding your verified store catalog.`;
+        whatsappService.openWhatsApp(rawPhone, msg);
     };
 
     const handleOpenSocial = (platform, rawValue, storeName) => {

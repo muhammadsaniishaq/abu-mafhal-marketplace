@@ -11,6 +11,7 @@ import { Video, ResizeMode } from 'expo-av';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { resolveVendorOrStore } from '../services/vendorResolver';
+import { whatsappService } from '../services/whatsappService';
 
 const { width } = Dimensions.get('window');
 const AM_LOGO = require('../../assets/am_logo.png');
@@ -437,13 +438,15 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
     };
 
     const handleWhatsAppVendor = (customMsg = '') => {
-        const rawPhone = vendor?.whatsapp || vendor?.phone || '08145853539';
-        const phone = rawPhone.replace(/[^0-9]/g, '');
-        const defaultText = `Hello ${vendor?.name || 'Seller'}, I am inquiring about "${product?.name}" (${fmtPrice(currentPrice)}) on Abu Mafhal Marketplace. Is it available for express delivery?`;
-        const msg = encodeURIComponent(customMsg || defaultText);
-        Linking.openURL(`https://wa.me/${phone}?text=${msg}`).catch(() => {
-            Alert.alert('Contact Seller', `Seller Phone: +${phone}`);
-        });
+        const rawPhone = vendor?.whatsapp || vendor?.phone || '2348145853539';
+        const vendorTitle = vendor?.name || 'Seller';
+        const defaultText = `Hello ${vendorTitle}, I want to order *${product?.name || 'Product'}* (${fmtPrice(currentPrice)}) on Abu Mafhal Marketplace.\nQty: ${quantity}\nLink: https://abumafhal.com/product/${product?.id || ''}\nIs this item available for express delivery?`;
+        whatsappService.openWhatsApp(rawPhone, customMsg || defaultText);
+    };
+
+    const handleWhatsAppShare = () => {
+        const shareMsg = `🌟 Check out *${product?.name || 'Product'}* for ${fmtPrice(currentPrice)} on Abu Mafhal Marketplace!\nAuthentic & Verified • Fast Delivery Nationwide.\nhttps://abumafhal.com/product/${product?.id || ''}`;
+        whatsappService.openWhatsApp('', shareMsg);
     };
 
     const subtitleText = product?.short_description ||
@@ -692,6 +695,16 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                                 <Text style={s.chatSellerBtnTxt}>Chat</Text>
                             </TouchableOpacity>
 
+                            {/* WhatsApp Direct Chat Button */}
+                            <TouchableOpacity
+                                style={s.chatWhatsAppBtn}
+                                onPress={() => handleWhatsAppVendor()}
+                                activeOpacity={0.8}
+                            >
+                                <Ionicons name="logo-whatsapp" size={13} color="#FFFFFF" />
+                                <Text style={s.chatWhatsAppBtnTxt}>WhatsApp</Text>
+                            </TouchableOpacity>
+
                             {/* View Store Button */}
                             <TouchableOpacity
                                 style={s.viewStoreBtn}
@@ -842,6 +855,26 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                             </TouchableOpacity>
                         </View>
                     </View>
+
+                    {/* WhatsApp Quick Order & Inquiry Bar */}
+                    <TouchableOpacity
+                        style={s.whatsAppOrderBar}
+                        onPress={() => handleWhatsAppVendor()}
+                        activeOpacity={0.85}
+                    >
+                        <View style={s.whatsAppOrderBarContent}>
+                            <View style={s.whatsAppIconCircle}>
+                                <Ionicons name="logo-whatsapp" size={19} color="#FFFFFF" />
+                            </View>
+                            <View style={{ flex: 1, marginLeft: 12 }}>
+                                <Text style={s.whatsAppOrderTitle}>Order / Inquire via WhatsApp</Text>
+                                <Text style={s.whatsAppOrderSub}>Direct chat with verified seller & fast delivery support</Text>
+                            </View>
+                            <View style={s.whatsAppBadge}>
+                                <Text style={s.whatsAppBadgeTxt}>INSTANT</Text>
+                            </View>
+                        </View>
+                    </TouchableOpacity>
 
                     {/* ══════════════════════════════════════════════════
                         9. TRUST & GUARANTEE TILES (Exact to Mockup)
@@ -2079,5 +2112,65 @@ const s = StyleSheet.create({
         color: '#FFFFFF',
         fontSize: 12,
         fontWeight: '700',
+    },
+
+    // ── WhatsApp Action Styles ──
+    chatWhatsAppBtn: {
+        backgroundColor: '#16A34A',
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 20,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    chatWhatsAppBtnTxt: {
+        color: '#FFFFFF',
+        fontSize: 11.5,
+        fontWeight: '800',
+    },
+    whatsAppOrderBar: {
+        marginTop: 14,
+        borderRadius: 14,
+        backgroundColor: '#F0FDF4',
+        borderWidth: 1.5,
+        borderColor: '#86EFAC',
+        padding: 12,
+    },
+    whatsAppOrderBarContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    whatsAppIconCircle: {
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        backgroundColor: '#16A34A',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    whatsAppOrderTitle: {
+        fontSize: 13.5,
+        fontWeight: '800',
+        color: '#15803D',
+    },
+    whatsAppOrderSub: {
+        fontSize: 11,
+        color: '#166534',
+        marginTop: 1,
+    },
+    whatsAppBadge: {
+        backgroundColor: '#DCFCE7',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#BBF7D0',
+    },
+    whatsAppBadgeTxt: {
+        fontSize: 9.5,
+        fontWeight: '900',
+        color: '#16A34A',
+        letterSpacing: 0.5,
     },
 });

@@ -11,6 +11,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { supabase } from '../lib/supabase';
 import { useAppSettings } from '../context/AppSettingsContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { whatsappService } from '../services/whatsappService';
 
 const STATUS_CFG = {
     pending: { color: '#D97706', bg: '#FEF3C7', icon: 'time-outline', label: 'Pending' },
@@ -314,16 +315,23 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
 
     // ── Share Order ───────────────────────────────────────────────────────────
     const shareOrder = (order) => {
+        const orderShort = order.id.slice(0, 8).toUpperCase();
         Share.share({
-            message: `📦 Abu Mafhal Order\n#${order.id.slice(0, 8).toUpperCase()}\nStatus: ${order.status?.toUpperCase()}\nTotal: ₦${order.total_amount?.toLocaleString()}\nDate: ${new Date(order.created_at).toLocaleDateString()}`
+            message: `📦 Abu Mafhal Marketplace Order #${orderShort}\nStatus: ${(order.status || 'Pending').toUpperCase()}\nTotal: ₦${(order.total_amount || 0).toLocaleString()}\nTrack: https://abumafhal.com/orders?id=${order.id}`
         });
+    };
+
+    const shareOrderWhatsApp = (order) => {
+        const orderShort = order.id.slice(0, 8).toUpperCase();
+        const msg = `📦 *Abu Mafhal Marketplace Order #${orderShort}*\nStatus: *${(order.status || 'Pending').toUpperCase()}*\nTotal: *₦${(order.total_amount || 0).toLocaleString()}*\nTrack Live: https://abumafhal.com/orders?id=${order.id}`;
+        whatsappService.openWhatsApp('', msg);
     };
 
     // ── Contact Support ───────────────────────────────────────────────────────
     const contactSupport = (order) => {
-        const msg = encodeURIComponent(`Hi Abu Mafhal Support, I need help with order #${order.id.slice(0, 8).toUpperCase()}`);
-        Linking.openURL(`whatsapp://send?phone=2348145853539&text=${msg}`)
-            .catch(() => Linking.openURL(`https://wa.me/2348145853539?text=${msg}`).catch(() => Linking.openURL('mailto:support@abumafhal.com')));
+        const orderShort = order.id.slice(0, 8).toUpperCase();
+        const msg = `Hello Abu Mafhal Support Team, I need assistance with my Order #${orderShort} (Total: ₦${(order.total_amount || 0).toLocaleString()}, Status: ${(order.status || 'Active').toUpperCase()}).`;
+        whatsappService.openWhatsApp('2348145853539', msg);
     };
 
     // ── Render Card ───────────────────────────────────────────────────────────
@@ -342,6 +350,7 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
         cancelling={cancelling === item.id}
         confirming={confirming === item.id}
         shareOrder={shareOrder}
+        shareOrderWhatsApp={shareOrderWhatsApp}
         contactSupport={contactSupport}
         settings={settings}
     />;
@@ -531,7 +540,7 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
     );
 };
 
-const OrderCard = React.memo(({ item, isExpanded, onToggle, onCancel, onConfirm, onNavigate, onReview, cancelling, confirming, shareOrder, contactSupport, settings }) => {
+const OrderCard = React.memo(({ item, isExpanded, onToggle, onCancel, onConfirm, onNavigate, onReview, cancelling, confirming, shareOrder, shareOrderWhatsApp, contactSupport, settings }) => {
     const status = item.status?.toLowerCase() || 'pending';
     const cfg = STATUS_CFG[status] || { color: '#64748B', bg: '#F1F5F9', icon: 'help-circle-outline', label: status };
     const isCancelled = status === 'cancelled';
@@ -690,10 +699,10 @@ const OrderCard = React.memo(({ item, isExpanded, onToggle, onCancel, onConfirm,
                                 <Ionicons name="location-outline" size={15} color="white" />
                                 <Text style={{ color: 'white', fontWeight: '700', fontSize: 13 }}>Track Order</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => shareOrder(item)}
-                                style={[C.btn, { backgroundColor: '#F1F5F9', flex: 1 }]}>
-                                <Ionicons name="share-outline" size={15} color="#0F172A" />
-                                <Text style={{ color: '#0F172A', fontWeight: '700', fontSize: 13 }}>Share</Text>
+                            <TouchableOpacity onPress={() => shareOrderWhatsApp ? shareOrderWhatsApp(item) : shareOrder(item)}
+                                style={[C.btn, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0', borderWidth: 1, flex: 1 }]}>
+                                <Ionicons name="logo-whatsapp" size={15} color="#16A34A" />
+                                <Text style={{ color: '#16A34A', fontWeight: '800', fontSize: 13 }}>WhatsApp</Text>
                             </TouchableOpacity>
                         </View>
                         <View style={{ flexDirection: 'row', gap: 10 }}>

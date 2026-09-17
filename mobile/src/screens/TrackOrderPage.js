@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
+import { whatsappService } from '../services/whatsappService';
 
 const AM_LOGO = require('../../assets/am_logo.png');
 
@@ -40,6 +41,16 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) 
         qty: 1,
         vendor: 'Mafhal Electronics',
         image: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?q=80&w=300&auto=format&fit=crop'
+    };
+
+    const handleShareTracking = () => {
+        const msg = `🚚 *Abu Mafhal Order Tracking (${orderNumber})*\nStatus: *${currentStatus.toUpperCase()}*\nEstimated Delivery: Tomorrow, 9:00 AM - 6:00 PM\nTrack Live: https://abumafhal.com/track?id=${order?.id || ''}`;
+        whatsappService.openWhatsApp('', msg);
+    };
+
+    const handleContactSupport = () => {
+        const msg = `Hello Abu Mafhal Support Team, I am tracking my Order ${orderNumber} (${currentStatus.toUpperCase()}) and would like an update on my dispatch.`;
+        whatsappService.openWhatsApp('2348145853539', msg);
     };
 
     return (
@@ -394,29 +405,51 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) 
                     </View>
                 </View>
 
-                {/* Need Help? Contact Support Button */}
-                <TouchableOpacity
-                    onPress={() => Linking.openURL('https://wa.me/2348101234567')}
-                    style={{
-                        backgroundColor: '#0A192F',
-                        borderRadius: 16,
-                        paddingVertical: 15,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 8,
-                        shadowColor: '#0A192F',
-                        shadowOffset: { width: 0, height: 4 },
-                        shadowOpacity: 0.2,
-                        shadowRadius: 8,
-                        elevation: 3
-                    }}
-                >
-                    <Ionicons name="chatbubble-ellipses-outline" size={18} color="white" />
-                    <Text style={{ color: 'white', fontWeight: '800', fontSize: 14 }}>
-                        Need Help? Contact Support &gt;
-                    </Text>
-                </TouchableOpacity>
+                {/* Action Buttons: WhatsApp Support & Share Tracking */}
+                <View style={{ gap: 10 }}>
+                    <TouchableOpacity
+                        onPress={handleContactSupport}
+                        style={{
+                            backgroundColor: '#16A34A',
+                            borderRadius: 16,
+                            paddingVertical: 15,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 8,
+                            shadowColor: '#16A34A',
+                            shadowOffset: { width: 0, height: 4 },
+                            shadowOpacity: 0.25,
+                            shadowRadius: 8,
+                            elevation: 3
+                        }}
+                        activeOpacity={0.85}
+                    >
+                        <Ionicons name="logo-whatsapp" size={20} color="white" />
+                        <Text style={{ color: 'white', fontWeight: '800', fontSize: 14 }}>
+                            24/7 WhatsApp Support & Updates &gt;
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        onPress={handleShareTracking}
+                        style={{
+                            backgroundColor: '#0A192F',
+                            borderRadius: 16,
+                            paddingVertical: 14,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 8,
+                        }}
+                        activeOpacity={0.85}
+                    >
+                        <Ionicons name="share-social-outline" size={18} color="#38BDF8" />
+                        <Text style={{ color: 'white', fontWeight: '700', fontSize: 13.5 }}>
+                            Share Live Tracking on WhatsApp
+                        </Text>
+                    </TouchableOpacity>
+                </View>
             </ScrollView>
         </View>
     );

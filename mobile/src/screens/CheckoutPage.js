@@ -744,7 +744,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 }).catch(err => console.log('Email confirmation dispatch note:', err));
             }
 
-            // 3. WhatsApp Notification via whatsappService
+            // 3. WhatsApp Notification to Customer
             if (customerPhone) {
                 whatsappService.sendOrderNotification({
                     phone: customerPhone,
@@ -753,6 +753,30 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     paymentMethod: payMethod,
                     userId
                 }).catch(err => console.log('WhatsApp confirmation dispatch note:', err));
+            }
+
+            // 4. Automated Vendor WhatsApp Dispatch Alert
+            const vendorIds = [...new Set(cart.map(i => i.vendor_id || i.vendorId).filter(Boolean))];
+            if (vendorIds.length > 0) {
+                vendorIds.forEach(async (vId) => {
+                    try {
+                        const { data: vProfile } = await supabase
+                            .from('profiles')
+                            .select('phone, phone_number, full_name, business_name')
+                            .eq('id', vId)
+                            .maybeSingle();
+
+                        const vPhone = vProfile?.phone || vProfile?.phone_number;
+                        if (vPhone) {
+                            const vendorItems = cart.filter(i => (i.vendor_id || i.vendorId) === vId);
+                            const itemsSummary = vendorItems.map(i => `• ${i.name || i.title || 'Product'} (x${i.quantity || i.qty || 1})`).join('\n');
+                            const orderShort = (orderId || '').slice(0, 8).toUpperCase();
+                            const vendorMsg = `📦 *New Order Alert on Abu Mafhal Marketplace!*\n\nHello *${vProfile.business_name || vProfile.full_name || 'Merchant'}*,\nYou have received a new order *#${orderShort}*!\n\n*Items to Dispatch:*\n${itemsSummary}\n\n🚚 Please log in to your Merchant Dashboard to prepare dispatch:\nhttps://abumafhal.com/mobile#vendor`;
+
+                            whatsappService.sendDirect(vPhone, vendorMsg, vId).catch(() => {});
+                        }
+                    } catch (_) {}
+                });
             }
         } catch (err) {
             console.warn('Order notifications dispatch error:', err);
