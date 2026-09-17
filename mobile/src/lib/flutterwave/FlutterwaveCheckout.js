@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, Modal, View, Animated, TouchableWithoutFeedback, Text, Alert, Image, Dimensions, Easing, TouchableOpacity, Platform, ActivityIndicator } from 'react-native';
 import WebView from 'react-native-webview';
 import { colors } from './flw_configs.js';
+import { Ionicons } from '@expo/vector-icons';
 
 // Replaced loader with native ActivityIndicator
 // var loader = require('./assets/loader.gif');
@@ -80,21 +81,46 @@ var FlutterwaveCheckout = function FlutterwaveCheckout(props) {
         // remove tx_ref and dismiss
         animateOut().then(onAbort);
     }, [onAbort, animateOut]);
+
     var handleNavigationStateChange = React.useCallback(function (ev) {
-        // cregex to check if redirect has occured on completion/cancel
-        var rx = /\/flutterwave\.com\/rn-redirect/;
-        // Don't end payment if not redirected back
-        if (!rx.test(ev.url)) {
+        var url = (ev && ev.url) ? String(ev.url) : '';
+        if (!url) return true;
+
+        var isSuccess = (
+            url.includes('standard.paystack.co/close') ||
+            url.includes('status=successful') ||
+            url.includes('status=success') ||
+            url.includes('status=completed') ||
+            url.includes('/payment/verify') ||
+            url.includes('/payment/success') ||
+            /\/flutterwave\.com\/rn-redirect/.test(url) ||
+            url.includes('trxref=')
+        );
+
+        var isCancelled = (
+            url.includes('status=cancelled') ||
+            url.includes('status=failed') ||
+            url.includes('/payment/cancel')
+        );
+
+        if (!isSuccess && !isCancelled) {
             return true;
         }
-        // dismiss modal
+
         animateOut().then(function () {
-            if (onRedirect) {
-                onRedirect(getRedirectParams(ev.url));
+            if (isCancelled) {
+                if (onAbort) onAbort();
+            } else if (onRedirect) {
+                var params = getRedirectParams(url);
+                if (!params.status) {
+                    params.status = 'successful';
+                }
+                onRedirect(params);
             }
         });
         return false;
-    }, [onRedirect]);
+    }, [onRedirect, onAbort, animateOut]);
+
     var doAnimate = React.useCallback(function () {
         if (visible === show) {
             return;
@@ -104,18 +130,24 @@ var FlutterwaveCheckout = function FlutterwaveCheckout(props) {
         }
         animateOut().then(function () { });
     }, [visible, show, animateOut, animateIn]);
+
     React.useEffect(function () {
         doAnimate();
         return function () { };
     }, [doAnimate]);
+
     var marginTop = animation.current.interpolate({
         inputRange: [0, 1],
         outputRange: [windowHeight, 0]
     });
+
     var opacity = animation.current.interpolate({
         inputRange: [0, 0.3, 1],
         outputRange: [0, 1, 1]
     });
+
+    var isHtml = typeof link === 'string' && (link.trim().startsWith('<') || link.trim().startsWith('<!DOCTYPE'));
+
     return (<Modal transparent={true} animated={false} hardwareAccelerated={false} visible={show}>
         <FlutterwaveCheckoutBackdrop onPress={function () { return handleAbort(); }} animation={animation.current} />
         <Animated.View style={[
@@ -125,6 +157,33 @@ var FlutterwaveCheckout = function FlutterwaveCheckout(props) {
                 opacity: opacity
             }
         ]} testID='flw-checkout-dialog'>
+            {/* Native Clean Header */}
+            <View style={{
+                height: 48,
+                backgroundColor: '#FFFFFF',
+                borderBottomWidth: 1,
+                borderBottomColor: '#E2E8F0',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingHorizontal: 16
+            }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="shield-checkmark" size={16} color="#10B981" />
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>
+                        Secure Escrow Checkout
+                    </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <TouchableOpacity onPress={handleReload} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Ionicons name="refresh" size={18} color="#64748B" />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={function () { return handleAbort(); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Ionicons name="close" size={22} color="#0F172A" />
+                    </TouchableOpacity>
+                </View>
+            </View>
+
             {Platform.OS === 'web' ? (
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'white' }}>
                     <Text style={{ fontSize: 18, color: '#334155', marginBottom: 16 }}>Redirecting to Secure Checkout...</Text>
@@ -133,7 +192,20 @@ var FlutterwaveCheckout = function FlutterwaveCheckout(props) {
                     <WebRedirect link={link} />
                 </View>
             ) : (
-                <WebView ref={webviewRef} source={{ uri: link || '' }} style={styles.webview} startInLoadingState={true} scalesPageToFit={true} javaScriptEnabled={true} onShouldStartLoadWithRequest={handleNavigationStateChange} renderError={function () { return <FlutterwaveCheckoutError hasLink={!!link} onTryAgain={handleReload} />; }} renderLoading={function () { return <FlutterwaveCheckoutLoader />; }} />
+                <WebView
+                    ref={webviewRef}
+                    source={isHtml ? { html: link } : { uri: link || '' }}
+                    style={styles.webview}
+                    startInLoadingState={true}
+                    scalesPageToFit={true}
+                    javaScriptEnabled={true}
+                    domStorageEnabled={true}
+                    originWhitelist={['*']}
+                    onShouldStartLoadWithRequest={handleNavigationStateChange}
+                    onNavigationStateChange={handleNavigationStateChange}
+                    renderError={function () { return <FlutterwaveCheckoutError hasLink={!!link} onTryAgain={handleReload} />; }}
+                    renderLoading={function () { return <FlutterwaveCheckoutLoader />; }}
+                />
             )}
         </Animated.View>
     </Modal>);

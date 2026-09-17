@@ -274,22 +274,27 @@ export const PaySmallSmallPage = ({ navigation, route, onBack, user: initialUser
             // 1. If paying via wallet, debit wallet
             if (selectedPaymentMethod === 'wallet' && user?.id) {
                 const newWalletBal = Math.max(0, walletBalance - instAmount);
-                await supabase.from('wallets').update({ balance: newWalletBal }).eq('user_id', user.id);
+                try {
+                    await supabase.from('profiles').update({ wallet_balance: newWalletBal }).eq('id', user.id);
+                    await supabase.from('wallets').update({ balance: newWalletBal }).eq('user_id', user.id);
+                } catch (_) {}
                 setWalletBalance(newWalletBal);
             }
 
-            // 2. Persist update to Supabase orders table
+            // 2. Persist update to Supabase orders table (gracefully handle if table absent)
             if (selectedPlan.id) {
-                await supabase.from('orders').update({
-                    installment_plan: {
-                        plan_type: selectedPlan.planType,
-                        total_amount: selectedPlan.totalAmount,
-                        remaining_balance: newRemaining,
-                        installments_paid: updatedPlan.installmentsPaid,
-                        schedule: updatedSchedule
-                    },
-                    payment_status: isCompleted ? 'paid' : 'installment_in_progress'
-                }).eq('id', selectedPlan.id);
+                try {
+                    await supabase.from('orders').update({
+                        installment_plan: {
+                            plan_type: selectedPlan.planType,
+                            total_amount: selectedPlan.totalAmount,
+                            remaining_balance: newRemaining,
+                            installments_paid: updatedPlan.installmentsPaid,
+                            schedule: updatedSchedule
+                        },
+                        payment_status: isCompleted ? 'paid' : 'installment_in_progress'
+                    }).eq('id', selectedPlan.id);
+                } catch (_) {}
             }
 
             // 3. Update local state

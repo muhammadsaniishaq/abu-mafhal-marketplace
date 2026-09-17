@@ -24,6 +24,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { useAppSettings, useBrandTheme } from '../context/AppSettingsContext';
 import FlutterwaveCheckout from '../lib/flutterwave/FlutterwaveCheckout';
+import { PaymentGatewayService } from '../services/paymentGatewayService';
 import CheckoutAddressCard from '../components/CheckoutAddressCard';
 import { CheckoutAddressSkeleton } from '../components/CheckoutSkeleton';
 import { whatsappService } from '../services/whatsappService';
@@ -821,101 +822,206 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 return;
             }
 
-            // Call Edge Function 'initiate-payment'
-            const { data, error: invokeError } = await supabase.functions.invoke('initiate-payment', {
-                headers: {
-                    Authorization: `Bearer ${session.access_token}`
-                },
-                body: {
+            const orderRef = PaymentGatewayService.generateRef('ORD');
+            setCurrentOrderId(orderRef);
+
+            // ── OPTION A: Instant Success (Wallet or POD) ────────────────
+            if (paymentMethod === 'pod') {
+                await PaymentGatewayService.recordTransaction({
+                    userId: verifiedUser.id,
+                    amount: finalTotal,
+                    reference: orderRef,
+                    gateway: 'Pay on Delivery',
+                    type: 'order_payment',
+                    status: 'pending_pod',
+                    description: `Order Placed via Pay on Delivery (Ref: ${orderRef})`
+                });
+
+                await PaymentGatewayService.cacheOrderLocally(verifiedUser.id, {
+                    id: orderRef,
+                    orderNumber: orderRef.slice(0, 8).toUpperCase(),
+                    createdAt: new Date().toISOString(),
+                    total_amount: finalTotal,
+                    status: 'processing',
+                    payment_status: 'pending_pod',
+                    payment_method: 'Pay on Delivery',
                     items: cart,
-                    address_id: selectedAddressId,
-                    shipping_override: addresses.find(a => a.id === selectedAddressId) || null,
-                    payment_method: paymentMethod,
-                    down_payment_method: paymentMethod === 'pay_small_small' ? pssDownPaymentMethod : null,
-                    installment_plan: paymentMethod === 'pay_small_small' ? {
-                        ...pssPlanDetails,
-                        down_payment_method: pssDownPaymentMethod
-                    } : null,
-                    coupon_code: appliedCoupon?.code || null,
-                    order_notes: orderNote,
-                    delivery_method: selectedDeliveryMethod || 'standard',
-                    shipping_fee: shippingFee,
-                    shipping_snapshot: shippingCalculation?.snapshot || null
-                }
-            });
-
-            if (invokeError) throw invokeError;
-            if (!data) throw new Error("Checkout failed to initialize");
-
-            const { order_id, checkout_url } = data;
-            setCurrentOrderId(order_id);
-
-            // Instant success (Wallet, Pay on Delivery, or Pay Small Small)
-            if (checkout_url === 'success') {
-                // If BNPL, cache rich plan locally for zero-latency in PaySmallSmallPage
-                if (paymentMethod === 'pay_small_small') {
-                    try {
-                        const newPlanItem = {
-                            id: order_id,
-                            orderNumber: order_id.slice(0, 8).toUpperCase(),
-                            createdAt: new Date().toISOString(),
-                            totalAmount: finalTotal,
-                            baseTotal: pssPlanDetails.baseTotal,
-                            surcharge: pssPlanDetails.surcharge,
-                            paidAmount: pssPlanDetails.downPayment,
-                            remainingAmount: pssPlanDetails.remainingBalance,
-                            planType: `${pssPlanDetails.durationMonths}_months_${pssPlanDetails.frequency}`,
-                            durationMonths: pssPlanDetails.durationMonths,
-                            frequency: pssPlanDetails.frequency,
-                            installmentsCount: pssPlanDetails.installmentsCount,
-                            installmentsPaid: 1,
-                            isCompleted: false,
-                            schedule: pssPlanDetails.schedule,
-                            items: cart
-                        };
-                        const pssCacheKey = `@abumafhal_pss_plans_${verifiedUser.id}`;
-                        const rawExisting = await AsyncStorage.getItem(pssCacheKey);
-                        const existingList = rawExisting ? JSON.parse(rawExisting) : [];
-                        await AsyncStorage.setItem(pssCacheKey, JSON.stringify([newPlanItem, ...existingList]));
-                    } catch (e) {
-                        console.log('Error caching PSS plan locally:', e);
-                    }
-                }
+                    delivery_address: selectedAddrObj
+                });
 
                 setOrderSuccess(true);
-                const payMethodLabel = paymentMethod === 'pay_small_small'
-                    ? 'Pay Small Small (BNPL)'
-                    : paymentMethod === 'pod'
-                    ? 'Pay on Delivery (Cash/POS)'
-                    : 'Wallet';
-                triggerOrderWhatsApp(order_id, finalTotal, payMethodLabel);
+                triggerOrderWhatsApp(orderRef, finalTotal, 'Pay on Delivery (Cash/POS)');
                 await clearProgress();
                 if (onClearCart) onClearCart();
                 return;
             }
 
-            if (!checkout_url) throw new Error("Could not initialize payment gateway.");
+            if (paymentMethod === 'Wallet') {
+                const newBal = Math.max(0, walletBalance - finalTotal);
+                await supabase.from('profiles').update({ wallet_balance: newBal }).eq('id', verifiedUser.id);
 
-            setPaymentLink(checkout_url);
+                await PaymentGatewayService.recordTransaction({
+                    userId: verifiedUser.id,
+                    amount: finalTotal,
+                    reference: orderRef,
+                    gateway: 'Wallet',
+                    type: 'order_payment',
+                    status: 'completed',
+                    description: `Full Order payment via Customer Wallet (Ref: ${orderRef})`
+                });
+
+                await PaymentGatewayService.cacheOrderLocally(verifiedUser.id, {
+                    id: orderRef,
+                    orderNumber: orderRef.slice(0, 8).toUpperCase(),
+                    createdAt: new Date().toISOString(),
+                    total_amount: finalTotal,
+                    status: 'processing',
+                    payment_status: 'paid',
+                    payment_method: 'Wallet',
+                    items: cart,
+                    delivery_address: selectedAddrObj
+                });
+
+                setOrderSuccess(true);
+                triggerOrderWhatsApp(orderRef, finalTotal, 'Wallet');
+                await clearProgress();
+                if (onClearCart) onClearCart();
+                return;
+            }
+
+            // ── OPTION B: Pay Small Small (BNPL) ─────────────────────────
+            if (paymentMethod === 'pay_small_small') {
+                const pssDownPayment = pssPlanDetails.downPayment;
+
+                // 1. Pay Small Small with POD
+                if (pssDownPaymentMethod === 'pod') {
+                    const newPlanItem = {
+                        id: orderRef,
+                        orderNumber: orderRef.slice(0, 8).toUpperCase(),
+                        createdAt: new Date().toISOString(),
+                        totalAmount: finalTotal,
+                        baseTotal: pssPlanDetails.baseTotal,
+                        surcharge: pssPlanDetails.surcharge,
+                        paidAmount: 0,
+                        remainingAmount: finalTotal,
+                        planType: `${pssPlanDetails.durationMonths}_months_${pssPlanDetails.frequency}`,
+                        durationMonths: pssPlanDetails.durationMonths,
+                        frequency: pssPlanDetails.frequency,
+                        installmentsCount: pssPlanDetails.installmentsCount,
+                        installmentsPaid: 0,
+                        isCompleted: false,
+                        schedule: pssPlanDetails.schedule,
+                        items: cart
+                    };
+                    const pssCacheKey = `@abumafhal_pss_plans_${verifiedUser.id}`;
+                    const rawExisting = await AsyncStorage.getItem(pssCacheKey);
+                    const existingList = rawExisting ? JSON.parse(rawExisting) : [];
+                    await AsyncStorage.setItem(pssCacheKey, JSON.stringify([newPlanItem, ...existingList]));
+
+                    await PaymentGatewayService.recordTransaction({
+                        userId: verifiedUser.id,
+                        amount: pssDownPayment,
+                        reference: orderRef,
+                        gateway: 'Pay Small Small (POD)',
+                        type: 'pss_down_payment',
+                        status: 'pending_pod',
+                        description: `Pay Small Small BNPL Down Payment (Ref: ${orderRef})`
+                    });
+
+                    setOrderSuccess(true);
+                    triggerOrderWhatsApp(orderRef, finalTotal, 'Pay Small Small (POD Down Payment)');
+                    await clearProgress();
+                    if (onClearCart) onClearCart();
+                    return;
+                }
+
+                // 2. Pay Small Small with Wallet
+                if (pssDownPaymentMethod === 'Wallet') {
+                    const newBal = Math.max(0, walletBalance - pssDownPayment);
+                    await supabase.from('profiles').update({ wallet_balance: newBal }).eq('id', verifiedUser.id);
+
+                    const newPlanItem = {
+                        id: orderRef,
+                        orderNumber: orderRef.slice(0, 8).toUpperCase(),
+                        createdAt: new Date().toISOString(),
+                        totalAmount: finalTotal,
+                        baseTotal: pssPlanDetails.baseTotal,
+                        surcharge: pssPlanDetails.surcharge,
+                        paidAmount: pssDownPayment,
+                        remainingAmount: pssPlanDetails.remainingBalance,
+                        planType: `${pssPlanDetails.durationMonths}_months_${pssPlanDetails.frequency}`,
+                        durationMonths: pssPlanDetails.durationMonths,
+                        frequency: pssPlanDetails.frequency,
+                        installmentsCount: pssPlanDetails.installmentsCount,
+                        installmentsPaid: 1,
+                        isCompleted: false,
+                        schedule: pssPlanDetails.schedule,
+                        items: cart
+                    };
+                    const pssCacheKey = `@abumafhal_pss_plans_${verifiedUser.id}`;
+                    const rawExisting = await AsyncStorage.getItem(pssCacheKey);
+                    const existingList = rawExisting ? JSON.parse(rawExisting) : [];
+                    await AsyncStorage.setItem(pssCacheKey, JSON.stringify([newPlanItem, ...existingList]));
+
+                    await PaymentGatewayService.recordTransaction({
+                        userId: verifiedUser.id,
+                        amount: pssDownPayment,
+                        reference: orderRef,
+                        gateway: 'Wallet',
+                        type: 'pss_down_payment',
+                        status: 'completed',
+                        description: `Pay Small Small BNPL Down Payment via Wallet (Ref: ${orderRef})`
+                    });
+
+                    setOrderSuccess(true);
+                    triggerOrderWhatsApp(orderRef, finalTotal, 'Pay Small Small (Wallet)');
+                    await clearProgress();
+                    if (onClearCart) onClearCart();
+                    return;
+                }
+
+                // 3. Pay Small Small with Paystack, Flutterwave, or Coinbase
+                const pssInit = await PaymentGatewayService.initiate({
+                    gateway: pssDownPaymentMethod,
+                    amount: pssDownPayment,
+                    email: verifiedUser.email,
+                    phone: selectedAddrObj?.phone || verifiedUser.phone || '',
+                    name: profile?.full_name || verifiedUser.user_metadata?.full_name || 'Customer',
+                    reference: orderRef
+                });
+
+                if (!pssInit?.success || !pssInit?.checkoutUrl) {
+                    throw new Error(`Could not initialize ${pssDownPaymentMethod} down payment gateway.`);
+                }
+
+                setPaymentLink(pssInit.checkoutUrl);
+                setShowPaymentModal(true);
+                return;
+            }
+
+            // ── OPTION C: Direct Gateway (Paystack, Flutterwave, Coinbase) ─
+            const initRes = await PaymentGatewayService.initiate({
+                gateway: paymentMethod,
+                amount: finalTotal,
+                email: verifiedUser.email,
+                phone: selectedAddrObj?.phone || verifiedUser.phone || '',
+                name: profile?.full_name || verifiedUser.user_metadata?.full_name || 'Customer',
+                reference: orderRef
+            });
+
+            if (!initRes?.success || !initRes?.checkoutUrl) {
+                throw new Error(`Could not initialize ${paymentMethod} payment gateway.`);
+            }
+
+            setPaymentLink(initRes.checkoutUrl);
             setShowPaymentModal(true);
 
         } catch (error) {
-            let errorMsg = 'Something went wrong. Please try again.';
-            if (error.context) {
-                try {
-                    const text = await error.context.text();
-                    const body = JSON.parse(text);
-                    if (body && body.error) errorMsg = String(body.error);
-                } catch (e) {
-                    errorMsg = error.message;
-                }
-            } else {
-                errorMsg = error.message || 'Network error. Please try again.';
-            }
-
+            console.error('Checkout Submit Error:', error);
+            const errorMsg = error.message || 'Payment initiation failed. Please try again.';
             setIsProcessing(false);
             setTimeout(() => {
-                Alert.alert('Checkout Failed', String(errorMsg).substring(0, 300));
+                Alert.alert('Payment Initialization Failed', String(errorMsg).substring(0, 300));
             }, 500);
         } finally {
             setIsProcessing(false);
@@ -2260,11 +2366,77 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 visible={showPaymentModal}
                 link={paymentLink}
                 onAbort={() => setShowPaymentModal(false)}
-                onRedirect={(data) => {
+                onRedirect={async (data) => {
                     setShowPaymentModal(false);
-                    if (data.status === 'successful' || data.status === 'completed' || data.status === 'success') {
+                    if (data && (data.status === 'successful' || data.status === 'completed' || data.status === 'success')) {
+                        const targetRef = currentOrderId || data.reference || data.tx_ref || PaymentGatewayService.generateRef('ORD');
+                        const isPss = paymentMethod === 'pay_small_small';
+                        const activeGateway = isPss ? pssDownPaymentMethod : paymentMethod;
+                        const paidAmount = isPss ? pssPlanDetails.downPayment : finalTotal;
+
+                        try {
+                            const { data: { user: currentUser } } = await supabase.auth.getUser();
+                            const uid = currentUser?.id;
+
+                            if (uid) {
+                                // 1. Record completed transaction in database
+                                await PaymentGatewayService.recordTransaction({
+                                    userId: uid,
+                                    amount: paidAmount,
+                                    reference: targetRef,
+                                    gateway: activeGateway,
+                                    type: isPss ? 'pss_down_payment' : 'order_payment',
+                                    description: isPss
+                                        ? `Pay Small Small BNPL Down Payment of ₦${paidAmount.toLocaleString()} via ${activeGateway} (Ref: ${targetRef})`
+                                        : `Escrow payment of ₦${paidAmount.toLocaleString()} via ${activeGateway} (Ref: ${targetRef})`
+                                });
+
+                                // 2. If Pay Small Small, cache rich plan locally
+                                if (isPss) {
+                                    const newPlanItem = {
+                                        id: targetRef,
+                                        orderNumber: targetRef.slice(0, 8).toUpperCase(),
+                                        createdAt: new Date().toISOString(),
+                                        totalAmount: finalTotal,
+                                        baseTotal: pssPlanDetails.baseTotal,
+                                        surcharge: pssPlanDetails.surcharge,
+                                        paidAmount: pssPlanDetails.downPayment,
+                                        remainingAmount: pssPlanDetails.remainingBalance,
+                                        planType: `${pssPlanDetails.durationMonths}_months_${pssPlanDetails.frequency}`,
+                                        durationMonths: pssPlanDetails.durationMonths,
+                                        frequency: pssPlanDetails.frequency,
+                                        installmentsCount: pssPlanDetails.installmentsCount,
+                                        installmentsPaid: 1,
+                                        isCompleted: false,
+                                        schedule: pssPlanDetails.schedule,
+                                        items: cart
+                                    };
+                                    const pssCacheKey = `@abumafhal_pss_plans_${uid}`;
+                                    const rawExisting = await AsyncStorage.getItem(pssCacheKey);
+                                    const existingList = rawExisting ? JSON.parse(rawExisting) : [];
+                                    await AsyncStorage.setItem(pssCacheKey, JSON.stringify([newPlanItem, ...existingList]));
+                                }
+
+                                // 3. Cache Order Locally for instant display
+                                await PaymentGatewayService.cacheOrderLocally(uid, {
+                                    id: targetRef,
+                                    orderNumber: targetRef.slice(0, 8).toUpperCase(),
+                                    createdAt: new Date().toISOString(),
+                                    total_amount: finalTotal,
+                                    status: 'processing',
+                                    payment_status: 'paid',
+                                    payment_method: activeGateway,
+                                    items: cart,
+                                    delivery_address: selectedAddrObj
+                                });
+                            }
+                        } catch (err) {
+                            console.warn('Post-payment record error:', err);
+                        }
+
                         setOrderSuccess(true);
-                        triggerOrderWhatsApp(currentOrderId, finalTotal, paymentMethod || 'Online Payment');
+                        triggerOrderWhatsApp(targetRef, finalTotal, activeGateway || 'Online Payment');
+                        await clearProgress();
                         if (onClearCart) onClearCart();
                     } else {
                         Alert.alert('Payment Incomplete', 'The transaction was cancelled or incomplete. Please try again.');
