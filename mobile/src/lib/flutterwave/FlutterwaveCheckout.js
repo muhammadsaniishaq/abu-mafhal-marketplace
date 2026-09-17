@@ -116,18 +116,30 @@ var FlutterwaveCheckout = function FlutterwaveCheckout(props) {
         var handleMsg = function (e) {
             var d = e && e.data;
             if (!d) return;
-            var str = typeof d === 'string' ? d : JSON.stringify(d);
-            if (str.includes('successful') || str.includes('completed') || str.includes('charge.success')) {
-                animateOut().then(function () {
-                    if (onRedirect) onRedirect({ status: 'successful' });
-                });
+            var data = d;
+            if (typeof d === 'string') {
+                try { data = JSON.parse(d); } catch (_) {}
+            }
+            if (typeof data === 'object' && data !== null) {
+                if (data.status === 'successful' || data.event === 'charge.success') {
+                    animateOut().then(function () {
+                        if (onRedirect) onRedirect(data);
+                    });
+                    return;
+                }
+                if (data.status === 'cancelled' || data.event === 'checkout.closed') {
+                    animateOut().then(function () {
+                        if (onAbort) onAbort();
+                    });
+                    return;
+                }
             }
         };
         window.addEventListener('message', handleMsg);
         return function () {
             window.removeEventListener('message', handleMsg);
         };
-    }, [onRedirect, animateOut]);
+    }, [onRedirect, onAbort, animateOut]);
 
     var doAnimate = React.useCallback(function () {
         if (visible === show) {
@@ -207,33 +219,6 @@ var FlutterwaveCheckout = function FlutterwaveCheckout(props) {
                             title="Secure Checkout"
                         />
                     )}
-                    <View style={{
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        padding: 12,
-                        backgroundColor: '#F8FAFC',
-                        borderTopWidth: 1,
-                        borderTopColor: '#E2E8F0'
-                    }}>
-                        <TouchableOpacity
-                            onPress={function () { return handleAbort(); }}
-                            style={{ paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10, backgroundColor: '#E2E8F0' }}
-                        >
-                            <Text style={{ fontSize: 13, fontWeight: '700', color: '#475569' }}>Cancel</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            onPress={function () {
-                                animateOut().then(function () {
-                                    if (onRedirect) onRedirect({ status: 'successful' });
-                                });
-                            }}
-                            style={{ paddingVertical: 10, paddingHorizontal: 18, borderRadius: 10, backgroundColor: '#10B981' }}
-                        >
-                            <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF' }}>✓ I Have Completed Payment</Text>
-                        </TouchableOpacity>
-                    </View>
                 </View>
             ) : (
                 <WebView

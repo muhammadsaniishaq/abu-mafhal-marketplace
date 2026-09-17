@@ -160,9 +160,19 @@ export const PaymentGatewayService = {
             ]
           },
           callback: function(response) {
+            try {
+              if (window.parent && window.parent !== window) {
+                window.parent.postMessage({ status: 'successful', reference: response.reference || '${ref}' }, '*');
+              }
+            } catch (_) {}
             window.location.href = "https://abumafhal.com/payment/verify?status=successful&reference=" + encodeURIComponent(response.reference || '${ref}');
           },
           onClose: function() {
+            try {
+              if (window.parent && window.parent !== window) {
+                window.parent.postMessage({ status: 'cancelled', reference: '${ref}' }, '*');
+              }
+            } catch (_) {}
             window.location.href = "https://abumafhal.com/payment/verify?status=cancelled&reference=" + encodeURIComponent('${ref}');
           }
         });
@@ -325,9 +335,19 @@ export const PaymentGatewayService = {
             logo: "https://abumafhal.com/logo.png"
           },
           callback: function(data) {
+            try {
+              if (window.parent && window.parent !== window) {
+                window.parent.postMessage({ status: 'successful', tx_ref: data.tx_ref || '${ref}', flwref: data.flw_ref || data.transaction_id || '' }, '*');
+              }
+            } catch (_) {}
             window.location.href = "https://abumafhal.com/payment/verify?status=successful&tx_ref=" + encodeURIComponent(data.tx_ref || '${ref}') + "&flwref=" + encodeURIComponent(data.flw_ref || data.transaction_id || '');
           },
           onclose: function() {
+            try {
+              if (window.parent && window.parent !== window) {
+                window.parent.postMessage({ status: 'cancelled', tx_ref: '${ref}' }, '*');
+              }
+            } catch (_) {}
             window.location.href = "https://abumafhal.com/payment/verify?status=cancelled&tx_ref=" + encodeURIComponent('${ref}');
           }
         });
