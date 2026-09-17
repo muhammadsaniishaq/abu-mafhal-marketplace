@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { Alert } from 'react-native';
+import { Alert, Platform, Vibration } from 'react-native';
 
 // Resend API key loaded from environment if configured
 export const RESEND_API_KEY = process.env.RESEND_API_KEY || process.env.EXPO_PUBLIC_RESEND_API_KEY || '';
@@ -7,48 +7,95 @@ export const RESEND_API_KEY = process.env.RESEND_API_KEY || process.env.EXPO_PUB
 export const NotificationService = {
 
     /**
-     * Send a notification (In-App + Email)
+     * Request browser / device push notification permission if available
+     */
+    async requestPermission() {
+        try {
+            if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
+                if (Notification.permission === 'default') {
+                    await Notification.requestPermission();
+                }
+                return Notification.permission === 'granted';
+            }
+        } catch (_) {}
+        return true;
+    },
+
+    /**
+     * Trigger a local push banner / sound
+     */
+    triggerLocalPush(title, body) {
+        try {
+            if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
+                if (Notification.permission === 'granted') {
+                    new Notification(title, {
+                        body,
+                        icon: '/favicon.ico',
+                        badge: '/favicon.ico'
+                    });
+                }
+            } else if (Platform.OS !== 'web') {
+                Vibration.vibrate([0, 200, 100, 200]);
+            }
+        } catch (_) {}
+    },
+
+    /**
+     * Send a notification (In-App + Local Push + Email)
      * @param {string} userId - Target User ID
      * @param {string} title - Title
      * @param {string} message - Body
      * @param {string} type - 'order' | 'shipping' | 'system' | 'login'
      * @param {string} email - (Optional) User email for sending mail
+     * @param {object} extra - (Optional) Extra payload
      */
-    async send({ userId, title, message, type, email }) {
+    async send({ userId, title, message, type = 'order', email, extra = {} }) {
         const result = { db: false, email: false, error: null };
 
+        // 1. Trigger immediate local push banner & vibration
+        this.triggerLocalPush(title, message);
+
         if (!userId) {
-            console.log('Skipping notification: No userId provided');
+            console.log('[NotificationService] Skipping DB notification: No userId provided');
             return result;
         }
 
         try {
-            // 1. Insert into Database (In-App)
-            // [FIX] DB Column appears to be 'userId' (camelCase) based on error logs
-            const { error } = await supabase.from('notifications').insert([{
-                userId: userId,
-                user_id: userId, // Send both just in case, Supabase ignores extras usually (or we can try just userId)
-                title,
-                message,
-                type
-            }]);
+            // 2. Insert into Supabase notifications table
+            // Verified schema columns: user_id, title, body, is_read, data
+            const notifPayload = {
+                user_id: userId,
+                title: String(title || 'Notification').trim(),
+                body: String(message || '').trim(),
+                is_read: false,
+                data: {
+                    type: type || 'order',
+                    ...extra
+                }
+            };
+
+            const { data, error } = await supabase
+                .from('notifications')
+                .insert([notifPayload])
+                .select('id')
+                .maybeSingle();
 
             if (error) {
-                console.log('Notification DB Error:', error);
-                result.error = "In-App DB Error: " + error.message;
+                console.warn('[NotificationService] In-App DB Note:', error.message);
+                result.error = error.message;
             } else {
                 result.db = true;
+                result.id = data?.id;
             }
 
-            // 2. Send Email (if email provided)
+            // 3. Send Email (if email provided)
             if (email) {
                 const emailResult = await this.sendEmail(email, title, message);
                 result.email = emailResult;
-                if (!emailResult) result.error = (result.error || "") + " Email Failed.";
             }
 
         } catch (err) {
-            console.log('Notification Service Error:', err);
+            console.warn('[NotificationService] Error:', err.message);
             result.error = err.message;
         }
 
@@ -56,12 +103,39 @@ export const NotificationService = {
     },
 
     /**
+     * High-level helper for Order Placement Notifications
+     */
+    async sendOrderNotification({ userId, orderId, amount, gateway, email, phone }) {
+        const orderShort = (orderId || '').slice(0, 8).toUpperCase();
+        const formattedAmount = Number(amount || 0).toLocaleString();
+
+        const title = `Order Confirmed (#${orderShort})`;
+        const message = `Your order of ₦${formattedAmount} via ${gateway || 'Online'} has been placed successfully and is being prepared for dispatch.`;
+
+        return await this.send({
+            userId,
+            title,
+            message,
+            type: 'order',
+            email,
+            extra: {
+                order_id: orderId,
+                order_number: orderShort,
+                amount,
+                gateway,
+                phone
+            }
+        });
+    },
+
+    /**
      * Send Email via Resend API
      */
     async sendEmail(to, subject, htmlBody) {
-        // [DEBUG] Check API Key
+        if (!to || !to.includes('@')) return false;
+
         if (!RESEND_API_KEY || RESEND_API_KEY.includes('12345')) {
-            console.log('Email skipped: No valid Resend API Key.');
+            console.log('[NotificationService] Email notice: Resend API Key is unconfigured.');
             return false;
         }
 
@@ -80,31 +154,26 @@ export const NotificationService = {
                 })
             });
 
-            // CRITICAL FIX: Always read as text first to avoid JSON parse crashes
-            // if the API returns an HTML error page (Gateway Timeout, rate limit, etc.)
             const rawText = await response.text();
             let data = null;
             try {
                 data = JSON.parse(rawText);
-            } catch (parseErr) {
-                // Response was not JSON (e.g., HTML Gateway error)
-                console.error('Resend API: Non-JSON response:', rawText?.substring(0, 200));
+            } catch (_) {
                 return false;
             }
 
             if (!response.ok) {
-                console.error("Resend API Error:", JSON.stringify(data));
-                // Don't Alert from a background service - just log and return false
+                console.warn('[NotificationService] Resend API Warning:', data?.message);
                 return false;
             }
 
-            console.log('Email Sent:', data?.id);
+            console.log('[NotificationService] Email Sent successfully:', data?.id);
             return true;
-
         } catch (err) {
-            console.log('Email Send Error (network):', err.message);
-            // Don't Alert from a background service - just log and return false
+            console.warn('[NotificationService] Email Send Notice:', err.message);
             return false;
         }
     }
 };
+
+export default NotificationService;

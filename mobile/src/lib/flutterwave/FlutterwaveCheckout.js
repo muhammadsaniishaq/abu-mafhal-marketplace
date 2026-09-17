@@ -1,44 +1,31 @@
 import React from 'react';
-import { StyleSheet, Modal, View, Animated, TouchableWithoutFeedback, Text, Alert, Image, Dimensions, Easing, TouchableOpacity, Platform, ActivityIndicator } from 'react-native';
+import { StyleSheet, Modal, View, Animated, TouchableWithoutFeedback, Text, Alert, Dimensions, Easing, TouchableOpacity, Platform, ActivityIndicator } from 'react-native';
 import WebView from 'react-native-webview';
 import { colors } from './flw_configs.js';
 import { Ionicons } from '@expo/vector-icons';
 
-// Replaced loader with native ActivityIndicator
-// var loader = require('./assets/loader.gif');
 var borderRadiusDimension = 24 / 896;
 var windowHeight = Dimensions.get('window').height;
+
 var getRedirectParams = function (url) {
-    // initialize result container
     var res = {};
-    // if url has params
     if (url.split('?').length > 1) {
-        // get query params in an array
         var params = url.split('?')[1].split('&');
-        // add url params to result
         for (var i = 0; i < params.length; i++) {
             var param = params[i].split('=');
             var val = decodeURIComponent(param[1]).trim();
             res[param[0]] = String(val);
         }
     }
-    // return result
     return res;
 };
-var WebRedirect = function (_a) {
-    var link = _a.link;
-    React.useEffect(function () {
-        if (link && Platform.OS === 'web') {
-            window.location.href = link;
-        }
-    }, [link]);
-    return null;
-};
+
 var FlutterwaveCheckout = function FlutterwaveCheckout(props) {
     var link = props.link, visible = props.visible, onRedirect = props.onRedirect, onAbort = props.onAbort;
     var _a = React.useState(false), show = _a[0], setShow = _a[1];
     var webviewRef = React.useRef(null);
     var animation = React.useRef(new Animated.Value(0));
+
     var animateIn = React.useCallback(function () {
         setShow(true);
         Animated.timing(animation.current, {
@@ -48,6 +35,7 @@ var FlutterwaveCheckout = function FlutterwaveCheckout(props) {
             useNativeDriver: false
         }).start();
     }, []);
+
     var animateOut = React.useCallback(function () {
         return new Promise(function (resolve) {
             Animated.timing(animation.current, {
@@ -60,11 +48,13 @@ var FlutterwaveCheckout = function FlutterwaveCheckout(props) {
             });
         });
     }, []);
+
     var handleReload = React.useCallback(function () {
         if (webviewRef.current) {
             webviewRef.current.reload();
         }
     }, []);
+
     var handleAbort = React.useCallback(function (confirmed) {
         if (confirmed === void 0) { confirmed = false; }
         if (!confirmed) {
@@ -78,7 +68,6 @@ var FlutterwaveCheckout = function FlutterwaveCheckout(props) {
             ]);
             return;
         }
-        // remove tx_ref and dismiss
         animateOut().then(onAbort);
     }, [onAbort, animateOut]);
 
@@ -120,6 +109,25 @@ var FlutterwaveCheckout = function FlutterwaveCheckout(props) {
         });
         return false;
     }, [onRedirect, onAbort, animateOut]);
+
+    // Listen to postMessage on Web
+    React.useEffect(function () {
+        if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+        var handleMsg = function (e) {
+            var d = e && e.data;
+            if (!d) return;
+            var str = typeof d === 'string' ? d : JSON.stringify(d);
+            if (str.includes('successful') || str.includes('completed') || str.includes('charge.success')) {
+                animateOut().then(function () {
+                    if (onRedirect) onRedirect({ status: 'successful' });
+                });
+            }
+        };
+        window.addEventListener('message', handleMsg);
+        return function () {
+            window.removeEventListener('message', handleMsg);
+        };
+    }, [onRedirect, animateOut]);
 
     var doAnimate = React.useCallback(function () {
         if (visible === show) {
@@ -185,11 +193,47 @@ var FlutterwaveCheckout = function FlutterwaveCheckout(props) {
             </View>
 
             {Platform.OS === 'web' ? (
-                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'white' }}>
-                    <Text style={{ fontSize: 18, color: '#334155', marginBottom: 16 }}>Redirecting to Secure Checkout...</Text>
-                    <ActivityIndicator size="large" color={colors.primary} />
-                    {/* Trigger redirect on web mount */}
-                    <WebRedirect link={link} />
+                <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+                    {isHtml ? (
+                        <iframe
+                            srcDoc={link}
+                            style={{ width: '100%', flex: 1, border: 'none', height: '100%' }}
+                            title="Secure Checkout"
+                        />
+                    ) : (
+                        <iframe
+                            src={link || ''}
+                            style={{ width: '100%', flex: 1, border: 'none', height: '100%' }}
+                            title="Secure Checkout"
+                        />
+                    )}
+                    <View style={{
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: 12,
+                        backgroundColor: '#F8FAFC',
+                        borderTopWidth: 1,
+                        borderTopColor: '#E2E8F0'
+                    }}>
+                        <TouchableOpacity
+                            onPress={function () { return handleAbort(); }}
+                            style={{ paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10, backgroundColor: '#E2E8F0' }}
+                        >
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: '#475569' }}>Cancel</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            onPress={function () {
+                                animateOut().then(function () {
+                                    if (onRedirect) onRedirect({ status: 'successful' });
+                                });
+                            }}
+                            style={{ paddingVertical: 10, paddingHorizontal: 18, borderRadius: 10, backgroundColor: '#10B981' }}
+                        >
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF' }}>✓ I Have Completed Payment</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
             ) : (
                 <WebView
@@ -210,9 +254,9 @@ var FlutterwaveCheckout = function FlutterwaveCheckout(props) {
         </Animated.View>
     </Modal>);
 };
+
 var FlutterwaveCheckoutBackdrop = function FlutterwaveCheckoutBackdrop(_a) {
     var animation = _a.animation, onPress = _a.onPress;
-    // Interpolation backdrop animation
     var backgroundColor = animation.interpolate({
         inputRange: [0, 0.3, 1],
         outputRange: [colors.transparent, colors.transparent, 'rgba(0,0,0,0.5)']
@@ -221,12 +265,13 @@ var FlutterwaveCheckoutBackdrop = function FlutterwaveCheckoutBackdrop(_a) {
         <Animated.View style={Object.assign({}, styles.backdrop, { backgroundColor: backgroundColor })} />
     </TouchableWithoutFeedback>);
 };
+
 export var FlutterwaveCheckoutError = function (_a) {
     var hasLink = _a.hasLink, onTryAgain = _a.onTryAgain;
     return (<View style={styles.error} testID="flw-checkout-error">
         {hasLink ? (<>
             <Text style={styles.errorText}>
-                An error occurred, please tab below to try again.
+                An error occurred, please tap below to try again.
             </Text>
             <TouchableOpacity style={styles.errorActionButton} onPress={onTryAgain}>
                 <Text style={styles.errorActionButtonText}>Try Again</Text>
@@ -236,72 +281,74 @@ export var FlutterwaveCheckoutError = function (_a) {
         </Text>)}
     </View>);
 };
+
 var FlutterwaveCheckoutLoader = function () {
     return (<View style={styles.loading} testID="flw-checkout-loader">
         <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={{ marginTop: 14, fontSize: 13, fontWeight: '700', color: '#64748B' }}>
+            Securing payment session...
+        </Text>
     </View>);
 };
+
 var styles = StyleSheet.create({
-    errorActionButtonText: {
-        textAlign: 'center',
-        color: colors.primary,
-        fontSize: 16
+    webviewContainer: {
+        flex: 1,
+        backgroundColor: colors.white,
+        marginTop: 40,
+        borderTopLeftRadius: borderRadiusDimension * windowHeight,
+        borderTopRightRadius: borderRadiusDimension * windowHeight,
+        overflow: 'hidden',
     },
-    errorActionButton: {
-        paddingHorizontal: 16,
-        paddingVertical: 16
-    },
-    errorText: {
-        color: colors.secondary,
-        textAlign: 'center',
-        marginBottom: 32,
-        fontSize: 18
-    },
-    error: {
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        bottom: 0,
-        top: 0,
-        backgroundColor: '#ffffff',
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingHorizontal: 56
+    webview: {
+        flex: 1,
+        backgroundColor: colors.white,
     },
     backdrop: {
         position: 'absolute',
+        top: 0,
         left: 0,
         right: 0,
         bottom: 0,
-        top: 0
-    },
-    loadingImage: {
-        width: 64,
-        height: 64,
-        resizeMode: 'contain'
     },
     loading: {
         position: 'absolute',
         top: 0,
+        left: 0,
         right: 0,
         bottom: 0,
-        left: 0,
-        backgroundColor: 'rgba(255, 255, 255, 0.3)',
+        alignItems: 'center',
         justifyContent: 'center',
-        alignItems: 'center'
+        backgroundColor: colors.white,
     },
-    webviewContainer: {
-        top: Platform.select({ ios: 96, android: 64 }),
-        flex: 1,
-        backgroundColor: '#efefef',
-        paddingBottom: Platform.select({ ios: 96, android: 64 }),
-        overflow: 'hidden',
-        borderTopLeftRadius: windowHeight * borderRadiusDimension,
-        borderTopRightRadius: windowHeight * borderRadiusDimension
+    error: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.white,
+        padding: 24,
     },
-    webview: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0)'
+    errorText: {
+        fontSize: 14,
+        color: '#64748B',
+        textAlign: 'center',
+        marginBottom: 16,
+    },
+    errorActionButton: {
+        backgroundColor: colors.primary,
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 12,
+    },
+    errorActionButtonText: {
+        color: colors.white,
+        fontWeight: '700',
+        fontSize: 14,
     }
 });
+
 export default FlutterwaveCheckout;
