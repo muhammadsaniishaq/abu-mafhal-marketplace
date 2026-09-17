@@ -276,9 +276,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             {
                 id: 'pay_small_small',
                 enabled: settings?.payment_methods?.pay_small_small !== false,
-                name: 'Pay Small Small (BNPL)',
-                sub: 'Pay 25% or 33% today, split the rest',
-                badge: 'Flexible BNPL',
+                name: 'Pay Small Small',
+                sub: 'Pay down payment today, split the rest',
+                badge: 'Installments',
                 icon: 'calendar-outline',
                 accentColor: GOLD
             },
@@ -1447,25 +1447,25 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         {/* ── PAY SMALL SMALL (BNPL) ADVANCED PLAN SELECTOR ── */}
                         {paymentMethod === 'pay_small_small' && (
                             <View style={s.pssBox}>
-                                {/* Header */}
+                                {/* Calm Header */}
                                 <View style={s.pssHeader}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                        <Ionicons name="calendar" size={15} color={GOLD} />
-                                        <Text style={s.pssHeaderTitle}>Pay Small Small (BNPL)</Text>
+                                        <Ionicons name="sparkles" size={14} color={GOLD} />
+                                        <Text style={s.pssHeaderTitle}>Pay Small Small</Text>
                                     </View>
                                     <View style={s.pssSurchargePill}>
-                                        <Text style={s.pssSurchargePillTxt}>+5% FINANCING</Text>
+                                        <Text style={s.pssSurchargePillTxt}>+5% fee</Text>
                                     </View>
                                 </View>
 
-                                {/* Compact Tenor & Frequency Row */}
+                                {/* Duration & Frequency Selectors */}
                                 <View style={s.pssTenorFreqRow}>
                                     <TouchableOpacity 
                                         style={s.pssPillSelect}
                                         onPress={() => setPssDurationModalOpen(true)}
                                         activeOpacity={0.8}
                                     >
-                                        <Text style={s.pssPillSelectLabel}>TENOR</Text>
+                                        <Text style={s.pssPillSelectLabel}>Duration</Text>
                                         <View style={s.pssPillSelectContent}>
                                             <Ionicons name="time-outline" size={13} color={GOLD} />
                                             <Text style={s.pssPillSelectTxt}>
@@ -1480,7 +1480,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                         onPress={() => setPssFrequencyModalOpen(true)}
                                         activeOpacity={0.8}
                                     >
-                                        <Text style={s.pssPillSelectLabel}>FREQUENCY</Text>
+                                        <Text style={s.pssPillSelectLabel}>Interval</Text>
                                         <View style={s.pssPillSelectContent}>
                                             <Ionicons name="repeat-outline" size={13} color={GOLD} />
                                             <Text style={s.pssPillSelectTxt} numberOfLines={1}>
@@ -1495,51 +1495,45 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                     </TouchableOpacity>
                                 </View>
 
-                                {/* Dual Metric Highlight Banner */}
+                                {/* Price Summary Hero Banner */}
                                 <View style={s.pssHeroBanner}>
                                     <View style={s.pssHeroCol}>
-                                        <Text style={s.pssHeroLabel}>DUE TODAY</Text>
+                                        <Text style={s.pssHeroLabel}>Pay Today</Text>
                                         <Text style={s.pssHeroValueEmerald}>{formatCurrency(pssPlanDetails.downPayment)}</Text>
-                                        <Text style={s.pssHeroSub}>Initial Down Payment</Text>
                                     </View>
                                     <View style={s.pssHeroDivider} />
                                     <View style={s.pssHeroCol}>
-                                        <Text style={s.pssHeroLabel}>REMAINING</Text>
+                                        <Text style={s.pssHeroLabel}>Then {pssPlanDetails.installmentsCount - 1}x ({pssPlanDetails.frequency})</Text>
                                         <Text style={s.pssHeroValueNavy}>{formatCurrency(pssPlanDetails.recurringAmount)}</Text>
-                                        <Text style={s.pssHeroSub}>{pssPlanDetails.installmentsCount - 1} recurring splits</Text>
                                     </View>
                                 </View>
 
-                                {/* Expandable Schedule Toggle */}
+                                {/* Minimalist Schedule Accordion Toggle */}
                                 <TouchableOpacity 
                                     style={s.pssScheduleToggleBtn}
                                     onPress={() => setPssScheduleExpanded(!pssScheduleExpanded)}
-                                    activeOpacity={0.8}
+                                    activeOpacity={0.7}
                                 >
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                        <Ionicons name="calendar-outline" size={13} color={NAVY} />
+                                        <Ionicons name="calendar-outline" size={12} color={SLATE} />
                                         <Text style={s.pssScheduleToggleTxt}>
-                                            {pssScheduleExpanded ? 'Hide Schedule' : `View ${pssPlanDetails.installmentsCount} Payment Dates`}
+                                            {pssScheduleExpanded ? 'Hide schedule' : 'Payment schedule'}
                                         </Text>
                                     </View>
-                                    <Ionicons name={pssScheduleExpanded ? 'chevron-up' : 'chevron-down'} size={13} color={NAVY} />
+                                    <Ionicons name={pssScheduleExpanded ? 'chevron-up' : 'chevron-down'} size={12} color={SLATE} />
                                 </TouchableOpacity>
 
                                 {pssScheduleExpanded && (
                                     <View style={s.pssScheduleBox}>
-                                        <Text style={s.pssScheduleTitle}>Schedule ({pssPlanDetails.installmentsCount} Splits):</Text>
                                         {pssPlanDetails.schedule.slice(0, 8).map((inst, i) => (
                                             <View key={i} style={s.pssScheduleRow}>
                                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                                     <View style={[s.pssScheduleNumCircle, i === 0 && { backgroundColor: EMERALD }]}>
                                                         <Text style={s.pssScheduleNumTxt}>{inst.installment_number}</Text>
                                                     </View>
-                                                    <View>
-                                                        <Text style={s.pssScheduleLabel}>{inst.label}</Text>
-                                                        <Text style={s.pssScheduleDate}>
-                                                            {i === 0 ? 'Today (Down Payment)' : new Date(inst.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                                                        </Text>
-                                                    </View>
+                                                    <Text style={s.pssScheduleLabel}>
+                                                        {i === 0 ? 'Today' : new Date(inst.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                                                    </Text>
                                                 </View>
                                                 <Text style={[s.pssScheduleAmount, i === 0 && { color: EMERALD }]}>
                                                     {formatCurrency(inst.amount)}
@@ -1549,13 +1543,11 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                     </View>
                                 )}
 
-                                {/* 4-GRID COLUMNS DOWN PAYMENT METHOD SELECTOR */}
+                                {/* Down Payment Gateway Selector (4 Columns) */}
                                 <View style={s.pssDownPaymentSection}>
                                     <View style={s.pssDownPaymentHeader}>
-                                        <Text style={s.pssDownPaymentTitle}>Pay Down Payment With</Text>
-                                        <View style={s.pssDueTodayTag}>
-                                            <Text style={s.pssDueTodayTagTxt}>Due: {formatCurrency(pssPlanDetails.downPayment)}</Text>
-                                        </View>
+                                        <Text style={s.pssDownPaymentTitle}>Pay Down Payment</Text>
+                                        <Text style={s.pssDueTodayTagTxt}>{formatCurrency(pssPlanDetails.downPayment)}</Text>
                                     </View>
 
                                     {/* 4 Equal Grid Columns */}
@@ -1569,8 +1561,8 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                                     onPress={() => {
                                                         if (isDisabled) {
                                                             Alert.alert(
-                                                                'Insufficient Wallet Balance',
-                                                                `Your Abu Mafhal wallet balance (₦${Number(opt.balance || 0).toLocaleString()}) is lower than today's down payment (₦${pssPlanDetails.downPayment.toLocaleString()}). Please top up your wallet or pick another payment method.`
+                                                                'Insufficient Balance',
+                                                                `Your wallet has ${formatCurrency(opt.balance || 0)}, but the down payment is ${formatCurrency(pssPlanDetails.downPayment)}.`
                                                             );
                                                             return;
                                                         }
@@ -1585,14 +1577,14 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                                 >
                                                     {isSelected && (
                                                         <View style={s.pssGridSelectedBadge}>
-                                                            <Ionicons name="checkmark" size={9} color={WHITE} />
+                                                            <Ionicons name="checkmark" size={8} color={WHITE} />
                                                         </View>
                                                     )}
                                                     <View style={[s.pssGridLogoBox, isSelected && s.pssGridLogoBoxSelected]}>
                                                         {opt.logo ? (
                                                             <Image source={{ uri: opt.logo }} style={s.pssGridLogoImg} />
                                                         ) : (
-                                                            <Ionicons name={opt.icon} size={20} color={isSelected ? GOLD : SLATE} />
+                                                            <Ionicons name={opt.icon} size={18} color={isSelected ? GOLD : SLATE} />
                                                         )}
                                                     </View>
                                                     <Text style={[s.pssGridColName, isSelected && s.pssGridColNameSelected]} numberOfLines={1}>
@@ -1600,17 +1592,19 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                                     </Text>
                                                     {opt.id === 'Wallet' ? (
                                                         <Text style={[s.pssGridColSub, isDisabled ? { color: DANGER } : { color: EMERALD }]} numberOfLines={1}>
-                                                            {isDisabled ? 'Low ₦' : `₦${Number(opt.balance || 0) >= 1000 ? Math.floor(Number(opt.balance || 0) / 1000) + 'k' : opt.balance}`}
+                                                            {isDisabled ? 'Low' : formatCurrency(opt.balance || 0)}
                                                         </Text>
                                                     ) : (
-                                                        <View style={[s.pssGridDot, isSelected && { backgroundColor: GOLD }]} />
+                                                        <Text style={s.pssGridColSubMuted} numberOfLines={1}>
+                                                            {opt.id === 'Paystack' ? 'Cards' : opt.id === 'Flutterwave' ? 'Mobile' : 'Crypto'}
+                                                        </Text>
                                                     )}
                                                 </TouchableOpacity>
                                             );
                                         })}
                                     </View>
 
-                                    {/* Dynamic Feedback Text */}
+                                    {/* Smooth single-line feedback */}
                                     <View style={s.pssSelectedMethodFeedback}>
                                         <Ionicons 
                                             name={
@@ -1623,20 +1617,21 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                         />
                                         <Text style={s.pssSelectedMethodFeedbackTxt} numberOfLines={1}>
                                             {pssDownPaymentMethod === 'Wallet'
-                                                ? `Direct debit of ₦${pssPlanDetails.downPayment.toLocaleString()} from Wallet`
+                                                ? `Direct wallet debit • Balance: ${formatCurrency(walletBalance)}`
                                                 : pssDownPaymentMethod === 'Coinbase'
-                                                ? 'Pay down payment using BTC, ETH, USDT or USDC'
+                                                ? 'Pay with crypto (BTC, ETH, USDT)'
                                                 : pssDownPaymentMethod === 'Flutterwave'
-                                                ? 'Pay down payment via Debit Card or Mobile Money'
-                                                : 'Pay down payment via Cards, Bank Transfer or USSD'}
+                                                ? 'Debit Card or Mobile Money'
+                                                : 'Card, Bank Transfer or USSD'}
                                         </Text>
                                     </View>
                                 </View>
 
+                                {/* Serene reassurance note */}
                                 <View style={s.pssNoticeRow}>
-                                    <Ionicons name="sparkles" size={12} color={GOLD} />
+                                    <Ionicons name="shield-checkmark" size={12} color={EMERALD} />
                                     <Text style={s.pssNoticeTxt}>
-                                        Dispatched promptly upon paying today's down payment. Manage future splits in your account.
+                                        Order dispatches once down payment is completed.
                                     </Text>
                                 </View>
                             </View>
@@ -3396,44 +3391,43 @@ const s = StyleSheet.create({
     },
     // Pay Small Small (BNPL) Styles
     pssBox: {
-        backgroundColor: '#FFFDF9',
-        borderRadius: 12,
+        backgroundColor: '#FAFAF7',
+        borderRadius: 14,
         padding: 12,
         marginTop: 4,
         marginBottom: 10,
-        borderWidth: 1.5,
-        borderColor: GOLD,
+        borderWidth: 1.2,
+        borderColor: '#EAE5D8',
     },
     pssHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 4,
+        marginBottom: 8,
     },
     pssHeaderTitle: {
-        fontSize: 13,
+        fontSize: 12.5,
         fontWeight: '800',
         color: NAVY,
+        letterSpacing: -0.2,
     },
     pssSurchargePill: {
         backgroundColor: '#FEF3C7',
-        paddingHorizontal: 7,
-        paddingVertical: 3,
-        borderRadius: 6,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 5,
         borderWidth: 1,
-        borderColor: '#F59E0B',
+        borderColor: '#FDE68A',
     },
     pssSurchargePillTxt: {
-        fontSize: 9.5,
-        fontWeight: '900',
+        fontSize: 9,
+        fontWeight: '800',
         color: '#92400E',
-        letterSpacing: 0.4,
     },
     // Compact Tenor & Frequency Styles
     pssTenorFreqRow: {
         flexDirection: 'row',
         gap: 8,
-        marginTop: 8,
         marginBottom: 8,
     },
     pssPillSelect: {
@@ -3442,15 +3436,14 @@ const s = StyleSheet.create({
         borderRadius: 10,
         paddingHorizontal: 10,
         paddingVertical: 7,
-        borderWidth: 1.2,
-        borderColor: '#E2E8F0',
+        borderWidth: 1,
+        borderColor: '#EAE5DB',
     },
     pssPillSelectLabel: {
         fontSize: 9,
-        fontWeight: '800',
+        fontWeight: '700',
         color: SLATE,
-        letterSpacing: 0.5,
-        textTransform: 'uppercase',
+        letterSpacing: 0.2,
     },
     pssPillSelectContent: {
         flexDirection: 'row',
@@ -3459,7 +3452,7 @@ const s = StyleSheet.create({
         marginTop: 2,
     },
     pssPillSelectTxt: {
-        fontSize: 12,
+        fontSize: 11.5,
         fontWeight: '700',
         color: NAVY,
         flex: 1,
@@ -3469,34 +3462,27 @@ const s = StyleSheet.create({
     pssHeroBanner: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#FFFFFF',
-        borderRadius: 12,
-        paddingVertical: 9,
+        backgroundColor: WHITE,
+        borderRadius: 10,
+        paddingVertical: 8,
         paddingHorizontal: 12,
-        borderWidth: 1.2,
-        borderColor: '#FDE68A',
-        marginTop: 2,
+        borderWidth: 1,
+        borderColor: '#EFEAE2',
         marginBottom: 8,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.04,
-        shadowRadius: 3,
-        elevation: 1,
     },
     pssHeroCol: {
         flex: 1,
     },
     pssHeroDivider: {
         width: 1,
-        height: 28,
-        backgroundColor: '#E2E8F0',
+        height: 24,
+        backgroundColor: '#EAE5DB',
         marginHorizontal: 10,
     },
     pssHeroLabel: {
-        fontSize: 9,
-        fontWeight: '800',
+        fontSize: 9.5,
+        fontWeight: '600',
         color: SLATE,
-        letterSpacing: 0.4,
     },
     pssHeroValueEmerald: {
         fontSize: 14,
@@ -3510,26 +3496,19 @@ const s = StyleSheet.create({
         color: NAVY,
         marginTop: 1,
     },
-    pssHeroSub: {
-        fontSize: 9.5,
-        color: MUTED,
-        marginTop: 1,
-    },
     // Schedule Toggle & Preview
     pssScheduleToggleBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#FEF3C7',
-        paddingHorizontal: 10,
-        paddingVertical: 7,
-        borderRadius: 8,
-        marginBottom: 6,
+        paddingHorizontal: 4,
+        paddingVertical: 4,
+        marginBottom: 4,
     },
     pssScheduleToggleTxt: {
-        fontSize: 11,
-        fontWeight: '800',
-        color: NAVY,
+        fontSize: 10.5,
+        fontWeight: '600',
+        color: SLATE,
     },
     pssScheduleBox: {
         backgroundColor: WHITE,
@@ -3537,14 +3516,8 @@ const s = StyleSheet.create({
         padding: 8,
         marginBottom: 8,
         borderWidth: 1,
-        borderColor: '#E2E8F0',
+        borderColor: '#EFEAE2',
         gap: 5,
-    },
-    pssScheduleTitle: {
-        fontSize: 10.5,
-        fontWeight: '800',
-        color: NAVY,
-        marginBottom: 2,
     },
     pssScheduleRow: {
         flexDirection: 'row',
@@ -3552,32 +3525,29 @@ const s = StyleSheet.create({
         justifyContent: 'space-between',
         paddingVertical: 3,
         borderBottomWidth: 0.5,
-        borderBottomColor: '#F1F5F9',
+        borderBottomColor: '#F8F6F0',
     },
     pssScheduleNumCircle: {
-        width: 16,
-        height: 16,
-        borderRadius: 8,
+        width: 15,
+        height: 15,
+        borderRadius: 7.5,
         backgroundColor: '#94A3B8',
         alignItems: 'center',
         justifyContent: 'center',
     },
     pssScheduleNumTxt: {
-        fontSize: 9,
+        fontSize: 8.5,
         fontWeight: '800',
         color: WHITE,
     },
     pssScheduleLabel: {
-        fontSize: 10.5,
-        fontWeight: '700',
+        fontSize: 10,
+        fontWeight: '600',
         color: NAVY,
-    },
-    pssScheduleDate: {
-        fontSize: 9,
-        color: SLATE,
+        marginLeft: 4,
     },
     pssScheduleAmount: {
-        fontSize: 11,
+        fontSize: 10.5,
         fontWeight: '800',
         color: NAVY,
     },
@@ -3586,7 +3556,7 @@ const s = StyleSheet.create({
         marginTop: 4,
         paddingTop: 8,
         borderTopWidth: 1,
-        borderTopColor: '#E2E8F0',
+        borderTopColor: '#EFEAE2',
     },
     pssDownPaymentHeader: {
         flexDirection: 'row',
@@ -3595,48 +3565,35 @@ const s = StyleSheet.create({
         marginBottom: 6,
     },
     pssDownPaymentTitle: {
-        fontSize: 11.5,
-        fontWeight: '800',
+        fontSize: 11,
+        fontWeight: '700',
         color: NAVY,
     },
-    pssDueTodayTag: {
-        backgroundColor: '#ECFDF5',
-        paddingHorizontal: 7,
-        paddingVertical: 2,
-        borderRadius: 5,
-        borderWidth: 1,
-        borderColor: '#A7F3D0',
-    },
     pssDueTodayTagTxt: {
-        fontSize: 9.5,
-        fontWeight: '800',
-        color: '#065F46',
+        fontSize: 11,
+        fontWeight: '900',
+        color: EMERALD,
     },
     pssGridRow: {
         flexDirection: 'row',
         gap: 6,
-        marginBottom: 8,
+        marginBottom: 6,
     },
     pssGridCol: {
         flex: 1,
         backgroundColor: WHITE,
-        borderRadius: 12,
-        paddingVertical: 9,
-        paddingHorizontal: 3,
+        borderRadius: 10,
+        paddingVertical: 8,
+        paddingHorizontal: 2,
         alignItems: 'center',
         justifyContent: 'center',
-        borderWidth: 1.5,
-        borderColor: '#E2E8F0',
-        minHeight: 78,
+        borderWidth: 1.2,
+        borderColor: '#EFEAE2',
+        minHeight: 74,
     },
     pssGridColSelected: {
         borderColor: GOLD,
-        backgroundColor: '#FEFDF6',
-        shadowColor: GOLD,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.12,
-        shadowRadius: 4,
-        elevation: 2,
+        backgroundColor: '#FFFEFA',
     },
     pssGridColDisabled: {
         opacity: 0.45,
@@ -3644,40 +3601,40 @@ const s = StyleSheet.create({
     },
     pssGridSelectedBadge: {
         position: 'absolute',
-        top: 4,
-        right: 4,
-        width: 13,
-        height: 13,
-        borderRadius: 6.5,
+        top: 3,
+        right: 3,
+        width: 12,
+        height: 12,
+        borderRadius: 6,
         backgroundColor: GOLD,
         alignItems: 'center',
         justifyContent: 'center',
     },
     pssGridLogoBox: {
-        width: 34,
-        height: 34,
-        borderRadius: 9,
-        backgroundColor: '#F8FAFC',
+        width: 30,
+        height: 30,
+        borderRadius: 8,
+        backgroundColor: '#FAFAF7',
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: '#E2E8F0',
+        borderColor: '#EFEAE2',
         overflow: 'hidden',
     },
     pssGridLogoBoxSelected: {
-        backgroundColor: '#FFFFFF',
-        borderColor: GOLD_BORDER,
+        backgroundColor: WHITE,
+        borderColor: '#FDE68A',
     },
     pssGridLogoImg: {
-        width: 24,
-        height: 24,
+        width: 22,
+        height: 22,
         resizeMode: 'contain',
     },
     pssGridColName: {
-        fontSize: 10,
+        fontSize: 9.5,
         fontWeight: '700',
         color: SLATE_DARK,
-        marginTop: 5,
+        marginTop: 4,
         textAlign: 'center',
     },
     pssGridColNameSelected: {
@@ -3685,32 +3642,29 @@ const s = StyleSheet.create({
         color: NAVY,
     },
     pssGridColSub: {
-        fontSize: 9,
+        fontSize: 8.5,
         fontWeight: '800',
         marginTop: 1,
     },
-    pssGridDot: {
-        width: 4,
-        height: 4,
-        borderRadius: 2,
-        backgroundColor: '#E2E8F0',
-        marginTop: 3,
+    pssGridColSubMuted: {
+        fontSize: 8,
+        color: MUTED,
+        marginTop: 1,
+        textAlign: 'center',
     },
     pssSelectedMethodFeedback: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
-        backgroundColor: '#FEFCE8',
-        paddingHorizontal: 9,
-        paddingVertical: 6,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: '#FEF08A',
+        gap: 5,
+        backgroundColor: '#F8F6EE',
+        paddingHorizontal: 8,
+        paddingVertical: 5,
+        borderRadius: 6,
         marginBottom: 6,
     },
     pssSelectedMethodFeedbackTxt: {
-        fontSize: 10,
-        color: '#854D0E',
+        fontSize: 9.5,
+        color: '#786028',
         fontWeight: '600',
         flex: 1,
     },
@@ -3718,13 +3672,13 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 5,
-        marginTop: 4,
+        marginTop: 2,
     },
     pssNoticeTxt: {
-        fontSize: 10,
-        color: '#92400E',
+        fontSize: 9.5,
+        color: SLATE,
         flex: 1,
-        lineHeight: 14,
+        lineHeight: 13,
     },
     // Pay on Delivery (POD) Styles
     podBox: {
