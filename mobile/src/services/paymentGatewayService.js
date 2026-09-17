@@ -5,8 +5,6 @@ import { supabase } from '../lib/supabase';
 // Production & Test Gateway Keys
 export const PAYSTACK_PUBLIC_KEY = 'pk_test_92a99bcc7c063338c402506c2e6db390dd986585';
 export const FLUTTERWAVE_PUBLIC_KEY = 'FLWPUBK_TEST-e04746fae852427a92dfeb6df16d5663-X';
-export const COINBASE_USDT_ADDRESS = 'TQ8C18Wb567hD3Z1W8mK8UqpL2PqZ4mNxK';
-export const COINBASE_BTC_ADDRESS = 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh';
 
 /**
  * Service to initiate online payments across Paystack, Flutterwave, and Coinbase Crypto.
@@ -49,7 +47,7 @@ export const PaymentGatewayService = {
                     gateway: 'Paystack',
                     checkoutUrl: data.authorization_url,
                     accessCode: data.access_code,
-                    type: 'url'
+                    type: 'url' 
                 };
             }
         } catch (e) {
@@ -381,224 +379,68 @@ export const PaymentGatewayService = {
     },
 
     /**
-     * Initiate Coinbase / Crypto Escrow Checkout
+     * Initiate Coinbase / Crypto Checkout (Coinbase Commerce)
      */
     async initiateCoinbase({ amount, email, reference, name, phone, metadata = {} }) {
         const safeAmount = Math.max(1, Number(amount) || 0);
-        const ref = reference || this.generateRef('CRYPTO');
-        const approxUsdt = (safeAmount / 1500).toFixed(2); // approximate USDT conversion at ~1500 NGN/USDT
+        const ref = reference || this.generateRef('COINBASE');
 
-        // Clean, responsive Crypto Escrow Interface with instant Copy & Confirmation
-        const inlineHtml = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Coinbase & Crypto Checkout</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: #0B1120;
-      color: #F8FAFC;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      padding: 20px;
-      text-align: center;
-    }
-    .card {
-      background: #1E293B;
-      border: 1px solid #334155;
-      border-radius: 18px;
-      padding: 24px 20px;
-      max-width: 440px;
-      width: 100%;
-      box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.5);
-    }
-    .logo-badge {
-      width: 52px;
-      height: 52px;
-      background: #0F172A;
-      border-radius: 14px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0 auto 12px;
-      border: 1px solid #3B82F6;
-    }
-    .title { font-size: 18px; font-weight: 800; color: #FFFFFF; }
-    .sub { font-size: 12px; color: #94A3B8; margin-top: 4px; margin-bottom: 16px; }
-    .amount-box {
-      background: #0F172A;
-      border: 1px solid #334155;
-      border-radius: 12px;
-      padding: 14px;
-      margin-bottom: 16px;
-    }
-    .ngn-val { font-size: 22px; font-weight: 900; color: #10B981; }
-    .crypto-val { font-size: 13px; font-weight: 700; color: #38BDF8; margin-top: 4px; }
-    .address-section {
-      text-align: left;
-      background: #0F172A;
-      border: 1px solid #334155;
-      border-radius: 12px;
-      padding: 14px;
-      margin-bottom: 14px;
-    }
-    .addr-label { font-size: 11px; font-weight: 800; text-transform: uppercase; color: #94A3B8; margin-bottom: 6px; }
-    .addr-val {
-      font-size: 11.5px;
-      font-family: monospace;
-      color: #E2E8F0;
-      word-break: break-all;
-      background: #1E293B;
-      padding: 8px 10px;
-      border-radius: 8px;
-      border: 1px dashed #475569;
-    }
-    .btn-copy {
-      background: #3B82F6;
-      color: white;
-      font-weight: 700;
-      font-size: 12px;
-      padding: 7px 14px;
-      border-radius: 6px;
-      border: none;
-      cursor: pointer;
-      margin-top: 8px;
-      display: inline-block;
-    }
-    .btn-confirm {
-      background: #10B981;
-      color: white;
-      font-weight: 800;
-      font-size: 15px;
-      padding: 14px;
-      border-radius: 10px;
-      border: none;
-      width: 100%;
-      cursor: pointer;
-      margin-top: 14px;
-    }
-    .btn-cancel {
-      background: transparent;
-      color: #94A3B8;
-      font-weight: 600;
-      font-size: 13px;
-      padding: 10px;
-      border: none;
-      width: 100%;
-      cursor: pointer;
-      margin-top: 6px;
-    }
-    .toast {
-      display: none;
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #10B981;
-      color: white;
-      padding: 8px 16px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 700;
-    }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="logo-badge">
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="10"></circle>
-        <path d="M12 8v8M8 12h8"></path>
-      </svg>
-    </div>
-    <div class="title">Coinbase Crypto Escrow</div>
-    <div class="sub">Pay securely with USDT (TRC-20) or Bitcoin</div>
+        // Invoke Supabase Edge Function configured with authentic Coinbase Commerce API
+        try {
+            const { data, error } = await supabase.functions.invoke('initiate-payment', {
+                body: {
+                    payment_method: 'Coinbase',
+                    payment_reference: ref,
+                    total_amount: safeAmount,
+                    items: metadata.items || [],
+                    shipping_address: metadata.shipping_address || {},
+                    delivery_method: metadata.delivery_method || 'standard',
+                    order_notes: metadata.order_notes || ''
+                }
+            });
 
-    <div class="amount-box">
-      <div class="ngn-val">&#8358;${safeAmount.toLocaleString()}</div>
-      <div class="crypto-val">&asymp; ${approxUsdt} USDT (TRC-20)</div>
-    </div>
+            if (!error && data?.checkout_url && typeof data.checkout_url === 'string' && data.checkout_url.startsWith('http')) {
+                return {
+                    success: true,
+                    reference: data.payment_reference || ref,
+                    gateway: 'Coinbase',
+                    checkoutUrl: data.checkout_url,
+                    sessionId: data.session_id,
+                    type: 'url'
+                };
+            }
 
-    <div class="address-section">
-      <div class="addr-label">Official Deposit Address (USDT - TRC20)</div>
-      <div class="addr-val" id="usdtAddr">${COINBASE_USDT_ADDRESS}</div>
-      <button class="btn-copy" onclick="copyAddress('${COINBASE_USDT_ADDRESS}')">&#128203; Copy USDT Address</button>
-    </div>
+            const errDetail = data?.error || error?.message || 'Coinbase Commerce returned an invalid response.';
+            console.warn('[PaymentGatewayService] Coinbase API warning:', errDetail);
 
-    <div class="address-section">
-      <div class="addr-label">Alternative: Bitcoin (BTC)</div>
-      <div class="addr-val" id="btcAddr">${COINBASE_BTC_ADDRESS}</div>
-      <button class="btn-copy" onclick="copyAddress('${COINBASE_BTC_ADDRESS}')">&#128203; Copy BTC Address</button>
-    </div>
+            // Inform the user if Coinbase Commerce API Key has not been configured in the backend environment
+            if (errDetail.toLowerCase().includes('api key') || errDetail.toLowerCase().includes('configuration missing') || errDetail.toLowerCase().includes('not configured')) {
+                throw new Error('Coinbase Commerce is not active on this store (API Key missing). Please choose Paystack, Flutterwave, or Wallet for instant checkout.');
+            }
 
-    <button class="btn-confirm" onclick="confirmPayment()">I Have Made Payment &#10004;</button>
-    <button class="btn-cancel" onclick="cancelPayment()">Cancel Transaction</button>
-    <div style="font-size: 11px; color: #64748B; margin-top: 10px;">Your transaction ref: ${ref}</div>
-  </div>
-
-  <div id="toast" class="toast">Address copied to clipboard!</div>
-
-  <script>
-    function copyAddress(text) {
-      if (navigator.clipboard) {
-        navigator.clipboard.writeText(text);
-      } else {
-        var el = document.createElement('textarea');
-        el.value = text;
-        document.body.appendChild(el);
-        el.select();
-        document.execCommand('copy');
-        document.body.removeChild(el);
-      }
-      var t = document.getElementById('toast');
-      t.style.display = 'block';
-      setTimeout(function() { t.style.display = 'none'; }, 2000);
-    }
-
-    function confirmPayment() {
-      window.location.href = "https://abumafhal.com/payment/verify?status=successful&reference=" + encodeURIComponent('${ref}') + "&gateway=coinbase";
-    }
-
-    function cancelPayment() {
-      window.location.href = "https://abumafhal.com/payment/verify?status=cancelled&reference=" + encodeURIComponent('${ref}');
-    }
-  </script>
-</body>
-</html>
-`;
-
-        return {
-            success: true,
-            reference: ref,
-            gateway: 'Coinbase',
-            checkoutUrl: inlineHtml,
-            type: 'html'
-        };
+            throw new Error(errDetail);
+        } catch (e) {
+            console.error('[PaymentGatewayService] Coinbase Commerce error:', e.message);
+            throw e;
+        }
     },
 
     /**
      * Unified Entry Point
      */
-    async initiate({ gateway = 'Paystack', amount, email, phone, name, metadata = {} }) {
+    async initiate({ gateway = 'Paystack', amount, email, phone, name, reference, metadata = {} }) {
         const normalized = String(gateway).toLowerCase();
 
         if (normalized.includes('flutter') || normalized.includes('flw')) {
-            return this.initiateFlutterwave({ amount, email, phone, name, metadata });
+            return this.initiateFlutterwave({ amount, email, phone, name, reference, metadata });
         }
 
         if (normalized.includes('coinbase') || normalized.includes('crypto')) {
-            return this.initiateCoinbase({ amount, email, phone, name, metadata });
+            return this.initiateCoinbase({ amount, email, phone, name, reference, metadata });
         }
 
         // Default to Paystack
-        return this.initiatePaystack({ amount, email, phone, name, metadata });
+        return this.initiatePaystack({ amount, email, phone, name, reference, metadata });
     },
 
     /**

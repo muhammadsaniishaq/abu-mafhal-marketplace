@@ -1059,7 +1059,15 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     email: verifiedUser.email,
                     phone: selectedAddrObj?.phone || verifiedUser.phone || '',
                     name: profile?.full_name || verifiedUser.user_metadata?.full_name || 'Customer',
-                    reference: orderRef
+                    reference: orderRef,
+                    metadata: {
+                        items: cart || [],
+                        shipping_address: selectedAddrObj || {},
+                        delivery_method: deliveryMethod || 'standard',
+                        order_notes: orderNotes || '',
+                        is_pss_down_payment: true,
+                        pss_plan: pssPlanDetails
+                    }
                 });
 
                 if (!pssInit?.success || !pssInit?.checkoutUrl) {
@@ -1078,7 +1086,13 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 email: verifiedUser.email,
                 phone: selectedAddrObj?.phone || verifiedUser.phone || '',
                 name: profile?.full_name || verifiedUser.user_metadata?.full_name || 'Customer',
-                reference: orderRef
+                reference: orderRef,
+                metadata: {
+                    items: cart || [],
+                    shipping_address: selectedAddrObj || {},
+                    delivery_method: deliveryMethod || 'standard',
+                    order_notes: orderNotes || ''
+                }
             });
 
             if (!initRes?.success || !initRes?.checkoutUrl) {
@@ -2217,14 +2231,14 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             <View style={s.footerBar}>
                 <View style={s.footerInner}>
                     <View style={s.footerTotalBox}>
-                        <Text style={s.footerTotalLabel}>
+                        <Text style={s.footerTotalLabel} numberOfLines={1} ellipsizeMode="tail">
                             {paymentMethod === 'pod'
                                 ? 'Due on Delivery'
                                 : paymentMethod === 'pay_small_small'
                                 ? 'Due Today (Down Payment)'
                                 : 'Total to Pay'}
                         </Text>
-                        <Text style={s.footerTotalVal}>
+                        <Text style={s.footerTotalVal} numberOfLines={1} adjustsFontSizeToFit={true} minimumFontScale={0.75}>
                             {paymentMethod === 'pod'
                                 ? formatCurrency(finalTotal)
                                 : paymentMethod === 'pay_small_small'
@@ -2232,10 +2246,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                 : formatCurrency(finalTotal)}
                         </Text>
                         {paymentMethod === 'pod' && (
-                            <Text style={{ fontSize: 9.5, color: '#EA580C', fontWeight: '800' }}>₦0 upfront today</Text>
+                            <Text style={{ fontSize: 9.5, color: '#EA580C', fontWeight: '800' }} numberOfLines={1}>₦0 upfront today</Text>
                         )}
                         {paymentMethod === 'pay_small_small' && (
-                            <Text style={{ fontSize: 9.5, color: '#B45309', fontWeight: '700' }}>Total: {formatCurrency(finalTotal)} (+5%)</Text>
+                            <Text style={{ fontSize: 9.5, color: '#B45309', fontWeight: '700' }} numberOfLines={1}>Total: {formatCurrency(finalTotal)} (+5%)</Text>
                         )}
                     </View>
 
@@ -2274,12 +2288,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                 <ActivityIndicator size="small" color={WHITE} />
                             ) : (
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                    <Text style={s.btnNextTxt}>
+                                    <Text style={s.btnNextTxt} numberOfLines={1}>
                                         {currentStep === 3
-                                            ? paymentMethod === 'pay_small_small'
-                                                ? `Confirm & Pay ${formatCurrency(pssPlanDetails.downPayment)}`
-                                                : paymentMethod === 'pod'
-                                                ? 'Confirm Order (Pay on Delivery)'
+                                            ? paymentMethod === 'pod'
+                                                ? 'Confirm Order'
                                                 : 'Confirm & Pay'
                                             : 'Continue'}
                                     </Text>
@@ -3441,14 +3453,17 @@ const s = StyleSheet.create({
     footerInner: {
         maxWidth: 540,
         width: '100%',
-        height: 60,
+        minHeight: 62,
+        paddingVertical: 8,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 14,
     },
     footerTotalBox: {
+        flex: 1,
         justifyContent: 'center',
+        marginRight: 10,
     },
     footerTotalLabel: {
         fontSize: 9.5,
@@ -3465,6 +3480,7 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
+        flexShrink: 0,
     },
     btnBack: {
         height: 42,
@@ -3473,6 +3489,7 @@ const s = StyleSheet.create({
         borderRadius: 10,
         alignItems: 'center',
         justifyContent: 'center',
+        flexShrink: 0,
     },
     btnBackTxt: {
         fontSize: 12,
@@ -3481,11 +3498,12 @@ const s = StyleSheet.create({
     },
     btnNext: {
         height: 42,
-        paddingHorizontal: 18,
+        paddingHorizontal: 16,
         backgroundColor: NAVY,
         borderRadius: 10,
         alignItems: 'center',
         justifyContent: 'center',
+        flexShrink: 0,
         shadowColor: NAVY,
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.2,
