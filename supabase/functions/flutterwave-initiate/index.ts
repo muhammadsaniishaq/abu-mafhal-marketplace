@@ -1,3 +1,5 @@
+// @ts-nocheck
+/// <reference path="../ambient.d.ts" />
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -8,7 +10,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -22,44 +24,66 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    const { order_id, email, phone_number, name } = await req.json();
-    if (!order_id) {
-      return new Response(JSON.stringify({ error: "order_id is required" }), {
+    const body = await req.json();
+    const {
+      order_id,
+      email,
+      phone_number,
+      phone,
+      name,
+      amount,
+      reference,
+      tx_ref: clientTxRef,
+      callback_url
+    } = body;
+
+    let finalAmount = amount;
+    let currency = "NGN";
+
+    if (order_id) {
+      const { data: order, error: orderErr } = await supabase
+        .from("orders")
+        .select("id, status, total_amount, currency")
+        .eq("id", order_id)
+        .single();
+
+      if (order && !orderErr) {
+        if (order.status === "PAID") {
+          return new Response(JSON.stringify({ error: "Order already paid" }), {
+            status: 409,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        finalAmount = order.total_amount;
+        currency = order.currency ?? "NGN";
+      }
+    }
+
+    if (!finalAmount || Number(finalAmount) <= 0) {
+      return new Response(JSON.stringify({ error: "amount or valid order_id is required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const { data: order, error: orderErr } = await supabase
-      .from("orders")
-      .select("id, status, total_amount, currency")
-      .eq("id", order_id)
-      .single();
-
-    if (orderErr || !order) throw new Error("Order not found");
-    if (order.status === "PAID") {
-      return new Response(JSON.stringify({ error: "Order already paid" }), {
-        status: 409,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const tx_ref = `order_${order_id}_${crypto.randomUUID()}`;
+    const tx_ref = clientTxRef || reference || (order_id ? `order_${order_id}_${crypto.randomUUID()}` : `FLW-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`);
+    const redirect_url = callback_url || "https://abumafhal.com/payment/verify";
 
     const payload = {
       tx_ref,
-      amount: String(order.total_amount),
-      currency: order.currency ?? "NGN",
-      redirect_url: "YOUR_APP_CALLBACK_URL",
+      amount: String(finalAmount),
+      currency: currency,
+      redirect_url,
       customer: {
-        email: email ?? "customer@example.com",
-        phonenumber: phone_number ?? "",
-        name: name ?? "",
+        email: email ?? "customer@abumafhal.com",
+        phonenumber: phone_number || phone || "",
+        name: name ?? "Customer",
       },
-      meta: { order_id },
+      meta: { order_id: order_id || null, tx_ref },
       customizations: {
-        title: "Checkout Payment",
-        description: "Order payment",
+        title: "Abu Mafhal Marketplace",
+        description: `Order Payment (Ref: ${tx_ref})`,
+        logo: "https://abumafhal.com/logo.png",
       },
     };
 
@@ -74,27 +98,38 @@ Deno.serve(async (req) => {
 
     const json = await res.json();
     if (!res.ok || json?.status !== "success") {
+      console.error("Flutterwave API Error Response:", json);
       return new Response(
-        JSON.stringify({ error: "Flutterwave init failed", details: json }),
+        JSON.stringify({ success: false, error: "Flutterwave init failed", details: json }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    await supabase
-      .from("orders")
-      .update({
-        provider: "flutterwave",
-        provider_reference: tx_ref,
-        status: "PENDING_PAYMENT",
-      })
-      .eq("id", order_id);
+    if (order_id) {
+      await supabase
+        .from("orders")
+        .update({
+          provider: "flutterwave",
+          provider_reference: tx_ref,
+          status: "PENDING_PAYMENT",
+        })
+        .eq("id", order_id);
+    }
 
+    const paymentLink = json.data?.link;
     return new Response(
-      JSON.stringify({ payment_link: json.data.link, tx_ref }),
+      JSON.stringify({
+        success: true,
+        authorization_url: paymentLink,
+        payment_link: paymentLink,
+        checkout_url: paymentLink,
+        tx_ref,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-  } catch (e) {
-    return new Response(JSON.stringify({ error: String(e?.message ?? e) }), {
+  } catch (e: any) {
+    console.error("flutterwave-initiate Exception:", e?.message || e);
+    return new Response(JSON.stringify({ success: false, error: String(e?.message ?? e) }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

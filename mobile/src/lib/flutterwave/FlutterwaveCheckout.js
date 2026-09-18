@@ -211,12 +211,14 @@ var FlutterwaveCheckout = function FlutterwaveCheckout(props) {
                             srcDoc={link}
                             style={{ width: '100%', flex: 1, border: 'none', height: '100%' }}
                             title="Secure Checkout"
+                            allow="payment; camera; microphone; geolocation"
                         />
                     ) : (
                         <iframe
                             src={link || ''}
                             style={{ width: '100%', flex: 1, border: 'none', height: '100%' }}
                             title="Secure Checkout"
+                            allow="payment; camera; microphone; geolocation"
                         />
                     )}
                 </View>
@@ -230,6 +232,8 @@ var FlutterwaveCheckout = function FlutterwaveCheckout(props) {
                     javaScriptEnabled={true}
                     domStorageEnabled={true}
                     originWhitelist={['*']}
+                    mixedContentMode="always"
+                    allowsInlineMediaPlayback={true}
                     onShouldStartLoadWithRequest={handleNavigationStateChange}
                     onNavigationStateChange={handleNavigationStateChange}
                     renderError={function () { return <FlutterwaveCheckoutError hasLink={!!link} onTryAgain={handleReload} />; }}

@@ -214,7 +214,72 @@ export const PaymentGatewayService = {
         const userName = name || 'Customer';
         const userPhone = phone || '08000000000';
 
-        // High-reliability Flutterwave v3 Checkout HTML for WebView
+        const callbackUrl = Platform.OS === 'web' 
+            ? (typeof window !== 'undefined' ? window.location.href : 'https://abumafhal.com/payment/verify')
+            : 'https://standard.paystack.co/close';
+
+        // 1. Try Primary: Supabase Edge Function 'initiate-payment' (Full session + Cart integration)
+        try {
+            const { data, error } = await supabase.functions.invoke('initiate-payment', {
+                body: {
+                    payment_method: 'Flutterwave',
+                    payment_reference: ref,
+                    total_amount: safeAmount,
+                    items: metadata.items || [],
+                    shipping_address: metadata.shipping_address || {},
+                    delivery_method: metadata.delivery_method || 'standard',
+                    order_notes: metadata.order_notes || ''
+                }
+            });
+
+            if (!error && data?.checkout_url && typeof data.checkout_url === 'string' && data.checkout_url.startsWith('http')) {
+                return {
+                    success: true,
+                    reference: data.payment_reference || ref,
+                    gateway: 'Flutterwave',
+                    checkoutUrl: data.checkout_url,
+                    sessionId: data.session_id,
+                    type: 'url'
+                };
+            }
+
+            const errDetail = data?.error || error?.message;
+            if (errDetail && (errDetail.toLowerCase().includes('secret key') || errDetail.toLowerCase().includes('configuration missing'))) {
+                console.warn('[PaymentGatewayService] Flutterwave backend configuration warning:', errDetail);
+            }
+        } catch (e) {
+            console.warn('[PaymentGatewayService] initiate-payment Flutterwave failed, checking secondary:', e.message);
+        }
+
+        // 2. Try Secondary: Standalone 'flutterwave-initiate' Edge Function
+        try {
+            const { data: flwData, error: flwError } = await supabase.functions.invoke('flutterwave-initiate', {
+                body: {
+                    amount: safeAmount,
+                    email: userEmail,
+                    phone: userPhone,
+                    name: userName,
+                    reference: ref,
+                    tx_ref: ref,
+                    callback_url: callbackUrl
+                }
+            });
+
+            const hostedLink = flwData?.checkout_url || flwData?.authorization_url || flwData?.payment_link;
+            if (!flwError && hostedLink && typeof hostedLink === 'string' && hostedLink.startsWith('http')) {
+                return {
+                    success: true,
+                    reference: flwData.tx_ref || ref,
+                    gateway: 'Flutterwave',
+                    checkoutUrl: hostedLink,
+                    type: 'url'
+                };
+            }
+        } catch (e) {
+            console.warn('[PaymentGatewayService] flutterwave-initiate edge function failed:', e.message);
+        }
+
+        // 3. High-reliability Fallback: Direct Flutterwave v3 Checkout HTML for WebView
         const inlineHtml = `
 <!DOCTYPE html>
 <html lang="en">
