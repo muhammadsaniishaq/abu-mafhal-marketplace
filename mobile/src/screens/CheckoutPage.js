@@ -2997,6 +2997,8 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         </ScrollView>
                     </View>
                 </TouchableOpacity>
+            </Modal>
+
             {/* ── ESCROW BUYER PROTECTION MODAL ─────────────────────────────── */}
             <Modal
                 visible={showEscrowModal}
