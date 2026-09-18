@@ -583,12 +583,18 @@ export const PaymentGatewayService = {
                 };
             }
 
-            const errDetail = res.data?.error || res.error || 'Coinbase Commerce returned an invalid response.';
+            let errDetail = res.data?.error || res.error || 'Coinbase Commerce returned an invalid response.';
             console.warn('[PaymentGatewayService] Coinbase API warning:', errDetail);
 
-            // Inform the user if Coinbase Commerce API Key has not been configured in the backend environment
-            if (errDetail.toLowerCase().includes('api key') || errDetail.toLowerCase().includes('configuration missing') || errDetail.toLowerCase().includes('not configured')) {
-                throw new Error('Coinbase Commerce is not active on this store (API Key missing in backend). Please choose Paystack, Flutterwave, or Wallet for instant checkout.');
+            // Inform the user clearly if Coinbase Commerce has not been configured in the backend environment
+            if (
+                errDetail.toLowerCase().includes('api key') ||
+                errDetail.toLowerCase().includes('configuration missing') ||
+                errDetail.toLowerCase().includes('not configured') ||
+                errDetail.toLowerCase().includes('vendor associations') ||
+                errDetail.toLowerCase().includes('diag_critical_error')
+            ) {
+                errDetail = 'Kafar Coinbase Commerce ba ta kammala saiti a backend ba (Missing Coinbase API Key / Configuration). Da fatan za a zabi Paystack (yana karbar dukkan Cards, Bank Transfer & USSD) ko Pay on Delivery / Wallet domin kammala oda.';
             }
 
             throw new Error(errDetail);

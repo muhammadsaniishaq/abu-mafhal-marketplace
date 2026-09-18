@@ -360,9 +360,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 id: 'Coinbase',
                 enabled: settings?.payment_methods?.crypto !== false,
                 name: 'Coinbase Crypto',
-                sub: 'BTC, ETH, USDT & USDC',
+                sub: 'A Kan Gyara (Under Maintenance)',
                 logo: 'https://media.licdn.com/dms/image/v2/D4E0BAQFBUuEd8VGK4w/company-logo_200_200/B4EZs3tEB3IQAI-/0/1766166118811/coinbase_logo?e=2147483647&v=beta&t=mPgscbzEhR9TBOuI9MM0BDNcbE4tvvbhF38KM3V1CAY',
-                badge: 'Web3',
+                badge: 'A Kan Gyara',
                 icon: 'logo-bitcoin'
             }
         ].filter(m => m.enabled);
@@ -656,7 +656,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             {
                 id: 'Coinbase',
                 name: 'Coinbase',
-                sub: 'Web3 Crypto',
+                sub: 'A Kan Gyara (Maintenance)',
                 logo: 'https://media.licdn.com/dms/image/v2/D4E0BAQFBUuEd8VGK4w/company-logo_200_200/B4EZs3tEB3IQAI-/0/1766166118811/coinbase_logo?e=2147483647&v=beta&t=mPgscbzEhR9TBOuI9MM0BDNcbE4tvvbhF38KM3V1CAY',
                 icon: 'logo-bitcoin',
                 accentColor: '#0052FF'
@@ -1409,6 +1409,29 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 Alert.alert(
                     'Kafar Flutterwave Tana Gyara',
                     'Kafar Flutterwave tana kan sabuntawa a backend a halin yanzu. Amfani da Paystack yana aiki 100% (yana karbar dukkan katunan banki, Bank Transfer, da USSD). Kuna son canzawa zuwa Paystack yanzu?',
+                    [
+                        { text: "A'a (Cancel)", style: 'cancel' },
+                        { 
+                            text: 'Biya da Paystack', 
+                            onPress: () => {
+                                if (paymentMethod === 'pay_small_small') {
+                                    setPssDownPaymentMethod('Paystack');
+                                } else {
+                                    setPaymentMethod('Paystack');
+                                }
+                                showToast('An canza zuwa Paystack. Danna domin kammalawa.');
+                            } 
+                        }
+                    ]
+                );
+                return;
+            }
+
+            const isCoinbase = paymentMethod === 'Coinbase' || pssDownPaymentMethod === 'Coinbase' || String(errorMsg).includes('Coinbase') || String(errorMsg).includes('vendor associations') || String(errorMsg).includes('DIAG_CRITICAL_ERROR');
+            if (isCoinbase) {
+                Alert.alert(
+                    'Kafar Coinbase (Crypto) Tana Gyara',
+                    'Kafar Coinbase Commerce ba ta kammala saiti a backend ba a halin yanzu (Missing API Key / Config). Amfani da Paystack yana aiki 100% (yana karbar dukkan katunan banki, Bank Transfer, da USSD). Kuna son canzawa zuwa Paystack yanzu?',
                     [
                         { text: "A'a (Cancel)", style: 'cancel' },
                         { 
