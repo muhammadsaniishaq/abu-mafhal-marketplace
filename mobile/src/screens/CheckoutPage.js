@@ -1274,6 +1274,16 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     return;
                 }
 
+                const isDatabaseUUID = (id) => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id) && id !== 'profile_default_addr' && id !== 'lga_dest';
+                const safeAddressId = isDatabaseUUID(selectedAddressId) ? selectedAddressId : 'default';
+                const safeShipping = selectedAddrObj || {
+                    address: quickDestination?.address || 'Delivery Address',
+                    city: quickDestination?.city || 'Bade',
+                    lga: quickDestination?.lga || 'Bade',
+                    state: quickDestination?.state || 'Yobe',
+                    phone: selectedAddrObj?.phone || verifiedUser.phone || ''
+                };
+
                 // 3. Pay Small Small with Paystack, Flutterwave, or Coinbase
                 const pssInit = await PaymentGatewayService.initiate({
                     gateway: pssDownPaymentMethod,
@@ -1284,8 +1294,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     reference: orderRef,
                     metadata: {
                         items: cart || [],
-                        address_id: selectedAddressId,
-                        shipping_address: selectedAddrObj || {},
+                        address_id: safeAddressId,
+                        shipping_address: safeShipping,
+                        shipping_override: safeShipping,
                         delivery_method: selectedDeliveryMethod || 'standard',
                         order_notes: orderNote || '',
                         is_pss_down_payment: true,
@@ -1293,7 +1304,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     }
                 });
 
-                // Direct Modern Web Overlay
+                // Direct Modern Web Overlay if openInline exists
                 if (pssInit?.type === 'inline_web' && typeof pssInit.openInline === 'function') {
                     setIsProcessing(false);
                     pssInit.openInline(
@@ -1311,12 +1322,29 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     throw new Error(`Could not initialize ${pssDownPaymentMethod} down payment gateway.`);
                 }
 
+                // Web: Redirect to official secure hosted checkout
+                if (Platform.OS === 'web' && typeof window !== 'undefined' && pssInit.checkoutUrl) {
+                    setIsProcessing(false);
+                    window.location.href = pssInit.checkoutUrl;
+                    return;
+                }
+
                 setPaymentLink(pssInit.checkoutUrl);
                 setShowPaymentModal(true);
                 return;
             }
 
             // ── OPTION C: Direct Gateway (Paystack, Flutterwave, Coinbase) ─
+            const isDatabaseUUID = (id) => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id) && id !== 'profile_default_addr' && id !== 'lga_dest';
+            const safeAddressId = isDatabaseUUID(selectedAddressId) ? selectedAddressId : 'default';
+            const safeShipping = selectedAddrObj || {
+                address: quickDestination?.address || 'Delivery Address',
+                city: quickDestination?.city || 'Bade',
+                lga: quickDestination?.lga || 'Bade',
+                state: quickDestination?.state || 'Yobe',
+                phone: selectedAddrObj?.phone || verifiedUser.phone || ''
+            };
+
             const initRes = await PaymentGatewayService.initiate({
                 gateway: paymentMethod,
                 amount: effectivePayAmount,
@@ -1326,8 +1354,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 reference: orderRef,
                 metadata: {
                     items: cart || [],
-                    address_id: selectedAddressId,
-                    shipping_address: selectedAddrObj || {},
+                    address_id: safeAddressId,
+                    shipping_address: safeShipping,
+                    shipping_override: safeShipping,
                     delivery_method: selectedDeliveryMethod || 'standard',
                     delivery_slot: deliverySlot,
                     is_gift: isGift,
@@ -1339,7 +1368,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 }
             });
 
-            // Direct Modern Web Overlay
+            // Direct Modern Web Overlay if openInline exists
             if (initRes?.type === 'inline_web' && typeof initRes.openInline === 'function') {
                 setIsProcessing(false);
                 initRes.openInline(
@@ -1355,6 +1384,13 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
             if (!initRes?.success || !initRes?.checkoutUrl) {
                 throw new Error(`Could not initialize ${paymentMethod} payment gateway.`);
+            }
+
+            // Web: Redirect to official secure hosted checkout (Paystack / Flutterwave / Coinbase)
+            if (Platform.OS === 'web' && typeof window !== 'undefined' && initRes.checkoutUrl) {
+                setIsProcessing(false);
+                window.location.href = initRes.checkoutUrl;
+                return;
             }
 
             setPaymentLink(initRes.checkoutUrl);

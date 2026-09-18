@@ -84,12 +84,19 @@ Deno.serve(async (req: Request) => {
                 .single();
 
             if (addressError) {
-                console.error("Address Lookup Error (DIAG_003):", addressError);
-                throw new Error("Shipping address not found in database for this user.");
+                console.warn("Address Lookup Notice (DIAG_003):", addressError.message || addressError);
+                if (shipping_override) {
+                    address = shipping_override;
+                    const lgaSuffix = address.lga ? ` (LGA: ${address.lga})` : "";
+                    shippingAddressString = `${address.address || ""}, ${address.city || ""}${lgaSuffix}, ${address.state || ""}`;
+                } else {
+                    throw new Error("Shipping address not found in database for this user.");
+                }
+            } else {
+                address = addressData;
+                const lgaSuffix = address.lga ? ` (LGA: ${address.lga})` : "";
+                shippingAddressString = `${address.address}, ${address.city || ""}${lgaSuffix}, ${address.state}`;
             }
-            address = addressData;
-            const lgaSuffix = address.lga ? ` (LGA: ${address.lga})` : "";
-            shippingAddressString = `${address.address}, ${address.city || ""}${lgaSuffix}, ${address.state}`;
         } else if (shipping_override) {
             address = shipping_override;
             const lgaSuffix = address.lga ? ` (LGA: ${address.lga})` : "";

@@ -211,39 +211,7 @@ export const PaymentGatewayService = {
 
         // When backend returns authorization_url and access_code
         if (edgeResult?.authorization_url) {
-            // If on Web, provide seamless PaystackPop inline experience using access_code from backend (no client key required)
-            if (Platform.OS === 'web' && typeof window !== 'undefined' && edgeResult.access_code) {
-                await this.loadWebScript('https://js.paystack.co/v1/inline.js');
-                if (window.PaystackPop && typeof window.PaystackPop.setup === 'function') {
-                    return {
-                        success: true,
-                        reference: edgeResult.reference || ref,
-                        gateway: 'Paystack',
-                        checkoutUrl: edgeResult.authorization_url,
-                        accessCode: edgeResult.access_code,
-                        type: 'inline_web',
-                        openInline: (onSuccess, onCancel) => {
-                            try {
-                                const handler = window.PaystackPop.setup({
-                                    access_code: edgeResult.access_code,
-                                    callback: (response) => {
-                                        if (onSuccess) onSuccess({ status: 'successful', reference: response?.reference || ref });
-                                    },
-                                    onClose: () => {
-                                        if (onCancel) onCancel();
-                                    }
-                                });
-                                handler.openIframe();
-                            } catch (err) {
-                                console.warn('[PaymentGatewayService] Web inline fallback:', err);
-                                if (window.open) window.open(edgeResult.authorization_url, '_blank');
-                            }
-                        }
-                    };
-                }
-            }
-
-            // Return URL checkout (official hosted Paystack checkout page)
+            // Direct official hosted Paystack checkout page (no client public key required!)
             return {
                 success: true,
                 reference: edgeResult.reference || ref,
@@ -366,6 +334,31 @@ export const PaymentGatewayService = {
     },
 
     /**
+     * Sanitize address parameters so Edge Functions never fail with
+     * "Shipping address not found in database for this user"
+     */
+    sanitizeAddressParams(metadata = {}) {
+        const isUUID = (id) => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id) && id !== 'profile_default_addr' && id !== 'lga_dest';
+
+        const rawAddr = metadata.shipping_address || metadata.shipping_override || {};
+        const safeShipping = {
+            address: rawAddr.address || 'Delivery Address',
+            city: rawAddr.city || rawAddr.lga || 'Bade',
+            lga: rawAddr.lga || rawAddr.city || 'Bade',
+            state: rawAddr.state || 'Yobe',
+            phone: rawAddr.phone || ''
+        };
+
+        // If not a genuine database UUID, pass 'default' so the edge function uses shipping_override directly!
+        const cleanAddressId = isUUID(metadata.address_id) ? metadata.address_id : 'default';
+
+        return {
+            cleanAddressId,
+            safeShipping
+        };
+    },
+
+    /**
      * Initiate Flutterwave Payment dynamically via Supabase Backend
      */
     async initiateFlutterwave({ amount, email, reference, name, phone, metadata = {} }) {
@@ -379,15 +372,17 @@ export const PaymentGatewayService = {
             ? (typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : 'https://abumafhal.com/payment/verify')
             : 'https://standard.paystack.co/close';
 
+        const { cleanAddressId, safeShipping } = this.sanitizeAddressParams(metadata);
+
         // 1. Try Primary: Supabase Edge Function 'initiate-payment' (Full session + Cart integration)
         const res1 = await this.invokeEdgeFunction('initiate-payment', {
             payment_method: 'Flutterwave',
             payment_reference: ref,
             total_amount: safeAmount,
             items: metadata.items || [],
-            address_id: metadata.address_id,
-            shipping_override: metadata.shipping_address || {},
-            shipping_address: metadata.shipping_address || {},
+            address_id: cleanAddressId,
+            shipping_override: safeShipping,
+            shipping_address: safeShipping,
             delivery_method: metadata.delivery_method || 'standard',
             order_notes: metadata.order_notes || ''
         });
@@ -404,7 +399,7 @@ export const PaymentGatewayService = {
         }
 
         // 2. Try Secondary: Standalone 'flutterwave-initiate' Edge Function with FLUTTERWAVE_SECRET_KEY
-        let flwErrorMsg = null;
+        let flwErrorMsg = res1.data?.error || res1.error;
         const res2 = await this.invokeEdgeFunction('flutterwave-initiate', {
             amount: safeAmount,
             email: userEmail,
@@ -547,10 +542,8 @@ export const PaymentGatewayService = {
             };
         }
 
-        // 4. Safe Smart Fallback: If Flutterwave is unavailable, route seamlessly to Paystack
-        // Paystack is 100% active on the backend and accepts cards, USSD, and bank transfers for all Nigerian banks.
-        console.warn('[PaymentGatewayService] Flutterwave backend endpoint unavailable (' + (flwErrorMsg || 'not configured') + '), falling back to active Paystack gateway...');
-        return this.initiatePaystack({ amount: safeAmount, email: userEmail, reference: ref, name: userName, phone: userPhone, metadata });
+        const errMsg = flwErrorMsg || 'Flutterwave gateway configuration missing on Supabase backend. Please ensure FLUTTERWAVE_SECRET_KEY is configured in Supabase Edge Functions environment or select Paystack for instant checkout.';
+        throw new Error(errMsg);
     },
 
     /**
@@ -560,6 +553,8 @@ export const PaymentGatewayService = {
         const safeAmount = Math.max(1, Number(amount) || 0);
         const ref = reference || this.generateRef('COINBASE');
 
+        const { cleanAddressId, safeShipping } = this.sanitizeAddressParams(metadata);
+
         // Invoke Supabase Edge Function configured with authentic Coinbase Commerce API
         try {
             const res = await this.invokeEdgeFunction('initiate-payment', {
@@ -567,9 +562,9 @@ export const PaymentGatewayService = {
                 payment_reference: ref,
                 total_amount: safeAmount,
                 items: metadata.items || [],
-                address_id: metadata.address_id,
-                shipping_override: metadata.shipping_address || {},
-                shipping_address: metadata.shipping_address || {},
+                address_id: cleanAddressId,
+                shipping_override: safeShipping,
+                shipping_address: safeShipping,
                 delivery_method: metadata.delivery_method || 'standard',
                 order_notes: metadata.order_notes || ''
             });
@@ -590,7 +585,7 @@ export const PaymentGatewayService = {
 
             // Inform the user if Coinbase Commerce API Key has not been configured in the backend environment
             if (errDetail.toLowerCase().includes('api key') || errDetail.toLowerCase().includes('configuration missing') || errDetail.toLowerCase().includes('not configured')) {
-                throw new Error('Coinbase Commerce is not active on this store (API Key missing). Please choose Paystack, Flutterwave, or Wallet for instant checkout.');
+                throw new Error('Coinbase Commerce is not active on this store (API Key missing in backend). Please choose Paystack, Flutterwave, or Wallet for instant checkout.');
             }
 
             throw new Error(errDetail);
