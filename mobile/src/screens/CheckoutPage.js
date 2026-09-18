@@ -324,9 +324,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 id: 'Flutterwave',
                 enabled: settings?.payment_methods?.flutterwave !== false,
                 name: 'Flutterwave',
-                sub: 'Cards & Mobile Money',
+                sub: 'A Kan Gyara (Under Maintenance)',
                 logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-W6MLvD_saE20EDSZzVPspKqcKxZ89rW8uw&s',
-                badge: 'Mobile Money',
+                badge: 'A Kan Gyara',
                 icon: 'flash-outline'
             },
             {
@@ -648,7 +648,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             {
                 id: 'Flutterwave',
                 name: 'Flutterwave',
-                sub: 'Cards & Mobile',
+                sub: 'A Kan Gyara (Maintenance)',
                 logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-W6MLvD_saE20EDSZzVPspKqcKxZ89rW8uw&s',
                 icon: 'flash-outline',
                 accentColor: '#F5A623'
@@ -1403,6 +1403,30 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 errorMsg = 'Kuskure wajen bude hanyar biya ta kan layi. Da fatan za a sake gwadawa ko amfani da Pay on Delivery ko Wallet.';
             }
             setIsProcessing(false);
+
+            const isFlw = paymentMethod === 'Flutterwave' || pssDownPaymentMethod === 'Flutterwave' || String(errorMsg).includes('Flutterwave') || String(errorMsg).includes('order_id');
+            if (isFlw) {
+                Alert.alert(
+                    'Kafar Flutterwave Tana Gyara',
+                    'Kafar Flutterwave tana kan sabuntawa a backend a halin yanzu. Amfani da Paystack yana aiki 100% (yana karbar dukkan katunan banki, Bank Transfer, da USSD). Kuna son canzawa zuwa Paystack yanzu?',
+                    [
+                        { text: "A'a (Cancel)", style: 'cancel' },
+                        { 
+                            text: 'Biya da Paystack', 
+                            onPress: () => {
+                                if (paymentMethod === 'pay_small_small') {
+                                    setPssDownPaymentMethod('Paystack');
+                                } else {
+                                    setPaymentMethod('Paystack');
+                                }
+                                showToast('An canza zuwa Paystack. Danna domin kammalawa.');
+                            } 
+                        }
+                    ]
+                );
+                return;
+            }
+
             showToast(`⚠️ ${errorMsg}`);
             showAlert('Payment Initialization Failed', String(errorMsg).substring(0, 300));
         } finally {

@@ -542,7 +542,10 @@ export const PaymentGatewayService = {
             };
         }
 
-        const errMsg = flwErrorMsg || 'Flutterwave gateway configuration missing on Supabase backend. Please ensure FLUTTERWAVE_SECRET_KEY is configured in Supabase Edge Functions environment or select Paystack for instant checkout.';
+        let errMsg = flwErrorMsg || 'Flutterwave gateway configuration missing on Supabase backend. Please ensure FLUTTERWAVE_SECRET_KEY is configured in Supabase Edge Functions environment or select Paystack for instant checkout.';
+        if (typeof errMsg === 'string' && (errMsg.includes('order_id') || errMsg.includes('Order not found') || errMsg.includes('Flutterwave init failed') || errMsg.includes('400'))) {
+            errMsg = 'Kafar Flutterwave tana kan gyara a backend (Ana bukatar sabuntawar tsari). Da fatan za a zabi Paystack (yana karbar dukkan Cards, Bank Transfer & USSD) ko Pay on Delivery / Wallet domin kammala oda.';
+        }
         throw new Error(errMsg);
     },
 
