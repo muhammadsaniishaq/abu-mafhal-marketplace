@@ -315,19 +315,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 id: 'Paystack',
                 enabled: settings?.payment_methods?.paystack !== false,
                 name: 'Paystack',
-                sub: 'Cards, Bank Transfer & USSD',
+                sub: 'Cards, Bank Transfer & USSD (Active)',
                 logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSzFzmpCa0Tav9NttiYF10t9wftJPQ0XYPBkA&s',
                 badge: 'Cards & Transfer',
                 icon: 'card-outline'
-            },
-            {
-                id: 'Flutterwave',
-                enabled: settings?.payment_methods?.flutterwave !== false,
-                name: 'Flutterwave',
-                sub: 'A Kan Gyara (Under Maintenance)',
-                logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-W6MLvD_saE20EDSZzVPspKqcKxZ89rW8uw&s',
-                badge: 'A Kan Gyara',
-                icon: 'flash-outline'
             },
             {
                 id: 'Wallet',
@@ -357,22 +348,34 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 accentColor: EMERALD
             },
             {
+                id: 'Flutterwave',
+                enabled: settings?.payment_methods?.flutterwave !== false,
+                name: 'Flutterwave',
+                sub: 'Kafar na kan gyara a halin yanzu',
+                logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-W6MLvD_saE20EDSZzVPspKqcKxZ89rW8uw&s',
+                badge: 'Under Maintenance',
+                isMaintenance: true,
+                icon: 'flash-outline'
+            },
+            {
                 id: 'Coinbase',
                 enabled: settings?.payment_methods?.crypto !== false,
                 name: 'Coinbase Crypto',
-                sub: 'A Kan Gyara (Under Maintenance)',
+                sub: 'Kafar na kan gyara a halin yanzu',
                 logo: 'https://media.licdn.com/dms/image/v2/D4E0BAQFBUuEd8VGK4w/company-logo_200_200/B4EZs3tEB3IQAI-/0/1766166118811/coinbase_logo?e=2147483647&v=beta&t=mPgscbzEhR9TBOuI9MM0BDNcbE4tvvbhF38KM3V1CAY',
-                badge: 'A Kan Gyara',
+                badge: 'Under Maintenance',
+                isMaintenance: true,
                 icon: 'logo-bitcoin'
             }
         ].filter(m => m.enabled);
     }, [settings, profile]);
 
     useEffect(() => {
-        if (!paymentMethod && availableMethods.length > 0) {
-            setPaymentMethod(availableMethods[0].id);
-        } else if (paymentMethod && !availableMethods.find(m => m.id === paymentMethod) && availableMethods.length > 0) {
-            setPaymentMethod(availableMethods[0].id);
+        const validActive = availableMethods.filter(m => !m.isMaintenance);
+        if (!paymentMethod && validActive.length > 0) {
+            setPaymentMethod(validActive[0].id);
+        } else if (paymentMethod && (!validActive.find(m => m.id === paymentMethod) || availableMethods.find(m => m.id === paymentMethod)?.isMaintenance) && validActive.length > 0) {
+            setPaymentMethod(validActive[0].id);
         }
     }, [availableMethods, paymentMethod]);
 
@@ -646,22 +649,6 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 accentColor: '#0AA5FF'
             },
             {
-                id: 'Flutterwave',
-                name: 'Flutterwave',
-                sub: 'A Kan Gyara (Maintenance)',
-                logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-W6MLvD_saE20EDSZzVPspKqcKxZ89rW8uw&s',
-                icon: 'flash-outline',
-                accentColor: '#F5A623'
-            },
-            {
-                id: 'Coinbase',
-                name: 'Coinbase',
-                sub: 'A Kan Gyara (Maintenance)',
-                logo: 'https://media.licdn.com/dms/image/v2/D4E0BAQFBUuEd8VGK4w/company-logo_200_200/B4EZs3tEB3IQAI-/0/1766166118811/coinbase_logo?e=2147483647&v=beta&t=mPgscbzEhR9TBOuI9MM0BDNcbE4tvvbhF38KM3V1CAY',
-                icon: 'logo-bitcoin',
-                accentColor: '#0052FF'
-            },
-            {
                 id: 'Wallet',
                 name: 'Wallet',
                 sub: `₦${wb.toLocaleString()}`,
@@ -670,6 +657,24 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 disabled: wb < dp,
                 balance: wb,
                 accentColor: EMERALD
+            },
+            {
+                id: 'Flutterwave',
+                name: 'Flutterwave',
+                sub: 'Maintenance',
+                logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-W6MLvD_saE20EDSZzVPspKqcKxZ89rW8uw&s',
+                icon: 'flash-outline',
+                accentColor: '#F5A623',
+                isMaintenance: true
+            },
+            {
+                id: 'Coinbase',
+                name: 'Coinbase',
+                sub: 'Maintenance',
+                logo: 'https://media.licdn.com/dms/image/v2/D4E0BAQFBUuEd8VGK4w/company-logo_200_200/B4EZs3tEB3IQAI-/0/1766166118811/coinbase_logo?e=2147483647&v=beta&t=mPgscbzEhR9TBOuI9MM0BDNcbE4tvvbhF38KM3V1CAY',
+                icon: 'logo-bitcoin',
+                accentColor: '#0052FF',
+                isMaintenance: true
             }
         ];
     }, [profile, pssPlanDetails.downPayment]);
@@ -1335,6 +1340,20 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             }
 
             // ── OPTION C: Direct Gateway (Paystack, Flutterwave, Coinbase) ─
+            if (paymentMethod === 'Flutterwave' || paymentMethod === 'Coinbase') {
+                setIsProcessing(false);
+                Alert.alert(
+                    'Kafar na Kan Gyara (Under Maintenance)',
+                    `Kafar ${paymentMethod} tana kan gyara a halin yanzu. An sauya zuwa Paystack (yana karbar dukkan katunan banki, Bank Transfer, da USSD). Danna "Place Order" domin kammalawa.`,
+                    [
+                        { 
+                            text: 'Biya da Paystack', 
+                            onPress: () => setPaymentMethod('Paystack') 
+                        }
+                    ]
+                );
+                return;
+            }
             const isDatabaseUUID = (id) => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id) && id !== 'profile_default_addr' && id !== 'lga_dest';
             const safeAddressId = isDatabaseUUID(selectedAddressId) ? selectedAddressId : 'default';
             const safeShipping = selectedAddrObj || {
@@ -2130,15 +2149,29 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         {availableMethods.map((method) => {
                             const isSelected = paymentMethod === method.id;
                             const isWallet = method.id === 'Wallet';
+                            const isMaint = method.isMaintenance;
 
                             return (
                                 <TouchableOpacity
                                     key={method.id}
-                                    onPress={() => setPaymentMethod(method.id)}
-                                    activeOpacity={0.8}
+                                    onPress={() => {
+                                        if (isMaint) {
+                                            Alert.alert(
+                                                'Kafar na Kan Gyara (Under Maintenance)',
+                                                `Kafar biyan kudi ta ${method.name} tana kan sabuntawa a halin yanzu. Da fatan za a zabi Paystack (yana karbar dukkan Cards, Bank Transfer, da USSD) ko Pay on Delivery / Wallet domin biya cikin sauki.`,
+                                                [
+                                                    { text: 'Na Fahimta', style: 'default' }
+                                                ]
+                                            );
+                                            return;
+                                        }
+                                        setPaymentMethod(method.id);
+                                    }}
+                                    activeOpacity={isMaint ? 0.9 : 0.8}
                                     style={[
                                         s.payCard,
-                                        isSelected && s.payCardSelected
+                                        isSelected && s.payCardSelected,
+                                        isMaint && { opacity: 0.65, backgroundColor: '#F8FAFC' }
                                     ]}
                                 >
                                     {/* Icon / Brand Logo */}
@@ -2163,18 +2196,18 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                     {/* Details */}
                                     <View style={{ flex: 1, marginLeft: 12 }}>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                            <Text style={[s.payTitle, isSelected && s.payTitleSelected]}>
+                                            <Text style={[s.payTitle, isSelected && s.payTitleSelected, isMaint && { color: SLATE }]}>
                                                 {method.name}
                                             </Text>
                                             {method.badge ? (
                                                 <View style={[
                                                     s.payBadge,
-                                                    method.accentColor ? { backgroundColor: method.accentColor === GOLD ? '#FEF9EC' : '#FFF7ED' } : null,
+                                                    isMaint ? { backgroundColor: '#FEF3C7' } : (method.accentColor ? { backgroundColor: method.accentColor === GOLD ? '#FEF9EC' : '#FFF7ED' } : null),
                                                     isWallet && isWalletInsufficient && s.payBadgeDanger
                                                 ]}>
                                                     <Text style={[
                                                         s.payBadgeTxt,
-                                                        method.accentColor ? { color: method.accentColor } : null,
+                                                        isMaint ? { color: '#D97706', fontWeight: '800' } : (method.accentColor ? { color: method.accentColor } : null),
                                                         isWallet && isWalletInsufficient && s.payBadgeDangerTxt
                                                     ]}>
                                                         {isWallet && isWalletInsufficient ? 'Insufficient' : method.badge}
@@ -2186,9 +2219,15 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                     </View>
 
                                     {/* Radio */}
-                                    <View style={[s.radioCircle, isSelected && s.radioCircleSelected, isSelected && method.accentColor && { borderColor: method.accentColor }]}>
-                                        {isSelected && <View style={[s.radioDot, method.accentColor && { backgroundColor: method.accentColor }]} />}
-                                    </View>
+                                    {isMaint ? (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                            <Ionicons name="construct-outline" size={16} color="#D97706" />
+                                        </View>
+                                    ) : (
+                                        <View style={[s.radioCircle, isSelected && s.radioCircleSelected, isSelected && method.accentColor && { borderColor: method.accentColor }]}>
+                                            {isSelected && <View style={[s.radioDot, method.accentColor && { backgroundColor: method.accentColor }]} />}
+                                        </View>
+                                    )}
                                 </TouchableOpacity>
                             );
                         })}
@@ -2304,10 +2343,19 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                         {pssPaymentOptions.map((opt) => {
                                             const isSelected = pssDownPaymentMethod === opt.id;
                                             const isDisabled = opt.disabled;
+                                            const isMaint = opt.isMaintenance;
                                             return (
                                                 <TouchableOpacity
                                                     key={opt.id}
                                                     onPress={() => {
+                                                        if (isMaint) {
+                                                            Alert.alert(
+                                                                'Kafar na Kan Gyara (Under Maintenance)',
+                                                                `Kafar biyan kudi ta ${opt.name} tana kan sabuntawa a halin yanzu. Da fatan za a zabi Paystack ko Wallet domin biyan kason farko.`,
+                                                                [{ text: 'Na Fahimta' }]
+                                                            );
+                                                            return;
+                                                        }
                                                         if (isDisabled) {
                                                             Alert.alert(
                                                                 'Insufficient Balance',
@@ -2321,12 +2369,17 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                                     style={[
                                                         s.pssGridCol,
                                                         isSelected && s.pssGridColSelected,
-                                                        isDisabled && s.pssGridColDisabled
+                                                        (isDisabled || isMaint) && s.pssGridColDisabled
                                                     ]}
                                                 >
                                                     {isSelected && (
                                                         <View style={s.pssGridSelectedBadge}>
                                                             <Ionicons name="checkmark" size={8} color={WHITE} />
+                                                        </View>
+                                                    )}
+                                                    {isMaint && (
+                                                        <View style={[s.pssGridSelectedBadge, { backgroundColor: '#D97706' }]}>
+                                                            <Ionicons name="construct" size={8} color={WHITE} />
                                                         </View>
                                                     )}
                                                     <View style={[s.pssGridLogoBox, isSelected && s.pssGridLogoBoxSelected]}>
