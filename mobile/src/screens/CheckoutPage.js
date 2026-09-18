@@ -310,14 +310,20 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
     // Available Payment Gateways
     const availableMethods = useMemo(() => {
         const walletBalance = Number(profile?.wallet_balance || 0);
+        const maint = settings?.payment_maintenance || { flutterwave: true, coinbase: true, paystack: false };
+        const isFlwMaint = maint.flutterwave !== false;
+        const isCoinbaseMaint = maint.coinbase !== false;
+        const isPaystackMaint = maint.paystack === true;
+
         return [
             {
                 id: 'Paystack',
                 enabled: settings?.payment_methods?.paystack !== false,
                 name: 'Paystack',
-                sub: 'Cards, Bank Transfer & USSD (Active)',
+                sub: isPaystackMaint ? 'Under Scheduled Maintenance' : 'Cards, Bank Transfer & USSD (Active)',
                 logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSzFzmpCa0Tav9NttiYF10t9wftJPQ0XYPBkA&s',
-                badge: 'Cards & Transfer',
+                badge: isPaystackMaint ? 'Under Maintenance' : 'Cards & Transfer',
+                isMaintenance: isPaystackMaint,
                 icon: 'card-outline'
             },
             {
@@ -351,20 +357,20 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 id: 'Flutterwave',
                 enabled: settings?.payment_methods?.flutterwave !== false,
                 name: 'Flutterwave',
-                sub: 'Kafar na kan gyara a halin yanzu',
+                sub: isFlwMaint ? 'Under Scheduled Maintenance' : 'Cards & Mobile Money',
                 logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-W6MLvD_saE20EDSZzVPspKqcKxZ89rW8uw&s',
-                badge: 'Under Maintenance',
-                isMaintenance: true,
+                badge: isFlwMaint ? 'Under Maintenance' : 'Mobile Money',
+                isMaintenance: isFlwMaint,
                 icon: 'flash-outline'
             },
             {
                 id: 'Coinbase',
                 enabled: settings?.payment_methods?.crypto !== false,
                 name: 'Coinbase Crypto',
-                sub: 'Kafar na kan gyara a halin yanzu',
+                sub: isCoinbaseMaint ? 'Under Scheduled Maintenance' : 'BTC, ETH, USDT & USDC',
                 logo: 'https://media.licdn.com/dms/image/v2/D4E0BAQFBUuEd8VGK4w/company-logo_200_200/B4EZs3tEB3IQAI-/0/1766166118811/coinbase_logo?e=2147483647&v=beta&t=mPgscbzEhR9TBOuI9MM0BDNcbE4tvvbhF38KM3V1CAY',
-                badge: 'Under Maintenance',
-                isMaintenance: true,
+                badge: isCoinbaseMaint ? 'Under Maintenance' : 'Web3',
+                isMaintenance: isCoinbaseMaint,
                 icon: 'logo-bitcoin'
             }
         ].filter(m => m.enabled);
@@ -639,14 +645,20 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
     const pssPaymentOptions = useMemo(() => {
         const wb = Number(profile?.wallet_balance || 0);
         const dp = pssPlanDetails.downPayment;
+        const maint = settings?.payment_maintenance || { flutterwave: true, coinbase: true, paystack: false };
+        const isFlwMaint = maint.flutterwave !== false;
+        const isCoinbaseMaint = maint.coinbase !== false;
+        const isPaystackMaint = maint.paystack === true;
+
         return [
             {
                 id: 'Paystack',
                 name: 'Paystack',
-                sub: 'Cards & Transfer',
+                sub: isPaystackMaint ? 'Maintenance' : 'Cards & Transfer',
                 logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSzFzmpCa0Tav9NttiYF10t9wftJPQ0XYPBkA&s',
                 icon: 'card-outline',
-                accentColor: '#0AA5FF'
+                accentColor: '#0AA5FF',
+                isMaintenance: isPaystackMaint
             },
             {
                 id: 'Wallet',
@@ -661,23 +673,23 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             {
                 id: 'Flutterwave',
                 name: 'Flutterwave',
-                sub: 'Maintenance',
+                sub: isFlwMaint ? 'Maintenance' : 'Cards & Mobile',
                 logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-W6MLvD_saE20EDSZzVPspKqcKxZ89rW8uw&s',
                 icon: 'flash-outline',
                 accentColor: '#F5A623',
-                isMaintenance: true
+                isMaintenance: isFlwMaint
             },
             {
                 id: 'Coinbase',
                 name: 'Coinbase',
-                sub: 'Maintenance',
+                sub: isCoinbaseMaint ? 'Maintenance' : 'Web3 Crypto',
                 logo: 'https://media.licdn.com/dms/image/v2/D4E0BAQFBUuEd8VGK4w/company-logo_200_200/B4EZs3tEB3IQAI-/0/1766166118811/coinbase_logo?e=2147483647&v=beta&t=mPgscbzEhR9TBOuI9MM0BDNcbE4tvvbhF38KM3V1CAY',
                 icon: 'logo-bitcoin',
                 accentColor: '#0052FF',
-                isMaintenance: true
+                isMaintenance: isCoinbaseMaint
             }
         ];
-    }, [profile, pssPlanDetails.downPayment]);
+    }, [profile, pssPlanDetails.downPayment, settings?.payment_maintenance]);
 
     // Load initial data
     useEffect(() => {
@@ -1340,15 +1352,20 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             }
 
             // ── OPTION C: Direct Gateway (Paystack, Flutterwave, Coinbase) ─
-            if (paymentMethod === 'Flutterwave' || paymentMethod === 'Coinbase') {
+            const activeMethodObj = availableMethods.find(m => m.id === paymentMethod);
+            if (activeMethodObj?.isMaintenance) {
                 setIsProcessing(false);
                 Alert.alert(
-                    'Kafar na Kan Gyara (Under Maintenance)',
-                    `Kafar ${paymentMethod} tana kan gyara a halin yanzu. An sauya zuwa Paystack (yana karbar dukkan katunan banki, Bank Transfer, da USSD). Danna "Place Order" domin kammalawa.`,
+                    'Gateway Under Maintenance',
+                    `${paymentMethod} is currently undergoing scheduled maintenance. Would you like to switch to Paystack (Cards, Bank Transfer & USSD) to complete your order now?`,
                     [
+                        { text: 'Cancel', style: 'cancel' },
                         { 
-                            text: 'Biya da Paystack', 
-                            onPress: () => setPaymentMethod('Paystack') 
+                            text: 'Pay with Paystack', 
+                            onPress: () => {
+                                setPaymentMethod('Paystack');
+                                showToast('Switched to Paystack. Tap Place Order to proceed.');
+                            } 
                         }
                     ]
                 );
@@ -1426,19 +1443,19 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             const isFlw = paymentMethod === 'Flutterwave' || pssDownPaymentMethod === 'Flutterwave' || String(errorMsg).includes('Flutterwave') || String(errorMsg).includes('order_id');
             if (isFlw) {
                 Alert.alert(
-                    'Kafar Flutterwave Tana Gyara',
-                    'Kafar Flutterwave tana kan sabuntawa a backend a halin yanzu. Amfani da Paystack yana aiki 100% (yana karbar dukkan katunan banki, Bank Transfer, da USSD). Kuna son canzawa zuwa Paystack yanzu?',
+                    'Gateway Under Maintenance',
+                    'Flutterwave is currently undergoing maintenance on the backend. Paystack is 100% active and accepts all Cards, Bank Transfers, and USSD. Would you like to pay with Paystack instead?',
                     [
-                        { text: "A'a (Cancel)", style: 'cancel' },
+                        { text: 'Cancel', style: 'cancel' },
                         { 
-                            text: 'Biya da Paystack', 
+                            text: 'Pay with Paystack', 
                             onPress: () => {
                                 if (paymentMethod === 'pay_small_small') {
                                     setPssDownPaymentMethod('Paystack');
                                 } else {
                                     setPaymentMethod('Paystack');
                                 }
-                                showToast('An canza zuwa Paystack. Danna domin kammalawa.');
+                                showToast('Switched to Paystack. Tap Place Order to proceed.');
                             } 
                         }
                     ]
@@ -1449,19 +1466,19 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             const isCoinbase = paymentMethod === 'Coinbase' || pssDownPaymentMethod === 'Coinbase' || String(errorMsg).includes('Coinbase') || String(errorMsg).includes('vendor associations') || String(errorMsg).includes('DIAG_CRITICAL_ERROR');
             if (isCoinbase) {
                 Alert.alert(
-                    'Kafar Coinbase (Crypto) Tana Gyara',
-                    'Kafar Coinbase Commerce ba ta kammala saiti a backend ba a halin yanzu (Missing API Key / Config). Amfani da Paystack yana aiki 100% (yana karbar dukkan katunan banki, Bank Transfer, da USSD). Kuna son canzawa zuwa Paystack yanzu?',
+                    'Gateway Under Maintenance',
+                    'Coinbase Commerce is currently undergoing maintenance on the backend. Paystack is 100% active and accepts all Cards, Bank Transfers, and USSD. Would you like to pay with Paystack instead?',
                     [
-                        { text: "A'a (Cancel)", style: 'cancel' },
+                        { text: 'Cancel', style: 'cancel' },
                         { 
-                            text: 'Biya da Paystack', 
+                            text: 'Pay with Paystack', 
                             onPress: () => {
                                 if (paymentMethod === 'pay_small_small') {
                                     setPssDownPaymentMethod('Paystack');
                                 } else {
                                     setPaymentMethod('Paystack');
                                 }
-                                showToast('An canza zuwa Paystack. Danna domin kammalawa.');
+                                showToast('Switched to Paystack. Tap Place Order to proceed.');
                             } 
                         }
                     ]
@@ -2157,10 +2174,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                     onPress={() => {
                                         if (isMaint) {
                                             Alert.alert(
-                                                'Kafar na Kan Gyara (Under Maintenance)',
-                                                `Kafar biyan kudi ta ${method.name} tana kan sabuntawa a halin yanzu. Da fatan za a zabi Paystack (yana karbar dukkan Cards, Bank Transfer, da USSD) ko Pay on Delivery / Wallet domin biya cikin sauki.`,
+                                                'Gateway Under Maintenance',
+                                                `${method.name} is currently undergoing scheduled maintenance. Please select Paystack (Cards, Bank Transfer & USSD) or Pay on Delivery / Wallet to complete your order seamlessly.`,
                                                 [
-                                                    { text: 'Na Fahimta', style: 'default' }
+                                                    { text: 'Understood', style: 'default' }
                                                 ]
                                             );
                                             return;
@@ -2350,9 +2367,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                                     onPress={() => {
                                                         if (isMaint) {
                                                             Alert.alert(
-                                                                'Kafar na Kan Gyara (Under Maintenance)',
-                                                                `Kafar biyan kudi ta ${opt.name} tana kan sabuntawa a halin yanzu. Da fatan za a zabi Paystack ko Wallet domin biyan kason farko.`,
-                                                                [{ text: 'Na Fahimta' }]
+                                                                'Gateway Under Maintenance',
+                                                                `${opt.name} is currently undergoing scheduled maintenance. Please select Paystack or Wallet for your down payment.`,
+                                                                [{ text: 'Understood' }]
                                                             );
                                                             return;
                                                         }

@@ -544,7 +544,7 @@ export const PaymentGatewayService = {
 
         let errMsg = flwErrorMsg || 'Flutterwave gateway configuration missing on Supabase backend. Please ensure FLUTTERWAVE_SECRET_KEY is configured in Supabase Edge Functions environment or select Paystack for instant checkout.';
         if (typeof errMsg === 'string' && (errMsg.includes('order_id') || errMsg.includes('Order not found') || errMsg.includes('Flutterwave init failed') || errMsg.includes('400'))) {
-            errMsg = 'Kafar Flutterwave tana kan gyara a backend (Ana bukatar sabuntawar tsari). Da fatan za a zabi Paystack (yana karbar dukkan Cards, Bank Transfer & USSD) ko Pay on Delivery / Wallet domin kammala oda.';
+            errMsg = 'Flutterwave is currently undergoing scheduled backend maintenance. Please choose Paystack (Cards, Bank Transfer & USSD) or Pay on Delivery / Wallet to complete your order.';
         }
         throw new Error(errMsg);
     },
@@ -594,7 +594,7 @@ export const PaymentGatewayService = {
                 errDetail.toLowerCase().includes('vendor associations') ||
                 errDetail.toLowerCase().includes('diag_critical_error')
             ) {
-                errDetail = 'Kafar Coinbase Commerce ba ta kammala saiti a backend ba (Missing Coinbase API Key / Configuration). Da fatan za a zabi Paystack (yana karbar dukkan Cards, Bank Transfer & USSD) ko Pay on Delivery / Wallet domin kammala oda.';
+                errDetail = 'Coinbase Commerce is currently undergoing scheduled backend maintenance. Please choose Paystack (Cards, Bank Transfer & USSD) or Pay on Delivery / Wallet to complete your order.';
             }
 
             throw new Error(errDetail);

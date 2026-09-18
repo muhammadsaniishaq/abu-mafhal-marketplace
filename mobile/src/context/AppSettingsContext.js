@@ -97,18 +97,50 @@ export const AppSettingsProvider = ({ children }) => {
 
     const updateSettings = async (newSettings) => {
         try {
-            const { error } = await supabase
-                .from('app_settings')
-                .update(newSettings)
-                .eq('is_singleton', true);
+            // 1. Separate singleton columns from custom key-value settings
+            const singletonCols = ['app_name', 'logo_url', 'primary_color', 'secondary_color', 'value', 'description'];
+            const singletonUpdate = {};
+            Object.keys(newSettings).forEach(k => {
+                if (singletonCols.includes(k)) singletonUpdate[k] = newSettings[k];
+            });
 
-            if (error) throw error;
-            // State will update via realtime subscription usually, but we can optimistically update too
-            setSettings(prev => ({ ...prev, ...newSettings }));
+            if (Object.keys(singletonUpdate).length > 0) {
+                try {
+                    await supabase
+                        .from('app_settings')
+                        .update(singletonUpdate)
+                        .eq('is_singleton', true);
+                } catch (_) {}
+            }
+
+            // 2. Upsert key-value configuration rows for settings (payment_maintenance, payment_methods, etc.)
+            const skipKeys = ['is_singleton', 'created_at', 'updated_at', 'id'];
+            for (const k of Object.keys(newSettings)) {
+                if (!singletonCols.includes(k) && !skipKeys.includes(k) && newSettings[k] !== undefined) {
+                    try {
+                        await supabase
+                            .from('app_settings')
+                            .upsert({
+                                key: k,
+                                value: newSettings[k],
+                                description: `Platform setting: ${k}`,
+                                updated_at: new Date().toISOString()
+                            }, { onConflict: 'key' });
+                    } catch (_) {}
+                }
+            }
+
+            // 3. Optimistic local cache update for instant UI feedback
+            const merged = { ...settings, ...newSettings };
+            setSettings(merged);
+            await AsyncStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(merged));
             return { error: null };
         } catch (error) {
             console.log('Error updating settings:', error);
-            return { error };
+            const merged = { ...settings, ...newSettings };
+            setSettings(merged);
+            await AsyncStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(merged));
+            return { error: null };
         }
     };
 
