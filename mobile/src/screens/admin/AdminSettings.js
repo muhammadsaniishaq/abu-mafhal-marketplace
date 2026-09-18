@@ -87,8 +87,8 @@ export const AdminSettings = ({ navigation }) => {
     });
     const [paymentMaintenance,     setPaymentMaintenance]    = useState(settings?.payment_maintenance || {
         paystack: false,
-        flutterwave: true,
-        coinbase: true,
+        flutterwave: false,
+        coinbase: false,
         wallet: false,
         pod: false,
     });

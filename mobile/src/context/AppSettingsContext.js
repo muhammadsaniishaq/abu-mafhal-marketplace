@@ -21,7 +21,9 @@ export const AppSettingsProvider = ({ children }) => {
         primary_color: '#0F172A',
         secondary_color: '#3B82F6',
         features: {},
-        payment_methods: { paystack: true, crypto: true, manual: true },
+        payment_methods: { paystack: true, crypto: true, manual: true, flutterwave: true, wallet: true, pod: true },
+        payment_maintenance: { paystack: false, flutterwave: false, coinbase: false, wallet: false, pod: false },
+        flutterwave_public_key: 'FLWPUBK-3fff199cbd02a7c478e39ce4e4c3ac0f-X',
         default_shipping_address: '',
         paystack_secret_key: '',
         prembly_app_id: '',
@@ -54,6 +56,24 @@ export const AppSettingsProvider = ({ children }) => {
                 const hasValidPlans = Array.isArray(merged.vendor_plans) && merged.vendor_plans.length > 0;
                 const enriched = {
                     ...merged,
+                    payment_methods: {
+                        paystack: true,
+                        crypto: true,
+                        manual: true,
+                        flutterwave: true,
+                        wallet: true,
+                        pod: true,
+                        ...(merged.payment_methods || {})
+                    },
+                    payment_maintenance: {
+                        paystack: false,
+                        flutterwave: false,
+                        coinbase: false,
+                        wallet: false,
+                        pod: false,
+                        ...(merged.payment_maintenance || {})
+                    },
+                    flutterwave_public_key: merged.flutterwave_public_key || 'FLWPUBK-3fff199cbd02a7c478e39ce4e4c3ac0f-X',
                     default_shipping_address: merged.default_shipping_address || '',
                     vendor_plans: hasValidPlans ? merged.vendor_plans : DEFAULT_VENDOR_PLANS
                 };

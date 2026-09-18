@@ -310,9 +310,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
     // Available Payment Gateways
     const availableMethods = useMemo(() => {
         const walletBalance = Number(profile?.wallet_balance || 0);
-        const maint = settings?.payment_maintenance || { flutterwave: true, coinbase: true, paystack: false };
-        const isFlwMaint = maint.flutterwave !== false;
-        const isCoinbaseMaint = maint.coinbase !== false;
+        const maint = settings?.payment_maintenance || {};
+        const isFlwMaint = maint.flutterwave === true;
+        const isCoinbaseMaint = maint.coinbase === true;
         const isPaystackMaint = maint.paystack === true;
 
         return [
@@ -645,9 +645,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
     const pssPaymentOptions = useMemo(() => {
         const wb = Number(profile?.wallet_balance || 0);
         const dp = pssPlanDetails.downPayment;
-        const maint = settings?.payment_maintenance || { flutterwave: true, coinbase: true, paystack: false };
-        const isFlwMaint = maint.flutterwave !== false;
-        const isCoinbaseMaint = maint.coinbase !== false;
+        const maint = settings?.payment_maintenance || {};
+        const isFlwMaint = maint.flutterwave === true;
+        const isCoinbaseMaint = maint.coinbase === true;
         const isPaystackMaint = maint.paystack === true;
 
         return [
@@ -1422,8 +1422,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 throw new Error(`Could not initialize ${paymentMethod} payment gateway.`);
             }
 
-            // Web: Redirect to official secure hosted checkout (Paystack / Flutterwave / Coinbase)
-            if (Platform.OS === 'web' && typeof window !== 'undefined' && initRes.checkoutUrl) {
+            // Web: Redirect to official secure hosted checkout (Paystack / Flutterwave / Coinbase) if valid URL
+            const isHttpUrl = typeof initRes.checkoutUrl === 'string' && (initRes.checkoutUrl.startsWith('http://') || initRes.checkoutUrl.startsWith('https://'));
+            if (Platform.OS === 'web' && typeof window !== 'undefined' && isHttpUrl) {
                 setIsProcessing(false);
                 window.location.href = initRes.checkoutUrl;
                 return;
@@ -1436,55 +1437,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             console.error('Checkout Submit Error:', error);
             let errorMsg = error?.message || 'Payment initiation failed. Please try again.';
             if (errorMsg.includes('non-2xx') || errorMsg.includes('Edge Function')) {
-                errorMsg = 'Kuskure wajen bude hanyar biya ta kan layi. Da fatan za a sake gwadawa ko amfani da Pay on Delivery ko Wallet.';
+                errorMsg = 'Payment initialization error. Please retry or choose another payment method.';
             }
             setIsProcessing(false);
-
-            const isFlw = paymentMethod === 'Flutterwave' || pssDownPaymentMethod === 'Flutterwave' || String(errorMsg).includes('Flutterwave') || String(errorMsg).includes('order_id');
-            if (isFlw) {
-                Alert.alert(
-                    'Gateway Under Maintenance',
-                    'Flutterwave is currently undergoing maintenance on the backend. Paystack is 100% active and accepts all Cards, Bank Transfers, and USSD. Would you like to pay with Paystack instead?',
-                    [
-                        { text: 'Cancel', style: 'cancel' },
-                        { 
-                            text: 'Pay with Paystack', 
-                            onPress: () => {
-                                if (paymentMethod === 'pay_small_small') {
-                                    setPssDownPaymentMethod('Paystack');
-                                } else {
-                                    setPaymentMethod('Paystack');
-                                }
-                                showToast('Switched to Paystack. Tap Place Order to proceed.');
-                            } 
-                        }
-                    ]
-                );
-                return;
-            }
-
-            const isCoinbase = paymentMethod === 'Coinbase' || pssDownPaymentMethod === 'Coinbase' || String(errorMsg).includes('Coinbase') || String(errorMsg).includes('vendor associations') || String(errorMsg).includes('DIAG_CRITICAL_ERROR');
-            if (isCoinbase) {
-                Alert.alert(
-                    'Gateway Under Maintenance',
-                    'Coinbase Commerce is currently undergoing maintenance on the backend. Paystack is 100% active and accepts all Cards, Bank Transfers, and USSD. Would you like to pay with Paystack instead?',
-                    [
-                        { text: 'Cancel', style: 'cancel' },
-                        { 
-                            text: 'Pay with Paystack', 
-                            onPress: () => {
-                                if (paymentMethod === 'pay_small_small') {
-                                    setPssDownPaymentMethod('Paystack');
-                                } else {
-                                    setPaymentMethod('Paystack');
-                                }
-                                showToast('Switched to Paystack. Tap Place Order to proceed.');
-                            } 
-                        }
-                    ]
-                );
-                return;
-            }
 
             showToast(`⚠️ ${errorMsg}`);
             showAlert('Payment Initialization Failed', String(errorMsg).substring(0, 300));
