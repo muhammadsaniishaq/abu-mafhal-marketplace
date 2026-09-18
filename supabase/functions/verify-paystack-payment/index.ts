@@ -113,6 +113,26 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
       });
+    } else if (action === 'order_payment' || action === 'pss_down_payment' || action === 'checkout') {
+      // Record verified transaction in database
+      await supabase.from('transactions').insert({
+        user_id,
+        amount: paidAmount,
+        reference,
+        type: action === 'pss_down_payment' ? 'pss_down_payment' : 'order_payment',
+        status: 'completed',
+        description: `Verified Escrow Payment of NGN ${paidAmount.toLocaleString()} via Paystack (Ref: ${reference})`
+      });
+
+      return new Response(JSON.stringify({
+        success: true,
+        message: `Order payment of NGN ${paidAmount} verified successfully.`,
+        amount: paidAmount,
+        reference
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      });
     } else {
       throw new Error(`Unsupported verification action: ${action}`);
     }

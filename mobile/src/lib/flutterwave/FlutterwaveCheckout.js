@@ -22,6 +22,7 @@ var getRedirectParams = function (url) {
 
 var FlutterwaveCheckout = function FlutterwaveCheckout(props) {
     var link = props.link, visible = props.visible, onRedirect = props.onRedirect, onAbort = props.onAbort;
+    var isHtml = typeof link === 'string' && (link.trim().startsWith('<') || link.trim().startsWith('<!DOCTYPE'));
     var _a = React.useState(false), show = _a[0], setShow = _a[1];
     var webviewRef = React.useRef(null);
     var animation = React.useRef(new Animated.Value(0));
@@ -156,6 +157,19 @@ var FlutterwaveCheckout = function FlutterwaveCheckout(props) {
         return function () { };
     }, [doAnimate]);
 
+    React.useEffect(function () {
+        if (Platform.OS === 'web' && visible && !isHtml && typeof link === 'string' && link.startsWith('http')) {
+            var timer = setTimeout(function () {
+                try {
+                    if (typeof window !== 'undefined') {
+                        window.location.href = link;
+                    }
+                } catch (_) {}
+            }, 600);
+            return function () { clearTimeout(timer); };
+        }
+    }, [visible, isHtml, link]);
+
     var marginTop = animation.current.interpolate({
         inputRange: [0, 1],
         outputRange: [windowHeight, 0]
@@ -165,8 +179,6 @@ var FlutterwaveCheckout = function FlutterwaveCheckout(props) {
         inputRange: [0, 0.3, 1],
         outputRange: [0, 1, 1]
     });
-
-    var isHtml = typeof link === 'string' && (link.trim().startsWith('<') || link.trim().startsWith('<!DOCTYPE'));
 
     return (<Modal transparent={true} animated={false} hardwareAccelerated={false} visible={show}>
         <FlutterwaveCheckoutBackdrop onPress={function () { return handleAbort(); }} animation={animation.current} />
@@ -214,12 +226,38 @@ var FlutterwaveCheckout = function FlutterwaveCheckout(props) {
                             allow="payment; camera; microphone; geolocation"
                         />
                     ) : (
-                        <iframe
-                            src={link || ''}
-                            style={{ width: '100%', flex: 1, border: 'none', height: '100%' }}
-                            title="Secure Checkout"
-                            allow="payment; camera; microphone; geolocation"
-                        />
+                        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28, backgroundColor: '#0F172A' }}>
+                            <ActivityIndicator size="large" color="#10B981" style={{ marginBottom: 20 }} />
+                            <Text style={{ fontSize: 20, fontWeight: '800', color: '#FFFFFF', marginBottom: 8, textAlign: 'center' }}>
+                                Escrow Gateway Ready
+                            </Text>
+                            <Text style={{ fontSize: 13.5, color: '#94A3B8', textAlign: 'center', marginBottom: 24, maxWidth: 380, lineHeight: 20 }}>
+                                Connecting to the encrypted payment gateway. If you are not redirected automatically, click below:
+                            </Text>
+                            <TouchableOpacity
+                                onPress={function () {
+                                    if (typeof window !== 'undefined' && link) {
+                                        window.location.href = link;
+                                    }
+                                }}
+                                style={{
+                                    backgroundColor: '#10B981',
+                                    paddingVertical: 15,
+                                    paddingHorizontal: 32,
+                                    borderRadius: 12,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 10,
+                                    shadowColor: '#10B981',
+                                    shadowOpacity: 0.4,
+                                    shadowRadius: 10,
+                                    elevation: 6
+                                }}
+                            >
+                                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 16 }}>Proceed to Payment</Text>
+                                <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+                            </TouchableOpacity>
+                        </View>
                     )}
                 </View>
             ) : (

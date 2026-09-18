@@ -202,6 +202,22 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
     const [pssScheduleExpanded, setPssScheduleExpanded]   = useState(false);
     const [pssDownPaymentMethod, setPssDownPaymentMethod] = useState('Paystack'); // 'Paystack' | 'Flutterwave' | 'Wallet' | 'pod'
 
+    // Modern Feature 1: Wallet Split Payment (apply available wallet balance to any order)
+    const [useWalletSplit, setUseWalletSplit]             = useState(false);
+
+    // Modern Feature 2: Delivery Slot & Dispatch Preferences
+    const [deliverySlot, setDeliverySlot]                 = useState('anytime'); // 'anytime' | 'morning' | 'afternoon' | 'evening'
+
+    // Modern Feature 3: Order as a Gift & Discrete Packaging
+    const [isGift, setIsGift]                             = useState(false);
+    const [giftMessage, setGiftMessage]                   = useState('');
+
+    // Modern Feature 4: Currency Preview Display (NGN, USD, GBP)
+    const [currencyPreview, setCurrencyPreview]           = useState('NGN');
+
+    // Modern Feature 5: Buyer Escrow Trust Modal
+    const [showEscrowModal, setShowEscrowModal]           = useState(false);
+
     // Step 3: Review & Options
     const [couponCode, setCouponCode]           = useState('');
     const [appliedCoupon, setAppliedCoupon]     = useState(null);
@@ -241,10 +257,55 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
         setToastMessage(msg);
         Animated.sequence([
             Animated.timing(toastAnim, { toValue: 1, duration: 150, useNativeDriver: true }),
-            Animated.delay(1800),
+            Animated.delay(2200),
             Animated.timing(toastAnim, { toValue: 0, duration: 150, useNativeDriver: true })
         ]).start();
     }, [toastAnim]);
+
+    // Cross-platform Alert Helper (Native Alert + Web Fallback)
+    const showAlert = useCallback((title, message, buttons) => {
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            const fullMsg = title ? `${title}: ${message}` : message;
+            if (buttons && buttons.length > 1) {
+                const confirmed = window.confirm(fullMsg);
+                if (confirmed) {
+                    const actionBtn = buttons.find(b => b.style !== 'cancel' && b.onPress);
+                    if (actionBtn && actionBtn.onPress) actionBtn.onPress();
+                }
+            } else {
+                window.alert(fullMsg);
+            }
+        } else {
+            Alert.alert(title, message, buttons);
+        }
+    }, []);
+
+    // Detect return from external payment gateways (Paystack / Flutterwave) on Web
+    useEffect(() => {
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const ref = params.get('reference') || params.get('trxref') || params.get('tx_ref');
+                const status = (params.get('status') || '').toLowerCase();
+
+                if (ref) {
+                    if (status === 'cancelled' || status === 'failed') {
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                        showToast('⚠️ Payment was cancelled. You can try again.');
+                        showAlert('Payment Cancelled', 'The payment transaction was cancelled. Please try again.');
+                        return;
+                    }
+
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    setCurrentOrderId(ref);
+                    setOrderSuccess(true);
+                    clearProgress();
+                    if (onClearCart) onClearCart();
+                    showToast('✓ Payment completed successfully!');
+                }
+            } catch (_) {}
+        }
+    }, [onClearCart, showAlert, showToast]);
 
     // Available Payment Gateways
     const availableMethods = useMemo(() => {
@@ -548,6 +609,29 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
     const isWalletInsufficient = paymentMethod === 'Wallet' && walletBalance < finalTotal;
     const isPssWalletInsufficient = paymentMethod === 'pay_small_small' && pssDownPaymentMethod === 'Wallet' && walletBalance < pssPlanDetails.downPayment;
 
+    // Wallet Split Amount Computation (Use available balance + pay remainder via Card/POD)
+    const walletDeduction = useMemo(() => {
+        if (!useWalletSplit || paymentMethod === 'Wallet' || walletBalance <= 0) return 0;
+        return Math.min(walletBalance, finalTotal);
+    }, [useWalletSplit, paymentMethod, walletBalance, finalTotal]);
+
+    const payableAfterWallet = useMemo(() => {
+        return Math.max(0, finalTotal - walletDeduction);
+    }, [finalTotal, walletDeduction]);
+
+    // Multi-Currency Exchange Rates & Formatter
+    const formatCurrencyDisplay = useCallback((amountNgn) => {
+        if (currencyPreview === 'USD') {
+            const usdVal = (amountNgn / 1500).toFixed(2);
+            return `$${Number(usdVal).toLocaleString()} USD`;
+        }
+        if (currencyPreview === 'GBP') {
+            const gbpVal = (amountNgn / 1900).toFixed(2);
+            return `£${Number(gbpVal).toLocaleString()} GBP`;
+        }
+        return formatCurrency(amountNgn);
+    }, [currencyPreview]);
+
     // Available Down Payment Options for Pay Small Small (BNPL) - Paystack, Flutterwave, Coinbase, Wallet
     const pssPaymentOptions = useMemo(() => {
         const wb = Number(profile?.wallet_balance || 0);
@@ -806,14 +890,16 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     showToast('✓ 10% Welcome discount applied!');
                     return;
                 }
-                Alert.alert('Invalid Coupon', `Voucher "${code}" is invalid or expired.`);
+                showToast(`⚠️ Voucher "${code}" is invalid or expired`);
+                showAlert('Invalid Coupon', `Voucher "${code}" is invalid or expired.`);
                 setDiscountAmount(0);
                 setAppliedCoupon(null);
                 return;
             }
 
             if (data.min_order_amount && initialTotal < Number(data.min_order_amount)) {
-                Alert.alert('Minimum Order Required', `This coupon requires a minimum subtotal of ₦${Number(data.min_order_amount).toLocaleString()}.`);
+                showToast(`⚠️ Minimum subtotal required: ₦${Number(data.min_order_amount).toLocaleString()}`);
+                showAlert('Minimum Order Required', `This coupon requires a minimum subtotal of ₦${Number(data.min_order_amount).toLocaleString()}.`);
                 return;
             }
 
@@ -830,7 +916,8 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             showToast(`✓ ₦${discount.toLocaleString()} discount applied!`);
         } catch (e) {
             console.log('Coupon Error:', e);
-            Alert.alert('Coupon Error', 'Could not validate voucher code.');
+            showToast('⚠️ Could not validate voucher code');
+            showAlert('Coupon Error', 'Could not validate voucher code.');
         } finally {
             setValidatingCoupon(false);
         }
@@ -843,15 +930,98 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
         showToast('Voucher removed');
     };
 
+    const handlePaymentComplete = async (data, explicitGateway) => {
+        setShowPaymentModal(false);
+        if (data && (data.status === 'successful' || data.status === 'completed' || data.status === 'success')) {
+            const targetRef = currentOrderId || data.reference || data.tx_ref || PaymentGatewayService.generateRef('ORD');
+            const isPss = paymentMethod === 'pay_small_small';
+            const activeGateway = explicitGateway || (isPss ? pssDownPaymentMethod : paymentMethod);
+            const paidAmount = isPss ? pssPlanDetails.downPayment : finalTotal;
+
+            try {
+                const { data: { user: currentUser } } = await supabase.auth.getUser();
+                const uid = currentUser?.id || profile?.id;
+
+                if (uid) {
+                    // 1. Record completed transaction in database
+                    await PaymentGatewayService.recordTransaction({
+                        userId: uid,
+                        amount: paidAmount,
+                        reference: targetRef,
+                        gateway: activeGateway,
+                        type: isPss ? 'pss_down_payment' : 'order_payment',
+                        description: isPss
+                            ? `Pay Small Small BNPL Down Payment of ₦${paidAmount.toLocaleString()} via ${activeGateway} (Ref: ${targetRef})`
+                            : `Escrow payment of ₦${paidAmount.toLocaleString()} via ${activeGateway} (Ref: ${targetRef})`
+                    });
+
+                    // 2. If Pay Small Small, cache rich plan locally
+                    if (isPss) {
+                        const newPlanItem = {
+                            id: targetRef,
+                            orderNumber: targetRef.slice(0, 8).toUpperCase(),
+                            createdAt: new Date().toISOString(),
+                            totalAmount: finalTotal,
+                            baseTotal: pssPlanDetails.baseTotal,
+                            surcharge: pssPlanDetails.surcharge,
+                            paidAmount: pssPlanDetails.downPayment,
+                            remainingAmount: pssPlanDetails.remainingBalance,
+                            planType: `${pssPlanDetails.durationMonths}_months_${pssPlanDetails.frequency}`,
+                            durationMonths: pssPlanDetails.durationMonths,
+                            frequency: pssPlanDetails.frequency,
+                            installmentsCount: pssPlanDetails.installmentsCount,
+                            installmentsPaid: 1,
+                            isCompleted: false,
+                            schedule: pssPlanDetails.schedule,
+                            items: cart
+                        };
+                        const pssCacheKey = `@abumafhal_pss_plans_${uid}`;
+                        const rawExisting = await AsyncStorage.getItem(pssCacheKey);
+                        const existingList = rawExisting ? JSON.parse(rawExisting) : [];
+                        await AsyncStorage.setItem(pssCacheKey, JSON.stringify([newPlanItem, ...existingList]));
+                    }
+
+                    // 3. Cache Order Locally for instant display
+                    await PaymentGatewayService.cacheOrderLocally(uid, {
+                        id: targetRef,
+                        orderNumber: targetRef.slice(0, 8).toUpperCase(),
+                        createdAt: new Date().toISOString(),
+                        total_amount: finalTotal,
+                        status: 'processing',
+                        payment_status: 'paid',
+                        payment_method: activeGateway,
+                        items: cart,
+                        delivery_address: selectedAddrObj,
+                        delivery_slot: deliverySlot,
+                        is_gift: isGift,
+                        gift_message: giftMessage,
+                        wallet_split_deducted: walletDeduction
+                    });
+                }
+            } catch (err) {
+                console.warn('Post-payment record error:', err);
+            }
+
+            setOrderSuccess(true);
+            triggerOrderWhatsApp(targetRef, finalTotal, activeGateway || 'Online Payment');
+            await clearProgress();
+            if (onClearCart) onClearCart();
+        } else {
+            showToast('⚠️ Payment was cancelled or incomplete');
+            showAlert('Payment Incomplete', 'The transaction was cancelled or incomplete. Please try again.');
+        }
+    };
+
     const handleFinalSubmit = async () => {
         if (!agreedToTerms) {
             setAgreedToTerms(true);
         }
 
-        if (isWalletInsufficient) {
-            Alert.alert(
+        if (isWalletInsufficient && !useWalletSplit) {
+            showToast('⚠️ Insufficient Wallet Balance');
+            showAlert(
                 'Insufficient Wallet Balance',
-                `Your wallet balance (₦${walletBalance.toLocaleString()}) is less than the order total (₦${finalTotal.toLocaleString()}). Please choose another payment method or top up your wallet.`,
+                `Your wallet balance (₦${walletBalance.toLocaleString()}) is less than the order total (₦${finalTotal.toLocaleString()}). Please choose another payment method or toggle Split Payment.`,
                 [
                     { text: 'Cancel', style: 'cancel' },
                     { text: 'Pay with Paystack', onPress: () => setPaymentMethod('Paystack') }
@@ -861,7 +1031,8 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
         }
 
         if (isPssWalletInsufficient) {
-            Alert.alert(
+            showToast('⚠️ Insufficient Wallet Balance for Down Payment');
+            showAlert(
                 'Insufficient Wallet Balance for Down Payment',
                 `Your wallet balance (₦${walletBalance.toLocaleString()}) is less than the required down payment (₦${pssPlanDetails.downPayment.toLocaleString()}). Please choose Paystack, Flutterwave, or Pay on Delivery.`,
                 [
@@ -897,11 +1068,55 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             const orderRef = PaymentGatewayService.generateRef('ORD');
             setCurrentOrderId(orderRef);
 
+            // ── WALLET SPLIT ADVANCED HANDLING ───────────────────────────
+            if (useWalletSplit && walletDeduction > 0 && paymentMethod !== 'Wallet') {
+                const newBal = Math.max(0, walletBalance - walletDeduction);
+                await supabase.from('profiles').update({ wallet_balance: newBal }).eq('id', verifiedUser.id);
+
+                await PaymentGatewayService.recordTransaction({
+                    userId: verifiedUser.id,
+                    amount: walletDeduction,
+                    reference: `${orderRef}-WLT`,
+                    gateway: 'Wallet',
+                    type: 'order_payment',
+                    status: 'completed',
+                    description: `Split wallet payment of ₦${walletDeduction.toLocaleString()} for Order #${orderRef.slice(0, 8).toUpperCase()}`
+                });
+
+                // If wallet completely covered the full order
+                if (payableAfterWallet === 0) {
+                    await PaymentGatewayService.cacheOrderLocally(verifiedUser.id, {
+                        id: orderRef,
+                        orderNumber: orderRef.slice(0, 8).toUpperCase(),
+                        createdAt: new Date().toISOString(),
+                        total_amount: finalTotal,
+                        status: 'processing',
+                        payment_status: 'paid',
+                        payment_method: 'Wallet (Full Split)',
+                        items: cart,
+                        delivery_address: selectedAddrObj,
+                        delivery_slot: deliverySlot,
+                        is_gift: isGift,
+                        gift_message: giftMessage
+                    });
+
+                    setOrderSuccess(true);
+                    triggerOrderWhatsApp(orderRef, finalTotal, 'Wallet (Split Covered)');
+                    await clearProgress();
+                    if (onClearCart) onClearCart();
+                    return;
+                }
+            }
+
+            const effectivePayAmount = (useWalletSplit && walletDeduction > 0 && paymentMethod !== 'Wallet')
+                ? payableAfterWallet
+                : finalTotal;
+
             // ── OPTION A: Instant Success (Wallet or POD) ────────────────
             if (paymentMethod === 'pod') {
                 await PaymentGatewayService.recordTransaction({
                     userId: verifiedUser.id,
-                    amount: finalTotal,
+                    amount: effectivePayAmount,
                     reference: orderRef,
                     gateway: 'Pay on Delivery',
                     type: 'order_payment',
@@ -916,13 +1131,17 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     total_amount: finalTotal,
                     status: 'processing',
                     payment_status: 'pending_pod',
-                    payment_method: 'Pay on Delivery',
+                    payment_method: useWalletSplit ? 'POD + Wallet Split' : 'Pay on Delivery',
                     items: cart,
-                    delivery_address: selectedAddrObj
+                    delivery_address: selectedAddrObj,
+                    delivery_slot: deliverySlot,
+                    is_gift: isGift,
+                    gift_message: giftMessage,
+                    amount_due_on_delivery: effectivePayAmount
                 });
 
                 setOrderSuccess(true);
-                triggerOrderWhatsApp(orderRef, finalTotal, 'Pay on Delivery (Cash/POS)');
+                triggerOrderWhatsApp(orderRef, finalTotal, useWalletSplit ? 'POD + Wallet Split' : 'Pay on Delivery (Cash/POS)');
                 await clearProgress();
                 if (onClearCart) onClearCart();
                 return;
@@ -951,7 +1170,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     payment_status: 'paid',
                     payment_method: 'Wallet',
                     items: cart,
-                    delivery_address: selectedAddrObj
+                    delivery_address: selectedAddrObj,
+                    delivery_slot: deliverySlot,
+                    is_gift: isGift,
+                    gift_message: giftMessage
                 });
 
                 setOrderSuccess(true);
@@ -1062,13 +1284,28 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     reference: orderRef,
                     metadata: {
                         items: cart || [],
+                        address_id: selectedAddressId,
                         shipping_address: selectedAddrObj || {},
-                        delivery_method: deliveryMethod || 'standard',
-                        order_notes: orderNotes || '',
+                        delivery_method: selectedDeliveryMethod || 'standard',
+                        order_notes: orderNote || '',
                         is_pss_down_payment: true,
                         pss_plan: pssPlanDetails
                     }
                 });
+
+                // Direct Modern Web Overlay
+                if (pssInit?.type === 'inline_web' && typeof pssInit.openInline === 'function') {
+                    setIsProcessing(false);
+                    pssInit.openInline(
+                        async (data) => {
+                            await handlePaymentComplete(data, pssDownPaymentMethod);
+                        },
+                        () => {
+                            showToast('Payment window closed');
+                        }
+                    );
+                    return;
+                }
 
                 if (!pssInit?.success || !pssInit?.checkoutUrl) {
                     throw new Error(`Could not initialize ${pssDownPaymentMethod} down payment gateway.`);
@@ -1082,18 +1319,39 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             // ── OPTION C: Direct Gateway (Paystack, Flutterwave, Coinbase) ─
             const initRes = await PaymentGatewayService.initiate({
                 gateway: paymentMethod,
-                amount: finalTotal,
+                amount: effectivePayAmount,
                 email: verifiedUser.email,
                 phone: selectedAddrObj?.phone || verifiedUser.phone || '',
                 name: profile?.full_name || verifiedUser.user_metadata?.full_name || 'Customer',
                 reference: orderRef,
                 metadata: {
                     items: cart || [],
+                    address_id: selectedAddressId,
                     shipping_address: selectedAddrObj || {},
-                    delivery_method: deliveryMethod || 'standard',
-                    order_notes: orderNotes || ''
+                    delivery_method: selectedDeliveryMethod || 'standard',
+                    delivery_slot: deliverySlot,
+                    is_gift: isGift,
+                    gift_message: giftMessage,
+                    is_split_payment: (useWalletSplit && walletDeduction > 0),
+                    wallet_deducted: walletDeduction,
+                    full_total: finalTotal,
+                    order_notes: orderNote || ''
                 }
             });
+
+            // Direct Modern Web Overlay
+            if (initRes?.type === 'inline_web' && typeof initRes.openInline === 'function') {
+                setIsProcessing(false);
+                initRes.openInline(
+                    async (data) => {
+                        await handlePaymentComplete(data, paymentMethod);
+                    },
+                    () => {
+                        showToast('Payment window closed');
+                    }
+                );
+                return;
+            }
 
             if (!initRes?.success || !initRes?.checkoutUrl) {
                 throw new Error(`Could not initialize ${paymentMethod} payment gateway.`);
@@ -1104,11 +1362,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
         } catch (error) {
             console.error('Checkout Submit Error:', error);
-            const errorMsg = error.message || 'Payment initiation failed. Please try again.';
+            const errorMsg = error?.message || 'Payment initiation failed. Please try again.';
             setIsProcessing(false);
-            setTimeout(() => {
-                Alert.alert('Payment Initialization Failed', String(errorMsg).substring(0, 300));
-            }, 500);
+            showToast(`⚠️ ${errorMsg}`);
+            showAlert('Payment Initialization Failed', String(errorMsg).substring(0, 300));
         } finally {
             setIsProcessing(false);
         }
@@ -1117,13 +1374,15 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
     const validateAndNext = () => {
         if (currentStep === 1) {
             if (!selectedAddressId) {
-                Alert.alert('Address Required', 'Please select or add a shipping address.');
+                showToast('⚠️ Please select or add a shipping address');
+                showAlert('Address Required', 'Please select or add a shipping address.');
                 return;
             }
             setCurrentStep(2);
         } else if (currentStep === 2) {
             if (!paymentMethod) {
-                Alert.alert('Payment Required', 'Please select a payment method.');
+                showToast('⚠️ Please select a payment method');
+                showAlert('Payment Required', 'Please select a payment method.');
                 return;
             }
             setCurrentStep(3);
@@ -1132,29 +1391,106 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
     // ── SUCCESS SCREEN ────────────────────────────────────────────────────────
     if (orderSuccess) {
+        const cleanRef = (currentOrderId || '').slice(0, 10).toUpperCase();
+
+        const handleCopyOrderRef = (ref) => {
+            try {
+                if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(ref);
+                }
+            } catch (_) {}
+            showToast(`Copied order #${ref} to clipboard`);
+        };
+
         return (
             <SafeAreaView style={s.successSafe}>
                 <StatusBar barStyle="dark-content" backgroundColor={WHITE} />
-                <View style={s.successContainer}>
+                <ScrollView contentContainerStyle={s.successContainer} showsVerticalScrollIndicator={false}>
                     <View style={s.successIconBox}>
                         <Ionicons name="checkmark-circle" size={54} color={EMERALD} />
                     </View>
                     <Text style={s.successTitle}>Order Placed Successfully!</Text>
                     <Text style={s.successSub}>
-                        Your order is confirmed and is now being packaged for dispatch.
+                        Your order is confirmed and protected by Abu Mafhal Escrow Guarantee.
                     </Text>
 
                     {currentOrderId && (
-                        <View style={s.orderIdPill}>
-                            <Text style={s.orderIdTxt}>ORDER #{currentOrderId.slice(0, 8).toUpperCase()}</Text>
+                        <View style={s.orderRefCard}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={s.orderRefLabel}>ORDER REFERENCE</Text>
+                                <Text style={s.orderRefVal}>#{cleanRef}</Text>
+                            </View>
+                            <TouchableOpacity
+                                style={s.copyRefBtn}
+                                onPress={() => handleCopyOrderRef(cleanRef)}
+                                activeOpacity={0.7}
+                            >
+                                <Ionicons name="copy-outline" size={14} color={NAVY} />
+                                <Text style={s.copyRefTxt}>Copy</Text>
+                            </TouchableOpacity>
                         </View>
                     )}
+
+                    {/* Delivery Slot & Gift Packaging Badges */}
+                    <View style={s.successBadgesRow}>
+                        <View style={s.successBadgePill}>
+                            <Ionicons name="time-outline" size={13} color="#2563EB" />
+                            <Text style={s.successBadgeTxt}>
+                                Slot: {deliverySlot === 'morning' ? 'Morning (8am-12pm)' : deliverySlot === 'afternoon' ? 'Afternoon (12pm-5pm)' : deliverySlot === 'evening' ? 'Evening (5pm-8pm)' : 'Standard Anytime'}
+                            </Text>
+                        </View>
+                        {isGift && (
+                            <View style={[s.successBadgePill, { backgroundColor: '#FDF2F8', borderColor: '#FBCFE8' }]}>
+                                <Ionicons name="gift" size={13} color="#DB2777" />
+                                <Text style={[s.successBadgeTxt, { color: '#BE185D' }]}>Gift Wrapped 🎁</Text>
+                            </View>
+                        )}
+                    </View>
+
+                    {/* Visual 4-Step Dispatch Timeline */}
+                    <View style={s.timelineCard}>
+                        <Text style={s.timelineHeaderTitle}>Dispatch Status Tracking</Text>
+                        <View style={s.timelineRow}>
+                            {[
+                                { step: 1, title: 'Order Placed', status: 'done', icon: 'checkmark' },
+                                { step: 2, title: 'Escrow Secured', status: 'done', icon: 'shield-checkmark' },
+                                { step: 3, title: 'Store Packaging', status: 'active', icon: 'cube' },
+                                { step: 4, title: 'Out for Delivery', status: 'pending', icon: 'bicycle' }
+                            ].map((item, idx) => (
+                                <View key={item.step} style={s.timelineStepItem}>
+                                    <View style={[
+                                        s.timelineStepCircle,
+                                        item.status === 'done' && s.timelineStepCircleDone,
+                                        item.status === 'active' && s.timelineStepCircleActive
+                                    ]}>
+                                        <Ionicons
+                                            name={item.icon}
+                                            size={12}
+                                            color={item.status === 'pending' ? SLATE : WHITE}
+                                        />
+                                    </View>
+                                    <Text style={[
+                                        s.timelineStepLabel,
+                                        item.status === 'active' && s.timelineStepLabelActive,
+                                        item.status === 'done' && s.timelineStepLabelDone
+                                    ]}>
+                                        {item.title}
+                                    </Text>
+                                    {idx < 3 && (
+                                        <View style={[
+                                            s.timelineStepBar,
+                                            item.status === 'done' && s.timelineStepBarDone
+                                        ]} />
+                                    )}
+                                </View>
+                            ))}
+                        </View>
+                    </View>
 
                     <TouchableOpacity
                         style={s.whatsAppBanner}
                         activeOpacity={0.8}
                         onPress={() => {
-                            const cleanRef = (currentOrderId || '').slice(0, 8).toUpperCase();
                             const msg = `Hello Abu Mafhal, I have confirmed payment for order #${cleanRef}. Please confirm dispatch status.`;
                             whatsappService.openWhatsApp('2348145853539', msg);
                         }}
@@ -1179,7 +1515,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         <View style={s.successPodNotice}>
                             <Ionicons name="cash-outline" size={16} color="#EA580C" />
                             <Text style={s.successPodNoticeTxt}>
-                                Please have {formatCurrency(finalTotal)} in cash or POS card ready when our verified rider delivers your package.
+                                Please have {formatCurrency(useWalletSplit ? payableAfterWallet : finalTotal)} in cash or POS card ready when our verified rider delivers your package.
                             </Text>
                         </View>
                     )}
@@ -1213,7 +1549,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                             <Text style={s.successSecondaryBtnTxt}>Return to Marketplace</Text>
                         </TouchableOpacity>
                     </View>
-                </View>
+                </ScrollView>
             </SafeAreaView>
         );
     }
@@ -1553,15 +1889,103 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                             </View>
                         )}
 
-                        {/* Fulfillment Guarantee Trust Badge */}
-                        <View style={s.trustBadgeRow}>
-                            <Ionicons name="shield-checkmark" size={15} color={GOLD} />
+                        {/* ── PREFERRED DELIVERY TIME SLOT ────────────────────────── */}
+                        <View style={s.deliverySlotWrap}>
+                            <View style={s.methodHeaderRow}>
+                                <Text style={s.methodHeaderTitle}>Preferred Delivery Slot</Text>
+                                <View style={s.slotBadge}>
+                                    <Ionicons name="time-outline" size={11} color={GOLD} />
+                                    <Text style={s.slotBadgeTxt}>Courier Dispatch Preference</Text>
+                                </View>
+                            </View>
+                            <View style={s.slotGrid}>
+                                {[
+                                    { id: 'anytime', label: 'Anytime', sub: '8am - 6pm', icon: 'flash-outline' },
+                                    { id: 'morning', label: 'Morning', sub: '8am - 12pm', icon: 'sunny-outline' },
+                                    { id: 'afternoon', label: 'Afternoon', sub: '12pm - 5pm', icon: 'partly-sunny-outline' },
+                                    { id: 'evening', label: 'Evening', sub: '5pm - 8pm', icon: 'moon-outline' }
+                                ].map((slot) => {
+                                    const isSlotSel = deliverySlot === slot.id;
+                                    return (
+                                        <TouchableOpacity
+                                            key={slot.id}
+                                            onPress={() => setDeliverySlot(slot.id)}
+                                            style={[s.slotCard, isSlotSel && s.slotCardActive]}
+                                            activeOpacity={0.8}
+                                        >
+                                            <Ionicons
+                                                name={slot.icon}
+                                                size={15}
+                                                color={isSlotSel ? GOLD : SLATE}
+                                            />
+                                            <Text style={[s.slotLabel, isSlotSel && s.slotLabelActive]}>
+                                                {slot.label}
+                                            </Text>
+                                            <Text style={s.slotSub}>{slot.sub}</Text>
+                                            {isSlotSel && (
+                                                <View style={s.slotCheckmarkBadge}>
+                                                    <Ionicons name="checkmark" size={9} color={WHITE} />
+                                                </View>
+                                            )}
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        </View>
+
+                        {/* ── SEND AS A GIFT OPTION ───────────────────────────────── */}
+                        <View style={s.giftOptionCard}>
+                            <TouchableOpacity
+                                style={s.giftToggleRow}
+                                onPress={() => setIsGift(!isGift)}
+                                activeOpacity={0.8}
+                            >
+                                <View style={s.giftToggleLeft}>
+                                    <View style={[s.giftIconWrap, isGift && s.giftIconWrapActive]}>
+                                        <Ionicons name="gift" size={16} color={isGift ? GOLD : SLATE} />
+                                    </View>
+                                    <View>
+                                        <Text style={s.giftToggleTitle}>Send this order as a Gift? 🎁</Text>
+                                        <Text style={s.giftToggleSub}>Discrete packaging • No price tags or receipt in box</Text>
+                                    </View>
+                                </View>
+                                <View style={[s.termsCheckbox, isGift && s.termsCheckboxActive]}>
+                                    {isGift && <Ionicons name="checkmark" size={12} color={WHITE} />}
+                                </View>
+                            </TouchableOpacity>
+
+                            {isGift && (
+                                <View style={s.giftInputWrap}>
+                                    <TextInput
+                                        style={s.giftInput}
+                                        placeholder="Write a sweet message for the recipient (e.g. Barka da Sallah / Happy Birthday!)"
+                                        placeholderTextColor="#94A3B8"
+                                        value={giftMessage}
+                                        onChangeText={setGiftMessage}
+                                        multiline
+                                        numberOfLines={2}
+                                    />
+                                </View>
+                            )}
+                        </View>
+
+                        {/* Fulfillment Guarantee Trust Badge (Tap to View Guarantee) */}
+                        <TouchableOpacity 
+                            style={s.trustBadgeRow} 
+                            activeOpacity={0.8}
+                            onPress={() => setShowEscrowModal(true)}
+                        >
+                            <Ionicons name="shield-checkmark" size={16} color={GOLD} />
                             <Text style={s.trustBadgeTxt}>
                                 {shippingCalculation?.totalDistanceKm
                                     ? `Total road route: ~${shippingCalculation.totalDistanceKm} km across Nigeria.`
                                     : 'Trackable dispatch & escrow protection on all shipments.'}
                             </Text>
-                        </View>
+                            <View style={s.trustViewBtn}>
+                                <Text style={s.trustViewBtnTxt}>Details</Text>
+                                <Ionicons name="chevron-forward" size={11} color={GOLD} />
+                            </View>
+                        </TouchableOpacity>
                     </View>
                 )}
 
@@ -1575,7 +1999,46 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                 <Text style={s.sectionTitle}>Payment Gateway</Text>
                                 <Text style={s.sectionSub}>Choose how you would like to complete payment</Text>
                             </View>
+                            <TouchableOpacity
+                                onPress={() => setShowEscrowModal(true)}
+                                style={s.escrowHeaderBadge}
+                                activeOpacity={0.8}
+                            >
+                                <Ionicons name="shield-checkmark" size={11} color={EMERALD} />
+                                <Text style={s.escrowHeaderBadgeTxt}>100% Escrow</Text>
+                            </TouchableOpacity>
                         </View>
+
+                        {/* ── MODERN FEATURE: WALLET SPLIT PAYMENT ──────────────── */}
+                        {walletBalance > 0 && paymentMethod !== 'Wallet' && (
+                            <TouchableOpacity
+                                style={[s.splitWalletCard, useWalletSplit && s.splitWalletCardActive]}
+                                onPress={() => setUseWalletSplit(!useWalletSplit)}
+                                activeOpacity={0.8}
+                            >
+                                <View style={s.splitWalletLeft}>
+                                    <View style={[s.splitWalletIcon, useWalletSplit && s.splitWalletIconActive]}>
+                                        <Ionicons name="wallet" size={16} color={useWalletSplit ? WHITE : GOLD} />
+                                    </View>
+                                    <View style={{ flex: 1, marginRight: 8 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                            <Text style={s.splitWalletTitle}>Apply Wallet Balance</Text>
+                                            <View style={s.splitWalletBadge}>
+                                                <Text style={s.splitWalletBadgeTxt}>₦{walletBalance.toLocaleString()} available</Text>
+                                            </View>
+                                        </View>
+                                        <Text style={s.splitWalletSub}>
+                                            {useWalletSplit
+                                                ? `✓ ₦${walletDeduction.toLocaleString()} deducted • Pay remaining ₦${payableAfterWallet.toLocaleString()} via ${paymentMethod}`
+                                                : `Use your ₦${walletBalance.toLocaleString()} wallet balance to reduce total`}
+                                        </Text>
+                                    </View>
+                                </View>
+                                <View style={[s.termsCheckbox, useWalletSplit && s.termsCheckboxActive]}>
+                                    {useWalletSplit && <Ionicons name="checkmark" size={12} color={WHITE} />}
+                                </View>
+                            </TouchableOpacity>
+                        )}
 
                         {/* Payment Cards */}
                         {availableMethods.map((method) => {
@@ -2080,10 +2543,31 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                         </TouchableOpacity>
                                     )}
                                 </View>
-                                {appliedCoupon && (
+                                {appliedCoupon ? (
                                     <Text style={s.couponSuccessTxt}>
                                         Applied: {appliedCoupon.code} (-{formatCurrency(discountAmount)})
                                     </Text>
+                                ) : (
+                                    <View style={s.popularVouchersWrap}>
+                                        <Text style={s.popularVouchersTitle}>Popular Vouchers (Tap to Apply):</Text>
+                                        <View style={s.popularVouchersRow}>
+                                            {[
+                                                { code: 'WELCOME10', label: 'WELCOME10 (-10%)' },
+                                                { code: 'FASTSHIP', label: 'FASTSHIP (-₦500)' },
+                                                { code: 'ABUVIP', label: 'ABUVIP (-₦1,000)' }
+                                            ].map((v) => (
+                                                <TouchableOpacity
+                                                    key={v.code}
+                                                    style={s.popularVoucherPill}
+                                                    onPress={() => setCouponCode(v.code)}
+                                                    activeOpacity={0.7}
+                                                >
+                                                    <Ionicons name="pricetag-outline" size={10} color="#B45309" />
+                                                    <Text style={s.popularVoucherPillTxt}>{v.label}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    </View>
                                 )}
                             </View>
                         )}
@@ -2112,13 +2596,30 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                 {agreedToTerms && <Ionicons name="checkmark" size={13} color={WHITE} />}
                             </View>
                             <Text style={s.termsTxt}>
-                                I agree to Abu Mafhal's <Text style={s.termsLink}>Escrow Purchase Terms</Text> & Buyer Protection policy.
+                                I agree to Abu Mafhal's <Text style={s.termsLink} onPress={() => setShowEscrowModal(true)}>Escrow Purchase Terms</Text> & Buyer Protection policy.
                             </Text>
                         </TouchableOpacity>
 
                         {/* Order Cost Breakdown Invoice Summary */}
                         <View style={s.invoiceCard}>
-                            <Text style={s.invoiceTitle}>Payment Summary</Text>
+                            <View style={s.invoiceHeaderRow}>
+                                <Text style={s.invoiceTitle}>Payment Summary</Text>
+                                {/* Multi-Currency Currency Selector */}
+                                <View style={s.currencyPillGroup}>
+                                    {['NGN', 'USD', 'GBP'].map((cur) => (
+                                        <TouchableOpacity
+                                            key={cur}
+                                            onPress={() => setCurrencyPreview(cur)}
+                                            style={[s.currencyPill, currencyPreview === cur && s.currencyPillActive]}
+                                            activeOpacity={0.8}
+                                        >
+                                            <Text style={[s.currencyPillTxt, currencyPreview === cur && s.currencyPillTxtActive]}>
+                                                {cur === 'NGN' ? '₦ NGN' : cur === 'USD' ? '$ USD' : '£ GBP'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                            </View>
 
                             {/* Subtotal */}
                             <View style={s.invoiceRow}>
@@ -2168,6 +2669,21 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                 </View>
                             )}
 
+                            {/* Wallet Split Deduction */}
+                            {useWalletSplit && walletDeduction > 0 && (
+                                <View style={s.invoiceRow}>
+                                    <View>
+                                        <Text style={[s.invoiceLabel, { color: EMERALD, fontWeight: '800' }]}>
+                                            Wallet Balance Applied
+                                        </Text>
+                                        <Text style={s.invoiceSubLabel}>Instant wallet debit deduction</Text>
+                                    </View>
+                                    <Text style={[s.invoiceValue, { color: EMERALD, fontWeight: '900' }]}>
+                                        -{formatCurrency(walletDeduction)}
+                                    </Text>
+                                </View>
+                            )}
+
                             {/* Pay Small Small 5% Financing Surcharge */}
                             {paymentMethod === 'pay_small_small' && (
                                 <View style={s.invoiceRow}>
@@ -2184,10 +2700,27 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                             {/* Final Total */}
                             <View style={s.finalRow}>
                                 <View>
-                                    <Text style={s.finalLabel}>Grand Total</Text>
-                                    <Text style={s.finalSubLabel}>All taxes, fees & delivery included</Text>
+                                    <Text style={s.finalLabel}>
+                                        {useWalletSplit && walletDeduction > 0
+                                            ? 'Remaining to Pay'
+                                            : 'Grand Total'}
+                                    </Text>
+                                    <Text style={s.finalSubLabel}>
+                                        {useWalletSplit && walletDeduction > 0
+                                            ? `(₦${walletDeduction.toLocaleString()} covered by Wallet)`
+                                            : 'All taxes, fees & delivery included'}
+                                    </Text>
                                 </View>
-                                <Text style={s.finalValue}>{formatCurrency(finalTotal)}</Text>
+                                <View style={{ alignItems: 'flex-end' }}>
+                                    <Text style={s.finalValue}>
+                                        {formatCurrency(useWalletSplit && walletDeduction > 0 ? payableAfterWallet : finalTotal)}
+                                    </Text>
+                                    {currencyPreview !== 'NGN' && (
+                                        <Text style={s.currencyConvertedSub}>
+                                            ~{formatCurrencyDisplay(useWalletSplit && walletDeduction > 0 ? payableAfterWallet : finalTotal)}
+                                        </Text>
+                                    )}
+                                </View>
                             </View>
 
                             {/* Down Payment vs Due Today Callout in Invoice */}
@@ -2206,11 +2739,15 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                             {paymentMethod === 'pod' && (
                                 <View style={{ backgroundColor: '#FFF7ED', padding: 10, borderRadius: 8, marginTop: 10, borderWidth: 1, borderColor: '#FED7AA' }}>
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <Text style={{ fontSize: 12, fontWeight: '800', color: '#C2410C' }}>Due Today (Upfront):</Text>
-                                        <Text style={{ fontSize: 14, fontWeight: '900', color: '#C2410C' }}>₦0</Text>
+                                        <Text style={{ fontSize: 12, fontWeight: '800', color: '#C2410C' }}>Due on Delivery:</Text>
+                                        <Text style={{ fontSize: 14, fontWeight: '900', color: '#C2410C' }}>
+                                            {formatCurrency(useWalletSplit ? payableAfterWallet : finalTotal)}
+                                        </Text>
                                     </View>
                                     <Text style={{ fontSize: 10.5, color: '#9A3412', marginTop: 2 }}>
-                                        Full order amount of {formatCurrency(finalTotal)} will be paid upon arrival (Cash or POS transfer).
+                                        {useWalletSplit && walletDeduction > 0
+                                            ? `₦${walletDeduction.toLocaleString()} deducted from Wallet. Pay remaining balance of ${formatCurrency(payableAfterWallet)} upon arrival.`
+                                            : `Full order amount of ${formatCurrency(finalTotal)} will be paid upon arrival (Cash or POS transfer).`}
                                     </Text>
                                 </View>
                             )}
@@ -2236,16 +2773,25 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                 ? 'Due on Delivery'
                                 : paymentMethod === 'pay_small_small'
                                 ? 'Due Today (Down Payment)'
+                                : useWalletSplit && walletDeduction > 0
+                                ? 'Due Today (After Wallet)'
                                 : 'Total to Pay'}
                         </Text>
                         <Text style={s.footerTotalVal} numberOfLines={1} adjustsFontSizeToFit={true} minimumFontScale={0.75}>
                             {paymentMethod === 'pod'
-                                ? formatCurrency(finalTotal)
+                                ? formatCurrency(useWalletSplit ? payableAfterWallet : finalTotal)
                                 : paymentMethod === 'pay_small_small'
                                 ? formatCurrency(pssPlanDetails.downPayment)
+                                : useWalletSplit && walletDeduction > 0
+                                ? formatCurrency(payableAfterWallet)
                                 : formatCurrency(finalTotal)}
                         </Text>
-                        {paymentMethod === 'pod' && (
+                        {useWalletSplit && walletDeduction > 0 && (
+                            <Text style={{ fontSize: 9.5, color: EMERALD, fontWeight: '800' }} numberOfLines={1}>
+                                ₦{walletDeduction.toLocaleString()} from Wallet
+                            </Text>
+                        )}
+                        {paymentMethod === 'pod' && !useWalletSplit && (
                             <Text style={{ fontSize: 9.5, color: '#EA580C', fontWeight: '800' }} numberOfLines={1}>₦0 upfront today</Text>
                         )}
                         {paymentMethod === 'pay_small_small' && (
@@ -2451,6 +2997,80 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         </ScrollView>
                     </View>
                 </TouchableOpacity>
+            {/* ── ESCROW BUYER PROTECTION MODAL ─────────────────────────────── */}
+            <Modal
+                visible={showEscrowModal}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setShowEscrowModal(false)}
+            >
+                <TouchableOpacity 
+                    style={s.modalOverlay} 
+                    activeOpacity={1} 
+                    onPress={() => setShowEscrowModal(false)}
+                >
+                    <View style={s.escrowModalSheet}>
+                        <View style={s.escrowModalHeader}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <View style={s.escrowIconBadge}>
+                                    <Ionicons name="shield-checkmark" size={18} color={EMERALD} />
+                                </View>
+                                <View>
+                                    <Text style={s.escrowModalTitle}>Abu Mafhal Buyer Protection</Text>
+                                    <Text style={s.escrowModalSub}>100% Safe Escrow Guarantee</Text>
+                                </View>
+                            </View>
+                            <TouchableOpacity onPress={() => setShowEscrowModal(false)} style={s.modalCloseBtn}>
+                                <Ionicons name="close-circle" size={22} color={SLATE} />
+                            </TouchableOpacity>
+                        </View>
+                        <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+                            <View style={s.escrowFeatureCard}>
+                                <Ionicons name="lock-closed" size={20} color={EMERALD} />
+                                <View style={{ flex: 1, marginLeft: 12 }}>
+                                    <Text style={s.escrowFeatureTitle}>Zero Risk Escrow Vault</Text>
+                                    <Text style={s.escrowFeatureDesc}>
+                                        Your payment is held safely in escrow. The seller is only paid after you inspect and accept your package upon delivery.
+                                    </Text>
+                                </View>
+                            </View>
+                            <View style={s.escrowFeatureCard}>
+                                <Ionicons name="sync" size={20} color={GOLD} />
+                                <View style={{ flex: 1, marginLeft: 12 }}>
+                                    <Text style={s.escrowFeatureTitle}>7-Day Return & Replacement</Text>
+                                    <Text style={s.escrowFeatureDesc}>
+                                        Damaged, wrong, or counterfeit items qualify for immediate replacement or full refund with zero hassle.
+                                    </Text>
+                                </View>
+                            </View>
+                            <View style={s.escrowFeatureCard}>
+                                <Ionicons name="bicycle" size={20} color="#3B82F6" />
+                                <View style={{ flex: 1, marginLeft: 12 }}>
+                                    <Text style={s.escrowFeatureTitle}>Verified Express Logistics</Text>
+                                    <Text style={s.escrowFeatureDesc}>
+                                        Track your delivery rider in real-time with continuous WhatsApp and SMS notifications from store dispatch to your door.
+                                    </Text>
+                                </View>
+                            </View>
+                            <View style={s.escrowFeatureCard}>
+                                <Ionicons name="chatbubbles" size={20} color="#8B5CF6" />
+                                <View style={{ flex: 1, marginLeft: 12 }}>
+                                    <Text style={s.escrowFeatureTitle}>24/7 Dispute Concierge</Text>
+                                    <Text style={s.escrowFeatureDesc}>
+                                        Direct priority WhatsApp line to dedicated resolution officers available 24 hours every day.
+                                    </Text>
+                                </View>
+                            </View>
+                        </ScrollView>
+                        <TouchableOpacity
+                            style={s.escrowModalCloseBtn}
+                            onPress={() => setShowEscrowModal(false)}
+                            activeOpacity={0.8}
+                        >
+                            <Text style={s.escrowModalCloseTxt}>I Understand & Feel Safe</Text>
+                        </TouchableOpacity>
+                    </View>
+                </TouchableOpacity>
             </Modal>
 
             {/* ── PAYMENT MODAL (WEBVIEW) ──────────────────────────────────── */}
@@ -2459,80 +3079,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 link={paymentLink}
                 onAbort={() => setShowPaymentModal(false)}
                 onRedirect={async (data) => {
-                    setShowPaymentModal(false);
-                    if (data && (data.status === 'successful' || data.status === 'completed' || data.status === 'success')) {
-                        const targetRef = currentOrderId || data.reference || data.tx_ref || PaymentGatewayService.generateRef('ORD');
-                        const isPss = paymentMethod === 'pay_small_small';
-                        const activeGateway = isPss ? pssDownPaymentMethod : paymentMethod;
-                        const paidAmount = isPss ? pssPlanDetails.downPayment : finalTotal;
-
-                        try {
-                            const { data: { user: currentUser } } = await supabase.auth.getUser();
-                            const uid = currentUser?.id;
-
-                            if (uid) {
-                                // 1. Record completed transaction in database
-                                await PaymentGatewayService.recordTransaction({
-                                    userId: uid,
-                                    amount: paidAmount,
-                                    reference: targetRef,
-                                    gateway: activeGateway,
-                                    type: isPss ? 'pss_down_payment' : 'order_payment',
-                                    description: isPss
-                                        ? `Pay Small Small BNPL Down Payment of ₦${paidAmount.toLocaleString()} via ${activeGateway} (Ref: ${targetRef})`
-                                        : `Escrow payment of ₦${paidAmount.toLocaleString()} via ${activeGateway} (Ref: ${targetRef})`
-                                });
-
-                                // 2. If Pay Small Small, cache rich plan locally
-                                if (isPss) {
-                                    const newPlanItem = {
-                                        id: targetRef,
-                                        orderNumber: targetRef.slice(0, 8).toUpperCase(),
-                                        createdAt: new Date().toISOString(),
-                                        totalAmount: finalTotal,
-                                        baseTotal: pssPlanDetails.baseTotal,
-                                        surcharge: pssPlanDetails.surcharge,
-                                        paidAmount: pssPlanDetails.downPayment,
-                                        remainingAmount: pssPlanDetails.remainingBalance,
-                                        planType: `${pssPlanDetails.durationMonths}_months_${pssPlanDetails.frequency}`,
-                                        durationMonths: pssPlanDetails.durationMonths,
-                                        frequency: pssPlanDetails.frequency,
-                                        installmentsCount: pssPlanDetails.installmentsCount,
-                                        installmentsPaid: 1,
-                                        isCompleted: false,
-                                        schedule: pssPlanDetails.schedule,
-                                        items: cart
-                                    };
-                                    const pssCacheKey = `@abumafhal_pss_plans_${uid}`;
-                                    const rawExisting = await AsyncStorage.getItem(pssCacheKey);
-                                    const existingList = rawExisting ? JSON.parse(rawExisting) : [];
-                                    await AsyncStorage.setItem(pssCacheKey, JSON.stringify([newPlanItem, ...existingList]));
-                                }
-
-                                // 3. Cache Order Locally for instant display
-                                await PaymentGatewayService.cacheOrderLocally(uid, {
-                                    id: targetRef,
-                                    orderNumber: targetRef.slice(0, 8).toUpperCase(),
-                                    createdAt: new Date().toISOString(),
-                                    total_amount: finalTotal,
-                                    status: 'processing',
-                                    payment_status: 'paid',
-                                    payment_method: activeGateway,
-                                    items: cart,
-                                    delivery_address: selectedAddrObj
-                                });
-                            }
-                        } catch (err) {
-                            console.warn('Post-payment record error:', err);
-                        }
-
-                        setOrderSuccess(true);
-                        triggerOrderWhatsApp(targetRef, finalTotal, activeGateway || 'Online Payment');
-                        await clearProgress();
-                        if (onClearCart) onClearCart();
-                    } else {
-                        Alert.alert('Payment Incomplete', 'The transaction was cancelled or incomplete. Please try again.');
-                    }
+                    await handlePaymentComplete(data);
                 }}
             />
         </View>
@@ -4464,6 +5011,401 @@ const s = StyleSheet.create({
         fontSize: 10.5,
         color: SLATE,
         marginTop: 1,
+    },
+
+    // Modern Delivery Time Slots
+    slotGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginTop: 6,
+    },
+    slotCard: {
+        flex: 1,
+        minWidth: '47%',
+        backgroundColor: WHITE,
+        borderWidth: 1.5,
+        borderColor: '#E2E8F0',
+        borderRadius: 10,
+        padding: 10,
+    },
+    slotCardActive: {
+        borderColor: NAVY,
+        backgroundColor: '#F8FAFC',
+    },
+    slotCardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 4,
+    },
+    slotCardTitle: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: NAVY,
+    },
+    slotCardSub: {
+        fontSize: 10.5,
+        color: SLATE,
+    },
+
+    // Modern Gift Packaging
+    giftOptionCard: {
+        backgroundColor: WHITE,
+        borderWidth: 1.5,
+        borderColor: '#E2E8F0',
+        borderRadius: 12,
+        padding: 12,
+        marginTop: 10,
+    },
+    giftOptionCardActive: {
+        borderColor: '#EC4899',
+        backgroundColor: '#FDF2F8',
+    },
+    giftOptionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    giftOptionTitle: {
+        fontSize: 12.5,
+        fontWeight: '800',
+        color: NAVY,
+    },
+    giftOptionSub: {
+        fontSize: 11,
+        color: SLATE,
+        marginTop: 2,
+    },
+    giftInput: {
+        backgroundColor: WHITE,
+        borderWidth: 1,
+        borderColor: '#FBCFE8',
+        borderRadius: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+        fontSize: 11.5,
+        color: NAVY,
+        marginTop: 8,
+    },
+
+    // Modern Wallet Split Payment
+    splitWalletCard: {
+        backgroundColor: WHITE,
+        borderWidth: 1.5,
+        borderColor: '#E2E8F0',
+        borderRadius: 12,
+        padding: 12,
+        marginTop: 10,
+    },
+    splitWalletCardActive: {
+        borderColor: EMERALD,
+        backgroundColor: '#F0FDF4',
+    },
+    splitWalletHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    splitWalletTitle: {
+        fontSize: 12.5,
+        fontWeight: '800',
+        color: NAVY,
+    },
+    splitWalletSub: {
+        fontSize: 11,
+        color: SLATE,
+        marginTop: 2,
+    },
+
+    // Escrow Badge & Protection Pills
+    escrowPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        backgroundColor: '#ECFDF5',
+        borderWidth: 1,
+        borderColor: '#A7F3D0',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 20,
+    },
+    escrowPillTxt: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: '#065F46',
+    },
+
+    // 1-Tap Discount Vouchers
+    popularVouchersWrap: {
+        marginTop: 8,
+    },
+    popularVouchersTitle: {
+        fontSize: 10.5,
+        fontWeight: '700',
+        color: SLATE,
+        marginBottom: 5,
+    },
+    popularVouchersRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
+    },
+    popularVoucherPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#FEF3C7',
+        borderWidth: 1,
+        borderColor: '#FDE68A',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 12,
+    },
+    popularVoucherPillTxt: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: '#92400E',
+    },
+
+    // Multi-Currency Switcher
+    currencyPillGroup: {
+        flexDirection: 'row',
+        backgroundColor: '#F1F5F9',
+        borderRadius: 8,
+        padding: 2,
+        gap: 2,
+    },
+    currencyPill: {
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6,
+    },
+    currencyPillActive: {
+        backgroundColor: NAVY,
+    },
+    currencyPillTxt: {
+        fontSize: 10.5,
+        fontWeight: '700',
+        color: SLATE,
+    },
+    currencyPillTxtActive: {
+        color: WHITE,
+        fontWeight: '800',
+    },
+    currencyConvertedSub: {
+        fontSize: 11,
+        color: GOLD,
+        fontWeight: '800',
+        marginTop: 2,
+    },
+
+    // Order Success Upgraded Components
+    orderRefCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        marginVertical: 12,
+        width: '100%',
+    },
+    orderRefLabel: {
+        fontSize: 9.5,
+        fontWeight: '800',
+        color: SLATE,
+        letterSpacing: 0.5,
+    },
+    orderRefVal: {
+        fontSize: 15,
+        fontWeight: '900',
+        color: NAVY,
+        letterSpacing: 0.5,
+        marginTop: 1,
+    },
+    copyRefBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#E2E8F0',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 8,
+    },
+    copyRefTxt: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: NAVY,
+    },
+    successBadgesRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginBottom: 14,
+        width: '100%',
+        justifyContent: 'center',
+    },
+    successBadgePill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        backgroundColor: '#EFF6FF',
+        borderWidth: 1,
+        borderColor: '#BFDBFE',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 20,
+    },
+    successBadgeTxt: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#1D4ED8',
+    },
+
+    // Visual Dispatch Timeline
+    timelineCard: {
+        backgroundColor: WHITE,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        borderRadius: 14,
+        padding: 14,
+        marginBottom: 16,
+        width: '100%',
+    },
+    timelineHeaderTitle: {
+        fontSize: 12.5,
+        fontWeight: '800',
+        color: NAVY,
+        marginBottom: 12,
+        textAlign: 'center',
+    },
+    timelineRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        position: 'relative',
+    },
+    timelineStepItem: {
+        flex: 1,
+        alignItems: 'center',
+        position: 'relative',
+    },
+    timelineStepCircle: {
+        width: 26,
+        height: 26,
+        borderRadius: 13,
+        backgroundColor: '#F1F5F9',
+        borderWidth: 1.5,
+        borderColor: '#CBD5E1',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 6,
+        zIndex: 2,
+    },
+    timelineStepCircleActive: {
+        backgroundColor: '#2563EB',
+        borderColor: '#2563EB',
+    },
+    timelineStepCircleDone: {
+        backgroundColor: EMERALD,
+        borderColor: EMERALD,
+    },
+    timelineStepBar: {
+        position: 'absolute',
+        top: 13,
+        left: '50%',
+        right: '-50%',
+        height: 2,
+        backgroundColor: '#E2E8F0',
+        zIndex: 1,
+    },
+    timelineStepBarDone: {
+        backgroundColor: EMERALD,
+    },
+    timelineStepLabel: {
+        fontSize: 9.5,
+        fontWeight: '700',
+        color: SLATE,
+        textAlign: 'center',
+        lineHeight: 12,
+    },
+    timelineStepLabelActive: {
+        color: '#2563EB',
+        fontWeight: '900',
+    },
+    timelineStepLabelDone: {
+        color: NAVY,
+        fontWeight: '800',
+    },
+
+    // Escrow Modal
+    escrowModalSheet: {
+        backgroundColor: WHITE,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        padding: 18,
+        maxWidth: 540,
+        width: '100%',
+        alignSelf: 'center',
+    },
+    escrowModalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingBottom: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+    },
+    escrowIconBadge: {
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        backgroundColor: '#ECFDF5',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    escrowModalTitle: {
+        fontSize: 14,
+        fontWeight: '900',
+        color: NAVY,
+    },
+    escrowModalSub: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: EMERALD,
+    },
+    escrowFeatureCard: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        paddingVertical: 12,
+        borderBottomWidth: 0.5,
+        borderBottomColor: '#F1F5F9',
+    },
+    escrowFeatureTitle: {
+        fontSize: 12.5,
+        fontWeight: '800',
+        color: NAVY,
+        marginBottom: 2,
+    },
+    escrowFeatureDesc: {
+        fontSize: 11,
+        color: SLATE,
+        lineHeight: 15,
+    },
+    escrowModalCloseBtn: {
+        backgroundColor: NAVY,
+        paddingVertical: 12,
+        borderRadius: 10,
+        alignItems: 'center',
+        marginTop: 14,
+    },
+    escrowModalCloseTxt: {
+        fontSize: 13,
+        fontWeight: '800',
+        color: WHITE,
     },
 });
 
