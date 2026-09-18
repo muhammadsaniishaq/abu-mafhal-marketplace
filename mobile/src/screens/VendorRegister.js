@@ -7,6 +7,7 @@ import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { UploadService } from '../services/uploadService';
+import { PaymentGatewayService } from '../services/paymentGatewayService';
 import { WebView } from 'react-native-webview';
 import { VendorCertificate } from './VendorCertificate';
 
@@ -554,17 +555,15 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                     const fallbackEmail = user?.email || `user_${user?.id?.substring(0, 6) || Math.floor(Math.random() * 10000)}@abumafhal.com`;
                     const ref = `RV-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-                    const { data, error } = await supabase.functions.invoke('initiate-paystack-payment', {
-                        body: {
-                            amount: plan.price,
-                            email: fallbackEmail,
-                            reference: ref,
-                            // [NEW] Pass callback_url for web redirect
-                            callback_url: Platform.OS === 'web' ? window.location.href : 'https://standard.paystack.co/close'
-                        }
+                    const res = await PaymentGatewayService.invokeEdgeFunction('initiate-paystack-payment', {
+                        amount: plan.price,
+                        email: fallbackEmail,
+                        reference: ref,
+                        callback_url: Platform.OS === 'web' ? window.location.href : 'https://standard.paystack.co/close'
                     });
 
-                    if (error) throw error;
+                    if (!res.ok) throw new Error(res.error || 'Failed to initialize payment');
+                    const data = res.data;
                     if (!data?.success) throw new Error(data?.error || 'Failed to initialize payment');
 
                     setCurrentRef(ref);
@@ -1198,17 +1197,16 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
 
                                 try {
                                     setLoading(true); // lock the form 
-                                    const { data, error } = await supabase.functions.invoke('verify-paystack-payment', {
-                                        body: {
-                                            reference: currentRef,
-                                            action: 'vendor_registration',
-                                            amount: plan.price,
-                                            user_id: user.id,
-                                            expected_plan_id: plan.id
-                                        }
+                                    const res = await PaymentGatewayService.invokeEdgeFunction('verify-paystack-payment', {
+                                        reference: currentRef,
+                                        action: 'vendor_registration',
+                                        amount: plan.price,
+                                        user_id: user.id,
+                                        expected_plan_id: plan.id
                                     });
 
-                                    if (error) throw error;
+                                    if (!res.ok) throw new Error(res.error || 'Vendor payment verification failed');
+                                    const data = res.data;
                                     if (!data?.success) throw new Error(data?.error || 'Vendor payment verification failed');
 
                                     setPaymentVerified(true);

@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import { WebView } from 'react-native-webview';
 import { useAppSettings } from '../context/AppSettingsContext';
 import { whatsappService } from '../services/whatsappService';
+import { PaymentGatewayService } from '../services/paymentGatewayService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
@@ -207,16 +208,15 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                 const fallbackEmail = user?.email || `wallet_${user?.id?.substring(0, 6) || Math.floor(Math.random() * 1000)}@abumafhal.com`;
                 const ref = `WALLET-${user?.id?.slice(0, 4) || 'GUEST'}-${Date.now()}`;
 
-                const { data, error } = await supabase.functions.invoke('initiate-paystack-payment', {
-                    body: {
-                        amount: amountNum,
-                        email: fallbackEmail,
-                        reference: ref,
-                        callback_url: Platform.OS === 'web' ? window.location.href : 'https://standard.paystack.co/close'
-                    }
+                const res = await PaymentGatewayService.invokeEdgeFunction('initiate-paystack-payment', {
+                    amount: amountNum,
+                    email: fallbackEmail,
+                    reference: ref,
+                    callback_url: Platform.OS === 'web' ? window.location.href : 'https://standard.paystack.co/close'
                 });
 
-                if (error) throw error;
+                if (!res.ok) throw new Error(res.error || 'Failed to initialize payment');
+                const data = res.data;
                 if (!data?.success) throw new Error(data?.error || 'Failed to initialize payment');
 
                 setCurrentRef(ref);
@@ -1491,16 +1491,15 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                                 setIsTopUpPending(true);
 
                                 try {
-                                    const { data, error } = await supabase.functions.invoke('verify-paystack-payment', {
-                                        body: {
-                                            reference: currentRef,
-                                            action: 'wallet_topup',
-                                            amount: parseInt(topUpAmount),
-                                            user_id: user.id
-                                        }
+                                    const res = await PaymentGatewayService.invokeEdgeFunction('verify-paystack-payment', {
+                                        reference: currentRef,
+                                        action: 'wallet_topup',
+                                        amount: parseInt(topUpAmount),
+                                        user_id: user.id
                                     });
 
-                                    if (error) throw error;
+                                    if (!res.ok) throw new Error(res.error || 'Verification failed');
+                                    const data = res.data;
                                     if (!data?.success) throw new Error(data?.error || 'Verification failed');
 
                                     Alert.alert('Success', `₦${parseInt(topUpAmount).toLocaleString()} added to your wallet!`);

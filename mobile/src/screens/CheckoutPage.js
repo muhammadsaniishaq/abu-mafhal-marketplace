@@ -1362,7 +1362,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
         } catch (error) {
             console.error('Checkout Submit Error:', error);
-            const errorMsg = error?.message || 'Payment initiation failed. Please try again.';
+            let errorMsg = error?.message || 'Payment initiation failed. Please try again.';
+            if (errorMsg.includes('non-2xx') || errorMsg.includes('Edge Function')) {
+                errorMsg = 'Kuskure wajen bude hanyar biya ta kan layi. Da fatan za a sake gwadawa ko amfani da Pay on Delivery ko Wallet.';
+            }
             setIsProcessing(false);
             showToast(`⚠️ ${errorMsg}`);
             showAlert('Payment Initialization Failed', String(errorMsg).substring(0, 300));
