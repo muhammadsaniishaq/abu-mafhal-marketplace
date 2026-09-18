@@ -351,10 +351,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 id: 'pod',
                 enabled: settings?.payment_methods?.pod !== false,
                 name: 'Pay on Delivery (POD)',
-                sub: 'Cash or POS card upon arrival',
-                badge: 'Cash / POS',
+                sub: 'Cash, Bank Transfer or POS upon arrival',
+                badge: '₦0 Upfront',
                 icon: 'cash-outline',
-                accentColor: '#F97316'
+                accentColor: EMERALD
             },
             {
                 id: 'Coinbase',
@@ -2300,33 +2300,73 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                             </View>
                         )}
 
-                        {/* Pay on Delivery (POD) Verified Callout */}
+                        {/* Pay on Delivery (POD) Modern Luxury Callout */}
                         {paymentMethod === 'pod' && (
                             <View style={s.podBox}>
                                 <View style={s.podHeader}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                        <Ionicons name="cash" size={18} color="#EA580C" />
-                                        <Text style={s.podTitle}>Pay on Delivery (Cash / POS) Active</Text>
+                                    <View style={s.podHeaderLeft}>
+                                        <View style={s.podIconBadge}>
+                                            <Ionicons name="cash-outline" size={18} color={EMERALD} />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={s.podTitle} numberOfLines={1}>Pay on Delivery (POD)</Text>
+                                            <Text style={s.podSub} numberOfLines={1}>Cash, Bank Transfer or POS</Text>
+                                        </View>
                                     </View>
                                     <View style={s.podZeroPill}>
-                                        <Text style={s.podZeroPillTxt}>₦0 UPFRONT TODAY</Text>
+                                        <Text style={s.podZeroPillTxt}>₦0 UPFRONT</Text>
                                     </View>
                                 </View>
-                                <Text style={s.podDesc}>
-                                    Pay ₦0 today! You only pay the total of <Text style={{ fontWeight: '800', color: NAVY }}>{formatCurrency(finalTotal)}</Text> in Cash or with POS Card directly to the courier upon delivery at your doorstep.
-                                </Text>
-                                <View style={s.podFeatureRow}>
-                                    <View style={s.podFeatureItem}>
-                                        <Ionicons name="checkmark-circle" size={14} color={EMERALD} />
-                                        <Text style={s.podFeatureTxt}>₦0 Upfront</Text>
+
+                                {/* Clean Amount Callout */}
+                                <View style={s.podAmountBanner}>
+                                    <View style={{ flex: 1, marginRight: 8 }}>
+                                        <Text style={s.podAmountLabel} numberOfLines={1}>
+                                            {useWalletSplit && walletDeduction > 0 ? 'Balance Due on Arrival' : 'Total Due on Arrival'}
+                                        </Text>
+                                        <Text style={s.podAmountVal} numberOfLines={1}>
+                                            {formatCurrency(useWalletSplit && walletDeduction > 0 ? payableAfterWallet : finalTotal)}
+                                        </Text>
+                                        {useWalletSplit && walletDeduction > 0 && (
+                                            <Text style={s.podWalletDeductedNote} numberOfLines={1}>
+                                                ✓ ₦{walletDeduction.toLocaleString()} deducted from Wallet
+                                            </Text>
+                                        )}
                                     </View>
-                                    <View style={s.podFeatureItem}>
-                                        <Ionicons name="checkmark-circle" size={14} color={EMERALD} />
-                                        <Text style={s.podFeatureTxt}>Inspect Before Paying</Text>
+                                    <View style={s.podDoorstepBadge}>
+                                        <Ionicons name="shield-checkmark" size={13} color="#1D4ED8" />
+                                        <Text style={s.podDoorstepTxt}>At Doorstep</Text>
                                     </View>
-                                    <View style={s.podFeatureItem}>
-                                        <Ionicons name="checkmark-circle" size={14} color={EMERALD} />
-                                        <Text style={s.podFeatureTxt}>Cash or POS on Delivery</Text>
+                                </View>
+
+                                {/* 3 Clear Benefits - beautifully aligned without overflow */}
+                                <View style={s.podGuaranteesList}>
+                                    <View style={s.podGuaranteeRow}>
+                                        <View style={s.podCheckCircle}>
+                                            <Ionicons name="checkmark" size={11} color={EMERALD} />
+                                        </View>
+                                        <Text style={s.podGuaranteeTxt}>
+                                            <Text style={{ fontWeight: '800', color: NAVY }}>Inspect Before Paying: </Text>
+                                            Open & check your package before handing payment to the rider.
+                                        </Text>
+                                    </View>
+                                    <View style={s.podGuaranteeRow}>
+                                        <View style={s.podCheckCircle}>
+                                            <Ionicons name="checkmark" size={11} color={EMERALD} />
+                                        </View>
+                                        <Text style={s.podGuaranteeTxt}>
+                                            <Text style={{ fontWeight: '800', color: NAVY }}>Flexible Payment: </Text>
+                                            Riders carry POS terminals & accept instant bank transfers or cash.
+                                        </Text>
+                                    </View>
+                                    <View style={s.podGuaranteeRow}>
+                                        <View style={s.podCheckCircle}>
+                                            <Ionicons name="checkmark" size={11} color={EMERALD} />
+                                        </View>
+                                        <Text style={s.podGuaranteeTxt}>
+                                            <Text style={{ fontWeight: '800', color: NAVY }}>₦0 Pre-payment Risk: </Text>
+                                            Zero card debit today. Payment occurs strictly upon inspection.
+                                        </Text>
                                     </View>
                                 </View>
                             </View>
@@ -2737,17 +2777,20 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                             )}
 
                             {paymentMethod === 'pod' && (
-                                <View style={{ backgroundColor: '#FFF7ED', padding: 10, borderRadius: 8, marginTop: 10, borderWidth: 1, borderColor: '#FED7AA' }}>
+                                <View style={s.podInvoiceNotice}>
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <Text style={{ fontSize: 12, fontWeight: '800', color: '#C2410C' }}>Due on Delivery:</Text>
-                                        <Text style={{ fontSize: 14, fontWeight: '900', color: '#C2410C' }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                            <Ionicons name="home-outline" size={14} color="#065F46" />
+                                            <Text style={s.podInvoiceNoticeTitle}>Due on Delivery:</Text>
+                                        </View>
+                                        <Text style={s.podInvoiceNoticeVal}>
                                             {formatCurrency(useWalletSplit ? payableAfterWallet : finalTotal)}
                                         </Text>
                                     </View>
-                                    <Text style={{ fontSize: 10.5, color: '#9A3412', marginTop: 2 }}>
+                                    <Text style={s.podInvoiceNoticeSub}>
                                         {useWalletSplit && walletDeduction > 0
-                                            ? `₦${walletDeduction.toLocaleString()} deducted from Wallet. Pay remaining balance of ${formatCurrency(payableAfterWallet)} upon arrival.`
-                                            : `Full order amount of ${formatCurrency(finalTotal)} will be paid upon arrival (Cash or POS transfer).`}
+                                            ? `₦${walletDeduction.toLocaleString()} deducted from Wallet. Pay balance upon arrival (Cash, Transfer or POS).`
+                                            : `₦0 paid today. Pay the full total upon doorstep inspection (Cash, Transfer or POS).`}
                                     </Text>
                                 </View>
                             )}
@@ -4499,70 +4542,169 @@ const s = StyleSheet.create({
         flex: 1,
         lineHeight: 13,
     },
-    // Pay on Delivery (POD) Styles
+    // Pay on Delivery (POD) Modern Luxury Styles
     podBox: {
-        backgroundColor: '#FFF7ED',
+        backgroundColor: WHITE,
         borderRadius: 14,
         padding: 14,
-        marginTop: 6,
+        marginTop: 8,
         marginBottom: 12,
         borderWidth: 1.5,
-        borderColor: '#FB923C',
-        shadowColor: '#EA580C',
+        borderColor: '#E2E8F0',
+        shadowColor: '#0F172A',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 5,
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
         elevation: 2,
     },
     podHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 8,
+        paddingBottom: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+        marginBottom: 10,
+    },
+    podHeaderLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        flex: 1,
+        marginRight: 8,
+    },
+    podIconBadge: {
+        width: 34,
+        height: 34,
+        borderRadius: 10,
+        backgroundColor: '#ECFDF5',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#A7F3D0',
     },
     podTitle: {
         fontSize: 13,
-        fontWeight: '800',
-        color: '#9A3412',
+        fontWeight: '900',
+        color: NAVY,
+        letterSpacing: -0.2,
+    },
+    podSub: {
+        fontSize: 10.5,
+        color: SLATE,
+        marginTop: 1,
     },
     podZeroPill: {
-        backgroundColor: '#FFEDD5',
-        paddingHorizontal: 7,
-        paddingVertical: 2.5,
-        borderRadius: 6,
+        backgroundColor: '#ECFDF5',
+        paddingHorizontal: 8,
+        paddingVertical: 3.5,
+        borderRadius: 20,
         borderWidth: 1,
-        borderColor: '#F97316',
+        borderColor: '#6EE7B7',
+        flexShrink: 0,
     },
     podZeroPillTxt: {
         fontSize: 9.5,
         fontWeight: '900',
-        color: '#C2410C',
+        color: '#065F46',
+        letterSpacing: 0.3,
     },
-    podDesc: {
-        fontSize: 11.5,
-        color: '#7C2D12',
-        lineHeight: 17,
-        marginBottom: 10,
-    },
-    podFeatureRow: {
+    podAmountBanner: {
         flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 10,
-        backgroundColor: WHITE,
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#F8FAFC',
+        borderRadius: 10,
         padding: 10,
-        borderRadius: 8,
         borderWidth: 1,
-        borderColor: '#FED7AA',
+        borderColor: '#E2E8F0',
+        marginBottom: 12,
     },
-    podFeatureItem: {
+    podAmountLabel: {
+        fontSize: 9.5,
+        fontWeight: '700',
+        color: SLATE,
+        textTransform: 'uppercase',
+        letterSpacing: 0.4,
+    },
+    podAmountVal: {
+        fontSize: 16,
+        fontWeight: '900',
+        color: NAVY,
+        marginTop: 2,
+    },
+    podWalletDeductedNote: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: EMERALD,
+        marginTop: 2,
+    },
+    podDoorstepBadge: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
+        backgroundColor: '#EFF6FF',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#BFDBFE',
+        flexShrink: 0,
     },
-    podFeatureTxt: {
+    podDoorstepTxt: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: '#1E40AF',
+    },
+    podGuaranteesList: {
+        gap: 8,
+    },
+    podGuaranteeRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 8,
+    },
+    podCheckCircle: {
+        width: 18,
+        height: 18,
+        borderRadius: 9,
+        backgroundColor: '#ECFDF5',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 1,
+        borderWidth: 1,
+        borderColor: '#A7F3D0',
+        flexShrink: 0,
+    },
+    podGuaranteeTxt: {
+        fontSize: 11,
+        color: SLATE_DARK,
+        lineHeight: 16,
+        flex: 1,
+    },
+    podInvoiceNotice: {
+        backgroundColor: '#F0FDF4',
+        padding: 12,
+        borderRadius: 10,
+        marginTop: 10,
+        borderWidth: 1,
+        borderColor: '#BBF7D0',
+    },
+    podInvoiceNoticeTitle: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#166534',
+    },
+    podInvoiceNoticeVal: {
+        fontSize: 14,
+        fontWeight: '900',
+        color: '#166534',
+    },
+    podInvoiceNoticeSub: {
         fontSize: 10.5,
-        fontWeight: '700',
-        color: NAVY,
+        color: '#15803D',
+        marginTop: 3,
+        lineHeight: 15,
     },
     // Success Screen Notices
     successPssNotice: {
