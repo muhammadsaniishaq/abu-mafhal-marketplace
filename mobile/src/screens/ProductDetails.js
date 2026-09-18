@@ -658,60 +658,72 @@ export const ProductDetails = ({ route, navigation, addToCart }) => {
                     </View>
 
                     {/* ══════════════════════════════════════════════════
-                        5. VENDOR / STORE CARD (With Live Chat Button)
+                        5. VENDOR / STORE CARD (Modern, Spacious & Arranged)
                     ══════════════════════════════════════════════════ */}
                     <View style={s.sellerCard}>
-                        <View style={s.sellerAvatarWrap}>
-                            {vendor?.avatar ? (
-                                <Image
-                                    source={{ uri: vendor.avatar }}
-                                    style={s.sellerAvatar}
-                                />
-                            ) : (
-                                <View style={[s.sellerAvatar, { backgroundColor: BRAND.navy, alignItems: 'center', justifyContent: 'center' }]}>
-                                    <Ionicons name={vendor?.isOfficial ? "shield-checkmark" : "storefront"} size={22} color={BRAND.gold} />
-                                </View>
-                            )}
-                        </View>
-
-                        <View style={{ flex: 1, marginLeft: 10 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                <Text numberOfLines={1} style={s.sellerName}>
-                                    {vendor?.name || 'ABU MAFHAL'}
-                                </Text>
-                                <Ionicons name="checkmark-circle" size={16} color={BRAND.sky} />
+                        {/* Top Row: Vendor Identity + View Store */}
+                        <TouchableOpacity
+                            style={s.sellerHeaderRow}
+                            onPress={() => navigation.navigate('Main', { screen: 'stores' })}
+                            activeOpacity={0.8}
+                        >
+                            <View style={s.sellerAvatarWrap}>
+                                {vendor?.avatar ? (
+                                    <Image
+                                        source={{ uri: vendor.avatar }}
+                                        style={s.sellerAvatar}
+                                    />
+                                ) : (
+                                    <View style={[s.sellerAvatar, { backgroundColor: BRAND.navy, alignItems: 'center', justifyContent: 'center' }]}>
+                                        <Ionicons name={vendor?.isOfficial ? "shield-checkmark" : "storefront"} size={22} color={BRAND.gold} />
+                                    </View>
+                                )}
                             </View>
-                            <Text style={s.sellerVerifiedTxt}>{vendor?.isOfficial ? 'Official Flagship Store' : 'Verified Merchant'}</Text>
-                        </View>
 
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            {/* Live Chat with Seller Button */}
+                            <View style={s.sellerInfoCol}>
+                                <View style={s.sellerNameRow}>
+                                    <Text numberOfLines={1} style={s.sellerName}>
+                                        {vendor?.name || 'ABU MAFHAL'}
+                                    </Text>
+                                    <Ionicons name="checkmark-circle" size={15} color={BRAND.sky} />
+                                </View>
+                                <View style={s.sellerBadgesRow}>
+                                    <View style={s.sellerVerifiedBadge}>
+                                        <Text style={s.sellerVerifiedTxt}>
+                                            {vendor?.isOfficial ? 'Official Store' : 'Verified Merchant'}
+                                        </Text>
+                                    </View>
+                                    <Text style={s.sellerRatingBadge}>⭐ 4.9</Text>
+                                </View>
+                            </View>
+
+                            {/* View Store Action */}
+                            <View style={s.viewStoreBtn}>
+                                <Text style={s.viewStoreBtnTxt}>Store</Text>
+                                <Ionicons name="chevron-forward" size={13} color="#0284C7" />
+                            </View>
+                        </TouchableOpacity>
+
+                        {/* Bottom Row: Action Buttons (Live Chat & WhatsApp) */}
+                        <View style={s.sellerActionsRow}>
+                            {/* Live In-App Chat Button */}
                             <TouchableOpacity
                                 style={s.chatSellerBtn}
                                 onPress={() => handleOpenLiveChat()}
-                                activeOpacity={0.8}
+                                activeOpacity={0.85}
                             >
-                                <Ionicons name="chatbubble-ellipses" size={13} color="#FFFFFF" />
-                                <Text style={s.chatSellerBtnTxt}>Chat</Text>
+                                <Ionicons name="chatbubble-ellipses" size={15} color="#FFFFFF" />
+                                <Text style={s.chatSellerBtnTxt}>Live Chat</Text>
                             </TouchableOpacity>
 
                             {/* WhatsApp Direct Chat Button */}
                             <TouchableOpacity
                                 style={s.chatWhatsAppBtn}
                                 onPress={() => handleWhatsAppVendor()}
-                                activeOpacity={0.8}
+                                activeOpacity={0.85}
                             >
-                                <Ionicons name="logo-whatsapp" size={13} color="#FFFFFF" />
+                                <Ionicons name="logo-whatsapp" size={16} color="#FFFFFF" />
                                 <Text style={s.chatWhatsAppBtnTxt}>WhatsApp</Text>
-                            </TouchableOpacity>
-
-                            {/* View Store Button */}
-                            <TouchableOpacity
-                                style={s.viewStoreBtn}
-                                onPress={() => navigation.navigate('Main', { screen: 'stores' })}
-                                activeOpacity={0.8}
-                            >
-                                <Text style={s.viewStoreBtnTxt}>View Store</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -1490,11 +1502,25 @@ const s = StyleSheet.create({
 
     // ── 5. Vendor / Store Card ──
     sellerCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 12,
+        marginTop: 14,
+        marginBottom: 6,
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 6,
+        elevation: 2,
+    },
+    sellerHeaderRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#FFFFFF',
-        marginTop: 14,
-        paddingVertical: 6,
+        paddingBottom: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F8FAFC',
     },
     sellerAvatarWrap: {
         width: 44,
@@ -1509,41 +1535,95 @@ const s = StyleSheet.create({
         width: '100%',
         height: '100%',
     },
+    sellerInfoCol: {
+        flex: 1,
+        marginLeft: 12,
+        marginRight: 8,
+        justifyContent: 'center',
+    },
+    sellerNameRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+    },
     sellerName: {
-        fontSize: 14,
+        fontSize: 14.5,
         fontWeight: '800',
         color: BRAND.slateDark,
     },
-    sellerVerifiedTxt: {
-        fontSize: 11,
-        color: BRAND.emerald,
-        fontWeight: '700',
-        marginTop: 1,
-    },
-    chatSellerBtn: {
-        backgroundColor: BRAND.navy,
-        paddingHorizontal: 12,
-        paddingVertical: 7,
-        borderRadius: 20,
+    sellerBadgesRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
+        gap: 6,
+        marginTop: 3,
     },
-    chatSellerBtnTxt: {
-        color: '#FFFFFF',
+    sellerVerifiedBadge: {
+        backgroundColor: '#ECFDF5',
+        paddingHorizontal: 7,
+        paddingVertical: 2,
+        borderRadius: 6,
+    },
+    sellerVerifiedTxt: {
+        fontSize: 10.5,
+        color: '#059669',
+        fontWeight: '700',
+    },
+    sellerRatingBadge: {
+        fontSize: 11,
+        color: '#D97706',
+        fontWeight: '700',
+    },
+    viewStoreBtn: {
+        backgroundColor: '#F0F9FF',
+        borderWidth: 1,
+        borderColor: '#BAE6FD',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 2,
+    },
+    viewStoreBtnTxt: {
+        color: '#0284C7',
         fontSize: 11.5,
         fontWeight: '800',
     },
-    viewStoreBtn: {
-        backgroundColor: '#E0F2FE',
-        paddingHorizontal: 13,
-        paddingVertical: 7,
-        borderRadius: 20,
+    sellerActionsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        marginTop: 10,
     },
-    viewStoreBtnTxt: {
-        color: '#0369A1',
-        fontSize: 12,
-        fontWeight: '700',
+    chatSellerBtn: {
+        flex: 1,
+        backgroundColor: BRAND.navy,
+        paddingVertical: 10,
+        borderRadius: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+    },
+    chatSellerBtnTxt: {
+        color: '#FFFFFF',
+        fontSize: 12.5,
+        fontWeight: '800',
+    },
+    chatWhatsAppBtn: {
+        flex: 1,
+        backgroundColor: '#16A34A',
+        paddingVertical: 10,
+        borderRadius: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+    },
+    chatWhatsAppBtnTxt: {
+        color: '#FFFFFF',
+        fontSize: 12.5,
+        fontWeight: '800',
     },
 
     // ── 6. Price & Stock Row ──
@@ -2115,20 +2195,6 @@ const s = StyleSheet.create({
     },
 
     // ── WhatsApp Action Styles ──
-    chatWhatsAppBtn: {
-        backgroundColor: '#16A34A',
-        paddingHorizontal: 12,
-        paddingVertical: 7,
-        borderRadius: 20,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    chatWhatsAppBtnTxt: {
-        color: '#FFFFFF',
-        fontSize: 11.5,
-        fontWeight: '800',
-    },
     whatsAppOrderBar: {
         marginTop: 14,
         borderRadius: 14,
