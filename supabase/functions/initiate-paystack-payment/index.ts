@@ -1,3 +1,5 @@
+// @ts-nocheck
+/// <reference path="../ambient.d.ts" />
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -6,13 +8,21 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
+serve(async (req: any) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders });
     }
 
     try {
-        const { amount, email, reference, callback_url, secret_key } = await req.json();
+        const body = await req.json().catch(() => ({}));
+        if (body.ping) {
+            return new Response(JSON.stringify({ success: true, ping: 'pong' }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 200,
+            });
+        }
+
+        const { amount, email, reference, callback_url, secret_key } = body;
 
         if (!amount || !email || !reference) {
             throw new Error('Missing required fields.');
@@ -84,9 +94,9 @@ serve(async (req) => {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200,
         });
-    } catch (error) {
-        console.error('Edge Function Catch Error:', error.message || error);
-        return new Response(JSON.stringify({ success: false, error: error.message || 'Unknown server error' }), {
+    } catch (error: any) {
+        console.error('Edge Function Catch Error:', error?.message || error);
+        return new Response(JSON.stringify({ success: false, error: error?.message || String(error) || 'Unknown server error' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200,
         });
