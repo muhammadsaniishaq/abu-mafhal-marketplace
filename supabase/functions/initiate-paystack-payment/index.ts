@@ -33,6 +33,8 @@ serve(async (req) => {
                 email,
                 amount: Math.round(Number(amount) * 100),
                 reference,
+                currency: 'NGN',
+                channels: ['card', 'bank', 'bank_transfer', 'ussd', 'qr', 'mobile_money'],
                 callback_url: callback_url || 'https://standard.paystack.co/close'
             })
         });

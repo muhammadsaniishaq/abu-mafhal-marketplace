@@ -1536,13 +1536,15 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
         } catch (error) {
             console.error('Checkout Submit Error:', error);
             let errorMsg = error?.message || 'Payment initiation failed. Please try again.';
-            if (errorMsg.includes('non-2xx') || errorMsg.includes('Edge Function')) {
+            if (errorMsg.includes('unable to process') || errorMsg.includes('Unable to process')) {
+                errorMsg = 'Paystack Test Mode: Please use Test Card (4084 0840 8408 4084) or Bank Transfer. Real bank ATM cards are not accepted in Paystack Test Mode.';
+            } else if (errorMsg.includes('non-2xx') || errorMsg.includes('Edge Function')) {
                 errorMsg = 'Payment initialization error. Please retry or choose another payment method.';
             }
             setIsProcessing(false);
 
             showToast(`⚠️ ${errorMsg}`);
-            showAlert('Payment Initialization Failed', String(errorMsg).substring(0, 300));
+            showAlert('Payment Notice', String(errorMsg).substring(0, 300));
         } finally {
             setIsProcessing(false);
         }
