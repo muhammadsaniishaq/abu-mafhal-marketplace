@@ -210,7 +210,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
     // Modern Feature 3: Order as a Gift & Discrete Packaging
     const [isGift, setIsGift]                             = useState(false);
+    const [giftRecipientName, setGiftRecipientName]       = useState('');
+    const [giftRecipientPhone, setGiftRecipientPhone]     = useState('');
     const [giftMessage, setGiftMessage]                   = useState('');
+    const [giftWrapStyle, setGiftWrapStyle]               = useState('Classic Gold Ribbon');
 
     // Modern Feature 4: Currency Preview Display (NGN, USD, GBP)
     const [currencyPreview, setCurrencyPreview]           = useState('NGN');
@@ -783,6 +786,12 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 if (sp.addressId && loadedAddresses.some(a => a.id === sp.addressId)) setSelectedAddressId(sp.addressId);
                 if (sp.paymentMethod) setPaymentMethod(sp.paymentMethod);
                 if (sp.note) setOrderNote(sp.note);
+                if (sp.deliverySlot) setDeliverySlot(sp.deliverySlot);
+                if (typeof sp.isGift === 'boolean') setIsGift(sp.isGift);
+                if (sp.giftRecipientName) setGiftRecipientName(sp.giftRecipientName);
+                if (sp.giftRecipientPhone) setGiftRecipientPhone(sp.giftRecipientPhone);
+                if (sp.giftMessage) setGiftMessage(sp.giftMessage);
+                if (sp.giftWrapStyle) setGiftWrapStyle(sp.giftWrapStyle);
             }
         } catch (error) {
             console.error('Error loading checkout data:', error);
@@ -797,7 +806,13 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 step: currentStep,
                 addressId: selectedAddressId,
                 paymentMethod,
-                note: orderNote
+                note: orderNote,
+                deliverySlot,
+                isGift,
+                giftRecipientName,
+                giftRecipientPhone,
+                giftMessage,
+                giftWrapStyle
             };
             await AsyncStorage.setItem(CHECKOUT_STORAGE_KEY, JSON.stringify(stateToSave));
         } catch (e) {
@@ -872,7 +887,17 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                             const vendorItems = cart.filter(i => (i.vendor_id || i.vendorId) === vId);
                             const itemsSummary = vendorItems.map(i => `• ${i.name || i.title || 'Product'} (x${i.quantity || i.qty || 1})`).join('\n');
                             const orderShort = (orderId || '').slice(0, 8).toUpperCase();
-                            const vendorMsg = `📦 *New Order Alert on Abu Mafhal Marketplace!*\n\nHello *${vProfile.business_name || vProfile.full_name || 'Merchant'}*,\nYou have received a new order *#${orderShort}*!\n\n*Items to Dispatch:*\n${itemsSummary}\n\n🚚 Please log in to your Merchant Dashboard to prepare dispatch:\nhttps://abumafhal.com/mobile#vendor`;
+                            const slotLabel = deliverySlot === 'morning' ? 'Morning (8:00 AM – 12:00 PM)' : deliverySlot === 'afternoon' ? 'Afternoon (12:00 PM – 5:00 PM)' : deliverySlot === 'evening' ? 'Evening (5:00 PM – 8:00 PM)' : 'Flexible Anytime (8:00 AM – 6:00 PM)';
+                            let specialInstructions = `\n⏰ *Preferred Delivery Slot:* ${slotLabel}`;
+                            if (isGift) {
+                                specialInstructions += `\n\n🎁 *SPECIAL SURPRISE GIFT ORDER:*`;
+                                specialInstructions += `\n⚠️ *CRITICAL:* Do NOT place any prices, invoices, or receipts inside or on the box!`;
+                                if (giftRecipientName) specialInstructions += `\n• *Gift Recipient:* ${giftRecipientName}`;
+                                if (giftRecipientPhone) specialInstructions += `\n• *Recipient Phone:* ${giftRecipientPhone}`;
+                                specialInstructions += `\n• *Packaging Style:* ${giftWrapStyle}`;
+                                if (giftMessage) specialInstructions += `\n• *Gift Note Card:* "${giftMessage}"`;
+                            }
+                            const vendorMsg = `📦 *New Order Alert on Abu Mafhal Marketplace!*\n\nHello *${vProfile.business_name || vProfile.full_name || 'Merchant'}*,\nYou have received a new order *#${orderShort}*!\n\n*Items to Dispatch:*\n${itemsSummary}${specialInstructions}\n\n🚚 Please log in to your Merchant Dashboard to prepare dispatch:\nhttps://abumafhal.com/mobile#vendor`;
 
                             whatsappService.sendDirect(vPhone, vendorMsg, vId).catch(() => {});
                         }
@@ -1012,6 +1037,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         delivery_slot: deliverySlot,
                         is_gift: isGift,
                         gift_message: giftMessage,
+                        gift_recipient_name: giftRecipientName,
+                        gift_recipient_phone: giftRecipientPhone,
+                        gift_wrap_style: giftWrapStyle,
                         wallet_split_deducted: walletDeduction
                     });
                 }
@@ -1114,7 +1142,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         delivery_address: selectedAddrObj,
                         delivery_slot: deliverySlot,
                         is_gift: isGift,
-                        gift_message: giftMessage
+                        gift_message: giftMessage,
+                        gift_recipient_name: giftRecipientName,
+                        gift_recipient_phone: giftRecipientPhone,
+                        gift_wrap_style: giftWrapStyle
                     });
 
                     setOrderSuccess(true);
@@ -1154,6 +1185,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     delivery_slot: deliverySlot,
                     is_gift: isGift,
                     gift_message: giftMessage,
+                    gift_recipient_name: giftRecipientName,
+                    gift_recipient_phone: giftRecipientPhone,
+                    gift_wrap_style: giftWrapStyle,
                     amount_due_on_delivery: effectivePayAmount
                 });
 
@@ -1190,7 +1224,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     delivery_address: selectedAddrObj,
                     delivery_slot: deliverySlot,
                     is_gift: isGift,
-                    gift_message: giftMessage
+                    gift_message: giftMessage,
+                    gift_recipient_name: giftRecipientName,
+                    gift_recipient_phone: giftRecipientPhone,
+                    gift_wrap_style: giftWrapStyle
                 });
 
                 setOrderSuccess(true);
@@ -1397,6 +1434,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     delivery_slot: deliverySlot,
                     is_gift: isGift,
                     gift_message: giftMessage,
+                    gift_recipient_name: giftRecipientName,
+                    gift_recipient_phone: giftRecipientPhone,
+                    gift_wrap_style: giftWrapStyle,
                     is_split_payment: (useWalletSplit && walletDeduction > 0),
                     wallet_deducted: walletDeduction,
                     full_total: finalTotal,
@@ -1513,13 +1553,15 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         <View style={s.successBadgePill}>
                             <Ionicons name="time-outline" size={13} color="#2563EB" />
                             <Text style={s.successBadgeTxt}>
-                                Slot: {deliverySlot === 'morning' ? 'Morning (8am-12pm)' : deliverySlot === 'afternoon' ? 'Afternoon (12pm-5pm)' : deliverySlot === 'evening' ? 'Evening (5pm-8pm)' : 'Standard Anytime'}
+                                Slot: {deliverySlot === 'morning' ? 'Morning (8:00 AM – 12:00 PM)' : deliverySlot === 'afternoon' ? 'Afternoon (12:00 PM – 5:00 PM)' : deliverySlot === 'evening' ? 'Evening (5:00 PM – 8:00 PM)' : 'Flexible Delivery (8:00 AM – 6:00 PM)'}
                             </Text>
                         </View>
                         {isGift && (
-                            <View style={[s.successBadgePill, { backgroundColor: '#FDF2F8', borderColor: '#FBCFE8' }]}>
-                                <Ionicons name="gift" size={13} color="#DB2777" />
-                                <Text style={[s.successBadgeTxt, { color: '#BE185D' }]}>Gift Wrapped 🎁</Text>
+                            <View style={[s.successBadgePill, { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }]}>
+                                <Ionicons name="gift" size={13} color="#D97706" />
+                                <Text style={[s.successBadgeTxt, { color: '#92400E' }]}>
+                                    Gift for {giftRecipientName || 'Recipient'} • {giftWrapStyle} 🎁
+                                </Text>
                             </View>
                         )}
                     </View>
@@ -1968,19 +2010,28 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
                         {/* ── PREFERRED DELIVERY TIME SLOT ────────────────────────── */}
                         <View style={s.deliverySlotWrap}>
-                            <View style={s.methodHeaderRow}>
-                                <Text style={s.methodHeaderTitle}>Preferred Delivery Slot</Text>
-                                <View style={s.slotBadge}>
-                                    <Ionicons name="time-outline" size={11} color={GOLD} />
-                                    <Text style={s.slotBadgeTxt}>Courier Dispatch Preference</Text>
+                            <View style={s.slotHeaderRow}>
+                                <View style={s.slotHeaderLeft}>
+                                    <View style={s.slotIconBadge}>
+                                        <Ionicons name="time" size={17} color="#2563EB" />
+                                    </View>
+                                    <View>
+                                        <Text style={s.slotHeaderTitle}>Preferred Delivery Slot</Text>
+                                        <Text style={s.slotHeaderSub}>Choose courier dispatch arrival window</Text>
+                                    </View>
+                                </View>
+                                <View style={s.slotStatusPill}>
+                                    <Ionicons name="shield-checkmark" size={11} color="#2563EB" />
+                                    <Text style={s.slotStatusPillTxt}>Priority Dispatch</Text>
                                 </View>
                             </View>
+
                             <View style={s.slotGrid}>
                                 {[
-                                    { id: 'anytime', label: 'Anytime', sub: '8am - 6pm', icon: 'flash-outline' },
-                                    { id: 'morning', label: 'Morning', sub: '8am - 12pm', icon: 'sunny-outline' },
-                                    { id: 'afternoon', label: 'Afternoon', sub: '12pm - 5pm', icon: 'partly-sunny-outline' },
-                                    { id: 'evening', label: 'Evening', sub: '5pm - 8pm', icon: 'moon-outline' }
+                                    { id: 'anytime', label: 'Flexible', time: '8:00 AM – 6:00 PM', sub: 'Standard courier route', badge: 'Recommended', icon: 'flash-outline' },
+                                    { id: 'morning', label: 'Morning Rush', time: '8:00 AM – 12:00 PM', sub: 'Earliest rider batch', badge: 'Early Priority', icon: 'sunny-outline' },
+                                    { id: 'afternoon', label: 'Midday Afternoon', time: '12:00 PM – 5:00 PM', sub: 'Optimal for office / shop', badge: 'Business Hours', icon: 'partly-sunny-outline' },
+                                    { id: 'evening', label: 'Evening Relaxed', time: '5:00 PM – 8:00 PM', sub: 'Deliver after work / home', badge: 'After Hours', icon: 'moon-outline' }
                                 ].map((slot) => {
                                     const isSlotSel = deliverySlot === slot.id;
                                     return (
@@ -1990,58 +2041,204 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                             style={[s.slotCard, isSlotSel && s.slotCardActive]}
                                             activeOpacity={0.8}
                                         >
-                                            <Ionicons
-                                                name={slot.icon}
-                                                size={15}
-                                                color={isSlotSel ? GOLD : SLATE}
-                                            />
-                                            <Text style={[s.slotLabel, isSlotSel && s.slotLabelActive]}>
+                                            <View style={s.slotCardTopRow}>
+                                                <View style={[s.slotCardIconWrap, isSlotSel && s.slotCardIconWrapActive]}>
+                                                    <Ionicons
+                                                        name={slot.icon}
+                                                        size={14}
+                                                        color={isSlotSel ? '#2563EB' : SLATE}
+                                                    />
+                                                </View>
+                                                <View style={[s.slotPillTag, isSlotSel && s.slotPillTagActive]}>
+                                                    <Text style={[s.slotPillTagTxt, isSlotSel && s.slotPillTagTxtActive]}>
+                                                        {slot.badge}
+                                                    </Text>
+                                                </View>
+                                            </View>
+
+                                            <Text style={[s.slotCardTitle, isSlotSel && s.slotCardTitleActive]}>
                                                 {slot.label}
                                             </Text>
-                                            <Text style={s.slotSub}>{slot.sub}</Text>
+                                            <Text style={s.slotCardTime}>{slot.time}</Text>
+                                            <Text style={s.slotCardSub}>{slot.sub}</Text>
+
                                             {isSlotSel && (
-                                                <View style={s.slotCheckmarkBadge}>
-                                                    <Ionicons name="checkmark" size={9} color={WHITE} />
+                                                <View style={s.slotSelectedCornerCheck}>
+                                                    <Ionicons name="checkmark" size={10} color={WHITE} />
                                                 </View>
                                             )}
                                         </TouchableOpacity>
                                     );
                                 })}
                             </View>
+
+                            <View style={s.slotSelectionNotice}>
+                                <Ionicons name="checkmark-circle" size={13} color="#166534" />
+                                <Text style={s.slotSelectionNoticeTxt}>
+                                    Scheduled: {deliverySlot === 'morning' ? 'Morning (8:00 AM – 12:00 PM)' : deliverySlot === 'afternoon' ? 'Afternoon (12:00 PM – 5:00 PM)' : deliverySlot === 'evening' ? 'Evening (5:00 PM – 8:00 PM)' : 'Flexible Delivery (8:00 AM – 6:00 PM)'}
+                                </Text>
+                            </View>
                         </View>
 
-                        {/* ── SEND AS A GIFT OPTION ───────────────────────────────── */}
-                        <View style={s.giftOptionCard}>
+                        {/* ── SEND AS A SURPRISE GIFT ───────────────────────────────── */}
+                        <View style={[s.giftMasterCard, isGift && s.giftMasterCardActive]}>
                             <TouchableOpacity
-                                style={s.giftToggleRow}
+                                style={s.giftToggleHeader}
                                 onPress={() => setIsGift(!isGift)}
-                                activeOpacity={0.8}
+                                activeOpacity={0.85}
                             >
-                                <View style={s.giftToggleLeft}>
-                                    <View style={[s.giftIconWrap, isGift && s.giftIconWrapActive]}>
-                                        <Ionicons name="gift" size={16} color={isGift ? GOLD : SLATE} />
+                                <View style={s.giftHeaderLeft}>
+                                    <View style={[s.giftIconCircle, isGift && s.giftIconCircleActive]}>
+                                        <Ionicons name="gift" size={18} color={isGift ? '#D97706' : SLATE} />
                                     </View>
-                                    <View>
-                                        <Text style={s.giftToggleTitle}>Send this order as a Gift? 🎁</Text>
-                                        <Text style={s.giftToggleSub}>Discrete packaging • No price tags or receipt in box</Text>
+                                    <View style={{ flex: 1 }}>
+                                        <View style={s.giftHeaderTitleRow}>
+                                            <Text style={s.giftHeaderTitle}>Send as a Surprise Gift</Text>
+                                            <Text style={{ fontSize: 13 }}>🎁</Text>
+                                        </View>
+                                        <Text style={s.giftHeaderSub}>Discrete packaging • No prices on box • Free card</Text>
                                     </View>
                                 </View>
-                                <View style={[s.termsCheckbox, isGift && s.termsCheckboxActive]}>
-                                    {isGift && <Ionicons name="checkmark" size={12} color={WHITE} />}
+
+                                {/* Custom Luxury Toggle Switch */}
+                                <View style={[s.switchTrack, isGift && s.switchTrackActive]}>
+                                    <View style={[s.switchThumb, isGift && s.switchThumbActive]} />
                                 </View>
                             </TouchableOpacity>
 
                             {isGift && (
-                                <View style={s.giftInputWrap}>
-                                    <TextInput
-                                        style={s.giftInput}
-                                        placeholder="Write a sweet message for the recipient (e.g. Barka da Sallah / Happy Birthday!)"
-                                        placeholderTextColor="#94A3B8"
-                                        value={giftMessage}
-                                        onChangeText={setGiftMessage}
-                                        multiline
-                                        numberOfLines={2}
-                                    />
+                                <View style={s.giftExpandBody}>
+                                    {/* Feature Pills */}
+                                    <View style={s.giftPillPerksRow}>
+                                        <View style={s.giftPerkPill}>
+                                            <Ionicons name="cube-outline" size={11} color="#92400E" />
+                                            <Text style={s.giftPerkPillTxt}>Discrete Box</Text>
+                                        </View>
+                                        <View style={s.giftPerkPill}>
+                                            <Ionicons name="pricetag-outline" size={11} color="#92400E" />
+                                            <Text style={s.giftPerkPillTxt}>Zero Price Tags</Text>
+                                        </View>
+                                        <View style={s.giftPerkPill}>
+                                            <Ionicons name="mail-outline" size={11} color="#92400E" />
+                                            <Text style={s.giftPerkPillTxt}>Free Gift Note</Text>
+                                        </View>
+                                        <View style={s.giftPerkPill}>
+                                            <Ionicons name="ribbon-outline" size={11} color="#92400E" />
+                                            <Text style={s.giftPerkPillTxt}>Festive Ribbon</Text>
+                                        </View>
+                                    </View>
+
+                                    {/* Recipient Full Name */}
+                                    <View style={s.giftInputGroup}>
+                                        <Text style={s.giftInputLabel}>Recipient Full Name (Sunan Wanda Za A Ba)</Text>
+                                        <View style={[s.giftInputBox, giftRecipientName ? s.giftInputBoxActive : null]}>
+                                            <Ionicons name="person-outline" size={14} color={giftRecipientName ? '#D97706' : SLATE} style={{ marginRight: 7 }} />
+                                            <TextInput
+                                                style={s.giftTextInput}
+                                                placeholder="e.g. Hajiya Fatima / Ahmad Bello"
+                                                placeholderTextColor="#94A3B8"
+                                                value={giftRecipientName}
+                                                onChangeText={setGiftRecipientName}
+                                            />
+                                        </View>
+                                    </View>
+
+                                    {/* Recipient Phone (Optional) */}
+                                    <View style={s.giftInputGroup}>
+                                        <Text style={s.giftInputLabel}>Recipient Phone Number (Optional for Courier)</Text>
+                                        <View style={[s.giftInputBox, giftRecipientPhone ? s.giftInputBoxActive : null]}>
+                                            <Ionicons name="call-outline" size={14} color={giftRecipientPhone ? '#D97706' : SLATE} style={{ marginRight: 7 }} />
+                                            <TextInput
+                                                style={s.giftTextInput}
+                                                placeholder="e.g. 08012345678"
+                                                placeholderTextColor="#94A3B8"
+                                                value={giftRecipientPhone}
+                                                onChangeText={setGiftRecipientPhone}
+                                                keyboardType="phone-pad"
+                                            />
+                                        </View>
+                                    </View>
+
+                                    {/* Quick Greeting Chips */}
+                                    <View style={s.giftInputGroup}>
+                                        <Text style={s.giftInputLabel}>Quick Greetings (Tap to Insert into Message):</Text>
+                                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.giftChipsScroll}>
+                                            {[
+                                                '🎉 Barka da Sallah!',
+                                                '🎂 Happy Birthday!',
+                                                '❤️ Barka da Shan Ruwa!',
+                                                '💐 Congratulations!',
+                                                '🎁 A Special Gift For You!'
+                                            ].map((chip) => (
+                                                <TouchableOpacity
+                                                    key={chip}
+                                                    style={s.greetingChip}
+                                                    onPress={() => {
+                                                        if (!giftMessage.trim()) {
+                                                            setGiftMessage(chip);
+                                                        } else {
+                                                            setGiftMessage(`${giftMessage.trim()} • ${chip}`);
+                                                        }
+                                                    }}
+                                                    activeOpacity={0.7}
+                                                >
+                                                    <Text style={s.greetingChipTxt}>{chip}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </ScrollView>
+                                    </View>
+
+                                    {/* Personal Gift Note */}
+                                    <View style={s.giftInputGroup}>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                                            <Text style={s.giftInputLabel}>Personal Message for Greeting Card</Text>
+                                            <Text style={{ fontSize: 9.5, color: SLATE }}>{giftMessage.length}/200</Text>
+                                        </View>
+                                        <View style={[s.giftInputBox, { alignItems: 'flex-start', minHeight: 64 }, giftMessage ? s.giftInputBoxActive : null]}>
+                                            <Ionicons name="create-outline" size={14} color={giftMessage ? '#D97706' : SLATE} style={{ marginRight: 7, marginTop: 3 }} />
+                                            <TextInput
+                                                style={[s.giftTextInput, { minHeight: 56, textAlignVertical: 'top' }]}
+                                                placeholder="Write your heartfelt message here (printed inside the gift card)..."
+                                                placeholderTextColor="#94A3B8"
+                                                value={giftMessage}
+                                                onChangeText={(txt) => setGiftMessage(txt.slice(0, 200))}
+                                                multiline
+                                                numberOfLines={3}
+                                            />
+                                        </View>
+                                    </View>
+
+                                    {/* Packaging Style Options */}
+                                    <View style={s.giftInputGroup}>
+                                        <Text style={s.giftInputLabel}>Choose Gift Wrap & Ribbon Style:</Text>
+                                        <View style={s.wrapStyleRow}>
+                                            {[
+                                                { id: 'Classic Gold Ribbon', label: 'Classic Gold Ribbon', tag: 'Included Free', icon: 'ribbon-outline' },
+                                                { id: 'Royal Velvet Box & Bow', label: 'Royal Velvet Box & Bow', tag: 'VIP Free', icon: 'sparkles-outline' }
+                                            ].map((style) => {
+                                                const isSel = giftWrapStyle === style.id;
+                                                return (
+                                                    <TouchableOpacity
+                                                        key={style.id}
+                                                        onPress={() => setGiftWrapStyle(style.id)}
+                                                        style={[s.wrapStyleBtn, isSel && s.wrapStyleBtnActive]}
+                                                        activeOpacity={0.8}
+                                                    >
+                                                        <Ionicons name={style.icon} size={14} color={isSel ? '#D97706' : SLATE} />
+                                                        <View style={{ flex: 1 }}>
+                                                            <Text style={[s.wrapStyleBtnTxt, isSel && s.wrapStyleBtnTxtActive]} numberOfLines={1}>
+                                                                {style.label}
+                                                            </Text>
+                                                            <Text style={{ fontSize: 8.5, color: isSel ? '#B45309' : SLATE, fontWeight: '700' }}>
+                                                                {style.tag}
+                                                            </Text>
+                                                        </View>
+                                                        {isSel && <Ionicons name="checkmark-circle" size={13} color="#D97706" />}
+                                                    </TouchableOpacity>
+                                                );
+                                            })}
+                                        </View>
+                                    </View>
                                 </View>
                             )}
                         </View>
@@ -2601,6 +2798,60 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                     {paymentMethod === 'pod' && (
                                         <Text style={[s.recapSubTxt, { color: '#EA580C', fontWeight: '700' }]}>
                                             ₦0 upfront • Pay full {formatCurrency(finalTotal)} on arrival (Cash/POS)
+                                        </Text>
+                                    )}
+                                </View>
+                            </View>
+
+                            {/* Dispatch & Gift Preferences Mini Card */}
+                            <View style={s.recapCard}>
+                                <View style={s.recapHeader}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Ionicons name="gift-outline" size={14} color={GOLD} />
+                                        <Text style={s.recapTitle}>Dispatch & Gift Preferences</Text>
+                                    </View>
+                                    <TouchableOpacity 
+                                        onPress={() => setCurrentStep(1)}
+                                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                    >
+                                        <Text style={s.recapEditTxt}>Change</Text>
+                                    </TouchableOpacity>
+                                </View>
+                                <View style={{ marginTop: 3 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Text style={s.recapMainTxt}>
+                                            Slot: {deliverySlot === 'morning' ? 'Morning (8:00 AM – 12:00 PM)' : deliverySlot === 'afternoon' ? 'Afternoon (12:00 PM – 5:00 PM)' : deliverySlot === 'evening' ? 'Evening (5:00 PM – 8:00 PM)' : 'Flexible Anytime (8:00 AM – 6:00 PM)'}
+                                        </Text>
+                                        <View style={[s.escrowSmallPill, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
+                                            <Ionicons name="time" size={10} color="#2563EB" />
+                                            <Text style={[s.escrowSmallPillTxt, { color: '#1D4ED8' }]}>Prioritized</Text>
+                                        </View>
+                                    </View>
+                                    {isGift ? (
+                                        <View style={{ marginTop: 5, backgroundColor: '#FFFBEB', padding: 8, borderRadius: 8, borderWidth: 1, borderColor: '#FDE68A' }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                                <Ionicons name="gift" size={12} color="#D97706" />
+                                                <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#92400E' }}>
+                                                    Surprise Gift Package (Zero Price Tags / Discrete Box)
+                                                </Text>
+                                            </View>
+                                            {giftRecipientName ? (
+                                                <Text style={{ fontSize: 11, color: '#78350F', marginTop: 2 }}>
+                                                    Recipient: <Text style={{ fontWeight: '700' }}>{giftRecipientName}</Text>{giftRecipientPhone ? ` (${giftRecipientPhone})` : ''}
+                                                </Text>
+                                            ) : null}
+                                            <Text style={{ fontSize: 10.5, color: '#92400E', marginTop: 2 }}>
+                                                Style: <Text style={{ fontWeight: '700' }}>{giftWrapStyle}</Text>
+                                            </Text>
+                                            {giftMessage ? (
+                                                <Text style={{ fontSize: 10.5, color: '#78350F', fontStyle: 'italic', marginTop: 3 }}>
+                                                    Note: "{giftMessage}"
+                                                </Text>
+                                            ) : null}
+                                        </View>
+                                    ) : (
+                                        <Text style={[s.recapSubTxt, { marginTop: 2 }]}>
+                                            Standard packaging • Customer invoice included
                                         </Text>
                                     )}
                                 </View>
@@ -5268,80 +5519,366 @@ const s = StyleSheet.create({
         marginTop: 1,
     },
 
-    // Modern Delivery Time Slots
+    // ── Ultra-Modern Delivery Time Slots ("Ba hayaniya, Smooth & Decorative") ──
+    deliverySlotWrap: {
+        backgroundColor: WHITE,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        padding: 14,
+        marginTop: 14,
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.03,
+        shadowRadius: 6,
+        elevation: 1,
+    },
+    slotHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 12,
+    },
+    slotHeaderLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        flex: 1,
+    },
+    slotIconBadge: {
+        width: 34,
+        height: 34,
+        borderRadius: 10,
+        backgroundColor: '#EFF6FF',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    slotHeaderTitle: {
+        fontSize: 13,
+        fontWeight: '800',
+        color: NAVY,
+    },
+    slotHeaderSub: {
+        fontSize: 10.5,
+        color: SLATE,
+        marginTop: 1,
+    },
+    slotStatusPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#EFF6FF',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#BFDBFE',
+    },
+    slotStatusPillTxt: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#2563EB',
+    },
     slotGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: 8,
-        marginTop: 6,
     },
     slotCard: {
         flex: 1,
         minWidth: '47%',
-        backgroundColor: WHITE,
+        backgroundColor: '#F8FAFC',
         borderWidth: 1.5,
         borderColor: '#E2E8F0',
-        borderRadius: 10,
+        borderRadius: 12,
         padding: 10,
+        position: 'relative',
     },
     slotCardActive: {
-        borderColor: NAVY,
-        backgroundColor: '#F8FAFC',
+        borderColor: '#2563EB',
+        backgroundColor: '#F0F7FF',
+        shadowColor: '#2563EB',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 5,
+        elevation: 2,
     },
-    slotCardHeader: {
+    slotCardTopRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 4,
+        marginBottom: 6,
+    },
+    slotCardIconWrap: {
+        width: 26,
+        height: 26,
+        borderRadius: 8,
+        backgroundColor: WHITE,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    slotCardIconWrapActive: {
+        backgroundColor: '#DBEAFE',
+        borderColor: '#93C5FD',
+    },
+    slotPillTag: {
+        backgroundColor: WHITE,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6,
+        borderWidth: 0.5,
+        borderColor: '#E2E8F0',
+    },
+    slotPillTagActive: {
+        backgroundColor: '#2563EB',
+        borderColor: '#2563EB',
+    },
+    slotPillTagTxt: {
+        fontSize: 8.5,
+        fontWeight: '700',
+        color: SLATE,
+    },
+    slotPillTagTxtActive: {
+        color: WHITE,
     },
     slotCardTitle: {
         fontSize: 12,
         fontWeight: '800',
         color: NAVY,
+        marginBottom: 2,
+    },
+    slotCardTitleActive: {
+        color: '#1D4ED8',
+    },
+    slotCardTime: {
+        fontSize: 10.5,
+        fontWeight: '700',
+        color: '#2563EB',
+        marginBottom: 2,
     },
     slotCardSub: {
-        fontSize: 10.5,
+        fontSize: 9.5,
         color: SLATE,
+        lineHeight: 12,
     },
-
-    // Modern Gift Packaging
-    giftOptionCard: {
-        backgroundColor: WHITE,
-        borderWidth: 1.5,
-        borderColor: '#E2E8F0',
-        borderRadius: 12,
-        padding: 12,
+    slotSelectedCornerCheck: {
+        position: 'absolute',
+        top: 6,
+        right: 6,
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        backgroundColor: '#2563EB',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    slotSelectionNotice: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: '#F0FDF4',
+        borderWidth: 1,
+        borderColor: '#BBF7D0',
+        borderRadius: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
         marginTop: 10,
     },
-    giftOptionCardActive: {
-        borderColor: '#EC4899',
-        backgroundColor: '#FDF2F8',
+    slotSelectionNoticeTxt: {
+        fontSize: 10.5,
+        fontWeight: '600',
+        color: '#166534',
+        flex: 1,
     },
-    giftOptionHeader: {
+
+    // ── Ultra-Modern Gift Packaging ("Ba hayaniya, Smooth & Decorative") ──
+    giftMasterCard: {
+        backgroundColor: WHITE,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        marginTop: 14,
+        padding: 14,
+        overflow: 'hidden',
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.03,
+        shadowRadius: 6,
+        elevation: 1,
+    },
+    giftMasterCardActive: {
+        borderColor: '#F59E0B',
+        backgroundColor: '#FFFEFC',
+    },
+    giftToggleHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
     },
-    giftOptionTitle: {
-        fontSize: 12.5,
+    giftHeaderLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        flex: 1,
+    },
+    giftIconCircle: {
+        width: 36,
+        height: 36,
+        borderRadius: 11,
+        backgroundColor: '#F1F5F9',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    giftIconCircleActive: {
+        backgroundColor: '#FEF3C7',
+    },
+    giftHeaderTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    giftHeaderTitle: {
+        fontSize: 13,
         fontWeight: '800',
         color: NAVY,
     },
-    giftOptionSub: {
-        fontSize: 11,
+    giftHeaderSub: {
+        fontSize: 10.5,
         color: SLATE,
         marginTop: 2,
     },
-    giftInput: {
+    switchTrack: {
+        width: 44,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: '#E2E8F0',
+        padding: 2,
+        justifyContent: 'center',
+    },
+    switchTrackActive: {
+        backgroundColor: '#F59E0B',
+    },
+    switchThumb: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
         backgroundColor: WHITE,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    switchThumbActive: {
+        alignSelf: 'flex-end',
+    },
+    giftExpandBody: {
+        marginTop: 12,
+        paddingTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: '#F1F5F9',
+    },
+    giftPillPerksRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
+        marginBottom: 12,
+    },
+    giftPerkPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#FFFBEB',
+        paddingHorizontal: 7,
+        paddingVertical: 3.5,
+        borderRadius: 6,
+        borderWidth: 0.5,
+        borderColor: '#FDE68A',
+    },
+    giftPerkPillTxt: {
+        fontSize: 9.5,
+        fontWeight: '700',
+        color: '#92400E',
+    },
+    giftInputGroup: {
+        marginBottom: 10,
+    },
+    giftInputLabel: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: NAVY,
+        marginBottom: 4,
+    },
+    giftInputBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8FAFC',
         borderWidth: 1,
-        borderColor: '#FBCFE8',
-        borderRadius: 8,
+        borderColor: '#E2E8F0',
+        borderRadius: 10,
         paddingHorizontal: 10,
         paddingVertical: 8,
+    },
+    giftInputBoxActive: {
+        borderColor: '#F59E0B',
+        backgroundColor: WHITE,
+    },
+    giftTextInput: {
+        flex: 1,
         fontSize: 11.5,
         color: NAVY,
-        marginTop: 8,
+        padding: 0,
+    },
+    giftChipsScroll: {
+        flexDirection: 'row',
+        gap: 6,
+        marginTop: 4,
+        marginBottom: 8,
+    },
+    greetingChip: {
+        backgroundColor: '#F1F5F9',
+        paddingHorizontal: 9,
+        paddingVertical: 5,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    greetingChipTxt: {
+        fontSize: 10,
+        fontWeight: '600',
+        color: '#334155',
+    },
+    wrapStyleRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginTop: 4,
+    },
+    wrapStyleBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        borderRadius: 10,
+        paddingHorizontal: 8,
+        paddingVertical: 7,
+    },
+    wrapStyleBtnActive: {
+        backgroundColor: '#FFFBEB',
+        borderColor: '#F59E0B',
+    },
+    wrapStyleBtnTxt: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: SLATE,
+        flex: 1,
+    },
+    wrapStyleBtnTxtActive: {
+        color: '#92400E',
     },
 
     // Modern Wallet Split Payment
