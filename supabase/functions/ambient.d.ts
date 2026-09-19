@@ -15,10 +15,12 @@ declare module "https://*" {
     const content: any;
     export default content;
     export const createClient: any;
+    export const serve: any;
 }
 
 declare module "jsr:*" {
     const content: any;
     export default content;
     export const createClient: any;
+    export const serve: any;
 }

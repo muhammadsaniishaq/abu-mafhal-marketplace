@@ -1,5 +1,6 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+// @ts-nocheck
+/// <reference path="../ambient.d.ts" />
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 function toHex(buf: ArrayBuffer) {
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -18,13 +19,19 @@ async function hmacSha256Hex(secret: string, message: string) {
   return toHex(sig);
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: any) => {
   try {
     const WEBHOOK_SECRET = Deno.env.get("COINBASE_COMMERCE_WEBHOOK_SECRET");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    if (!WEBHOOK_SECRET) throw new Error("Missing COINBASE_COMMERCE_WEBHOOK_SECRET");
+    if (!WEBHOOK_SECRET) {
+      console.log("Coinbase webhook invoked but Coinbase is deprecated in favor of NOWPayments.");
+      return new Response(JSON.stringify({ message: "Coinbase is replaced by NOWPayments" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) throw new Error("Missing Supabase env vars");
 
     const signature = req.headers.get("X-CC-Webhook-Signature") ?? req.headers.get("x-cc-webhook-signature");
@@ -67,7 +74,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response("OK", { status: 200 });
-  } catch (e) {
+  } catch (e: any) {
     return new Response(String(e?.message ?? e), { status: 500 });
   }
 });

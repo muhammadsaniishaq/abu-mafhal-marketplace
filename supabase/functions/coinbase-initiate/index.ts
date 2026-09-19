@@ -21,23 +21,23 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    let COINBASE_COMMERCE_API_KEY = Deno.env.get("COINBASE_API_KEY") || Deno.env.get("COINBASE_COMMERCE_API_KEY");
-    if (!COINBASE_COMMERCE_API_KEY) {
+    let apiKey = Deno.env.get("NOWPAYMENTS_API_KEY");
+    if (!apiKey) {
       try {
         const { data: rows } = await supabase.from("app_settings").select("*");
         if (rows && Array.isArray(rows)) {
           for (const r of rows) {
             if (r.key === "payment_gateways" && r.value && typeof r.value === "object") {
-              if (r.value.coinbase_api_key) COINBASE_COMMERCE_API_KEY = r.value.coinbase_api_key;
-            } else if (r.key === "coinbase_api_key") {
-              COINBASE_COMMERCE_API_KEY = typeof r.value === "string" ? r.value : (r.value?.value || r.value?.key);
+              if (r.value.nowpayments_api_key) apiKey = r.value.nowpayments_api_key;
+            } else if (r.key === "nowpayments_api_key") {
+              apiKey = typeof r.value === "string" ? r.value : (r.value?.value || r.value?.key);
             }
           }
         }
       } catch (_) {}
     }
 
-    if (!COINBASE_COMMERCE_API_KEY) throw new Error("Coinbase Commerce API Key is not configured in Admin Settings or Supabase.");
+    if (!apiKey) throw new Error("NOWPayments API Key is not configured in Admin Settings or Supabase.");
 
     const body = await req.json();
     const { order_id, amount, email, name, reference } = body;
@@ -75,42 +75,42 @@ Deno.serve(async (req) => {
 
     const ref = reference || `CB-${Date.now()}`;
 
-    // Create Coinbase Commerce charge
-    const res = await fetch("https://api.commerce.coinbase.com/charges", {
+    // Create NOWPayments invoice
+    const res = await fetch("https://api.nowpayments.io/v1/invoice", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-CC-Api-Key": COINBASE_COMMERCE_API_KEY,
-        "X-CC-Version": "2018-03-22",
+        "x-api-key": apiKey.trim(),
       },
       body: JSON.stringify({
-        name: "Abu Mafhal Marketplace",
-        description: `Order Payment (Ref: ${ref})`,
-        local_price: { amount: String(finalAmount), currency },
-        pricing_type: "fixed_price",
-        metadata: { order_id: order_id || null, reference: ref, customer_email: email || "" },
-        redirect_url: "https://abumafhal.com/payment/verify?status=successful",
-        cancel_url: "https://abumafhal.com/payment/verify?status=cancelled"
+        price_amount: Number(finalAmount) || 0,
+        price_currency: currency.toLowerCase(),
+        order_id: ref,
+        order_description: `Order Payment (Ref: ${ref})`,
+        ipn_callback_url: `${SUPABASE_URL}/functions/v1/webhook-nowpayments`,
+        success_url: `https://abumafhal.com/payment/verify?status=successful&gateway=nowpayments&reference=${encodeURIComponent(ref)}`,
+        cancel_url: `https://abumafhal.com/payment/verify?status=cancelled&gateway=nowpayments&reference=${encodeURIComponent(ref)}`,
       }),
     });
 
     const json = await res.json();
-    if (!res.ok || !json?.data) {
-      console.error("Coinbase API Error:", json);
-      return new Response(JSON.stringify({ error: "Coinbase charge creation failed", details: json }), {
+    if (!json?.invoice_url) {
+      console.error("NOWPayments API Error:", json);
+      return new Response(JSON.stringify({ error: "NOWPayments invoice creation failed", details: json }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const chargeId = json.data.id;
-    const hostedUrl = json.data.hosted_url;
+    const invoiceId = json.id;
+    const hostedUrl = json.invoice_url;
 
     return new Response(JSON.stringify({
       success: true,
-      charge_id: chargeId,
+      charge_id: invoiceId,
       hosted_url: hostedUrl,
       checkout_url: hostedUrl,
+      invoice_url: hostedUrl,
       reference: ref
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

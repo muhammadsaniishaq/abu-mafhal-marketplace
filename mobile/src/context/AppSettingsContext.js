@@ -22,10 +22,12 @@ export const AppSettingsProvider = ({ children }) => {
         secondary_color: '#3B82F6',
         features: {},
         payment_methods: { paystack: true, crypto: true, manual: true, flutterwave: true, wallet: true, pod: true },
-        payment_maintenance: { paystack: false, flutterwave: false, coinbase: false, wallet: false, pod: false },
+        payment_maintenance: { paystack: false, flutterwave: false, nowpayments: false, wallet: false, pod: false },
         flutterwave_public_key: (typeof process !== 'undefined' ? (process.env?.EXPO_PUBLIC_FLUTTERWAVE_PUBLIC_KEY || process.env?.VITE_FLUTTERWAVE_PUBLIC_KEY) : '') || '',
         default_shipping_address: '',
         paystack_secret_key: '',
+        nowpayments_api_key: '',
+        nowpayments_ipn_key: '',
         prembly_app_id: '',
         prembly_secret_key: '',
         vendor_plans: DEFAULT_VENDOR_PLANS,
@@ -66,7 +68,8 @@ export const AppSettingsProvider = ({ children }) => {
                         if (parsedGk.paystack_secret_key && !merged.paystack_secret_key) merged.paystack_secret_key = parsedGk.paystack_secret_key;
                         if (parsedGk.flutterwave_public_key && !merged.flutterwave_public_key) merged.flutterwave_public_key = parsedGk.flutterwave_public_key;
                         if (parsedGk.flutterwave_secret_key && !merged.flutterwave_secret_key) merged.flutterwave_secret_key = parsedGk.flutterwave_secret_key;
-                        if (parsedGk.coinbase_api_key && !merged.coinbase_api_key) merged.coinbase_api_key = parsedGk.coinbase_api_key;
+                        if (parsedGk.nowpayments_api_key && !merged.nowpayments_api_key) merged.nowpayments_api_key = parsedGk.nowpayments_api_key;
+                        if (parsedGk.nowpayments_ipn_key && !merged.nowpayments_ipn_key) merged.nowpayments_ipn_key = parsedGk.nowpayments_ipn_key;
                     }
                 } catch (_) {}
 
@@ -90,7 +93,7 @@ export const AppSettingsProvider = ({ children }) => {
                     payment_maintenance: {
                         paystack: false,
                         flutterwave: false,
-                        coinbase: false,
+                        nowpayments: false,
                         wallet: false,
                         pod: false,
                         ...(merged.payment_maintenance || {})
@@ -161,7 +164,8 @@ export const AppSettingsProvider = ({ children }) => {
                 paystack_secret_key: newSettings.paystack_secret_key || '',
                 flutterwave_public_key: newSettings.flutterwave_public_key || '',
                 flutterwave_secret_key: newSettings.flutterwave_secret_key || '',
-                coinbase_api_key: newSettings.coinbase_api_key || '',
+                nowpayments_api_key: newSettings.nowpayments_api_key || '',
+                nowpayments_ipn_key: newSettings.nowpayments_ipn_key || '',
                 updated_at: new Date().toISOString()
             };
 

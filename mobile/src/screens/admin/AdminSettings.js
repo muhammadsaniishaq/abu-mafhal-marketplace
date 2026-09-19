@@ -331,7 +331,7 @@ export const AdminSettings = ({ navigation }) => {
     const [paymentMaintenance,     setPaymentMaintenance]    = useState(settings?.payment_maintenance || {
         paystack: false,
         flutterwave: false,
-        coinbase: false,
+        nowpayments: false,
         wallet: false,
         pod: false,
     });
@@ -339,12 +339,13 @@ export const AdminSettings = ({ navigation }) => {
     const [paystackSecretKey,      setPaystackSecretKey]     = useState(settings?.paystack_secret_key || '');
     const [flutterwavePublicKey,   setFlutterwavePublicKey]  = useState(settings?.flutterwave_public_key || '');
     const [flutterwaveSecretKey,   setFlutterwaveSecretKey]  = useState(settings?.flutterwave_secret_key || '');
-    const [coinbaseApiKey,         setCoinbaseApiKey]        = useState(settings?.coinbase_api_key || '');
+    const [nowpaymentsApiKey,      setNowpaymentsApiKey]     = useState(settings?.nowpayments_api_key || '');
+    const [nowpaymentsIpnKey,      setNowpaymentsIpnKey]     = useState(settings?.nowpayments_ipn_key || '');
 
     // Show/Hide Secrets
     const [showPaystackSecret,     setShowPaystackSecret]    = useState(false);
     const [showFlwSecret,          setShowFlwSecret]         = useState(false);
-    const [showCoinbaseSecret,     setShowCoinbaseSecret]    = useState(false);
+    const [showNowpaymentsSecret,  setShowNowpaymentsSecret] = useState(false);
 
     // Diagnostics / Live Ping Test State
     const [pingTesting,            setPingTesting]           = useState(false);
@@ -474,7 +475,8 @@ export const AdminSettings = ({ navigation }) => {
             if (settings.payment_maintenance) setPaymentMaintenance(prev => ({ ...prev, ...settings.payment_maintenance }));
             if (settings.flutterwave_public_key !== undefined) setFlutterwavePublicKey(settings.flutterwave_public_key || '');
             if (settings.flutterwave_secret_key !== undefined) setFlutterwaveSecretKey(settings.flutterwave_secret_key || '');
-            if (settings.coinbase_api_key !== undefined) setCoinbaseApiKey(settings.coinbase_api_key || '');
+            if (settings.nowpayments_api_key !== undefined) setNowpaymentsApiKey(settings.nowpayments_api_key || '');
+            if (settings.nowpayments_ipn_key !== undefined) setNowpaymentsIpnKey(settings.nowpayments_ipn_key || '');
             if (settings.require_phone_on_checkout !== undefined) setRequirePhoneOnCheckout(settings.require_phone_on_checkout !== false);
             if (settings.unpaid_order_timeout_hours !== undefined) setUnpaidOrderTimeoutHours(settings.unpaid_order_timeout_hours?.toString() || '24');
             if (settings.gateway_fee_pass_through !== undefined) setGatewayFeePassThrough(!!settings.gateway_fee_pass_through);
@@ -523,7 +525,7 @@ export const AdminSettings = ({ navigation }) => {
         if (paystackPublicKey)  s += 10;
         if (paystackSecretKey)  s += 10;
         if (flutterwavePublicKey || flutterwaveSecretKey) s += 10;
-        if (coinbaseApiKey)     s += 10;
+        if (nowpaymentsApiKey)  s += 10;
         if (geminiApiKey)       s += 10;
         if (premblyAppId)       s += 10;
         if (supportEmail)       s += 10;
@@ -531,7 +533,7 @@ export const AdminSettings = ({ navigation }) => {
         if (privacyPolicyUrl)   s += 5;
         if (termsUrl)           s += 5;
         return Math.min(s, 100);
-    }, [appName, logoUrl, paystackPublicKey, paystackSecretKey, flutterwavePublicKey, flutterwaveSecretKey, coinbaseApiKey, geminiApiKey, premblyAppId, supportEmail, supportPhone, privacyPolicyUrl, termsUrl]);
+    }, [appName, logoUrl, paystackPublicKey, paystackSecretKey, flutterwavePublicKey, flutterwaveSecretKey, nowpaymentsApiKey, geminiApiKey, premblyAppId, supportEmail, supportPhone, privacyPolicyUrl, termsUrl]);
 
     const healthColor = healthScore >= 70 ? '#10B981' : healthScore >= 40 ? '#F59E0B' : '#EF4444';
     const healthLabel = healthScore >= 70 ? 'Fully Configured' : healthScore >= 40 ? 'Partially Set Up' : 'Needs Attention';
@@ -562,7 +564,7 @@ export const AdminSettings = ({ navigation }) => {
         setPaymentMaintenance({
             paystack: inMaint,
             flutterwave: inMaint,
-            coinbase: inMaint,
+            nowpayments: inMaint,
             wallet: inMaint,
             pod: inMaint,
         });
@@ -667,7 +669,7 @@ export const AdminSettings = ({ navigation }) => {
             payment_maintenance: paymentMaintenance,
             paystack_public_key: paystackPublicKey, paystack_secret_key: paystackSecretKey,
             flutterwave_public_key: flutterwavePublicKey, flutterwave_secret_key: flutterwaveSecretKey,
-            coinbase_api_key: coinbaseApiKey,
+            nowpayments_api_key: nowpaymentsApiKey, nowpayments_ipn_key: nowpaymentsIpnKey,
             // Checkout & Order Security
             require_phone_on_checkout: requirePhoneOnCheckout,
             unpaid_order_timeout_hours: parseInt(unpaidOrderTimeoutHours) || 24,
@@ -958,12 +960,12 @@ export const AdminSettings = ({ navigation }) => {
                 color: '#F59E0B',
             },
             {
-                id: 'coinbase',
+                id: 'nowpayments',
                 methodKey: 'crypto',
-                name: 'Coinbase Commerce',
-                desc: 'Crypto Payments (Bitcoin, Ethereum, Solana, USDC)',
+                name: 'NOWPayments Crypto',
+                desc: 'Multi-crypto payments (USDT, BTC, ETH, SOL, BNB & 150+ coins)',
                 icon: 'logo-bitcoin',
-                color: '#3B82F6',
+                color: '#10B981',
             },
             {
                 id: 'wallet',
@@ -999,12 +1001,12 @@ export const AdminSettings = ({ navigation }) => {
                                 setPaymentMaintenance({
                                     paystack: false,
                                     flutterwave: true,
-                                    coinbase: true,
+                                    nowpayments: false,
                                     wallet: false,
                                     pod: false
                                 });
                                 setUnsaved(true);
-                                Alert.alert('Emergency Preset Applied', 'Flutterwave & Coinbase are now set to Maintenance. Paystack and Wallet remain Active.');
+                                Alert.alert('Emergency Preset Applied', 'Flutterwave is set to Maintenance. Paystack, NOWPayments & Wallet remain Active.');
                             }}
                             style={[S.presetBtn, { backgroundColor: '#F59E0B15', borderColor: '#F59E0B40' }]}
                         >
@@ -1156,23 +1158,34 @@ export const AdminSettings = ({ navigation }) => {
 
                         <View style={[S.separator, { borderColor: T.border }]} />
 
-                        <Text style={[S.cardSub, { color: T.muted, marginBottom: 12, marginTop: 4 }]}>COINBASE COMMERCE</Text>
-                        <View style={{ position: 'relative' }}>
+                        <Text style={[S.cardSub, { color: T.muted, marginBottom: 12, marginTop: 4 }]}>NOWPAYMENTS CRYPTO GATEWAY</Text>
+                        <View style={{ position: 'relative', marginBottom: 16 }}>
                             <Inp
-                                label="Coinbase Commerce API Key"
-                                value={coinbaseApiKey}
-                                onChange={v => { setCoinbaseApiKey(v); setUnsaved(true); }}
-                                icon="logo-bitcoin"
-                                secure={!showCoinbaseSecret}
-                                placeholder="Enter Coinbase Commerce API Key..."
-                                color="#3B82F6"
+                                label="NOWPayments API Key"
+                                value={nowpaymentsApiKey}
+                                onChange={v => { setNowpaymentsApiKey(v); setUnsaved(true); }}
+                                icon="key-outline"
+                                secure={!showNowpaymentsSecret}
+                                placeholder="Enter NOWPayments Live API Key..."
+                                color="#10B981"
                             />
                             <TouchableOpacity
-                                onPress={() => setShowCoinbaseSecret(p => !p)}
+                                onPress={() => setShowNowpaymentsSecret(p => !p)}
                                 style={S.eyeBtn}
                             >
-                                <Ionicons name={showCoinbaseSecret ? 'eye-off' : 'eye'} size={18} color={T.muted} />
+                                <Ionicons name={showNowpaymentsSecret ? 'eye-off' : 'eye'} size={18} color={T.muted} />
                             </TouchableOpacity>
+                        </View>
+                        <View style={{ position: 'relative' }}>
+                            <Inp
+                                label="NOWPayments IPN Secret Key"
+                                value={nowpaymentsIpnKey}
+                                onChange={v => { setNowpaymentsIpnKey(v); setUnsaved(true); }}
+                                icon="shield-checkmark-outline"
+                                secure={!showNowpaymentsSecret}
+                                placeholder="Enter NOWPayments IPN Secret..."
+                                color="#3B82F6"
+                            />
                         </View>
                     </Card>
                 </Sect>
@@ -1222,9 +1235,9 @@ export const AdminSettings = ({ navigation }) => {
                                     </Text>
                                 </View>
                                 <View style={S.pingRow}>
-                                    <Text style={[S.pingLabel, { color: T.text }]}>Coinbase Commerce:</Text>
-                                    <Text style={{ fontSize: 12, fontWeight: '700', color: paymentMaintenance.coinbase ? '#D97706' : '#10B981' }}>
-                                        {paymentMaintenance.coinbase ? 'Maintenance Mode' : 'Live Mode'}
+                                    <Text style={[S.pingLabel, { color: T.text }]}>NOWPayments Crypto:</Text>
+                                    <Text style={{ fontSize: 12, fontWeight: '700', color: paymentMaintenance.nowpayments ? '#D97706' : '#10B981' }}>
+                                        {paymentMaintenance.nowpayments ? 'Maintenance Mode' : 'Live Mode'}
                                     </Text>
                                 </View>
                             </View>
@@ -1240,12 +1253,12 @@ export const AdminSettings = ({ navigation }) => {
                 </Sect>
 
                 {/* 4. Developer Webhook Endpoints */}
-                <Sect title="Gateway Webhook Endpoints" subtitle="Endpoints to paste into your Paystack and Flutterwave developer dashboards" icon="link">
+                <Sect title="Gateway Webhook Endpoints" subtitle="Endpoints to paste into your Paystack, Flutterwave, and NOWPayments developer dashboards" icon="link">
                     <Card>
                         {[
                             { name: 'Paystack Webhook', url: 'https://ejqymvjrfqqljzjlwcin.supabase.co/functions/v1/paystack-webhook' },
                             { name: 'Flutterwave Webhook', url: 'https://ejqymvjrfqqljzjlwcin.supabase.co/functions/v1/flutterwave-webhook' },
-                            { name: 'Coinbase Webhook', url: 'https://ejqymvjrfqqljzjlwcin.supabase.co/functions/v1/coinbase-webhook' },
+                            { name: 'NOWPayments IPN Webhook', url: 'https://ejqymvjrfqqljzjlwcin.supabase.co/functions/v1/webhook-nowpayments' },
                         ].map((wh, idx) => (
                             <View key={wh.name} style={[S.whRow, { borderColor: T.border, borderBottomWidth: idx === 2 ? 0 : 1 }]}>
                                 <View style={{ flex: 1, marginRight: 8 }}>

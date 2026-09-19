@@ -3,7 +3,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-Deno.serve(async (req: Request) => {
+Deno.serve(async (req: any) => {
   try {
     const secretHash = Deno.env.get("FLUTTERWAVE_WEBHOOK_HASH");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");

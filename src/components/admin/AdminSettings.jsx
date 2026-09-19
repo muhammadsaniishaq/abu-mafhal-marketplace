@@ -264,7 +264,7 @@ const AdminSettings = () => {
                                     </div>
                                     <Toggle label="Paystack Integration" field="paystack" nestedObj="payment_methods" />
                                     <Toggle label="Flutterwave Integration" field="flutterwave" nestedObj="payment_methods" />
-                                    <Toggle label="Crypto Payments (Coinbase)" field="crypto" nestedObj="payment_methods" />
+                                    <Toggle label="Crypto Payments (NOWPayments)" field="crypto" nestedObj="payment_methods" />
                                     <Toggle label="Customer Internal Wallet" field="wallet" nestedObj="payment_methods" />
 
                                     <div className="col-span-full mt-6 mb-4">
@@ -272,6 +272,8 @@ const AdminSettings = () => {
                                     </div>
                                     <InputField type="password" label="Paystack Public Key" field="paystack_public_key" />
                                     <InputField type="password" label="Paystack Secret Key" field="paystack_secret_key" />
+                                    <InputField type="password" label="NOWPayments API Key" field="nowpayments_api_key" />
+                                    <InputField type="password" label="NOWPayments IPN Secret Key" field="nowpayments_ipn_key" />
                                 </div>
                             </div>
                         )}

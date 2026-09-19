@@ -7,7 +7,7 @@ let _gatewayConfigCache = null;
 let _gatewayConfigCacheTime = 0;
 
 /**
- * Service to initiate online payments across Paystack, Flutterwave, and Coinbase Crypto.
+ * Service to initiate online payments across Paystack, Flutterwave, and NOWPayments Crypto.
  * All API keys and secrets are securely managed on the Supabase backend.
  */
 export const PaymentGatewayService = {
@@ -131,9 +131,13 @@ export const PaymentGatewayService = {
             src.flutterwave_secret_key || src.flutterwaveSecretKey || src.FLUTTERWAVE_SECRET_KEY ||
             src.payment_gateways?.flutterwave_secret_key || src.payment_gateways?.flutterwaveSecretKey
         );
-        const coinbaseKey = getStr(
-            src.coinbase_api_key || src.coinbaseApiKey || src.COINBASE_API_KEY ||
-            src.payment_gateways?.coinbase_api_key || src.payment_gateways?.coinbaseApiKey
+        const nowpaymentsKey = getStr(
+            src.nowpayments_api_key || src.nowpaymentsApiKey || src.NOWPAYMENTS_API_KEY ||
+            src.payment_gateways?.nowpayments_api_key || src.payment_gateways?.nowpaymentsApiKey
+        );
+        const nowpaymentsIpn = getStr(
+            src.nowpayments_ipn_key || src.nowpaymentsIpnKey || src.NOWPAYMENTS_IPN_KEY ||
+            src.payment_gateways?.nowpayments_ipn_key || src.payment_gateways?.nowpaymentsIpnKey
         );
 
         const out = {};
@@ -141,7 +145,8 @@ export const PaymentGatewayService = {
         if (paystackSec) out.paystack_secret_key = paystackSec;
         if (flutterwavePub && !flutterwavePub.includes('FLWPUBK-3fff')) out.flutterwave_public_key = flutterwavePub;
         if (flutterwaveSec) out.flutterwave_secret_key = flutterwaveSec;
-        if (coinbaseKey) out.coinbase_api_key = coinbaseKey;
+        if (nowpaymentsKey) out.nowpayments_api_key = nowpaymentsKey;
+        if (nowpaymentsIpn) out.nowpayments_ipn_key = nowpaymentsIpn;
         return out;
     },
 
@@ -193,7 +198,7 @@ export const PaymentGatewayService = {
         } catch (_) {}
 
         // Fallback: If public keys still missing, request them from Edge Function (which bypasses RLS)
-        if (!config.paystack_public_key && !config.flutterwave_public_key && !config.coinbase_api_key) {
+        if (!config.paystack_public_key && !config.flutterwave_public_key && !config.nowpayments_api_key) {
             try {
                 const { data: edgeRes } = await supabase.functions.invoke('initiate-paystack-payment', {
                     body: { action: 'get_gateway_settings' }
@@ -212,8 +217,8 @@ export const PaymentGatewayService = {
             if (!config.flutterwave_public_key && (process.env?.EXPO_PUBLIC_FLUTTERWAVE_PUBLIC_KEY || process.env?.VITE_FLUTTERWAVE_PUBLIC_KEY)) {
                 config.flutterwave_public_key = (process.env?.EXPO_PUBLIC_FLUTTERWAVE_PUBLIC_KEY || process.env?.VITE_FLUTTERWAVE_PUBLIC_KEY).trim();
             }
-            if (!config.coinbase_api_key && (process.env?.EXPO_PUBLIC_COINBASE_API_KEY || process.env?.VITE_COINBASE_API_KEY)) {
-                config.coinbase_api_key = (process.env?.EXPO_PUBLIC_COINBASE_API_KEY || process.env?.VITE_COINBASE_API_KEY).trim();
+            if (!config.nowpayments_api_key && (process.env?.EXPO_PUBLIC_NOWPAYMENTS_API_KEY || process.env?.VITE_NOWPAYMENTS_API_KEY)) {
+                config.nowpayments_api_key = (process.env?.EXPO_PUBLIC_NOWPAYMENTS_API_KEY || process.env?.VITE_NOWPAYMENTS_API_KEY).trim();
             }
         }
 
@@ -669,61 +674,81 @@ export const PaymentGatewayService = {
     },
 
     /**
-     * Initiate Coinbase Commerce Crypto Checkout
+     * Initiate NOWPayments Multi-Crypto Checkout
+     * Supports USDT (TRC20/ERC20/BEP20), BTC, ETH, SOL, BNB & 150+ cryptocurrencies
      */
-    async initiateCoinbase({ amount, email, reference, name, phone, appSettings, metadata = {} }) {
+    async initiateNowPayments({ amount, email, reference, name, phone, appSettings, metadata = {} }) {
         const safeAmount = Math.max(1, Number(amount) || 0);
-        const ref = reference || this.generateRef('COINBASE');
+        const ref = reference || this.generateRef('NP');
         const userEmail = (email && email.includes('@')) ? email.trim() : `customer_${Date.now()}@abumafhal.com`;
         const userName = name || 'Customer';
 
         const config = await this.getGatewayConfig(appSettings || metadata?.appSettings);
-        const coinbaseApiKey = config.coinbase_api_key || config.COINBASE_API_KEY ||
-            (typeof process !== 'undefined' ? (process.env?.EXPO_PUBLIC_COINBASE_API_KEY || process.env?.VITE_COINBASE_API_KEY) : null);
+        const apiKey = config.nowpayments_api_key || config.NOWPAYMENTS_API_KEY ||
+            (typeof process !== 'undefined' ? (process.env?.EXPO_PUBLIC_NOWPAYMENTS_API_KEY || process.env?.VITE_NOWPAYMENTS_API_KEY) : null);
 
-        if (coinbaseApiKey) {
+        // 1. Try Backend Supabase Edge Function first
+        try {
+            const edgeRes = await this.invokeEdgeFunction('nowpayments-initiate', {
+                amount: safeAmount,
+                currency: 'ngn',
+                order_id: ref,
+                order_description: `Abu Mafhal Order Ref: ${ref}`,
+                customer_email: userEmail,
+                api_key: apiKey || undefined
+            });
+            if (edgeRes.ok && edgeRes.data?.invoice_url) {
+                return {
+                    success: true,
+                    reference: ref,
+                    gateway: 'NOWPayments',
+                    checkoutUrl: edgeRes.data.invoice_url,
+                    invoiceId: edgeRes.data.id,
+                    type: 'url'
+                };
+            }
+        } catch (_) {}
+
+        // 2. Direct API call to NOWPayments Invoice endpoint
+        if (apiKey) {
             try {
-                const res = await fetch('https://api.commerce.coinbase.com/charges', {
+                const res = await fetch('https://api.nowpayments.io/v1/invoice', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-CC-Api-Key': coinbaseApiKey.trim(),
-                        'X-CC-Version': '2018-03-22'
+                        'x-api-key': apiKey.trim()
                     },
                     body: JSON.stringify({
-                        name: 'Abu Mafhal Marketplace',
-                        description: `Payment for Order ${ref}`,
-                        local_price: {
-                            amount: safeAmount.toString(),
-                            currency: 'NGN'
-                        },
-                        pricing_type: 'fixed_price',
-                        metadata: {
-                            reference: ref,
-                            customer_email: userEmail
-                        },
-                        redirect_url: 'https://abumafhal.com/payment/verify?status=successful',
-                        cancel_url: 'https://abumafhal.com/payment/verify?status=cancelled'
+                        price_amount: safeAmount,
+                        price_currency: 'ngn',
+                        order_id: ref,
+                        order_description: `Abu Mafhal Order ${ref}`,
+                        ipn_callback_url: 'https://ejqymvjrfqqljzjlwcin.supabase.co/functions/v1/webhook-nowpayments',
+                        success_url: 'https://abumafhal.com/payment/verify?status=successful&gateway=nowpayments&reference=' + encodeURIComponent(ref),
+                        cancel_url: 'https://abumafhal.com/payment/verify?status=cancelled&gateway=nowpayments&reference=' + encodeURIComponent(ref)
                     })
                 });
 
                 const data = await res.json();
-                if (data?.data?.hosted_url) {
+                if (data?.invoice_url) {
                     return {
                         success: true,
                         reference: ref,
-                        gateway: 'Coinbase',
-                        checkoutUrl: data.data.hosted_url,
-                        sessionId: data.data.id,
+                        gateway: 'NOWPayments',
+                        checkoutUrl: data.invoice_url,
+                        invoiceId: data.id,
                         type: 'url'
                     };
                 }
+                if (data?.message) {
+                    console.warn('[PaymentGatewayService] NOWPayments API response:', data.message);
+                }
             } catch (err) {
-                console.warn('[PaymentGatewayService] Direct Coinbase Commerce call error:', err);
+                console.warn('[PaymentGatewayService] Direct NOWPayments API call error:', err);
             }
         }
 
-        throw new Error('Coinbase Commerce Crypto checkout is currently undergoing wallet maintenance. Please select Paystack (Cards & Bank Transfer), Flutterwave, or Abu Mafhal Wallet to proceed.');
+        throw new Error('Kofar biyan kudi ta NOWPayments (Crypto) tana bukatar sanya API Key a Admin Settings ko Supabase. Da fatan a saita ta ko a zaɓi Paystack ko Wallet.');
     },
 
     /**
@@ -736,8 +761,8 @@ export const PaymentGatewayService = {
             return this.initiateFlutterwave({ amount, email, phone, name, reference, appSettings, metadata });
         }
 
-        if (normalized.includes('coinbase') || normalized.includes('crypto')) {
-            return this.initiateCoinbase({ amount, email, phone, name, reference, appSettings, metadata });
+        if (normalized.includes('nowpayment') || normalized.includes('crypto') || normalized.includes('coinbase')) {
+            return this.initiateNowPayments({ amount, email, phone, name, reference, appSettings, metadata });
         }
 
         // Default to Paystack

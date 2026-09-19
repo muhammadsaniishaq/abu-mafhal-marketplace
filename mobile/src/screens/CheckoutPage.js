@@ -316,7 +316,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
         const walletBalance = Number(profile?.wallet_balance || 0);
         const maint = settings?.payment_maintenance || {};
         const isFlwMaint = maint.flutterwave === true;
-        const isCoinbaseMaint = maint.coinbase === true;
+        const isNowpaymentsMaint = maint.nowpayments === true || maint.crypto === true;
         const isPaystackMaint = maint.paystack === true;
 
         return [
@@ -368,13 +368,13 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 icon: 'flash-outline'
             },
             {
-                id: 'Coinbase',
+                id: 'NOWPayments',
                 enabled: settings?.payment_methods?.crypto !== false,
-                name: 'Coinbase Crypto',
-                sub: isCoinbaseMaint ? 'Under Scheduled Maintenance' : 'BTC, ETH, USDT & USDC',
-                logo: 'https://media.licdn.com/dms/image/v2/D4E0BAQFBUuEd8VGK4w/company-logo_200_200/B4EZs3tEB3IQAI-/0/1766166118811/coinbase_logo?e=2147483647&v=beta&t=mPgscbzEhR9TBOuI9MM0BDNcbE4tvvbhF38KM3V1CAY',
-                badge: isCoinbaseMaint ? 'Under Maintenance' : 'Web3',
-                isMaintenance: isCoinbaseMaint,
+                name: 'NOWPayments Crypto',
+                sub: isNowpaymentsMaint ? 'Under Scheduled Maintenance' : 'USDT, BTC, ETH, SOL & 150+ Coins',
+                logo: 'https://nowpayments.io/images/logo/logo.svg',
+                badge: isNowpaymentsMaint ? 'Under Maintenance' : 'Web3 Crypto',
+                isMaintenance: isNowpaymentsMaint,
                 icon: 'logo-bitcoin'
             }
         ].filter(m => m.enabled);
@@ -645,13 +645,13 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
         return formatCurrency(amountNgn);
     }, [currencyPreview]);
 
-    // Available Down Payment Options for Pay Small Small (BNPL) - Paystack, Flutterwave, Coinbase, Wallet
+    // Available Down Payment Options for Pay Small Small (BNPL) - Paystack, Flutterwave, NOWPayments, Wallet
     const pssPaymentOptions = useMemo(() => {
         const wb = Number(profile?.wallet_balance || 0);
         const dp = pssPlanDetails.downPayment;
         const maint = settings?.payment_maintenance || {};
         const isFlwMaint = maint.flutterwave === true;
-        const isCoinbaseMaint = maint.coinbase === true;
+        const isNowpaymentsMaint = maint.nowpayments === true || maint.crypto === true;
         const isPaystackMaint = maint.paystack === true;
 
         return [
@@ -684,13 +684,13 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 isMaintenance: isFlwMaint
             },
             {
-                id: 'Coinbase',
-                name: 'Coinbase',
-                sub: isCoinbaseMaint ? 'Maintenance' : 'Web3 Crypto',
-                logo: 'https://media.licdn.com/dms/image/v2/D4E0BAQFBUuEd8VGK4w/company-logo_200_200/B4EZs3tEB3IQAI-/0/1766166118811/coinbase_logo?e=2147483647&v=beta&t=mPgscbzEhR9TBOuI9MM0BDNcbE4tvvbhF38KM3V1CAY',
+                id: 'NOWPayments',
+                name: 'NOWPayments',
+                sub: isNowpaymentsMaint ? 'Maintenance' : 'USDT & Crypto',
+                logo: 'https://nowpayments.io/images/logo/logo.svg',
                 icon: 'logo-bitcoin',
-                accentColor: '#0052FF',
-                isMaintenance: isCoinbaseMaint
+                accentColor: '#10B981',
+                isMaintenance: isNowpaymentsMaint
             }
         ];
     }, [profile, pssPlanDetails.downPayment, settings?.payment_maintenance]);
@@ -1398,7 +1398,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     phone: selectedAddrObj?.phone || verifiedUser.phone || ''
                 };
 
-                // 3. Pay Small Small with Paystack, Flutterwave, or Coinbase
+                // 3. Pay Small Small with Paystack, Flutterwave, or NOWPayments
                 const pssInit = await PaymentGatewayService.initiate({
                     gateway: pssDownPaymentMethod,
                     amount: pssDownPayment,
@@ -1450,7 +1450,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 return;
             }
 
-            // ── OPTION C: Direct Gateway (Paystack, Flutterwave, Coinbase) ─
+            // ── OPTION C: Direct Gateway (Paystack, Flutterwave, NOWPayments) ─
             const activeMethodObj = availableMethods.find(m => m.id === paymentMethod);
             if (activeMethodObj?.isMaintenance) {
                 setIsProcessing(false);
@@ -1526,7 +1526,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 throw new Error(`Could not initialize ${paymentMethod} payment gateway.`);
             }
 
-            // Web: Redirect to official secure hosted checkout (Paystack / Flutterwave / Coinbase) if valid URL
+            // Web: Redirect to official secure hosted checkout (Paystack / Flutterwave / NOWPayments) if valid URL
             const isHttpUrl = typeof initRes.checkoutUrl === 'string' && (initRes.checkoutUrl.startsWith('http://') || initRes.checkoutUrl.startsWith('https://'));
             if (Platform.OS === 'web' && typeof window !== 'undefined' && isHttpUrl) {
                 setIsProcessing(false);
@@ -2661,7 +2661,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                         <Ionicons 
                                             name={
                                                 pssDownPaymentMethod === 'Wallet' ? 'wallet' :
-                                                pssDownPaymentMethod === 'Coinbase' ? 'logo-bitcoin' :
+                                                (pssDownPaymentMethod === 'NOWPayments' || pssDownPaymentMethod === 'Coinbase') ? 'logo-bitcoin' :
                                                 pssDownPaymentMethod === 'Flutterwave' ? 'flash' : 'card'
                                             } 
                                             size={12} 
@@ -2670,8 +2670,8 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                         <Text style={s.pssSelectedMethodFeedbackTxt} numberOfLines={1}>
                                             {pssDownPaymentMethod === 'Wallet'
                                                 ? `Direct wallet debit • Balance: ${formatCurrency(walletBalance)}`
-                                                : pssDownPaymentMethod === 'Coinbase'
-                                                ? 'Pay with crypto (BTC, ETH, USDT)'
+                                                : (pssDownPaymentMethod === 'NOWPayments' || pssDownPaymentMethod === 'Coinbase')
+                                                ? 'Pay with crypto (USDT, BTC, ETH)'
                                                 : pssDownPaymentMethod === 'Flutterwave'
                                                 ? 'Debit Card or Mobile Money'
                                                 : 'Card, Bank Transfer or USSD'}

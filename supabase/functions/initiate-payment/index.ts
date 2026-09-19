@@ -8,7 +8,7 @@ const corsHeaders = {
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-Deno.serve(async (req: Request) => {
+Deno.serve(async (req: any) => {
     if (req.method === "OPTIONS") {
         return new Response("ok", { headers: corsHeaders });
     }
@@ -671,39 +671,29 @@ Deno.serve(async (req: Request) => {
                 } else {
                     checkoutUrl = "success";
                 }
-            } else if (downPaymentMethod === "Coinbase") {
-                const coinbaseSecret = dbGatewayKeys.coinbase_api_key || dbGatewayKeys.COINBASE_API_KEY || Deno.env.get("COINBASE_API_KEY");
-                if (coinbaseSecret) {
+            } else if (downPaymentMethod === "NOWPayments" || downPaymentMethod === "Coinbase") {
+                const nowpaymentsApiKey = dbGatewayKeys.nowpayments_api_key || dbGatewayKeys.NOWPAYMENTS_API_KEY || Deno.env.get("NOWPAYMENTS_API_KEY");
+                if (nowpaymentsApiKey) {
                     try {
-                        const response = await fetch("https://api.commerce.coinbase.com/charges", {
+                        const response = await fetch("https://api.nowpayments.io/v1/invoice", {
                             method: "POST",
                             headers: {
-                                "X-CC-Api-Key": coinbaseSecret,
-                                "X-CC-Version": "2018-03-22",
+                                "x-api-key": nowpaymentsApiKey.trim(),
                                 "Content-Type": "application/json",
                             },
                             body: JSON.stringify({
-                                name: "Abu Mafhal Pay Small Small",
-                                description: `Down Payment for Order ${paymentRef}`,
-                                local_price: {
-                                    amount: downPayment.toString(),
-                                    currency: "NGN",
-                                },
-                                pricing_type: "fixed_price",
-                                metadata: {
-                                    session_id: session.id,
-                                    user_id: user.id,
-                                    is_pss: true,
-                                    order_id: finalOrderId,
-                                    down_payment: downPayment
-                                },
-                                redirect_url: "https://abumafhal.com/payment/success",
-                                cancel_url: "https://abumafhal.com/payment/cancel"
+                                price_amount: downPayment,
+                                price_currency: "ngn",
+                                order_id: paymentRef,
+                                order_description: `Down Payment for Order ${paymentRef} (Abu Mafhal Pay Small Small)`,
+                                ipn_callback_url: "https://ejqymvjrfqqljzjlwcin.supabase.co/functions/v1/webhook-nowpayments",
+                                success_url: "https://abumafhal.com/payment/verify?status=successful&gateway=nowpayments&reference=" + encodeURIComponent(paymentRef),
+                                cancel_url: "https://abumafhal.com/payment/verify?status=cancelled&gateway=nowpayments&reference=" + encodeURIComponent(paymentRef)
                             }),
                         });
                         const result = await response.json();
-                        if (result.data?.hosted_url) {
-                            checkoutUrl = result.data.hosted_url;
+                        if (result.invoice_url) {
+                            checkoutUrl = result.invoice_url;
                         } else {
                             checkoutUrl = "success";
                         }
@@ -717,40 +707,33 @@ Deno.serve(async (req: Request) => {
                 checkoutUrl = "success";
             }
         }
-        else if (payment_method === "Coinbase") {
-            const coinbaseSecret = dbGatewayKeys.coinbase_api_key || dbGatewayKeys.COINBASE_API_KEY || Deno.env.get("COINBASE_API_KEY");
-            if (!coinbaseSecret) throw new Error("Coinbase configuration missing (API Key in Admin Settings or Supabase Database)");
+        else if (payment_method === "NOWPayments" || payment_method === "Coinbase") {
+            const nowpaymentsApiKey = dbGatewayKeys.nowpayments_api_key || dbGatewayKeys.NOWPAYMENTS_API_KEY || Deno.env.get("NOWPAYMENTS_API_KEY");
+            if (!nowpaymentsApiKey) throw new Error("NOWPayments configuration missing (API Key in Admin Settings or Supabase Database)");
 
-            const response = await fetch("https://api.commerce.coinbase.com/charges", {
+            const response = await fetch("https://api.nowpayments.io/v1/invoice", {
                 method: "POST",
                 headers: {
-                    "X-CC-Api-Key": coinbaseSecret,
-                    "X-CC-Version": "2018-03-22",
+                    "x-api-key": nowpaymentsApiKey.trim(),
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    name: `Abu Mafhal Marketplace`,
-                    description: `Order Ref: ${paymentRef}`,
-                    local_price: {
-                        amount: totalAmount.toString(),
-                        currency: "NGN",
-                    },
-                    pricing_type: "fixed_price",
-                    metadata: {
-                        session_id: session.id,
-                        user_id: user.id
-                    },
-                    redirect_url: "https://abumafhal.com/payment/success",
-                    cancel_url: "https://abumafhal.com/payment/cancel"
+                    price_amount: totalAmount,
+                    price_currency: "ngn",
+                    order_id: paymentRef,
+                    order_description: `Abu Mafhal Order ${paymentRef}`,
+                    ipn_callback_url: "https://ejqymvjrfqqljzjlwcin.supabase.co/functions/v1/webhook-nowpayments",
+                    success_url: "https://abumafhal.com/payment/verify?status=successful&gateway=nowpayments&reference=" + encodeURIComponent(paymentRef),
+                    cancel_url: "https://abumafhal.com/payment/verify?status=cancelled&gateway=nowpayments&reference=" + encodeURIComponent(paymentRef)
                 }),
             });
 
             const result = await response.json();
-            if (!result.data || !result.data.hosted_url) {
-                console.error("Coinbase Error Detail:", result);
-                throw new Error(result.error?.message || "Coinbase initiation failed");
+            if (!result.invoice_url) {
+                console.error("NOWPayments Error Detail:", result);
+                throw new Error(result.message || "NOWPayments invoice initiation failed");
             }
-            checkoutUrl = result.data.hosted_url;
+            checkoutUrl = result.invoice_url;
         }
         else {
             throw new Error(`Payment method ${payment_method} not supported.`);
