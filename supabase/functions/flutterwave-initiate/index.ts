@@ -14,15 +14,32 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const FLUTTERWAVE_SECRET_KEY = Deno.env.get("FLUTTERWAVE_SECRET_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    if (!FLUTTERWAVE_SECRET_KEY) throw new Error("Missing FLUTTERWAVE_SECRET_KEY");
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY)
       throw new Error("Missing Supabase env vars");
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Fetch live secret key from app_settings table in Supabase
+    let FLUTTERWAVE_SECRET_KEY = Deno.env.get("FLUTTERWAVE_SECRET_KEY");
+    if (!FLUTTERWAVE_SECRET_KEY) {
+      try {
+        const { data: rows } = await supabase.from("app_settings").select("*");
+        if (rows && Array.isArray(rows)) {
+          for (const r of rows) {
+            if (r.key === "payment_gateways" && r.value && typeof r.value === "object") {
+              if (r.value.flutterwave_secret_key) FLUTTERWAVE_SECRET_KEY = r.value.flutterwave_secret_key;
+            } else if (r.key === "flutterwave_secret_key") {
+              FLUTTERWAVE_SECRET_KEY = typeof r.value === "string" ? r.value : (r.value?.value || r.value?.key);
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (!FLUTTERWAVE_SECRET_KEY) throw new Error("Flutterwave Secret Key is not configured in Admin Settings or Supabase.");
 
     const body = await req.json();
     const {

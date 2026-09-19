@@ -585,8 +585,26 @@ Deno.serve(async (req: Request) => {
                 }
             }
 
+            // Fetch live gateway configuration dynamically from Supabase database (app_settings table)
+            // Eliminates the need to store secret keys in .env
+            let dbGatewayKeys: Record<string, any> = {};
+            try {
+                const { data: settingsRows } = await supabaseAdmin.from("app_settings").select("*");
+                if (settingsRows && Array.isArray(settingsRows)) {
+                    for (const row of settingsRows) {
+                        if (row.key === "payment_gateways" && row.value && typeof row.value === "object") {
+                            Object.assign(dbGatewayKeys, row.value);
+                        } else if (row.key && row.value) {
+                            dbGatewayKeys[row.key] = typeof row.value === "object" ? (row.value.value || row.value.key || row.value) : row.value;
+                        }
+                    }
+                }
+            } catch (dbErr) {
+                console.warn("Could not fetch gateway keys from app_settings:", dbErr);
+            }
+
             if (downPaymentMethod === "Paystack") {
-                const paystackSecret = Deno.env.get("PAYSTACK_SECRET_KEY");
+                const paystackSecret = dbGatewayKeys.paystack_secret_key || dbGatewayKeys.PAYSTACK_SECRET_KEY || Deno.env.get("PAYSTACK_SECRET_KEY");
                 if (paystackSecret) {
                     try {
                         const response = await fetch("https://api.paystack.co/transaction/initialize", {
@@ -615,7 +633,7 @@ Deno.serve(async (req: Request) => {
                     checkoutUrl = "success";
                 }
             } else if (downPaymentMethod === "Flutterwave") {
-                const flwSecret = Deno.env.get("FLUTTERWAVE_SECRET_KEY");
+                const flwSecret = dbGatewayKeys.flutterwave_secret_key || dbGatewayKeys.FLUTTERWAVE_SECRET_KEY || Deno.env.get("FLUTTERWAVE_SECRET_KEY");
                 if (flwSecret) {
                     try {
                         const response = await fetch("https://api.flutterwave.com/v3/payments", {
@@ -654,7 +672,7 @@ Deno.serve(async (req: Request) => {
                     checkoutUrl = "success";
                 }
             } else if (downPaymentMethod === "Coinbase") {
-                const coinbaseSecret = Deno.env.get("COINBASE_API_KEY");
+                const coinbaseSecret = dbGatewayKeys.coinbase_api_key || dbGatewayKeys.COINBASE_API_KEY || Deno.env.get("COINBASE_API_KEY");
                 if (coinbaseSecret) {
                     try {
                         const response = await fetch("https://api.commerce.coinbase.com/charges", {
@@ -700,8 +718,8 @@ Deno.serve(async (req: Request) => {
             }
         }
         else if (payment_method === "Coinbase") {
-            const coinbaseSecret = Deno.env.get("COINBASE_API_KEY");
-            if (!coinbaseSecret) throw new Error("Coinbase configuration missing (API Key)");
+            const coinbaseSecret = dbGatewayKeys.coinbase_api_key || dbGatewayKeys.COINBASE_API_KEY || Deno.env.get("COINBASE_API_KEY");
+            if (!coinbaseSecret) throw new Error("Coinbase configuration missing (API Key in Admin Settings or Supabase Database)");
 
             const response = await fetch("https://api.commerce.coinbase.com/charges", {
                 method: "POST",

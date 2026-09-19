@@ -22,6 +22,55 @@ serve(async (req: any) => {
             });
         }
 
+        // Authoritative Admin Settings Key Saver using Service Role (Bypasses RLS)
+        if (body.action === 'save_gateway_settings' && (body.gateway_keys || body.gateway_data)) {
+            const keysToSave = body.gateway_keys || body.gateway_data;
+            const supabaseUrl = Deno.env.get('SUPABASE_URL');
+            const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+            if (!supabaseUrl || !serviceRoleKey) {
+                throw new Error('Server environment missing Supabase credentials.');
+            }
+            const adminClient = createClient(supabaseUrl, serviceRoleKey);
+            const { data, error } = await adminClient
+                .from('app_settings')
+                .upsert({
+                    key: 'payment_gateways',
+                    value: keysToSave,
+                    description: 'Online Payment Gateways Configuration',
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'key' })
+                .select();
+
+            if (error) throw error;
+
+            return new Response(JSON.stringify({ success: true, data }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 200,
+            });
+        }
+
+        // Authoritative Admin Settings Key Getter using Service Role (Bypasses RLS)
+        if (body.action === 'get_gateway_settings') {
+            const supabaseUrl = Deno.env.get('SUPABASE_URL');
+            const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+            if (!supabaseUrl || !serviceRoleKey) {
+                throw new Error('Server environment missing Supabase credentials.');
+            }
+            const adminClient = createClient(supabaseUrl, serviceRoleKey);
+            const { data, error } = await adminClient
+                .from('app_settings')
+                .select('*')
+                .eq('key', 'payment_gateways')
+                .maybeSingle();
+
+            if (error) throw error;
+
+            return new Response(JSON.stringify({ success: true, data: data?.value || {} }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 200,
+            });
+        }
+
         const { amount, email, reference, callback_url, secret_key } = body;
 
         if (!amount || !email || !reference) {

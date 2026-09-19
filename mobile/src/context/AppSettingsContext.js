@@ -165,16 +165,39 @@ export const AppSettingsProvider = ({ children }) => {
                 updated_at: new Date().toISOString()
             };
 
+            // Save to database without relying on .env:
+            // 1. Try secure RPC function (SECURITY DEFINER)
+            // 2. Fallback to Edge Function (Service Role Key)
+            // 3. Fallback to direct upsert
             try {
-                await supabase
-                    .from('app_settings')
-                    .upsert({
-                        key: 'payment_gateways',
-                        value: gatewayKeys,
-                        description: 'Payment Gateway API Credentials',
-                        updated_at: new Date().toISOString()
-                    }, { onConflict: 'key' });
-            } catch (_) {}
+                let saved = false;
+                try {
+                    const { error: rpcErr } = await supabase.rpc('save_payment_gateways', { gateway_data: gatewayKeys });
+                    if (!rpcErr) saved = true;
+                } catch (_) {}
+
+                if (!saved) {
+                    try {
+                        const { data: fnData, error: fnErr } = await supabase.functions.invoke('initiate-paystack-payment', {
+                            body: { action: 'save_gateway_settings', gateway_data: gatewayKeys, gateway_keys: gatewayKeys }
+                        });
+                        if (!fnErr && fnData?.success) saved = true;
+                    } catch (_) {}
+                }
+
+                if (!saved) {
+                    await supabase
+                        .from('app_settings')
+                        .upsert({
+                            key: 'payment_gateways',
+                            value: gatewayKeys,
+                            description: 'Payment Gateway API Credentials',
+                            updated_at: new Date().toISOString()
+                        }, { onConflict: 'key' });
+                }
+            } catch (gwSaveErr) {
+                console.warn('Gateway keys database persistence notice:', gwSaveErr);
+            }
 
             // 3. Upsert key-value configuration rows for settings
             const skipKeys = ['is_singleton', 'created_at', 'updated_at', 'id'];

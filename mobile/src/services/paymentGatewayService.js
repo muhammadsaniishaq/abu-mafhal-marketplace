@@ -182,13 +182,27 @@ export const PaymentGatewayService = {
             if (!error && Array.isArray(data)) {
                 const dbConfig = {};
                 data.forEach(item => {
-                    if (item.key) {
+                    if (item.key === 'payment_gateways' && item.value && typeof item.value === 'object') {
+                        Object.assign(dbConfig, item.value);
+                    } else if (item.key) {
                         dbConfig[item.key] = item.value;
                     }
                 });
                 Object.assign(config, this.extractKeysFromSettings(dbConfig));
             }
         } catch (_) {}
+
+        // Fallback: If public keys still missing, request them from Edge Function (which bypasses RLS)
+        if (!config.paystack_public_key && !config.flutterwave_public_key && !config.coinbase_api_key) {
+            try {
+                const { data: edgeRes } = await supabase.functions.invoke('initiate-paystack-payment', {
+                    body: { action: 'get_gateway_settings' }
+                });
+                if (edgeRes?.success && edgeRes?.data) {
+                    Object.assign(config, this.extractKeysFromSettings(edgeRes.data));
+                }
+            } catch (_) {}
+        }
 
         // 4. Priority 4: Environment Variables Fallback
         if (typeof process !== 'undefined') {
@@ -482,9 +496,9 @@ export const PaymentGatewayService = {
         const config = await this.getGatewayConfig(appSettings || metadata?.appSettings);
         const rawPubKey = config.flutterwave_public_key || config.FLUTTERWAVE_PUBLIC_KEY || 
             (typeof process !== 'undefined' ? (process.env?.EXPO_PUBLIC_FLUTTERWAVE_PUBLIC_KEY || process.env?.VITE_FLUTTERWAVE_PUBLIC_KEY) : null);
-        const flwPubKey = (rawPubKey && !rawPubKey.includes('FLWPUBK-3fff') && rawPubKey.trim().length > 15) 
+        const flwPubKey = (rawPubKey && !rawPubKey.includes('FLWPUBK-3fff') && !rawPubKey.includes('FLWPUBK-8KAiNOWzks') && rawPubKey.trim().length > 15) 
             ? rawPubKey.trim() 
-            : 'FLWPUBK-8KAiNOWzksWGTGZDvgcrEL8QD82brD0MZXzh+Nm9USY=';
+            : null;
 
         // 1. Direct Flutterwave API if secret key is present in app_settings or environment
         const flwSecret = config.flutterwave_secret_key || config.FLUTTERWAVE_SECRET_KEY ||
@@ -517,19 +531,21 @@ export const PaymentGatewayService = {
 
                 const data = await response.json();
                 if (data?.status === 'success' && data?.data?.link) {
-                    if (Platform.OS !== 'web') {
-                        return {
-                            success: true,
-                            reference: ref,
-                            gateway: 'Flutterwave',
-                            checkoutUrl: data.data.link,
-                            type: 'url'
-                        };
-                    }
+                    return {
+                        success: true,
+                        reference: ref,
+                        gateway: 'Flutterwave',
+                        checkoutUrl: data.data.link,
+                        type: 'url'
+                    };
                 }
             } catch (err) {
                 console.warn('[PaymentGatewayService] Direct Flutterwave API call failed:', err);
             }
+        }
+
+        if (!flwPubKey) {
+            throw new Error('Kofar biyan kudi ta Flutterwave tana bukatar sanya API Keys a Admin Settings ko Supabase. Da fatan a zabi Paystack ko Abu Mafhal Wallet domin kammala biya.');
         }
 
         // 2. Official Inline Checkout (Web)

@@ -1,3 +1,5 @@
+// @ts-nocheck
+/// <reference path="../ambient.d.ts" />
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -8,18 +10,34 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: any) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const PAYSTACK_SECRET_KEY = Deno.env.get("PAYSTACK_SECRET_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    if (!PAYSTACK_SECRET_KEY) throw new Error("Missing PAYSTACK_SECRET_KEY");
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) throw new Error("Missing Supabase env vars");
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    let PAYSTACK_SECRET_KEY = Deno.env.get("PAYSTACK_SECRET_KEY");
+    if (!PAYSTACK_SECRET_KEY) {
+      try {
+        const { data: rows } = await supabase.from("app_settings").select("*");
+        if (rows && Array.isArray(rows)) {
+          for (const r of rows) {
+            if (r.key === "payment_gateways" && r.value && typeof r.value === "object") {
+              if (r.value.paystack_secret_key) PAYSTACK_SECRET_KEY = r.value.paystack_secret_key;
+            } else if (r.key === "paystack_secret_key") {
+              PAYSTACK_SECRET_KEY = typeof r.value === "string" ? r.value : (r.value?.value || r.value?.key);
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (!PAYSTACK_SECRET_KEY) throw new Error("Paystack Secret Key is not configured in Admin Settings or Supabase.");
 
     const { order_id, email } = await req.json();
 
@@ -99,7 +117,7 @@ Deno.serve(async (req) => {
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-  } catch (e) {
+  } catch (e: any) {
     return new Response(JSON.stringify({ error: String(e?.message ?? e) }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

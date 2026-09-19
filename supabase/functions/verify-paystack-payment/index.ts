@@ -1,3 +1,5 @@
+// @ts-nocheck
+/// <reference path="../ambient.d.ts" />
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -6,7 +8,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
+serve(async (req: any) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -25,12 +27,26 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // 2. Fetch the Paystack Secret Key from Deno Environment (Secrets)
-    const SECRET_KEY = Deno.env.get('PAYSTACK_SECRET_KEY');
+    // 2. Fetch the Paystack Secret Key from database app_settings or environment
+    let SECRET_KEY = Deno.env.get('PAYSTACK_SECRET_KEY');
+    if (!SECRET_KEY) {
+      try {
+        const { data: rows } = await supabase.from('app_settings').select('*');
+        if (rows && Array.isArray(rows)) {
+          for (const r of rows) {
+            if (r.key === 'payment_gateways' && r.value && typeof r.value === 'object') {
+              if (r.value.paystack_secret_key) SECRET_KEY = r.value.paystack_secret_key;
+            } else if (r.key === 'paystack_secret_key') {
+              SECRET_KEY = typeof r.value === 'string' ? r.value : (r.value?.value || r.value?.key);
+            }
+          }
+        }
+      } catch (_) {}
+    }
 
     if (!SECRET_KEY) {
-      console.error('Failed to get secret key from environment variables.');
-      throw new Error('Payment gateway is not configured properly.');
+      console.error('Paystack secret key is missing in both app_settings and environment.');
+      throw new Error('Payment gateway is not configured properly (Missing Paystack Secret Key).');
     }
 
     // 3. Verify Payment with Paystack
@@ -81,7 +97,7 @@ serve(async (req) => {
       // Find the active plans
       const { data: settingsData } = await supabase.from('app_settings').select('vendor_plans').single();
       const activePlans = settingsData?.vendor_plans || [];
-      const plan = activePlans.find(p => p.id === expected_plan_id) || activePlans[0];
+      const plan = activePlans.find((p: any) => p.id === expected_plan_id) || activePlans[0];
 
       if (!plan) {
         throw new Error('System configuration error: vendor plan not found.');
@@ -137,9 +153,9 @@ serve(async (req) => {
       throw new Error(`Unsupported verification action: ${action}`);
     }
 
-  } catch (error) {
-    console.error('Verification Error:', error.message);
-    return new Response(JSON.stringify({ success: false, error: error.message }), {
+  } catch (error: any) {
+    console.error('Verification Error:', error?.message || error);
+    return new Response(JSON.stringify({ success: false, error: error?.message || String(error) }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400,
     });
