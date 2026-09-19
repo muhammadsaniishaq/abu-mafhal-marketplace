@@ -4,6 +4,7 @@ import {
     Alert, ActivityIndicator, Image, Animated, Dimensions,
     StatusBar, Modal, FlatList, Clipboard, Platform
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppSettings } from '../../context/AppSettingsContext';
@@ -35,6 +36,14 @@ const CURRENCIES = [
 ];
 
 const QUICK_COLORS = ['#0F172A','#1E3A8A','#065F46','#7C2D12','#4C1D95','#831843','#134E4A'];
+
+const THEME_PRESETS = [
+    { name: 'Midnight Gold', primary: '#0F172A', secondary: '#D97706', tag: 'Luxury' },
+    { name: 'Sapphire Tech', primary: '#0A192F', secondary: '#3B82F6', tag: 'Enterprise' },
+    { name: 'Emerald Oasis', primary: '#064E3B', secondary: '#10B981', tag: 'Fresh' },
+    { name: 'Cyber Crimson', primary: '#18181B', secondary: '#EF4444', tag: 'Vibrant' },
+    { name: 'Royal Amethyst', primary: '#2E1065', secondary: '#8B5CF6', tag: 'Modern' },
+];
 
 const NIGERIA_STATES = [
     'Abia','Adamawa','Akwa Ibom','Anambra','Bauchi','Bayelsa','Benue','Borno',
@@ -110,7 +119,7 @@ const S = {
     aiTitle:    { fontSize: 13, fontWeight: '800', color: '#92400E' },
     aiDesc:     { fontSize: 12, color: '#B45309', marginTop: 3 },
     modalBg:    { flex: 1, backgroundColor: '#00000066', justifyContent: 'flex-end' },
-    modalSheet: { borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 22, maxHeight: '65%' },
+    modalSheet: { borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 22, maxHeight: '80%' },
     adminProfileRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
     adminAvatar:     { width: 68, height: 68, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
     bannerPreview:   { flexDirection: 'row', alignItems: 'center', borderRadius: 10, padding: 12, marginTop: 14 },
@@ -138,6 +147,15 @@ const S = {
     pingLabel:       { fontSize: 12, fontWeight: '600' },
     whRow:           { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 11 },
     copyBtn:         { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
+    quickActionBtn:  { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 9, borderWidth: 1 },
+    quickActionTxt:  { fontSize: 11, fontWeight: '700' },
+    themePresetCard: { width: 112, borderRadius: 13, padding: 10, borderWidth: 1.5, gap: 5 },
+    previewWrap:     { borderRadius: 14, padding: 13, borderWidth: 1, marginTop: 14 },
+    previewHeader:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 9, borderBottomWidth: 1 },
+    previewSearch:   { height: 28, borderRadius: 8, paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
+    previewBtn:      { height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginTop: 8, paddingHorizontal: 12 },
+    cockpitPill:     { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
+    cockpitPillTxt:  { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
 };
 
 // ─── Theme Context ─────────────────────────────────────────────
@@ -404,6 +422,44 @@ export const AdminSettings = ({ navigation }) => {
     const [maxProductImages,   setMaxProductImages]   = useState(settings?.max_product_images?.toString() || '6');
     const [vendorAutoApprove,  setVendorAutoApprove]  = useState(settings?.vendor_auto_approve  || false);
 
+    // ── NEW Features: Branding, Trust & Slogan ─────────────────
+    const [tagline,            setTagline]            = useState(settings?.tagline || 'Quality Products | Trusted Sellers | Fast Delivery');
+    const [showVerifiedBadge,  setShowVerifiedBadge]  = useState(settings?.show_verified_badge !== false);
+
+    // ── NEW Features: Escrow, Payout & Cashback ────────────────
+    const [escrowProtection,   setEscrowProtection]   = useState(settings?.escrow_protection !== false);
+    const [escrowReleaseDays,  setEscrowReleaseDays]  = useState(settings?.escrow_release_days?.toString() || '3');
+    const [vendorMinPayout,    setVendorMinPayout]    = useState(settings?.vendor_min_payout?.toString() || '5000');
+    const [cashbackEnabled,    setCashbackEnabled]    = useState(settings?.cashback_enabled || false);
+    const [cashbackRate,       setCashbackRate]       = useState(settings?.cashback_rate?.toString() || '1.0');
+
+    // ── NEW Features: Security & Compliance ────────────────────
+    const [maintenanceMode,    setMaintenanceMode]    = useState(settings?.maintenance_mode || false);
+    const [maintenanceNotice,  setMaintenanceNotice]  = useState(settings?.maintenance_notice || 'Abu Mafhal Marketplace is currently undergoing scheduled upgrades. We will be back shortly!');
+    const [requireVendorNinBvn,setRequireVendorNinBvn]= useState(settings?.require_vendor_nin_bvn || false);
+    const [adminSessionTimeout,setAdminSessionTimeout]= useState(settings?.admin_session_timeout?.toString() || '60');
+    const [fraudShieldEnabled, setFraudShieldEnabled] = useState(settings?.fraud_shield_enabled !== false);
+
+    // ── NEW Features: Vendors Tier Controls ────────────────────
+    const [freePlanProductLimit,   setFreePlanProductLimit]   = useState(settings?.free_plan_product_limit?.toString() || '15');
+    const [allowVendorVacation,    setAllowVendorVacation]    = useState(settings?.allow_vendor_vacation !== false);
+    const [vendorDailyPayoutLimit, setVendorDailyPayoutLimit] = useState(settings?.vendor_daily_payout_limit?.toString() || '500000');
+
+    // ── NEW Features: Contact, Social & Messaging ──────────────
+    const [whatsappWelcomeMessage, setWhatsappWelcomeMessage] = useState(settings?.whatsapp_welcome_message || 'Hello Abu Mafhal Support, I have an inquiry about...');
+    const [supportWorkingHours,    setSupportWorkingHours]    = useState(settings?.support_working_hours || 'Mon - Sat: 8:00 AM - 9:00 PM, Sun: 12:00 PM - 6:00 PM');
+    const [telegramChannel,        setTelegramChannel]        = useState(settings?.telegram_channel || '');
+
+    // ── NEW Features: Extra Modules & Engagement ───────────────
+    const [enableFlashSales,       setEnableFlashSales]       = useState(settings?.enable_flash_sales !== false);
+    const [enableWishlist,         setEnableWishlist]         = useState(settings?.enable_wishlist !== false);
+    const [enableRecentlyViewed,   setEnableRecentlyViewed]   = useState(settings?.enable_recently_viewed !== false);
+    const [enableProductQa,        setEnableProductQa]        = useState(settings?.enable_product_qa !== false);
+    const [enableGuestCheckout,    setEnableGuestCheckout]    = useState(settings?.enable_guest_checkout || false);
+
+    // JSON Config Import/Export state
+    const [importJsonText,         setImportJsonText]         = useState('');
+
     const [uploadingLogo,          setUploadingLogo]         = useState(false);
     const [uploadingCertLogo,      setUploadingCertLogo]     = useState(false);
     const [uploadingCertBadge,     setUploadingCertBadge]    = useState(false);
@@ -423,6 +479,30 @@ export const AdminSettings = ({ navigation }) => {
             if (settings.unpaid_order_timeout_hours !== undefined) setUnpaidOrderTimeoutHours(settings.unpaid_order_timeout_hours?.toString() || '24');
             if (settings.gateway_fee_pass_through !== undefined) setGatewayFeePassThrough(!!settings.gateway_fee_pass_through);
             if (settings.gateway_fee_pct !== undefined) setGatewayFeePct(settings.gateway_fee_pct?.toString() || '1.5');
+            // Sync new features
+            if (settings.tagline !== undefined) setTagline(settings.tagline || '');
+            if (settings.show_verified_badge !== undefined) setShowVerifiedBadge(settings.show_verified_badge !== false);
+            if (settings.escrow_protection !== undefined) setEscrowProtection(settings.escrow_protection !== false);
+            if (settings.escrow_release_days !== undefined) setEscrowReleaseDays(settings.escrow_release_days?.toString() || '3');
+            if (settings.vendor_min_payout !== undefined) setVendorMinPayout(settings.vendor_min_payout?.toString() || '5000');
+            if (settings.cashback_enabled !== undefined) setCashbackEnabled(!!settings.cashback_enabled);
+            if (settings.cashback_rate !== undefined) setCashbackRate(settings.cashback_rate?.toString() || '1.0');
+            if (settings.maintenance_mode !== undefined) setMaintenanceMode(!!settings.maintenance_mode);
+            if (settings.maintenance_notice !== undefined) setMaintenanceNotice(settings.maintenance_notice || '');
+            if (settings.require_vendor_nin_bvn !== undefined) setRequireVendorNinBvn(!!settings.require_vendor_nin_bvn);
+            if (settings.admin_session_timeout !== undefined) setAdminSessionTimeout(settings.admin_session_timeout?.toString() || '60');
+            if (settings.fraud_shield_enabled !== undefined) setFraudShieldEnabled(settings.fraud_shield_enabled !== false);
+            if (settings.free_plan_product_limit !== undefined) setFreePlanProductLimit(settings.free_plan_product_limit?.toString() || '15');
+            if (settings.allow_vendor_vacation !== undefined) setAllowVendorVacation(settings.allow_vendor_vacation !== false);
+            if (settings.vendor_daily_payout_limit !== undefined) setVendorDailyPayoutLimit(settings.vendor_daily_payout_limit?.toString() || '500000');
+            if (settings.whatsapp_welcome_message !== undefined) setWhatsappWelcomeMessage(settings.whatsapp_welcome_message || '');
+            if (settings.support_working_hours !== undefined) setSupportWorkingHours(settings.support_working_hours || '');
+            if (settings.telegram_channel !== undefined) setTelegramChannel(settings.telegram_channel || '');
+            if (settings.enable_flash_sales !== undefined) setEnableFlashSales(settings.enable_flash_sales !== false);
+            if (settings.enable_wishlist !== undefined) setEnableWishlist(settings.enable_wishlist !== false);
+            if (settings.enable_recently_viewed !== undefined) setEnableRecentlyViewed(settings.enable_recently_viewed !== false);
+            if (settings.enable_product_qa !== undefined) setEnableProductQa(settings.enable_product_qa !== false);
+            if (settings.enable_guest_checkout !== undefined) setEnableGuestCheckout(!!settings.enable_guest_checkout);
         }
     }, [settings]);
 
@@ -523,6 +603,51 @@ export const AdminSettings = ({ navigation }) => {
         }
     };
 
+    const handleClearCache = async () => {
+        Alert.alert(
+            'Purge Local Cache? 🧹',
+            'This will clear local AsyncStorage settings & image caches and synchronizes live from Supabase.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Purge & Re-sync',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await AsyncStorage.removeItem('@abumafhal_settings_v1');
+                            if (refreshSettings) await refreshSettings();
+                            Alert.alert('Cache Purged! ✅', 'Local cache cleared and fresh platform settings synchronized from cloud.');
+                        } catch (e) {
+                            Alert.alert('Error', 'Failed to purge cache.');
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const handleImportJson = () => {
+        try {
+            const parsed = JSON.parse(importJsonText);
+            if (!parsed || typeof parsed !== 'object') throw new Error('Invalid JSON');
+            if (parsed.app_name) setAppName(parsed.app_name);
+            if (parsed.tagline) setTagline(parsed.tagline);
+            if (parsed.primary_color) setPrimaryColor(parsed.primary_color);
+            if (parsed.secondary_color) setSecondaryColor(parsed.secondary_color);
+            if (parsed.currency) setCurrency(parsed.currency);
+            if (parsed.commission_rate) setCommissionRate(parsed.commission_rate.toString());
+            if (parsed.support_email) setSupportEmail(parsed.support_email);
+            if (parsed.support_phone) setSupportPhone(parsed.support_phone);
+            if (parsed.whatsapp_number) setWhatsappNumber(parsed.whatsapp_number);
+            if (parsed.payment_methods) setPaymentMethods(parsed.payment_methods);
+            setUnsaved(true);
+            setShowExportModal(false);
+            Alert.alert('Config Staged! 📥', 'Imported settings staged into memory. Tap Deploy to push changes live.');
+        } catch (e) {
+            Alert.alert('Import Failed ❌', 'Invalid JSON payload. Please paste a valid settings backup.');
+        }
+    };
+
     const handleSave = async () => {
         setLoading(true);
         Animated.sequence([
@@ -535,6 +660,8 @@ export const AdminSettings = ({ navigation }) => {
             cert_logo_url: certLogoUrl, cert_badge_url: certBadgeUrl, cert_signature_url: certSignatureUrl,
             primary_color: primaryColor, secondary_color: secondaryColor,
             default_shipping_address: defaultShippingAddress,
+            // Branding & Trust
+            tagline, show_verified_badge: showVerifiedBadge,
             // Payment Gateway Hub & Maintenance
             payment_methods: paymentMethods,
             payment_maintenance: paymentMaintenance,
@@ -546,6 +673,18 @@ export const AdminSettings = ({ navigation }) => {
             unpaid_order_timeout_hours: parseInt(unpaidOrderTimeoutHours) || 24,
             gateway_fee_pass_through: gatewayFeePassThrough,
             gateway_fee_pct: parseFloat(gatewayFeePct) || 1.5,
+            // Escrow, Payout & Cashback
+            escrow_protection: escrowProtection,
+            escrow_release_days: parseInt(escrowReleaseDays) || 3,
+            vendor_min_payout: parseFloat(vendorMinPayout) || 5000,
+            cashback_enabled: cashbackEnabled,
+            cashback_rate: parseFloat(cashbackRate) || 1.0,
+            // Security & Fraud Shield
+            maintenance_mode: maintenanceMode,
+            maintenance_notice: maintenanceNotice,
+            require_vendor_nin_bvn: requireVendorNinBvn,
+            admin_session_timeout: parseInt(adminSessionTimeout) || 60,
+            fraud_shield_enabled: fraudShieldEnabled,
             // Security & Credentials
             prembly_app_id: premblyAppId, prembly_secret_key: premblySecretKey,
             gemini_api_key: geminiApiKey, openai_api_key: openaiApiKey,
@@ -558,10 +697,18 @@ export const AdminSettings = ({ navigation }) => {
             support_email: supportEmail, support_phone: supportPhone, whatsapp_number: whatsappNumber,
             instagram_handle: instagramHandle, twitter_handle: twitterHandle,
             facebook_url: facebookUrl, tiktok_handle: tiktokHandle,
+            whatsapp_welcome_message: whatsappWelcomeMessage,
+            support_working_hours: supportWorkingHours,
+            telegram_channel: telegramChannel,
             enable_coupons: enableCoupons, max_discount_pct: parseFloat(maxDiscountPct) || 30,
             enable_returns: enableReturns, return_window_days: parseInt(returnWindowDays) || 7,
             enable_reviews: enableReviews, enable_ratings: enableRatings,
             enable_live_chat: enableLiveChat, enable_waitlist: enableWaitlist,
+            enable_flash_sales: enableFlashSales,
+            enable_wishlist: enableWishlist,
+            enable_recently_viewed: enableRecentlyViewed,
+            enable_product_qa: enableProductQa,
+            enable_guest_checkout: enableGuestCheckout,
             app_store_url: appStoreUrl, play_store_url: playStoreUrl,
             privacy_policy_url: privacyPolicyUrl, terms_url: termsUrl,
             // Phase-4
@@ -575,6 +722,9 @@ export const AdminSettings = ({ navigation }) => {
             enable_affiliate: enableAffiliate, affiliate_rate: parseFloat(affiliateRate) || 5,
             max_product_images: parseInt(maxProductImages) || 6,
             vendor_auto_approve: vendorAutoApprove,
+            free_plan_product_limit: parseInt(freePlanProductLimit) || 15,
+            allow_vendor_vacation: allowVendorVacation,
+            vendor_daily_payout_limit: parseFloat(vendorDailyPayoutLimit) || 500000,
             // Phase-5 Shipping & Tax
             shipping_fees: shippingFees,
             tax_enabled: taxEnabled,
@@ -594,19 +744,22 @@ export const AdminSettings = ({ navigation }) => {
 
     const handleExportSettings = () => {
         const exportData = JSON.stringify({
-            app_name: appName, primary_color: primaryColor, secondary_color: secondaryColor,
+            app_name: appName, tagline, primary_color: primaryColor, secondary_color: secondaryColor,
             currency, commission_rate: commissionRate, min_order_amount: minOrderAmount,
             free_shipping_min: freeShippingMin, support_email: supportEmail,
-            support_phone: supportPhone, enable_coupons: enableCoupons,
-            max_discount_pct: maxDiscountPct, enable_returns: enableReturns,
-            return_window_days: returnWindowDays,
-            payment_maintenance: paymentMaintenance,
-            payment_methods: paymentMethods,
+            support_phone: supportPhone, whatsapp_number: whatsappNumber,
+            whatsapp_welcome_message: whatsappWelcomeMessage, support_working_hours: supportWorkingHours,
+            enable_coupons: enableCoupons, max_discount_pct: maxDiscountPct,
+            enable_returns: enableReturns, return_window_days: returnWindowDays,
+            escrow_protection: escrowProtection, escrow_release_days: escrowReleaseDays,
+            vendor_min_payout: vendorMinPayout, cashback_enabled: cashbackEnabled, cashback_rate: cashbackRate,
+            maintenance_mode: maintenanceMode, maintenance_notice: maintenanceNotice,
+            payment_maintenance: paymentMaintenance, payment_methods: paymentMethods,
             require_phone_on_checkout: requirePhoneOnCheckout,
             unpaid_order_timeout_hours: unpaidOrderTimeoutHours,
         }, null, 2);
-        Clipboard.setString(exportData);
-        Alert.alert('Copied! 📋', 'Settings snapshot copied to clipboard. Paste it somewhere safe to back up your config.');
+        setImportJsonText(exportData);
+        setShowExportModal(true);
     };
 
     const handlePickImage = async (type) => {
@@ -655,7 +808,9 @@ export const AdminSettings = ({ navigation }) => {
                         </View>
                     </View>
                     <Inp label="Marketplace Name" value={appName} onChange={v => { setAppName(v); setUnsaved(true); }} icon="business" placeholder="e.g. Abu Mafhal" />
+                    <Inp label="Platform Slogan / Tagline" value={tagline} onChange={v => { setTagline(v); setUnsaved(true); }} icon="ribbon" placeholder="Quality Products | Trusted Sellers | Fast Delivery" hint="Displayed under the marketplace name on the home page" />
                     <Inp label="Fallback Shipping Address" value={defaultShippingAddress} onChange={v => { setDefaultShippingAddress(v); setUnsaved(true); }} icon="location" placeholder="HQ address" multi />
+                    <Tog label="Show Verified Trust Badges" desc="Display verified seller checkmark on stores & products" icon="shield-checkmark" value={showVerifiedBadge} onToggle={() => { setShowVerifiedBadge(p => !p); setUnsaved(true); }} color="#3B82F6" />
                 </Card>
             </Sect>
 
@@ -687,6 +842,70 @@ export const AdminSettings = ({ navigation }) => {
                                 color={secondaryColor}
                                 placeholder="#3B82F6"
                             />
+                        </View>
+                    </View>
+                </Card>
+            </Sect>
+
+            <Sect title="Curated Theme Presets" icon="color-wand">
+                <Card>
+                    <Text style={[S.cardSub, { color: T.muted, marginBottom: 12 }]}>One-click professional color scheme synchronization</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingBottom: 4 }}>
+                        {THEME_PRESETS.map(preset => {
+                            const isSelected = primaryColor === preset.primary && secondaryColor === preset.secondary;
+                            return (
+                                <TouchableOpacity
+                                    key={preset.name}
+                                    onPress={() => {
+                                        setPrimaryColor(preset.primary);
+                                        setSecondaryColor(preset.secondary);
+                                        setUnsaved(true);
+                                    }}
+                                    style={[
+                                        S.themePresetCard,
+                                        {
+                                            backgroundColor: T.surface,
+                                            borderColor: isSelected ? preset.secondary : T.border,
+                                            borderWidth: isSelected ? 2 : 1
+                                        }
+                                    ]}
+                                >
+                                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                                        <View style={[S.swatch, { backgroundColor: preset.primary, width: 22, height: 22 }]} />
+                                        <View style={[S.swatch, { backgroundColor: preset.secondary, width: 22, height: 22 }]} />
+                                    </View>
+                                    <Text style={{ fontSize: 11, fontWeight: '800', color: T.text }} numberOfLines={1}>{preset.name}</Text>
+                                    <Text style={{ fontSize: 9, color: preset.secondary, fontWeight: '800' }}>{preset.tag}</Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </ScrollView>
+
+                    {/* Live Storefront Mock Preview */}
+                    <View style={[S.previewWrap, { backgroundColor: T.surface, borderColor: T.border }]}>
+                        <View style={[S.previewHeader, { borderColor: T.border }]}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                                <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: primaryColor, alignItems: 'center', justifyContent: 'center' }}>
+                                    <Ionicons name="storefront" size={14} color="#FFF" />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ fontSize: 12, fontWeight: '800', color: T.text }}>{appName || 'Abu Mafhal'}</Text>
+                                    <Text style={{ fontSize: 9, color: T.muted }} numberOfLines={1}>{tagline || 'Tagline'}</Text>
+                                </View>
+                            </View>
+                            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: secondaryColor }} />
+                        </View>
+                        <View style={[S.previewSearch, { backgroundColor: T.card, borderColor: T.border, borderWidth: 1 }]}>
+                            <Ionicons name="search" size={12} color={T.muted} />
+                            <Text style={{ fontSize: 11, color: T.muted }}>Search 10,000+ items...</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                            <View style={[S.previewBtn, { flex: 1, backgroundColor: primaryColor }]}>
+                                <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '800' }}>Primary Button</Text>
+                            </View>
+                            <View style={[S.previewBtn, { backgroundColor: secondaryColor + '20', borderColor: secondaryColor, borderWidth: 1 }]}>
+                                <Text style={{ color: secondaryColor, fontSize: 11, fontWeight: '800' }}>Accent</Text>
+                            </View>
                         </View>
                     </View>
                 </Card>
@@ -1199,12 +1418,78 @@ export const AdminSettings = ({ navigation }) => {
                         )}
                     </Card>
                 </Sect>
+
+                {/* 11. Escrow & Fund Protection */}
+                <Sect title="Escrow & Fund Protection" icon="lock-closed">
+                    <Card>
+                        <Tog label="Buyer Escrow Protection" desc="Hold customer payments in escrow until delivery is confirmed" icon="shield-checkmark"
+                            value={escrowProtection} onToggle={() => { setEscrowProtection(p => !p); setUnsaved(true); }} color="#10B981" />
+                        {escrowProtection && (
+                            <View style={{ marginTop: 10 }}>
+                                <Inp label="Auto-Release Period (Days)" value={escrowReleaseDays}
+                                    onChange={v => { setEscrowReleaseDays(v); setUnsaved(true); }}
+                                    icon="time" keyboard="numeric" placeholder="3"
+                                    color="#10B981" hint="Automatic payout release to vendor if buyer does not dispute after delivery" />
+                            </View>
+                        )}
+                    </Card>
+                </Sect>
+
+                {/* 12. Vendor Payouts & Customer Cashback */}
+                <Sect title="Payout Thresholds & Cashback" icon="wallet">
+                    <Card>
+                        <Inp label={`Minimum Vendor Payout (${selectedCurrency.symbol})`} value={vendorMinPayout}
+                            onChange={v => { setVendorMinPayout(v); setUnsaved(true); }}
+                            icon="cash" keyboard="numeric" placeholder="5000"
+                            color="#D97706" hint="Minimum balance required before vendors can request a bank withdrawal" />
+
+                        <Tog label="Customer Wallet Cashback Rewards" desc="Award buyers with store wallet balance on delivered orders" icon="gift"
+                            value={cashbackEnabled} onToggle={() => { setCashbackEnabled(p => !p); setUnsaved(true); }} color="#EC4899" />
+                        {cashbackEnabled && (
+                            <View style={{ marginTop: 10 }}>
+                                <Inp label="Cashback Rate (%)" value={cashbackRate}
+                                    onChange={v => { setCashbackRate(v); setUnsaved(true); }}
+                                    icon="percent" keyboard="numeric" placeholder="1.0"
+                                    color="#EC4899" hint="Percentage of purchase amount credited back to buyer wallet" />
+                            </View>
+                        )}
+                    </Card>
+                </Sect>
             </View>
         );
     };
 
     const renderSecurity = () => (
         <View style={S.section}>
+            {/* Maintenance Mode */}
+            <Sect title="Platform Maintenance & Uptime" icon="construct">
+                <Card>
+                    <Tog label="System Maintenance Mode" desc="Take platform offline for non-administrators during scheduled updates" icon="warning"
+                        value={maintenanceMode} onToggle={() => { setMaintenanceMode(p => !p); setUnsaved(true); }} color="#EF4444" />
+                    {maintenanceMode && (
+                        <View style={{ marginTop: 10 }}>
+                            <Inp label="Maintenance Public Notice" value={maintenanceNotice}
+                                onChange={v => { setMaintenanceNotice(v); setUnsaved(true); }}
+                                icon="alert-circle" placeholder="Scheduled upgrade..." multi
+                                color="#EF4444" hint="Displayed to buyers and vendors when maintenance is active" />
+                        </View>
+                    )}
+                </Card>
+            </Sect>
+
+            <Sect title="Vendor Compliance & Security Shield" icon="shield-half">
+                <Card>
+                    <Tog label="Require NIN / CAC Before Listing" desc="Vendors cannot publish live products until verified by Prembly" icon="ribbon"
+                        value={requireVendorNinBvn} onToggle={() => { setRequireVendorNinBvn(p => !p); setUnsaved(true); }} color="#3B82F6" />
+                    <Tog label="Strict Fraud Detection Shield" desc="Flag risky checkout attempts with mismatched geographic IP" icon="finger-print"
+                        value={fraudShieldEnabled} onToggle={() => { setFraudShieldEnabled(p => !p); setUnsaved(true); }} color="#10B981" />
+                    <Inp label="Admin Inactivity Auto-Logout (Minutes)" value={adminSessionTimeout}
+                        onChange={v => { setAdminSessionTimeout(v); setUnsaved(true); }}
+                        icon="time" keyboard="numeric" placeholder="60"
+                        color="#64748B" hint="Forces session renewal after prolonged admin inactivity" />
+                </Card>
+            </Sect>
+
             <Sect title="AI Intelligence APIs" icon="sparkles">
                 <Card>
                     <Inp label="Gemini Ultra Key"  value={geminiApiKey}  onChange={v => { setGeminiApiKey(v); setUnsaved(true); }}  icon="sparkles"  secure placeholder="AIza..." color="#8B5CF6" />
@@ -1235,8 +1520,8 @@ export const AdminSettings = ({ navigation }) => {
                 <TouchableOpacity onPress={handleExportSettings} style={[S.exportBtn, { backgroundColor: T.surface, borderColor: T.border }]}>
                     <Ionicons name="clipboard-outline" size={22} color="#3B82F6" />
                     <View style={{ flex: 1 }}>
-                        <Text style={[S.cardTitle, { color: T.text }]}>Export to Clipboard</Text>
-                        <Text style={[S.cardSub, { color: T.muted }]}>Copy all non-secret settings as JSON backup</Text>
+                        <Text style={[S.cardTitle, { color: T.text }]}>Backup & Snapshot Manager</Text>
+                        <Text style={[S.cardSub, { color: T.muted }]}>Export or restore JSON snapshot of platform settings</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color={T.muted} />
                 </TouchableOpacity>
@@ -1272,6 +1557,22 @@ export const AdminSettings = ({ navigation }) => {
                     </Card>
                 ))}
             </Sect>
+
+            {/* Vendor Listing Limits & Vacation Policy */}
+            <Sect title="Vendor Listing Limits & Policies" icon="options">
+                <Card>
+                    <Inp label="Free Trial Product Limit" value={freePlanProductLimit}
+                        onChange={v => { setFreePlanProductLimit(v); setUnsaved(true); }}
+                        icon="cube" keyboard="numeric" placeholder="15"
+                        color="#F59E0B" hint="Maximum number of active listings for vendors on trial" />
+                    <Inp label={`Daily Payout Withdrawal Limit (${selectedCurrency.symbol})`} value={vendorDailyPayoutLimit}
+                        onChange={v => { setVendorDailyPayoutLimit(v); setUnsaved(true); }}
+                        icon="cash" keyboard="numeric" placeholder="500000"
+                        color="#10B981" hint="Maximum single-day withdrawal limit per vendor" />
+                    <Tog label="Allow Vendor Vacation Mode" desc="Permit vendors to pause orders without losing reviews or rankings" icon="airplane"
+                        value={allowVendorVacation} onToggle={() => { setAllowVendorVacation(p => !p); setUnsaved(true); }} color="#3B82F6" />
+                </Card>
+            </Sect>
         </View>
     );
 
@@ -1282,6 +1583,20 @@ export const AdminSettings = ({ navigation }) => {
                     <Inp label="Support Email" value={supportEmail} onChange={v => { setSupportEmail(v); setUnsaved(true); }} icon="mail" placeholder="support@abumafhal.com" keyboard="email-address" color="#3B82F6" />
                     <Inp label="Support Phone" value={supportPhone} onChange={v => { setSupportPhone(v); setUnsaved(true); }} icon="call" placeholder="+234 XXX XXXX" keyboard="phone-pad" color="#10B981" />
                     <Inp label="WhatsApp Number" value={whatsappNumber} onChange={v => { setWhatsappNumber(v); setUnsaved(true); }} icon="logo-whatsapp" placeholder="+234 XXX XXXX" keyboard="phone-pad" color="#22C55E" hint="Customers tap to open chat directly" />
+                </Card>
+            </Sect>
+
+            <Sect title="Customer Messaging & Working Hours" icon="time">
+                <Card>
+                    <Inp label="WhatsApp Pre-filled Message" value={whatsappWelcomeMessage}
+                        onChange={v => { setWhatsappWelcomeMessage(v); setUnsaved(true); }}
+                        icon="chatbubble-ellipses" placeholder="Hello Abu Mafhal Support..."
+                        color="#22C55E" hint="Default message when customer clicks WhatsApp button" />
+                    <Inp label="Support Working Hours" value={supportWorkingHours}
+                        onChange={v => { setSupportWorkingHours(v); setUnsaved(true); }}
+                        icon="time" placeholder="Mon - Sat: 8:00 AM - 9:00 PM"
+                        color="#0EA5E9" hint="Displayed in the support drawer and checkout screen" />
+                    <SocialInput label="Telegram" icon="paper-plane" color="#229ED9" value={telegramChannel} onChange={setTelegramChannel} placeholder="@abumafhal_support or channel link" />
                 </Card>
             </Sect>
 
@@ -1306,6 +1621,21 @@ export const AdminSettings = ({ navigation }) => {
                     <Tog label="Star Ratings"         desc="Show star rating on products"            icon="star-half"     value={enableRatings} onToggle={() => { setEnableRatings(p => !p); setUnsaved(true); }} color="#F59E0B" />
                     <Tog label="Live Chat"            desc="Enable in-app live support chat"         icon="chatbubbles"   value={enableLiveChat} onToggle={() => { setEnableLiveChat(p => !p); setUnsaved(true); }} color="#0EA5E9" />
                     <Tog label="Product Waitlist"     desc="Let users join waitlist for sold-out items" icon="hourglass" value={enableWaitlist} onToggle={() => { setEnableWaitlist(p => !p); setUnsaved(true); }} color="#6366F1" />
+                </Card>
+            </Sect>
+
+            <Sect title="Shopping Experience Modules" icon="sparkles">
+                <Card>
+                    <Tog label="Flash Sales & Timed Deals" desc="Display promotional countdown deals on home screen" icon="flash"
+                        value={enableFlashSales} onToggle={() => { setEnableFlashSales(p => !p); setUnsaved(true); }} color="#EF4444" />
+                    <Tog label="Customer Wishlist" desc="Allow buyers to bookmark and save favorite items" icon="heart"
+                        value={enableWishlist} onToggle={() => { setEnableWishlist(p => !p); setUnsaved(true); }} color="#EC4899" />
+                    <Tog label="Recently Viewed Products" desc="Show personal browsing history recommendations" icon="time"
+                        value={enableRecentlyViewed} onToggle={() => { setEnableRecentlyViewed(p => !p); setUnsaved(true); }} color="#8B5CF6" />
+                    <Tog label="Product Questions & Answers (Q&A)" desc="Allow prospective buyers to ask questions on item page" icon="help-circle"
+                        value={enableProductQa} onToggle={() => { setEnableProductQa(p => !p); setUnsaved(true); }} color="#0EA5E9" />
+                    <Tog label="Guest Express Checkout" desc="Allow checkout without forcing account registration" icon="bag-check"
+                        value={enableGuestCheckout} onToggle={() => { setEnableGuestCheckout(p => !p); setUnsaved(true); }} color="#10B981" />
                 </Card>
             </Sect>
 
@@ -1344,6 +1674,26 @@ export const AdminSettings = ({ navigation }) => {
 
     const renderAdvanced = () => (
         <View style={S.section}>
+            {/* System Cache & Diagnostics */}
+            <Sect title="System Cache & Realtime Sync" icon="speedometer">
+                <Card>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                        <View style={{ flex: 1, marginRight: 12 }}>
+                            <Text style={[S.cardTitle, { color: T.text }]}>Purge App Local Cache</Text>
+                            <Text style={[S.cardSub, { color: T.muted }]}>Clears local AsyncStorage settings & image caches and synchronizes live from Supabase</Text>
+                        </View>
+                        <TouchableOpacity onPress={handleClearCache} style={[S.quickActionBtn, { backgroundColor: '#EF4444' + '15', borderColor: '#EF4444' }]}>
+                            <Ionicons name="trash-bin-outline" size={15} color="#EF4444" />
+                            <Text style={[S.quickActionTxt, { color: '#EF4444' }]}>Purge</Text>
+                        </TouchableOpacity>
+                    </View>
+                    <View style={[S.infoBox, { backgroundColor: darkMode ? '#1E3A5F' : '#EFF6FF' }]}>
+                        <Ionicons name="sync" size={15} color="#3B82F6" />
+                        <Text style={{ fontSize: 12, color: darkMode ? '#93C5FD' : '#1E40AF', flex: 1 }}>Database connection is healthy and synced in realtime with Supabase Cloud.</Text>
+                    </View>
+                </Card>
+            </Sect>
+
             {/* Admin Profile Card */}
             <Sect title="Admin Identity" icon="person-circle">
                 <Card>
@@ -1479,13 +1829,18 @@ export const AdminSettings = ({ navigation }) => {
                 {/* ════ HEADER ════ */}
                 <View style={[S.header, { backgroundColor: T.card, borderColor: T.border, paddingTop: 8 }]}>
 
-                    {/* Row 1: Nav + Title + Actions */}
+                    {/* Row 1: Nav + Title + Badge + Actions */}
                     <View style={S.hRow}>
                         <TouchableOpacity onPress={() => navigation.goBack()} style={[S.iconBtn, { backgroundColor: T.surface }]}>
                             <Ionicons name="chevron-back" size={21} color={T.text} />
                         </TouchableOpacity>
                         <View style={{ flex: 1, marginHorizontal: 12 }}>
-                            <Text style={[S.hTitle, { color: T.text }]}>System Config</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Text style={[S.hTitle, { color: T.text }]}>System Config</Text>
+                                <View style={[S.cockpitPill, { borderColor: '#3B82F6', backgroundColor: '#3B82F6' + '15' }]}>
+                                    <Text style={[S.cockpitPillTxt, { color: '#3B82F6' }]}>ENTERPRISE v2.8</Text>
+                                </View>
+                            </View>
                             <Text style={[S.hSub, { color: T.muted }]}>GLOBAL PLATFORM CONTROLS</Text>
                         </View>
                         {/* Dark mode */}
@@ -1515,11 +1870,11 @@ export const AdminSettings = ({ navigation }) => {
                         </View>
                     </View>
 
-                    {/* Modern Status Chips */}
-                    <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+                    {/* Modern Status Chips & Quick Actions */}
+                    <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                         <View style={[S.statChip, { backgroundColor: T.surface, borderColor: T.border }]}>
                             <View style={[S.statusDot, { backgroundColor: '#10B981' }]} />
-                            <Text style={[S.statChipTxt, { color: T.text }]}>{activeGatewaysCount} Live</Text>
+                            <Text style={[S.statChipTxt, { color: T.text }]}>{activeGatewaysCount} Live Gateways</Text>
                         </View>
                         {maintenanceGatewaysCount > 0 && (
                             <View style={[S.statChip, { backgroundColor: darkMode ? '#3A2010' : '#FEF3C7', borderColor: '#F59E0B' }]}>
@@ -1533,8 +1888,14 @@ export const AdminSettings = ({ navigation }) => {
                         </View>
                         <View style={[S.statChip, { backgroundColor: T.surface, borderColor: T.border }]}>
                             <Ionicons name="shield-checkmark-outline" size={11} color="#10B981" />
-                            <Text style={[S.statChipTxt, { color: T.text }]}>v2.4 Protected</Text>
+                            <Text style={[S.statChipTxt, { color: T.text }]}>v2.8 Shield</Text>
                         </View>
+
+                        {/* Quick Action: Backup & Restore */}
+                        <TouchableOpacity onPress={handleExportSettings} style={[S.quickActionBtn, { backgroundColor: T.surface, borderColor: T.border }]}>
+                            <Ionicons name="save-outline" size={12} color="#3B82F6" />
+                            <Text style={[S.quickActionTxt, { color: T.text }]}>Snapshot Backup</Text>
+                        </TouchableOpacity>
                     </View>
 
                     {/* Search */}
@@ -1613,6 +1974,69 @@ export const AdminSettings = ({ navigation }) => {
                                         {currency === item.code && <Ionicons name="checkmark-circle" size={20} color="#3B82F6" />}
                                     </TouchableOpacity>
                                 )} />
+                        </View>
+                    </View>
+                </Modal>
+
+                {/* ════ BACKUP & RESTORE MODAL ════ */}
+                <Modal visible={showExportModal} transparent animationType="slide" onRequestClose={() => setShowExportModal(false)}>
+                    <View style={S.modalBg}>
+                        <View style={[S.modalSheet, { backgroundColor: T.card }]}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                    <Ionicons name="save" size={20} color="#3B82F6" />
+                                    <Text style={[S.sTitle, { color: T.text }]}>Config Snapshot & Restore</Text>
+                                </View>
+                                <TouchableOpacity onPress={() => setShowExportModal(false)}>
+                                    <Ionicons name="close" size={22} color={T.muted} />
+                                </TouchableOpacity>
+                            </View>
+
+                            <Text style={[S.cardSub, { color: T.muted, marginBottom: 10 }]}>
+                                You can copy this JSON snapshot to back up your marketplace setup, or paste a saved JSON here to restore configurations.
+                            </Text>
+
+                            <TextInput
+                                style={[
+                                    S.iInput,
+                                    {
+                                        backgroundColor: T.surface,
+                                        borderColor: T.border,
+                                        color: T.text,
+                                        height: 160,
+                                        textAlignVertical: 'top',
+                                        fontSize: 12,
+                                        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+                                    },
+                                    Platform.OS === 'web' && { outlineStyle: 'none' }
+                                ]}
+                                multiline
+                                value={importJsonText}
+                                onChangeText={setImportJsonText}
+                                placeholder="Paste settings JSON here to restore..."
+                                placeholderTextColor={T.muted}
+                            />
+
+                            <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        Clipboard.setString(importJsonText);
+                                        Alert.alert('Copied! 📋', 'Full snapshot JSON copied to clipboard.');
+                                    }}
+                                    style={[S.deployBtn, { flex: 1, backgroundColor: '#3B82F6', justifyContent: 'center' }]}
+                                >
+                                    <Ionicons name="copy-outline" size={14} color="white" />
+                                    <Text style={S.deployTxt}>Copy JSON</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    onPress={handleImportJson}
+                                    style={[S.deployBtn, { flex: 1, backgroundColor: '#10B981', justifyContent: 'center' }]}
+                                >
+                                    <Ionicons name="download-outline" size={14} color="white" />
+                                    <Text style={S.deployTxt}>Stage & Restore</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </View>
                 </Modal>

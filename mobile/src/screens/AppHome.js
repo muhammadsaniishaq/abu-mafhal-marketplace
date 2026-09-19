@@ -637,6 +637,26 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
             }}>
                 <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" translucent={true} />
 
+                {/* Sitewide Announcement Banner (Controlled from Admin Settings) */}
+                {settings?.announcement_active && !!settings?.announcement_text && (
+                    <View style={{
+                        backgroundColor: settings?.announcement_color || '#3B82F6',
+                        paddingVertical: 6,
+                        paddingHorizontal: 12,
+                        borderRadius: 8,
+                        marginBottom: 8,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6
+                    }}>
+                        <Ionicons name="megaphone" size={13} color="#FFFFFF" />
+                        <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700', textAlign: 'center', flex: 1 }} numberOfLines={1}>
+                            {settings.announcement_text}
+                        </Text>
+                    </View>
+                )}
+
                 {/* Top row: logo + actions (Strict First-Mobile Layout, 0% overflow) */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, minWidth: 0, width: '100%' }}>
                     {/* Brand Identity */}
