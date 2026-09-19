@@ -251,6 +251,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [paymentLink, setPaymentLink]           = useState('');
     const [currentOrderId, setCurrentOrderId]     = useState(null);
+    const [completedOrderData, setCompletedOrderData] = useState(null);
 
     // Floating Toast Notification
     const [toastMessage, setToastMessage] = useState('');
@@ -1023,8 +1024,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         await AsyncStorage.setItem(pssCacheKey, JSON.stringify([newPlanItem, ...existingList]));
                     }
 
-                    // 3. Cache Order Locally for instant display
-                    await PaymentGatewayService.cacheOrderLocally(uid, {
+                    const orderPayload = {
                         id: targetRef,
                         orderNumber: targetRef.slice(0, 8).toUpperCase(),
                         createdAt: new Date().toISOString(),
@@ -1041,7 +1041,11 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         gift_recipient_phone: giftRecipientPhone,
                         gift_wrap_style: giftWrapStyle,
                         wallet_split_deducted: walletDeduction
-                    });
+                    };
+                    await PaymentGatewayService.cacheOrderLocally(uid, orderPayload);
+                    AsyncStorage.setItem('@abumafhal_last_order', JSON.stringify(orderPayload)).catch(() => {});
+                    setCompletedOrderData(orderPayload);
+                    setCurrentOrderId(targetRef);
                 }
             } catch (err) {
                 console.warn('Post-payment record error:', err);
@@ -1130,7 +1134,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
                 // If wallet completely covered the full order
                 if (payableAfterWallet === 0) {
-                    await PaymentGatewayService.cacheOrderLocally(verifiedUser.id, {
+                    const orderPayload = {
                         id: orderRef,
                         orderNumber: orderRef.slice(0, 8).toUpperCase(),
                         createdAt: new Date().toISOString(),
@@ -1146,7 +1150,11 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         gift_recipient_name: giftRecipientName,
                         gift_recipient_phone: giftRecipientPhone,
                         gift_wrap_style: giftWrapStyle
-                    });
+                    };
+                    await PaymentGatewayService.cacheOrderLocally(verifiedUser.id, orderPayload);
+                    AsyncStorage.setItem('@abumafhal_last_order', JSON.stringify(orderPayload)).catch(() => {});
+                    setCompletedOrderData(orderPayload);
+                    setCurrentOrderId(orderRef);
 
                     setOrderSuccess(true);
                     triggerOrderWhatsApp(orderRef, finalTotal, 'Wallet (Split Covered)');
@@ -1172,7 +1180,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     description: `Order Placed via Pay on Delivery (Ref: ${orderRef})`
                 });
 
-                await PaymentGatewayService.cacheOrderLocally(verifiedUser.id, {
+                const orderPayload = {
                     id: orderRef,
                     orderNumber: orderRef.slice(0, 8).toUpperCase(),
                     createdAt: new Date().toISOString(),
@@ -1189,7 +1197,11 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     gift_recipient_phone: giftRecipientPhone,
                     gift_wrap_style: giftWrapStyle,
                     amount_due_on_delivery: effectivePayAmount
-                });
+                };
+                await PaymentGatewayService.cacheOrderLocally(verifiedUser.id, orderPayload);
+                AsyncStorage.setItem('@abumafhal_last_order', JSON.stringify(orderPayload)).catch(() => {});
+                setCompletedOrderData(orderPayload);
+                setCurrentOrderId(orderRef);
 
                 setOrderSuccess(true);
                 triggerOrderWhatsApp(orderRef, finalTotal, useWalletSplit ? 'POD + Wallet Split' : 'Pay on Delivery (Cash/POS)');
@@ -1212,7 +1224,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     description: `Full Order payment via Customer Wallet (Ref: ${orderRef})`
                 });
 
-                await PaymentGatewayService.cacheOrderLocally(verifiedUser.id, {
+                const orderPayload = {
                     id: orderRef,
                     orderNumber: orderRef.slice(0, 8).toUpperCase(),
                     createdAt: new Date().toISOString(),
@@ -1228,7 +1240,11 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     gift_recipient_name: giftRecipientName,
                     gift_recipient_phone: giftRecipientPhone,
                     gift_wrap_style: giftWrapStyle
-                });
+                };
+                await PaymentGatewayService.cacheOrderLocally(verifiedUser.id, orderPayload);
+                AsyncStorage.setItem('@abumafhal_last_order', JSON.stringify(orderPayload)).catch(() => {});
+                setCompletedOrderData(orderPayload);
+                setCurrentOrderId(orderRef);
 
                 setOrderSuccess(true);
                 triggerOrderWhatsApp(orderRef, finalTotal, 'Wallet');
@@ -1276,6 +1292,28 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         description: `Pay Small Small BNPL Down Payment (Ref: ${orderRef})`
                     });
 
+                    const orderPayload = {
+                        id: orderRef,
+                        orderNumber: orderRef.slice(0, 8).toUpperCase(),
+                        createdAt: new Date().toISOString(),
+                        total_amount: finalTotal,
+                        status: 'processing',
+                        payment_status: 'pss_active',
+                        payment_method: 'Pay Small Small (POD Down Payment)',
+                        items: cart,
+                        delivery_address: selectedAddrObj,
+                        delivery_slot: deliverySlot,
+                        is_gift: isGift,
+                        gift_message: giftMessage,
+                        gift_recipient_name: giftRecipientName,
+                        gift_recipient_phone: giftRecipientPhone,
+                        gift_wrap_style: giftWrapStyle
+                    };
+                    await PaymentGatewayService.cacheOrderLocally(verifiedUser.id, orderPayload);
+                    AsyncStorage.setItem('@abumafhal_last_order', JSON.stringify(orderPayload)).catch(() => {});
+                    setCompletedOrderData(orderPayload);
+                    setCurrentOrderId(orderRef);
+
                     setOrderSuccess(true);
                     triggerOrderWhatsApp(orderRef, finalTotal, 'Pay Small Small (POD Down Payment)');
                     await clearProgress();
@@ -1320,6 +1358,28 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         status: 'completed',
                         description: `Pay Small Small BNPL Down Payment via Wallet (Ref: ${orderRef})`
                     });
+
+                    const orderPayload = {
+                        id: orderRef,
+                        orderNumber: orderRef.slice(0, 8).toUpperCase(),
+                        createdAt: new Date().toISOString(),
+                        total_amount: finalTotal,
+                        status: 'processing',
+                        payment_status: 'pss_active',
+                        payment_method: 'Pay Small Small (Wallet)',
+                        items: cart,
+                        delivery_address: selectedAddrObj,
+                        delivery_slot: deliverySlot,
+                        is_gift: isGift,
+                        gift_message: giftMessage,
+                        gift_recipient_name: giftRecipientName,
+                        gift_recipient_phone: giftRecipientPhone,
+                        gift_wrap_style: giftWrapStyle
+                    };
+                    await PaymentGatewayService.cacheOrderLocally(verifiedUser.id, orderPayload);
+                    AsyncStorage.setItem('@abumafhal_last_order', JSON.stringify(orderPayload)).catch(() => {});
+                    setCompletedOrderData(orderPayload);
+                    setCurrentOrderId(orderRef);
 
                     setOrderSuccess(true);
                     triggerOrderWhatsApp(orderRef, finalTotal, 'Pay Small Small (Wallet)');
@@ -1640,6 +1700,21 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     )}
 
                     <View style={s.successActionGroup}>
+                        <TouchableOpacity
+                            style={[s.successPrimaryBtn, { backgroundColor: '#0284C7', marginBottom: 12 }]}
+                            onPress={() => {
+                                const targetOrderId = cleanRef || currentOrderId || completedOrderData?.id;
+                                navigation.navigate('TrackOrder', {
+                                    order: completedOrderData,
+                                    orderId: targetOrderId
+                                });
+                            }}
+                            activeOpacity={0.8}
+                        >
+                            <Ionicons name="navigate-circle-outline" size={18} color={WHITE} />
+                            <Text style={s.successPrimaryBtnTxt}>Track Order Live 🚚</Text>
+                        </TouchableOpacity>
+
                         {paymentMethod === 'pay_small_small' && (
                             <TouchableOpacity
                                 style={s.successPssBtn}
