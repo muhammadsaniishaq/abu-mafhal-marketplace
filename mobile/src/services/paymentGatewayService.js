@@ -359,24 +359,82 @@ export const PaymentGatewayService = {
     },
 
     /**
-     * Initiate Flutterwave Payment dynamically
+     * Initiate Flutterwave Payment dynamically via Supabase Backend & Official APIs
      */
     async initiateFlutterwave({ amount, email, reference, name, phone, metadata = {} }) {
         const safeAmount = Math.max(1, Number(amount) || 0);
         const ref = reference || this.generateRef('FLW');
         const userEmail = (email && email.includes('@')) ? email.trim() : `customer_${Date.now()}@abumafhal.com`;
-        const userName = name || 'Customer';
+        const userName = name || 'Valued Customer';
         const userPhone = phone || '08000000000';
 
         const callbackUrl = Platform.OS === 'web' 
             ? (typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : 'https://abumafhal.com/payment/verify')
             : 'https://standard.paystack.co/close';
 
+        const { cleanAddressId, safeShipping } = this.sanitizeAddressParams(metadata);
+
+        let edgeError = null;
+
+        // 1. Primary: Authoritative Backend Supabase Edge Function 'initiate-payment' (with backend FLUTTERWAVE_SECRET_KEY)
+        if (Array.isArray(metadata.items) && metadata.items.length > 0) {
+            const res1 = await this.invokeEdgeFunction('initiate-payment', {
+                items: metadata.items,
+                address_id: cleanAddressId,
+                payment_method: 'Flutterwave',
+                shipping_override: safeShipping,
+                delivery_method: metadata.delivery_method || 'standard',
+                order_notes: metadata.order_notes || '',
+                coupon_code: metadata.coupon_code || '',
+                amount: safeAmount,
+                email: userEmail,
+                phone: userPhone,
+                name: userName,
+                reference: ref,
+                callback_url: callbackUrl
+            });
+
+            if (res1.ok && res1.data?.checkout_url) {
+                return {
+                    success: true,
+                    reference: res1.data.payment_reference || ref,
+                    gateway: 'Flutterwave',
+                    checkoutUrl: res1.data.checkout_url,
+                    sessionId: res1.data.session_id,
+                    type: 'url'
+                };
+            } else if (res1.error || res1.data?.error) {
+                edgeError = res1.data?.error || res1.error;
+            }
+        }
+
+        // 2. Secondary: Backend Standalone Edge Function 'flutterwave-initiate'
+        const res2 = await this.invokeEdgeFunction('flutterwave-initiate', {
+            amount: safeAmount,
+            email: userEmail,
+            phone: userPhone,
+            phone_number: userPhone,
+            name: userName,
+            reference: ref,
+            tx_ref: ref,
+            order_id: metadata.order_id || ref,
+            callback_url: callbackUrl
+        });
+
+        const link2 = res2.data?.checkout_url || res2.data?.authorization_url || res2.data?.payment_link;
+        if (res2.ok && link2) {
+            return {
+                success: true,
+                reference: res2.data?.tx_ref || ref,
+                gateway: 'Flutterwave',
+                checkoutUrl: link2,
+                type: 'url'
+            };
+        }
+
+        // 3. Direct Flutterwave API if flutterwave_secret_key is configured in app_settings
         const config = await this.getGatewayConfig();
         const flwSecret = config.flutterwave_secret_key || config.FLUTTERWAVE_SECRET_KEY;
-        const flwPubKey = config.flutterwave_public_key || config.FLUTTERWAVE_PUBLIC_KEY || 'FLWPUBK-3fff199cbd02a7c478e39ce4e4c3ac0f-X';
-
-        // 1. If Flutterwave Secret Key is configured, attempt official Flutterwave Hosted Checkout
         if (flwSecret) {
             try {
                 const response = await fetch('https://api.flutterwave.com/v3/payments', {
@@ -414,12 +472,16 @@ export const PaymentGatewayService = {
                     };
                 }
             } catch (err) {
-                console.warn('[PaymentGatewayService] Direct Flutterwave API call skipped, using official inline:', err);
+                console.warn('[PaymentGatewayService] Direct Flutterwave API call failed:', err);
             }
         }
 
-        // 2. Direct Official Inline Checkout (Web)
-        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        // 4. Official Inline Checkout (Web) ONLY IF an authentic, valid public key is explicitly configured
+        // Must NEVER use the invalid demo key 'FLWPUBK-3fff199cbd02a7c478e39ce4e4c3ac0f-X'
+        const rawPubKey = config.flutterwave_public_key || config.FLUTTERWAVE_PUBLIC_KEY || (typeof process !== 'undefined' ? (process.env?.EXPO_PUBLIC_FLUTTERWAVE_PUBLIC_KEY || process.env?.VITE_FLUTTERWAVE_PUBLIC_KEY) : '');
+        const flwPubKey = (rawPubKey && !rawPubKey.includes('FLWPUBK-3fff') && rawPubKey.trim().length > 15) ? rawPubKey.trim() : null;
+
+        if (flwPubKey && Platform.OS === 'web' && typeof window !== 'undefined') {
             await this.loadWebScript('https://checkout.flutterwave.com/v3.js');
             if (typeof window.FlutterwaveCheckout === 'function') {
                 return {
@@ -460,91 +522,78 @@ export const PaymentGatewayService = {
             }
         }
 
-        // 3. Official Mobile / WebView HTML Checkout
-        const inlineHtml = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Flutterwave Secure Checkout</title>
-  <script src="https://checkout.flutterwave.com/v3.js"></script>
-  <style>
-    body { background: #0B1120; color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; text-align: center; }
-    .card { background: #1E293B; border: 1px solid #334155; border-radius: 16px; padding: 32px 24px; max-width: 400px; width: 100%; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4); }
-    .title { font-size: 18px; font-weight: 800; color: #FFFFFF; margin-bottom: 6px; }
-    .amount { font-size: 26px; font-weight: 900; color: #F5A623; margin: 14px 0 20px; }
-    .spinner { border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid #F5A623; border-radius: 50%; width: 32px; height: 32px; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    .btn { background: #F5A623; color: #0F172A; font-weight: 900; font-size: 15px; padding: 14px 24px; border-radius: 10px; border: none; width: 100%; cursor: pointer; margin-top: 16px; }
-    .secure-note { font-size: 12px; color: #94A3B8; margin-top: 14px; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="title">Flutterwave Checkout</div>
-    <div class="amount">&#8358;${safeAmount.toLocaleString()}</div>
-    <div id="loadingBox"><div class="spinner"></div><div style="font-size: 13.5px; color: #94A3B8;">Connecting to Flutterwave gateway...</div></div>
-    <button id="payBtn" class="btn" style="display:none;" onclick="openFlutterwave()">Click to Pay &#8358;${safeAmount.toLocaleString()}</button>
-    <div class="secure-note">&#128274; Escrow Protected Payment Processing</div>
-  </div>
-  <script>
-    function openFlutterwave() {
-      try {
-        FlutterwaveCheckout({
-          public_key: '${flwPubKey}',
-          tx_ref: '${ref}',
-          amount: ${safeAmount},
-          currency: 'NGN',
-          payment_options: 'card,banktransfer,ussd,mobilemoney',
-          customer: {
-            email: '${userEmail}',
-            phone_number: '${userPhone}',
-            name: '${userName}'
-          },
-          callback: function(data) {
-            window.location.href = "https://abumafhal.com/payment/verify?status=successful&tx_ref=" + encodeURIComponent(data.tx_ref || '${ref}');
-          },
-          onclose: function() {
-            window.location.href = "https://abumafhal.com/payment/verify?status=cancelled&tx_ref=" + encodeURIComponent('${ref}');
-          }
-        });
-      } catch (e) {
-        document.getElementById('loadingBox').style.display = 'none';
-        document.getElementById('payBtn').style.display = 'block';
-      }
-    }
-    window.onload = function() {
-      setTimeout(openFlutterwave, 300);
-      setTimeout(function() {
-        document.getElementById('loadingBox').style.display = 'none';
-        document.getElementById('payBtn').style.display = 'block';
-      }, 2500);
-    };
-  </script>
-</body>
-</html>`;
-
-        return {
-            success: true,
-            reference: ref,
-            gateway: 'Flutterwave',
-            checkoutUrl: inlineHtml,
-            type: 'html'
-        };
+        const finalMsg = edgeError || res2.error || 'Flutterwave payment gateway is currently unavailable on the backend. Please select Paystack (Cards & Transfer) or Wallet to proceed.';
+        throw new Error(finalMsg);
     },
 
     /**
-     * Initiate Coinbase / Crypto Checkout (Coinbase Commerce)
+     * Initiate Coinbase Commerce Crypto Checkout via Supabase Backend & Official API
+     * (NO mock addresses; connects to live Coinbase Commerce charge API)
      */
     async initiateCoinbase({ amount, email, reference, name, phone, metadata = {} }) {
         const safeAmount = Math.max(1, Number(amount) || 0);
         const ref = reference || this.generateRef('COINBASE');
         const userEmail = (email && email.includes('@')) ? email.trim() : `customer_${Date.now()}@abumafhal.com`;
+        const userName = name || 'Customer';
 
+        const { cleanAddressId, safeShipping } = this.sanitizeAddressParams(metadata);
+
+        let edgeError = null;
+
+        // 1. Primary: Authoritative Backend Supabase Edge Function 'initiate-payment' (with backend COINBASE_API_KEY)
+        if (Array.isArray(metadata.items) && metadata.items.length > 0) {
+            const res1 = await this.invokeEdgeFunction('initiate-payment', {
+                items: metadata.items,
+                address_id: cleanAddressId,
+                payment_method: 'Coinbase',
+                shipping_override: safeShipping,
+                delivery_method: metadata.delivery_method || 'standard',
+                order_notes: metadata.order_notes || '',
+                coupon_code: metadata.coupon_code || '',
+                amount: safeAmount,
+                email: userEmail,
+                reference: ref
+            });
+
+            if (res1.ok && res1.data?.checkout_url) {
+                return {
+                    success: true,
+                    reference: res1.data.payment_reference || ref,
+                    gateway: 'Coinbase',
+                    checkoutUrl: res1.data.checkout_url,
+                    sessionId: res1.data.session_id,
+                    type: 'url'
+                };
+            } else if (res1.error || res1.data?.error) {
+                edgeError = res1.data?.error || res1.error;
+            }
+        }
+
+        // 2. Secondary: Backend Standalone Edge Function 'coinbase-initiate'
+        const res2 = await this.invokeEdgeFunction('coinbase-initiate', {
+            amount: safeAmount,
+            email: userEmail,
+            name: userName,
+            reference: ref,
+            order_id: metadata.order_id || ref
+        });
+
+        const hostedUrl2 = res2.data?.hosted_url || res2.data?.checkout_url;
+        if (res2.ok && hostedUrl2) {
+            return {
+                success: true,
+                reference: res2.data?.reference || ref,
+                gateway: 'Coinbase',
+                checkoutUrl: hostedUrl2,
+                sessionId: res2.data?.charge_id,
+                type: 'url'
+            };
+        }
+
+        // 3. Direct Coinbase Commerce API if key is configured in settings
         const config = await this.getGatewayConfig();
         const coinbaseApiKey = config.coinbase_api_key || config.COINBASE_API_KEY;
 
-        // 1. If Coinbase Commerce API Key is configured in settings, create official charge via Coinbase Commerce API
         if (coinbaseApiKey) {
             try {
                 const res = await fetch('https://api.commerce.coinbase.com/charges', {
@@ -587,91 +636,9 @@ export const PaymentGatewayService = {
             }
         }
 
-        // 2. Interactive Web3 / Crypto Gateway Checkout (Supports BTC, ETH, USDT, USDC, SOL)
-        const usdRate = 1650;
-        const usdAmount = (safeAmount / usdRate).toFixed(2);
-        const usdtAmount = usdAmount;
-
-        const cryptoHtml = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Coinbase Web3 Crypto Checkout</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #070D18; color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
-    .card { background: #0E1A2E; border: 1px solid #1E293B; border-radius: 20px; padding: 28px 20px; max-width: 420px; width: 100%; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
-    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-    .badge { background: #1652F020; color: #1652F0; border: 1px solid #1652F040; border-radius: 12px; font-size: 11px; font-weight: 800; padding: 4px 10px; }
-    .title { font-size: 18px; font-weight: 800; color: #FFFFFF; }
-    .price-box { background: #0B1424; border: 1px solid #1E2D4A; border-radius: 14px; padding: 16px; text-align: center; margin-bottom: 20px; }
-    .amount-ngn { font-size: 24px; font-weight: 900; color: #10B981; }
-    .amount-usd { font-size: 13px; color: #94A3B8; margin-top: 4px; }
-    .coins { display: flex; gap: 8px; margin-bottom: 20px; }
-    .coin-tab { flex: 1; padding: 10px 4px; text-align: center; background: #0B1424; border: 1px solid #1E2D4A; border-radius: 10px; cursor: pointer; font-size: 12px; font-weight: 800; color: #94A3B8; }
-    .coin-tab.active { background: #1652F0; color: #FFFFFF; border-color: #1652F0; }
-    .address-card { background: #0B1424; border: 1px solid #1E2D4A; border-radius: 12px; padding: 14px; margin-bottom: 16px; }
-    .addr-label { font-size: 10px; font-weight: 800; color: #64748B; letter-spacing: 0.8px; margin-bottom: 6px; }
-    .addr-text { font-family: monospace; font-size: 12px; color: #E2E8F0; word-break: break-all; margin-bottom: 10px; }
-    .copy-btn { background: #1E293B; border: 1px solid #334155; color: #38BDF8; font-size: 11px; font-weight: 700; padding: 6px 12px; border-radius: 6px; cursor: pointer; display: inline-block; }
-    .complete-btn { background: #1652F0; color: #FFFFFF; font-weight: 900; font-size: 14px; border: none; border-radius: 12px; padding: 14px; width: 100%; cursor: pointer; }
-    .note { font-size: 11px; color: #64748B; text-align: center; margin-top: 14px; line-height: 1.4; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="header">
-      <div class="title">&#9889; Coinbase Web3</div>
-      <div class="badge">SECURE ESCROW</div>
-    </div>
-    <div class="price-box">
-      <div class="amount-ngn">&#8358;${safeAmount.toLocaleString()}</div>
-      <div class="amount-usd">&#8776; $${usdAmount} USD (${usdtAmount} USDT)</div>
-    </div>
-    <div class="coins">
-      <div class="coin-tab active" id="tab-usdt" onclick="selectCoin('USDT')">USDT (TRC20)</div>
-      <div class="coin-tab" id="tab-btc" onclick="selectCoin('BTC')">BTC</div>
-      <div class="coin-tab" id="tab-eth" onclick="selectCoin('ETH')">ETH / USDC</div>
-    </div>
-    <div class="address-card">
-      <div class="addr-label">ESCROW DEPOSIT ADDRESS (<span id="coinName">USDT TRC20</span>)</div>
-      <div class="addr-text" id="walletAddr">TLLU8v8Vq2y7f7hFm3K8Tz2e2f9v7W8q2y</div>
-      <button class="copy-btn" onclick="copyAddress()">Copy Address</button>
-    </div>
-    <button class="complete-btn" onclick="confirmPayment()">I Have Made Payment</button>
-    <div class="note">Transfers are automatically detected and credited to your order upon 1 network confirmation.</div>
-  </div>
-  <script>
-    const addresses = {
-      'USDT': 'TLLU8v8Vq2y7f7hFm3K8Tz2e2f9v7W8q2y',
-      'BTC': '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa',
-      'ETH': '0x71C8389310248b744E4562B28B3f0C34B600572e'
-    };
-    function selectCoin(c) {
-      document.querySelectorAll('.coin-tab').forEach(t => t.classList.remove('active'));
-      document.getElementById('tab-' + c.toLowerCase()).classList.add('active');
-      document.getElementById('coinName').innerText = c;
-      document.getElementById('walletAddr').innerText = addresses[c] || addresses['USDT'];
-    }
-    function copyAddress() {
-      navigator.clipboard.writeText(document.getElementById('walletAddr').innerText);
-      alert('Address copied to clipboard!');
-    }
-    function confirmPayment() {
-      window.location.href = "https://abumafhal.com/payment/verify?status=successful&tx_ref=" + encodeURIComponent('${ref}');
-    }
-  </script>
-</body>
-</html>`;
-
-        return {
-            success: true,
-            reference: ref,
-            gateway: 'Coinbase',
-            checkoutUrl: cryptoHtml,
-            type: 'html'
-        };
+        // NO MOCK ADDRESSES: If API / backend could not generate a live charge, provide a real descriptive error
+        const finalMsg = edgeError || res2.error || 'Coinbase Commerce crypto checkout could not generate a live payment session. Please select Paystack or Wallet to complete your order.';
+        throw new Error(finalMsg);
     },
 
     /**

@@ -23,7 +23,7 @@ export const AppSettingsProvider = ({ children }) => {
         features: {},
         payment_methods: { paystack: true, crypto: true, manual: true, flutterwave: true, wallet: true, pod: true },
         payment_maintenance: { paystack: false, flutterwave: false, coinbase: false, wallet: false, pod: false },
-        flutterwave_public_key: 'FLWPUBK-3fff199cbd02a7c478e39ce4e4c3ac0f-X',
+        flutterwave_public_key: (typeof process !== 'undefined' ? (process.env?.EXPO_PUBLIC_FLUTTERWAVE_PUBLIC_KEY || process.env?.VITE_FLUTTERWAVE_PUBLIC_KEY) : '') || '',
         default_shipping_address: '',
         paystack_secret_key: '',
         prembly_app_id: '',
@@ -54,6 +54,10 @@ export const AppSettingsProvider = ({ children }) => {
 
                 // Ensure default arrays and addresses exist
                 const hasValidPlans = Array.isArray(merged.vendor_plans) && merged.vendor_plans.length > 0;
+                const safeFlwKey = (merged.flutterwave_public_key && !merged.flutterwave_public_key.includes('FLWPUBK-3fff'))
+                    ? merged.flutterwave_public_key
+                    : ((typeof process !== 'undefined' ? (process.env?.EXPO_PUBLIC_FLUTTERWAVE_PUBLIC_KEY || process.env?.VITE_FLUTTERWAVE_PUBLIC_KEY) : '') || '');
+
                 const enriched = {
                     ...merged,
                     payment_methods: {
@@ -73,7 +77,7 @@ export const AppSettingsProvider = ({ children }) => {
                         pod: false,
                         ...(merged.payment_maintenance || {})
                     },
-                    flutterwave_public_key: merged.flutterwave_public_key || 'FLWPUBK-3fff199cbd02a7c478e39ce4e4c3ac0f-X',
+                    flutterwave_public_key: safeFlwKey,
                     default_shipping_address: merged.default_shipping_address || '',
                     vendor_plans: hasValidPlans ? merged.vendor_plans : DEFAULT_VENDOR_PLANS
                 };

@@ -1,3 +1,5 @@
+// @ts-nocheck
+/// <reference path="../ambient.d.ts" />
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -12,40 +14,50 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const COINBASE_COMMERCE_API_KEY = Deno.env.get("COINBASE_COMMERCE_API_KEY");
+    const COINBASE_COMMERCE_API_KEY = Deno.env.get("COINBASE_API_KEY") || Deno.env.get("COINBASE_COMMERCE_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    if (!COINBASE_COMMERCE_API_KEY) throw new Error("Missing COINBASE_COMMERCE_API_KEY");
+    if (!COINBASE_COMMERCE_API_KEY) throw new Error("Missing COINBASE_API_KEY");
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) throw new Error("Missing Supabase env vars");
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    const { order_id } = await req.json();
-    if (!order_id) {
-      return new Response(JSON.stringify({ error: "order_id is required" }), {
+    const body = await req.json();
+    const { order_id, amount, email, name, reference } = body;
+
+    let finalAmount = amount;
+    let currency = "NGN";
+
+    if (order_id) {
+      try {
+        const { data: order } = await supabase
+          .from("orders")
+          .select("id, status, total_amount, currency")
+          .eq("id", order_id)
+          .maybeSingle();
+
+        if (order) {
+          if (order.status === "PAID") {
+            return new Response(JSON.stringify({ error: "Order already paid" }), {
+              status: 409,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          finalAmount = order.total_amount || finalAmount;
+          currency = order.currency ?? "NGN";
+        }
+      } catch (_) {}
+    }
+
+    if (!finalAmount || Number(finalAmount) <= 0) {
+      return new Response(JSON.stringify({ error: "amount or order_id is required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Fetch order from DB (server source of truth)
-    const { data: order, error: orderErr } = await supabase
-      .from("orders")
-      .select("id, status, total_amount, currency")
-      .eq("id", order_id)
-      .single();
-
-    if (orderErr || !order) throw new Error("Order not found");
-    if (order.status === "PAID") {
-      return new Response(JSON.stringify({ error: "Order already paid" }), {
-        status: 409,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const currency = (order.currency ?? "USD").toUpperCase(); // Commerce commonly supports USD; use what you support
-    const amount = String(order.total_amount);
+    const ref = reference || `CB-${Date.now()}`;
 
     // Create Coinbase Commerce charge
     const res = await fetch("https://api.commerce.coinbase.com/charges", {
@@ -56,17 +68,20 @@ Deno.serve(async (req) => {
         "X-CC-Version": "2018-03-22",
       },
       body: JSON.stringify({
-        name: "Order payment",
-        description: `Payment for order ${order_id}`,
-        local_price: { amount, currency },
+        name: "Abu Mafhal Marketplace",
+        description: `Order Payment (Ref: ${ref})`,
+        local_price: { amount: String(finalAmount), currency },
         pricing_type: "fixed_price",
-        metadata: { order_id },
+        metadata: { order_id: order_id || null, reference: ref, customer_email: email || "" },
+        redirect_url: "https://abumafhal.com/payment/verify?status=successful",
+        cancel_url: "https://abumafhal.com/payment/verify?status=cancelled"
       }),
     });
 
     const json = await res.json();
     if (!res.ok || !json?.data) {
-      return new Response(JSON.stringify({ error: "Coinbase init failed", details: json }), {
+      console.error("Coinbase API Error:", json);
+      return new Response(JSON.stringify({ error: "Coinbase charge creation failed", details: json }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -75,16 +90,13 @@ Deno.serve(async (req) => {
     const chargeId = json.data.id;
     const hostedUrl = json.data.hosted_url;
 
-    await supabase
-      .from("orders")
-      .update({
-        provider: "coinbase",
-        provider_reference: chargeId,
-        status: "PENDING_PAYMENT",
-      })
-      .eq("id", order_id);
-
-    return new Response(JSON.stringify({ charge_id: chargeId, hosted_url: hostedUrl }), {
+    return new Response(JSON.stringify({
+      success: true,
+      charge_id: chargeId,
+      hosted_url: hostedUrl,
+      checkout_url: hostedUrl,
+      reference: ref
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
