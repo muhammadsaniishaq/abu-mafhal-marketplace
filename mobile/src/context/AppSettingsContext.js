@@ -52,6 +52,24 @@ export const AppSettingsProvider = ({ children }) => {
                     }
                 });
 
+                // Merge payment_gateways object if present in database
+                if (merged.payment_gateways && typeof merged.payment_gateways === 'object') {
+                    Object.assign(merged, merged.payment_gateways);
+                }
+
+                // Preserve local dedicated gateway keys if database has empty values
+                try {
+                    const cachedGatewayKeys = await AsyncStorage.getItem('@abumafhal_gateway_keys');
+                    if (cachedGatewayKeys) {
+                        const parsedGk = JSON.parse(cachedGatewayKeys);
+                        if (parsedGk.paystack_public_key && !merged.paystack_public_key) merged.paystack_public_key = parsedGk.paystack_public_key;
+                        if (parsedGk.paystack_secret_key && !merged.paystack_secret_key) merged.paystack_secret_key = parsedGk.paystack_secret_key;
+                        if (parsedGk.flutterwave_public_key && !merged.flutterwave_public_key) merged.flutterwave_public_key = parsedGk.flutterwave_public_key;
+                        if (parsedGk.flutterwave_secret_key && !merged.flutterwave_secret_key) merged.flutterwave_secret_key = parsedGk.flutterwave_secret_key;
+                        if (parsedGk.coinbase_api_key && !merged.coinbase_api_key) merged.coinbase_api_key = parsedGk.coinbase_api_key;
+                    }
+                } catch (_) {}
+
                 // Ensure default arrays and addresses exist
                 const hasValidPlans = Array.isArray(merged.vendor_plans) && merged.vendor_plans.length > 0;
                 const safeFlwKey = (merged.flutterwave_public_key && !merged.flutterwave_public_key.includes('FLWPUBK-3fff'))
@@ -137,7 +155,28 @@ export const AppSettingsProvider = ({ children }) => {
                 } catch (_) {}
             }
 
-            // 2. Upsert key-value configuration rows for settings (payment_maintenance, payment_methods, etc.)
+            // 2. Dedicated Payment Gateway Keys group
+            const gatewayKeys = {
+                paystack_public_key: newSettings.paystack_public_key || '',
+                paystack_secret_key: newSettings.paystack_secret_key || '',
+                flutterwave_public_key: newSettings.flutterwave_public_key || '',
+                flutterwave_secret_key: newSettings.flutterwave_secret_key || '',
+                coinbase_api_key: newSettings.coinbase_api_key || '',
+                updated_at: new Date().toISOString()
+            };
+
+            try {
+                await supabase
+                    .from('app_settings')
+                    .upsert({
+                        key: 'payment_gateways',
+                        value: gatewayKeys,
+                        description: 'Payment Gateway API Credentials',
+                        updated_at: new Date().toISOString()
+                    }, { onConflict: 'key' });
+            } catch (_) {}
+
+            // 3. Upsert key-value configuration rows for settings
             const skipKeys = ['is_singleton', 'created_at', 'updated_at', 'id'];
             for (const k of Object.keys(newSettings)) {
                 if (!singletonCols.includes(k) && !skipKeys.includes(k) && newSettings[k] !== undefined) {
@@ -146,7 +185,7 @@ export const AppSettingsProvider = ({ children }) => {
                             .from('app_settings')
                             .upsert({
                                 key: k,
-                                value: newSettings[k],
+                                value: typeof newSettings[k] === 'object' ? newSettings[k] : { value: newSettings[k] },
                                 description: `Platform setting: ${k}`,
                                 updated_at: new Date().toISOString()
                             }, { onConflict: 'key' });
@@ -154,10 +193,15 @@ export const AppSettingsProvider = ({ children }) => {
                 }
             }
 
-            // 3. Optimistic local cache update for instant UI feedback
+            // 4. Update local caches (both main settings & dedicated gateway keys)
             const merged = { ...settings, ...newSettings };
             setSettings(merged);
             await AsyncStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(merged));
+            await AsyncStorage.setItem('@abumafhal_gateway_keys', JSON.stringify(gatewayKeys));
+            if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(merged));
+                window.localStorage.setItem('@abumafhal_gateway_keys', JSON.stringify(gatewayKeys));
+            }
             return { error: null };
         } catch (error) {
             console.log('Error updating settings:', error);

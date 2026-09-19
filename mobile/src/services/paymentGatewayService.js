@@ -102,46 +102,110 @@ export const PaymentGatewayService = {
     },
 
     /**
-     * Dynamically fetch payment gateway configuration & public keys from Supabase backend (app_settings)
+     * Cleanly extract API keys from any settings object (strings, objects, env keys)
      */
-    async getGatewayConfig() {
-        const now = Date.now();
-        if (_gatewayConfigCache && (now - _gatewayConfigCacheTime < 300000)) {
-            return _gatewayConfigCache;
-        }
-
-        try {
-            const { data, error } = await supabase
-                .from('app_settings')
-                .select('key, value');
-
-            const config = {};
-            if (!error && Array.isArray(data)) {
-                data.forEach(item => {
-                    if (item.key) config[item.key] = item.value;
-                });
+    extractKeysFromSettings(src) {
+        if (!src || typeof src !== 'object') return {};
+        const getStr = (val) => {
+            if (!val) return '';
+            if (typeof val === 'string') return val.trim();
+            if (typeof val === 'object') {
+                return (val.key || val.value || val.apiKey || val.secretKey || val.publicKey || '').toString().trim();
             }
+            return String(val).trim();
+        };
 
-            try {
-                const { data: singleton } = await supabase
-                    .from('app_settings')
-                    .select('*')
-                    .eq('is_singleton', true)
-                    .maybeSingle();
+        const paystackPub = getStr(
+            src.paystack_public_key || src.paystackPublicKey || src.PAYSTACK_PUBLIC_KEY ||
+            src.payment_gateways?.paystack_public_key || src.payment_gateways?.paystackPublicKey
+        );
+        const paystackSec = getStr(
+            src.paystack_secret_key || src.paystackSecretKey || src.PAYSTACK_SECRET_KEY ||
+            src.payment_gateways?.paystack_secret_key || src.payment_gateways?.paystackSecretKey
+        );
+        const flutterwavePub = getStr(
+            src.flutterwave_public_key || src.flutterwavePublicKey || src.FLUTTERWAVE_PUBLIC_KEY ||
+            src.payment_gateways?.flutterwave_public_key || src.payment_gateways?.flutterwavePublicKey
+        );
+        const flutterwaveSec = getStr(
+            src.flutterwave_secret_key || src.flutterwaveSecretKey || src.FLUTTERWAVE_SECRET_KEY ||
+            src.payment_gateways?.flutterwave_secret_key || src.payment_gateways?.flutterwaveSecretKey
+        );
+        const coinbaseKey = getStr(
+            src.coinbase_api_key || src.coinbaseApiKey || src.COINBASE_API_KEY ||
+            src.payment_gateways?.coinbase_api_key || src.payment_gateways?.coinbaseApiKey
+        );
 
-                if (singleton) {
-                    if (singleton.paystack_public_key) config.paystack_public_key = singleton.paystack_public_key;
-                    if (singleton.flutterwave_public_key) config.flutterwave_public_key = singleton.flutterwave_public_key;
-                }
-            } catch (_) {}
+        const out = {};
+        if (paystackPub) out.paystack_public_key = paystackPub;
+        if (paystackSec) out.paystack_secret_key = paystackSec;
+        if (flutterwavePub && !flutterwavePub.includes('FLWPUBK-3fff')) out.flutterwave_public_key = flutterwavePub;
+        if (flutterwaveSec) out.flutterwave_secret_key = flutterwaveSec;
+        if (coinbaseKey) out.coinbase_api_key = coinbaseKey;
+        return out;
+    },
 
-            _gatewayConfigCache = config;
-            _gatewayConfigCacheTime = now;
-            return config;
-        } catch (e) {
-            console.warn('[PaymentGatewayService] Error fetching gateway configuration from backend:', e.message);
-            return _gatewayConfigCache || {};
+    /**
+     * Dynamically fetch authoritative payment gateway configuration & keys from
+     * 1. Active Admin Settings Context (Real-time live settings)
+     * 2. Local Persistent Cache (@abumafhal_gateway_keys & @abumafhal_settings_v1)
+     * 3. Supabase Backend 'app_settings' table (Direct database rows)
+     * 4. Environment Variables
+     */
+    async getGatewayConfig(runtimeSettings = null) {
+        const config = {};
+
+        // 1. Priority 1: Passed Runtime Admin Settings
+        if (runtimeSettings && typeof runtimeSettings === 'object') {
+            Object.assign(config, this.extractKeysFromSettings(runtimeSettings));
         }
+
+        // 2. Priority 2: Local Persistent Storage Cache (@abumafhal_gateway_keys and @abumafhal_settings_v1)
+        try {
+            if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+                const rawGk = window.localStorage.getItem('@abumafhal_gateway_keys');
+                if (rawGk) Object.assign(config, this.extractKeysFromSettings(JSON.parse(rawGk)));
+                const rawSettings = window.localStorage.getItem('@abumafhal_settings_v1');
+                if (rawSettings) Object.assign(config, this.extractKeysFromSettings(JSON.parse(rawSettings)));
+            }
+            if (AsyncStorage) {
+                const rawGk = await AsyncStorage.getItem('@abumafhal_gateway_keys');
+                if (rawGk) Object.assign(config, this.extractKeysFromSettings(JSON.parse(rawGk)));
+                const rawSettings = await AsyncStorage.getItem('@abumafhal_settings_v1');
+                if (rawSettings) Object.assign(config, this.extractKeysFromSettings(JSON.parse(rawSettings)));
+            }
+        } catch (_) {}
+
+        // 3. Priority 3: Supabase Backend 'app_settings' Table
+        try {
+            const { data, error } = await supabase.from('app_settings').select('*');
+            if (!error && Array.isArray(data)) {
+                const dbConfig = {};
+                data.forEach(item => {
+                    if (item.key) {
+                        dbConfig[item.key] = item.value;
+                    }
+                });
+                Object.assign(config, this.extractKeysFromSettings(dbConfig));
+            }
+        } catch (_) {}
+
+        // 4. Priority 4: Environment Variables Fallback
+        if (typeof process !== 'undefined') {
+            if (!config.paystack_public_key && (process.env?.EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY || process.env?.VITE_PAYSTACK_PUBLIC_KEY)) {
+                config.paystack_public_key = (process.env?.EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY || process.env?.VITE_PAYSTACK_PUBLIC_KEY).trim();
+            }
+            if (!config.flutterwave_public_key && (process.env?.EXPO_PUBLIC_FLUTTERWAVE_PUBLIC_KEY || process.env?.VITE_FLUTTERWAVE_PUBLIC_KEY)) {
+                config.flutterwave_public_key = (process.env?.EXPO_PUBLIC_FLUTTERWAVE_PUBLIC_KEY || process.env?.VITE_FLUTTERWAVE_PUBLIC_KEY).trim();
+            }
+            if (!config.coinbase_api_key && (process.env?.EXPO_PUBLIC_COINBASE_API_KEY || process.env?.VITE_COINBASE_API_KEY)) {
+                config.coinbase_api_key = (process.env?.EXPO_PUBLIC_COINBASE_API_KEY || process.env?.VITE_COINBASE_API_KEY).trim();
+            }
+        }
+
+        _gatewayConfigCache = { ..._gatewayConfigCache, ...config };
+        _gatewayConfigCacheTime = Date.now();
+        return _gatewayConfigCache;
     },
 
     /**
@@ -163,9 +227,9 @@ export const PaymentGatewayService = {
     },
 
     /**
-     * Initiate Paystack Payment dynamically via Supabase Backend
+     * Initiate Paystack Payment dynamically via Supabase Backend & Direct API
      */
-    async initiatePaystack({ amount, email, reference, name, phone, metadata = {} }) {
+    async initiatePaystack({ amount, email, reference, name, phone, appSettings, metadata = {} }) {
         const safeAmount = Math.max(1, Number(amount) || 0);
         const ref = reference || this.generateRef('PAYSTACK');
         const userEmail = (email && email.includes('@')) ? email.trim() : `customer_${Date.now()}@abumafhal.com`;
@@ -174,13 +238,16 @@ export const PaymentGatewayService = {
             ? (typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : 'https://abumafhal.com/payment/verify')
             : 'https://standard.paystack.co/close';
 
-        const config = await this.getGatewayConfig();
+        // Resolve dynamic keys directly from Admin Settings context or local cache or Supabase
+        const config = await this.getGatewayConfig(appSettings || metadata?.appSettings);
         const dynamicPubKey = config.paystack_public_key || config.PAYSTACK_PUBLIC_KEY || 
             (typeof process !== 'undefined' ? (process.env?.EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY || process.env?.VITE_PAYSTACK_PUBLIC_KEY) : null) || 
             'pk_test_92a99bcc7c063338c402506c2e6db390dd986585';
+        const dynamicSecKey = config.paystack_secret_key || config.PAYSTACK_SECRET_KEY ||
+            (typeof process !== 'undefined' ? (process.env?.EXPO_PUBLIC_PAYSTACK_SECRET_KEY || process.env?.PAYSTACK_SECRET_KEY) : null);
         const isTestMode = String(dynamicPubKey).startsWith('pk_test_');
 
-        // 1. Primary: Authoritative Backend Supabase Edge Function with PAYSTACK_SECRET_KEY
+        // 1. Primary: Authoritative Backend Supabase Edge Function
         let edgeResult = null;
         let edgeError = null;
 
@@ -190,7 +257,8 @@ export const PaymentGatewayService = {
             reference: ref,
             currency: 'NGN',
             channels: ['card', 'bank', 'bank_transfer', 'ussd', 'qr', 'mobile_money'],
-            callback_url: callbackUrl
+            callback_url: callbackUrl,
+            secret_key: dynamicSecKey || undefined
         });
 
         if (res1.ok && res1.data?.success && res1.data?.authorization_url) {
@@ -199,7 +267,38 @@ export const PaymentGatewayService = {
             edgeError = res1.data?.error || res1.error;
         }
 
-        // Try secondary edge function 'paystack-initiate' if primary was unavailable
+        // 2. Direct Paystack API call fallback if dynamic secret key is present
+        if (!edgeResult && dynamicSecKey) {
+            try {
+                const directRes = await fetch('https://api.paystack.co/transaction/initialize', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${dynamicSecKey.trim()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: userEmail,
+                        amount: Math.round(safeAmount * 100),
+                        reference: ref,
+                        currency: 'NGN',
+                        channels: ['card', 'bank', 'bank_transfer', 'ussd', 'qr', 'mobile_money'],
+                        callback_url: callbackUrl
+                    })
+                });
+                const directData = await directRes.json();
+                if (directData?.status && directData.data?.authorization_url) {
+                    edgeResult = {
+                        authorization_url: directData.data.authorization_url,
+                        access_code: directData.data.access_code,
+                        reference: directData.data.reference || ref
+                    };
+                }
+            } catch (directErr) {
+                console.warn('[PaymentGatewayService] Direct Paystack init error:', directErr);
+            }
+        }
+
+        // 3. Secondary edge function 'paystack-initiate' if still unavailable
         if (!edgeResult) {
             const res2 = await this.invokeEdgeFunction('paystack-initiate', {
                 amount: safeAmount,
@@ -220,7 +319,6 @@ export const PaymentGatewayService = {
         }
 
         // Web Experience: Always use Official Paystack Inline Modal
-        // It provides seamless card/transfer payment with live test guidance and never loses page state
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
             await this.loadWebScript('https://js.paystack.co/v1/inline.js');
             if (window.PaystackPop && typeof window.PaystackPop.setup === 'function') {
@@ -370,7 +468,7 @@ export const PaymentGatewayService = {
     /**
      * Initiate Flutterwave Payment dynamically via Official SDK & Inline APIs
      */
-    async initiateFlutterwave({ amount, email, reference, name, phone, metadata = {} }) {
+    async initiateFlutterwave({ amount, email, reference, name, phone, appSettings, metadata = {} }) {
         const safeAmount = Math.max(1, Number(amount) || 0);
         const ref = reference || this.generateRef('FLW');
         const userEmail = (email && email.includes('@')) ? email.trim() : `customer_${Date.now()}@abumafhal.com`;
@@ -381,21 +479,22 @@ export const PaymentGatewayService = {
             ? (typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : 'https://abumafhal.com/payment/verify')
             : 'https://standard.paystack.co/close';
 
-        const config = await this.getGatewayConfig();
+        const config = await this.getGatewayConfig(appSettings || metadata?.appSettings);
         const rawPubKey = config.flutterwave_public_key || config.FLUTTERWAVE_PUBLIC_KEY || 
             (typeof process !== 'undefined' ? (process.env?.EXPO_PUBLIC_FLUTTERWAVE_PUBLIC_KEY || process.env?.VITE_FLUTTERWAVE_PUBLIC_KEY) : null);
         const flwPubKey = (rawPubKey && !rawPubKey.includes('FLWPUBK-3fff') && rawPubKey.trim().length > 15) 
             ? rawPubKey.trim() 
             : 'FLWPUBK-8KAiNOWzksWGTGZDvgcrEL8QD82brD0MZXzh+Nm9USY=';
 
-        // 1. Direct Flutterwave API if secret key is present in app_settings
-        const flwSecret = config.flutterwave_secret_key || config.FLUTTERWAVE_SECRET_KEY;
+        // 1. Direct Flutterwave API if secret key is present in app_settings or environment
+        const flwSecret = config.flutterwave_secret_key || config.FLUTTERWAVE_SECRET_KEY ||
+            (typeof process !== 'undefined' ? (process.env?.EXPO_PUBLIC_FLUTTERWAVE_SECRET_KEY || process.env?.FLUTTERWAVE_SECRET_KEY) : null);
         if (flwSecret) {
             try {
                 const response = await fetch('https://api.flutterwave.com/v3/payments', {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${flwSecret}`,
+                        'Authorization': `Bearer ${flwSecret.trim()}`,
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
@@ -556,14 +655,15 @@ export const PaymentGatewayService = {
     /**
      * Initiate Coinbase Commerce Crypto Checkout
      */
-    async initiateCoinbase({ amount, email, reference, name, phone, metadata = {} }) {
+    async initiateCoinbase({ amount, email, reference, name, phone, appSettings, metadata = {} }) {
         const safeAmount = Math.max(1, Number(amount) || 0);
         const ref = reference || this.generateRef('COINBASE');
         const userEmail = (email && email.includes('@')) ? email.trim() : `customer_${Date.now()}@abumafhal.com`;
         const userName = name || 'Customer';
 
-        const config = await this.getGatewayConfig();
-        const coinbaseApiKey = config.coinbase_api_key || config.COINBASE_API_KEY;
+        const config = await this.getGatewayConfig(appSettings || metadata?.appSettings);
+        const coinbaseApiKey = config.coinbase_api_key || config.COINBASE_API_KEY ||
+            (typeof process !== 'undefined' ? (process.env?.EXPO_PUBLIC_COINBASE_API_KEY || process.env?.VITE_COINBASE_API_KEY) : null);
 
         if (coinbaseApiKey) {
             try {
@@ -571,7 +671,7 @@ export const PaymentGatewayService = {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-CC-Api-Key': coinbaseApiKey,
+                        'X-CC-Api-Key': coinbaseApiKey.trim(),
                         'X-CC-Version': '2018-03-22'
                     },
                     body: JSON.stringify({
@@ -613,19 +713,19 @@ export const PaymentGatewayService = {
     /**
      * Unified Entry Point
      */
-    async initiate({ gateway = 'Paystack', amount, email, phone, name, reference, metadata = {} }) {
+    async initiate({ gateway = 'Paystack', amount, email, phone, name, reference, appSettings, metadata = {} }) {
         const normalized = String(gateway).toLowerCase();
 
         if (normalized.includes('flutter') || normalized.includes('flw')) {
-            return this.initiateFlutterwave({ amount, email, phone, name, reference, metadata });
+            return this.initiateFlutterwave({ amount, email, phone, name, reference, appSettings, metadata });
         }
 
         if (normalized.includes('coinbase') || normalized.includes('crypto')) {
-            return this.initiateCoinbase({ amount, email, phone, name, reference, metadata });
+            return this.initiateCoinbase({ amount, email, phone, name, reference, appSettings, metadata });
         }
 
         // Default to Paystack
-        return this.initiatePaystack({ amount, email, phone, name, reference, metadata });
+        return this.initiatePaystack({ amount, email, phone, name, reference, appSettings, metadata });
     },
 
     /**

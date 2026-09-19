@@ -12,15 +12,45 @@ serve(async (req) => {
     }
 
     try {
-        const { amount, email, reference, callback_url } = await req.json();
+        const { amount, email, reference, callback_url, secret_key } = await req.json();
 
         if (!amount || !email || !reference) {
             throw new Error('Missing required fields.');
         }
 
-        const SECRET_KEY = Deno.env.get('PAYSTACK_SECRET_KEY');
+        // 1. Dynamic Secret Key from Admin Settings request
+        let SECRET_KEY = secret_key;
+
+        // 2. Dynamic Secret Key from Supabase app_settings table via Service Role
         if (!SECRET_KEY) {
-            throw new Error('Payment gateway is not configured properly (Missing PAYSTACK_SECRET_KEY environment variable).');
+            try {
+                const supabaseUrl = Deno.env.get('SUPABASE_URL');
+                const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+                if (supabaseUrl && serviceRoleKey) {
+                    const supabaseClient = createClient(supabaseUrl, serviceRoleKey);
+                    const { data: dbSettings } = await supabaseClient.from('app_settings').select('*');
+                    if (dbSettings && Array.isArray(dbSettings)) {
+                        const gwRow = dbSettings.find((r: any) => r.key === 'payment_gateways');
+                        if (gwRow?.value?.paystack_secret_key) {
+                            SECRET_KEY = gwRow.value.paystack_secret_key;
+                        } else {
+                            const secRow = dbSettings.find((r: any) => r.key === 'paystack_secret_key');
+                            if (secRow?.value) {
+                                SECRET_KEY = typeof secRow.value === 'string' ? secRow.value : (secRow.value.value || secRow.value.key);
+                            }
+                        }
+                    }
+                }
+            } catch (_) {}
+        }
+
+        // 3. Fallback to Deno Environment Variable
+        if (!SECRET_KEY) {
+            SECRET_KEY = Deno.env.get('PAYSTACK_SECRET_KEY');
+        }
+
+        if (!SECRET_KEY) {
+            throw new Error('Payment gateway is not configured properly (Missing Paystack Secret Key in Admin Settings or Server Environment).');
         }
 
         const paystackRes = await fetch('https://api.paystack.co/transaction/initialize', {

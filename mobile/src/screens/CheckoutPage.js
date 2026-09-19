@@ -1406,7 +1406,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     phone: selectedAddrObj?.phone || verifiedUser.phone || '',
                     name: profile?.full_name || verifiedUser.user_metadata?.full_name || 'Customer',
                     reference: orderRef,
+                    appSettings: settings,
                     metadata: {
+                        appSettings: settings,
                         items: cart || [],
                         address_id: safeAddressId,
                         shipping_address: safeShipping,
@@ -1485,7 +1487,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 phone: selectedAddrObj?.phone || verifiedUser.phone || '',
                 name: profile?.full_name || verifiedUser.user_metadata?.full_name || 'Customer',
                 reference: orderRef,
+                appSettings: settings,
                 metadata: {
+                    appSettings: settings,
                     items: cart || [],
                     address_id: safeAddressId,
                     shipping_address: safeShipping,
