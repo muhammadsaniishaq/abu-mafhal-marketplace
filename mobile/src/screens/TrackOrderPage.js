@@ -30,6 +30,7 @@ const DEFAULT_PRODUCT_IMG = 'https://images.unsplash.com/photo-1523275335684-378
 // Luxury E-Commerce Palette
 const NAVY       = '#0A192F';
 const NAVY_DARK  = '#071224';
+const NAVY_LIGHT = '#1E293B';
 const GOLD       = '#D97706';
 const EMERALD    = '#10B981';
 const BLUE       = '#2563EB';
