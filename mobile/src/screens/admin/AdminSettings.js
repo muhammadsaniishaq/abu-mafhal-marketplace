@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, useContext } from 'react';
 import {
     View, Text, Switch, TouchableOpacity, ScrollView, TextInput,
     Alert, ActivityIndicator, Image, Animated, Dimensions,
@@ -45,11 +45,236 @@ const NIGERIA_STATES = [
 ];
 
 const DEFAULT_SHIPPING_FEES = NIGERIA_STATES.reduce((acc, state) => {
-    // Lagos, Abuja, Rivers, Kano = lower rates; others = standard
     const premium = ['Lagos','FCT (Abuja)','Rivers','Kano','Ogun'].includes(state);
     acc[state] = premium ? 1500 : 3000;
     return acc;
 }, {});
+
+// ─── Themes ───────────────────────────────────────────────────
+const LIGHT = { bg: '#F8FAFC', card: '#FFFFFF', text: '#0E1A2E', muted: '#64748B', border: '#E2E8F0', surface: '#F1F5F9' };
+const DARK  = { bg: '#0B1120', card: '#1E293B', text: '#F1F5F9', muted: '#64748B', border: '#334155', surface: '#0F172A' };
+
+// ─── Styles ────────────────────────────────────────────────────
+const S = {
+    root:       { flex: 1 },
+    header:     { paddingHorizontal: 18, paddingBottom: 0, borderBottomWidth: 1 },
+    hRow:       { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+    hTitle:     { fontSize: 18, fontWeight: '900', letterSpacing: -0.5 },
+    hSub:       { fontSize: 9, fontWeight: '700', letterSpacing: 1.2, marginTop: 2 },
+    iconBtn:    { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+    deployBtn:  { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 11 },
+    deployTxt:  { color: 'white', fontWeight: '800', fontSize: 13 },
+    healthWrap: { borderRadius: 12, padding: 12, marginBottom: 14 },
+    healthTrack:{ height: 5, borderRadius: 3, overflow: 'hidden' },
+    healthFill: { height: 5, borderRadius: 3 },
+    searchWrap: { flexDirection: 'row', alignItems: 'center', borderRadius: 11, paddingHorizontal: 13, height: 40, borderWidth: 1, marginBottom: 14, gap: 9 },
+    searchIp:   { flex: 1, fontSize: 14, fontWeight: '600' },
+    dot:        { width: 7, height: 7, borderRadius: 4, backgroundColor: '#10B981' },
+    tabsRow:    { flexDirection: 'row', borderTopWidth: 1, borderColor: '#E2E8F0' },
+    tab:        { flex: 1, alignItems: 'center', paddingVertical: 11, gap: 2 },
+    tabTxt:     { fontSize: 9 },
+    indicator:  { position: 'absolute', bottom: 0, width: TAB_W, height: 3, borderRadius: 3 },
+    section:    { padding: 18 },
+    sTitle:     { fontSize: 15, fontWeight: '900', letterSpacing: -0.3 },
+    sSub:       { fontSize: 12, marginTop: 1 },
+    card:       { borderRadius: 18, padding: 16, marginBottom: 14, borderWidth: 1, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 6, elevation: 1 },
+    cardTitle:  { fontSize: 14, fontWeight: '800' },
+    cardSub:    { fontSize: 12, lineHeight: 17 },
+    iLabel:     { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.8 },
+    iInput:     { borderRadius: 11, padding: 12, fontSize: 14, fontWeight: '600', borderWidth: 1 },
+    hint:       { fontSize: 11, marginTop: 4 },
+    togRow:     { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, gap: 12 },
+    togIcon:    { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    togLabel:   { fontSize: 14, fontWeight: '800' },
+    togDesc:    { fontSize: 12, marginTop: 1 },
+    logoPicker: { width: 68, height: 68, borderRadius: 20, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+    fullImg:    { width: '100%', height: '100%', resizeMode: 'cover' },
+    imgLoader:  { position: 'absolute', zIndex: 10, backgroundColor: '#00000055', width: '100%', height: '100%', justifyContent: 'center' },
+    editBadge:  { position: 'absolute', bottom: 4, right: 4, width: 19, height: 19, borderRadius: 10, backgroundColor: '#3B82F6', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'white' },
+    certBox:    { width: '48%', height: 78, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 1, overflow: 'hidden' },
+    certLabel:  { fontSize: 9, fontWeight: '800', marginTop: 4, textTransform: 'uppercase' },
+    planBadge:  { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    swatch:     { width: 24, height: 24, borderRadius: 8 },
+    colorDot:   { width: 14, height: 14, borderRadius: 4, borderWidth: 1, borderColor: '#CBD5E1' },
+    currRow:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderRadius: 11, padding: 13, borderWidth: 1, marginBottom: 16 },
+    currValue:  { fontSize: 14, fontWeight: '700', marginTop: 2 },
+    currItem:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 13, paddingHorizontal: 8, borderBottomWidth: 1 },
+    socialRow:  { flexDirection: 'row', alignItems: 'center', borderRadius: 11, borderWidth: 1, marginBottom: 10, overflow: 'hidden' },
+    socialIcon: { width: 46, height: 46, alignItems: 'center', justifyContent: 'center' },
+    socialInput:{ flex: 1, fontSize: 14, fontWeight: '600', paddingHorizontal: 12 },
+    exportBtn:  { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 16, padding: 16, borderWidth: 1 },
+    infoBox:    { flexDirection: 'row', gap: 9, padding: 12, borderRadius: 11, marginTop: 4 },
+    dangerCard: { borderRadius: 18, padding: 16, borderWidth: 1.5 },
+    dangerBtn:  { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 13, justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: '#FCA5A5' },
+    aiTip:      { flexDirection: 'row', gap: 12, backgroundColor: '#FFFBEB', padding: 14, borderRadius: 13, borderLeftWidth: 4, borderColor: '#F59E0B', marginBottom: 10 },
+    aiTitle:    { fontSize: 13, fontWeight: '800', color: '#92400E' },
+    aiDesc:     { fontSize: 12, color: '#B45309', marginTop: 3 },
+    modalBg:    { flex: 1, backgroundColor: '#00000066', justifyContent: 'flex-end' },
+    modalSheet: { borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 22, maxHeight: '65%' },
+    adminProfileRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
+    adminAvatar:     { width: 68, height: 68, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+    bannerPreview:   { flexDirection: 'row', alignItems: 'center', borderRadius: 10, padding: 12, marginTop: 14 },
+    localeChip:      { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, borderWidth: 1.5 },
+    localeLabel:     { fontSize: 13, fontWeight: '700' },
+    stateCell:       { width: '48%', borderRadius: 12, borderWidth: 1, padding: 10, gap: 4 },
+    stateName:       { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.4 },
+    stateFeeInput:   { flex: 1, fontSize: 14, fontWeight: '700', borderBottomWidth: 1, paddingBottom: 2, minWidth: 60 },
+    statChip:        { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
+    statChipTxt:     { fontSize: 10, fontWeight: '700' },
+    statusDot:       { width: 6, height: 6, borderRadius: 3 },
+    presetBtn:       { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
+    presetBtnTxt:    { fontSize: 11, fontWeight: '800' },
+    gwIcon:          { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+    pillBadge:       { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 7, paddingVertical: 4, borderRadius: 12, borderWidth: 1 },
+    pillBadgeTxt:    { fontSize: 9, fontWeight: '800', letterSpacing: 0.3 },
+    gwControlsRow:   { flexDirection: 'row', alignItems: 'center', paddingTop: 10, borderTopWidth: 1, marginTop: 4 },
+    gwCtrlLabel:     { fontSize: 12, fontWeight: '700' },
+    separator:       { height: 1, borderTopWidth: 1, marginVertical: 14 },
+    eyeBtn:          { position: 'absolute', right: 12, top: 32, padding: 6 },
+    pingBtn:         { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9 },
+    pingBtnTxt:      { color: 'white', fontWeight: '800', fontSize: 12 },
+    pingResultsBox:  { borderRadius: 12, borderWidth: 1, padding: 12, marginTop: 6 },
+    pingRow:         { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
+    pingLabel:       { fontSize: 12, fontWeight: '600' },
+    whRow:           { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 11 },
+    copyBtn:         { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
+};
+
+// ─── Theme Context ─────────────────────────────────────────────
+const SettingsThemeContext = React.createContext(LIGHT);
+
+// ─── Extracted & Memoized Components (Permanent Input Focus) ──
+const Sect = React.memo(({ title, subtitle, icon, children }) => {
+    const T = useContext(SettingsThemeContext);
+    return (
+        <View style={{ marginBottom: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, marginTop: 8 }}>
+                {icon && <Ionicons name={icon} size={16} color={T.muted} />}
+                <View>
+                    <Text style={[S.sTitle, { color: T.text }]}>{title}</Text>
+                    {subtitle && <Text style={[S.sSub, { color: T.muted }]}>{subtitle}</Text>}
+                </View>
+            </View>
+            {children}
+        </View>
+    );
+});
+
+const Card = React.memo(({ children, style }) => {
+    const T = useContext(SettingsThemeContext);
+    return (
+        <View style={[S.card, { backgroundColor: T.card, borderColor: T.border }, style]}>{children}</View>
+    );
+});
+
+const Inp = React.memo(({ label, value, onChange, placeholder, secure, icon, color = '#64748B', keyboard = 'default', multi, hint }) => {
+    const T = useContext(SettingsThemeContext);
+    const [focused, setFocused] = useState(false);
+    return (
+        <View style={{ marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 7 }}>
+                {icon && <Ionicons name={icon} size={13} color={focused ? '#3B82F6' : color} />}
+                <Text style={[S.iLabel, { color: focused ? '#3B82F6' : T.muted }]}>{label}</Text>
+            </View>
+            <TextInput
+                style={[
+                    S.iInput,
+                    { 
+                        backgroundColor: T.surface, 
+                        borderColor: focused ? '#3B82F6' : T.border, 
+                        color: T.text,
+                        borderWidth: focused ? 1.5 : 1,
+                    },
+                    Platform.OS === 'web' && { outlineStyle: 'none' },
+                    multi && { height: 80, textAlignVertical: 'top', paddingTop: 12 }
+                ]}
+                value={value !== undefined && value !== null ? String(value) : ''}
+                onChangeText={v => {
+                    if (typeof onChange === 'function') onChange(v);
+                }}
+                onFocus={() => setFocused(true)}
+                onBlur={() => setFocused(false)}
+                placeholder={placeholder}
+                placeholderTextColor={T.muted}
+                secureTextEntry={secure}
+                keyboardType={keyboard}
+                multiline={multi}
+                autoCapitalize="none"
+                autoCorrect={false}
+            />
+            {hint && <Text style={[S.hint, { color: T.muted }]}>{hint}</Text>}
+        </View>
+    );
+});
+
+const Tog = React.memo(({ label, desc, value, onToggle, color = '#3B82F6', icon }) => {
+    const T = useContext(SettingsThemeContext);
+    return (
+        <TouchableOpacity activeOpacity={0.7} onPress={onToggle} style={[S.togRow, { borderColor: T.border }]}>
+            <View style={[S.togIcon, { backgroundColor: color + '18' }]}>
+                <Ionicons name={icon} size={18} color={color} />
+            </View>
+            <View style={{ flex: 1 }}>
+                <Text style={[S.togLabel, { color: T.text }]}>{label}</Text>
+                {desc && <Text style={[S.togDesc, { color: T.muted }]}>{desc}</Text>}
+            </View>
+            <Switch
+                value={!!value}
+                onValueChange={onToggle}
+                trackColor={{ false: T.border, true: color }}
+                thumbColor="white"
+            />
+        </TouchableOpacity>
+    );
+});
+
+const SocialInput = React.memo(({ label, icon, color, value, onChange, placeholder }) => {
+    const T = useContext(SettingsThemeContext);
+    const [focused, setFocused] = useState(false);
+    return (
+        <View style={[S.socialRow, { backgroundColor: T.surface, borderColor: focused ? color : T.border, borderWidth: focused ? 1.5 : 1 }]}>
+            <View style={[S.socialIcon, { backgroundColor: color + '20' }]}>
+                <Ionicons name={icon} size={18} color={color} />
+            </View>
+            <TextInput
+                style={[S.socialInput, { color: T.text }, Platform.OS === 'web' && { outlineStyle: 'none' }]}
+                value={value !== undefined && value !== null ? String(value) : ''}
+                onChangeText={v => {
+                    if (typeof onChange === 'function') onChange(v);
+                }}
+                onFocus={() => setFocused(true)}
+                onBlur={() => setFocused(false)}
+                placeholder={placeholder}
+                placeholderTextColor={T.muted}
+                autoCapitalize="none"
+                autoCorrect={false}
+            />
+        </View>
+    );
+});
+
+const StateFeeCell = React.memo(({ state, fee, symbol, onChange }) => {
+    const T = useContext(SettingsThemeContext);
+    const [focused, setFocused] = useState(false);
+    return (
+        <View style={[S.stateCell, { backgroundColor: T.surface, borderColor: focused ? '#3B82F6' : T.border, borderWidth: focused ? 1.5 : 1 }]}>
+            <Text style={[S.stateName, { color: focused ? '#3B82F6' : T.muted }]} numberOfLines={1}>{state}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={{ color: T.muted, fontSize: 11, marginRight: 2 }}>{symbol}</Text>
+                <TextInput
+                    style={[S.stateFeeInput, { color: T.text, borderColor: focused ? '#3B82F6' : T.border }, Platform.OS === 'web' && { outlineStyle: 'none' }]}
+                    value={fee !== undefined && fee !== null ? String(fee) : '0'}
+                    onChangeText={onChange}
+                    onFocus={() => setFocused(true)}
+                    onBlur={() => setFocused(false)}
+                    keyboardType="numeric"
+                    placeholder="0"
+                    placeholderTextColor={T.muted}
+                />
+            </View>
+        </View>
+    );
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 export const AdminSettings = ({ navigation }) => {
@@ -413,68 +638,6 @@ export const AdminSettings = ({ navigation }) => {
         setVendorPlans(np); setUnsaved(true);
     };
 
-    // ── Inner shared components ────────────────────────────────
-    const Sect = ({ title, subtitle, icon, children }) => (
-        <View style={{ marginBottom: 6 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, marginTop: 8 }}>
-                {icon && <Ionicons name={icon} size={16} color={T.muted} />}
-                <View>
-                    <Text style={[S.sTitle, { color: T.text }]}>{title}</Text>
-                    {subtitle && <Text style={[S.sSub, { color: T.muted }]}>{subtitle}</Text>}
-                </View>
-            </View>
-            {children}
-        </View>
-    );
-
-    const Card = ({ children, style }) => (
-        <View style={[S.card, { backgroundColor: T.card, borderColor: T.border }, style]}>{children}</View>
-    );
-
-    const Inp = ({ label, value, onChange, placeholder, secure, icon, color = '#64748B', keyboard = 'default', multi, hint }) => (
-        <View style={{ marginBottom: 16 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 7 }}>
-                {icon && <Ionicons name={icon} size={12} color={color} />}
-                <Text style={[S.iLabel, { color: T.muted }]}>{label}</Text>
-            </View>
-            <TextInput
-                style={[S.iInput, { backgroundColor: T.surface, borderColor: T.border, color: T.text }, multi && { height: 80, textAlignVertical: 'top', paddingTop: 12 }]}
-                value={value} onChangeText={v => { onChange(v); setUnsaved(true); }}
-                placeholder={placeholder} placeholderTextColor={T.muted}
-                secureTextEntry={secure} keyboardType={keyboard} multiline={multi}
-            />
-            {hint && <Text style={[S.hint, { color: T.muted }]}>{hint}</Text>}
-        </View>
-    );
-
-    const Tog = ({ label, desc, value, onToggle, color = '#3B82F6', icon }) => (
-        <TouchableOpacity activeOpacity={0.7} onPress={onToggle} style={[S.togRow, { borderColor: T.border }]}>
-            <View style={[S.togIcon, { backgroundColor: color + '18' }]}>
-                <Ionicons name={icon} size={18} color={color} />
-            </View>
-            <View style={{ flex: 1 }}>
-                <Text style={[S.togLabel, { color: T.text }]}>{label}</Text>
-                {desc && <Text style={[S.togDesc, { color: T.muted }]}>{desc}</Text>}
-            </View>
-            <Switch value={!!value} onValueChange={v => { onToggle(v); setUnsaved(true); }}
-                trackColor={{ false: T.border, true: color }} thumbColor="white" />
-        </TouchableOpacity>
-    );
-
-    const SocialInput = ({ label, icon, color, value, onChange, placeholder }) => (
-        <View style={[S.socialRow, { backgroundColor: T.surface, borderColor: T.border }]}>
-            <View style={[S.socialIcon, { backgroundColor: color + '20' }]}>
-                <Ionicons name={icon} size={18} color={color} />
-            </View>
-            <TextInput
-                style={[S.socialInput, { color: T.text }]}
-                value={value} onChangeText={v => { onChange(v); setUnsaved(true); }}
-                placeholder={placeholder} placeholderTextColor={T.muted}
-                autoCapitalize="none"
-            />
-        </View>
-    );
-
     // ── Tab Renderers ──────────────────────────────────────────
     const renderBranding = () => (
         <View style={S.section}>
@@ -506,20 +669,24 @@ export const AdminSettings = ({ navigation }) => {
                     </View>
                     <View style={{ flexDirection: 'row', gap: 12 }}>
                         <View style={{ flex: 1 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                                <View style={[S.colorDot, { backgroundColor: primaryColor }]} />
-                                <Text style={[S.iLabel, { color: T.muted }]}>PRIMARY</Text>
-                            </View>
-                            <TextInput style={[S.iInput, { backgroundColor: T.surface, borderColor: T.border, color: T.text }]}
-                                value={primaryColor} onChangeText={v => { setPrimaryColor(v); setUnsaved(true); }} placeholder="#0F172A" placeholderTextColor={T.muted} />
+                            <Inp
+                                label="PRIMARY COLOR"
+                                value={primaryColor}
+                                onChange={v => { setPrimaryColor(v); setUnsaved(true); }}
+                                icon="ellipse"
+                                color={primaryColor}
+                                placeholder="#0F172A"
+                            />
                         </View>
                         <View style={{ flex: 1 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                                <View style={[S.colorDot, { backgroundColor: secondaryColor }]} />
-                                <Text style={[S.iLabel, { color: T.muted }]}>ACCENT</Text>
-                            </View>
-                            <TextInput style={[S.iInput, { backgroundColor: T.surface, borderColor: T.border, color: T.text }]}
-                                value={secondaryColor} onChangeText={v => { setSecondaryColor(v); setUnsaved(true); }} placeholder="#3B82F6" placeholderTextColor={T.muted} />
+                            <Inp
+                                label="ACCENT COLOR"
+                                value={secondaryColor}
+                                onChange={v => { setSecondaryColor(v); setUnsaved(true); }}
+                                icon="ellipse"
+                                color={secondaryColor}
+                                placeholder="#3B82F6"
+                            />
                         </View>
                     </View>
                 </Card>
@@ -1002,18 +1169,16 @@ export const AdminSettings = ({ navigation }) => {
                         <Text style={[S.iLabel, { color: T.muted, marginBottom: 14 }]}>PER-STATE FEES ({selectedCurrency.symbol})</Text>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                             {NIGERIA_STATES.map(state => (
-                                <View key={state} style={[S.stateCell, { backgroundColor: T.surface, borderColor: T.border }]}>
-                                    <Text style={[S.stateName, { color: T.muted }]} numberOfLines={1}>{state}</Text>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <Text style={{ color: T.muted, fontSize: 11, marginRight: 2 }}>{selectedCurrency.symbol}</Text>
-                                        <TextInput
-                                            style={[S.stateFeeInput, { color: T.text, borderColor: T.border }]}
-                                            value={(shippingFees[state] ?? 0).toString()}
-                                            onChangeText={v => { setShippingFees(p => ({ ...p, [state]: parseInt(v) || 0 })); setUnsaved(true); }}
-                                            keyboardType="numeric" placeholder="0" placeholderTextColor={T.muted}
-                                        />
-                                    </View>
-                                </View>
+                                <StateFeeCell
+                                    key={state}
+                                    state={state}
+                                    fee={shippingFees[state]}
+                                    symbol={selectedCurrency.symbol}
+                                    onChange={v => {
+                                        setShippingFees(p => ({ ...p, [state]: parseInt(v) || 0 }));
+                                        setUnsaved(true);
+                                    }}
+                                />
                             ))}
                         </View>
                     </Card>
@@ -1307,238 +1472,151 @@ export const AdminSettings = ({ navigation }) => {
     const activeCat = CATEGORIES.find(c => c.id === activeTab) || CATEGORIES[0];
 
     return (
-        <View style={[S.root, { backgroundColor: T.bg }]}>
-            <StatusBar barStyle={darkMode ? 'light-content' : 'dark-content'} backgroundColor={T.card} />
+        <SettingsThemeContext.Provider value={T}>
+            <View style={[S.root, { backgroundColor: T.bg }]}>
+                <StatusBar barStyle={darkMode ? 'light-content' : 'dark-content'} backgroundColor={T.card} />
 
-            {/* ════ HEADER ════ */}
-            <View style={[S.header, { backgroundColor: T.card, borderColor: T.border, paddingTop: 8 }]}>
+                {/* ════ HEADER ════ */}
+                <View style={[S.header, { backgroundColor: T.card, borderColor: T.border, paddingTop: 8 }]}>
 
-                {/* Row 1: Nav + Title + Actions */}
-                <View style={S.hRow}>
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={[S.iconBtn, { backgroundColor: T.surface }]}>
-                        <Ionicons name="chevron-back" size={21} color={T.text} />
-                    </TouchableOpacity>
-                    <View style={{ flex: 1, marginHorizontal: 12 }}>
-                        <Text style={[S.hTitle, { color: T.text }]}>System Config</Text>
-                        <Text style={[S.hSub, { color: T.muted }]}>GLOBAL PLATFORM CONTROLS</Text>
-                    </View>
-                    {/* Dark mode */}
-                    <TouchableOpacity onPress={() => setDarkMode(d => !d)} style={[S.iconBtn, { backgroundColor: T.surface, marginRight: 8 }]}>
-                        <Ionicons name={darkMode ? 'sunny' : 'moon'} size={17} color={darkMode ? '#F59E0B' : '#8B5CF6'} />
-                    </TouchableOpacity>
-                    {/* Deploy button */}
-                    <Animated.View style={{ transform: [{ scale: deployPulse }] }}>
-                        <TouchableOpacity onPress={handleSave} disabled={loading}
-                            style={[S.deployBtn, { backgroundColor: unsaved ? activeCat.color : '#64748B' }]}>
-                            {loading
-                                ? <ActivityIndicator size="small" color="white" />
-                                : <><Ionicons name="cloud-upload" size={13} color="white" /><Text style={S.deployTxt}>{unsaved ? 'Deploy' : 'Saved'}</Text></>
-                            }
+                    {/* Row 1: Nav + Title + Actions */}
+                    <View style={S.hRow}>
+                        <TouchableOpacity onPress={() => navigation.goBack()} style={[S.iconBtn, { backgroundColor: T.surface }]}>
+                            <Ionicons name="chevron-back" size={21} color={T.text} />
                         </TouchableOpacity>
-                    </Animated.View>
-                </View>
+                        <View style={{ flex: 1, marginHorizontal: 12 }}>
+                            <Text style={[S.hTitle, { color: T.text }]}>System Config</Text>
+                            <Text style={[S.hSub, { color: T.muted }]}>GLOBAL PLATFORM CONTROLS</Text>
+                        </View>
+                        {/* Dark mode */}
+                        <TouchableOpacity onPress={() => setDarkMode(d => !d)} style={[S.iconBtn, { backgroundColor: T.surface, marginRight: 8 }]}>
+                            <Ionicons name={darkMode ? 'sunny' : 'moon'} size={17} color={darkMode ? '#F59E0B' : '#8B5CF6'} />
+                        </TouchableOpacity>
+                        {/* Deploy button */}
+                        <Animated.View style={{ transform: [{ scale: deployPulse }] }}>
+                            <TouchableOpacity onPress={handleSave} disabled={loading}
+                                style={[S.deployBtn, { backgroundColor: unsaved ? activeCat.color : '#64748B' }]}>
+                                {loading
+                                    ? <ActivityIndicator size="small" color="white" />
+                                    : <><Ionicons name="cloud-upload" size={13} color="white" /><Text style={S.deployTxt}>{unsaved ? 'Deploy' : 'Saved'}</Text></>
+                                }
+                            </TouchableOpacity>
+                        </Animated.View>
+                    </View>
 
-                {/* Health Bar */}
-                <View style={[S.healthWrap, { backgroundColor: T.surface }]}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                        <Text style={[S.iLabel, { color: T.muted }]}>CONFIGURATION HEALTH</Text>
-                        <Text style={{ fontSize: 11, fontWeight: '800', color: healthColor }}>{healthLabel} · {healthScore}%</Text>
+                    {/* Health Bar */}
+                    <View style={[S.healthWrap, { backgroundColor: T.surface }]}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <Text style={[S.iLabel, { color: T.muted }]}>CONFIGURATION HEALTH</Text>
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: healthColor }}>{healthLabel} · {healthScore}%</Text>
+                        </View>
+                        <View style={[S.healthTrack, { backgroundColor: T.border }]}>
+                            <View style={[S.healthFill, { width: `${healthScore}%`, backgroundColor: healthColor }]} />
+                        </View>
                     </View>
-                    <View style={[S.healthTrack, { backgroundColor: T.border }]}>
-                        <View style={[S.healthFill, { width: `${healthScore}%`, backgroundColor: healthColor }]} />
-                    </View>
-                </View>
 
-                {/* Modern Status Chips */}
-                <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
-                    <View style={[S.statChip, { backgroundColor: T.surface, borderColor: T.border }]}>
-                        <View style={[S.statusDot, { backgroundColor: '#10B981' }]} />
-                        <Text style={[S.statChipTxt, { color: T.text }]}>{activeGatewaysCount} Live</Text>
+                    {/* Modern Status Chips */}
+                    <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+                        <View style={[S.statChip, { backgroundColor: T.surface, borderColor: T.border }]}>
+                            <View style={[S.statusDot, { backgroundColor: '#10B981' }]} />
+                            <Text style={[S.statChipTxt, { color: T.text }]}>{activeGatewaysCount} Live</Text>
+                        </View>
+                        {maintenanceGatewaysCount > 0 && (
+                            <View style={[S.statChip, { backgroundColor: darkMode ? '#3A2010' : '#FEF3C7', borderColor: '#F59E0B' }]}>
+                                <View style={[S.statusDot, { backgroundColor: '#F59E0B' }]} />
+                                <Text style={[S.statChipTxt, { color: '#B45309' }]}>{maintenanceGatewaysCount} in Maintenance</Text>
+                            </View>
+                        )}
+                        <View style={[S.statChip, { backgroundColor: T.surface, borderColor: T.border }]}>
+                            <Ionicons name="cash-outline" size={11} color={T.muted} />
+                            <Text style={[S.statChipTxt, { color: T.text }]}>{selectedCurrency.code} ({selectedCurrency.symbol})</Text>
+                        </View>
+                        <View style={[S.statChip, { backgroundColor: T.surface, borderColor: T.border }]}>
+                            <Ionicons name="shield-checkmark-outline" size={11} color="#10B981" />
+                            <Text style={[S.statChipTxt, { color: T.text }]}>v2.4 Protected</Text>
+                        </View>
                     </View>
-                    {maintenanceGatewaysCount > 0 && (
-                        <View style={[S.statChip, { backgroundColor: darkMode ? '#3A2010' : '#FEF3C7', borderColor: '#F59E0B' }]}>
-                            <View style={[S.statusDot, { backgroundColor: '#F59E0B' }]} />
-                            <Text style={[S.statChipTxt, { color: '#B45309' }]}>{maintenanceGatewaysCount} in Maintenance</Text>
+
+                    {/* Search */}
+                    <View style={[S.searchWrap, { backgroundColor: T.surface, borderColor: T.border }]}>
+                        <Ionicons name="search" size={16} color={T.muted} />
+                        <TextInput style={[S.searchIp, { color: T.text }, Platform.OS === 'web' && { outlineStyle: 'none' }]}
+                            placeholder="Search any setting…" placeholderTextColor={T.muted}
+                            value={searchQuery} onChangeText={setSearchQuery} />
+                        {isSearching
+                            ? <TouchableOpacity onPress={() => setSearchQuery('')}><Ionicons name="close-circle" size={16} color={T.muted} /></TouchableOpacity>
+                            : <View style={S.dot} />
+                        }
+                    </View>
+
+                    {/* Tabs */}
+                    {!isSearching && (
+                        <View style={S.tabsRow}>
+                            {CATEGORIES.map(cat => {
+                                const active = activeTab === cat.id;
+                                return (
+                                    <TouchableOpacity key={cat.id} style={S.tab} onPress={() => setActiveTab(cat.id)}>
+                                        <Ionicons name={cat.icon} size={16} color={active ? cat.color : T.muted} />
+                                        <Text style={[S.tabTxt, { color: active ? cat.color : T.muted, fontWeight: active ? '800' : '600' }]}>{cat.label}</Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                            <Animated.View style={[S.indicator, { left: slideAnim, backgroundColor: activeCat.color }]} />
                         </View>
                     )}
-                    <View style={[S.statChip, { backgroundColor: T.surface, borderColor: T.border }]}>
-                        <Ionicons name="cash-outline" size={11} color={T.muted} />
-                        <Text style={[S.statChipTxt, { color: T.text }]}>{selectedCurrency.code} ({selectedCurrency.symbol})</Text>
-                    </View>
-                    <View style={[S.statChip, { backgroundColor: T.surface, borderColor: T.border }]}>
-                        <Ionicons name="shield-checkmark-outline" size={11} color="#10B981" />
-                        <Text style={[S.statChipTxt, { color: T.text }]}>v2.4 Protected</Text>
-                    </View>
                 </View>
 
-                {/* Search */}
-                <View style={[S.searchWrap, { backgroundColor: T.surface, borderColor: T.border }]}>
-                    <Ionicons name="search" size={16} color={T.muted} />
-                    <TextInput style={[S.searchIp, { color: T.text }]}
-                        placeholder="Search any setting…" placeholderTextColor={T.muted}
-                        value={searchQuery} onChangeText={setSearchQuery} />
-                    {isSearching
-                        ? <TouchableOpacity onPress={() => setSearchQuery('')}><Ionicons name="close-circle" size={16} color={T.muted} /></TouchableOpacity>
-                        : <View style={S.dot} />
-                    }
-                </View>
-
-                {/* Tabs */}
-                {!isSearching && (
-                    <View style={S.tabsRow}>
-                        {CATEGORIES.map(cat => {
-                            const active = activeTab === cat.id;
-                            return (
-                                <TouchableOpacity key={cat.id} style={S.tab} onPress={() => setActiveTab(cat.id)}>
-                                    <Ionicons name={cat.icon} size={16} color={active ? cat.color : T.muted} />
-                                    <Text style={[S.tabTxt, { color: active ? cat.color : T.muted, fontWeight: active ? '800' : '600' }]}>{cat.label}</Text>
-                                </TouchableOpacity>
-                            );
-                        })}
-                        <Animated.View style={[S.indicator, { left: slideAnim, backgroundColor: activeCat.color }]} />
-                    </View>
-                )}
-            </View>
-
-            {/* ════ BODY ════ */}
-            <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-                {isSearching ? (
-                    <View style={{ padding: 20 }}>
-                        <Text style={[S.sTitle, { color: T.text, marginBottom: 4 }]}>Results for "{searchQuery}"</Text>
-                        <Text style={[S.sSub, { color: T.muted, marginBottom: 16 }]}>Searching across all system nodes…</Text>
-                        {renderBranding()}{renderFinancial()}{renderSecurity()}
-                        {renderVendors()}{renderContact()}{renderFeatures()}{renderAdvanced()}
-                    </View>
-                ) : (
-                    <>
-                        {activeTab === 'branding'  && renderBranding()}
-                        {activeTab === 'financial' && renderFinancial()}
-                        {activeTab === 'security'  && renderSecurity()}
-                        {activeTab === 'vendors'   && renderVendors()}
-                        {activeTab === 'contact'   && renderContact()}
-                        {activeTab === 'features'  && renderFeatures()}
-                        {activeTab === 'advanced'  && renderAdvanced()}
-                    </>
-                )}
-            </ScrollView>
-
-            {/* ════ CURRENCY MODAL ════ */}
-            <Modal visible={showCurrencyModal} transparent animationType="slide" onRequestClose={() => setShowCurrencyModal(false)}>
-                <View style={S.modalBg}>
-                    <View style={[S.modalSheet, { backgroundColor: T.card }]}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                            <Text style={[S.sTitle, { color: T.text }]}>Select Currency</Text>
-                            <TouchableOpacity onPress={() => setShowCurrencyModal(false)}>
-                                <Ionicons name="close" size={22} color={T.muted} />
-                            </TouchableOpacity>
+                {/* ════ BODY ════ */}
+                <ScrollView
+                    contentContainerStyle={{ paddingBottom: 120 }}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    {isSearching ? (
+                        <View style={{ padding: 20 }}>
+                            <Text style={[S.sTitle, { color: T.text, marginBottom: 4 }]}>Results for "{searchQuery}"</Text>
+                            <Text style={[S.sSub, { color: T.muted, marginBottom: 16 }]}>Searching across all system nodes…</Text>
+                            {renderBranding()}{renderFinancial()}{renderSecurity()}
+                            {renderVendors()}{renderContact()}{renderFeatures()}{renderAdvanced()}
                         </View>
-                        <FlatList data={CURRENCIES} keyExtractor={i => i.code}
-                            renderItem={({ item }) => (
-                                <TouchableOpacity onPress={() => { setCurrency(item.code); setUnsaved(true); setShowCurrencyModal(false); }}
-                                    style={[S.currItem, { borderColor: T.border, backgroundColor: currency === item.code ? (darkMode ? '#1E3A5F' : '#EFF6FF') : 'transparent' }]}>
-                                    <View>
-                                        <Text style={[S.currValue, { color: T.text }]}>{item.symbol}  {item.code}</Text>
-                                        <Text style={[S.cardSub, { color: T.muted }]}>{item.name}</Text>
-                                    </View>
-                                    {currency === item.code && <Ionicons name="checkmark-circle" size={20} color="#3B82F6" />}
+                    ) : (
+                        <>
+                            {activeTab === 'branding'  && renderBranding()}
+                            {activeTab === 'financial' && renderFinancial()}
+                            {activeTab === 'security'  && renderSecurity()}
+                            {activeTab === 'vendors'   && renderVendors()}
+                            {activeTab === 'contact'   && renderContact()}
+                            {activeTab === 'features'  && renderFeatures()}
+                            {activeTab === 'advanced'  && renderAdvanced()}
+                        </>
+                    )}
+                </ScrollView>
+
+                {/* ════ CURRENCY MODAL ════ */}
+                <Modal visible={showCurrencyModal} transparent animationType="slide" onRequestClose={() => setShowCurrencyModal(false)}>
+                    <View style={S.modalBg}>
+                        <View style={[S.modalSheet, { backgroundColor: T.card }]}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                                <Text style={[S.sTitle, { color: T.text }]}>Select Currency</Text>
+                                <TouchableOpacity onPress={() => setShowCurrencyModal(false)}>
+                                    <Ionicons name="close" size={22} color={T.muted} />
                                 </TouchableOpacity>
-                            )} />
+                            </View>
+                            <FlatList data={CURRENCIES} keyExtractor={i => i.code}
+                                renderItem={({ item }) => (
+                                    <TouchableOpacity onPress={() => { setCurrency(item.code); setUnsaved(true); setShowCurrencyModal(false); }}
+                                        style={[S.currItem, { borderColor: T.border, backgroundColor: currency === item.code ? (darkMode ? '#1E3A5F' : '#EFF6FF') : 'transparent' }]}>
+                                        <View>
+                                            <Text style={[S.currValue, { color: T.text }]}>{item.symbol}  {item.code}</Text>
+                                            <Text style={[S.cardSub, { color: T.muted }]}>{item.name}</Text>
+                                        </View>
+                                        {currency === item.code && <Ionicons name="checkmark-circle" size={20} color="#3B82F6" />}
+                                    </TouchableOpacity>
+                                )} />
+                        </View>
                     </View>
-                </View>
-            </Modal>
-        </View>
+                </Modal>
+            </View>
+        </SettingsThemeContext.Provider>
     );
-};
-
-// ─── Themes ───────────────────────────────────────────────────
-const LIGHT = { bg: '#F8FAFC', card: '#FFFFFF', text: '#0E1A2E', muted: '#64748B', border: '#E2E8F0', surface: '#F1F5F9' };
-const DARK  = { bg: '#0B1120', card: '#1E293B', text: '#F1F5F9', muted: '#64748B', border: '#334155', surface: '#0F172A' };
-
-// ─── Styles ────────────────────────────────────────────────────
-const S = {
-    root:       { flex: 1 },
-    header:     { paddingHorizontal: 18, paddingBottom: 0, borderBottomWidth: 1 },
-    hRow:       { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-    hTitle:     { fontSize: 18, fontWeight: '900', letterSpacing: -0.5 },
-    hSub:       { fontSize: 9, fontWeight: '700', letterSpacing: 1.2, marginTop: 2 },
-    iconBtn:    { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-    deployBtn:  { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 11 },
-    deployTxt:  { color: 'white', fontWeight: '800', fontSize: 13 },
-    healthWrap: { borderRadius: 12, padding: 12, marginBottom: 14 },
-    healthTrack:{ height: 5, borderRadius: 3, overflow: 'hidden' },
-    healthFill: { height: 5, borderRadius: 3 },
-    searchWrap: { flexDirection: 'row', alignItems: 'center', borderRadius: 11, paddingHorizontal: 13, height: 40, borderWidth: 1, marginBottom: 14, gap: 9 },
-    searchIp:   { flex: 1, fontSize: 14, fontWeight: '600' },
-    dot:        { width: 7, height: 7, borderRadius: 4, backgroundColor: '#10B981' },
-    tabsRow:    { flexDirection: 'row', borderTopWidth: 1, borderColor: '#E2E8F0' },
-    tab:        { flex: 1, alignItems: 'center', paddingVertical: 11, gap: 2 },
-    tabTxt:     { fontSize: 9 },
-    indicator:  { position: 'absolute', bottom: 0, width: TAB_W, height: 3, borderRadius: 3 },
-    section:    { padding: 18 },
-    sTitle:     { fontSize: 15, fontWeight: '900', letterSpacing: -0.3 },
-    sSub:       { fontSize: 12, marginTop: 1 },
-    card:       { borderRadius: 18, padding: 16, marginBottom: 14, borderWidth: 1, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 6, elevation: 1 },
-    cardTitle:  { fontSize: 14, fontWeight: '800' },
-    cardSub:    { fontSize: 12, lineHeight: 17 },
-    iLabel:     { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.8 },
-    iInput:     { borderRadius: 11, padding: 12, fontSize: 14, fontWeight: '600', borderWidth: 1 },
-    hint:       { fontSize: 11, marginTop: 4 },
-    togRow:     { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, gap: 12 },
-    togIcon:    { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-    togLabel:   { fontSize: 14, fontWeight: '800' },
-    togDesc:    { fontSize: 12, marginTop: 1 },
-    logoPicker: { width: 68, height: 68, borderRadius: 20, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-    fullImg:    { width: '100%', height: '100%', resizeMode: 'cover' },
-    imgLoader:  { position: 'absolute', zIndex: 10, backgroundColor: '#00000055', width: '100%', height: '100%', justifyContent: 'center' },
-    editBadge:  { position: 'absolute', bottom: 4, right: 4, width: 19, height: 19, borderRadius: 10, backgroundColor: '#3B82F6', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'white' },
-    certBox:    { width: '48%', height: 78, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 1, overflow: 'hidden' },
-    certLabel:  { fontSize: 9, fontWeight: '800', marginTop: 4, textTransform: 'uppercase' },
-    planBadge:  { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-    swatch:     { width: 24, height: 24, borderRadius: 8 },
-    colorDot:   { width: 14, height: 14, borderRadius: 4, borderWidth: 1, borderColor: '#CBD5E1' },
-    currRow:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderRadius: 11, padding: 13, borderWidth: 1, marginBottom: 16 },
-    currValue:  { fontSize: 14, fontWeight: '700', marginTop: 2 },
-    currItem:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 13, paddingHorizontal: 8, borderBottomWidth: 1 },
-    socialRow:  { flexDirection: 'row', alignItems: 'center', borderRadius: 11, borderWidth: 1, marginBottom: 10, overflow: 'hidden' },
-    socialIcon: { width: 46, height: 46, alignItems: 'center', justifyContent: 'center' },
-    socialInput:{ flex: 1, fontSize: 14, fontWeight: '600', paddingHorizontal: 12 },
-    exportBtn:  { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 16, padding: 16, borderWidth: 1 },
-    infoBox:    { flexDirection: 'row', gap: 9, padding: 12, borderRadius: 11, marginTop: 4 },
-    dangerCard: { borderRadius: 18, padding: 16, borderWidth: 1.5 },
-    dangerBtn:  { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 13, justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: '#FCA5A5' },
-    aiTip:      { flexDirection: 'row', gap: 12, backgroundColor: '#FFFBEB', padding: 14, borderRadius: 13, borderLeftWidth: 4, borderColor: '#F59E0B', marginBottom: 10 },
-    aiTitle:    { fontSize: 13, fontWeight: '800', color: '#92400E' },
-    aiDesc:     { fontSize: 12, color: '#B45309', marginTop: 3 },
-    modalBg:    { flex: 1, backgroundColor: '#00000066', justifyContent: 'flex-end' },
-    modalSheet: { borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 22, maxHeight: '65%' },
-    // Phase-4 Advanced
-    adminProfileRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
-    adminAvatar:     { width: 68, height: 68, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-    bannerPreview:   { flexDirection: 'row', alignItems: 'center', borderRadius: 10, padding: 12, marginTop: 14 },
-    localeChip:      { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, borderWidth: 1.5 },
-    localeLabel:     { fontSize: 13, fontWeight: '700' },
-    // Phase-5 Shipping
-    stateCell:       { width: '48%', borderRadius: 12, borderWidth: 1, padding: 10, gap: 4 },
-    stateName:       { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.4 },
-    stateFeeInput:   { flex: 1, fontSize: 14, fontWeight: '700', borderBottomWidth: 1, paddingBottom: 2, minWidth: 60 },
-    // Modern Gateway Hub & Diagnostics
-    statChip:        { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
-    statChipTxt:     { fontSize: 10, fontWeight: '700' },
-    statusDot:       { width: 6, height: 6, borderRadius: 3 },
-    presetBtn:       { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
-    presetBtnTxt:    { fontSize: 11, fontWeight: '800' },
-    gwIcon:          { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-    pillBadge:       { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 7, paddingVertical: 4, borderRadius: 12, borderWidth: 1 },
-    pillBadgeTxt:    { fontSize: 9, fontWeight: '800', letterSpacing: 0.3 },
-    gwControlsRow:   { flexDirection: 'row', alignItems: 'center', paddingTop: 10, borderTopWidth: 1, marginTop: 4 },
-    gwCtrlLabel:     { fontSize: 12, fontWeight: '700' },
-    separator:       { height: 1, borderTopWidth: 1, marginVertical: 14 },
-    eyeBtn:          { position: 'absolute', right: 12, top: 32, padding: 6 },
-    pingBtn:         { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9 },
-    pingBtnTxt:      { color: 'white', fontWeight: '800', fontSize: 12 },
-    pingResultsBox:  { borderRadius: 12, borderWidth: 1, padding: 12, marginTop: 6 },
-    pingRow:         { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
-    pingLabel:       { fontSize: 12, fontWeight: '600' },
-    whRow:           { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 11 },
-    copyBtn:         { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
 };
