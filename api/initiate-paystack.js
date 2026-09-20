@@ -13,7 +13,11 @@ export default async function handler(req, res) {
     }
 
     try {
-        const body = req.body || {};
+        let body = req.body || {};
+        if (typeof body === 'string') {
+            try { body = JSON.parse(body); } catch (_) { body = {}; }
+        }
+
         const {
             amount,
             email,
@@ -57,20 +61,21 @@ export default async function handler(req, res) {
         }
 
         // 2. Call Official Paystack Initialize API (Server-side, no CORS)
+        const psPayload = {
+            email: userEmail,
+            amount: Math.round(safeAmount * 100),
+            reference: ref,
+            currency: 'NGN',
+            callback_url: redirectUrl
+        };
+
         const psRes = await fetch('https://api.paystack.co/transaction/initialize', {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${paystackSecret.trim()}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                email: userEmail,
-                amount: Math.round(safeAmount * 100),
-                reference: ref,
-                currency: 'NGN',
-                channels: ['card', 'bank', 'bank_transfer', 'ussd', 'qr', 'mobile_money'],
-                callback_url: redirectUrl
-            })
+            body: JSON.stringify(psPayload)
         });
 
         const psData = await psRes.json();

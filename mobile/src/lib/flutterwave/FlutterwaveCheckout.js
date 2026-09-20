@@ -159,14 +159,11 @@ var FlutterwaveCheckout = function FlutterwaveCheckout(props) {
 
     React.useEffect(function () {
         if (Platform.OS === 'web' && visible && !isHtml && typeof link === 'string' && link.startsWith('http')) {
-            var timer = setTimeout(function () {
-                try {
-                    if (typeof window !== 'undefined') {
-                        window.location.href = link;
-                    }
-                } catch (_) {}
-            }, 600);
-            return function () { clearTimeout(timer); };
+            try {
+                if (typeof window !== 'undefined') {
+                    window.location.href = link;
+                }
+            } catch (_) {}
         }
     }, [visible, isHtml, link]);
 
@@ -226,13 +223,13 @@ var FlutterwaveCheckout = function FlutterwaveCheckout(props) {
                             allow="payment; camera; microphone; geolocation"
                         />
                     ) : (
-                        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28, backgroundColor: '#0F172A' }}>
-                            <ActivityIndicator size="large" color="#10B981" style={{ marginBottom: 20 }} />
-                            <Text style={{ fontSize: 20, fontWeight: '800', color: '#FFFFFF', marginBottom: 8, textAlign: 'center' }}>
-                                Escrow Gateway Ready
+                        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16, backgroundColor: '#FFFFFF' }}>
+                            <ActivityIndicator size="large" color="#10B981" style={{ marginBottom: 14 }} />
+                            <Text style={{ fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 6, textAlign: 'center' }}>
+                                Redirecting to Secure Checkout...
                             </Text>
-                            <Text style={{ fontSize: 13.5, color: '#94A3B8', textAlign: 'center', marginBottom: 24, maxWidth: 380, lineHeight: 20 }}>
-                                Connecting to the encrypted payment gateway. If you are not redirected automatically, click below:
+                            <Text style={{ fontSize: 12.5, color: '#64748B', textAlign: 'center', marginBottom: 18, maxWidth: 300 }}>
+                                If you are not redirected automatically, tap below:
                             </Text>
                             <TouchableOpacity
                                 onPress={function () {
@@ -242,20 +239,16 @@ var FlutterwaveCheckout = function FlutterwaveCheckout(props) {
                                 }}
                                 style={{
                                     backgroundColor: '#10B981',
-                                    paddingVertical: 15,
-                                    paddingHorizontal: 32,
-                                    borderRadius: 12,
+                                    paddingVertical: 10,
+                                    paddingHorizontal: 22,
+                                    borderRadius: 8,
                                     flexDirection: 'row',
                                     alignItems: 'center',
-                                    gap: 10,
-                                    shadowColor: '#10B981',
-                                    shadowOpacity: 0.4,
-                                    shadowRadius: 10,
-                                    elevation: 6
+                                    gap: 8
                                 }}
                             >
-                                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 16 }}>Proceed to Payment</Text>
-                                <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+                                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14 }}>Open Payment Page</Text>
+                                <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
                             </TouchableOpacity>
                         </View>
                     )}
@@ -322,9 +315,9 @@ var styles = StyleSheet.create({
     webviewContainer: {
         flex: 1,
         backgroundColor: colors.white,
-        marginTop: 40,
-        borderTopLeftRadius: borderRadiusDimension * windowHeight,
-        borderTopRightRadius: borderRadiusDimension * windowHeight,
+        marginTop: 0,
+        width: '100%',
+        height: '100%',
         overflow: 'hidden',
     },
     webview: {

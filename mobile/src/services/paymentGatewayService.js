@@ -367,7 +367,19 @@ export const PaymentGatewayService = {
             }
         }
 
-        // Web Experience: Always use Official Paystack Inline Modal
+        // 3. Primary Experience: When backend returns hosted authorization_url, use official hosted page directly
+        if (edgeResult?.authorization_url) {
+            return {
+                success: true,
+                reference: edgeResult.reference || ref,
+                gateway: 'Paystack',
+                checkoutUrl: edgeResult.authorization_url,
+                accessCode: edgeResult.access_code,
+                type: 'url'
+            };
+        }
+
+        // 4. Web Fallback: Paystack Inline Modal
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
             await this.loadWebScript('https://js.paystack.co/v1/inline.js');
             if (window.PaystackPop && typeof window.PaystackPop.setup === 'function') {
@@ -384,7 +396,6 @@ export const PaymentGatewayService = {
                                 amount: Math.round(safeAmount * 100),
                                 ref: ref,
                                 currency: 'NGN',
-                                channels: ['card', 'bank', 'bank_transfer', 'ussd', 'qr', 'mobile_money'],
                                 callback: (response) => {
                                     if (onSuccess) onSuccess({ status: 'successful', reference: response?.reference || ref });
                                 },
@@ -405,18 +416,6 @@ export const PaymentGatewayService = {
             }
         }
 
-        // Mobile Experience: When backend returns hosted authorization_url, open in WebView
-        if (edgeResult?.authorization_url) {
-            return {
-                success: true,
-                reference: edgeResult.reference || ref,
-                gateway: 'Paystack',
-                checkoutUrl: edgeResult.authorization_url,
-                accessCode: edgeResult.access_code,
-                type: 'url'
-            };
-        }
-
         // Fallback Mobile Experience: Self-contained WebView HTML with embedded Paystack inline
         const inlineHtml = `<!DOCTYPE html>
 <html>
@@ -426,15 +425,16 @@ export const PaymentGatewayService = {
   <title>Paystack Escrow Checkout</title>
   <script src="https://js.paystack.co/v1/inline.js"></script>
   <style>
-    body { background: #0B1120; color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; text-align: center; margin: 0; }
-    .card { background: #1E293B; border: 1px solid #334155; border-radius: 16px; padding: 32px 24px; max-width: 400px; width: 100%; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4); }
-    .title { font-size: 18px; font-weight: 800; color: #FFFFFF; margin-bottom: 6px; }
-    .amount { font-size: 26px; font-weight: 900; color: #10B981; margin: 14px 0 20px; }
-    .notice { background: rgba(245, 158, 11, 0.15); border: 1px solid #F59E0B; border-radius: 8px; padding: 12px; font-size: 12px; color: #FCD34D; line-height: 1.5; margin-bottom: 16px; text-align: left; }
-    .spinner { border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid #10B981; border-radius: 50%; width: 32px; height: 32px; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+    * { box-sizing: border-box; }
+    body { background: #0B1120; color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 16px 12px; text-align: center; margin: 0; }
+    .card { background: #1E293B; border: 1px solid #334155; border-radius: 12px; padding: 20px 16px; max-width: 330px; width: 100%; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4); }
+    .title { font-size: 16px; font-weight: 700; color: #FFFFFF; margin-bottom: 4px; }
+    .amount { font-size: 22px; font-weight: 800; color: #10B981; margin: 8px 0 14px; }
+    .notice { background: rgba(245, 158, 11, 0.15); border: 1px solid #F59E0B; border-radius: 8px; padding: 10px; font-size: 11.5px; color: #FCD34D; line-height: 1.4; margin-bottom: 14px; text-align: left; }
+    .spinner { border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid #10B981; border-radius: 50%; width: 28px; height: 28px; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    .btn { background: #10B981; color: #FFFFFF; font-weight: 800; font-size: 15px; padding: 14px 24px; border-radius: 10px; border: none; width: 100%; cursor: pointer; margin-top: 16px; }
-    .secure-note { font-size: 12px; color: #94A3B8; margin-top: 14px; }
+    .btn { background: #10B981; color: #FFFFFF; font-weight: 700; font-size: 14px; padding: 12px 18px; border-radius: 8px; border: none; width: 100%; cursor: pointer; margin-top: 12px; }
+    .secure-note { font-size: 11px; color: #94A3B8; margin-top: 12px; }
   </style>
 </head>
 <body>
@@ -656,14 +656,15 @@ export const PaymentGatewayService = {
   <title>Flutterwave Checkout</title>
   <script src="https://checkout.flutterwave.com/v3.js"></script>
   <style>
-    body { background: #0B1120; color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; text-align: center; margin: 0; }
-    .card { background: #1E293B; border: 1px solid #334155; border-radius: 16px; padding: 32px 24px; max-width: 400px; width: 100%; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4); }
-    .title { font-size: 18px; font-weight: 800; color: #FFFFFF; margin-bottom: 6px; }
-    .amount { font-size: 26px; font-weight: 900; color: #F5A623; margin: 14px 0 20px; }
-    .spinner { border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid #F5A623; border-radius: 50%; width: 32px; height: 32px; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+    * { box-sizing: border-box; }
+    body { background: #0B1120; color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 16px 12px; text-align: center; margin: 0; }
+    .card { background: #1E293B; border: 1px solid #334155; border-radius: 12px; padding: 20px 16px; max-width: 330px; width: 100%; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4); }
+    .title { font-size: 16px; font-weight: 700; color: #FFFFFF; margin-bottom: 4px; }
+    .amount { font-size: 22px; font-weight: 800; color: #F5A623; margin: 8px 0 14px; }
+    .spinner { border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid #F5A623; border-radius: 50%; width: 28px; height: 28px; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    .btn { background: #F5A623; color: #000000; font-weight: 800; font-size: 15px; padding: 14px 24px; border-radius: 10px; border: none; width: 100%; cursor: pointer; margin-top: 16px; }
-    .secure-note { font-size: 12px; color: #94A3B8; margin-top: 14px; }
+    .btn { background: #F5A623; color: #000000; font-weight: 700; font-size: 14px; padding: 12px 18px; border-radius: 8px; border: none; width: 100%; cursor: pointer; margin-top: 12px; }
+    .secure-note { font-size: 11px; color: #94A3B8; margin-top: 12px; }
   </style>
 </head>
 <body>
