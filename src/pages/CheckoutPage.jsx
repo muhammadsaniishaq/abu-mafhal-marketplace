@@ -33,9 +33,54 @@ const CheckoutPage = () => {
     zipCode: ''
   });
 
+  // Load saved shipping address on mount
+  React.useEffect(() => {
+    try {
+      const cached = localStorage.getItem('@abumafhal_last_selected_address') || localStorage.getItem('@abumafhal_web_shipping_info');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed.address) {
+          setShippingInfo(prev => ({
+            ...prev,
+            fullName: parsed.fullName || parsed.name || prev.fullName,
+            email: parsed.email || prev.email,
+            phone: parsed.phone || prev.phone,
+            address: parsed.address || prev.address,
+            city: parsed.city || parsed.lga || prev.city,
+            state: parsed.state || prev.state,
+            zipCode: parsed.zipCode || prev.zipCode
+          }));
+        }
+      }
+    } catch (_) {}
+
+    const uid = currentUser?.id || currentUser?.uid;
+    if (uid) {
+      supabase.from('profiles').select('address, state, city, phone, full_name').eq('id', uid).maybeSingle().then(({ data }) => {
+        if (data && data.address) {
+          setShippingInfo(prev => ({
+            ...prev,
+            fullName: data.full_name || prev.fullName,
+            phone: data.phone || prev.phone,
+            address: data.address || prev.address,
+            city: data.city || prev.city,
+            state: data.state || prev.state
+          }));
+        }
+      });
+    }
+  }, [currentUser]);
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setShippingInfo((prev) => ({ ...prev, [name]: value }));
+    setShippingInfo((prev) => {
+      const updated = { ...prev, [name]: value };
+      try {
+        localStorage.setItem('@abumafhal_web_shipping_info', JSON.stringify(updated));
+        localStorage.setItem('@abumafhal_last_selected_address', JSON.stringify(updated));
+      } catch (_) {}
+      return updated;
+    });
   };
 
   const validateForm = () => {
@@ -77,30 +122,83 @@ const CheckoutPage = () => {
   const initializePaystack = usePaystackPayment(paystackConfig);
   const handleFlutterwaveAction = useFlutterwave(fwConfig);
 
-  const handlePaystackPayment = () => {
-    initializePaystack(
-      (ref) => completeOrder(ref.reference, 'paystack'),
-      () => setLoading(false)
-    );
+  const handlePaystackPayment = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/initiate-paystack', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: finalTotal,
+          email: shippingInfo.email,
+          reference: `ORD-${Date.now()}`,
+          callback_url: `${window.location.origin}/buyer/orders?success=true`
+        })
+      });
+      const data = await res.json();
+      if (data?.success && data?.authorization_url) {
+        window.location.href = data.authorization_url;
+        return;
+      }
+      throw new Error(data?.error || 'Paystack initialization failed');
+    } catch (err) {
+      console.warn('Backend Paystack error, trying client inline:', err);
+      if (paystackConfig.publicKey && paystackConfig.publicKey.startsWith('pk_')) {
+        initializePaystack(
+          (ref) => completeOrder(ref.reference, 'paystack'),
+          () => setLoading(false)
+        );
+      } else {
+        alert(err.message || 'Paystack API Keys ba a sa su ba a Admin Settings. Da fatan a saita su ko a zabi Flutterwave.');
+        setLoading(false);
+      }
+    }
   };
 
-  const handleFlutterwavePayment = () => {
-    handleFlutterwaveAction({
-      callback: (response) => {
-        closePaymentModal();
-        if (response.status === "successful") {
-          completeOrder(response.transaction_id, 'flutterwave');
-        } else {
-          console.error("Flutterwave failed:", response);
-          setLoading(false);
-        }
-      },
-      onClose: () => setLoading(false)
-    });
+  const handleFlutterwavePayment = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/initiate-flutterwave', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: finalTotal,
+          email: shippingInfo.email,
+          phone: shippingInfo.phone,
+          name: shippingInfo.fullName,
+          reference: `ORD-${Date.now()}`,
+          callback_url: `${window.location.origin}/buyer/orders?success=true`
+        })
+      });
+      const data = await res.json();
+      if (data?.success && data?.checkout_url) {
+        window.location.href = data.checkout_url;
+        return;
+      }
+      throw new Error(data?.error || 'Flutterwave initialization failed');
+    } catch (err) {
+      console.warn('Backend FLW error, trying client inline:', err);
+      if (fwConfig.public_key && fwConfig.public_key.startsWith('FLWPUBK')) {
+        handleFlutterwaveAction({
+          callback: (response) => {
+            closePaymentModal();
+            if (response.status === "successful") {
+              completeOrder(response.transaction_id, 'flutterwave');
+            } else {
+              setLoading(false);
+            }
+          },
+          onClose: () => setLoading(false)
+        });
+      } else {
+        alert(err.message || 'Kofar biyan kudi ta Flutterwave ta samu matsala. Da fatan a sake gwadawa.');
+        setLoading(false);
+      }
+    }
   };
 
   const handleNOWPayment = () => {
-    alert("NOWPayments integration not yet available.");
+    alert("Kofar biyan kudi ta Crypto (NOWPayments) za a zaba a matsayin madadin biya.");
     setLoading(false);
   };
 

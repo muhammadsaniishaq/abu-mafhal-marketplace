@@ -477,6 +477,12 @@ export const AdminSettings = ({ navigation }) => {
             if (settings.flutterwave_secret_key !== undefined) setFlutterwaveSecretKey(settings.flutterwave_secret_key || '');
             if (settings.nowpayments_api_key !== undefined) setNowpaymentsApiKey(settings.nowpayments_api_key || '');
             if (settings.nowpayments_ipn_key !== undefined) setNowpaymentsIpnKey(settings.nowpayments_ipn_key || '');
+            if (settings.default_shipping_address !== undefined) {
+                const addr = typeof settings.default_shipping_address === 'object' && settings.default_shipping_address !== null
+                    ? (settings.default_shipping_address.value || settings.default_shipping_address.address || '')
+                    : (settings.default_shipping_address || '');
+                setDefaultShippingAddress(addr);
+            }
             if (settings.require_phone_on_checkout !== undefined) setRequirePhoneOnCheckout(settings.require_phone_on_checkout !== false);
             if (settings.unpaid_order_timeout_hours !== undefined) setUnpaidOrderTimeoutHours(settings.unpaid_order_timeout_hours?.toString() || '24');
             if (settings.gateway_fee_pass_through !== undefined) setGatewayFeePassThrough(!!settings.gateway_fee_pass_through);

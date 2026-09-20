@@ -90,15 +90,34 @@ export const AddressPage = ({ navigation, onBack }) => {
         const uid = user?.id || 'guest';
         let mergedList = [];
 
-        // 1. Load from local AsyncStorage first
+        // 1. Load from local AsyncStorage & window.localStorage first
         try {
-            const localRaw = await AsyncStorage.getItem(getStorageKey(uid));
+            let localRaw = await AsyncStorage.getItem(getStorageKey(uid));
+            if (!localRaw && typeof window !== 'undefined' && window.localStorage) {
+                localRaw = window.localStorage.getItem(getStorageKey(uid));
+            }
+            if (!localRaw) {
+                localRaw = await AsyncStorage.getItem('@user_addresses_guest');
+                if (!localRaw && typeof window !== 'undefined' && window.localStorage) {
+                    localRaw = window.localStorage.getItem('@user_addresses_guest');
+                }
+            }
             if (localRaw) {
                 const parsed = JSON.parse(localRaw);
-                if (Array.isArray(parsed)) mergedList = parsed;
+                if (Array.isArray(parsed) && parsed.length > 0) mergedList = parsed;
+            }
+            if (mergedList.length === 0) {
+                let lastSelected = await AsyncStorage.getItem('@abumafhal_last_selected_address');
+                if (!lastSelected && typeof window !== 'undefined' && window.localStorage) {
+                    lastSelected = window.localStorage.getItem('@abumafhal_last_selected_address');
+                }
+                if (lastSelected) {
+                    const parsedLast = JSON.parse(lastSelected);
+                    if (parsedLast && parsedLast.address) mergedList = [parsedLast];
+                }
             }
         } catch (e) {
-            console.log('AsyncStorage read error:', e);
+            console.log('Storage read error in AddressPage:', e);
         }
 
         // 2. Attempt to query Supabase 'addresses' table
@@ -119,9 +138,11 @@ export const AddressPage = ({ navigation, onBack }) => {
                     });
                     mergedList = Array.from(idMap.values());
                     await AsyncStorage.setItem(getStorageKey(uid), JSON.stringify(mergedList));
+                    if (typeof window !== 'undefined' && window.localStorage) {
+                        window.localStorage.setItem(getStorageKey(uid), JSON.stringify(mergedList));
+                    }
                 }
             } catch (err) {
-                // Supabase table may not exist yet or offline; fallback to local
                 console.log('Supabase addresses table query skipped/fallback:', err?.message || err);
             }
         }
@@ -131,7 +152,7 @@ export const AddressPage = ({ navigation, onBack }) => {
             try {
                 const { data: prof } = await supabase
                     .from('profiles')
-                    .select('address, state, phone, phone_number')
+                    .select('address, state, city, lga, phone, phone_number')
                     .eq('id', user.id)
                     .maybeSingle();
 
@@ -141,14 +162,18 @@ export const AddressPage = ({ navigation, onBack }) => {
                         user_id: user.id,
                         title: 'Home',
                         address: prof.address,
-                        city: '',
-                        state: prof.state || '',
+                        city: prof.city || prof.lga || '',
+                        lga: prof.lga || prof.city || '',
+                        state: prof.state || 'Yobe',
                         phone: prof.phone || prof.phone_number || '',
                         is_default: true,
                         created_at: new Date().toISOString()
                     };
                     mergedList = [fallbackItem];
                     await AsyncStorage.setItem(getStorageKey(uid), JSON.stringify(mergedList));
+                    if (typeof window !== 'undefined' && window.localStorage) {
+                        window.localStorage.setItem(getStorageKey(uid), JSON.stringify(mergedList));
+                    }
                 }
             } catch (err) {
                 console.log('Profile fallback address error:', err);
@@ -379,28 +404,58 @@ export const AddressPage = ({ navigation, onBack }) => {
                 updatedList.unshift(newRecord);
             }
 
-            // Persist to local storage immediately
+            // Persist to local storage immediately across all fallback keys
             await AsyncStorage.setItem(getStorageKey(uid), JSON.stringify(updatedList));
-
-            // Sync with Supabase (Best-Effort)
-            if (user) {
+            await AsyncStorage.setItem('@user_addresses_guest', JSON.stringify(updatedList));
+            await AsyncStorage.setItem('@abumafhal_last_selected_address', JSON.stringify(newRecord));
+            if (typeof window !== 'undefined' && window.localStorage) {
                 try {
-                    const sbPayload = {
-                        user_id: user.id,
-                        title: newRecord.title,
-                        address: newRecord.address,
-                        city: newRecord.city,
-                        state: newRecord.state,
-                        phone: newRecord.phone,
-                        is_default: newRecord.is_default
-                    };
+                    window.localStorage.setItem(getStorageKey(uid), JSON.stringify(updatedList));
+                    window.localStorage.setItem('@user_addresses_guest', JSON.stringify(updatedList));
+                    window.localStorage.setItem('@abumafhal_last_selected_address', JSON.stringify(newRecord));
+                } catch (_) {}
+            }
+
+            // Sync with Supabase: Try RPC first (SECURITY DEFINER), fallback to direct tables
+            const sbPayload = {
+                id: (editingId && !editingId.startsWith('addr_') && !editingId.startsWith('profile_')) ? editingId : undefined,
+                user_id: user?.id || null,
+                title: newRecord.title,
+                address: newRecord.address,
+                landmark: formData.landmark ? formData.landmark.trim() : null,
+                city: newRecord.city,
+                lga: newRecord.lga || newRecord.city,
+                state: newRecord.state,
+                phone: newRecord.phone,
+                latitude: newRecord.latitude,
+                longitude: newRecord.longitude,
+                is_default: newRecord.is_default
+            };
+
+            let savedViaRpc = false;
+            try {
+                const { data: rpcData, error: rpcErr } = await supabase.rpc('save_user_address', {
+                    address_payload: sbPayload
+                });
+                if (!rpcErr && rpcData) {
+                    savedViaRpc = true;
+                    if (rpcData.id) {
+                        newRecord.id = rpcData.id;
+                        const finalUpdated = updatedList.map(a => a.id === newRecord.id ? { ...a, id: rpcData.id } : a);
+                        await AsyncStorage.setItem(getStorageKey(uid), JSON.stringify(finalUpdated));
+                    }
+                }
+            } catch (_) {}
+
+            if (!savedViaRpc && user) {
+                try {
                     if (editingId && !editingId.startsWith('addr_') && !editingId.startsWith('profile_')) {
                         await supabase.from('addresses').update(sbPayload).eq('id', editingId);
                     } else {
                         await supabase.from('addresses').insert([sbPayload]);
                     }
                 } catch (sbErr) {
-                    console.log('Supabase sync notice (saved locally):', sbErr?.message);
+                    console.log('Direct addresses insert notice:', sbErr?.message);
                 }
 
                 // Also update profile record for convenience
@@ -409,6 +464,7 @@ export const AddressPage = ({ navigation, onBack }) => {
                         await supabase.from('profiles').update({
                             address: fullAddressText,
                             state: formData.state,
+                            city: formData.city,
                             phone: formData.phone.trim()
                         }).eq('id', user.id);
                     } catch (pErr) {

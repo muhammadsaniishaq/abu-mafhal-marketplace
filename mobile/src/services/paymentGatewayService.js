@@ -266,24 +266,54 @@ export const PaymentGatewayService = {
             (typeof process !== 'undefined' ? (process.env?.EXPO_PUBLIC_PAYSTACK_SECRET_KEY || process.env?.PAYSTACK_SECRET_KEY) : null);
         const isTestMode = String(dynamicPubKey).startsWith('pk_test_');
 
-        // 1. Primary: Authoritative Backend Supabase Edge Function
+        // 1. Primary: Serverless Backend Endpoint (Eliminates CORS & RLS key mismatches)
         let edgeResult = null;
         let edgeError = null;
 
-        const res1 = await this.invokeEdgeFunction('initiate-paystack-payment', {
-            amount: safeAmount,
-            email: userEmail,
-            reference: ref,
-            currency: 'NGN',
-            channels: ['card', 'bank', 'bank_transfer', 'ussd', 'qr', 'mobile_money'],
-            callback_url: callbackUrl,
-            secret_key: dynamicSecKey || undefined
-        });
+        try {
+            const endpointUrl = Platform.OS === 'web' && typeof window !== 'undefined'
+                ? '/api/initiate-paystack'
+                : 'https://abumafhal.com/api/initiate-paystack';
 
-        if (res1.ok && res1.data?.success && res1.data?.authorization_url) {
-            edgeResult = res1.data;
-        } else if (res1.error || res1.data?.error) {
-            edgeError = res1.data?.error || res1.error;
+            const srvRes = await fetch(endpointUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    amount: safeAmount,
+                    email: userEmail,
+                    reference: ref,
+                    callback_url: callbackUrl,
+                    secret_key: dynamicSecKey || undefined
+                })
+            });
+
+            const srvData = await srvRes.json();
+            if (srvRes.ok && srvData?.success && srvData?.authorization_url) {
+                edgeResult = srvData;
+            } else if (srvData?.error) {
+                edgeError = srvData.error;
+            }
+        } catch (srvErr) {
+            console.warn('[PaymentGatewayService] Serverless Paystack notice:', srvErr.message);
+        }
+
+        // 2. Secondary: Authoritative Backend Supabase Edge Function
+        if (!edgeResult) {
+            const res1 = await this.invokeEdgeFunction('initiate-paystack-payment', {
+                amount: safeAmount,
+                email: userEmail,
+                reference: ref,
+                currency: 'NGN',
+                channels: ['card', 'bank', 'bank_transfer', 'ussd', 'qr', 'mobile_money'],
+                callback_url: callbackUrl,
+                secret_key: dynamicSecKey || undefined
+            });
+
+            if (res1.ok && res1.data?.success && res1.data?.authorization_url) {
+                edgeResult = res1.data;
+            } else if (res1.error || res1.data?.error) {
+                edgeError = res1.data?.error || res1.error;
+            }
         }
 
         // 2. Direct Paystack API call fallback if dynamic secret key is present
@@ -505,48 +535,70 @@ export const PaymentGatewayService = {
             ? rawPubKey.trim() 
             : null;
 
-        // 1. Direct Flutterwave API if secret key is present in app_settings or environment
+        // 1. Primary: Serverless Backend Endpoint (Eliminates CORS & supports hosted links 100%)
         const flwSecret = config.flutterwave_secret_key || config.FLUTTERWAVE_SECRET_KEY ||
             (typeof process !== 'undefined' ? (process.env?.EXPO_PUBLIC_FLUTTERWAVE_SECRET_KEY || process.env?.FLUTTERWAVE_SECRET_KEY) : null);
-        if (flwSecret) {
-            try {
-                const response = await fetch('https://api.flutterwave.com/v3/payments', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${flwSecret.trim()}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        tx_ref: ref,
-                        amount: safeAmount,
-                        currency: 'NGN',
-                        redirect_url: callbackUrl,
-                        customer: {
-                            email: userEmail,
-                            phonenumber: userPhone,
-                            name: userName
-                        },
-                        customizations: {
-                            title: 'Abu Mafhal Marketplace',
-                            description: `Order Ref: ${ref}`,
-                            logo: 'https://abumafhal.com/logo.png'
-                        }
-                    })
-                });
 
-                const data = await response.json();
-                if (data?.status === 'success' && data?.data?.link) {
-                    return {
-                        success: true,
-                        reference: ref,
-                        gateway: 'Flutterwave',
-                        checkoutUrl: data.data.link,
-                        type: 'url'
-                    };
-                }
-            } catch (err) {
-                console.warn('[PaymentGatewayService] Direct Flutterwave API call failed:', err);
+        try {
+            const endpointUrl = Platform.OS === 'web' && typeof window !== 'undefined'
+                ? '/api/initiate-flutterwave'
+                : 'https://abumafhal.com/api/initiate-flutterwave';
+
+            const srvRes = await fetch(endpointUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    amount: safeAmount,
+                    email: userEmail,
+                    phone: userPhone,
+                    name: userName,
+                    reference: ref,
+                    tx_ref: ref,
+                    callback_url: callbackUrl,
+                    secret_key: flwSecret || undefined
+                })
+            });
+
+            const srvData = await srvRes.json();
+            if (srvRes.ok && srvData?.success && (srvData?.checkout_url || srvData?.authorization_url || srvData?.payment_link)) {
+                const link = srvData.checkout_url || srvData.authorization_url || srvData.payment_link;
+                return {
+                    success: true,
+                    reference: ref,
+                    gateway: 'Flutterwave',
+                    checkoutUrl: link,
+                    type: 'url'
+                };
             }
+        } catch (srvErr) {
+            console.warn('[PaymentGatewayService] Serverless Flutterwave notice:', srvErr.message);
+        }
+
+        // 2. Secondary: Backend Supabase Edge Function 'flutterwave-initiate'
+        try {
+            const edgeRes = await this.invokeEdgeFunction('flutterwave-initiate', {
+                amount: safeAmount,
+                email: userEmail,
+                phone: userPhone,
+                name: userName,
+                reference: ref,
+                tx_ref: ref,
+                order_id: metadata.order_id || ref,
+                callback_url: callbackUrl
+            });
+
+            if (edgeRes.ok && edgeRes.data && (edgeRes.data.checkout_url || edgeRes.data.authorization_url || edgeRes.data.payment_link)) {
+                const link = edgeRes.data.checkout_url || edgeRes.data.authorization_url || edgeRes.data.payment_link;
+                return {
+                    success: true,
+                    reference: ref,
+                    gateway: 'Flutterwave',
+                    checkoutUrl: link,
+                    type: 'url'
+                };
+            }
+        } catch (edgeErr) {
+            console.warn('[PaymentGatewayService] Edge function flutterwave-initiate notice:', edgeErr.message);
         }
 
         if (!flwPubKey) {

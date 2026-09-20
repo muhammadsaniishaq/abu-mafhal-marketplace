@@ -44,19 +44,30 @@ const AdminSettings = () => {
                 .select('*');
 
             if (error) throw error;
-            const singleData = (data && data.length > 0) ? (data.find(r => r.is_singleton) || data[0]) : null;
-            if (singleData) {
-                const data = singleData;
+            if (data && data.length > 0) {
+                const merged = {};
+                data.forEach(r => {
+                    if (r.key) {
+                        merged[r.key] = typeof r.value === 'object' && r.value !== null && 'value' in r.value && Object.keys(r.value).length === 1
+                            ? r.value.value
+                            : r.value;
+                    }
+                });
+
+                if (merged.payment_gateways && typeof merged.payment_gateways === 'object') {
+                    Object.assign(merged, merged.payment_gateways);
+                }
+
                 // Initialize arrays/objects if null
-                if (!data.shipping_fees) {
+                if (!merged.shipping_fees) {
                     const defaultFees = {};
                     NIGERIA_STATES.forEach(s => defaultFees[s] = ['Lagos', 'FCT (Abuja)', 'Rivers', 'Kano', 'Ogun'].includes(s) ? 1500 : 3000);
-                    data.shipping_fees = defaultFees;
+                    merged.shipping_fees = defaultFees;
                 }
-                if (!data.payment_methods) data.payment_methods = {};
-                if (!data.features) data.features = {};
+                if (!merged.payment_methods) merged.payment_methods = { paystack: true, flutterwave: true, nowpayments: true, wallet: true, pod: true };
+                if (!merged.features) merged.features = {};
                 
-                setSettings(data);
+                setSettings(merged);
             }
         } catch (error) {
             console.error('Error fetching settings:', error);
@@ -70,15 +81,58 @@ const AdminSettings = () => {
         if(e) e.preventDefault();
         setSaving(true);
         try {
-            const { error } = await supabase
-                .from('app_settings')
-                .update({
-                    ...settings,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('is_singleton', true);
+            // 1. Save payment gateways dedicated group
+            const gatewayKeys = {
+                paystack_public_key: settings.paystack_public_key || '',
+                paystack_secret_key: settings.paystack_secret_key || '',
+                flutterwave_public_key: settings.flutterwave_public_key || '',
+                flutterwave_secret_key: settings.flutterwave_secret_key || '',
+                nowpayments_api_key: settings.nowpayments_api_key || '',
+                nowpayments_ipn_key: settings.nowpayments_ipn_key || '',
+                updated_at: new Date().toISOString()
+            };
 
-            if (error) throw error;
+            try {
+                await supabase.rpc('save_payment_gateways', { gateway_data: gatewayKeys });
+            } catch (_) {}
+
+            try {
+                await supabase
+                    .from('app_settings')
+                    .upsert({
+                        key: 'payment_gateways',
+                        value: gatewayKeys,
+                        description: 'Authoritative Payment Gateways Credentials',
+                        updated_at: new Date().toISOString()
+                    }, { onConflict: 'key' });
+            } catch (_) {}
+
+            // 2. Save each key-value setting
+            for (const [k, val] of Object.entries(settings)) {
+                if (val !== undefined && k !== 'payment_gateways' && k !== 'id' && k !== 'created_at' && k !== 'updated_at') {
+                    const payload = typeof val === 'object' ? val : { value: val };
+                    try {
+                        const { error: rpcErr } = await supabase.rpc('save_app_setting', {
+                            p_key: k,
+                            p_value: payload,
+                            p_description: `Platform setting: ${k}`
+                        });
+                        if (rpcErr) throw rpcErr;
+                    } catch (_) {
+                        try {
+                            await supabase
+                                .from('app_settings')
+                                .upsert({
+                                    key: k,
+                                    value: payload,
+                                    description: `Platform setting: ${k}`,
+                                    updated_at: new Date().toISOString()
+                                }, { onConflict: 'key' });
+                        } catch (_) {}
+                    }
+                }
+            }
+
             setUnsaved(false);
             setToast('Configurations saved and synced globally.');
             setTimeout(() => setToast(''), 4000);
@@ -270,10 +324,12 @@ const AdminSettings = () => {
                                     <div className="col-span-full mt-6 mb-4">
                                         <h3 className="font-semibold text-gray-800 border-b pb-2 text-rose-700">Gateway API Secrets</h3>
                                     </div>
-                                    <InputField type="password" label="Paystack Public Key" field="paystack_public_key" />
-                                    <InputField type="password" label="Paystack Secret Key" field="paystack_secret_key" />
-                                    <InputField type="password" label="NOWPayments API Key" field="nowpayments_api_key" />
-                                    <InputField type="password" label="NOWPayments IPN Secret Key" field="nowpayments_ipn_key" />
+                                    <InputField type="password" label="Paystack Public Key" field="paystack_public_key" placeholder="pk_live_... or pk_test_..." />
+                                    <InputField type="password" label="Paystack Secret Key" field="paystack_secret_key" placeholder="sk_live_... or sk_test_..." />
+                                    <InputField type="password" label="Flutterwave Public Key" field="flutterwave_public_key" placeholder="FLWPUBK-... or FLWPUBK_TEST-..." />
+                                    <InputField type="password" label="Flutterwave Secret Key" field="flutterwave_secret_key" placeholder="FLWSECK-... or FLWSECK_TEST-..." />
+                                    <InputField type="password" label="NOWPayments API Key" field="nowpayments_api_key" placeholder="Enter NOWPayments API Key..." />
+                                    <InputField type="password" label="NOWPayments IPN Secret Key" field="nowpayments_ipn_key" placeholder="Enter NOWPayments IPN Key..." />
                                 </div>
                             </div>
                         )}
@@ -284,6 +340,10 @@ const AdminSettings = () => {
                                 <h2 className="text-xl font-bold text-gray-900 mb-6 border-b pb-2">Shipping & Taxation</h2>
                                 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 mb-8">
+                                    <div className="col-span-full mb-4">
+                                        <InputField label="Fallback Headquarters Shipping Address" field="default_shipping_address" placeholder="e.g. Main Commercial Plaza, Bade / Gashua, Yobe State" hint="Main HQ dispatch address used across marketplace calculations." />
+                                    </div>
+
                                     <Toggle label="Enable Tax (VAT) Calculation" field="tax_enabled" />
                                     {settings.tax_enabled !== false && (
                                         <InputField type="number" label="Global Tax Rate (%)" field="tax_rate" />

@@ -99,7 +99,9 @@ export const AppSettingsProvider = ({ children }) => {
                         ...(merged.payment_maintenance || {})
                     },
                     flutterwave_public_key: safeFlwKey,
-                    default_shipping_address: merged.default_shipping_address || '',
+                    default_shipping_address: (typeof merged.default_shipping_address === 'object' && merged.default_shipping_address !== null)
+                        ? (merged.default_shipping_address.value || merged.default_shipping_address.address || '')
+                        : (merged.default_shipping_address || ''),
                     vendor_plans: hasValidPlans ? merged.vendor_plans : DEFAULT_VENDOR_PLANS
                 };
                 setSettings({ ...enriched, loading: false });
@@ -203,20 +205,32 @@ export const AppSettingsProvider = ({ children }) => {
                 console.warn('Gateway keys database persistence notice:', gwSaveErr);
             }
 
-            // 3. Upsert key-value configuration rows for settings
+            // 3. Upsert key-value configuration rows for settings (using RPC then direct upsert)
             const skipKeys = ['is_singleton', 'created_at', 'updated_at', 'id'];
             for (const k of Object.keys(newSettings)) {
                 if (!singletonCols.includes(k) && !skipKeys.includes(k) && newSettings[k] !== undefined) {
+                    const formattedVal = typeof newSettings[k] === 'object' ? newSettings[k] : { value: newSettings[k] };
                     try {
-                        await supabase
-                            .from('app_settings')
-                            .upsert({
-                                key: k,
-                                value: typeof newSettings[k] === 'object' ? newSettings[k] : { value: newSettings[k] },
-                                description: `Platform setting: ${k}`,
-                                updated_at: new Date().toISOString()
-                            }, { onConflict: 'key' });
-                    } catch (_) {}
+                        const { error: rpcErr } = await supabase.rpc('save_app_setting', {
+                            p_key: k,
+                            p_value: formattedVal,
+                            p_description: `Platform setting: ${k}`
+                        });
+                        if (rpcErr) throw rpcErr;
+                    } catch (_) {
+                        try {
+                            await supabase
+                                .from('app_settings')
+                                .upsert({
+                                    key: k,
+                                    value: formattedVal,
+                                    description: `Platform setting: ${k}`,
+                                    updated_at: new Date().toISOString()
+                                }, { onConflict: 'key' });
+                        } catch (upsertErr) {
+                            console.log(`Setting ${k} save notice:`, upsertErr?.message);
+                        }
+                    }
                 }
             }
 

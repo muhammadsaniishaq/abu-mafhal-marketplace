@@ -27,6 +27,55 @@ const Checkout = () => {
     zipCode: ''
   });
 
+  // Auto-load saved shipping address
+  React.useEffect(() => {
+    try {
+      const cached = localStorage.getItem('@abumafhal_last_selected_address') || localStorage.getItem('@abumafhal_web_shipping_info');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed.address) {
+          setShippingInfo(prev => ({
+            ...prev,
+            fullName: parsed.fullName || parsed.name || prev.fullName,
+            email: parsed.email || prev.email,
+            phone: parsed.phone || prev.phone,
+            address: parsed.address || prev.address,
+            city: parsed.city || parsed.lga || prev.city,
+            state: parsed.state || prev.state,
+            zipCode: parsed.zipCode || prev.zipCode
+          }));
+        }
+      }
+    } catch (_) {}
+
+    const uid = currentUser?.id || currentUser?.uid;
+    if (uid) {
+      supabase.from('profiles').select('address, state, city, phone, full_name').eq('id', uid).maybeSingle().then(({ data }) => {
+        if (data && data.address) {
+          setShippingInfo(prev => ({
+            ...prev,
+            fullName: data.full_name || prev.fullName,
+            phone: data.phone || prev.phone,
+            address: data.address || prev.address,
+            city: data.city || prev.city,
+            state: data.state || prev.state
+          }));
+        }
+      });
+    }
+  }, [currentUser]);
+
+  const updateShippingField = (field, val) => {
+    setShippingInfo(prev => {
+      const updated = { ...prev, [field]: val };
+      try {
+        localStorage.setItem('@abumafhal_last_selected_address', JSON.stringify(updated));
+        localStorage.setItem('@abumafhal_web_shipping_info', JSON.stringify(updated));
+      } catch (_) {}
+      return updated;
+    });
+  };
+
   const [paymentMethod, setPaymentMethod] = useState('paystack');
   const [loading, setLoading] = useState(false);
 
@@ -341,7 +390,7 @@ const Checkout = () => {
                   <input
                     type="text"
                     value={shippingInfo.fullName}
-                    onChange={(e) => setShippingInfo({...shippingInfo, fullName: e.target.value})}
+                    onChange={(e) => updateShippingField('fullName', e.target.value)}
                     required
                     className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
                   />
@@ -351,7 +400,7 @@ const Checkout = () => {
                   <input
                     type="email"
                     value={shippingInfo.email}
-                    onChange={(e) => setShippingInfo({...shippingInfo, email: e.target.value})}
+                    onChange={(e) => updateShippingField('email', e.target.value)}
                     required
                     className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
                   />
@@ -361,7 +410,7 @@ const Checkout = () => {
                   <input
                     type="tel"
                     value={shippingInfo.phone}
-                    onChange={(e) => setShippingInfo({...shippingInfo, phone: e.target.value})}
+                    onChange={(e) => updateShippingField('phone', e.target.value)}
                     required
                     className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
                   />
@@ -371,7 +420,7 @@ const Checkout = () => {
                   <input
                     type="text"
                     value={shippingInfo.address}
-                    onChange={(e) => setShippingInfo({...shippingInfo, address: e.target.value})}
+                    onChange={(e) => updateShippingField('address', e.target.value)}
                     required
                     className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
                   />
@@ -381,7 +430,7 @@ const Checkout = () => {
                   <input
                     type="text"
                     value={shippingInfo.city}
-                    onChange={(e) => setShippingInfo({...shippingInfo, city: e.target.value})}
+                    onChange={(e) => updateShippingField('city', e.target.value)}
                     required
                     className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
                   />
@@ -391,7 +440,7 @@ const Checkout = () => {
                   <input
                     type="text"
                     value={shippingInfo.state}
-                    onChange={(e) => setShippingInfo({...shippingInfo, state: e.target.value})}
+                    onChange={(e) => updateShippingField('state', e.target.value)}
                     required
                     className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
                   />
@@ -401,7 +450,7 @@ const Checkout = () => {
                   <input
                     type="text"
                     value={shippingInfo.zipCode}
-                    onChange={(e) => setShippingInfo({...shippingInfo, zipCode: e.target.value})}
+                    onChange={(e) => updateShippingField('zipCode', e.target.value)}
                     className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700"
                   />
                 </div>

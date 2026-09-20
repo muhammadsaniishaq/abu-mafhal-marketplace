@@ -738,7 +738,16 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             }
 
             try {
-                const localRaw = await AsyncStorage.getItem(`@user_addresses_${currentUser.id}`);
+                let localRaw = await AsyncStorage.getItem(`@user_addresses_${currentUser.id}`);
+                if (!localRaw && typeof window !== 'undefined' && window.localStorage) {
+                    localRaw = window.localStorage.getItem(`@user_addresses_${currentUser.id}`);
+                }
+                if (!localRaw) {
+                    localRaw = await AsyncStorage.getItem('@user_addresses_guest');
+                    if (!localRaw && typeof window !== 'undefined' && window.localStorage) {
+                        localRaw = window.localStorage.getItem('@user_addresses_guest');
+                    }
+                }
                 if (localRaw) {
                     const parsed = JSON.parse(localRaw);
                     if (Array.isArray(parsed)) {
@@ -747,6 +756,19 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                 idMap.set(item.id, item);
                             }
                         });
+                    }
+                }
+
+                if (idMap.size === 0) {
+                    let lastSelected = await AsyncStorage.getItem('@abumafhal_last_selected_address');
+                    if (!lastSelected && typeof window !== 'undefined' && window.localStorage) {
+                        lastSelected = window.localStorage.getItem('@abumafhal_last_selected_address');
+                    }
+                    if (lastSelected) {
+                        const parsedLast = JSON.parse(lastSelected);
+                        if (parsedLast && (parsedLast.address || parsedLast.city)) {
+                            idMap.set(parsedLast.id || 'last_cached_addr', parsedLast);
+                        }
                     }
                 }
             } catch (e) {
@@ -764,8 +786,22 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     address: prof.address,
                     city: prof.city || prof.lga || '',
                     lga: prof.lga || prof.city || '',
-                    state: prof.state || '',
+                    state: prof.state || 'Yobe',
                     phone: prof.phone || prof.phone_number || '',
+                    is_default: true
+                }];
+            }
+
+            // Fallback to quickDestination so checkout is NEVER stuck with empty addresses
+            if (loadedAddresses.length === 0 && quickDestination?.address) {
+                loadedAddresses = [{
+                    id: 'quick_dest_addr',
+                    title: 'Delivery Address',
+                    address: quickDestination.address,
+                    city: quickDestination.city || quickDestination.lga || 'Bade',
+                    lga: quickDestination.lga || quickDestination.city || 'Bade',
+                    state: quickDestination.state || 'Yobe',
+                    phone: currentUser?.phone || currentUser?.user_metadata?.phone || '',
                     is_default: true
                 }];
             }
