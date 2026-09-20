@@ -14,6 +14,19 @@ const DEFAULT_VENDOR_PLANS = [
     { id: 'lifetime', label: 'Lifetime', price: 40000, badge: 'BEST VALUE', is_active: true }
 ];
 
+export const unwrapSettingValue = (val) => {
+    if (val === null || val === undefined) return val;
+    if (typeof val === 'object' && !Array.isArray(val)) {
+        if ('value' in val) {
+            const keys = Object.keys(val);
+            if (keys.length === 1 || keys.every(k => ['value', 'updated_at', 'description', 'key'].includes(k))) {
+                return val.value;
+            }
+        }
+    }
+    return val;
+};
+
 export const AppSettingsProvider = ({ children }) => {
     const [settings, setSettings] = useState({
         app_name: 'Abu Mafhal Marketplace',
@@ -47,16 +60,25 @@ export const AppSettingsProvider = ({ children }) => {
 
             if (data && data.length > 0) {
                 const mainRow = data.find(r => r.is_singleton) || data[0];
-                const merged = { ...mainRow };
+                const merged = {};
+                if (mainRow && typeof mainRow === 'object') {
+                    Object.keys(mainRow).forEach(k => {
+                        merged[k] = unwrapSettingValue(mainRow[k]);
+                    });
+                }
                 data.forEach(r => {
-                    if (r.key && r.value) {
-                        merged[r.key] = r.value;
+                    if (r.key && r.value !== undefined && r.value !== null) {
+                        merged[r.key] = unwrapSettingValue(r.value);
                     }
                 });
 
                 // Merge payment_gateways object if present in database
                 if (merged.payment_gateways && typeof merged.payment_gateways === 'object') {
-                    Object.assign(merged, merged.payment_gateways);
+                    const unwrappedGateways = {};
+                    Object.keys(merged.payment_gateways).forEach(gk => {
+                        unwrappedGateways[gk] = unwrapSettingValue(merged.payment_gateways[gk]);
+                    });
+                    Object.assign(merged, unwrappedGateways);
                 }
 
                 // Preserve local dedicated gateway keys if database has empty values
@@ -75,9 +97,13 @@ export const AppSettingsProvider = ({ children }) => {
 
                 // Ensure default arrays and addresses exist
                 const hasValidPlans = Array.isArray(merged.vendor_plans) && merged.vendor_plans.length > 0;
-                const safeFlwKey = (merged.flutterwave_public_key && !merged.flutterwave_public_key.includes('FLWPUBK-3fff'))
+                const safeFlwKey = (merged.flutterwave_public_key && typeof merged.flutterwave_public_key === 'string' && !merged.flutterwave_public_key.includes('FLWPUBK-3fff'))
                     ? merged.flutterwave_public_key
                     : ((typeof process !== 'undefined' ? (process.env?.EXPO_PUBLIC_FLUTTERWAVE_PUBLIC_KEY || process.env?.VITE_FLUTTERWAVE_PUBLIC_KEY) : '') || '');
+
+                const safeDefaultAddr = typeof merged.default_shipping_address === 'object' && merged.default_shipping_address !== null
+                    ? (merged.default_shipping_address.value || merged.default_shipping_address.address || '')
+                    : (merged.default_shipping_address || '');
 
                 const enriched = {
                     ...merged,
@@ -88,7 +114,7 @@ export const AppSettingsProvider = ({ children }) => {
                         flutterwave: true,
                         wallet: true,
                         pod: true,
-                        ...(merged.payment_methods || {})
+                        ...(typeof merged.payment_methods === 'object' ? merged.payment_methods : {})
                     },
                     payment_maintenance: {
                         paystack: false,
@@ -96,12 +122,10 @@ export const AppSettingsProvider = ({ children }) => {
                         nowpayments: false,
                         wallet: false,
                         pod: false,
-                        ...(merged.payment_maintenance || {})
+                        ...(typeof merged.payment_maintenance === 'object' ? merged.payment_maintenance : {})
                     },
                     flutterwave_public_key: safeFlwKey,
-                    default_shipping_address: (typeof merged.default_shipping_address === 'object' && merged.default_shipping_address !== null)
-                        ? (merged.default_shipping_address.value || merged.default_shipping_address.address || '')
-                        : (merged.default_shipping_address || ''),
+                    default_shipping_address: safeDefaultAddr,
                     vendor_plans: hasValidPlans ? merged.vendor_plans : DEFAULT_VENDOR_PLANS
                 };
                 setSettings({ ...enriched, loading: false });
@@ -115,12 +139,16 @@ export const AppSettingsProvider = ({ children }) => {
     };
 
     useEffect(() => {
-        // 1. Instant cache load
+        // 1. Instant cache load with unwrap safety
         AsyncStorage.getItem(SETTINGS_CACHE_KEY).then(cached => {
             if (cached) {
                 try {
                     const parsed = JSON.parse(cached);
-                    setSettings(prev => ({ ...prev, ...parsed, loading: false }));
+                    const cleaned = {};
+                    Object.keys(parsed).forEach(k => {
+                        cleaned[k] = unwrapSettingValue(parsed[k]);
+                    });
+                    setSettings(prev => ({ ...prev, ...cleaned, loading: false }));
                 } catch (_) {}
             }
         }).catch(() => {});
@@ -133,7 +161,21 @@ export const AppSettingsProvider = ({ children }) => {
             .channel('app_settings_changes')
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'app_settings' }, payload => {
                 console.log('Settings updated realtime:', payload.new);
-                setSettings(prev => ({ ...prev, ...payload.new }));
+                if (payload.new) {
+                    const updated = payload.new;
+                    if (updated.key && updated.value !== undefined) {
+                        setSettings(prev => ({
+                            ...prev,
+                            [updated.key]: unwrapSettingValue(updated.value)
+                        }));
+                    } else {
+                        const cleaned = {};
+                        Object.keys(updated).forEach(k => {
+                            cleaned[k] = unwrapSettingValue(updated[k]);
+                        });
+                        setSettings(prev => ({ ...prev, ...cleaned }));
+                    }
+                }
             })
             .subscribe();
 
@@ -235,7 +277,11 @@ export const AppSettingsProvider = ({ children }) => {
             }
 
             // 4. Update local caches (both main settings & dedicated gateway keys)
-            const merged = { ...settings, ...newSettings };
+            const cleanNewSettings = {};
+            Object.keys(newSettings).forEach(k => {
+                cleanNewSettings[k] = unwrapSettingValue(newSettings[k]);
+            });
+            const merged = { ...settings, ...cleanNewSettings };
             setSettings(merged);
             await AsyncStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(merged));
             await AsyncStorage.setItem('@abumafhal_gateway_keys', JSON.stringify(gatewayKeys));
@@ -246,7 +292,11 @@ export const AppSettingsProvider = ({ children }) => {
             return { error: null };
         } catch (error) {
             console.log('Error updating settings:', error);
-            const merged = { ...settings, ...newSettings };
+            const cleanNewSettings = {};
+            Object.keys(newSettings).forEach(k => {
+                cleanNewSettings[k] = unwrapSettingValue(newSettings[k]);
+            });
+            const merged = { ...settings, ...cleanNewSettings };
             setSettings(merged);
             await AsyncStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(merged));
             return { error: null };

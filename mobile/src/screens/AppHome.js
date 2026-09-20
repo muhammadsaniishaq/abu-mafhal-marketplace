@@ -640,9 +640,12 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                 <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" translucent={true} />
 
                 {/* Sitewide Announcement Banner (Controlled from Admin Settings) */}
-                {settings?.announcement_active && !!settings?.announcement_text && (
+                {Boolean(
+                    (typeof settings?.announcement_active === 'boolean' ? settings.announcement_active : Boolean(settings?.announcement_active?.value)) &&
+                    (typeof settings?.announcement_text === 'string' ? settings.announcement_text.trim().length > 0 : Boolean(settings?.announcement_text?.value))
+                ) && (
                     <View style={{
-                        backgroundColor: settings?.announcement_color || '#3B82F6',
+                        backgroundColor: (typeof settings?.announcement_color === 'string' ? settings.announcement_color : settings?.announcement_color?.value) || '#3B82F6',
                         paddingVertical: 6,
                         paddingHorizontal: 12,
                         borderRadius: 8,
@@ -654,7 +657,7 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                     }}>
                         <Ionicons name="megaphone" size={13} color="#FFFFFF" />
                         <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700', textAlign: 'center', flex: 1 }} numberOfLines={1}>
-                            {settings.announcement_text}
+                            {typeof settings?.announcement_text === 'string' ? settings.announcement_text : String(settings?.announcement_text?.value || '')}
                         </Text>
                     </View>
                 )}
@@ -924,10 +927,10 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                                     style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
                                 />
                                 <Text style={{ fontSize: 20, fontWeight: '900', color: '#F59E0B', lineHeight: 24 }}>
-                                    {settings?.app_name || 'Abu Mafhal Marketplace'}
+                                    {typeof settings?.app_name === 'string' ? settings.app_name : (settings?.app_name?.value || 'Abu Mafhal Marketplace')}
                                 </Text>
                                 <Text style={{ fontSize: 11, color: '#94A3B8', fontWeight: '600', marginTop: 6, marginBottom: 12 }}>
-                                    {settings?.tagline || 'Quality Products | Trusted Sellers | Fast Delivery'}
+                                    {typeof settings?.tagline === 'string' ? settings.tagline : (settings?.tagline?.value || 'Quality Products | Trusted Sellers | Fast Delivery')}
                                 </Text>
                                 <View style={{ backgroundColor: '#F59E0B', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, alignSelf: 'flex-start' }}>
                                     <Text style={{ color: '#0A192F', fontSize: 11, fontWeight: '800' }}>Shop Now →</Text>
