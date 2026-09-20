@@ -34,6 +34,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ComparisonProvider } from './src/context/ComparisonContext';
 import { clearFollowedStoresCache } from './src/services/vendorFollowerService';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 
 // Screens
 import { ProductComparison } from './src/screens/ProductComparison';
@@ -491,87 +492,90 @@ export default function App() {
     let initialRoute = getInitialRoute();
 
     return (
-        <GestureHandlerRootView style={{ flex: 1 }}>
-            <SafeAreaProvider style={{ flex: 1 }}>
-                <AppSettingsProvider>
-                    <ComparisonProvider>
-                        <NavigationContainer 
-                            ref={navigationRef} 
-                            linking={linking}
-                            onStateChange={() => {
-                                try {
-                                    const currentRoute = navigationRef.getCurrentRoute();
-                                    if (currentRoute?.name) {
-                                        AsyncStorage.setItem('@abumafhal_last_screen', currentRoute.name).catch(() => {});
-                                        if (typeof window !== 'undefined' && window.localStorage) {
-                                            window.localStorage.setItem('@abumafhal_last_screen', currentRoute.name);
+        <ErrorBoundary>
+            <GestureHandlerRootView style={{ flex: 1 }}>
+                <SafeAreaProvider style={{ flex: 1 }}>
+                    <AppSettingsProvider>
+                        <ComparisonProvider>
+                            <NavigationContainer 
+                                ref={navigationRef} 
+                                linking={linking}
+                                onStateChange={() => {
+                                    try {
+                                        const currentRoute = navigationRef.getCurrentRoute();
+                                        if (currentRoute?.name) {
+                                            AsyncStorage.setItem('@abumafhal_last_screen', currentRoute.name).catch(() => {});
+                                            if (typeof window !== 'undefined' && window.localStorage) {
+                                                window.localStorage.setItem('@abumafhal_last_screen', currentRoute.name);
 
-                                            // STRICT LOCK: Ensure browser address bar never reverts to desktop web
-                                            if (!window.location.pathname.startsWith('/mobile')) {
-                                                const currentHash = window.location.hash || '';
-                                                window.history.replaceState(null, '', '/mobile' + currentHash);
-                                            }
+                                                // STRICT LOCK: Ensure browser address bar never reverts to desktop web
+                                                if (!window.location.pathname.startsWith('/mobile')) {
+                                                    const currentHash = window.location.hash || '';
+                                                    window.history.replaceState(null, '', '/mobile' + currentHash);
+                                                }
 
-                                            if (currentRoute.name === 'AdminDashboard') {
-                                                if (window.location.hash !== '#admin') window.location.hash = 'admin';
-                                            } else if (currentRoute.name === 'VendorDashboard') {
-                                                if (window.location.hash !== '#vendor') window.location.hash = 'vendor';
-                                            } else if (currentRoute.name === 'DriverDashboard') {
-                                                if (window.location.hash !== '#driver') window.location.hash = 'driver';
-                                            } else {
-                                                if (window.location.hash === '#admin' || window.location.hash === '#vendor' || window.location.hash === '#driver') {
-                                                    window.location.hash = '';
+                                                if (currentRoute.name === 'AdminDashboard') {
+                                                    if (window.location.hash !== '#admin') window.location.hash = 'admin';
+                                                } else if (currentRoute.name === 'VendorDashboard') {
+                                                    if (window.location.hash !== '#vendor') window.location.hash = 'vendor';
+                                                } else if (currentRoute.name === 'DriverDashboard') {
+                                                    if (window.location.hash !== '#driver') window.location.hash = 'driver';
+                                                } else {
+                                                    if (window.location.hash === '#admin' || window.location.hash === '#vendor' || window.location.hash === '#driver') {
+                                                        window.location.hash = '';
+                                                    }
                                                 }
                                             }
                                         }
-                                    }
-                                } catch (_) {}
-                            }}
-                        >
-                        <Stack.Navigator
-                            key={user ? `user-${user.id}-${user.role}` : 'guest'}
-                            initialRouteName={initialRoute}
-                            screenOptions={{ headerShown: false, detachInactiveScreens: false }}
-                        >
-                            <Stack.Screen name="Landing">
-                                {props => (
-                                    <LandingPage
-                                        {...props}
-                                        user={user}
-                                        cartCount={cartLines?.length || 0}
-                                        cartLines={cartLines}
-                                        onAddToCart={handleAddToCart}
-                                        onEnterShop={(tab = 'shop', params = {}) => {
-                                            props.navigation.navigate('Main', { screen: tab, ...params });
-                                        }}
-                                        onLogin={() => props.navigation.navigate('Auth')}
-                                        onNavigate={(screen, params) => props.navigation.navigate(screen, params)}
-                                    />
-                                )}
-                            </Stack.Screen>
-                            <Stack.Screen name="Auth">
-                                {props => (
-                                    <AuthPage
-                                        {...props}
-                                        onBack={() => props.navigation.goBack()}
-                                        onLoginSuccess={async (loggedInUser) => {
-                                            await fetchUserProfile(loggedInUser.id, loggedInUser);
-                                            const redirectTo = props.route?.params?.redirectTo;
-                                            const redirectParams = props.route?.params?.redirectParams;
+                                    } catch (_) {}
+                                }}
+                            >
+                            <Stack.Navigator
+                                initialRouteName={initialRoute}
+                                screenOptions={{ headerShown: false, detachInactiveScreens: false }}
+                            >
+                                <Stack.Screen name="Landing">
+                                    {props => (
+                                        <LandingPage
+                                            {...props}
+                                            user={user}
+                                            cartCount={cartLines?.length || 0}
+                                            cartLines={cartLines}
+                                            onAddToCart={handleAddToCart}
+                                            onEnterShop={(tab = 'shop', params = {}) => {
+                                                props.navigation.navigate('Main', { screen: tab, ...params });
+                                            }}
+                                            onLogin={() => props.navigation.navigate('Auth')}
+                                            onNavigate={(screen, params) => props.navigation.navigate(screen, params)}
+                                        />
+                                    )}
+                                </Stack.Screen>
+                                <Stack.Screen name="Auth">
+                                    {props => (
+                                        <AuthPage
+                                            {...props}
+                                            onBack={() => props.navigation.goBack()}
+                                            onLoginSuccess={async (loggedInUser) => {
+                                                await fetchUserProfile(loggedInUser.id, loggedInUser);
+                                                const redirectTo = props.route?.params?.redirectTo;
+                                                const redirectParams = props.route?.params?.redirectParams;
 
-                                            setTimeout(() => {
-                                                if (navigationRef.isReady()) {
-                                                    if (redirectTo) {
-                                                        navigationRef.navigate(redirectTo, redirectParams);
-                                                    } else {
-                                                        navigationRef.navigate('Main');
+                                                setTimeout(() => {
+                                                    if (navigationRef.isReady()) {
+                                                        if (redirectTo) {
+                                                            navigationRef.navigate(redirectTo, redirectParams);
+                                                        } else {
+                                                            navigationRef.reset({
+                                                                index: 0,
+                                                                routes: [{ name: 'Main', params: { screen: 'home' } }]
+                                                            });
+                                                        }
                                                     }
-                                                }
-                                            }, 150);
-                                        }}
-                                    />
-                                )}
-                            </Stack.Screen>
+                                                }, 100);
+                                            }}
+                                        />
+                                    )}
+                                </Stack.Screen>
                             <Stack.Screen name="Main">
                                 {props => (
                                     <MainApp
@@ -625,5 +629,6 @@ export default function App() {
                 </AppSettingsProvider>
             </SafeAreaProvider>
         </GestureHandlerRootView>
+    </ErrorBoundary>
     );
 }

@@ -21,6 +21,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppSettings } from '../context/AppSettingsContext';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 
 const { width } = Dimensions.get('window');
 const AM_LOGO = require('../../assets/am_logo.png');
@@ -611,20 +612,21 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
         ...(newArrivals || []),
         ...(recommended || []),
         ...(trendingProducts || []),
-    ];
+    ].filter(p => p && p.id);
     const uniqueProducts = Array.from(new Map(allProductsPool.map(p => [p.id, p])).values());
 
     const finalFlashProducts = activeCategoryFilter === 'All'
         ? ((flashSale && flashSale.length > 0) ? flashSale : uniqueProducts.slice(0, 6))
         : uniqueProducts.filter(p => {
-            const cat = (p.category || p.subtitle || '').toLowerCase();
-            const filter = activeCategoryFilter.toLowerCase();
+            const cat = String(p?.category || p?.subtitle || '').toLowerCase();
+            const filter = String(activeCategoryFilter || '').toLowerCase();
             return cat.includes(filter) || filter.includes(cat);
         });
 
 
     return (
-        <View style={styles.container}>
+        <ErrorBoundary>
+            <View style={styles.container}>
             {/* ── TOP HEADER (First-Mobile Luxury Header) ── */}
             <View style={{
                 backgroundColor: '#FFFFFF',
@@ -1035,11 +1037,11 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                                         <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 2 }}>
                                             <View>
                                                 <Text style={{ fontSize: 12, fontWeight: '900', color: '#0F172A' }}>
-                                                    ₦{(prod.price || 25000).toLocaleString()}
+                                                    ₦{Number(prod?.price || 25000).toLocaleString()}
                                                 </Text>
-                                                {prod.compare_at_price ? (
+                                                {prod?.compare_at_price ? (
                                                     <Text style={{ fontSize: 8.5, color: '#94A3B8', textDecorationLine: 'line-through' }}>
-                                                        ₦{prod.compare_at_price.toLocaleString()}
+                                                        ₦{Number(prod.compare_at_price).toLocaleString()}
                                                     </Text>
                                                 ) : null}
                                             </View>
@@ -1280,14 +1282,14 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                                         <Ionicons name="receipt-outline" size={16} color="#D9A73A" />
                                     </View>
                                     <View style={{ flex: 1 }}>
-                                        <Text style={{ fontWeight: '800', color: '#0E1A2E', fontSize: 12 }}>#{ord.id.slice(0, 8).toUpperCase()}</Text>
-                                        <Text style={{ color: '#8A9BB0', fontSize: 10, marginTop: 2 }}>{ord.order_items?.length || 0} items • {new Date(ord.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}</Text>
+                                        <Text style={{ fontWeight: '800', color: '#0E1A2E', fontSize: 12 }}>#{String(ord?.id || '').slice(0, 8).toUpperCase()}</Text>
+                                        <Text style={{ color: '#8A9BB0', fontSize: 10, marginTop: 2 }}>{ord?.order_items?.length || 0} items • {ord?.created_at ? new Date(ord.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : 'Recently'}</Text>
                                     </View>
                                     <View style={{ alignItems: 'flex-end', gap: 4 }}>
                                         <View style={{ backgroundColor: sc.bg, paddingHorizontal: 6, paddingVertical: 2.5, borderRadius: 6 }}>
-                                            <Text style={{ color: sc.text, fontSize: 8.5, fontWeight: '900' }}>{ord.status?.toUpperCase()}</Text>
+                                            <Text style={{ color: sc.text, fontSize: 8.5, fontWeight: '900' }}>{String(ord?.status || 'pending').toUpperCase()}</Text>
                                         </View>
-                                        <Text style={{ fontWeight: '900', color: '#D9A73A', fontSize: 12 }}>₦{(ord.total_amount || 0).toLocaleString()}</Text>
+                                        <Text style={{ fontWeight: '900', color: '#D9A73A', fontSize: 12 }}>₦{Number(ord?.total_amount || 0).toLocaleString()}</Text>
                                     </View>
                                 </TouchableOpacity>
                             );
@@ -1981,9 +1983,11 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                         </View>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}>
                             {priceDrops.map((item, i) => {
-                                const saved = Math.round(((item.compare_at_price - item.price) / item.compare_at_price) * 100);
+                                const cmpPrice = Number(item?.compare_at_price || 0);
+                                const currPrice = Number(item?.price || 0);
+                                const saved = (cmpPrice > currPrice && cmpPrice > 0) ? Math.round(((cmpPrice - currPrice) / cmpPrice) * 100) : 0;
                                 return (
-                                    <TouchableOpacity key={i} onPress={() => handleProductClick(item)}
+                                    <TouchableOpacity key={item?.id || i} onPress={() => handleProductClick(item)}
                                         style={{ width: 108, backgroundColor: 'white', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(217,167,58,0.15)', elevation: 2 }}>
                                         <Image source={{ uri: getProductImage(item) }}
                                             style={{ width: 108, height: 95 }} resizeMode="cover" />
@@ -1992,8 +1996,10 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                                         </View>
                                         <View style={{ padding: 7 }}>
                                             <Text style={{ fontWeight: '700', fontSize: 11, color: '#0E1A2E' }} numberOfLines={1}>{item?.name}</Text>
-                                            <Text style={{ fontWeight: '900', fontSize: 11.5, color: '#D9A73A' }}>₦{(item?.price || 0).toLocaleString()}</Text>
-                                            <Text style={{ fontSize: 10, color: '#8A9BB0', textDecorationLine: 'line-through' }}>₦{(item?.compare_at_price || 0).toLocaleString()}</Text>
+                                            <Text style={{ fontWeight: '900', fontSize: 11.5, color: '#D9A73A' }}>₦{currPrice.toLocaleString()}</Text>
+                                            {cmpPrice > 0 ? (
+                                                <Text style={{ fontSize: 10, color: '#8A9BB0', textDecorationLine: 'line-through' }}>₦{cmpPrice.toLocaleString()}</Text>
+                                            ) : null}
                                         </View>
                                     </TouchableOpacity>
                                 );
@@ -2146,7 +2152,8 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                     <Text style={{ fontWeight: '700', color: '#0E1A2E', fontSize: 14 }}>{toast.message}</Text>
                 </Animated.View>
             )}
-        </View>
+            </View>
+        </ErrorBoundary>
     );
 };
 
@@ -2182,7 +2189,7 @@ const EliteMembershipCard = React.memo(({ user, checkInData, loyalty }) => (
                         <Text style={{ color: '#D9A73A', fontSize: 9, fontWeight: '900', letterSpacing: 0.8 }}>{loyalty?.tier?.toUpperCase() || 'NEW MEMBER'}</Text>
                     </View>
                     <Text style={{ color: 'white', fontSize: 13, fontWeight: '900' }}>{loyalty?.is_elite ? 'Elite Status' : (loyalty?.tier || 'Membership')}</Text>
-                    <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 9.5, marginTop: 2 }}>{loyalty?.points?.toLocaleString() || 0} Elite Points</Text>
+                    <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 9.5, marginTop: 2 }}>{Number(loyalty?.points || 0).toLocaleString()} Elite Points</Text>
                 </View>
                 <TouchableOpacity style={{ backgroundColor: '#D9A73A', paddingHorizontal: 10, paddingVertical: 5.5, borderRadius: 8 }}>
                     <Text style={{ color: '#0E1A2E', fontWeight: '900', fontSize: 9.5 }}>REDEEM</Text>

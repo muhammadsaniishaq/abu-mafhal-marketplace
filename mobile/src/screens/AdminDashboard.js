@@ -149,10 +149,6 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
         } catch (_) {}
 
         if (navigation) {
-            if (typeof navigation.canGoBack === 'function' && navigation.canGoBack()) {
-                navigation.goBack();
-                return;
-            }
             if (typeof navigation.reset === 'function') {
                 navigation.reset({
                     index: 0,

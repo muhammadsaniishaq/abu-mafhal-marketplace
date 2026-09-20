@@ -13,7 +13,8 @@ export var colors = {
     primary: '#f5a623',
     primaryLight: '#f9ce85',
     secondary: '#12122C',
-    transparent: 'rgba(0,0,0,0)'
+    transparent: 'rgba(0,0,0,0)',
+    white: '#FFFFFF'
 };
 /**
  * Payment options available in V3
