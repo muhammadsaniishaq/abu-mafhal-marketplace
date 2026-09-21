@@ -1003,6 +1003,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
         amountDueOnDelivery = 0,
         notes = null,
         targetUserId = null,
+        installmentPlan = null,
     }) => {
         try {
             let verifiedUser = user;
@@ -1029,11 +1030,48 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             const giftNotes = isGift ? `GIFT ORDER - Recipient: ${giftRecipientName || ''} | Phone: ${giftRecipientPhone || ''} | Message: ${giftMessage || ''}` : null;
             const combinedNotes = [notes, giftNotes].filter(Boolean).join(' | ') || null;
 
+            const isPss = paymentMethod === 'pay_small_small' || !!installmentPlan;
+            let effectivePlan = installmentPlan;
+            if (!effectivePlan && isPss && pssPlanDetails) {
+                effectivePlan = {
+                    id: targetRef,
+                    orderNumber: (targetRef || 'ORD').slice(0, 8).toUpperCase(),
+                    createdAt: new Date().toISOString(),
+                    totalAmount: finalTotal,
+                    baseTotal: pssPlanDetails.baseTotal,
+                    surcharge: pssPlanDetails.surcharge,
+                    paidAmount: paidAmount || pssPlanDetails.downPayment || 0,
+                    remainingAmount: pssPlanDetails.remainingBalance,
+                    planType: `${pssPlanDetails.durationMonths}_months_${pssPlanDetails.frequency}`,
+                    durationMonths: pssPlanDetails.durationMonths,
+                    frequency: pssPlanDetails.frequency,
+                    installmentsCount: pssPlanDetails.installmentsCount,
+                    installmentsPaid: paidAmount > 0 ? 1 : 0,
+                    isCompleted: false,
+                    schedule: pssPlanDetails.schedule,
+                    items: cart
+                };
+            }
+
+            // Embed installment plan in shipping_details JSONB so it persists 100% safely
+            const shippingDetailsPayload = {
+                ...(addrObj || {}),
+                ...(effectivePlan ? { installment_plan: effectivePlan } : {})
+            };
+
+            const effectiveMethod = isPss
+                ? (paymentMethodName || (pssDownPaymentMethod ? `Pay Small Small (${pssDownPaymentMethod})` : 'Pay Small Small (BNPL)'))
+                : (paymentMethodName || paymentMethod || 'online');
+
+            const effectiveStatus = isPss
+                ? (paymentStatus === 'pending_pod' ? 'pss_pending_pod' : 'pss_active')
+                : paymentStatus;
+
             const supabaseOrderPayload = {
                 user_id: uid,
                 status: 'processing',
-                payment_status: paymentStatus,
-                payment_method: paymentMethodName || paymentMethod || 'online',
+                payment_status: effectiveStatus,
+                payment_method: effectiveMethod,
                 payment_reference: targetRef,
                 total_amount: finalTotal,
                 subtotal: Math.max(0, finalTotal - (shippingFee || 0)),
@@ -1041,12 +1079,23 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 tax_amount: taxAmount || 0,
                 discount_amount: discountAmount || 0,
                 shipping_address: shippingAddressStr,
-                shipping_details: addrObj || {},
+                shipping_details: shippingDetailsPayload,
                 contact_phone: contactPhone,
                 notes: combinedNotes,
                 current_location: 'Processing Facility',
                 tracking_number: (targetRef || 'ORD').slice(0, 12).toUpperCase(),
             };
+
+            // Cache to local BNPL ledger if user ID is known
+            if (isPss && uid && effectivePlan) {
+                try {
+                    const pssCacheKey = `@abumafhal_pss_plans_${uid}`;
+                    const rawExisting = await AsyncStorage.getItem(pssCacheKey);
+                    const existingList = rawExisting ? JSON.parse(rawExisting) : [];
+                    const filtered = existingList.filter(p => p.id !== effectivePlan.id && p.orderNumber !== effectivePlan.orderNumber);
+                    await AsyncStorage.setItem(pssCacheKey, JSON.stringify([effectivePlan, ...filtered]));
+                } catch (_) {}
+            }
 
             const { data: insertedOrder, error: orderInsertErr } = await supabase
                 .from('orders')
@@ -1082,7 +1131,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     console.log(`[Checkout] ✅ ${itemRows.length} order item(s) persisted to Supabase.`);
                 }
 
-                const logDescription = paymentStatus === 'paid'
+                const logDescription = isPss
+                    ? `Pay Small Small BNPL order placed. Down payment recorded via ${effectiveMethod}. Installment schedule activated.`
+                    : paymentStatus === 'paid'
                     ? `Payment of ₦${finalTotal.toLocaleString()} confirmed via ${paymentMethodName || paymentMethod}. Order is being prepared.`
                     : paymentStatus === 'pending_pod'
                     ? `Order confirmed via Pay on Delivery. ₦${amountDueOnDelivery.toLocaleString()} due upon dispatch/delivery.`
@@ -1091,7 +1142,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 await supabase.from('order_status_logs').insert({
                     order_id: dbOrderId,
                     status: 'processing',
-                    title: 'Order Placed',
+                    title: isPss ? 'BNPL Order Placed' : 'Order Placed',
                     description: logDescription,
                     location: 'Processing Facility',
                     changed_by: uid,
@@ -1114,6 +1165,28 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             const paidAmount = isPss ? pssPlanDetails.downPayment : finalTotal;
 
             let supabaseOrderId = null;
+            let pssPlanItem = null;
+
+            if (isPss && pssPlanDetails) {
+                pssPlanItem = {
+                    id: targetRef,
+                    orderNumber: targetRef.slice(0, 8).toUpperCase(),
+                    createdAt: new Date().toISOString(),
+                    totalAmount: finalTotal,
+                    baseTotal: pssPlanDetails.baseTotal,
+                    surcharge: pssPlanDetails.surcharge,
+                    paidAmount: pssPlanDetails.downPayment,
+                    remainingAmount: pssPlanDetails.remainingBalance,
+                    planType: `${pssPlanDetails.durationMonths}_months_${pssPlanDetails.frequency}`,
+                    durationMonths: pssPlanDetails.durationMonths,
+                    frequency: pssPlanDetails.frequency,
+                    installmentsCount: pssPlanDetails.installmentsCount,
+                    installmentsPaid: 1,
+                    isCompleted: false,
+                    schedule: pssPlanDetails.schedule,
+                    items: cart
+                };
+            }
 
             try {
                 const { data: { user: currentUser } } = await supabase.auth.getUser();
@@ -1133,39 +1206,23 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     });
 
                     // 2. If Pay Small Small, cache rich plan locally
-                    if (isPss) {
-                        const newPlanItem = {
-                            id: targetRef,
-                            orderNumber: targetRef.slice(0, 8).toUpperCase(),
-                            createdAt: new Date().toISOString(),
-                            totalAmount: finalTotal,
-                            baseTotal: pssPlanDetails.baseTotal,
-                            surcharge: pssPlanDetails.surcharge,
-                            paidAmount: pssPlanDetails.downPayment,
-                            remainingAmount: pssPlanDetails.remainingBalance,
-                            planType: `${pssPlanDetails.durationMonths}_months_${pssPlanDetails.frequency}`,
-                            durationMonths: pssPlanDetails.durationMonths,
-                            frequency: pssPlanDetails.frequency,
-                            installmentsCount: pssPlanDetails.installmentsCount,
-                            installmentsPaid: 1,
-                            isCompleted: false,
-                            schedule: pssPlanDetails.schedule,
-                            items: cart
-                        };
+                    if (isPss && pssPlanItem) {
                         const pssCacheKey = `@abumafhal_pss_plans_${uid}`;
                         const rawExisting = await AsyncStorage.getItem(pssCacheKey);
                         const existingList = rawExisting ? JSON.parse(rawExisting) : [];
-                        await AsyncStorage.setItem(pssCacheKey, JSON.stringify([newPlanItem, ...existingList]));
+                        const filtered = existingList.filter(p => p.id !== pssPlanItem.id && p.orderNumber !== pssPlanItem.orderNumber);
+                        await AsyncStorage.setItem(pssCacheKey, JSON.stringify([pssPlanItem, ...filtered]));
                     }
                 }
 
-                // 3. Persist Order to Supabase
+                // 3. Persist Order to Supabase with BNPL details
                 const dbOrderId = await saveOrderToSupabase({
                     targetRef,
-                    paymentStatus: 'paid',
-                    paymentMethodName: activeGateway || 'online',
+                    paymentStatus: isPss ? 'pss_active' : 'paid',
+                    paymentMethodName: isPss ? `Pay Small Small (${activeGateway})` : (activeGateway || 'online'),
                     paidAmount: paidAmount,
-                    targetUserId: uid
+                    targetUserId: uid,
+                    installmentPlan: pssPlanItem
                 });
                 if (dbOrderId) supabaseOrderId = dbOrderId;
 
@@ -1177,8 +1234,8 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     createdAt: new Date().toISOString(),
                     total_amount: finalTotal,
                     status: 'processing',
-                    payment_status: 'paid',
-                    payment_method: activeGateway,
+                    payment_status: isPss ? 'pss_active' : 'paid',
+                    payment_method: isPss ? `Pay Small Small (${activeGateway})` : activeGateway,
                     items: cart,
                     delivery_address: selectedAddrObj,
                     delivery_slot: deliverySlot,
@@ -1187,7 +1244,8 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     gift_recipient_name: giftRecipientName,
                     gift_recipient_phone: giftRecipientPhone,
                     gift_wrap_style: giftWrapStyle,
-                    wallet_split_deducted: walletDeduction
+                    wallet_split_deducted: walletDeduction,
+                    installment_plan: pssPlanItem
                 };
                 if (uid) {
                     await PaymentGatewayService.cacheOrderLocally(uid, orderPayload);
@@ -1494,12 +1552,13 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
                     const dbOrderId = await saveOrderToSupabase({
                         targetRef: orderRef,
-                        paymentStatus: 'pss_active',
+                        paymentStatus: 'pending_pod',
                         paymentMethodName: 'Pay Small Small (POD Down Payment)',
                         paidAmount: 0,
                         amountDueOnDelivery: pssDownPayment,
                         notes: `Pay Small Small BNPL: Down Payment ₦${pssDownPayment.toLocaleString()} due on delivery`,
-                        targetUserId: verifiedUser.id
+                        targetUserId: verifiedUser.id,
+                        installmentPlan: newPlanItem
                     });
                     const resolvedOrderId = dbOrderId || orderRef;
 
@@ -1509,7 +1568,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         createdAt: new Date().toISOString(),
                         total_amount: finalTotal,
                         status: 'processing',
-                        payment_status: 'pss_active',
+                        payment_status: 'pss_pending_pod',
                         payment_method: 'Pay Small Small (POD Down Payment)',
                         items: cart,
                         delivery_address: selectedAddrObj,
@@ -1518,7 +1577,8 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         gift_message: giftMessage,
                         gift_recipient_name: giftRecipientName,
                         gift_recipient_phone: giftRecipientPhone,
-                        gift_wrap_style: giftWrapStyle
+                        gift_wrap_style: giftWrapStyle,
+                        installment_plan: newPlanItem
                     };
                     await PaymentGatewayService.cacheOrderLocally(verifiedUser.id, orderPayload);
                     AsyncStorage.setItem('@abumafhal_last_order', JSON.stringify(orderPayload)).catch(() => {});
@@ -1558,7 +1618,8 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     const pssCacheKey = `@abumafhal_pss_plans_${verifiedUser.id}`;
                     const rawExisting = await AsyncStorage.getItem(pssCacheKey);
                     const existingList = rawExisting ? JSON.parse(rawExisting) : [];
-                    await AsyncStorage.setItem(pssCacheKey, JSON.stringify([newPlanItem, ...existingList]));
+                    const filtered = existingList.filter(p => p.id !== newPlanItem.id && p.orderNumber !== newPlanItem.orderNumber);
+                    await AsyncStorage.setItem(pssCacheKey, JSON.stringify([newPlanItem, ...filtered]));
 
                     await PaymentGatewayService.recordTransaction({
                         userId: verifiedUser.id,
@@ -1576,7 +1637,8 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         paymentMethodName: 'Pay Small Small (Wallet)',
                         paidAmount: pssDownPayment,
                         notes: `Pay Small Small BNPL: Down Payment ₦${pssDownPayment.toLocaleString()} paid via Wallet`,
-                        targetUserId: verifiedUser.id
+                        targetUserId: verifiedUser.id,
+                        installmentPlan: newPlanItem
                     });
                     const resolvedOrderId = dbOrderId || orderRef;
 
@@ -1595,7 +1657,8 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         gift_message: giftMessage,
                         gift_recipient_name: giftRecipientName,
                         gift_recipient_phone: giftRecipientPhone,
-                        gift_wrap_style: giftWrapStyle
+                        gift_wrap_style: giftWrapStyle,
+                        installment_plan: newPlanItem
                     };
                     await PaymentGatewayService.cacheOrderLocally(verifiedUser.id, orderPayload);
                     AsyncStorage.setItem('@abumafhal_last_order', JSON.stringify(orderPayload)).catch(() => {});

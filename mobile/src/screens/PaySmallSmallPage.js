@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { useAppSettings } from '../context/AppSettingsContext';
+import { paySmallSmallService } from '../services/paySmallSmallService';
 
 const { width } = Dimensions.get('window');
 
@@ -83,11 +84,15 @@ export const PaySmallSmallPage = ({ navigation, route, onBack, user: initialUser
             }
 
             // 1. Load cached plans first for instantaneous rendering
+            let cachedPlans = [];
             try {
                 const cached = await AsyncStorage.getItem(storageKey);
                 if (cached) {
                     const parsed = JSON.parse(cached);
-                    if (Array.isArray(parsed)) setPlans(parsed);
+                    if (Array.isArray(parsed)) {
+                        cachedPlans = parsed;
+                        setPlans(parsed);
+                    }
                 }
             } catch (_) {}
 
@@ -104,24 +109,24 @@ export const PaySmallSmallPage = ({ navigation, route, onBack, user: initialUser
                 .maybeSingle();
             if (walletData) setWalletBalance(Number(walletData.balance || 0));
 
-            // 3. Fetch BNPL Orders from Supabase
+            // 3. Fetch BNPL Orders from Supabase using comprehensive ilike pattern
             const { data: orders, error } = await supabase
                 .from('orders')
                 .select('*')
                 .eq('user_id', activeUserId)
-                .or('payment_method.eq.pay_small_small,payment_method.eq.Pay Small Small')
+                .or('payment_method.ilike.%pay_small_small%,payment_method.ilike.%pss%,payment_status.ilike.%pss%,payment_status.ilike.%installment%')
                 .order('created_at', { ascending: false });
 
             let fetchedPlans = [];
             if (orders && orders.length > 0) {
                 fetchedPlans = orders.map(order => {
-                    const rawPlan = order.installment_plan || order.metadata?.installment_plan;
+                    const rawPlan = order.installment_plan || order.shipping_details?.installment_plan || order.metadata?.installment_plan;
                     const total = Number(order.total_amount || 0);
 
                     // Parse plan or construct from order if structure not populated
                     let schedule = rawPlan?.schedule;
                     if (!schedule || !Array.isArray(schedule) || schedule.length === 0) {
-                        const count = 3;
+                        const count = rawPlan?.installmentsCount || 3;
                         const down = Math.round(total / count);
                         const inst2 = Math.round(total / count);
                         const inst3 = total - down - inst2;
@@ -145,25 +150,70 @@ export const PaySmallSmallPage = ({ navigation, route, onBack, user: initialUser
 
                     return {
                         id: order.id,
-                        orderNumber: order.id.slice(0, 8).toUpperCase(),
+                        orderNumber: (order.tracking_number || order.payment_reference || order.id).slice(0, 8).toUpperCase(),
                         createdAt: order.created_at,
                         totalAmount: total,
                         paidAmount,
                         remainingAmount,
-                        planType: rawPlan?.plan_type || '3_months',
+                        planType: rawPlan?.plan_type || rawPlan?.planType || '3_months',
                         installmentsCount: schedule.length,
                         installmentsPaid: paidCount,
                         isCompleted,
                         schedule,
-                        items: Array.isArray(order.items) ? order.items : []
+                        items: Array.isArray(order.items) ? order.items : (Array.isArray(rawPlan?.items) ? rawPlan.items : [])
                     };
                 });
             }
 
-            // Sync with local fallback if no live cloud orders yet
-            if (fetchedPlans.length > 0) {
-                setPlans(fetchedPlans);
-                await AsyncStorage.setItem(storageKey, JSON.stringify(fetchedPlans));
+            // 4. Merge cached plans & live cloud plans
+            const planMap = new Map();
+            if (Array.isArray(cachedPlans)) {
+                cachedPlans.forEach(p => {
+                    if (p && (p.id || p.orderNumber)) {
+                        planMap.set(p.id || p.orderNumber, p);
+                    }
+                });
+            }
+            fetchedPlans.forEach(p => {
+                if (p && (p.id || p.orderNumber)) {
+                    planMap.set(p.id || p.orderNumber, p);
+                }
+            });
+
+            const mergedPlans = Array.from(planMap.values()).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+            setPlans(mergedPlans);
+            if (mergedPlans.length > 0) {
+                await AsyncStorage.setItem(storageKey, JSON.stringify(mergedPlans));
+            }
+
+            // 5. Automated Check & Send WhatsApp + Email Reminders for Due/Overdue Installments
+            try {
+                let userEmail = user?.email;
+                let userPhone = user?.phone || user?.user_metadata?.phone;
+                let userName = user?.user_metadata?.full_name || user?.user_metadata?.name;
+
+                if (!userEmail || !userPhone || !userName) {
+                    const { data: prof } = await supabase
+                        .from('profiles')
+                        .select('email, phone, phone_number, full_name')
+                        .eq('id', activeUserId)
+                        .maybeSingle();
+                    if (prof) {
+                        userEmail = userEmail || prof.email;
+                        userPhone = userPhone || prof.phone || prof.phone_number;
+                        userName = userName || prof.full_name;
+                    }
+                }
+
+                await paySmallSmallService.checkAndSendInstallmentReminders({
+                    userId: activeUserId,
+                    userEmail,
+                    userPhone,
+                    userName,
+                    plans: mergedPlans
+                });
+            } catch (reminderErr) {
+                console.log('[PaySmallSmallPage] Automated reminder check note:', reminderErr.message);
             }
         } catch (err) {
             console.log('Error loading Pay Small Small data:', err);
@@ -182,36 +232,18 @@ export const PaySmallSmallPage = ({ navigation, route, onBack, user: initialUser
         loadData();
     };
 
-    // Derived Metrics
-    const activePlans = useMemo(() => plans.filter(p => !p.isCompleted), [plans]);
-    const completedPlans = useMemo(() => plans.filter(p => p.isCompleted), [plans]);
-    const totalOutstanding = useMemo(() => activePlans.reduce((sum, p) => sum + p.remainingAmount, 0), [activePlans]);
-    
-    // Find next payment due date across all active plans
-    const nextDueInfo = useMemo(() => {
-        let earliestDate = null;
-        let nextAmount = 0;
-        let planOrderNum = '';
+    // Derived Financial & Overdue Metrics via paySmallSmallService
+    const ledgerMetrics = useMemo(() => {
+        return paySmallSmallService.calculateLedgerMetrics(plans);
+    }, [plans]);
 
-        for (const plan of activePlans) {
-            const nextInst = plan.schedule.find(s => s.status !== 'paid');
-            if (nextInst) {
-                const dueDate = new Date(nextInst.due_date);
-                if (!earliestDate || dueDate < earliestDate) {
-                    earliestDate = dueDate;
-                    nextAmount = nextInst.amount;
-                    planOrderNum = plan.orderNumber;
-                }
-            }
-        }
-
-        return earliestDate ? {
-            dateStr: earliestDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
-            daysRemaining: Math.ceil((earliestDate - new Date()) / (1000 * 60 * 60 * 24)),
-            amount: nextAmount,
-            orderNumber: planOrderNum
-        } : null;
-    }, [activePlans]);
+    const activePlans = ledgerMetrics.activePlans;
+    const completedPlans = ledgerMetrics.completedPlans;
+    const totalOutstanding = ledgerMetrics.totalOutstanding;
+    const totalOverdue = ledgerMetrics.totalOverdue;
+    const overdueInstallmentsCount = ledgerMetrics.overdueInstallmentsCount;
+    const hasOverdue = ledgerMetrics.hasOverdue;
+    const nextDueInfo = ledgerMetrics.nextDueInfo;
 
     // Handle Paying Next Installment
     const handleOpenPayment = (plan) => {
@@ -284,15 +316,37 @@ export const PaySmallSmallPage = ({ navigation, route, onBack, user: initialUser
             // 2. Persist update to Supabase orders table (gracefully handle if table absent)
             if (selectedPlan.id) {
                 try {
+                    const planUpdateObj = {
+                        plan_type: selectedPlan.planType,
+                        total_amount: selectedPlan.totalAmount,
+                        remaining_balance: newRemaining,
+                        installments_paid: updatedPlan.installmentsPaid,
+                        schedule: updatedSchedule
+                    };
+
+                    const { data: existingOrd } = await supabase
+                        .from('orders')
+                        .select('shipping_details')
+                        .eq('id', selectedPlan.id)
+                        .maybeSingle();
+
+                    const currentShipping = (existingOrd && existingOrd.shipping_details && typeof existingOrd.shipping_details === 'object')
+                        ? existingOrd.shipping_details
+                        : {};
+
                     await supabase.from('orders').update({
-                        installment_plan: {
-                            plan_type: selectedPlan.planType,
-                            total_amount: selectedPlan.totalAmount,
-                            remaining_balance: newRemaining,
-                            installments_paid: updatedPlan.installmentsPaid,
-                            schedule: updatedSchedule
+                        installment_plan: planUpdateObj,
+                        shipping_details: {
+                            ...currentShipping,
+                            installment_plan: {
+                                ...selectedPlan,
+                                remainingAmount: newRemaining,
+                                installmentsPaid: updatedPlan.installmentsPaid,
+                                schedule: updatedSchedule,
+                                isCompleted
+                            }
                         },
-                        payment_status: isCompleted ? 'paid' : 'installment_in_progress'
+                        payment_status: isCompleted ? 'paid' : 'pss_active'
                     }).eq('id', selectedPlan.id);
                 } catch (_) {}
             }
@@ -373,6 +427,14 @@ export const PaySmallSmallPage = ({ navigation, route, onBack, user: initialUser
                         <View>
                             <Text style={s.kpiSmallLabel}>OUTSTANDING BNPL LEDGER</Text>
                             <Text style={s.kpiBalanceVal}>{formatCurrency(totalOutstanding)}</Text>
+                            {hasOverdue && (
+                                <View style={s.kpiOverduePill}>
+                                    <Ionicons name="warning" size={10} color="#EF4444" />
+                                    <Text style={s.kpiOverduePillTxt}>
+                                        {formatCurrency(totalOverdue)} OVERDUE ({overdueInstallmentsCount})
+                                    </Text>
+                                </View>
+                            )}
                         </View>
                         <View style={s.activeBadge}>
                             <View style={s.activeDot} />
@@ -393,9 +455,11 @@ export const PaySmallSmallPage = ({ navigation, route, onBack, user: initialUser
                             {nextDueInfo && (
                                 <Text style={[
                                     s.kpiMetricNotice,
-                                    nextDueInfo.daysRemaining <= 3 ? s.kpiNoticeUrgent : null
+                                    (nextDueInfo.isOverdue || nextDueInfo.daysRemaining <= 3) ? s.kpiNoticeUrgent : null
                                 ]}>
-                                    {nextDueInfo.daysRemaining > 0
+                                    {nextDueInfo.isOverdue
+                                        ? `⚠️ Overdue by ${Math.abs(nextDueInfo.daysRemaining)}d (${formatCurrency(nextDueInfo.amount)})`
+                                        : nextDueInfo.daysRemaining > 0
                                         ? `In ${nextDueInfo.daysRemaining} days (${formatCurrency(nextDueInfo.amount)})`
                                         : `Due Today! (${formatCurrency(nextDueInfo.amount)})`}
                                 </Text>
@@ -416,6 +480,39 @@ export const PaySmallSmallPage = ({ navigation, route, onBack, user: initialUser
                         </View>
                     </View>
                 </View>
+
+                {/* ── OVERDUE DEBT ALERT BANNER ── */}
+                {hasOverdue && (
+                    <View style={s.overdueAlertCard}>
+                        <View style={s.overdueAlertTop}>
+                            <View style={s.overdueAlertIconBox}>
+                                <Ionicons name="warning" size={20} color="#DC2626" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={s.overdueAlertTitle}>OVERDUE INSTALLMENT BALANCE DETECTED</Text>
+                                <Text style={s.overdueAlertSub}>
+                                    You have {overdueInstallmentsCount} overdue payment{overdueInstallmentsCount > 1 ? 's' : ''} totaling <Text style={{ fontWeight: '800', color: '#DC2626' }}>{formatCurrency(totalOverdue)}</Text>.
+                                </Text>
+                            </View>
+                        </View>
+                        <Text style={s.overdueAlertDesc}>
+                            Please settle your overdue installment today to keep your 0% interest credit rating active, avoid service holds, and receive future orders without delay.
+                        </Text>
+                        <TouchableOpacity
+                            style={s.overduePayBtn}
+                            onPress={() => {
+                                const planWithOverdue = activePlans.find(p => p.schedule.some(inst => inst.status !== 'paid' && new Date(inst.due_date) < new Date()));
+                                if (planWithOverdue) {
+                                    handleOpenPayment(planWithOverdue);
+                                }
+                            }}
+                            activeOpacity={0.85}
+                        >
+                            <Ionicons name="card-outline" size={16} color={WHITE} />
+                            <Text style={s.overduePayBtnTxt}>Settle Overdue Balance ({formatCurrency(totalOverdue)}) →</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
 
                 {/* ── TABS SELECTOR ── */}
                 <View style={s.tabsRow}>
@@ -542,6 +639,8 @@ export const PaySmallSmallPage = ({ navigation, route, onBack, user: initialUser
                                                 const isPaid = inst.status === 'paid';
                                                 const isCurrentTarget = nextPending && nextPending.installment_number === inst.installment_number;
                                                 const dueDateObj = new Date(inst.due_date);
+                                                const isOverdue = !isPaid && dueDateObj < new Date();
+                                                const daysOverdue = isOverdue ? Math.ceil((new Date().getTime() - dueDateObj.getTime()) / (1000 * 60 * 60 * 24)) : 0;
                                                 const formattedDate = dueDateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
                                                 return (
@@ -549,10 +648,12 @@ export const PaySmallSmallPage = ({ navigation, route, onBack, user: initialUser
                                                         <View style={[
                                                             s.milestoneDot,
                                                             isPaid && s.milestoneDotPaid,
-                                                            isCurrentTarget && s.milestoneDotCurrent
+                                                            isOverdue ? s.milestoneDotOverdue : (isCurrentTarget && s.milestoneDotCurrent)
                                                         ]}>
                                                             {isPaid ? (
                                                                 <Ionicons name="checkmark" size={11} color={WHITE} />
+                                                            ) : isOverdue ? (
+                                                                <Ionicons name="warning" size={11} color="#DC2626" />
                                                             ) : (
                                                                 <Text style={[
                                                                     s.milestoneNum,
@@ -565,22 +666,22 @@ export const PaySmallSmallPage = ({ navigation, route, onBack, user: initialUser
 
                                                         <View style={s.milestoneDetails}>
                                                             <View style={s.milestoneRow}>
-                                                                <Text style={[s.milestoneTitle, isPaid && s.milestoneTitlePaid]}>
+                                                                <Text style={[s.milestoneTitle, isPaid && s.milestoneTitlePaid, isOverdue && { color: '#991B1B', fontWeight: '700' }]}>
                                                                     {inst.installment_number === 1 ? 'Down Payment (Initial)' : `Installment ${inst.installment_number}`}
                                                                 </Text>
-                                                                <Text style={[s.milestoneAmount, isPaid && s.milestoneAmountPaid]}>
+                                                                <Text style={[s.milestoneAmount, isPaid && s.milestoneAmountPaid, isOverdue && { color: '#DC2626' }]}>
                                                                     {formatCurrency(inst.amount)}
                                                                 </Text>
                                                             </View>
                                                             <View style={s.milestoneRow}>
-                                                                <Text style={s.milestoneDate}>
-                                                                    {isPaid ? `Paid ✓` : `Due: ${formattedDate}`}
+                                                                <Text style={[s.milestoneDate, isOverdue && { color: '#DC2626', fontWeight: '600' }]}>
+                                                                    {isPaid ? `Paid ✓` : isOverdue ? `⚠️ Overdue (${daysOverdue}d ago)` : `Due: ${formattedDate}`}
                                                                 </Text>
                                                                 <Text style={[
                                                                     s.milestoneStatus,
-                                                                    isPaid ? s.statusPaid : isCurrentTarget ? s.statusCurrent : s.statusUpcoming
+                                                                    isPaid ? s.statusPaid : isOverdue ? s.statusOverdue : isCurrentTarget ? s.statusCurrent : s.statusUpcoming
                                                                 ]}>
-                                                                    {isPaid ? 'COMPLETED' : isCurrentTarget ? 'DUE NEXT' : 'UPCOMING'}
+                                                                    {isPaid ? 'COMPLETED' : isOverdue ? 'OVERDUE' : isCurrentTarget ? 'DUE NEXT' : 'UPCOMING'}
                                                                 </Text>
                                                             </View>
                                                         </View>
@@ -591,22 +692,30 @@ export const PaySmallSmallPage = ({ navigation, route, onBack, user: initialUser
 
                                         {/* Action Bar */}
                                         {nextPending && (
-                                            <View style={s.planActionRow}>
-                                                <View style={{ flex: 1 }}>
-                                                    <Text style={s.nextDuePrompt}>Next Installment</Text>
-                                                    <Text style={s.nextDuePromptVal}>
-                                                        {formatCurrency(nextPending.amount)}
-                                                    </Text>
-                                                </View>
-                                                <TouchableOpacity
-                                                    style={s.payInstBtn}
-                                                    onPress={() => handleOpenPayment(plan)}
-                                                    activeOpacity={0.8}
-                                                >
-                                                    <Ionicons name="card-outline" size={15} color={WHITE} />
-                                                    <Text style={s.payInstBtnTxt}>Pay Now</Text>
-                                                </TouchableOpacity>
-                                            </View>
+                                            (() => {
+                                                const nextDueObj = new Date(nextPending.due_date);
+                                                const nextIsOverdue = nextDueObj < new Date();
+                                                return (
+                                                    <View style={s.planActionRow}>
+                                                        <View style={{ flex: 1 }}>
+                                                            <Text style={[s.nextDuePrompt, nextIsOverdue && { color: '#DC2626', fontWeight: '700' }]}>
+                                                                {nextIsOverdue ? '⚠️ Overdue Payment' : 'Next Installment'}
+                                                            </Text>
+                                                            <Text style={[s.nextDuePromptVal, nextIsOverdue && { color: '#DC2626' }]}>
+                                                                {formatCurrency(nextPending.amount)}
+                                                            </Text>
+                                                        </View>
+                                                        <TouchableOpacity
+                                                            style={[s.payInstBtn, nextIsOverdue && { backgroundColor: '#DC2626' }]}
+                                                            onPress={() => handleOpenPayment(plan)}
+                                                            activeOpacity={0.8}
+                                                        >
+                                                            <Ionicons name="card-outline" size={15} color={WHITE} />
+                                                            <Text style={s.payInstBtnTxt}>{nextIsOverdue ? 'Settle Overdue' : 'Pay Now'}</Text>
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                );
+                                            })()
                                         )}
                                     </View>
                                 );
@@ -899,6 +1008,86 @@ const s = StyleSheet.create({
         marginTop: 2,
         letterSpacing: -0.5
     },
+    kpiOverduePill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: 'rgba(239, 68, 68, 0.2)',
+        paddingHorizontal: 7,
+        paddingVertical: 3,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: 'rgba(239, 68, 68, 0.4)',
+        marginTop: 5,
+        alignSelf: 'flex-start'
+    },
+    kpiOverduePillTxt: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: '#F87171',
+        letterSpacing: 0.3
+    },
+    // Overdue Alert Banner
+    overdueAlertCard: {
+        backgroundColor: '#FEF2F2',
+        borderRadius: 14,
+        padding: 16,
+        borderWidth: 1.5,
+        borderColor: '#FCA5A5',
+        marginBottom: 14,
+        shadowColor: '#DC2626',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 6,
+        elevation: 3
+    },
+    overdueAlertTop: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        marginBottom: 8
+    },
+    overdueAlertIconBox: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#FEE2E2',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    overdueAlertTitle: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#991B1B',
+        letterSpacing: 0.5
+    },
+    overdueAlertSub: {
+        fontSize: 12.5,
+        color: '#7F1D1D',
+        marginTop: 2
+    },
+    overdueAlertDesc: {
+        fontSize: 11.5,
+        color: '#B91C1C',
+        lineHeight: 16,
+        marginBottom: 12
+    },
+    overduePayBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        backgroundColor: '#DC2626',
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        borderRadius: 8
+    },
+    overduePayBtnTxt: {
+        fontSize: 12.5,
+        fontWeight: '800',
+        color: WHITE,
+        letterSpacing: 0.3
+    },
     activeBadge: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1161,6 +1350,10 @@ const s = StyleSheet.create({
         backgroundColor: EMERALD,
         borderColor: EMERALD
     },
+    milestoneDotOverdue: {
+        backgroundColor: '#FEF2F2',
+        borderColor: '#DC2626'
+    },
     milestoneDotCurrent: {
         backgroundColor: GOLD_LIGHT,
         borderColor: GOLD
@@ -1210,6 +1403,10 @@ const s = StyleSheet.create({
     },
     statusPaid: {
         color: EMERALD
+    },
+    statusOverdue: {
+        color: '#DC2626',
+        fontWeight: '800'
     },
     statusCurrent: {
         color: GOLD

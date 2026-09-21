@@ -173,7 +173,18 @@ BEGIN
     END IF;
 END $$;
 
--- 11. NOTIFY POSTGREST SCHEMA CACHE RELOAD
+-- 11. PAY SMALL SMALL (BNPL) INSTALLMENT PLAN SUPPORT
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'installment_plan'
+    ) THEN
+        ALTER TABLE public.orders ADD COLUMN installment_plan JSONB;
+    END IF;
+END $$;
+
+-- 12. NOTIFY POSTGREST SCHEMA CACHE RELOAD
 NOTIFY pgrst, 'reload schema';
 
-SELECT 'Orders and Live Tracking Schema created successfully!' AS result;
+SELECT 'Orders, Live Tracking, and BNPL Schema created successfully!' AS result;

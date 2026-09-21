@@ -371,12 +371,32 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) 
         return 2;
     }, [currentStatus, isCancelled]);
 
-    // Items list
+    // Items list (reliable fallback across Supabase order_items and local/cart items)
     const orderItems = useMemo(() => {
-        const raw = currentOrder?.items || currentOrder?.order_items;
-        if (Array.isArray(raw) && raw.length > 0) return raw;
+        if (Array.isArray(currentOrder?.order_items) && currentOrder.order_items.length > 0) {
+            return currentOrder.order_items;
+        }
+        if (Array.isArray(currentOrder?.items) && currentOrder.items.length > 0) {
+            return currentOrder.items;
+        }
         return [];
     }, [currentOrder]);
+
+    // Financial calculations
+    const itemsSubtotal = useMemo(() => {
+        if (orderItems.length === 0) return 0;
+        return orderItems.reduce((sum, itm) => {
+            const prod = itm.product || {};
+            const p = parseFloat(itm.price || prod.price || 0) || 0;
+            const q = parseInt(itm.quantity || itm.qty || 1, 10) || 1;
+            return sum + (p * q);
+        }, 0);
+    }, [orderItems]);
+
+    const totalAmount = parseFloat(currentOrder?.total_amount || 0) || 0;
+    const shippingFee = parseFloat(currentOrder?.shipping_fee || 0) || 0;
+    const discountApplied = parseFloat(currentOrder?.discount_applied || 0) || 0;
+    const displaySubtotal = itemsSubtotal > 0 ? itemsSubtotal : Math.max(0, totalAmount - shippingFee + discountApplied);
 
     // Shipping Destination Address
     const shippingAddress = useMemo(() => {
@@ -758,18 +778,18 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) 
                             </View>
                         )}
 
-                        {/* ── LIVE STANDING STATION / INDA KAYAN SUKE A TSAYE (LIVE CHECKPOINT) ── */}
+                        {/* ── LIVE STANDING STATION (CURRENT SHIPMENT CHECKPOINT) ── */}
                         <View style={s.liveStationCard}>
                             <View style={s.liveStationHeader}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
                                     <View style={s.pulseCircleOuter}>
                                         <Animated.View style={[s.pulseCircleInner, { opacity: pulseAnim }]} />
-                                        <Ionicons name="location-sharp" size={17} color="#DC2626" />
+                                        <Ionicons name="location-sharp" size={17} color="#10B981" />
                                     </View>
                                     <View style={{ flex: 1 }}>
-                                        <Text style={s.liveStationLabel}>INDA KAYAN SUKE A YANZU (LIVE STATION)</Text>
+                                        <Text style={s.liveStationLabel}>CURRENT SHIPMENT CHECKPOINT</Text>
                                         <Text style={s.liveStationName} numberOfLines={2}>
-                                            {currentOrder?.current_location || (activeStep >= 5 ? 'An Isar da Kayan (Delivered)' : activeStep >= 4 ? 'Kusa da kai - Kan Hanya (Out for Final Delivery)' : activeStep >= 3 ? 'Kano Central Hub → Yobe Interstate Route' : 'Babban Shagon Ajiya (Merchant Sorting Facility)')}
+                                            {currentOrder?.current_location || (activeStep >= 5 ? 'Delivered to Destination' : activeStep >= 4 ? 'Out for Final Delivery' : activeStep >= 3 ? 'Central Logistics Hub → Regional Route' : 'Central Fulfillment & Sorting Facility')}
                                         </Text>
                                     </View>
                                 </View>
@@ -781,10 +801,10 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) 
                             {/* Route Stations Visualizer */}
                             <View style={s.stationTrackBox}>
                                 {[
-                                    { id: 'origin', title: 'Shago/Hub', done: activeStep >= 0, icon: 'business-outline' },
-                                    { id: 'transit', title: 'Babbar Hanya', done: activeStep >= 3, icon: 'swap-horizontal-outline' },
-                                    { id: 'station', title: 'Tashar Gari', done: activeStep >= 4, icon: 'storefront-outline' },
-                                    { id: 'dest', title: 'Doorstep', done: activeStep >= 5, icon: 'home-outline' },
+                                    { id: 'origin', title: 'Merchant Hub', done: activeStep >= 0, icon: 'business-outline' },
+                                    { id: 'transit', title: 'In Transit', done: activeStep >= 3, icon: 'swap-horizontal-outline' },
+                                    { id: 'station', title: 'Local Hub', done: activeStep >= 4, icon: 'storefront-outline' },
+                                    { id: 'dest', title: 'Delivered', done: activeStep >= 5, icon: 'home-outline' },
                                 ].map((st, i) => (
                                     <React.Fragment key={st.id}>
                                         <View style={{ alignItems: 'center', minWidth: 55 }}>
@@ -811,7 +831,7 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) 
                                             {currentOrder?.driver?.name || 'Abu Mafhal Express Dispatch'}
                                         </Text>
                                         <Text style={s.driverVehicle}>
-                                            {currentOrder?.driver?.vehicle_type || 'Express Dispatch Rider'}{currentOrder?.driver?.vehicle_number ? ` • ${currentOrder.driver.vehicle_number}` : ''}
+                                            {currentOrder?.driver?.vehicle_type || 'Express Dispatch Courier'}{currentOrder?.driver?.vehicle_number ? ` • ${currentOrder.driver.vehicle_number}` : ''}
                                         </Text>
                                     </View>
                                     <View style={{ flexDirection: 'row', gap: 6 }}>
@@ -820,15 +840,15 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) 
                                             style={s.driverCallBtn}
                                         >
                                             <Ionicons name="call" size={13} color={WHITE} />
-                                            <Text style={s.driverBtnTxt}>Kira</Text>
+                                            <Text style={s.driverBtnTxt}>Call Driver</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity
                                             onPress={() => {
                                                 const phone = currentOrder?.driver?.phone || currentOrder?.contact_phone;
                                                 if (phone) {
-                                                    whatsappService.openDirectChat(phone, `Sannu, ina magana ne game da Order #${(currentOrder?.id || '').slice(0, 8).toUpperCase()}`);
+                                                    whatsappService.openDirectChat(phone, `Hello, I am contacting you regarding my Order ${orderDisplayRef}`);
                                                 } else {
-                                                    Alert.alert('Babu Lambar WhatsApp', 'Za a iya kiran lambar kai tsaye ta waya.');
+                                                    Alert.alert('No WhatsApp Number', 'You can contact the courier directly via phone call.');
                                                 }
                                             }}
                                             style={s.driverWhatsAppBtn}
@@ -962,6 +982,34 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) 
                                     </View>
                                 </View>
                             )}
+
+                            {/* Financial Calculation Breakdown */}
+                            <View style={s.financialBreakdownBox}>
+                                <View style={s.breakdownRow}>
+                                    <Text style={s.breakdownLabel}>Items Subtotal</Text>
+                                    <Text style={s.breakdownValue}>₦{displaySubtotal.toLocaleString()}</Text>
+                                </View>
+                                <View style={s.breakdownRow}>
+                                    <Text style={s.breakdownLabel}>Delivery & Shipping</Text>
+                                    <Text style={s.breakdownValue}>
+                                        {shippingFee > 0 ? `₦${shippingFee.toLocaleString()}` : 'Free Delivery'}
+                                    </Text>
+                                </View>
+                                {discountApplied > 0 && (
+                                    <View style={s.breakdownRow}>
+                                        <Text style={[s.breakdownLabel, { color: '#16A34A' }]}>Discount / Voucher</Text>
+                                        <Text style={[s.breakdownValue, { color: '#16A34A' }]}>-₦{discountApplied.toLocaleString()}</Text>
+                                    </View>
+                                )}
+                                <View style={s.breakdownRow}>
+                                    <Text style={s.breakdownLabel}>Payment Method</Text>
+                                    <Text style={s.breakdownValue}>{currentOrder?.payment_method || 'Verified Checkout'}</Text>
+                                </View>
+                                <View style={[s.breakdownRow, s.breakdownTotalRow]}>
+                                    <Text style={s.breakdownTotalLabel}>Total Amount</Text>
+                                    <Text style={s.breakdownTotalValue}>₦{totalAmount.toLocaleString()}</Text>
+                                </View>
+                            </View>
                         </View>
 
                         {/* ── ACTION BUTTONS ───────────────────────────────── */}
@@ -1316,18 +1364,23 @@ const s = StyleSheet.create({
         backgroundColor: '#E2E8F0'
     },
 
-    // Security PIN Card
+    // Security PIN Card (Modern High-Trust Handover Code)
     securityPinCard: {
-        backgroundColor: '#FFFBEB',
+        backgroundColor: '#F8FAFC',
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: '#FDE68A',
+        borderColor: '#E2E8F0',
         padding: 14,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: 12,
-        marginBottom: 14
+        marginBottom: 14,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.03,
+        shadowRadius: 4,
+        elevation: 1
     },
     securityPinLeft: {
         flex: 1,
@@ -1336,9 +1389,9 @@ const s = StyleSheet.create({
         gap: 12
     },
     securityPinIconBox: {
-        width: 36,
-        height: 36,
-        borderRadius: 10,
+        width: 38,
+        height: 38,
+        borderRadius: 12,
         backgroundColor: '#FEF3C7',
         alignItems: 'center',
         justifyContent: 'center'
@@ -1347,29 +1400,28 @@ const s = StyleSheet.create({
         flex: 1
     },
     securityPinTitle: {
-        fontSize: 12.5,
+        fontSize: 13,
         fontWeight: '800',
-        color: '#92400E'
+        color: NAVY
     },
     securityPinSub: {
-        fontSize: 10.5,
-        color: '#B45309',
+        fontSize: 11,
+        color: SLATE,
         marginTop: 2,
         lineHeight: 15
     },
     securityPinBadge: {
-        backgroundColor: WHITE,
+        backgroundColor: NAVY,
         borderRadius: 12,
         paddingHorizontal: 12,
         paddingVertical: 7,
-        borderWidth: 1.5,
-        borderColor: GOLD,
-        elevation: 1
+        borderWidth: 1,
+        borderColor: '#1E293B'
     },
     securityPinDigits: {
         fontSize: 17,
         fontWeight: '900',
-        color: '#92400E',
+        color: '#FBBF24',
         letterSpacing: 2
     },
 
@@ -1689,6 +1741,46 @@ const s = StyleSheet.create({
         alignItems: 'center',
         paddingVertical: 6
     },
+    // Financial Cost Breakdown in Items Card
+    financialBreakdownBox: {
+        marginTop: 14,
+        paddingTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: '#F1F5F9'
+    },
+    breakdownRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 6
+    },
+    breakdownLabel: {
+        fontSize: 12,
+        color: SLATE,
+        fontWeight: '600'
+    },
+    breakdownValue: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: NAVY
+    },
+    breakdownTotalRow: {
+        marginTop: 6,
+        paddingTop: 8,
+        borderTopWidth: 1,
+        borderTopColor: '#E2E8F0',
+        marginBottom: 0
+    },
+    breakdownTotalLabel: {
+        fontSize: 13,
+        fontWeight: '800',
+        color: NAVY
+    },
+    breakdownTotalValue: {
+        fontSize: 16,
+        fontWeight: '900',
+        color: NAVY
+    },
 
     // Action Group
     actionGroup: {
@@ -1732,19 +1824,19 @@ const s = StyleSheet.create({
         fontSize: 12.5
     },
 
-    // Live Standing Station & Checkpoints
+    // Live Standing Station & Checkpoints (Modern Telemetry Card)
     liveStationCard: {
         backgroundColor: WHITE,
         borderRadius: 18,
         padding: 16,
         marginBottom: 14,
-        borderWidth: 1.5,
-        borderColor: '#FEF3C7',
+        borderWidth: 1,
+        borderColor: BORDER_COL,
         shadowColor: '#0F172A',
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-        elevation: 2
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
+        elevation: 1
     },
     liveStationHeader: {
         flexDirection: 'row',
@@ -1756,7 +1848,7 @@ const s = StyleSheet.create({
         width: 34,
         height: 34,
         borderRadius: 17,
-        backgroundColor: '#FEE2E2',
+        backgroundColor: '#ECFDF5',
         alignItems: 'center',
         justifyContent: 'center',
         position: 'relative'
@@ -1766,32 +1858,32 @@ const s = StyleSheet.create({
         width: 34,
         height: 34,
         borderRadius: 17,
-        backgroundColor: '#FECACA'
+        backgroundColor: '#D1FAE5'
     },
     liveStationLabel: {
-        fontSize: 9.5,
-        fontWeight: '900',
-        color: '#DC2626',
-        letterSpacing: 0.8
+        fontSize: 10,
+        fontWeight: '800',
+        color: '#059669',
+        letterSpacing: 0.5
     },
     liveStationName: {
         fontSize: 14,
-        fontWeight: '900',
+        fontWeight: '800',
         color: NAVY,
         marginTop: 2
     },
     liveStationBadge: {
-        backgroundColor: '#FEF2F2',
-        borderColor: '#FCA5A5',
+        backgroundColor: '#ECFDF5',
+        borderColor: '#A7F3D0',
         borderWidth: 1,
         paddingHorizontal: 8,
         paddingVertical: 3,
-        borderRadius: 10
+        borderRadius: 8
     },
     liveStationBadgeTxt: {
         fontSize: 9.5,
         fontWeight: '900',
-        color: '#DC2626'
+        color: '#059669'
     },
     stationTrackBox: {
         flexDirection: 'row',

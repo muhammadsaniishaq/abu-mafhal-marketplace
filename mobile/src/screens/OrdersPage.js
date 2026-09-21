@@ -65,51 +65,127 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
             const { data: authData } = await supabase.auth.getUser();
             activeUserId = authData?.user?.id;
         }
+
+        const mergedOrders = [];
+        const seenOrderKeys = new Set();
+
+        const registerOrder = (ord) => {
+            if (!ord) return;
+            const key = ord.id || ord.payment_reference || ord.reference || ord.orderNumber;
+            if (key && !seenOrderKeys.has(key)) {
+                seenOrderKeys.add(key);
+                mergedOrders.push(ord);
+            }
+        };
+
+        // 1. Instant cache load from local storage
+        try {
+            if (activeUserId) {
+                const userCached = await AsyncStorage.getItem(`@abumafhal_orders_${activeUserId}`);
+                if (userCached) {
+                    const parsed = JSON.parse(userCached);
+                    if (Array.isArray(parsed)) parsed.forEach(registerOrder);
+                }
+            }
+            const lastOrd = await AsyncStorage.getItem('@abumafhal_last_order');
+            if (lastOrd) {
+                const parsedLast = JSON.parse(lastOrd);
+                registerOrder(parsedLast);
+            }
+            const guestCached = await AsyncStorage.getItem('@abumafhal_orders_guest');
+            if (guestCached) {
+                const parsedGuest = JSON.parse(guestCached);
+                if (Array.isArray(parsedGuest)) parsedGuest.forEach(registerOrder);
+            }
+
+            if (mergedOrders.length > 0) {
+                setOrders([...mergedOrders].sort((a, b) => new Date(b.created_at || b.createdAt || 0) - new Date(a.created_at || a.createdAt || 0)));
+                setLoading(false);
+            }
+        } catch (_) {}
+
         if (!activeUserId) {
             setLoading(false);
             setRefreshing(false);
             return;
         }
 
-        // Instant cache load
+        // 2. Fetch from Supabase orders table
         try {
-            const cacheKey = `@abumafhal_orders_${activeUserId}`;
-            const cached = await AsyncStorage.getItem(cacheKey);
-            if (cached) {
-                const parsed = JSON.parse(cached);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    setOrders(parsed);
-                    setLoading(false);
-                }
-            }
-        } catch (_) {}
-
-        try {
-            const { data, error } = await supabase
+            const { data: dbOrders, error: dbErr } = await supabase
                 .from('orders')
-                .select('*, user_confirmed, confirmed_at, driver:drivers(id, name), order_items(id, quantity, price, variant, product_id, product:products(id, name, images))')
+                .select('*, user_confirmed, confirmed_at, driver:drivers(id, name, phone), order_items(id, quantity, price, variant, product_id, product:products(id, name, images, price))')
                 .eq('user_id', activeUserId)
                 .order('created_at', { ascending: false });
-            if (!error && data) {
-                setOrders(data);
-                AsyncStorage.setItem(`@abumafhal_orders_${activeUserId}`, JSON.stringify(data)).catch(() => {});
-            } else if (error) {
-                console.warn('Orders joined fetch error, trying simple:', error.message);
-                const { data: simpleData, error: simpleErr } = await supabase
+
+            if (!dbErr && Array.isArray(dbOrders) && dbOrders.length > 0) {
+                // Replace or prepend richer db orders
+                dbOrders.forEach(dbOrd => {
+                    const key = dbOrd.id || dbOrd.payment_reference || dbOrd.reference;
+                    const existingIdx = mergedOrders.findIndex(o => (o.id || o.payment_reference || o.reference) === key);
+                    if (existingIdx >= 0) {
+                        mergedOrders[existingIdx] = { ...mergedOrders[existingIdx], ...dbOrd };
+                    } else {
+                        mergedOrders.unshift(dbOrd);
+                        if (key) seenOrderKeys.add(key);
+                    }
+                });
+            } else if (dbErr) {
+                console.warn('Orders joined fetch note:', dbErr.message);
+                const { data: simpleData } = await supabase
                     .from('orders')
                     .select('*')
                     .eq('user_id', activeUserId)
                     .order('created_at', { ascending: false });
-                if (!simpleErr && simpleData) {
-                    setOrders(simpleData);
+                if (Array.isArray(simpleData)) {
+                    simpleData.forEach(registerOrder);
                 }
             }
         } catch (e) {
             console.log('Orders fetch error:', e);
-        } finally {
-            setLoading(false);
-            setRefreshing(false);
         }
+
+        // 3. Fallback: Check Supabase transactions table for completed order payments
+        try {
+            const { data: txData } = await supabase
+                .from('transactions')
+                .select('*')
+                .eq('user_id', activeUserId)
+                .eq('type', 'order_payment')
+                .order('created_at', { ascending: false })
+                .limit(15);
+
+            if (Array.isArray(txData) && txData.length > 0) {
+                txData.forEach(tx => {
+                    const ref = tx.reference || tx.id;
+                    if (ref && !seenOrderKeys.has(ref)) {
+                        registerOrder({
+                            id: ref,
+                            reference: ref,
+                            orderNumber: ref.slice(0, 8).toUpperCase(),
+                            created_at: tx.created_at,
+                            createdAt: tx.created_at,
+                            total_amount: tx.amount,
+                            status: tx.status === 'completed' ? 'processing' : (tx.status || 'processing'),
+                            payment_status: tx.status === 'completed' ? 'paid' : tx.status,
+                            payment_method: tx.gateway || 'Escrow Payment',
+                            order_items: [],
+                            items: [],
+                            source: 'transactions'
+                        });
+                    }
+                });
+            }
+        } catch (_) {}
+
+        // Sort descending and update state
+        mergedOrders.sort((a, b) => new Date(b.created_at || b.createdAt || 0) - new Date(a.created_at || a.createdAt || 0));
+        setOrders(mergedOrders);
+        if (activeUserId && mergedOrders.length > 0) {
+            AsyncStorage.setItem(`@abumafhal_orders_${activeUserId}`, JSON.stringify(mergedOrders)).catch(() => {});
+        }
+        setLoading(false);
+        setRefreshing(false);
     };
 
     const stats = useMemo(() => ({
@@ -559,8 +635,24 @@ const OrderCard = React.memo(({ item, isExpanded, onToggle, onCancel, onConfirm,
     const needsConfirmation = isDelivered && !isConfirmed;
     const canCancel = ['pending', 'processing'].includes(status);
     const stepIndex = STEPS.indexOf(status);
-    const items = item.order_items || [];
-    const images = items.slice(0, 5).map(oi => getImg(oi.product?.images)).filter(Boolean);
+    const items = (item.order_items && item.order_items.length > 0)
+        ? item.order_items
+        : (Array.isArray(item.items) && item.items.length > 0 ? item.items : []);
+    const images = items.slice(0, 5).map(oi => {
+        const prod = oi.product || {};
+        return getImg(prod.images || oi.images || oi.image);
+    }).filter(Boolean);
+
+    // Item pricing calculations
+    const itemsSubtotal = items.reduce((sum, oi) => {
+        const p = parseFloat(oi.price || oi.product?.price || 0) || 0;
+        const q = parseInt(oi.quantity || oi.qty || 1, 10) || 1;
+        return sum + (p * q);
+    }, 0);
+    const shippingFee = parseFloat(item.shipping_fee || 0) || 0;
+    const discount = parseFloat(item.discount_applied || 0) || 0;
+    const totalPaid = parseFloat(item.total_amount || (itemsSubtotal + shippingFee - discount) || 0);
+    const displaySubtotal = itemsSubtotal > 0 ? itemsSubtotal : Math.max(0, totalPaid - shippingFee + discount);
 
     return (
         <View style={C.card}>
@@ -581,7 +673,7 @@ const OrderCard = React.memo(({ item, isExpanded, onToggle, onCancel, onConfirm,
                             <Text style={[C.statusText, { color: cfg.color }]}>{cfg.label.toUpperCase()}</Text>
                         </View>
                         <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A', marginTop: 4 }}>
-                            ₦{(item.total_amount || 0).toLocaleString()}
+                            ₦{totalPaid.toLocaleString()}
                         </Text>
                     </View>
                 </View>
@@ -643,15 +735,15 @@ const OrderCard = React.memo(({ item, isExpanded, onToggle, onCancel, onConfirm,
                             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' }} />
                             <View style={{ flex: 1 }}>
                                 <Text style={{ color: '#D9A73A', fontSize: 9, fontWeight: '800', letterSpacing: 0.6 }}>
-                                    INDA KAYAN SUKE A YANZU (LIVE):
+                                    LIVE CHECKPOINT:
                                 </Text>
                                 <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }} numberOfLines={1}>
-                                    {item.current_location || 'Abu Mafhal Central Logistics Hub'}
+                                    {item.current_location || (status === 'delivered' ? 'Delivered to Destination' : 'Abu Mafhal Central Logistics Hub')}
                                 </Text>
                             </View>
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
-                            <Text style={{ color: 'white', fontSize: 11, fontWeight: '700' }}>Gano Kayan</Text>
+                            <Text style={{ color: 'white', fontSize: 11, fontWeight: '700' }}>Track Live</Text>
                             <Ionicons name="chevron-forward" size={12} color="#D9A73A" />
                         </View>
                     </TouchableOpacity>
@@ -667,34 +759,53 @@ const OrderCard = React.memo(({ item, isExpanded, onToggle, onCancel, onConfirm,
 
             {isExpanded && (
                 <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 14 }}>
-                    <Text style={C.sectionLabel}>ITEMS ORDERED</Text>
+                    <Text style={C.sectionLabel}>ITEMS ORDERED ({items.length})</Text>
                     {items.length > 0 ? items.map((oi, i) => {
-                        const imgUrl = getImg(oi.product?.images);
+                        const prod = oi.product || {};
+                        const imgUrl = getImg(prod.images || oi.images || oi.image);
+                        const itemName = prod.name || oi.name || oi.title || 'Marketplace Item';
+                        const unitPrice = parseFloat(oi.price || prod.price || 0) || 0;
+                        const qty = parseInt(oi.quantity || oi.qty || 1, 10) || 1;
+                        const lineTotal = unitPrice * qty;
+
                         return (
-                            <View key={oi.id || i} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                            <View key={oi.id || i} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12, paddingBottom: 10, borderBottomWidth: i < items.length - 1 ? 1 : 0, borderBottomColor: '#F1F5F9' }}>
                                 {imgUrl
                                     ? <Image source={{ uri: imgUrl }} style={C.itemImg} resizeMode="cover" />
                                     : <View style={[C.itemImg, { backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }]}>
-                                        <Ionicons name="image-outline" size={18} color="#CBD5E1" />
+                                        <Ionicons name="cube-outline" size={20} color="#94A3B8" />
                                     </View>
                                 }
                                 <View style={{ flex: 1 }}>
-                                    <Text style={{ fontWeight: '700', color: '#0F172A', fontSize: 13 }}>{oi.product?.name || 'Product'}</Text>
-                                    <Text style={{ color: '#64748B', fontSize: 12 }}>Qty: {oi.quantity}{oi.variant ? ` • ${oi.variant}` : ''}</Text>
+                                    <Text style={{ fontWeight: '700', color: '#0F172A', fontSize: 13, lineHeight: 18 }} numberOfLines={2}>
+                                        {itemName}
+                                    </Text>
+                                    <Text style={{ color: '#64748B', fontSize: 12, marginTop: 2 }}>
+                                        ₦{unitPrice.toLocaleString()} × {qty} item{qty > 1 ? 's' : ''}{oi.variant ? ` • ${oi.variant}` : ''}
+                                    </Text>
                                 </View>
                                 <View style={{ alignItems: 'flex-end' }}>
-                                    <Text style={{ fontWeight: '800', color: '#0F172A' }}>₦{((oi.price || 0) * (oi.quantity || 1)).toLocaleString()}</Text>
+                                    <Text style={{ fontWeight: '800', color: '#0F172A', fontSize: 13 }}>₦{lineTotal.toLocaleString()}</Text>
                                     {isConfirmed && settings?.enable_reviews !== false && (
                                         <TouchableOpacity onPress={() => onReview({ order: item, item: oi, type: 'product' })}
-                                            style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                                            <Ionicons name="star-outline" size={11} color="#F59E0B" />
-                                            <Text style={{ fontSize: 10, color: '#F59E0B', fontWeight: '700' }}>Review</Text>
+                                            style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#FEF3C7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 }}>
+                                            <Ionicons name="star" size={10} color="#D97706" />
+                                            <Text style={{ fontSize: 10, color: '#92400E', fontWeight: '700' }}>Review</Text>
                                         </TouchableOpacity>
                                     )}
                                 </View>
                             </View>
                         );
-                    }) : <Text style={{ color: '#94A3B8', fontSize: 13, marginBottom: 10 }}>No item details found.</Text>}
+                    }) : (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10, paddingVertical: 8 }}>
+                            <Ionicons name="cube-outline" size={22} color="#94A3B8" />
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ fontWeight: '700', color: '#0F172A', fontSize: 13 }}>Marketplace Purchased Items</Text>
+                                <Text style={{ color: '#64748B', fontSize: 12 }}>Ref: #{(item.id || item.reference || '').slice(0, 8).toUpperCase()}</Text>
+                            </View>
+                            <Text style={{ fontWeight: '800', color: '#0F172A', fontSize: 13 }}>₦{totalPaid.toLocaleString()}</Text>
+                        </View>
+                    )}
 
                     {item.shipping_address && (
                         <View style={{ backgroundColor: '#F0FDF4', borderRadius: 12, padding: 10, marginBottom: 12, flexDirection: 'row', gap: 8, alignItems: 'center' }}>
@@ -709,21 +820,31 @@ const OrderCard = React.memo(({ item, isExpanded, onToggle, onCancel, onConfirm,
                         </View>
                     )}
 
-                    <View style={{ backgroundColor: '#F8FAFC', borderRadius: 14, padding: 12, marginBottom: 14 }}>
+                    <View style={{ backgroundColor: '#F8FAFC', borderRadius: 14, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: '#F1F5F9' }}>
                         <Text style={C.sectionLabel}>PAYMENT SUMMARY</Text>
-                        {[
-                            ['Method', item.payment_method || 'N/A'],
-                            ['Shipping', `₦${(item.shipping_fee || 0).toLocaleString()}`],
-                            item.discount_applied > 0 && ['Discount', `-₦${(item.discount_applied || 0).toLocaleString()}`],
-                        ].filter(Boolean).map(([l, v]) => (
-                            <View key={l} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 }}>
-                                <Text style={{ color: '#64748B', fontSize: 12 }}>{l}</Text>
-                                <Text style={{ fontWeight: '700', color: '#0F172A', fontSize: 12 }}>{v}</Text>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <Text style={{ color: '#64748B', fontSize: 12 }}>Items Subtotal</Text>
+                            <Text style={{ fontWeight: '700', color: '#0F172A', fontSize: 12 }}>₦{displaySubtotal.toLocaleString()}</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <Text style={{ color: '#64748B', fontSize: 12 }}>Delivery & Shipping Fee</Text>
+                            <Text style={{ fontWeight: '700', color: '#0F172A', fontSize: 12 }}>
+                                {shippingFee > 0 ? `₦${shippingFee.toLocaleString()}` : 'Free'}
+                            </Text>
+                        </View>
+                        {discount > 0 && (
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                                <Text style={{ color: '#16A34A', fontSize: 12 }}>Discount Applied</Text>
+                                <Text style={{ fontWeight: '700', color: '#16A34A', fontSize: 12 }}>-₦{discount.toLocaleString()}</Text>
                             </View>
-                        ))}
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#E2E8F0' }}>
-                            <Text style={{ fontWeight: '800', color: '#0F172A' }}>Total Paid</Text>
-                            <Text style={{ fontWeight: '900', color: '#0F172A', fontSize: 16 }}>₦{(item.total_amount || 0).toLocaleString()}</Text>
+                        )}
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <Text style={{ color: '#64748B', fontSize: 12 }}>Payment Method</Text>
+                            <Text style={{ fontWeight: '700', color: '#0F172A', fontSize: 12 }}>{item.payment_method || 'Verified Payment'}</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#E2E8F0' }}>
+                            <Text style={{ fontWeight: '800', color: '#0F172A', fontSize: 13 }}>Total Paid</Text>
+                            <Text style={{ fontWeight: '900', color: '#0F172A', fontSize: 17 }}>₦{totalPaid.toLocaleString()}</Text>
                         </View>
                     </View>
 
