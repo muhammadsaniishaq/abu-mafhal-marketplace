@@ -152,7 +152,24 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) 
                 console.log('[TrackOrder] Local cache load note:', e.message);
             }
 
-            // 4. Load from Supabase transactions table
+            // 4. Load from Supabase orders table (and transactions fallback)
+            try {
+                if (userId) {
+                    const { data: dbOrders, error: dbErr } = await supabase
+                        .from('orders')
+                        .select('*, driver:drivers(id, name, phone, vehicle_type, vehicle_number), order_items(*, product:products(name, images, price))')
+                        .eq('user_id', userId)
+                        .order('created_at', { ascending: false })
+                        .limit(20);
+
+                    if (!dbErr && Array.isArray(dbOrders) && dbOrders.length > 0) {
+                        dbOrders.forEach(registerOrder);
+                    }
+                }
+            } catch (e) {
+                console.log('[TrackOrder] Supabase orders fetch note:', e.message);
+            }
+
             try {
                 if (userId) {
                     const { data: txData } = await supabase
@@ -241,6 +258,24 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) 
                 setSearchLoading(false);
                 return;
             }
+
+            // Check Supabase orders table first
+            try {
+                const { data: ordData } = await supabase
+                    .from('orders')
+                    .select('*, driver:drivers(id, name, phone, vehicle_type, vehicle_number), order_items(*, product:products(name, images, price))')
+                    .or(`id.eq.${query},payment_reference.ilike.%${query}%`)
+                    .limit(1)
+                    .maybeSingle();
+                if (ordData) {
+                    setCurrentOrder(ordData);
+                    setUserOrders(prev => [ordData, ...prev.filter(o => o.id !== ordData.id)]);
+                    setShowSearch(false);
+                    setSearchQuery('');
+                    setSearchLoading(false);
+                    return;
+                }
+            } catch (_) {}
 
             // Check Supabase transactions
             const { data: txData } = await supabase
@@ -722,6 +757,89 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) 
                                 )}
                             </View>
                         )}
+
+                        {/* ── LIVE STANDING STATION / INDA KAYAN SUKE A TSAYE (LIVE CHECKPOINT) ── */}
+                        <View style={s.liveStationCard}>
+                            <View style={s.liveStationHeader}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                                    <View style={s.pulseCircleOuter}>
+                                        <Animated.View style={[s.pulseCircleInner, { opacity: pulseAnim }]} />
+                                        <Ionicons name="location-sharp" size={17} color="#DC2626" />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={s.liveStationLabel}>INDA KAYAN SUKE A YANZU (LIVE STATION)</Text>
+                                        <Text style={s.liveStationName} numberOfLines={2}>
+                                            {currentOrder?.current_location || (activeStep >= 5 ? 'An Isar da Kayan (Delivered)' : activeStep >= 4 ? 'Kusa da kai - Kan Hanya (Out for Final Delivery)' : activeStep >= 3 ? 'Kano Central Hub → Yobe Interstate Route' : 'Babban Shagon Ajiya (Merchant Sorting Facility)')}
+                                        </Text>
+                                    </View>
+                                </View>
+                                <View style={s.liveStationBadge}>
+                                    <Text style={s.liveStationBadgeTxt}>LIVE</Text>
+                                </View>
+                            </View>
+
+                            {/* Route Stations Visualizer */}
+                            <View style={s.stationTrackBox}>
+                                {[
+                                    { id: 'origin', title: 'Shago/Hub', done: activeStep >= 0, icon: 'business-outline' },
+                                    { id: 'transit', title: 'Babbar Hanya', done: activeStep >= 3, icon: 'swap-horizontal-outline' },
+                                    { id: 'station', title: 'Tashar Gari', done: activeStep >= 4, icon: 'storefront-outline' },
+                                    { id: 'dest', title: 'Doorstep', done: activeStep >= 5, icon: 'home-outline' },
+                                ].map((st, i) => (
+                                    <React.Fragment key={st.id}>
+                                        <View style={{ alignItems: 'center', minWidth: 55 }}>
+                                            <View style={[s.stationNode, st.done && s.stationNodeDone]}>
+                                                <Ionicons name={st.done ? 'checkmark' : st.icon} size={11} color={st.done ? WHITE : SLATE} />
+                                            </View>
+                                            <Text style={[s.stationNodeTxt, st.done && s.stationNodeTxtDone]}>{st.title}</Text>
+                                        </View>
+                                        {i < 3 && (
+                                            <View style={[s.stationTrackLine, activeStep >= (i === 0 ? 3 : i === 1 ? 4 : 5) && s.stationTrackLineDone]} />
+                                        )}
+                                    </React.Fragment>
+                                ))}
+                            </View>
+
+                            {/* Driver Card Row if assigned or in transit */}
+                            {(currentOrder?.driver || activeStep >= 3) && (
+                                <View style={s.driverCardBox}>
+                                    <View style={s.driverAvatar}>
+                                        <Ionicons name="person" size={18} color={NAVY} />
+                                    </View>
+                                    <View style={{ flex: 1, marginLeft: 10 }}>
+                                        <Text style={s.driverName}>
+                                            {currentOrder?.driver?.name || 'Abu Mafhal Express Dispatch'}
+                                        </Text>
+                                        <Text style={s.driverVehicle}>
+                                            {currentOrder?.driver?.vehicle_type || 'Express Dispatch Rider'}{currentOrder?.driver?.vehicle_number ? ` • ${currentOrder.driver.vehicle_number}` : ''}
+                                        </Text>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                                        <TouchableOpacity
+                                            onPress={() => Linking.openURL(`tel:${currentOrder?.driver?.phone || currentOrder?.contact_phone || '08000000000'}`)}
+                                            style={s.driverCallBtn}
+                                        >
+                                            <Ionicons name="call" size={13} color={WHITE} />
+                                            <Text style={s.driverBtnTxt}>Kira</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                const phone = currentOrder?.driver?.phone || currentOrder?.contact_phone;
+                                                if (phone) {
+                                                    whatsappService.openDirectChat(phone, `Sannu, ina magana ne game da Order #${(currentOrder?.id || '').slice(0, 8).toUpperCase()}`);
+                                                } else {
+                                                    Alert.alert('Babu Lambar WhatsApp', 'Za a iya kiran lambar kai tsaye ta waya.');
+                                                }
+                                            }}
+                                            style={s.driverWhatsAppBtn}
+                                        >
+                                            <Ionicons name="logo-whatsapp" size={13} color={WHITE} />
+                                            <Text style={s.driverBtnTxt}>WhatsApp</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            )}
+                        </View>
 
                         {/* ── REAL MOBILE STEPPER TIMELINE (NEVER OVERFLOWS) ─── */}
                         <View style={s.stepperCard}>
@@ -1612,5 +1730,158 @@ const s = StyleSheet.create({
         color: NAVY,
         fontWeight: '800',
         fontSize: 12.5
+    },
+
+    // Live Standing Station & Checkpoints
+    liveStationCard: {
+        backgroundColor: WHITE,
+        borderRadius: 18,
+        padding: 16,
+        marginBottom: 14,
+        borderWidth: 1.5,
+        borderColor: '#FEF3C7',
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+        elevation: 2
+    },
+    liveStationHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 14
+    },
+    pulseCircleOuter: {
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        backgroundColor: '#FEE2E2',
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative'
+    },
+    pulseCircleInner: {
+        position: 'absolute',
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        backgroundColor: '#FECACA'
+    },
+    liveStationLabel: {
+        fontSize: 9.5,
+        fontWeight: '900',
+        color: '#DC2626',
+        letterSpacing: 0.8
+    },
+    liveStationName: {
+        fontSize: 14,
+        fontWeight: '900',
+        color: NAVY,
+        marginTop: 2
+    },
+    liveStationBadge: {
+        backgroundColor: '#FEF2F2',
+        borderColor: '#FCA5A5',
+        borderWidth: 1,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 10
+    },
+    liveStationBadgeTxt: {
+        fontSize: 9.5,
+        fontWeight: '900',
+        color: '#DC2626'
+    },
+    stationTrackBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#F8FAFC',
+        paddingVertical: 12,
+        paddingHorizontal: 10,
+        borderRadius: 12,
+        marginBottom: 10
+    },
+    stationNode: {
+        width: 26,
+        height: 26,
+        borderRadius: 13,
+        backgroundColor: '#E2E8F0',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 4
+    },
+    stationNodeDone: {
+        backgroundColor: '#10B981'
+    },
+    stationNodeTxt: {
+        fontSize: 9.5,
+        fontWeight: '700',
+        color: SLATE,
+        textAlign: 'center'
+    },
+    stationNodeTxtDone: {
+        color: '#065F46',
+        fontWeight: '900'
+    },
+    stationTrackLine: {
+        flex: 1,
+        height: 2,
+        backgroundColor: '#E2E8F0',
+        marginHorizontal: 4,
+        marginTop: -14
+    },
+    stationTrackLineDone: {
+        backgroundColor: '#10B981'
+    },
+    driverCardBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F1F5F9',
+        padding: 10,
+        borderRadius: 12,
+        marginTop: 4
+    },
+    driverAvatar: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#E2E8F0',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    driverName: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: NAVY
+    },
+    driverVehicle: {
+        fontSize: 10.5,
+        color: SLATE,
+        marginTop: 1
+    },
+    driverCallBtn: {
+        backgroundColor: '#0F172A',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 9,
+        paddingVertical: 6,
+        borderRadius: 8
+    },
+    driverWhatsAppBtn: {
+        backgroundColor: '#16A34A',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 9,
+        paddingVertical: 6,
+        borderRadius: 8
+    },
+    driverBtnTxt: {
+        color: WHITE,
+        fontSize: 10.5,
+        fontWeight: '800'
     }
 });

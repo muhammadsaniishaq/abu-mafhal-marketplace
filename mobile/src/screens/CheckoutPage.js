@@ -908,7 +908,20 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 }).catch(err => console.log('WhatsApp confirmation dispatch note:', err));
             }
 
-            // 4. Automated Vendor WhatsApp Dispatch Alert
+            // 4. Admin Order Alert Email (non-blocking)
+            try {
+                const adminEmail = settings?.support_email || '';
+                const orderShort = (orderId || '').slice(0, 8).toUpperCase();
+                if (adminEmail && adminEmail.includes('@')) {
+                    const itemsSummary = cart.map(i =>
+                        `<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">${i.name || i.title || 'Item'}</td><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:center;">${i.quantity || i.qty || 1}</td><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">₦${((i.price || 0) * (i.quantity || i.qty || 1)).toLocaleString()}</td></tr>`
+                    ).join('');
+                    const adminHtml = `<!DOCTYPE html><html><head><style>body{font-family:Arial,sans-serif;line-height:1.5;color:#1e293b;}table{border-collapse:collapse;width:100%;}</style></head><body><div style="max-width:600px;margin:0 auto;"><div style="background:#0E1A2E;padding:24px;text-align:center;border-radius:12px 12px 0 0;"><h2 style="color:#D9A73A;margin:0;">🛒 New Order Placed!</h2></div><div style="background:#fff;padding:24px;border:1px solid #e2e8f0;border-top:none;"><h3 style="color:#0E1A2E;">Order #${orderShort}</h3><table><thead><tr style="background:#f1f5f9;"><th style="padding:8px 10px;text-align:left;">Item</th><th style="padding:8px 10px;">Qty</th><th style="padding:8px 10px;text-align:right;">Amount</th></tr></thead><tbody>${itemsSummary}</tbody><tfoot><tr><td colspan="2" style="padding:10px;font-weight:700;">Total</td><td style="padding:10px;text-align:right;font-weight:700;color:#0E1A2E;">₦${Number(totalAmount || 0).toLocaleString()}</td></tr></tfoot></table><p style="margin-top:16px;"><b>Customer:</b> ${customerName}</p><p><b>Payment:</b> ${payMethod || 'Online'}</p><p style="text-align:center;margin-top:24px;"><a href="https://abumafhal.com/mobile#admin/orders" style="background:#0E1A2E;color:#D9A73A;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;">View in Admin Dashboard →</a></p></div></div></body></html>`;
+                    NotificationService.sendEmail(adminEmail, `🛒 New Order #${orderShort} — ₦${Number(totalAmount || 0).toLocaleString()}`, adminHtml).catch(() => {});
+                }
+            } catch (_) {}
+
+            // 5. Automated Vendor WhatsApp Dispatch Alert
             const vendorIds = [...new Set(cart.map(i => i.vendor_id || i.vendorId).filter(Boolean))];
             if (vendorIds.length > 0) {
                 vendorIds.forEach(async (vId) => {

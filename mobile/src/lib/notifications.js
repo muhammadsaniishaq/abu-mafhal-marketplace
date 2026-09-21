@@ -1,8 +1,67 @@
 import { supabase } from './supabase';
 import { Alert, Platform, Vibration } from 'react-native';
 
-// Resend API key loaded from environment if configured
-export const RESEND_API_KEY = process.env.RESEND_API_KEY || process.env.EXPO_PUBLIC_RESEND_API_KEY || '';
+// ---------------------------------------------------------------------------
+// Dynamic Resend API Key
+// We intentionally avoid a module-level constant so the admin can update the
+// key from the Admin Settings page without needing a redeploy.
+// ---------------------------------------------------------------------------
+let _resendKeyCache = null;     // cached value
+let _resendKeyCacheTs = 0;      // timestamp of last fetch (ms)
+const _RESEND_KEY_TTL = 60000; // re-fetch at most every 60 s
+
+async function getResendApiKey() {
+    // 1. First try env var (useful in dev / CI)
+    const envKey = process.env.RESEND_API_KEY || process.env.EXPO_PUBLIC_RESEND_API_KEY || '';
+    if (envKey && !envKey.includes('12345')) return envKey;
+
+    // 2. Serve from cache if fresh
+    const now = Date.now();
+    if (_resendKeyCache && now - _resendKeyCacheTs < _RESEND_KEY_TTL) {
+        return _resendKeyCache;
+    }
+
+    // 3. Fetch from app_settings table
+    try {
+        const { data } = await supabase
+            .from('app_settings')
+            .select('value')
+            .eq('key', 'resend_api_key')
+            .maybeSingle();
+
+        const key = data?.value?.value || data?.value || '';
+        if (key && typeof key === 'string' && key.length > 8) {
+            _resendKeyCache = key;
+            _resendKeyCacheTs = now;
+            return key;
+        }
+
+        // Also try the singleton row format used by updateSettings
+        const { data: singleton } = await supabase
+            .from('app_settings')
+            .select('resend_api_key')
+            .eq('id', 1)
+            .maybeSingle();
+
+        const singletonKey = singleton?.resend_api_key || '';
+        if (singletonKey && typeof singletonKey === 'string' && singletonKey.length > 8) {
+            _resendKeyCache = singletonKey;
+            _resendKeyCacheTs = now;
+            return singletonKey;
+        }
+    } catch (_) {}
+
+    return '';
+}
+
+// Expose cache invalidation so AdminSettings can bust it on save
+export function invalidateResendKeyCache() {
+    _resendKeyCache = null;
+    _resendKeyCacheTs = 0;
+}
+
+// Legacy compat export (may be empty — check is now inside sendEmail)
+export const RESEND_API_KEY = '';
 
 export const NotificationService = {
 
@@ -130,12 +189,15 @@ export const NotificationService = {
 
     /**
      * Send Email via Resend API
+     * Dynamically fetches the API key from app_settings so admin changes
+     * take effect without a redeploy.
      */
     async sendEmail(to, subject, htmlBody) {
         if (!to || !to.includes('@')) return false;
 
-        if (!RESEND_API_KEY || RESEND_API_KEY.includes('12345')) {
-            console.log('[NotificationService] Email notice: Resend API Key is unconfigured.');
+        const apiKey = await getResendApiKey();
+        if (!apiKey || apiKey.includes('12345')) {
+            console.log('[NotificationService] Email notice: Resend API Key is unconfigured. Set it in Admin → Advanced → Email API.');
             return false;
         }
 
@@ -144,7 +206,7 @@ export const NotificationService = {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${RESEND_API_KEY}`
+                    'Authorization': `Bearer ${apiKey}`
                 },
                 body: JSON.stringify({
                     from: 'Abu Mafhal <support@abumafhal.com>',

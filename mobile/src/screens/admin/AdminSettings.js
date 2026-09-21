@@ -11,6 +11,7 @@ import { useAppSettings } from '../../context/AppSettingsContext';
 import * as ImagePicker from 'expo-image-picker';
 import { UploadService } from '../../services/uploadService';
 import { supabase } from '../../lib/supabase';
+import { invalidateResendKeyCache } from '../../lib/notifications';
 
 const { width: W } = Dimensions.get('window');
 const TAB_W = W / 7;
@@ -361,6 +362,8 @@ export const AdminSettings = ({ navigation }) => {
     const [premblySecretKey,       setPremblySecretKey]      = useState(settings?.prembly_secret_key || '');
     const [geminiApiKey,           setGeminiApiKey]          = useState(settings?.gemini_api_key || '');
     const [openaiApiKey,           setOpenaiApiKey]          = useState(settings?.openai_api_key || '');
+    const [resendApiKey,           setResendApiKey]          = useState(settings?.resend_api_key || '');
+    const [showResendKey,          setShowResendKey]         = useState(false);
     const [features,               setFeatures]              = useState(settings?.features || {});
     const [vendorPlans,            setVendorPlans]           = useState(settings?.vendor_plans || []);
 
@@ -511,6 +514,7 @@ export const AdminSettings = ({ navigation }) => {
             if (settings.enable_recently_viewed !== undefined) setEnableRecentlyViewed(settings.enable_recently_viewed !== false);
             if (settings.enable_product_qa !== undefined) setEnableProductQa(settings.enable_product_qa !== false);
             if (settings.enable_guest_checkout !== undefined) setEnableGuestCheckout(!!settings.enable_guest_checkout);
+            if (settings.resend_api_key !== undefined) setResendApiKey(settings.resend_api_key || '');
         }
     }, [settings]);
 
@@ -696,6 +700,7 @@ export const AdminSettings = ({ navigation }) => {
             // Security & Credentials
             prembly_app_id: premblyAppId, prembly_secret_key: premblySecretKey,
             gemini_api_key: geminiApiKey, openai_api_key: openaiApiKey,
+            resend_api_key: resendApiKey,
             features, vendor_plans: vendorPlans,
             currency, commission_rate: parseFloat(commissionRate) || 5,
             min_order_amount: parseFloat(minOrderAmount) || 500,
@@ -745,6 +750,7 @@ export const AdminSettings = ({ navigation }) => {
         if (error) Alert.alert('Sync Failed ❌', 'Could not push changes. Check connectivity.');
         else {
             setUnsaved(false);
+            invalidateResendKeyCache(); // Bust cached Resend key so new one is used immediately
             Alert.alert('Deployed! ✅', 'All configurations are now live across the platform.');
             if (refreshSettings) refreshSettings();
         }
@@ -1513,6 +1519,41 @@ export const AdminSettings = ({ navigation }) => {
                 <Card>
                     <Inp label="Gemini Ultra Key"  value={geminiApiKey}  onChange={v => { setGeminiApiKey(v); setUnsaved(true); }}  icon="sparkles"  secure placeholder="AIza..." color="#8B5CF6" />
                     <Inp label="OpenAI GPT Key"    value={openaiApiKey}  onChange={v => { setOpenaiApiKey(v); setUnsaved(true); }}  icon="brain"     secure placeholder="sk-..."  color="#10B981" />
+                </Card>
+            </Sect>
+
+            <Sect title="Email Delivery — Resend API" icon="mail" subtitle="Power order confirmations, receipts & OTPs">
+                <Card>
+                    <View style={{ flexDirection: 'row', gap: 4, padding: 10, borderRadius: 10, backgroundColor: darkMode ? '#1E293B' : '#F0FDF4', borderWidth: 1, borderColor: '#86EFAC', marginBottom: 14 }}>
+                        <Ionicons name="information-circle" size={15} color="#16A34A" style={{ marginTop: 1 }} />
+                        <Text style={{ fontSize: 12, color: darkMode ? '#86EFAC' : '#15803D', flex: 1, lineHeight: 18 }}>
+                            Get your free API key at <Text style={{ fontWeight: '800' }}>resend.com</Text>. Paste it here and tap Deploy to enable email notifications for orders, OTPs, and vendor alerts.
+                        </Text>
+                    </View>
+                    <View style={{ position: 'relative' }}>
+                        <Inp
+                            label="Resend API Key"
+                            value={resendApiKey}
+                            onChange={v => { setResendApiKey(v); setUnsaved(true); }}
+                            icon="key"
+                            secure={!showResendKey}
+                            placeholder="re_..."
+                            color="#D9A73A"
+                            hint="Starts with re_live_... or re_test_..."
+                        />
+                        <TouchableOpacity
+                            onPress={() => setShowResendKey(p => !p)}
+                            style={S.eyeBtn}
+                        >
+                            <Ionicons name={showResendKey ? 'eye-off' : 'eye'} size={17} color={T.muted} />
+                        </TouchableOpacity>
+                    </View>
+                    {resendApiKey && resendApiKey.length > 8 && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                            <View style={[S.dot, { backgroundColor: '#10B981' }]} />
+                            <Text style={{ fontSize: 11, color: '#10B981', fontWeight: '700' }}>API Key configured — email delivery active</Text>
+                        </View>
+                    )}
                 </Card>
             </Sect>
 

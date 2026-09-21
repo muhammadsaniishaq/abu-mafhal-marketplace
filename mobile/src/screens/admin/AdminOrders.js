@@ -74,6 +74,11 @@ export const AdminOrders = ({ navigation, onBack }) => {
     const [refundReason, setRefundReason] = useState('');
     const [refundOrder, setRefundOrder] = useState(null);
 
+    // Live checkpoint location updates
+    const [locationInput, setLocationInput] = useState('');
+    const [updatingLocation, setUpdatingLocation] = useState(false);
+    const [schemaNotice, setSchemaNotice] = useState(false);
+
     // Realtime subscription ref
     const realtimeChannelRef = useRef(null);
 
@@ -117,14 +122,19 @@ export const AdminOrders = ({ navigation, onBack }) => {
                 .limit(100);
 
             if (error) {
-                console.error('Fetch Orders Error:', error);
-                Alert.alert('Error', error.message || 'Failed to fetch orders');
+                console.warn('Fetch Orders Notice:', error.message);
+                if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
+                    setSchemaNotice(true);
+                } else {
+                    Alert.alert('Notice', error.message || 'Failed to fetch orders');
+                }
             } else {
                 setOrders(data || []);
+                setSchemaNotice(false);
             }
         } catch (err) {
             console.error('Fetch Orders Crash:', err);
-            Alert.alert('Network Error', 'Could not load orders. Please check your connection.');
+            setSchemaNotice(true);
         }
         setLoading(false);
         setRefreshing(false);
@@ -284,6 +294,54 @@ export const AdminOrders = ({ navigation, onBack }) => {
             Alert.alert('Error', err.message);
         }
         setUpdating(false);
+    };
+
+    // ─── Live Checkpoint Location Update ─────────────────────────────────────
+    const updateLiveLocation = async (orderId, newLocation) => {
+        if (!newLocation || !newLocation.trim()) {
+            Alert.alert('Notice', 'Please enter or select a valid location');
+            return;
+        }
+        setUpdatingLocation(true);
+        const loc = newLocation.trim();
+        try {
+            const { error } = await supabase
+                .from('orders')
+                .update({ current_location: loc, updated_at: new Date().toISOString() })
+                .eq('id', orderId);
+
+            if (!error) {
+                setOrders(prev => prev.map(o => o.id === orderId ? { ...o, current_location: loc } : o));
+                if (selectedOrder?.id === orderId) {
+                    setSelectedOrder(prev => ({ ...prev, current_location: loc }));
+                }
+                const { data: { user } } = await supabase.auth.getUser();
+                await supabase.from('order_status_logs').insert({
+                    order_id: orderId,
+                    status: selectedOrder?.status || 'in_transit',
+                    location: loc,
+                    note: `Live Station: ${loc}`,
+                    changed_by: user?.id || null
+                }).catch(() => {});
+
+                // Also notify customer if phone exists
+                const currentO = selectedOrder || orders.find(o => o.id === orderId);
+                if (currentO?.user?.phone) {
+                    const locMsg = `Update for Abu Mafhal Order #${orderId.slice(0, 8).toUpperCase()}: Your shipment is currently at [${loc}].`;
+                    whatsappService.sendDirect(currentO.user.phone, locMsg, currentO?.user_id)
+                        .catch(e => console.log('Station update WhatsApp error:', e));
+                }
+
+                Alert.alert('Success', `Live location updated to: ${loc}`);
+                setLocationInput('');
+            } else {
+                Alert.alert('Notice', error.message || 'Could not update location');
+            }
+        } catch (e) {
+            Alert.alert('Error', e.message || 'Failed to update location');
+        } finally {
+            setUpdatingLocation(false);
+        }
     };
 
     // ─── Refund / Cancel ─────────────────────────────────────────────────────
@@ -583,6 +641,12 @@ export const AdminOrders = ({ navigation, onBack }) => {
                         <Text style={{ fontSize: 11, color: '#3B82F6', fontWeight: '600' }}>{item.driver.name} – {getLevel(item.driver?.xp)}</Text>
                     </View>
                 )}
+                {item.current_location ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 4, backgroundColor: '#F8FAFC', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, alignSelf: 'flex-start', borderWidth: 1, borderColor: '#E2E8F0' }}>
+                        <Ionicons name="navigate-circle" size={13} color="#D9A73A" />
+                        <Text style={{ fontSize: 11, color: '#0F172A', fontWeight: '700' }}>Station: <Text style={{ color: '#2563EB' }}>{item.current_location}</Text></Text>
+                    </View>
+                ) : null}
                 {/* Product Image Thumbnails */}
                 {item.order_items && item.order_items.length > 0 && (
                     <View style={{ flexDirection: 'row', gap: 6, marginTop: 10, alignItems: 'center' }}>
@@ -721,6 +785,22 @@ export const AdminOrders = ({ navigation, onBack }) => {
                     ))}
                 </ScrollView>
             </View>
+
+            {/* Schema Notice Banner */}
+            {schemaNotice && (
+                <View style={{ marginHorizontal: 16, marginTop: 12, backgroundColor: '#FFFBEB', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#FDE68A', flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+                    <Ionicons name="warning" size={22} color="#D97706" style={{ marginTop: 2 }} />
+                    <View style={{ flex: 1 }}>
+                        <Text style={{ color: '#92400E', fontWeight: '800', fontSize: 13 }}>Supabase Schema Cache Notice</Text>
+                        <Text style={{ color: '#B45309', fontSize: 12, marginTop: 2, lineHeight: 16 }}>
+                            The orders table is not yet registered in Supabase. Please run CREATE_ORDERS_AND_TRACKING_SCHEMA.sql in Supabase SQL Editor to enable database order tracking.
+                        </Text>
+                        <TouchableOpacity onPress={fetchOrders} style={{ marginTop: 8, backgroundColor: '#D97706', alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 }}>
+                            <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>Retry Sync</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            )}
 
             {/* ── Orders List ── */}
             {loading && !refreshing
@@ -926,6 +1006,78 @@ export const AdminOrders = ({ navigation, onBack }) => {
                                                 </View>
                                             </View>
                                         )}
+                                    </View>
+
+                                    {/* ─ Live Checkpoint Location Update ─ */}
+                                    <View style={[S.card, { borderColor: '#D9A73A', borderWidth: 1 }]}>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                <Ionicons name="navigate-circle" size={20} color="#D9A73A" />
+                                                <Text style={[S.cardTitle, { marginBottom: 0 }]}>📍 Live Tracking Location</Text>
+                                            </View>
+                                            <View style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 }}>
+                                                <Text style={{ color: '#B45309', fontSize: 10, fontWeight: '800' }}>CUSTOMER CAN SEE</Text>
+                                            </View>
+                                        </View>
+                                        <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 10 }}>
+                                            Update the current physical station or checkpoint where this order is standing right now.
+                                        </Text>
+
+                                        {order.current_location ? (
+                                            <View style={{ backgroundColor: '#F8FAFC', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' }} />
+                                                <Text style={{ fontSize: 12, color: '#0F172A', fontWeight: '700', flex: 1 }}>
+                                                    Current: <Text style={{ color: '#2563EB' }}>{order.current_location}</Text>
+                                                </Text>
+                                            </View>
+                                        ) : null}
+
+                                        {/* Quick Preset Buttons */}
+                                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', marginBottom: 6 }}>Quick Presets:</Text>
+                                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+                                            <View style={{ flexDirection: 'row', gap: 6 }}>
+                                                {[
+                                                    'Abu Mafhal Central Hub (Kano)',
+                                                    'Kano → Yobe Interstate Transit',
+                                                    'Potiskum Logistics Junction',
+                                                    'Damaturu Transit Terminal',
+                                                    'Gashua / Bade Central Station',
+                                                    'Out for Local Delivery',
+                                                    'Arrived at Destination'
+                                                ].map((preset) => (
+                                                    <TouchableOpacity
+                                                        key={preset}
+                                                        onPress={() => updateLiveLocation(order.id, preset)}
+                                                        disabled={updatingLocation}
+                                                        style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#CBD5E1' }}
+                                                    >
+                                                        <Text style={{ fontSize: 11, color: '#0F172A', fontWeight: '600' }}>{preset}</Text>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </View>
+                                        </ScrollView>
+
+                                        {/* Custom Location Input */}
+                                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                                            <TextInput
+                                                placeholder="Custom station or town (e.g. Nguru Road)..."
+                                                placeholderTextColor="#94A3B8"
+                                                value={locationInput}
+                                                onChangeText={setLocationInput}
+                                                style={{ flex: 1, borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, fontSize: 13, backgroundColor: '#FFFFFF' }}
+                                            />
+                                            <TouchableOpacity
+                                                onPress={() => updateLiveLocation(order.id, locationInput)}
+                                                disabled={updatingLocation || !locationInput.trim()}
+                                                style={{ backgroundColor: '#0E1A2E', paddingHorizontal: 14, justifyContent: 'center', alignItems: 'center', borderRadius: 10, opacity: (!locationInput.trim() || updatingLocation) ? 0.6 : 1 }}
+                                            >
+                                                {updatingLocation ? (
+                                                    <ActivityIndicator size="small" color="#FFFFFF" />
+                                                ) : (
+                                                    <Text style={{ color: '#D9A73A', fontWeight: '800', fontSize: 12 }}>SAVE</Text>
+                                                )}
+                                            </TouchableOpacity>
+                                        </View>
                                     </View>
 
                                     {/* ─ Update Status ─ */}

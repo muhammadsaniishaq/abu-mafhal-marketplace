@@ -93,6 +93,16 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
             if (!error && data) {
                 setOrders(data);
                 AsyncStorage.setItem(`@abumafhal_orders_${activeUserId}`, JSON.stringify(data)).catch(() => {});
+            } else if (error) {
+                console.warn('Orders joined fetch error, trying simple:', error.message);
+                const { data: simpleData, error: simpleErr } = await supabase
+                    .from('orders')
+                    .select('*')
+                    .eq('user_id', activeUserId)
+                    .order('created_at', { ascending: false });
+                if (!simpleErr && simpleData) {
+                    setOrders(simpleData);
+                }
             }
         } catch (e) {
             console.log('Orders fetch error:', e);
@@ -620,6 +630,31 @@ const OrderCard = React.memo(({ item, isExpanded, onToggle, onCancel, onConfirm,
                             {STEPS.map(s => <Text key={s} style={{ fontSize: 8, color: '#94A3B8', fontWeight: '700', textTransform: 'uppercase', width: 20, textAlign: 'center' }}>{s.slice(0, 4)}</Text>)}
                         </View>
                     </View>
+                )}
+
+                {/* Live Station Checkpoint Banner (One-Tap Live Track) */}
+                {!isCancelled && (
+                    <TouchableOpacity
+                        activeOpacity={0.85}
+                        onPress={() => onNavigate && onNavigate('TrackOrder', { order: item })}
+                        style={{ marginTop: 12, backgroundColor: '#0E1A2E', borderRadius: 12, paddingVertical: 9, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: 'rgba(217, 167, 58, 0.4)' }}
+                    >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' }} />
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ color: '#D9A73A', fontSize: 9, fontWeight: '800', letterSpacing: 0.6 }}>
+                                    INDA KAYAN SUKE A YANZU (LIVE):
+                                </Text>
+                                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }} numberOfLines={1}>
+                                    {item.current_location || 'Abu Mafhal Central Logistics Hub'}
+                                </Text>
+                            </View>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                            <Text style={{ color: 'white', fontSize: 11, fontWeight: '700' }}>Gano Kayan</Text>
+                            <Ionicons name="chevron-forward" size={12} color="#D9A73A" />
+                        </View>
+                    </TouchableOpacity>
                 )}
 
                 {isCancelled && (
