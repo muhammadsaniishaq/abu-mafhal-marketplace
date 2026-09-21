@@ -150,7 +150,30 @@ EXCEPTION WHEN OTHERS THEN
     -- Ignore if already added
 END $$;
 
--- 10. NOTIFY POSTGREST SCHEMA CACHE RELOAD
+-- 10. FOREIGN KEY RELATION TO PROFILES (Enables direct PostgREST joins if desired)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'fk_orders_profiles'
+    ) THEN
+        BEGIN
+            ALTER TABLE public.orders ADD CONSTRAINT fk_orders_profiles FOREIGN KEY (user_id) REFERENCES public.profiles(id) ON DELETE SET NULL;
+        EXCEPTION WHEN OTHERS THEN
+            NULL;
+        END;
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'fk_drivers_profiles'
+    ) THEN
+        BEGIN
+            ALTER TABLE public.drivers ADD CONSTRAINT fk_drivers_profiles FOREIGN KEY (user_id) REFERENCES public.profiles(id) ON DELETE SET NULL;
+        EXCEPTION WHEN OTHERS THEN
+            NULL;
+        END;
+    END IF;
+END $$;
+
+-- 11. NOTIFY POSTGREST SCHEMA CACHE RELOAD
 NOTIFY pgrst, 'reload schema';
 
 SELECT 'Orders and Live Tracking Schema created successfully!' AS result;

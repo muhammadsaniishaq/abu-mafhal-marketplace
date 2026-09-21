@@ -117,19 +117,47 @@ export const AdminOrders = ({ navigation, onBack }) => {
         try {
             const { data, error } = await supabase
                 .from('orders')
-                .select('*, user:profiles(full_name, email, phone), driver:drivers(name, vehicle_type, phone, xp), order_items(id, quantity, price, product:products(name, images))')
+                .select('*, driver:drivers(name, vehicle_type, phone, xp), order_items(id, quantity, price, product:products(name, images))')
                 .order('created_at', { ascending: false })
                 .limit(100);
 
             if (error) {
                 console.warn('Fetch Orders Notice:', error.message);
-                if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
+                if (error.code === 'PGRST205' || (error.message?.includes('schema cache') && error.message?.includes('orders'))) {
                     setSchemaNotice(true);
                 } else {
                     Alert.alert('Notice', error.message || 'Failed to fetch orders');
                 }
             } else {
-                setOrders(data || []);
+                let enrichedOrders = data || [];
+                const userIds = [...new Set(enrichedOrders.map(o => o.user_id).filter(Boolean))];
+                let profileMap = {};
+                if (userIds.length > 0) {
+                    try {
+                        const { data: profilesData } = await supabase
+                            .from('profiles')
+                            .select('id, full_name, email, phone')
+                            .in('id', userIds);
+                        (profilesData || []).forEach(p => {
+                            profileMap[p.id] = p;
+                        });
+                    } catch (_) {}
+                }
+
+                enrichedOrders = enrichedOrders.map(o => {
+                    const p = profileMap[o.user_id];
+                    const shipping = v(o.shipping_details) || v(o.shipping_address) || {};
+                    return {
+                        ...o,
+                        user: p || {
+                            full_name: shipping.full_name || shipping.recipient_name || 'Valued Customer',
+                            email: shipping.email || 'N/A',
+                            phone: o.contact_phone || shipping.phone || 'N/A'
+                        }
+                    };
+                });
+
+                setOrders(enrichedOrders);
                 setSchemaNotice(false);
             }
         } catch (err) {
@@ -144,9 +172,26 @@ export const AdminOrders = ({ navigation, onBack }) => {
         try {
             const { data, error } = await supabase
                 .from('drivers')
-                .select('*, user:profiles(email)')
+                .select('*')
                 .limit(50);
-            if (!error) setDrivers(data || []);
+            if (!error && data) {
+                const userIds = [...new Set(data.map(d => d.user_id).filter(Boolean))];
+                let profileMap = {};
+                if (userIds.length > 0) {
+                    try {
+                        const { data: pData } = await supabase
+                            .from('profiles')
+                            .select('id, email')
+                            .in('id', userIds);
+                        (pData || []).forEach(p => { profileMap[p.id] = p; });
+                    } catch (_) {}
+                }
+                const enriched = data.map(d => ({
+                    ...d,
+                    user: profileMap[d.user_id] || { email: 'N/A' }
+                }));
+                setDrivers(enriched);
+            }
         } catch (e) {
             console.log('Fetch Drivers Error', e);
         }
@@ -163,14 +208,32 @@ export const AdminOrders = ({ navigation, onBack }) => {
                     .eq('order_id', orderId)
                     .limit(50),
                 supabase.from('order_status_logs')
-                    .select('*, changed_by_profile:profiles(full_name)')
+                    .select('*')
                     .eq('order_id', orderId)
                     .order('created_at', { ascending: false })
                     .limit(20)
             ]);
 
             if (!itemsRes.error) setOrderItems(itemsRes.data || []);
-            if (!timelineRes.error) setTimeline(timelineRes.data || []);
+            if (!timelineRes.error && timelineRes.data) {
+                const logs = timelineRes.data;
+                const changedByIds = [...new Set(logs.map(l => l.changed_by).filter(Boolean))];
+                let profileMap = {};
+                if (changedByIds.length > 0) {
+                    try {
+                        const { data: pData } = await supabase
+                            .from('profiles')
+                            .select('id, full_name')
+                            .in('id', changedByIds);
+                        (pData || []).forEach(p => { profileMap[p.id] = p; });
+                    } catch (_) {}
+                }
+                const enrichedLogs = logs.map(l => ({
+                    ...l,
+                    changed_by_profile: profileMap[l.changed_by] || null
+                }));
+                setTimeline(enrichedLogs);
+            }
         } catch (e) {
             console.log('Fetch Order Items Error:', e);
         }

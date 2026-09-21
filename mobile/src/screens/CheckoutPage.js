@@ -284,33 +284,6 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
         }
     }, []);
 
-    // Detect return from external payment gateways (Paystack / Flutterwave) on Web
-    useEffect(() => {
-        if (Platform.OS === 'web' && typeof window !== 'undefined') {
-            try {
-                const params = new URLSearchParams(window.location.search);
-                const ref = params.get('reference') || params.get('trxref') || params.get('tx_ref');
-                const status = (params.get('status') || '').toLowerCase();
-
-                if (ref) {
-                    if (status === 'cancelled' || status === 'failed') {
-                        window.history.replaceState({}, document.title, window.location.pathname);
-                        showToast('⚠️ Payment was cancelled. You can try again.');
-                        showAlert('Payment Cancelled', 'The payment transaction was cancelled. Please try again.');
-                        return;
-                    }
-
-                    window.history.replaceState({}, document.title, window.location.pathname);
-                    setCurrentOrderId(ref);
-                    setOrderSuccess(true);
-                    clearProgress();
-                    if (onClearCart) onClearCart();
-                    showToast('✓ Payment completed successfully!');
-                }
-            } catch (_) {}
-        }
-    }, [onClearCart, showAlert, showToast]);
-
     // Available Payment Gateways
     const availableMethods = useMemo(() => {
         const walletBalance = Number(profile?.wallet_balance || 0);
@@ -1022,6 +995,116 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
         showToast('Voucher removed');
     };
 
+    const saveOrderToSupabase = async ({
+        targetRef,
+        paymentStatus = 'unpaid',
+        paymentMethodName,
+        paidAmount = 0,
+        amountDueOnDelivery = 0,
+        notes = null,
+        targetUserId = null,
+    }) => {
+        try {
+            let verifiedUser = user;
+            if (!verifiedUser) {
+                try {
+                    const { data: { user: authUser } } = await supabase.auth.getUser();
+                    if (authUser) verifiedUser = authUser;
+                } catch (_) {}
+            }
+
+            const rawUid = targetUserId || verifiedUser?.id || profile?.id;
+            const uid = (typeof rawUid === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawUid))
+                ? rawUid
+                : null;
+
+            const addrObj = selectedAddrObj || addresses.find(a => a.id === selectedAddressId);
+            const shippingAddressStr = addrObj
+                ? [addrObj.address, addrObj.city, addrObj.state].filter(Boolean).join(', ')
+                : (quickDestination?.address || '');
+            const contactPhone = addrObj?.phone || profile?.phone_number || profile?.phone || '';
+
+            const isUUID = (str) => typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
+
+            const giftNotes = isGift ? `GIFT ORDER - Recipient: ${giftRecipientName || ''} | Phone: ${giftRecipientPhone || ''} | Message: ${giftMessage || ''}` : null;
+            const combinedNotes = [notes, giftNotes].filter(Boolean).join(' | ') || null;
+
+            const supabaseOrderPayload = {
+                user_id: uid,
+                status: 'processing',
+                payment_status: paymentStatus,
+                payment_method: paymentMethodName || paymentMethod || 'online',
+                payment_reference: targetRef,
+                total_amount: finalTotal,
+                subtotal: Math.max(0, finalTotal - (shippingFee || 0)),
+                shipping_fee: shippingFee || 0,
+                tax_amount: taxAmount || 0,
+                discount_amount: discountAmount || 0,
+                shipping_address: shippingAddressStr,
+                shipping_details: addrObj || {},
+                contact_phone: contactPhone,
+                notes: combinedNotes,
+                current_location: 'Processing Facility',
+                tracking_number: (targetRef || 'ORD').slice(0, 12).toUpperCase(),
+            };
+
+            const { data: insertedOrder, error: orderInsertErr } = await supabase
+                .from('orders')
+                .insert(supabaseOrderPayload)
+                .select('id')
+                .single();
+
+            if (orderInsertErr) {
+                console.warn('[Checkout] Supabase orders table insert error:', orderInsertErr.message);
+                return null;
+            }
+
+            const dbOrderId = insertedOrder?.id;
+            console.log('[Checkout] ✅ Order successfully persisted to Supabase:', dbOrderId);
+
+            if (dbOrderId && cart.length > 0) {
+                const itemRows = cart.map(item => ({
+                    order_id: dbOrderId,
+                    product_id: isUUID(item.id || item.product_id) ? (item.id || item.product_id) : null,
+                    vendor_id: isUUID(item.vendor_id || item.vendorId) ? (item.vendor_id || item.vendorId) : null,
+                    quantity: item.quantity || item.qty || 1,
+                    price: parseFloat(item.price) || 0,
+                    variant: item.variant || item.selectedVariant || null,
+                }));
+
+                const { error: itemsErr } = await supabase
+                    .from('order_items')
+                    .insert(itemRows);
+
+                if (itemsErr) {
+                    console.warn('[Checkout] Order items insert error:', itemsErr.message);
+                } else {
+                    console.log(`[Checkout] ✅ ${itemRows.length} order item(s) persisted to Supabase.`);
+                }
+
+                const logDescription = paymentStatus === 'paid'
+                    ? `Payment of ₦${finalTotal.toLocaleString()} confirmed via ${paymentMethodName || paymentMethod}. Order is being prepared.`
+                    : paymentStatus === 'pending_pod'
+                    ? `Order confirmed via Pay on Delivery. ₦${amountDueOnDelivery.toLocaleString()} due upon dispatch/delivery.`
+                    : `Order placed via ${paymentMethodName || paymentMethod}. Status: ${paymentStatus}.`;
+
+                await supabase.from('order_status_logs').insert({
+                    order_id: dbOrderId,
+                    status: 'processing',
+                    title: 'Order Placed',
+                    description: logDescription,
+                    location: 'Processing Facility',
+                    changed_by: uid,
+                }).catch(() => {});
+            }
+
+            return dbOrderId;
+        } catch (dbErr) {
+            console.warn('[Checkout] Supabase order save exception:', dbErr.message);
+            return null;
+        }
+    };
+
     const handlePaymentComplete = async (data, explicitGateway) => {
         setShowPaymentModal(false);
         if (data && (data.status === 'successful' || data.status === 'completed' || data.status === 'success')) {
@@ -1029,6 +1112,8 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             const isPss = paymentMethod === 'pay_small_small';
             const activeGateway = explicitGateway || (isPss ? pssDownPaymentMethod : paymentMethod);
             const paidAmount = isPss ? pssPlanDetails.downPayment : finalTotal;
+
+            let supabaseOrderId = null;
 
             try {
                 const { data: { user: currentUser } } = await supabase.auth.getUser();
@@ -1072,36 +1157,51 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         const existingList = rawExisting ? JSON.parse(rawExisting) : [];
                         await AsyncStorage.setItem(pssCacheKey, JSON.stringify([newPlanItem, ...existingList]));
                     }
-
-                    const orderPayload = {
-                        id: targetRef,
-                        orderNumber: targetRef.slice(0, 8).toUpperCase(),
-                        createdAt: new Date().toISOString(),
-                        total_amount: finalTotal,
-                        status: 'processing',
-                        payment_status: 'paid',
-                        payment_method: activeGateway,
-                        items: cart,
-                        delivery_address: selectedAddrObj,
-                        delivery_slot: deliverySlot,
-                        is_gift: isGift,
-                        gift_message: giftMessage,
-                        gift_recipient_name: giftRecipientName,
-                        gift_recipient_phone: giftRecipientPhone,
-                        gift_wrap_style: giftWrapStyle,
-                        wallet_split_deducted: walletDeduction
-                    };
-                    await PaymentGatewayService.cacheOrderLocally(uid, orderPayload);
-                    AsyncStorage.setItem('@abumafhal_last_order', JSON.stringify(orderPayload)).catch(() => {});
-                    setCompletedOrderData(orderPayload);
-                    setCurrentOrderId(targetRef);
                 }
+
+                // 3. Persist Order to Supabase
+                const dbOrderId = await saveOrderToSupabase({
+                    targetRef,
+                    paymentStatus: 'paid',
+                    paymentMethodName: activeGateway || 'online',
+                    paidAmount: paidAmount,
+                    targetUserId: uid
+                });
+                if (dbOrderId) supabaseOrderId = dbOrderId;
+
+                // 4. Local cache as fallback for offline display
+                const resolvedOrderId = supabaseOrderId || targetRef;
+                const orderPayload = {
+                    id: resolvedOrderId,
+                    orderNumber: targetRef.slice(0, 8).toUpperCase(),
+                    createdAt: new Date().toISOString(),
+                    total_amount: finalTotal,
+                    status: 'processing',
+                    payment_status: 'paid',
+                    payment_method: activeGateway,
+                    items: cart,
+                    delivery_address: selectedAddrObj,
+                    delivery_slot: deliverySlot,
+                    is_gift: isGift,
+                    gift_message: giftMessage,
+                    gift_recipient_name: giftRecipientName,
+                    gift_recipient_phone: giftRecipientPhone,
+                    gift_wrap_style: giftWrapStyle,
+                    wallet_split_deducted: walletDeduction
+                };
+                if (uid) {
+                    await PaymentGatewayService.cacheOrderLocally(uid, orderPayload);
+                }
+                AsyncStorage.setItem('@abumafhal_last_order', JSON.stringify(orderPayload)).catch(() => {});
+                setCompletedOrderData(orderPayload);
+                setCurrentOrderId(resolvedOrderId);
             } catch (err) {
                 console.warn('Post-payment record error:', err);
             }
 
+            const finalOrderId = supabaseOrderId || targetRef;
             setOrderSuccess(true);
-            triggerOrderWhatsApp(targetRef, finalTotal, activeGateway || 'Online Payment');
+            triggerOrderWhatsApp(finalOrderId, finalTotal, activeGateway || 'Online Payment');
             await clearProgress();
             if (onClearCart) onClearCart();
         } else {
@@ -1109,6 +1209,29 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             showAlert('Payment Incomplete', 'The transaction was cancelled or incomplete. Please try again.');
         }
     };
+
+    // Detect return from external payment gateways (Paystack / Flutterwave) on Web
+    useEffect(() => {
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const ref = params.get('reference') || params.get('trxref') || params.get('tx_ref');
+                const status = (params.get('status') || '').toLowerCase();
+
+                if (ref) {
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    if (status === 'cancelled' || status === 'failed') {
+                        showToast('⚠️ Payment was cancelled. You can try again.');
+                        showAlert('Payment Cancelled', 'The payment transaction was cancelled. Please try again.');
+                        return;
+                    }
+
+                    handlePaymentComplete({ status: 'successful', reference: ref });
+                    showToast('✓ Payment completed successfully!');
+                }
+            } catch (_) {}
+        }
+    }, [handlePaymentComplete, showAlert, showToast]);
 
     const handleFinalSubmit = async () => {
         if (!agreedToTerms) {
@@ -1183,8 +1306,17 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
                 // If wallet completely covered the full order
                 if (payableAfterWallet === 0) {
+                    const dbOrderId = await saveOrderToSupabase({
+                        targetRef: orderRef,
+                        paymentStatus: 'paid',
+                        paymentMethodName: 'Wallet (Full Split)',
+                        paidAmount: finalTotal,
+                        targetUserId: verifiedUser.id
+                    });
+                    const resolvedOrderId = dbOrderId || orderRef;
+
                     const orderPayload = {
-                        id: orderRef,
+                        id: resolvedOrderId,
                         orderNumber: orderRef.slice(0, 8).toUpperCase(),
                         createdAt: new Date().toISOString(),
                         total_amount: finalTotal,
@@ -1203,10 +1335,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     await PaymentGatewayService.cacheOrderLocally(verifiedUser.id, orderPayload);
                     AsyncStorage.setItem('@abumafhal_last_order', JSON.stringify(orderPayload)).catch(() => {});
                     setCompletedOrderData(orderPayload);
-                    setCurrentOrderId(orderRef);
+                    setCurrentOrderId(resolvedOrderId);
 
                     setOrderSuccess(true);
-                    triggerOrderWhatsApp(orderRef, finalTotal, 'Wallet (Split Covered)');
+                    triggerOrderWhatsApp(resolvedOrderId, finalTotal, 'Wallet (Split Covered)');
                     await clearProgress();
                     if (onClearCart) onClearCart();
                     return;
@@ -1229,8 +1361,18 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     description: `Order Placed via Pay on Delivery (Ref: ${orderRef})`
                 });
 
+                const dbOrderId = await saveOrderToSupabase({
+                    targetRef: orderRef,
+                    paymentStatus: 'pending_pod',
+                    paymentMethodName: useWalletSplit ? 'POD + Wallet Split' : 'Pay on Delivery',
+                    paidAmount: walletDeduction || 0,
+                    amountDueOnDelivery: effectivePayAmount,
+                    targetUserId: verifiedUser.id
+                });
+                const resolvedOrderId = dbOrderId || orderRef;
+
                 const orderPayload = {
-                    id: orderRef,
+                    id: resolvedOrderId,
                     orderNumber: orderRef.slice(0, 8).toUpperCase(),
                     createdAt: new Date().toISOString(),
                     total_amount: finalTotal,
@@ -1250,10 +1392,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 await PaymentGatewayService.cacheOrderLocally(verifiedUser.id, orderPayload);
                 AsyncStorage.setItem('@abumafhal_last_order', JSON.stringify(orderPayload)).catch(() => {});
                 setCompletedOrderData(orderPayload);
-                setCurrentOrderId(orderRef);
+                setCurrentOrderId(resolvedOrderId);
 
                 setOrderSuccess(true);
-                triggerOrderWhatsApp(orderRef, finalTotal, useWalletSplit ? 'POD + Wallet Split' : 'Pay on Delivery (Cash/POS)');
+                triggerOrderWhatsApp(resolvedOrderId, finalTotal, useWalletSplit ? 'POD + Wallet Split' : 'Pay on Delivery (Cash/POS)');
                 await clearProgress();
                 if (onClearCart) onClearCart();
                 return;
@@ -1273,8 +1415,17 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     description: `Full Order payment via Customer Wallet (Ref: ${orderRef})`
                 });
 
+                const dbOrderId = await saveOrderToSupabase({
+                    targetRef: orderRef,
+                    paymentStatus: 'paid',
+                    paymentMethodName: 'Wallet',
+                    paidAmount: finalTotal,
+                    targetUserId: verifiedUser.id
+                });
+                const resolvedOrderId = dbOrderId || orderRef;
+
                 const orderPayload = {
-                    id: orderRef,
+                    id: resolvedOrderId,
                     orderNumber: orderRef.slice(0, 8).toUpperCase(),
                     createdAt: new Date().toISOString(),
                     total_amount: finalTotal,
@@ -1293,10 +1444,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 await PaymentGatewayService.cacheOrderLocally(verifiedUser.id, orderPayload);
                 AsyncStorage.setItem('@abumafhal_last_order', JSON.stringify(orderPayload)).catch(() => {});
                 setCompletedOrderData(orderPayload);
-                setCurrentOrderId(orderRef);
+                setCurrentOrderId(resolvedOrderId);
 
                 setOrderSuccess(true);
-                triggerOrderWhatsApp(orderRef, finalTotal, 'Wallet');
+                triggerOrderWhatsApp(resolvedOrderId, finalTotal, 'Wallet');
                 await clearProgress();
                 if (onClearCart) onClearCart();
                 return;
@@ -1341,8 +1492,19 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         description: `Pay Small Small BNPL Down Payment (Ref: ${orderRef})`
                     });
 
+                    const dbOrderId = await saveOrderToSupabase({
+                        targetRef: orderRef,
+                        paymentStatus: 'pss_active',
+                        paymentMethodName: 'Pay Small Small (POD Down Payment)',
+                        paidAmount: 0,
+                        amountDueOnDelivery: pssDownPayment,
+                        notes: `Pay Small Small BNPL: Down Payment ₦${pssDownPayment.toLocaleString()} due on delivery`,
+                        targetUserId: verifiedUser.id
+                    });
+                    const resolvedOrderId = dbOrderId || orderRef;
+
                     const orderPayload = {
-                        id: orderRef,
+                        id: resolvedOrderId,
                         orderNumber: orderRef.slice(0, 8).toUpperCase(),
                         createdAt: new Date().toISOString(),
                         total_amount: finalTotal,
@@ -1361,10 +1523,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     await PaymentGatewayService.cacheOrderLocally(verifiedUser.id, orderPayload);
                     AsyncStorage.setItem('@abumafhal_last_order', JSON.stringify(orderPayload)).catch(() => {});
                     setCompletedOrderData(orderPayload);
-                    setCurrentOrderId(orderRef);
+                    setCurrentOrderId(resolvedOrderId);
 
                     setOrderSuccess(true);
-                    triggerOrderWhatsApp(orderRef, finalTotal, 'Pay Small Small (POD Down Payment)');
+                    triggerOrderWhatsApp(resolvedOrderId, finalTotal, 'Pay Small Small (POD Down Payment)');
                     await clearProgress();
                     if (onClearCart) onClearCart();
                     return;
@@ -1408,8 +1570,18 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         description: `Pay Small Small BNPL Down Payment via Wallet (Ref: ${orderRef})`
                     });
 
+                    const dbOrderId = await saveOrderToSupabase({
+                        targetRef: orderRef,
+                        paymentStatus: 'pss_active',
+                        paymentMethodName: 'Pay Small Small (Wallet)',
+                        paidAmount: pssDownPayment,
+                        notes: `Pay Small Small BNPL: Down Payment ₦${pssDownPayment.toLocaleString()} paid via Wallet`,
+                        targetUserId: verifiedUser.id
+                    });
+                    const resolvedOrderId = dbOrderId || orderRef;
+
                     const orderPayload = {
-                        id: orderRef,
+                        id: resolvedOrderId,
                         orderNumber: orderRef.slice(0, 8).toUpperCase(),
                         createdAt: new Date().toISOString(),
                         total_amount: finalTotal,
@@ -1428,10 +1600,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     await PaymentGatewayService.cacheOrderLocally(verifiedUser.id, orderPayload);
                     AsyncStorage.setItem('@abumafhal_last_order', JSON.stringify(orderPayload)).catch(() => {});
                     setCompletedOrderData(orderPayload);
-                    setCurrentOrderId(orderRef);
+                    setCurrentOrderId(resolvedOrderId);
 
                     setOrderSuccess(true);
-                    triggerOrderWhatsApp(orderRef, finalTotal, 'Pay Small Small (Wallet)');
+                    triggerOrderWhatsApp(resolvedOrderId, finalTotal, 'Pay Small Small (Wallet)');
                     await clearProgress();
                     if (onClearCart) onClearCart();
                     return;
