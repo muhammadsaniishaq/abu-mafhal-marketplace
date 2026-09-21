@@ -257,6 +257,26 @@ export const PaySmallSmallPage = ({ navigation, route, onBack, user: initialUser
         setPaymentModalVisible(true);
     };
 
+    // Deep-link / route parameter listener: auto-focus targeted order BNPL plan
+    useEffect(() => {
+        const targetId = route?.params?.orderId || route?.params?.planId;
+        if (targetId && plans.length > 0 && !loading) {
+            const matched = plans.find(p => 
+                p.id === targetId || 
+                p.orderNumber === targetId || 
+                (typeof targetId === 'string' && targetId.length >= 8 && p.orderNumber === targetId.slice(0, 8).toUpperCase())
+            );
+            if (matched) {
+                if (matched.isCompleted) {
+                    setActiveTab('history');
+                } else {
+                    setActiveTab('active');
+                    handleOpenPayment(matched);
+                }
+            }
+        }
+    }, [route?.params?.orderId, route?.params?.planId, plans, loading]);
+
     const handleConfirmPayment = async () => {
         if (!selectedPlan || !selectedPlan.targetInstallment) return;
 

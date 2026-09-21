@@ -69,7 +69,7 @@ function generateSecurityPin(orderId) {
     return String(num);
 }
 
-export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) => {
+export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder, onNavigate }) => {
     const passedOrder = propOrder || route?.params?.order;
     const passedOrderId = route?.params?.orderId || passedOrder?.id || passedOrder?.reference;
     const goBack = onBack || (() => navigation?.goBack());
@@ -104,7 +104,7 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) 
         return () => loop.stop();
     }, [pulseAnim]);
 
-    // Load orders from multiple sources: AsyncStorage cache & Supabase
+    // Load orders from authoritative sources: AsyncStorage cache & Supabase orders
     const loadTrackingData = useCallback(async () => {
         setLoading(true);
         try {
@@ -113,7 +113,9 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) 
 
             const registerOrder = (ord) => {
                 if (!ord) return;
-                const key = ord.id || ord.reference || ord.orderNumber;
+                // Reject phantom transaction logs
+                if (ord.source === 'supabase_transactions' || ord.source === 'transactions') return;
+                const key = ord.id || ord.payment_reference || ord.reference || ord.orderNumber || ord.tracking_number;
                 if (key && !seenIds.has(key)) {
                     seenIds.add(key);
                     loadedList.push(ord);
@@ -129,30 +131,29 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) 
             const { data: authData } = await supabase.auth.getUser().catch(() => ({ data: null }));
             const userId = authData?.user?.id;
 
-            // 3. Load from AsyncStorage (@abumafhal_last_order and user orders)
+            // 3. Load from AsyncStorage (authentic user orders)
             try {
                 const lastOrdRaw = await AsyncStorage.getItem('@abumafhal_last_order');
                 if (lastOrdRaw) {
                     const parsed = JSON.parse(lastOrdRaw);
-                    registerOrder(parsed);
+                    if (parsed && parsed.source !== 'transactions' && parsed.source !== 'supabase_transactions') {
+                        registerOrder(parsed);
+                    }
                 }
                 if (userId) {
                     const userOrdsRaw = await AsyncStorage.getItem(`@abumafhal_orders_${userId}`);
                     if (userOrdsRaw) {
                         const parsedList = JSON.parse(userOrdsRaw);
-                        if (Array.isArray(parsedList)) parsedList.forEach(registerOrder);
+                        if (Array.isArray(parsedList)) {
+                            parsedList.filter(o => o && o.source !== 'transactions' && o.source !== 'supabase_transactions').forEach(registerOrder);
+                        }
                     }
-                }
-                const guestOrdsRaw = await AsyncStorage.getItem('@abumafhal_orders_guest');
-                if (guestOrdsRaw) {
-                    const parsedGuest = JSON.parse(guestOrdsRaw);
-                    if (Array.isArray(parsedGuest)) parsedGuest.forEach(registerOrder);
                 }
             } catch (e) {
                 console.log('[TrackOrder] Local cache load note:', e.message);
             }
 
-            // 4. Load from Supabase orders table (and transactions fallback)
+            // 4. Load from Supabase orders table with driver and items joins
             try {
                 if (userId) {
                     const { data: dbOrders, error: dbErr } = await supabase
@@ -170,53 +171,20 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) 
                 console.log('[TrackOrder] Supabase orders fetch note:', e.message);
             }
 
-            try {
-                if (userId) {
-                    const { data: txData } = await supabase
-                        .from('transactions')
-                        .select('*')
-                        .eq('user_id', userId)
-                        .eq('type', 'order_payment')
-                        .order('created_at', { ascending: false })
-                        .limit(10);
-
-                    if (txData && txData.length > 0) {
-                        txData.forEach(tx => {
-                            const ref = tx.reference || tx.id;
-                            if (!seenIds.has(ref)) {
-                                registerOrder({
-                                    id: ref,
-                                    reference: ref,
-                                    orderNumber: ref.slice(0, 8).toUpperCase(),
-                                    createdAt: tx.created_at,
-                                    created_at: tx.created_at,
-                                    total_amount: tx.amount,
-                                    status: tx.status === 'completed' ? 'processing' : (tx.status || 'processing'),
-                                    payment_status: tx.status === 'completed' ? 'paid' : tx.status,
-                                    payment_method: tx.gateway || 'Escrow Payment',
-                                    items: [],
-                                    source: 'supabase_transactions'
-                                });
-                            }
-                        });
-                    }
-                }
-            } catch (e) {
-                console.log('[TrackOrder] Supabase transactions fetch note:', e.message);
-            }
-
             setUserOrders(loadedList);
 
-            // 5. Select active order
-            if (!currentOrder && loadedList.length > 0) {
+            // 5. Select active order (focus exclusively on the single tracked order)
+            if (loadedList.length > 0) {
                 if (passedOrderId) {
                     const found = loadedList.find(o =>
                         (o.id && o.id.toString().toLowerCase() === passedOrderId.toString().toLowerCase()) ||
                         (o.reference && o.reference.toString().toLowerCase() === passedOrderId.toString().toLowerCase()) ||
-                        (o.orderNumber && o.orderNumber.toString().toLowerCase() === passedOrderId.toString().toLowerCase())
+                        (o.payment_reference && o.payment_reference.toString().toLowerCase() === passedOrderId.toString().toLowerCase()) ||
+                        (o.orderNumber && o.orderNumber.toString().toLowerCase() === passedOrderId.toString().toLowerCase()) ||
+                        (o.tracking_number && o.tracking_number.toString().toLowerCase() === passedOrderId.toString().toLowerCase())
                     );
                     setCurrentOrder(found || loadedList[0]);
-                } else {
+                } else if (!currentOrder) {
                     setCurrentOrder(loadedList[0]);
                 }
             }
@@ -259,12 +227,12 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) 
                 return;
             }
 
-            // Check Supabase orders table first
+            // Check Supabase orders table
             try {
                 const { data: ordData } = await supabase
                     .from('orders')
                     .select('*, driver:drivers(id, name, phone, vehicle_type, vehicle_number), order_items(*, product:products(name, images, price))')
-                    .or(`id.eq.${query},payment_reference.ilike.%${query}%`)
+                    .or(`id.eq.${query},payment_reference.ilike.%${query}%,tracking_number.ilike.%${query}%`)
                     .limit(1)
                     .maybeSingle();
                 if (ordData) {
@@ -276,33 +244,6 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) 
                     return;
                 }
             } catch (_) {}
-
-            // Check Supabase transactions
-            const { data: txData } = await supabase
-                .from('transactions')
-                .select('*')
-                .or(`reference.ilike.%${query}%,id.eq.${query}`)
-                .limit(1)
-                .maybeSingle();
-
-            if (txData) {
-                const found = {
-                    id: txData.reference || txData.id,
-                    reference: txData.reference || txData.id,
-                    orderNumber: (txData.reference || txData.id).slice(0, 8).toUpperCase(),
-                    createdAt: txData.created_at,
-                    total_amount: txData.amount,
-                    status: txData.status === 'completed' ? 'processing' : txData.status,
-                    payment_status: txData.status === 'completed' ? 'paid' : txData.status,
-                    payment_method: txData.gateway || 'Escrow',
-                    items: []
-                };
-                setCurrentOrder(found);
-                setUserOrders(prev => [found, ...prev]);
-                setShowSearch(false);
-                setSearchQuery('');
-                return;
-            }
 
             Alert.alert(
                 'Order Not Found',
@@ -370,6 +311,85 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) 
         if (currentStatus === 'delivered' || currentStatus === 'completed') return 5;
         return 2;
     }, [currentStatus, isCancelled]);
+
+    // Live progress percentage calculation
+    const statusProgress = useMemo(() => {
+        if (isCancelled) return { pct: 0, label: 'Order Cancelled', color: '#EF4444' };
+        switch (activeStep) {
+            case 5: return { pct: 100, label: 'Delivered to Recipient', color: EMERALD };
+            case 4: return { pct: 85, label: 'Out for Final Delivery', color: BLUE };
+            case 3: return { pct: 60, label: 'In Transit between Hubs', color: BLUE };
+            case 2: return { pct: 40, label: 'Package Packed & Dispatched', color: GOLD };
+            case 1: return { pct: 25, label: 'Payment Confirmed', color: GOLD };
+            default: return { pct: 15, label: 'Order Processing', color: GOLD };
+        }
+    }, [isCancelled, activeStep]);
+
+    // Pay Small Small (BNPL) detection and ledger metrics
+    const pssPlan = useMemo(() => {
+        const raw = currentOrder?.installment_plan || currentOrder?.shipping_details?.installment_plan || currentOrder?.metadata?.installment_plan;
+        if (!raw) return null;
+        if (typeof raw === 'string') {
+            try { return JSON.parse(raw); } catch (_) { return null; }
+        }
+        return raw;
+    }, [currentOrder]);
+
+    const isCurrentOrderPss = useMemo(() => {
+        return !!(
+            pssPlan ||
+            (currentOrder?.payment_method && currentOrder?.payment_method.toLowerCase().includes('small')) ||
+            (currentOrder?.payment_method && currentOrder?.payment_method.toLowerCase().includes('pss')) ||
+            (currentOrder?.payment_status && currentOrder?.payment_status.toLowerCase().includes('pss')) ||
+            (currentOrder?.payment_status && currentOrder?.payment_status.toLowerCase().includes('installment'))
+        );
+    }, [pssPlan, currentOrder]);
+
+    const currentPssMetrics = useMemo(() => {
+        if (!isCurrentOrderPss) return null;
+        const total = Number(pssPlan?.totalAmount || currentOrder?.total_amount || 0);
+        const paid = Number(pssPlan?.paidAmount || (currentOrder?.payment_status === 'paid' ? total : (currentOrder?.subtotal || Math.round(total * 0.25))));
+        const remaining = Math.max(0, Number(pssPlan?.remainingAmount ?? (total - paid)));
+        const schedule = Array.isArray(pssPlan?.schedule) ? pssPlan.schedule : [];
+        const nextPending = schedule.find(s => s.status !== 'paid');
+        const now = new Date();
+        const dueDate = nextPending?.due_date ? new Date(nextPending.due_date) : null;
+        const isOverdue = dueDate ? dueDate < now : false;
+        const daysRemaining = dueDate ? Math.ceil((dueDate - now) / (1000 * 60 * 60 * 24)) : null;
+        const count = pssPlan?.installmentsCount || schedule.length || 4;
+        const paidCount = pssPlan?.installmentsPaid || schedule.filter(s => s.status === 'paid').length || (paid >= total ? count : 1);
+        const isFullyPaid = remaining <= 0 || paidCount >= count;
+
+        return {
+            total,
+            paid,
+            remaining,
+            count,
+            paidCount,
+            isFullyPaid,
+            nextAmount: nextPending?.amount || (remaining > 0 ? Math.round(remaining / Math.max(1, count - paidCount)) : 0),
+            dueDate,
+            dateStr: dueDate ? dueDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null,
+            isOverdue,
+            daysRemaining,
+            frequency: pssPlan?.frequency || 'Monthly'
+        };
+    }, [isCurrentOrderPss, pssPlan, currentOrder]);
+
+    const handleGoToPaySmallSmall = () => {
+        if (navigation?.navigate) {
+            navigation.navigate('PaySmallSmall', { orderId: currentOrder?.id });
+        } else if (onNavigate) {
+            onNavigate('PaySmallSmall', { orderId: currentOrder?.id });
+        }
+    };
+
+    const handleShareTrackingWhatsApp = () => {
+        const ref = orderDisplayRef;
+        const statusTxt = statusProgress.label.toUpperCase();
+        const msg = `📦 *Abu Mafhal Shipment Tracking*\nOrder: *${ref}*\nStatus: *${statusTxt}*\nCurrent Location: *${currentOrder?.current_location || 'Central Sorting Hub'}*\nEstimated Delivery: *${estimatedDeliveryText}*\n\nTrack Live: https://abumafhal.com/orders?id=${currentOrder?.id || currentOrder?.reference}`;
+        whatsappService.openWhatsApp('', msg);
+    };
 
     // Items list (reliable fallback across Supabase order_items and local/cart items)
     const orderItems = useMemo(() => {
@@ -599,32 +619,6 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) 
                 contentContainerStyle={s.scrollContent}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={NAVY} />}
             >
-                {/* ── ORDER SWITCHER PILLS ────────────────────────────────── */}
-                {userOrders.length > 1 && (
-                    <View style={s.orderSwitcherContainer}>
-                        <Text style={s.orderSwitcherLabel}>YOUR RECENT ORDERS ({userOrders.length}):</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.orderPillsScroll}>
-                            {userOrders.map((ord) => {
-                                const isSelected = ord.id === currentOrder?.id || ord.reference === currentOrder?.reference;
-                                const shortRef = `#${(ord.orderNumber || ord.reference || ord.id || 'ORD').slice(0, 8).toUpperCase()}`;
-                                const st = (ord.status || 'processing').toUpperCase();
-                                return (
-                                    <TouchableOpacity
-                                        key={ord.id || ord.reference || Math.random().toString()}
-                                        onPress={() => setCurrentOrder(ord)}
-                                        style={[s.orderPill, isSelected && s.orderPillActive]}
-                                        activeOpacity={0.7}
-                                    >
-                                        <Text style={[s.orderPillTxt, isSelected && s.orderPillTxtActive]}>
-                                            {shortRef} • {st}
-                                        </Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </ScrollView>
-                    </View>
-                )}
-
                 {loading ? (
                     <View style={s.loadingBox}>
                         <ActivityIndicator size="large" color={BLUE} />
@@ -646,6 +640,105 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) 
                     </View>
                 ) : (
                     <>
+                        {/* ── LIVE PROGRESS TELEMETRY BAR (0% - 100%) ────────── */}
+                        <View style={s.progressBarCard}>
+                            <View style={s.progressBarHeader}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                                    <Animated.View style={[s.liveBeaconDot, { opacity: pulseAnim, backgroundColor: statusProgress.color }]} />
+                                    <Text style={s.progressBarStageLabel}>
+                                        {statusProgress.label.toUpperCase()}
+                                    </Text>
+                                </View>
+                                <Text style={[s.progressBarPctText, { color: statusProgress.color }]}>
+                                    {statusProgress.pct}%
+                                </Text>
+                            </View>
+                            <View style={s.progressBarTrack}>
+                                <View style={[s.progressBarFill, { width: `${statusProgress.pct}%`, backgroundColor: statusProgress.color }]} />
+                            </View>
+                            <View style={s.progressBarStagesRow}>
+                                <Text style={[s.stageTick, activeStep >= 0 && s.stageTickActive]}>Placed</Text>
+                                <Text style={[s.stageTick, activeStep >= 2 && s.stageTickActive]}>Packed</Text>
+                                <Text style={[s.stageTick, activeStep >= 3 && s.stageTickActive]}>In Transit</Text>
+                                <Text style={[s.stageTick, activeStep >= 4 && s.stageTickActive]}>Out</Text>
+                                <Text style={[s.stageTick, activeStep >= 5 && s.stageTickActive]}>Delivered</Text>
+                            </View>
+                        </View>
+
+                        {/* ── PAY SMALL SMALL (BNPL) INSTALLMENT BREAKDOWN ──── */}
+                        {isCurrentOrderPss && currentPssMetrics && (
+                            <View style={s.bnplCard}>
+                                <View style={s.bnplHeader}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                                        <Ionicons name="flash" size={17} color={GOLD} />
+                                        <Text style={s.bnplTitle}>Pay Small Small • 0% Interest BNPL</Text>
+                                    </View>
+                                    <View style={[
+                                        s.bnplBadge,
+                                        currentPssMetrics.isFullyPaid ? s.bnplBadgePaid : currentPssMetrics.isOverdue ? s.bnplBadgeOverdue : s.bnplBadgeActive
+                                    ]}>
+                                        <Text style={[
+                                            s.bnplBadgeTxt,
+                                            currentPssMetrics.isFullyPaid ? { color: EMERALD } : currentPssMetrics.isOverdue ? { color: '#EF4444' } : { color: GOLD }
+                                        ]}>
+                                            {currentPssMetrics.isFullyPaid ? 'SETTLED' : currentPssMetrics.isOverdue ? 'OVERDUE' : 'ACTIVE PLAN'}
+                                        </Text>
+                                    </View>
+                                </View>
+
+                                <Text style={s.bnplSub}>
+                                    Installment plan: <Text style={{ fontWeight: '800', color: WHITE }}>{currentPssMetrics.paidCount} of {currentPssMetrics.count} installments paid</Text>
+                                </Text>
+
+                                {/* BNPL Progress Bar */}
+                                <View style={s.bnplProgressTrack}>
+                                    <View style={[s.bnplProgressFill, {
+                                        width: `${Math.min(100, Math.round((currentPssMetrics.paid / Math.max(1, currentPssMetrics.total)) * 100))}%`,
+                                        backgroundColor: currentPssMetrics.isFullyPaid ? EMERALD : GOLD
+                                    }]} />
+                                </View>
+
+                                <View style={s.bnplMetricsRow}>
+                                    <View style={s.bnplMetricCol}>
+                                        <Text style={s.bnplMetricLbl}>Total Value</Text>
+                                        <Text style={s.bnplMetricVal}>₦{currentPssMetrics.total.toLocaleString()}</Text>
+                                    </View>
+                                    <View style={s.bnplMetricDivider} />
+                                    <View style={s.bnplMetricCol}>
+                                        <Text style={s.bnplMetricLbl}>Deposit Paid</Text>
+                                        <Text style={[s.bnplMetricVal, { color: EMERALD }]}>₦{currentPssMetrics.paid.toLocaleString()}</Text>
+                                    </View>
+                                    <View style={s.bnplMetricDivider} />
+                                    <View style={s.bnplMetricCol}>
+                                        <Text style={s.bnplMetricLbl}>Balance Due</Text>
+                                        <Text style={[s.bnplMetricVal, { color: '#F87171' }]}>₦{currentPssMetrics.remaining.toLocaleString()}</Text>
+                                    </View>
+                                </View>
+
+                                {!currentPssMetrics.isFullyPaid && (
+                                    <View style={s.bnplDueActionBox}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={s.bnplDueLbl}>
+                                                {currentPssMetrics.isOverdue ? '⚠️ Overdue Installment:' : 'Next Installment Due:'}
+                                            </Text>
+                                            <Text style={[s.bnplDueVal, currentPssMetrics.isOverdue && { color: '#EF4444' }]}>
+                                                ₦{currentPssMetrics.nextAmount.toLocaleString()}
+                                                {currentPssMetrics.dateStr ? ` • ${currentPssMetrics.dateStr}` : ''}
+                                            </Text>
+                                        </View>
+                                        <TouchableOpacity
+                                            onPress={handleGoToPaySmallSmall}
+                                            style={s.bnplActionBtn}
+                                            activeOpacity={0.8}
+                                        >
+                                            <Ionicons name="card-outline" size={14} color={WHITE} />
+                                            <Text style={s.bnplActionBtnTxt}>Pay Next →</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
+                            </View>
+                        )}
+
                         {/* ── HERO STATUS CARD (CLEAN & PROFESSIONAL) ──────── */}
                         <View style={s.statusCard}>
                             {/* Order Ref & Copy Row */}
@@ -726,12 +819,29 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) 
                                 <View style={s.securityPinTextBox}>
                                     <Text style={s.securityPinTitle}>Delivery Security Handover PIN</Text>
                                     <Text style={s.securityPinSub}>
-                                        Give this 4-digit code to your rider only after inspecting your items.
+                                        Give this 4-digit code to your courier rider only after inspecting your package.
                                     </Text>
                                 </View>
                             </View>
-                            <View style={s.securityPinBadge}>
-                                <Text style={s.securityPinDigits}>{securityPin}</Text>
+                            <View style={s.securityPinRightCol}>
+                                <View style={s.securityPinBadge}>
+                                    <Text style={s.securityPinDigits}>{securityPin}</Text>
+                                </View>
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+                                            navigator.clipboard.writeText(securityPin);
+                                            Alert.alert('PIN Copied', `Security PIN #${securityPin} copied to clipboard.`);
+                                        } else {
+                                            Alert.alert('Security PIN', `Your package handover PIN is ${securityPin}`);
+                                        }
+                                    }}
+                                    style={s.copyPinBtn}
+                                    activeOpacity={0.7}
+                                >
+                                    <Ionicons name="copy-outline" size={11} color={NAVY} />
+                                    <Text style={s.copyPinBtnTxt}>Copy PIN</Text>
+                                </TouchableOpacity>
                             </View>
                         </View>
 
@@ -1015,13 +1125,37 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) 
                         {/* ── ACTION BUTTONS ───────────────────────────────── */}
                         <View style={s.actionGroup}>
                             <TouchableOpacity
+                                onPress={handleShareTrackingWhatsApp}
+                                style={s.shareWhatsAppBtn}
+                                activeOpacity={0.85}
+                            >
+                                <Ionicons name="share-social" size={17} color={WHITE} />
+                                <Text style={s.shareWhatsAppBtnTxt}>
+                                    Share Live Tracking via WhatsApp
+                                </Text>
+                            </TouchableOpacity>
+
+                            {isCurrentOrderPss && currentPssMetrics && !currentPssMetrics.isFullyPaid && (
+                                <TouchableOpacity
+                                    onPress={handleGoToPaySmallSmall}
+                                    style={s.bnplShortcutBtn}
+                                    activeOpacity={0.85}
+                                >
+                                    <Ionicons name="card-outline" size={17} color={WHITE} />
+                                    <Text style={s.bnplShortcutBtnTxt}>
+                                        Manage Pay Small Small Plan (0% Interest)
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
+
+                            <TouchableOpacity
                                 onPress={handleWhatsAppSupport}
                                 style={s.primaryActionBtn}
                                 activeOpacity={0.85}
                             >
-                                <Ionicons name="logo-whatsapp" size={19} color={WHITE} />
+                                <Ionicons name="logo-whatsapp" size={18} color={WHITE} />
                                 <Text style={s.primaryActionBtnTxt}>
-                                    Live WhatsApp Support & Dispatch Inquiries
+                                    24/7 Logistics Support & Dispatch Inquiries
                                 </Text>
                             </TouchableOpacity>
 
@@ -1031,7 +1165,7 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder }) 
                                 activeOpacity={0.8}
                             >
                                 <Ionicons name="document-text-outline" size={17} color={NAVY} />
-                                <Text style={s.secondaryActionBtnTxt}>View Full Order Invoice & Receipt</Text>
+                                <Text style={s.secondaryActionBtnTxt}>Download Official Invoice & Receipt</Text>
                             </TouchableOpacity>
                         </View>
                     </>
@@ -1135,37 +1269,249 @@ const s = StyleSheet.create({
         paddingBottom: 120
     },
 
-    // Order Switcher
-    orderSwitcherContainer: {
-        marginBottom: 14
+    // Live Progress Telemetry Bar
+    progressBarCard: {
+        backgroundColor: WHITE,
+        borderRadius: 18,
+        padding: 16,
+        marginBottom: 14,
+        borderWidth: 1,
+        borderColor: BORDER_COL,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 6,
+        elevation: 2
     },
-    orderSwitcherLabel: {
-        fontSize: 10.5,
-        fontWeight: '800',
-        color: SLATE,
-        letterSpacing: 0.5,
-        marginBottom: 6
+    progressBarHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 10
     },
-    orderPillsScroll: {
-        gap: 8,
-        paddingVertical: 2
+    liveBeaconDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4
     },
-    orderPill: {
-        backgroundColor: '#E2E8F0',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 20
-    },
-    orderPillActive: {
-        backgroundColor: NAVY
-    },
-    orderPillTxt: {
+    progressBarStageLabel: {
         fontSize: 11,
-        fontWeight: '700',
-        color: '#475569'
+        fontWeight: '900',
+        color: NAVY,
+        letterSpacing: 0.4
     },
-    orderPillTxtActive: {
-        color: '#38BDF8'
+    progressBarPctText: {
+        fontSize: 14,
+        fontWeight: '900'
+    },
+    progressBarTrack: {
+        height: 8,
+        backgroundColor: '#F1F5F9',
+        borderRadius: 4,
+        overflow: 'hidden',
+        marginBottom: 8
+    },
+    progressBarFill: {
+        height: '100%',
+        borderRadius: 4
+    },
+    progressBarStagesRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingHorizontal: 2
+    },
+    stageTick: {
+        fontSize: 9.5,
+        fontWeight: '700',
+        color: '#94A3B8'
+    },
+    stageTickActive: {
+        color: NAVY,
+        fontWeight: '800'
+    },
+
+    // BNPL Pay Small Small Card
+    bnplCard: {
+        backgroundColor: '#071224',
+        borderRadius: 18,
+        padding: 16,
+        marginBottom: 14,
+        borderWidth: 1,
+        borderColor: 'rgba(217, 167, 58, 0.35)',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.12,
+        shadowRadius: 8,
+        elevation: 3
+    },
+    bnplHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 4
+    },
+    bnplTitle: {
+        fontSize: 13,
+        fontWeight: '900',
+        color: WHITE,
+        letterSpacing: 0.2
+    },
+    bnplBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6
+    },
+    bnplBadgePaid: {
+        backgroundColor: 'rgba(16, 185, 129, 0.18)'
+    },
+    bnplBadgeOverdue: {
+        backgroundColor: 'rgba(239, 68, 68, 0.18)'
+    },
+    bnplBadgeActive: {
+        backgroundColor: 'rgba(217, 167, 58, 0.18)'
+    },
+    bnplBadgeTxt: {
+        fontSize: 9.5,
+        fontWeight: '900',
+        letterSpacing: 0.4
+    },
+    bnplSub: {
+        fontSize: 11,
+        color: '#94A3B8',
+        marginBottom: 10
+    },
+    bnplProgressTrack: {
+        height: 6,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        borderRadius: 3,
+        overflow: 'hidden',
+        marginBottom: 12
+    },
+    bnplProgressFill: {
+        height: '100%',
+        borderRadius: 3
+    },
+    bnplMetricsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: 'rgba(255,255,255,0.04)',
+        borderRadius: 12,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        marginBottom: 10
+    },
+    bnplMetricCol: {
+        flex: 1,
+        alignItems: 'center'
+    },
+    bnplMetricLbl: {
+        fontSize: 9.5,
+        color: '#94A3B8',
+        fontWeight: '600'
+    },
+    bnplMetricVal: {
+        fontSize: 12.5,
+        fontWeight: '900',
+        color: WHITE,
+        marginTop: 2
+    },
+    bnplMetricDivider: {
+        width: 1,
+        height: 20,
+        backgroundColor: 'rgba(255,255,255,0.1)'
+    },
+    bnplDueActionBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingTop: 8,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255,255,255,0.08)'
+    },
+    bnplDueLbl: {
+        fontSize: 10,
+        color: '#94A3B8',
+        fontWeight: '700'
+    },
+    bnplDueVal: {
+        fontSize: 13,
+        fontWeight: '900',
+        color: WHITE,
+        marginTop: 1
+    },
+    bnplActionBtn: {
+        backgroundColor: GOLD,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4
+    },
+    bnplActionBtnTxt: {
+        color: WHITE,
+        fontSize: 11,
+        fontWeight: '900'
+    },
+    bnplShortcutBtn: {
+        backgroundColor: GOLD,
+        borderRadius: 14,
+        paddingVertical: 13,
+        paddingHorizontal: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        marginBottom: 10
+    },
+    bnplShortcutBtnTxt: {
+        color: WHITE,
+        fontWeight: '900',
+        fontSize: 12.5
+    },
+
+    // Security PIN Right Column & Copy Button
+    securityPinRightCol: {
+        alignItems: 'flex-end',
+        gap: 5
+    },
+    copyPinBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+        backgroundColor: '#E2E8F0',
+        paddingHorizontal: 7,
+        paddingVertical: 3,
+        borderRadius: 6
+    },
+    copyPinBtnTxt: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: NAVY
+    },
+
+    // Share Live Tracking via WhatsApp
+    shareWhatsAppBtn: {
+        backgroundColor: '#16A34A',
+        borderRadius: 14,
+        paddingVertical: 13,
+        paddingHorizontal: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        marginBottom: 10,
+        shadowColor: '#16A34A',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 6,
+        elevation: 2
+    },
+    shareWhatsAppBtnTxt: {
+        color: WHITE,
+        fontWeight: '900',
+        fontSize: 12.5
     },
 
     // Loading & Empty

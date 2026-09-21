@@ -66,11 +66,13 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
             activeUserId = authData?.user?.id;
         }
 
-        const mergedOrders = [];
+        let mergedOrders = [];
         const seenOrderKeys = new Set();
 
         const registerOrder = (ord) => {
             if (!ord) return;
+            // Reject phantom transaction logs
+            if (ord.source === 'transactions' || ord.source === 'supabase_transactions') return;
             const key = ord.id || ord.payment_reference || ord.reference || ord.orderNumber;
             if (key && !seenOrderKeys.has(key)) {
                 seenOrderKeys.add(key);
@@ -78,24 +80,23 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
             }
         };
 
-        // 1. Instant cache load from local storage
+        // 1. Instant cache load from local storage (filtering out any phantom records)
         try {
             if (activeUserId) {
                 const userCached = await AsyncStorage.getItem(`@abumafhal_orders_${activeUserId}`);
                 if (userCached) {
                     const parsed = JSON.parse(userCached);
-                    if (Array.isArray(parsed)) parsed.forEach(registerOrder);
+                    if (Array.isArray(parsed)) {
+                        parsed.filter(o => o && o.source !== 'transactions' && o.source !== 'supabase_transactions').forEach(registerOrder);
+                    }
                 }
             }
             const lastOrd = await AsyncStorage.getItem('@abumafhal_last_order');
             if (lastOrd) {
                 const parsedLast = JSON.parse(lastOrd);
-                registerOrder(parsedLast);
-            }
-            const guestCached = await AsyncStorage.getItem('@abumafhal_orders_guest');
-            if (guestCached) {
-                const parsedGuest = JSON.parse(guestCached);
-                if (Array.isArray(parsedGuest)) parsedGuest.forEach(registerOrder);
+                if (parsedLast && parsedLast.source !== 'transactions' && parsedLast.source !== 'supabase_transactions') {
+                    registerOrder(parsedLast);
+                }
             }
 
             if (mergedOrders.length > 0) {
@@ -110,7 +111,7 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
             return;
         }
 
-        // 2. Fetch from Supabase orders table
+        // 2. Fetch authoritative orders from Supabase orders table with joined products & driver
         try {
             const { data: dbOrders, error: dbErr } = await supabase
                 .from('orders')
@@ -118,18 +119,9 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
                 .eq('user_id', activeUserId)
                 .order('created_at', { ascending: false });
 
-            if (!dbErr && Array.isArray(dbOrders) && dbOrders.length > 0) {
-                // Replace or prepend richer db orders
-                dbOrders.forEach(dbOrd => {
-                    const key = dbOrd.id || dbOrd.payment_reference || dbOrd.reference;
-                    const existingIdx = mergedOrders.findIndex(o => (o.id || o.payment_reference || o.reference) === key);
-                    if (existingIdx >= 0) {
-                        mergedOrders[existingIdx] = { ...mergedOrders[existingIdx], ...dbOrd };
-                    } else {
-                        mergedOrders.unshift(dbOrd);
-                        if (key) seenOrderKeys.add(key);
-                    }
-                });
+            if (!dbErr && Array.isArray(dbOrders)) {
+                // Supabase is the single source of truth for authentic orders
+                mergedOrders = dbOrders;
             } else if (dbErr) {
                 console.warn('Orders joined fetch note:', dbErr.message);
                 const { data: simpleData } = await supabase
@@ -137,51 +129,21 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
                     .select('*')
                     .eq('user_id', activeUserId)
                     .order('created_at', { ascending: false });
-                if (Array.isArray(simpleData)) {
-                    simpleData.forEach(registerOrder);
+                if (Array.isArray(simpleData) && simpleData.length > 0) {
+                    mergedOrders = simpleData;
                 }
             }
         } catch (e) {
             console.log('Orders fetch error:', e);
         }
 
-        // 3. Fallback: Check Supabase transactions table for completed order payments
-        try {
-            const { data: txData } = await supabase
-                .from('transactions')
-                .select('*')
-                .eq('user_id', activeUserId)
-                .eq('type', 'order_payment')
-                .order('created_at', { ascending: false })
-                .limit(15);
-
-            if (Array.isArray(txData) && txData.length > 0) {
-                txData.forEach(tx => {
-                    const ref = tx.reference || tx.id;
-                    if (ref && !seenOrderKeys.has(ref)) {
-                        registerOrder({
-                            id: ref,
-                            reference: ref,
-                            orderNumber: ref.slice(0, 8).toUpperCase(),
-                            created_at: tx.created_at,
-                            createdAt: tx.created_at,
-                            total_amount: tx.amount,
-                            status: tx.status === 'completed' ? 'processing' : (tx.status || 'processing'),
-                            payment_status: tx.status === 'completed' ? 'paid' : tx.status,
-                            payment_method: tx.gateway || 'Escrow Payment',
-                            order_items: [],
-                            items: [],
-                            source: 'transactions'
-                        });
-                    }
-                });
-            }
-        } catch (_) {}
+        // Filter and strip any phantom/empty transaction items
+        mergedOrders = mergedOrders.filter(o => o && o.id && o.source !== 'transactions' && o.source !== 'supabase_transactions');
 
         // Sort descending and update state
         mergedOrders.sort((a, b) => new Date(b.created_at || b.createdAt || 0) - new Date(a.created_at || a.createdAt || 0));
         setOrders(mergedOrders);
-        if (activeUserId && mergedOrders.length > 0) {
+        if (activeUserId) {
             AsyncStorage.setItem(`@abumafhal_orders_${activeUserId}`, JSON.stringify(mergedOrders)).catch(() => {});
         }
         setLoading(false);
@@ -654,6 +616,48 @@ const OrderCard = React.memo(({ item, isExpanded, onToggle, onCancel, onConfirm,
     const totalPaid = parseFloat(item.total_amount || (itemsSubtotal + shippingFee - discount) || 0);
     const displaySubtotal = itemsSubtotal > 0 ? itemsSubtotal : Math.max(0, totalPaid - shippingFee + discount);
 
+    // Pay Small Small (BNPL) detection and metrics
+    const rawPlan = item.installment_plan || item.shipping_details?.installment_plan || item.metadata?.installment_plan;
+    const plan = typeof rawPlan === 'string' ? (() => { try { return JSON.parse(rawPlan); } catch (_) { return null; } })() : rawPlan;
+    const isPss = !!(
+        plan ||
+        (item.payment_method && item.payment_method.toLowerCase().includes('small')) ||
+        (item.payment_method && item.payment_method.toLowerCase().includes('pss')) ||
+        (item.payment_status && item.payment_status.toLowerCase().includes('pss')) ||
+        (item.payment_status && item.payment_status.toLowerCase().includes('installment'))
+    );
+
+    const pssMetrics = useMemo(() => {
+        if (!isPss) return null;
+        const total = Number(plan?.totalAmount || item.total_amount || 0);
+        const paid = Number(plan?.paidAmount || (item.payment_status === 'paid' ? total : (item.subtotal || Math.round(total * 0.25))));
+        const remaining = Math.max(0, Number(plan?.remainingAmount ?? (total - paid)));
+        const schedule = Array.isArray(plan?.schedule) ? plan.schedule : [];
+        const nextPending = schedule.find(s => s.status !== 'paid');
+        const now = new Date();
+        const dueDate = nextPending?.due_date ? new Date(nextPending.due_date) : null;
+        const isOverdue = dueDate ? dueDate < now : false;
+        const daysRemaining = dueDate ? Math.ceil((dueDate - now) / (1000 * 60 * 60 * 24)) : null;
+        const count = plan?.installmentsCount || schedule.length || 4;
+        const paidCount = plan?.installmentsPaid || schedule.filter(s => s.status === 'paid').length || (paid >= total ? count : 1);
+        const isFullyPaid = remaining <= 0 || paidCount >= count;
+
+        return {
+            total,
+            paid,
+            remaining,
+            count,
+            paidCount,
+            isFullyPaid,
+            nextAmount: nextPending?.amount || (remaining > 0 ? Math.round(remaining / Math.max(1, count - paidCount)) : 0),
+            dueDate,
+            dateStr: dueDate ? dueDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null,
+            isOverdue,
+            daysRemaining,
+            frequency: plan?.frequency || 'Monthly'
+        };
+    }, [isPss, plan, item]);
+
     return (
         <View style={C.card}>
             {/* Header row */}
@@ -666,6 +670,26 @@ const OrderCard = React.memo(({ item, isExpanded, onToggle, onCancel, onConfirm,
                         <View>
                             <Text style={C.orderId}>#{item.id.slice(0, 8).toUpperCase()}</Text>
                             <Text style={C.orderDate}>{new Date(item.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</Text>
+                            {isPss && (
+                                <View style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    backgroundColor: '#0E1A2E',
+                                    borderColor: '#D97706',
+                                    borderWidth: 1,
+                                    paddingHorizontal: 7,
+                                    paddingVertical: 2,
+                                    borderRadius: 6,
+                                    marginTop: 4,
+                                    alignSelf: 'flex-start'
+                                }}>
+                                    <Ionicons name="flash" size={10} color="#D97706" />
+                                    <Text style={{ color: '#F8FAFC', fontSize: 9.5, fontWeight: '800', letterSpacing: 0.3 }}>
+                                        0% INTEREST BNPL
+                                    </Text>
+                                </View>
+                            )}
                         </View>
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
@@ -675,6 +699,11 @@ const OrderCard = React.memo(({ item, isExpanded, onToggle, onCancel, onConfirm,
                         <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A', marginTop: 4 }}>
                             ₦{totalPaid.toLocaleString()}
                         </Text>
+                        {isPss && pssMetrics && !pssMetrics.isFullyPaid && (
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#D97706', marginTop: 1 }}>
+                                Remaining: ₦{pssMetrics.remaining.toLocaleString()}
+                            </Text>
+                        )}
                     </View>
                 </View>
 
@@ -724,6 +753,96 @@ const OrderCard = React.memo(({ item, isExpanded, onToggle, onCancel, onConfirm,
                     </View>
                 )}
 
+                {/* ── BNPL (Pay Small Small) Installment Ledger Box ── */}
+                {isPss && pssMetrics && (
+                    <View style={{
+                        backgroundColor: '#071224',
+                        borderRadius: 14,
+                        padding: 12,
+                        marginTop: 12,
+                        borderWidth: 1,
+                        borderColor: pssMetrics.isOverdue ? '#EF4444' : 'rgba(217, 167, 58, 0.35)'
+                    }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Ionicons name="wallet-outline" size={15} color="#D97706" />
+                                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>
+                                    Pay Small Small Plan ({pssMetrics.paidCount}/{pssMetrics.count} Paid)
+                                </Text>
+                            </View>
+                            <View style={{
+                                backgroundColor: pssMetrics.isFullyPaid ? 'rgba(16, 185, 129, 0.2)' : pssMetrics.isOverdue ? 'rgba(239, 68, 68, 0.2)' : 'rgba(217, 167, 58, 0.2)',
+                                paddingHorizontal: 7,
+                                paddingVertical: 2.5,
+                                borderRadius: 6
+                            }}>
+                                <Text style={{
+                                    fontSize: 9.5,
+                                    fontWeight: '800',
+                                    color: pssMetrics.isFullyPaid ? '#10B981' : pssMetrics.isOverdue ? '#EF4444' : '#D97706'
+                                }}>
+                                    {pssMetrics.isFullyPaid ? 'SETTLED' : pssMetrics.isOverdue ? 'OVERDUE' : 'ACTIVE PLAN'}
+                                </Text>
+                            </View>
+                        </View>
+
+                        {/* Progress Bar */}
+                        <View style={{ height: 6, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden', marginVertical: 6 }}>
+                            <View style={{
+                                height: '100%',
+                                width: `${Math.min(100, Math.round((pssMetrics.paid / Math.max(1, pssMetrics.total)) * 100))}%`,
+                                backgroundColor: pssMetrics.isFullyPaid ? '#10B981' : '#D97706'
+                            }} />
+                        </View>
+
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+                            <Text style={{ color: '#94A3B8', fontSize: 11 }}>
+                                Paid: <Text style={{ color: '#10B981', fontWeight: '800' }}>₦{pssMetrics.paid.toLocaleString()}</Text>
+                            </Text>
+                            <Text style={{ color: '#94A3B8', fontSize: 11 }}>
+                                Balance: <Text style={{ color: '#F87171', fontWeight: '800' }}>₦{pssMetrics.remaining.toLocaleString()}</Text>
+                            </Text>
+                        </View>
+
+                        {!pssMetrics.isFullyPaid && (
+                            <View style={{
+                                marginTop: 10,
+                                paddingTop: 8,
+                                borderTopWidth: 1,
+                                borderTopColor: 'rgba(255,255,255,0.08)',
+                                flexDirection: 'row',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                            }}>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ color: pssMetrics.isOverdue ? '#FCA5A5' : '#94A3B8', fontSize: 10, fontWeight: '700' }}>
+                                        {pssMetrics.isOverdue ? '⚠️ Overdue Installment:' : 'Next Due Installment:'}
+                                    </Text>
+                                    <Text style={{ color: pssMetrics.isOverdue ? '#EF4444' : '#FFFFFF', fontSize: 13, fontWeight: '900' }}>
+                                        ₦{pssMetrics.nextAmount.toLocaleString()}
+                                        {pssMetrics.dateStr ? ` • ${pssMetrics.dateStr}` : ''}
+                                    </Text>
+                                </View>
+                                <TouchableOpacity
+                                    onPress={() => onNavigate && onNavigate('PaySmallSmall', { orderId: item.id })}
+                                    activeOpacity={0.8}
+                                    style={{
+                                        backgroundColor: '#D97706',
+                                        paddingHorizontal: 12,
+                                        paddingVertical: 7,
+                                        borderRadius: 8,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        gap: 4
+                                    }}
+                                >
+                                    <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>Pay Next →</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </View>
+                )}
+
                 {/* Live Station Checkpoint Banner (One-Tap Live Track) */}
                 {!isCancelled && (
                     <TouchableOpacity
@@ -734,7 +853,7 @@ const OrderCard = React.memo(({ item, isExpanded, onToggle, onCancel, onConfirm,
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
                             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' }} />
                             <View style={{ flex: 1 }}>
-                                <Text style={{ color: '#D9A73A', fontSize: 9, fontWeight: '800', letterSpacing: 0.6 }}>
+                                <Text style={{ color: '#D97706', fontSize: 9, fontWeight: '800', letterSpacing: 0.6 }}>
                                     LIVE CHECKPOINT:
                                 </Text>
                                 <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }} numberOfLines={1}>
@@ -744,7 +863,7 @@ const OrderCard = React.memo(({ item, isExpanded, onToggle, onCancel, onConfirm,
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
                             <Text style={{ color: 'white', fontSize: 11, fontWeight: '700' }}>Track Live</Text>
-                            <Ionicons name="chevron-forward" size={12} color="#D9A73A" />
+                            <Ionicons name="chevron-forward" size={12} color="#D97706" />
                         </View>
                     </TouchableOpacity>
                 )}
@@ -842,8 +961,20 @@ const OrderCard = React.memo(({ item, isExpanded, onToggle, onCancel, onConfirm,
                             <Text style={{ color: '#64748B', fontSize: 12 }}>Payment Method</Text>
                             <Text style={{ fontWeight: '700', color: '#0F172A', fontSize: 12 }}>{item.payment_method || 'Verified Payment'}</Text>
                         </View>
+                        {isPss && pssMetrics ? (
+                            <>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6, paddingTop: 4, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                                    <Text style={{ color: '#64748B', fontSize: 12 }}>Down Payment (Settled)</Text>
+                                    <Text style={{ fontWeight: '700', color: '#10B981', fontSize: 12 }}>₦{pssMetrics.paid.toLocaleString()}</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                                    <Text style={{ color: '#64748B', fontSize: 12 }}>Remaining Installment Debt</Text>
+                                    <Text style={{ fontWeight: '800', color: '#DC2626', fontSize: 12 }}>₦{pssMetrics.remaining.toLocaleString()}</Text>
+                                </View>
+                            </>
+                        ) : null}
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#E2E8F0' }}>
-                            <Text style={{ fontWeight: '800', color: '#0F172A', fontSize: 13 }}>Total Paid</Text>
+                            <Text style={{ fontWeight: '800', color: '#0F172A', fontSize: 13 }}>{isPss ? 'Total Order Value' : 'Total Paid'}</Text>
                             <Text style={{ fontWeight: '900', color: '#0F172A', fontSize: 17 }}>₦{totalPaid.toLocaleString()}</Text>
                         </View>
                     </View>
@@ -855,6 +986,13 @@ const OrderCard = React.memo(({ item, isExpanded, onToggle, onCancel, onConfirm,
                                 <Ionicons name="location-outline" size={15} color="white" />
                                 <Text style={{ color: 'white', fontWeight: '700', fontSize: 13 }}>Track Order</Text>
                             </TouchableOpacity>
+                            {isPss && pssMetrics && !pssMetrics.isFullyPaid && (
+                                <TouchableOpacity onPress={() => onNavigate('PaySmallSmall', { orderId: item.id })}
+                                    style={[C.btn, { backgroundColor: '#D97706', flex: 2 }]}>
+                                    <Ionicons name="card-outline" size={15} color="white" />
+                                    <Text style={{ color: 'white', fontWeight: '800', fontSize: 13 }}>Manage Plan</Text>
+                                </TouchableOpacity>
+                            )}
                             <TouchableOpacity onPress={() => shareOrderWhatsApp ? shareOrderWhatsApp(item) : shareOrder(item)}
                                 style={[C.btn, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0', borderWidth: 1, flex: 1 }]}>
                                 <Ionicons name="logo-whatsapp" size={15} color="#16A34A" />
