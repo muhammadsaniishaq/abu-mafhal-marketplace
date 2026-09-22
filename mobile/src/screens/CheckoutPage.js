@@ -1004,6 +1004,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
         notes = null,
         targetUserId = null,
         installmentPlan = null,
+        customCart = null,
+        customTotal = null,
+        customShipping = null
     }) => {
         try {
             let verifiedUser = user;
@@ -1019,7 +1022,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 ? rawUid
                 : null;
 
-            const addrObj = selectedAddrObj || addresses.find(a => a.id === selectedAddressId);
+            const addrObj = customShipping || selectedAddrObj || addresses.find(a => a.id === selectedAddressId);
             const shippingAddressStr = addrObj
                 ? [addrObj.address, addrObj.city, addrObj.state].filter(Boolean).join(', ')
                 : (quickDestination?.address || '');
@@ -1030,6 +1033,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             const giftNotes = isGift ? `GIFT ORDER - Recipient: ${giftRecipientName || ''} | Phone: ${giftRecipientPhone || ''} | Message: ${giftMessage || ''}` : null;
             const combinedNotes = [notes, giftNotes].filter(Boolean).join(' | ') || null;
 
+            const effectiveCart = (customCart && customCart.length > 0) ? customCart : cart;
+            const effectiveTotal = (customTotal != null && customTotal > 0) ? customTotal : finalTotal;
+
             const isPss = paymentMethod === 'pay_small_small' || !!installmentPlan;
             let effectivePlan = installmentPlan;
             if (!effectivePlan && isPss && pssPlanDetails) {
@@ -1037,7 +1043,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     id: targetRef,
                     orderNumber: (targetRef || 'ORD').slice(0, 8).toUpperCase(),
                     createdAt: new Date().toISOString(),
-                    totalAmount: finalTotal,
+                    totalAmount: effectiveTotal,
                     baseTotal: pssPlanDetails.baseTotal,
                     surcharge: pssPlanDetails.surcharge,
                     paidAmount: paidAmount || pssPlanDetails.downPayment || 0,
@@ -1049,7 +1055,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     installmentsPaid: paidAmount > 0 ? 1 : 0,
                     isCompleted: false,
                     schedule: pssPlanDetails.schedule,
-                    items: cart
+                    items: effectiveCart
                 };
             }
 
@@ -1073,13 +1079,14 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 payment_status: effectiveStatus,
                 payment_method: effectiveMethod,
                 payment_reference: targetRef,
-                total_amount: finalTotal,
-                subtotal: Math.max(0, finalTotal - (shippingFee || 0)),
+                total_amount: effectiveTotal,
+                subtotal: Math.max(0, effectiveTotal - (shippingFee || 0)),
                 shipping_fee: shippingFee || 0,
                 tax_amount: taxAmount || 0,
                 discount_amount: discountAmount || 0,
                 shipping_address: shippingAddressStr,
                 shipping_details: shippingDetailsPayload,
+                installment_plan: effectivePlan || null,
                 contact_phone: contactPhone,
                 notes: combinedNotes,
                 current_location: 'Processing Facility',
@@ -1097,22 +1104,36 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 } catch (_) {}
             }
 
-            const { data: insertedOrder, error: orderInsertErr } = await supabase
+            let insertedOrder = null;
+            const { data: directInsert, error: orderInsertErr } = await supabase
                 .from('orders')
                 .insert(supabaseOrderPayload)
                 .select('id')
                 .single();
 
             if (orderInsertErr) {
-                console.warn('[Checkout] Supabase orders table insert error:', orderInsertErr.message);
-                return null;
+                console.warn('[Checkout] Supabase orders table insert retry without direct installment_plan column:', orderInsertErr.message);
+                const fallbackPayload = { ...supabaseOrderPayload };
+                delete fallbackPayload.installment_plan;
+                const { data: retryInsert, error: retryErr } = await supabase
+                    .from('orders')
+                    .insert(fallbackPayload)
+                    .select('id')
+                    .single();
+                if (retryErr) {
+                    console.warn('[Checkout] Supabase orders table retry failed:', retryErr.message);
+                    return null;
+                }
+                insertedOrder = retryInsert;
+            } else {
+                insertedOrder = directInsert;
             }
 
             const dbOrderId = insertedOrder?.id;
             console.log('[Checkout] ✅ Order successfully persisted to Supabase:', dbOrderId);
 
-            if (dbOrderId && cart.length > 0) {
-                const itemRows = cart.map(item => ({
+            if (dbOrderId && effectiveCart.length > 0) {
+                const itemRows = effectiveCart.map(item => ({
                     order_id: dbOrderId,
                     product_id: isUUID(item.id || item.product_id) ? (item.id || item.product_id) : null,
                     vendor_id: isUUID(item.vendor_id || item.vendorId) ? (item.vendor_id || item.vendorId) : null,
@@ -1132,9 +1153,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 }
 
                 const logDescription = isPss
-                    ? `Pay Small Small BNPL order placed. Down payment recorded via ${effectiveMethod}. Installment schedule activated.`
+                    ? `Pay Small Small BNPL order placed. Down payment of ₦${(paidAmount || 0).toLocaleString()} recorded via ${effectiveMethod}. Installment schedule activated.`
                     : paymentStatus === 'paid'
-                    ? `Payment of ₦${finalTotal.toLocaleString()} confirmed via ${paymentMethodName || paymentMethod}. Order is being prepared.`
+                    ? `Payment of ₦${effectiveTotal.toLocaleString()} confirmed via ${paymentMethodName || paymentMethod}. Order is being prepared.`
                     : paymentStatus === 'pending_pod'
                     ? `Order confirmed via Pay on Delivery. ₦${amountDueOnDelivery.toLocaleString()} due upon dispatch/delivery.`
                     : `Order placed via ${paymentMethodName || paymentMethod}. Status: ${paymentStatus}.`;
@@ -1159,32 +1180,49 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
     const handlePaymentComplete = async (data, explicitGateway) => {
         setShowPaymentModal(false);
         if (data && (data.status === 'successful' || data.status === 'completed' || data.status === 'success')) {
-            const targetRef = currentOrderId || data.reference || data.tx_ref || PaymentGatewayService.generateRef('ORD');
-            const isPss = paymentMethod === 'pay_small_small';
-            const activeGateway = explicitGateway || (isPss ? pssDownPaymentMethod : paymentMethod);
-            const paidAmount = isPss ? pssPlanDetails.downPayment : finalTotal;
+            // Restore any pending checkout session saved before external redirect
+            let pendingSession = null;
+            try {
+                const rawPending = (typeof window !== 'undefined' && window.localStorage)
+                    ? window.localStorage.getItem('@abumafhal_pending_checkout_session')
+                    : await AsyncStorage.getItem('@abumafhal_pending_checkout_session');
+                if (rawPending) {
+                    const parsed = JSON.parse(rawPending);
+                    if (parsed && (parsed.orderRef === (currentOrderId || data.reference || data.tx_ref) || Date.now() - (parsed.timestamp || 0) < 7200000)) {
+                        pendingSession = parsed;
+                    }
+                }
+            } catch (_) {}
+
+            const targetRef = currentOrderId || data.reference || data.tx_ref || pendingSession?.orderRef || PaymentGatewayService.generateRef('ORD');
+            const isPss = (pendingSession?.paymentMethod === 'pay_small_small') || (paymentMethod === 'pay_small_small');
+            const activeGateway = explicitGateway || (isPss ? (pendingSession?.pssDownPaymentMethod || pssDownPaymentMethod) : (pendingSession?.paymentMethod || paymentMethod));
+            const activePssPlan = isPss ? (pendingSession?.pssPlanDetails || pssPlanDetails) : null;
+            const activeCart = (pendingSession?.cart && pendingSession.cart.length > 0) ? pendingSession.cart : cart;
+            const activeFinalTotal = Number(pendingSession?.finalTotal || finalTotal || 0);
+            const paidAmount = isPss ? (Number(activePssPlan?.downPayment) || Number(pendingSession?.paidAmount) || 0) : activeFinalTotal;
 
             let supabaseOrderId = null;
             let pssPlanItem = null;
 
-            if (isPss && pssPlanDetails) {
+            if (isPss && activePssPlan) {
                 pssPlanItem = {
                     id: targetRef,
-                    orderNumber: targetRef.slice(0, 8).toUpperCase(),
+                    orderNumber: (targetRef || 'ORD').slice(0, 8).toUpperCase(),
                     createdAt: new Date().toISOString(),
-                    totalAmount: finalTotal,
-                    baseTotal: pssPlanDetails.baseTotal,
-                    surcharge: pssPlanDetails.surcharge,
-                    paidAmount: pssPlanDetails.downPayment,
-                    remainingAmount: pssPlanDetails.remainingBalance,
-                    planType: `${pssPlanDetails.durationMonths}_months_${pssPlanDetails.frequency}`,
-                    durationMonths: pssPlanDetails.durationMonths,
-                    frequency: pssPlanDetails.frequency,
-                    installmentsCount: pssPlanDetails.installmentsCount,
+                    totalAmount: activeFinalTotal,
+                    baseTotal: activePssPlan.baseTotal,
+                    surcharge: activePssPlan.surcharge || 0,
+                    paidAmount: paidAmount,
+                    remainingAmount: activePssPlan.remainingBalance,
+                    planType: `${activePssPlan.durationMonths}_months_${activePssPlan.frequency}`,
+                    durationMonths: activePssPlan.durationMonths,
+                    frequency: activePssPlan.frequency,
+                    installmentsCount: activePssPlan.installmentsCount,
                     installmentsPaid: 1,
                     isCompleted: false,
-                    schedule: pssPlanDetails.schedule,
-                    items: cart
+                    schedule: activePssPlan.schedule,
+                    items: activeCart
                 };
             }
 
@@ -1219,10 +1257,13 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 const dbOrderId = await saveOrderToSupabase({
                     targetRef,
                     paymentStatus: isPss ? 'pss_active' : 'paid',
-                    paymentMethodName: isPss ? `Pay Small Small (${activeGateway})` : (activeGateway || 'online'),
+                    paymentMethodName: isPss ? `Pay Small Small (${activeGateway || 'Paystack'})` : (activeGateway || 'online'),
                     paidAmount: paidAmount,
                     targetUserId: uid,
-                    installmentPlan: pssPlanItem
+                    installmentPlan: pssPlanItem,
+                    customCart: activeCart,
+                    customTotal: activeFinalTotal,
+                    customShipping: pendingSession?.selectedAddrObj
                 });
                 if (dbOrderId) supabaseOrderId = dbOrderId;
 
@@ -1230,20 +1271,20 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 const resolvedOrderId = supabaseOrderId || targetRef;
                 const orderPayload = {
                     id: resolvedOrderId,
-                    orderNumber: targetRef.slice(0, 8).toUpperCase(),
+                    orderNumber: (targetRef || 'ORD').slice(0, 8).toUpperCase(),
                     createdAt: new Date().toISOString(),
-                    total_amount: finalTotal,
+                    total_amount: activeFinalTotal,
                     status: 'processing',
                     payment_status: isPss ? 'pss_active' : 'paid',
-                    payment_method: isPss ? `Pay Small Small (${activeGateway})` : activeGateway,
-                    items: cart,
-                    delivery_address: selectedAddrObj,
-                    delivery_slot: deliverySlot,
-                    is_gift: isGift,
-                    gift_message: giftMessage,
-                    gift_recipient_name: giftRecipientName,
-                    gift_recipient_phone: giftRecipientPhone,
-                    gift_wrap_style: giftWrapStyle,
+                    payment_method: isPss ? `Pay Small Small (${activeGateway || 'Paystack'})` : activeGateway,
+                    items: activeCart,
+                    delivery_address: pendingSession?.selectedAddrObj || selectedAddrObj,
+                    delivery_slot: pendingSession?.deliverySlot || deliverySlot,
+                    is_gift: pendingSession?.isGift || isGift,
+                    gift_message: pendingSession?.giftMessage || giftMessage,
+                    gift_recipient_name: pendingSession?.giftRecipientName || giftRecipientName,
+                    gift_recipient_phone: pendingSession?.giftRecipientPhone || giftRecipientPhone,
+                    gift_wrap_style: pendingSession?.giftWrapStyle || giftWrapStyle,
                     wallet_split_deducted: walletDeduction,
                     installment_plan: pssPlanItem
                 };
@@ -1253,13 +1294,21 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 AsyncStorage.setItem('@abumafhal_last_order', JSON.stringify(orderPayload)).catch(() => {});
                 setCompletedOrderData(orderPayload);
                 setCurrentOrderId(resolvedOrderId);
+
+                // Clean up pending session
+                try {
+                    if (typeof window !== 'undefined' && window.localStorage) {
+                        window.localStorage.removeItem('@abumafhal_pending_checkout_session');
+                    }
+                    await AsyncStorage.removeItem('@abumafhal_pending_checkout_session');
+                } catch (_) {}
             } catch (err) {
                 console.warn('Post-payment record error:', err);
             }
 
             const finalOrderId = supabaseOrderId || targetRef;
             setOrderSuccess(true);
-            triggerOrderWhatsApp(finalOrderId, finalTotal, activeGateway || 'Online Payment');
+            triggerOrderWhatsApp(finalOrderId, activeFinalTotal, isPss ? `Pay Small Small (${activeGateway})` : (activeGateway || 'Online Payment'));
             await clearProgress();
             if (onClearCart) onClearCart();
         } else {
@@ -1724,6 +1773,32 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
                 // Web: Redirect to official secure hosted checkout
                 if (Platform.OS === 'web' && typeof window !== 'undefined' && pssInit.checkoutUrl) {
+                    const pendingCheckoutPayload = {
+                        orderRef,
+                        paymentMethod: 'pay_small_small',
+                        pssDownPaymentMethod,
+                        pssPlanDetails,
+                        paidAmount: pssDownPayment,
+                        cart,
+                        finalTotal,
+                        baseTotal,
+                        shippingFee,
+                        discountAmount,
+                        selectedAddressId,
+                        selectedAddrObj: safeShipping,
+                        orderNote,
+                        deliverySlot,
+                        isGift,
+                        giftRecipientName,
+                        giftRecipientPhone,
+                        giftMessage,
+                        giftWrapStyle,
+                        timestamp: Date.now()
+                    };
+                    try {
+                        window.localStorage.setItem('@abumafhal_pending_checkout_session', JSON.stringify(pendingCheckoutPayload));
+                        await AsyncStorage.setItem('@abumafhal_pending_checkout_session', JSON.stringify(pendingCheckoutPayload));
+                    } catch (_) {}
                     setIsProcessing(false);
                     window.location.href = pssInit.checkoutUrl;
                     return;
@@ -1813,6 +1888,29 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             // Web: Redirect to official secure hosted checkout (Paystack / Flutterwave / NOWPayments) if valid URL
             const isHttpUrl = typeof initRes.checkoutUrl === 'string' && (initRes.checkoutUrl.startsWith('http://') || initRes.checkoutUrl.startsWith('https://'));
             if (Platform.OS === 'web' && typeof window !== 'undefined' && isHttpUrl) {
+                const pendingCheckoutPayload = {
+                    orderRef,
+                    paymentMethod,
+                    cart,
+                    finalTotal,
+                    baseTotal,
+                    shippingFee,
+                    discountAmount,
+                    selectedAddressId,
+                    selectedAddrObj: safeShipping,
+                    orderNote,
+                    deliverySlot,
+                    isGift,
+                    giftRecipientName,
+                    giftRecipientPhone,
+                    giftMessage,
+                    giftWrapStyle,
+                    timestamp: Date.now()
+                };
+                try {
+                    window.localStorage.setItem('@abumafhal_pending_checkout_session', JSON.stringify(pendingCheckoutPayload));
+                    await AsyncStorage.setItem('@abumafhal_pending_checkout_session', JSON.stringify(pendingCheckoutPayload));
+                } catch (_) {}
                 setIsProcessing(false);
                 window.location.href = initRes.checkoutUrl;
                 return;

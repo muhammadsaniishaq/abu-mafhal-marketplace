@@ -696,12 +696,24 @@ const OrderCard = React.memo(({ item, isExpanded, onToggle, onCancel, onConfirm,
                         <View style={[C.statusBadge, { backgroundColor: cfg.bg }]}>
                             <Text style={[C.statusText, { color: cfg.color }]}>{cfg.label.toUpperCase()}</Text>
                         </View>
-                        <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A', marginTop: 4 }}>
-                            ₦{totalPaid.toLocaleString()}
-                        </Text>
-                        {isPss && pssMetrics && !pssMetrics.isFullyPaid && (
-                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#D97706', marginTop: 1 }}>
-                                Remaining: ₦{pssMetrics.remaining.toLocaleString()}
+                        {isPss && pssMetrics ? (
+                            <View style={{ alignItems: 'flex-end', marginTop: 4 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3 }}>
+                                    <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '700', textTransform: 'uppercase' }}>Paid:</Text>
+                                    <Text style={{ fontSize: 16, fontWeight: '900', color: '#10B981' }}>
+                                        ₦{pssMetrics.paid.toLocaleString()}
+                                    </Text>
+                                </View>
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: pssMetrics.isOverdue ? '#DC2626' : '#D97706', marginTop: 1 }}>
+                                    {pssMetrics.isFullyPaid 
+                                        ? 'Total: ₦' + pssMetrics.total.toLocaleString()
+                                        : `Due: ₦${pssMetrics.remaining.toLocaleString()} of ₦${pssMetrics.total.toLocaleString()}`
+                                    }
+                                </Text>
+                            </View>
+                        ) : (
+                            <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A', marginTop: 4 }}>
+                                ₦{totalPaid.toLocaleString()}
                             </Text>
                         )}
                     </View>
@@ -963,20 +975,25 @@ const OrderCard = React.memo(({ item, isExpanded, onToggle, onCancel, onConfirm,
                         </View>
                         {isPss && pssMetrics ? (
                             <>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6, paddingTop: 4, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
-                                    <Text style={{ color: '#64748B', fontSize: 12 }}>Down Payment (Settled)</Text>
-                                    <Text style={{ fontWeight: '700', color: '#10B981', fontSize: 12 }}>₦{pssMetrics.paid.toLocaleString()}</Text>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                                    <Text style={{ color: '#0F172A', fontSize: 12, fontWeight: '800' }}>Actual Amount Paid (Deposit)</Text>
+                                    <Text style={{ fontWeight: '900', color: '#10B981', fontSize: 13 }}>₦{pssMetrics.paid.toLocaleString()}</Text>
                                 </View>
                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                                    <Text style={{ color: '#64748B', fontSize: 12 }}>Remaining Installment Debt</Text>
-                                    <Text style={{ fontWeight: '800', color: '#DC2626', fontSize: 12 }}>₦{pssMetrics.remaining.toLocaleString()}</Text>
+                                    <Text style={{ color: '#DC2626', fontSize: 12, fontWeight: '700' }}>Remaining Installment Debt</Text>
+                                    <Text style={{ fontWeight: '800', color: '#DC2626', fontSize: 13 }}>₦{pssMetrics.remaining.toLocaleString()}</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#E2E8F0' }}>
+                                    <Text style={{ fontWeight: '800', color: '#0F172A', fontSize: 13 }}>Total Order Contract Value</Text>
+                                    <Text style={{ fontWeight: '900', color: '#0F172A', fontSize: 16 }}>₦{pssMetrics.total.toLocaleString()}</Text>
                                 </View>
                             </>
-                        ) : null}
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#E2E8F0' }}>
-                            <Text style={{ fontWeight: '800', color: '#0F172A', fontSize: 13 }}>{isPss ? 'Total Order Value' : 'Total Paid'}</Text>
-                            <Text style={{ fontWeight: '900', color: '#0F172A', fontSize: 17 }}>₦{totalPaid.toLocaleString()}</Text>
-                        </View>
+                        ) : (
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#E2E8F0' }}>
+                                <Text style={{ fontWeight: '800', color: '#0F172A', fontSize: 13 }}>Total Paid</Text>
+                                <Text style={{ fontWeight: '900', color: '#0F172A', fontSize: 17 }}>₦{totalPaid.toLocaleString()}</Text>
+                            </View>
+                        )}
                     </View>
 
                     <View style={{ gap: 10 }}>

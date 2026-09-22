@@ -802,9 +802,9 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder, on
                                 </View>
                                 <View style={s.snapshotDivider} />
                                 <View style={s.snapshotItem}>
-                                    <Text style={s.snapshotLbl}>Amount Total</Text>
+                                    <Text style={s.snapshotLbl}>{isCurrentOrderPss ? 'Deposit Paid' : 'Amount Total'}</Text>
                                     <Text style={[s.snapshotVal, { color: EMERALD, fontWeight: '900' }]}>
-                                        ₦{Number(currentOrder?.total_amount || 0).toLocaleString()}
+                                        ₦{Number(isCurrentOrderPss && currentPssMetrics ? currentPssMetrics.paid : (currentOrder?.total_amount || 0)).toLocaleString()}
                                     </Text>
                                 </View>
                             </View>
