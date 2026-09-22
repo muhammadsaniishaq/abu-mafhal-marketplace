@@ -365,9 +365,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
     // ── Delivery Methods & Instant Distance Engine ──────────────────────────
     const [selectedDeliveryMethod, setSelectedDeliveryMethod] = useState('standard');
     const [deliveryMethods, setDeliveryMethods] = useState([
-        { code: 'standard', name: 'Standard Delivery', estimated_days: '2-4 Business Days', icon: 'bicycle-outline' },
-        { code: 'express',  name: 'Express Priority',  estimated_days: '24-48 Hours',       icon: 'flash-outline' },
-        { code: 'pickup',   name: 'Store Pickup',      estimated_days: 'Ready in 2 Hours',   icon: 'storefront-outline' }
+        { id: 'standard', code: 'standard', name: 'Standard Delivery', estimated_days: '2-4 Business Days', icon: 'bicycle-outline' },
+        { id: 'express',  code: 'express',  name: 'Express Priority',  estimated_days: '24-48 Hours',       icon: 'flash-outline' },
+        { id: 'pickup',   code: 'pickup',   name: 'Store Pickup',      estimated_days: 'Ready in 2 Hours',   icon: 'storefront-outline' }
     ]);
 
     // Resolve active customer address directly from saved shipping addresses
@@ -398,11 +398,19 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
         const selectedAddr = selectedAddrObj;
         if (!selectedAddr || !cart.length) return null;
 
+        const mergedAdminSettings = {
+            ...(settings?.shipping_settings || {}),
+            shipping_fees: settings?.shipping_fees,
+            default_shipping_fee: settings?.default_shipping_fee,
+            free_shipping_enabled: settings?.free_shipping_enabled || settings?.shipping_settings?.free_shipping_enabled,
+            free_shipping_threshold: settings?.free_shipping_threshold || settings?.shipping_settings?.free_shipping_threshold
+        };
+
         return ShippingCalculationEngine.calculateMultiVendorShippingInstant({
             cartItems: cart,
             customerAddress: selectedAddr,
             deliveryMethodCode: selectedDeliveryMethod || 'standard',
-            adminSettings: settings?.shipping_settings || settings,
+            adminSettings: mergedAdminSettings,
             shippingMethods: deliveryMethods,
             storesCache: ShippingCalculationEngine.IN_MEMORY_STORES_CACHE
         });
@@ -411,16 +419,25 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
     // Dynamic Shipping Fee (Instantly computed with zero delay)
     const shippingFee = useMemo(() => {
         if (selectedDeliveryMethod === 'pickup') return 0;
+        const allFreeShipping = cart.length > 0 && cart.every(item => item.free_shipping === true);
+        if (allFreeShipping) return 0;
         if (shippingCalculation && typeof shippingCalculation.totalShippingFee === 'number') {
             return shippingCalculation.totalShippingFee;
         }
         const selectedAddr = selectedAddrObj;
-        const allFreeShipping = cart.length > 0 && cart.every(item => item.free_shipping === true);
-        if (allFreeShipping) return 0;
-        if (selectedAddr?.state && settings?.shipping_fees?.[selectedAddr.state] !== undefined) {
-            return Number(settings.shipping_fees[selectedAddr.state]);
+        if (selectedAddr?.state && settings?.shipping_fees) {
+            const stateMatch = Object.keys(settings.shipping_fees).find(
+                k => k.toLowerCase().trim() === selectedAddr.state.toLowerCase().trim() ||
+                     (k.toLowerCase().includes('abuja') && selectedAddr.state.toLowerCase().includes('abuja')) ||
+                     (k.toLowerCase().includes('fct') && selectedAddr.state.toLowerCase().includes('fct'))
+            );
+            if (stateMatch && settings.shipping_fees[stateMatch] !== undefined) {
+                return Number(settings.shipping_fees[stateMatch]);
+            }
         }
-        return parseFloat(settings?.default_shipping_fee) || 1000;
+        const rawDef = settings?.default_shipping_fee;
+        const parsedDef = (typeof rawDef === 'object' && rawDef !== null) ? (rawDef.value ?? rawDef.amount) : rawDef;
+        return parseFloat(parsedDef) || 3000;
     }, [shippingCalculation, selectedDeliveryMethod, selectedAddrObj, cart, settings]);
 
     // Tax calculation
@@ -432,7 +449,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
     const taxRateLabel = (parseFloat(settings?.tax_rate) || 7.5).toFixed(1);
     const isTaxEnabled = settings?.tax_enabled !== false;
-    const isShippingFree = selectedDeliveryMethod === 'pickup' || (shippingFee === 0 && cart.length > 0 && cart.every(item => item.free_shipping === true));
+    const isShippingFree = selectedDeliveryMethod === 'pickup' || shippingFee === 0;
 
     // ── Local Government Area (LGA) Quick Selector Helpers ────────────────────
     const quickStates = ['Yobe', 'Jigawa', 'Borno', 'Kano', 'Bauchi', 'Gombe', 'Kaduna', 'Abuja', 'Lagos', 'All States'];
@@ -786,7 +803,12 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 }
             }
             if (methodsRes.status === 'fulfilled' && methodsRes.value?.data?.length > 0) {
-                setDeliveryMethods(methodsRes.value.data);
+                const normalizedMethods = methodsRes.value.data.map(m => ({
+                    ...m,
+                    code: m.code || m.id,
+                    id: m.id || m.code
+                }));
+                setDeliveryMethods(normalizedMethods);
             }
 
             if (savedProgress.status === 'fulfilled' && savedProgress.value) {
@@ -1005,7 +1027,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
         installmentPlan = null,
         customCart = null,
         customTotal = null,
-        customShipping = null
+        customShipping = null,
+        customDeliveryMethod = null,
+        customShippingFee = null
     }) => {
         try {
             let verifiedUser = user;
@@ -1034,6 +1058,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
             const effectiveCart = (customCart && customCart.length > 0) ? customCart : cart;
             const effectiveTotal = (customTotal != null && customTotal > 0) ? customTotal : finalTotal;
+
+            const effectiveDeliveryMethod = customDeliveryMethod || selectedDeliveryMethod || 'standard';
+            const isPickup = effectiveDeliveryMethod === 'pickup';
+            const effectiveShippingFee = isPickup ? 0 : (customShippingFee !== null && customShippingFee !== undefined ? Number(customShippingFee) : Number(shippingFee || 0));
 
             const isPss = paymentMethod === 'pay_small_small' || !!installmentPlan;
             let effectivePlan = installmentPlan;
@@ -1071,9 +1099,13 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 };
             }
 
-            // Embed installment plan in shipping_details JSONB so it persists 100% safely
+            // Embed delivery method & installment plan in shipping_details JSONB so it persists 100% safely
+            const resolvedMethodName = deliveryMethods.find(m => (m.code || m.id) === effectiveDeliveryMethod)?.name || (isPickup ? 'Store Pickup' : 'Standard Delivery');
             const shippingDetailsPayload = {
                 ...(addrObj || {}),
+                delivery_method: effectiveDeliveryMethod,
+                delivery_method_name: resolvedMethodName,
+                is_pickup: isPickup,
                 ...(effectivePlan ? { installment_plan: effectivePlan } : {})
             };
 
@@ -1092,8 +1124,8 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 payment_method: effectiveMethod,
                 payment_reference: targetRef,
                 total_amount: effectiveTotal,
-                subtotal: Math.max(0, effectiveTotal - (shippingFee || 0)),
-                shipping_fee: shippingFee || 0,
+                subtotal: Math.max(0, effectiveTotal - (effectiveShippingFee || 0) - (taxAmount || 0)),
+                shipping_fee: effectiveShippingFee,
                 tax_amount: taxAmount || 0,
                 discount_amount: discountAmount || 0,
                 shipping_address: shippingAddressStr,
@@ -1101,7 +1133,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 installment_plan: effectivePlan || null,
                 contact_phone: contactPhone,
                 notes: combinedNotes,
-                current_location: 'Processing Facility',
+                current_location: isPickup ? 'Store Pickup Counter' : 'Processing Facility',
                 tracking_number: (targetRef || 'ORD').slice(0, 12).toUpperCase(),
             };
 
@@ -1305,7 +1337,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     installmentPlan: pssPlanItem,
                     customCart: activeCart,
                     customTotal: activeFinalTotal,
-                    customShipping: pendingSession?.selectedAddrObj
+                    customShipping: pendingSession?.selectedAddrObj,
+                    customDeliveryMethod: pendingSession?.selectedDeliveryMethod || selectedDeliveryMethod || 'standard',
+                    customShippingFee: pendingSession?.shippingFee !== undefined ? pendingSession.shippingFee : shippingFee
                 });
                 if (dbOrderId) supabaseOrderId = dbOrderId;
 
@@ -1857,6 +1891,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         finalTotal,
                         baseTotal,
                         shippingFee,
+                        selectedDeliveryMethod: selectedDeliveryMethod || 'standard',
                         discountAmount,
                         selectedAddressId,
                         selectedAddrObj: safeShipping,
@@ -1969,6 +2004,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     finalTotal,
                     baseTotal,
                     shippingFee,
+                    selectedDeliveryMethod: selectedDeliveryMethod || 'standard',
                     discountAmount,
                     selectedAddressId,
                     selectedAddrObj: safeShipping,
@@ -2449,33 +2485,39 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                             </View>
 
                             {deliveryMethods.map((method) => {
-                                const isSelected = selectedDeliveryMethod === method.code;
-                                const isPickup   = method.code === 'pickup';
-                                const isExpress  = method.code === 'express';
+                                const methodCode = method.code || method.id;
+                                const isSelected = selectedDeliveryMethod === methodCode;
+                                const isPickup   = methodCode === 'pickup';
+                                const isExpress  = methodCode === 'express';
 
                                 let methodCostLabel = '';
                                 if (isPickup) {
                                     methodCostLabel = 'FREE';
                                 } else {
+                                    const mergedAdminSettings = {
+                                        ...(settings?.shipping_settings || {}),
+                                        shipping_fees: settings?.shipping_fees,
+                                        default_shipping_fee: settings?.default_shipping_fee
+                                    };
                                     const mCalc = ShippingCalculationEngine.calculateMultiVendorShippingInstant({
                                         cartItems: cart,
                                         customerAddress: selectedAddrObj,
-                                        deliveryMethodCode: method.code,
-                                        adminSettings: settings?.shipping_settings || settings,
+                                        deliveryMethodCode: methodCode,
+                                        adminSettings: mergedAdminSettings,
                                         shippingMethods: deliveryMethods
                                     });
-                                    if (mCalc?.totalShippingFee && mCalc.totalShippingFee > 0) {
-                                        methodCostLabel = formatCurrency(mCalc.totalShippingFee);
+                                    if (mCalc?.totalShippingFee !== undefined && mCalc.totalShippingFee !== null) {
+                                        methodCostLabel = mCalc.totalShippingFee === 0 ? 'FREE' : formatCurrency(mCalc.totalShippingFee);
                                     } else {
-                                        const defaultFee = isExpress ? 2500 : 800;
+                                        const defaultFee = isExpress ? 4500 : 3000;
                                         methodCostLabel = formatCurrency(defaultFee);
                                     }
                                 }
 
                                 return (
                                     <TouchableOpacity
-                                        key={method.code}
-                                        onPress={() => setSelectedDeliveryMethod(method.code)}
+                                        key={methodCode}
+                                        onPress={() => setSelectedDeliveryMethod(methodCode)}
                                         activeOpacity={0.8}
                                         style={[
                                             s.methodCard,
@@ -3570,7 +3612,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                             <View style={s.invoiceRow}>
                                 <View>
                                     <Text style={s.invoiceLabel}>
-                                        Shipping ({deliveryMethods.find(m => m.code === selectedDeliveryMethod)?.name || 'Delivery'})
+                                        Shipping ({deliveryMethods.find(m => (m.code || m.id) === selectedDeliveryMethod)?.name || (selectedDeliveryMethod === 'pickup' ? 'Store Pickup' : 'Delivery')})
                                     </Text>
                                     <Text style={s.invoiceSubLabel}>
                                         {shippingCalculation?.vendorBreakdown?.length > 1

@@ -172,7 +172,7 @@ export const NIGERIA_LGA_CENTROIDS = {
 export const DEFAULT_SHIPPING_SETTINGS = {
     enabled: true,
     currency: 'NGN',
-    base_fee: 1000,
+    base_fee: 3000,
     price_per_km: 75,
     min_fee: 800,
     max_fee: 25000,
@@ -730,7 +730,7 @@ export class ShippingCalculationEngine {
         }
 
         // 6. Resolve Pricing Parameters across Hierarchy:
-        // Priority: Vendor Custom Override > Admin LGA Zone > Admin State Zone > Delivery Method/Global Override > LGA Tier Baseline
+        // Priority: Vendor Custom Override > Admin LGA Zone > Admin State Zone > Admin Configured State Fee > Delivery Method/Global Override > LGA Tier Baseline
         let baseFee    = lgaTier.baseFee;
         let pricePerKm = lgaTier.pricePerKm;
         let minFee     = lgaTier.minFee;
@@ -748,7 +748,48 @@ export class ShippingCalculationEngine {
             if (deliveryMethod.max_fee !== undefined && deliveryMethod.max_fee !== null) maxFee = Number(deliveryMethod.max_fee);
         }
 
-        if (deliveryMethod?.base_fee === undefined) {
+        // Check for Admin State-level Shipping Fee Configuration (from Admin Settings)
+        const adminShippingFees = globalSettings?.shipping_fees || {};
+        let adminConfiguredStateFee = null;
+        if (customerState && adminShippingFees && typeof adminShippingFees === 'object') {
+            const stateMatch = Object.keys(adminShippingFees).find(k => {
+                const normKey = k.toLowerCase().trim();
+                const normState = customerState.toLowerCase().trim();
+                return normKey === normState ||
+                    (normKey.includes('abuja') && normState.includes('abuja')) ||
+                    (normKey.includes('fct') && normState.includes('fct'));
+            });
+            if (stateMatch && adminShippingFees[stateMatch] !== undefined && adminShippingFees[stateMatch] !== null) {
+                adminConfiguredStateFee = Number(adminShippingFees[stateMatch]);
+            }
+        }
+
+        if (adminConfiguredStateFee === null) {
+            const rawDef = globalSettings?.default_shipping_fee;
+            const parsedDef = (typeof rawDef === 'object' && rawDef !== null) ? (rawDef.value ?? rawDef.amount) : rawDef;
+            if (parsedDef && !isNaN(Number(parsedDef)) && Number(parsedDef) > 0) {
+                adminConfiguredStateFee = Number(parsedDef);
+            }
+        }
+
+        if (adminConfiguredStateFee !== null && adminConfiguredStateFee > 0) {
+            if (methodId === 'standard') {
+                baseFee = adminConfiguredStateFee;
+                isFixedFee = true;
+                fixedFeeAmount = adminConfiguredStateFee;
+                minFee = Math.min(minFee, adminConfiguredStateFee);
+            } else if (methodId === 'express') {
+                const expFee = Math.round(adminConfiguredStateFee * 1.5);
+                baseFee = expFee;
+                isFixedFee = true;
+                fixedFeeAmount = expFee;
+            } else if (methodId === 'same_day') {
+                const sameFee = Math.round(adminConfiguredStateFee * 2.0);
+                baseFee = sameFee;
+                isFixedFee = true;
+                fixedFeeAmount = sameFee;
+            }
+        } else if (deliveryMethod?.base_fee === undefined) {
             if (methodId === 'express') {
                 baseFee = lgaTier.expressBaseFee || Math.round(baseFee * 1.6);
                 minFee  = Math.max(minFee, baseFee);
@@ -1071,7 +1112,12 @@ export class ShippingCalculationEngine {
 
         let globalSettings = DEFAULT_SHIPPING_SETTINGS;
         if (adminSettings) {
-            globalSettings = { ...globalSettings, ...(adminSettings.shipping_settings || adminSettings) };
+            globalSettings = { 
+                ...globalSettings, 
+                ...(adminSettings.shipping_settings || adminSettings),
+                shipping_fees: adminSettings.shipping_fees || adminSettings.shipping_settings?.shipping_fees,
+                default_shipping_fee: adminSettings.default_shipping_fee || adminSettings.shipping_settings?.default_shipping_fee
+            };
         }
 
         const methods = (shippingMethods && shippingMethods.length > 0) ? shippingMethods : DEFAULT_SHIPPING_METHODS;

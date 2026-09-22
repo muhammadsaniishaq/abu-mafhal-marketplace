@@ -58,7 +58,9 @@ export const CartPage = ({
     const shippingSettings = settings?.shipping_settings || {};
     const isFreeShippingEnabled = Boolean(shippingSettings.free_shipping_enabled);
     const freeShippingThreshold = isFreeShippingEnabled ? Number(shippingSettings.free_shipping_threshold || 0) : 0;
-    const baseShippingFee = Number(shippingSettings.base_fee || 1000) + Number(shippingSettings.handling_fee || 0);
+    const rawDefShipping = settings?.default_shipping_fee;
+    const parsedDefShipping = (typeof rawDefShipping === 'object' && rawDefShipping !== null) ? (rawDefShipping.value ?? rawDefShipping.amount) : rawDefShipping;
+    const baseShippingFee = Number(shippingSettings.base_fee || parsedDefShipping || 3000) + Number(shippingSettings.handling_fee || 0);
     const isFreeNationwide = Boolean(shippingSettings.free_nationwide_shipping);
 
     // ── States ────────────────────────────────────────────────────────────────
@@ -203,11 +205,18 @@ export const CartPage = ({
     // Calculate exact multi-vendor shipping identical to CheckoutPage
     const liveShippingResult = useMemo(() => {
         if (!cart.length || !customerAddress) return null;
+        const mergedAdminSettings = {
+            ...(settings?.shipping_settings || {}),
+            shipping_fees: settings?.shipping_fees,
+            default_shipping_fee: settings?.default_shipping_fee,
+            free_shipping_enabled: settings?.free_shipping_enabled || settings?.shipping_settings?.free_shipping_enabled,
+            free_shipping_threshold: settings?.free_shipping_threshold || settings?.shipping_settings?.free_shipping_threshold
+        };
         return ShippingCalculationEngine.calculateMultiVendorShippingInstant({
             cartItems: cart,
             customerAddress,
             deliveryMethodCode: 'standard',
-            adminSettings: settings?.shipping_settings || settings,
+            adminSettings: mergedAdminSettings,
             storesCache: ShippingCalculationEngine.IN_MEMORY_STORES_CACHE
         });
     }, [cart, customerAddress, settings, storesLoaded]);
@@ -218,8 +227,16 @@ export const CartPage = ({
         if (liveShippingResult && typeof liveShippingResult.totalShippingFee === 'number') {
             return liveShippingResult.totalShippingFee;
         }
+        if (customerAddress?.state && settings?.shipping_fees) {
+            const stateMatch = Object.keys(settings.shipping_fees).find(
+                k => k.toLowerCase().trim() === customerAddress.state.toLowerCase().trim()
+            );
+            if (stateMatch && settings.shipping_fees[stateMatch] !== undefined) {
+                return Number(settings.shipping_fees[stateMatch]);
+            }
+        }
         return baseShippingFee;
-    }, [cart.length, isFreeShipping, liveShippingResult, baseShippingFee]);
+    }, [cart.length, isFreeShipping, liveShippingResult, customerAddress, settings, baseShippingFee]);
 
     const discount = useMemo(() => {
         if (!appliedPromo || cart.length === 0) return 0;
