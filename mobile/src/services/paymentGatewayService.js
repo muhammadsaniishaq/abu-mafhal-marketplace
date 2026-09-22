@@ -865,11 +865,14 @@ export const PaymentGatewayService = {
 
     /**
      * Authoritative Payment Verification
+     * Strictly verifies payments against Paystack / Flutterwave APIs.
+     * Never returns false-positive success.
      */
     async verifyPayment({ reference, gateway = 'Paystack', amount, userId, action = 'order_payment' }) {
         if (!reference) return { success: false, error: 'Missing payment reference' };
         const norm = String(gateway).toLowerCase();
 
+        // 1. Paystack Verification
         if (norm.includes('paystack')) {
             try {
                 const res = await this.invokeEdgeFunction('verify-paystack-payment', {
@@ -881,12 +884,100 @@ export const PaymentGatewayService = {
                 if (res.ok && res.data?.success) {
                     return { success: true, data: res.data };
                 }
+                if (res.data?.error || res.error) {
+                    const errTxt = res.data?.error || res.error;
+                    // If backend explicitly rejected payment verification (e.g. transaction not successful)
+                    if (errTxt.toLowerCase().includes('verification failed') || errTxt.toLowerCase().includes('not successful')) {
+                        return { success: false, error: errTxt };
+                    }
+                }
             } catch (e) {
-                console.warn('[PaymentGatewayService] Paystack verify note:', e.message);
+                console.warn('[PaymentGatewayService] Paystack verify edge note:', e.message);
+            }
+
+            // Fallback: Direct Paystack Verify API with dynamic secret key
+            try {
+                const config = await this.getGatewayConfig();
+                const secret = config.paystack_secret_key || config.PAYSTACK_SECRET_KEY || 
+                    (typeof process !== 'undefined' ? (process.env?.EXPO_PUBLIC_PAYSTACK_SECRET_KEY || process.env?.PAYSTACK_SECRET_KEY) : null);
+                if (secret) {
+                    const resp = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${secret.trim()}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    const json = await resp.json();
+                    if (json?.status && json?.data?.status === 'success') {
+                        return { success: true, data: json.data };
+                    } else {
+                        return { success: false, error: json?.message || 'Transaction was not successful on Paystack' };
+                    }
+                }
+            } catch (directErr) {
+                console.warn('[PaymentGatewayService] Direct Paystack verify error:', directErr.message);
             }
         }
 
-        // Database verified record check
+        // 2. Flutterwave Verification
+        if (norm.includes('flutterwave') || norm.includes('flw')) {
+            try {
+                const config = await this.getGatewayConfig();
+                const flwSecret = config.flutterwave_secret_key || config.FLUTTERWAVE_SECRET_KEY ||
+                    (typeof process !== 'undefined' ? (process.env?.EXPO_PUBLIC_FLUTTERWAVE_SECRET_KEY || process.env?.FLUTTERWAVE_SECRET_KEY) : null);
+                if (flwSecret) {
+                    const resp = await fetch(`https://api.flutterwave.com/v3/transactions/verify_by_reference?tx_ref=${encodeURIComponent(reference)}`, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${flwSecret.trim()}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    const json = await resp.json();
+                    if (json?.status === 'success' && json?.data?.status === 'successful') {
+                        return { success: true, data: json.data };
+                    } else {
+                        return { success: false, error: json?.message || 'Transaction was not approved by Flutterwave' };
+                    }
+                }
+            } catch (flwErr) {
+                console.warn('[PaymentGatewayService] Flutterwave verify error:', flwErr.message);
+            }
+        }
+
+        // 3. NOWPayments (Crypto) Verification
+        if (norm.includes('nowpayment') || norm.includes('crypto')) {
+            try {
+                const config = await this.getGatewayConfig();
+                const npKey = config.nowpayments_api_key || config.NOWPAYMENTS_API_KEY ||
+                    (typeof process !== 'undefined' ? (process.env?.EXPO_PUBLIC_NOWPAYMENTS_API_KEY || process.env?.VITE_NOWPAYMENTS_API_KEY) : null);
+                if (npKey) {
+                    const resp = await fetch('https://api.nowpayments.io/v1/payment/?limit=20&page=0&sortBy=created_at&orderBy=desc', {
+                        method: 'GET',
+                        headers: {
+                            'x-api-key': npKey.trim()
+                        }
+                    });
+                    const json = await resp.json();
+                    if (Array.isArray(json?.data)) {
+                        const matched = json.data.find(p => p.order_id === reference || String(p.payment_id) === String(reference));
+                        if (matched) {
+                            const st = (matched.payment_status || '').toLowerCase();
+                            if (st === 'finished' || st === 'confirmed' || st === 'sending') {
+                                return { success: true, data: matched };
+                            } else if (st === 'failed' || st === 'expired' || st === 'rejected') {
+                                return { success: false, error: `Crypto payment ${st}. Please try again.` };
+                            }
+                        }
+                    }
+                }
+            } catch (npErr) {
+                console.warn('[PaymentGatewayService] NOWPayments verify error:', npErr.message);
+            }
+        }
+
+        // 4. Database verified record check (e.g. IPN webhook already marked transaction completed)
         try {
             const { data } = await supabase.from('transactions')
                 .select('*')
@@ -898,7 +989,7 @@ export const PaymentGatewayService = {
             }
         } catch (_) {}
 
-        return { success: true, reference };
+        return { success: false, error: 'Payment transaction could not be verified with payment gateway.' };
     },
 
     /**

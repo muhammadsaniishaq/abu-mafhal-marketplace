@@ -76,21 +76,19 @@ var FlutterwaveCheckout = function FlutterwaveCheckout(props) {
         var url = (ev && ev.url) ? String(ev.url) : '';
         if (!url) return true;
 
-        var isSuccess = (
+        var isCancelled = (
             url.includes('standard.paystack.co/close') ||
+            url.includes('status=cancelled') ||
+            url.includes('status=failed') ||
+            url.includes('/payment/cancel') ||
+            url.includes('cancelled=true')
+        );
+
+        var isSuccess = !isCancelled && (
             url.includes('status=successful') ||
             url.includes('status=success') ||
             url.includes('status=completed') ||
-            url.includes('/payment/verify') ||
-            url.includes('/payment/success') ||
-            /\/flutterwave\.com\/rn-redirect/.test(url) ||
-            url.includes('trxref=')
-        );
-
-        var isCancelled = (
-            url.includes('status=cancelled') ||
-            url.includes('status=failed') ||
-            url.includes('/payment/cancel')
+            url.includes('/payment/success')
         );
 
         if (!isSuccess && !isCancelled) {
@@ -100,7 +98,7 @@ var FlutterwaveCheckout = function FlutterwaveCheckout(props) {
         animateOut().then(function () {
             if (isCancelled) {
                 if (onAbort) onAbort();
-            } else if (onRedirect) {
+            } else if (isSuccess && onRedirect) {
                 var params = getRedirectParams(url);
                 if (!params.status) {
                     params.status = 'successful';

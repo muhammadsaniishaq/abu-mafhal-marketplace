@@ -32,6 +32,73 @@ function getImg(images) {
     return null;
 }
 
+export const getOrderPssMetrics = (item) => {
+    if (!item) return null;
+    const rawPlan = item.installment_plan || item.shipping_details?.installment_plan || item.metadata?.installment_plan;
+    const plan = typeof rawPlan === 'string' ? (() => { try { return JSON.parse(rawPlan); } catch (_) { return null; } })() : rawPlan;
+    const isPss = !!(
+        plan ||
+        (item.payment_method && item.payment_method.toLowerCase().includes('small')) ||
+        (item.payment_method && item.payment_method.toLowerCase().includes('pss')) ||
+        (item.payment_status && item.payment_status.toLowerCase().includes('pss')) ||
+        (item.payment_status && item.payment_status.toLowerCase().includes('installment'))
+    );
+    if (!isPss) return null;
+
+    const total = Number(plan?.total_amount || plan?.totalAmount || item.total_amount || 0);
+    const schedule = Array.isArray(plan?.schedule) ? plan.schedule : [];
+    
+    // Accurate paid amount calculation from verified schedule items
+    const schedulePaidSum = schedule.filter(s => s.status === 'paid').reduce((sum, s) => sum + Number(s.amount || 0), 0);
+    let paid = schedulePaidSum;
+    if (paid <= 0) {
+        if (plan?.paid_amount !== undefined && plan?.paid_amount !== null) paid = Number(plan.paid_amount);
+        else if (plan?.paidAmount !== undefined && plan?.paidAmount !== null) paid = Number(plan.paidAmount);
+        else if (plan?.down_payment !== undefined && plan?.down_payment !== null) paid = Number(plan.down_payment);
+        else if (plan?.downPayment !== undefined && plan?.downPayment !== null) paid = Number(plan.downPayment);
+        else if (plan?.remaining_balance !== undefined && plan?.remaining_balance !== null) paid = Math.max(0, total - Number(plan.remaining_balance));
+        else if (plan?.remainingAmount !== undefined && plan?.remainingAmount !== null) paid = Math.max(0, total - Number(plan.remainingAmount));
+        else if (item.payment_status === 'paid') paid = total;
+        else paid = Math.round(total * 0.25);
+    }
+
+    let remaining = 0;
+    if (plan?.remaining_balance !== undefined && plan?.remaining_balance !== null) {
+        remaining = Number(plan.remaining_balance);
+    } else if (plan?.remainingAmount !== undefined && plan?.remainingAmount !== null) {
+        remaining = Number(plan.remainingAmount);
+    } else {
+        remaining = Math.max(0, total - paid);
+    }
+
+    const count = Number(plan?.installmentsCount || plan?.installments_count || schedule.length || 4);
+    const paidCount = schedule.filter(s => s.status === 'paid').length || Number(plan?.installments_paid || plan?.installmentsPaid || (paid >= total ? count : (paid > 0 ? 1 : 0)));
+    const isFullyPaid = remaining <= 0 || paidCount >= count;
+
+    const nextPending = schedule.find(s => s.status !== 'paid');
+    const now = new Date();
+    const dueDate = nextPending?.due_date ? new Date(nextPending.due_date) : null;
+    const isOverdue = dueDate ? dueDate < now : false;
+    const daysRemaining = dueDate ? Math.ceil((dueDate - now) / (1000 * 60 * 60 * 24)) : null;
+
+    return {
+        total,
+        paid,
+        remaining,
+        count,
+        paidCount,
+        isFullyPaid,
+        schedule,
+        nextPending,
+        nextAmount: nextPending?.amount || (remaining > 0 ? Math.round(remaining / Math.max(1, count - paidCount)) : 0),
+        dueDate,
+        dateStr: dueDate ? dueDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null,
+        isOverdue,
+        daysRemaining,
+        frequency: plan?.frequency || 'Monthly'
+    };
+};
+
 export const OrdersPage = ({ onBack, user, onNavigate }) => {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -150,12 +217,23 @@ export const OrdersPage = ({ onBack, user, onNavigate }) => {
         setRefreshing(false);
     };
 
-    const stats = useMemo(() => ({
-        total: orders.length,
-        active: orders.filter(o => ['pending', 'processing', 'shipped'].includes(o.status)).length,
-        delivered: orders.filter(o => o.status === 'delivered').length,
-        spend: orders.reduce((s, o) => s + (o.total_amount || 0), 0), // sum all orders
-    }), [orders]);
+    const stats = useMemo(() => {
+        let totalSpend = 0;
+        orders.forEach(o => {
+            const m = getOrderPssMetrics(o);
+            if (m) {
+                totalSpend += m.paid;
+            } else if (o.payment_status === 'paid' || o.status === 'delivered' || o.status === 'completed') {
+                totalSpend += Number(o.total_amount || 0);
+            }
+        });
+        return {
+            total: orders.length,
+            active: orders.filter(o => ['pending', 'processing', 'shipped'].includes(o.status)).length,
+            delivered: orders.filter(o => o.status === 'delivered').length,
+            spend: totalSpend,
+        };
+    }, [orders]);
 
     const filtered = useMemo(() => {
         let r = orders;
@@ -616,47 +694,9 @@ const OrderCard = React.memo(({ item, isExpanded, onToggle, onCancel, onConfirm,
     const totalPaid = parseFloat(item.total_amount || (itemsSubtotal + shippingFee - discount) || 0);
     const displaySubtotal = itemsSubtotal > 0 ? itemsSubtotal : Math.max(0, totalPaid - shippingFee + discount);
 
-    // Pay Small Small (BNPL) detection and metrics
-    const rawPlan = item.installment_plan || item.shipping_details?.installment_plan || item.metadata?.installment_plan;
-    const plan = typeof rawPlan === 'string' ? (() => { try { return JSON.parse(rawPlan); } catch (_) { return null; } })() : rawPlan;
-    const isPss = !!(
-        plan ||
-        (item.payment_method && item.payment_method.toLowerCase().includes('small')) ||
-        (item.payment_method && item.payment_method.toLowerCase().includes('pss')) ||
-        (item.payment_status && item.payment_status.toLowerCase().includes('pss')) ||
-        (item.payment_status && item.payment_status.toLowerCase().includes('installment'))
-    );
-
-    const pssMetrics = useMemo(() => {
-        if (!isPss) return null;
-        const total = Number(plan?.totalAmount || item.total_amount || 0);
-        const paid = Number(plan?.paidAmount || (item.payment_status === 'paid' ? total : (item.subtotal || Math.round(total * 0.25))));
-        const remaining = Math.max(0, Number(plan?.remainingAmount ?? (total - paid)));
-        const schedule = Array.isArray(plan?.schedule) ? plan.schedule : [];
-        const nextPending = schedule.find(s => s.status !== 'paid');
-        const now = new Date();
-        const dueDate = nextPending?.due_date ? new Date(nextPending.due_date) : null;
-        const isOverdue = dueDate ? dueDate < now : false;
-        const daysRemaining = dueDate ? Math.ceil((dueDate - now) / (1000 * 60 * 60 * 24)) : null;
-        const count = plan?.installmentsCount || schedule.length || 4;
-        const paidCount = plan?.installmentsPaid || schedule.filter(s => s.status === 'paid').length || (paid >= total ? count : 1);
-        const isFullyPaid = remaining <= 0 || paidCount >= count;
-
-        return {
-            total,
-            paid,
-            remaining,
-            count,
-            paidCount,
-            isFullyPaid,
-            nextAmount: nextPending?.amount || (remaining > 0 ? Math.round(remaining / Math.max(1, count - paidCount)) : 0),
-            dueDate,
-            dateStr: dueDate ? dueDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null,
-            isOverdue,
-            daysRemaining,
-            frequency: plan?.frequency || 'Monthly'
-        };
-    }, [isPss, plan, item]);
+    // Pay Small Small (BNPL) metrics
+    const pssMetrics = useMemo(() => getOrderPssMetrics(item), [item]);
+    const isPss = !!pssMetrics;
 
     return (
         <View style={C.card}>

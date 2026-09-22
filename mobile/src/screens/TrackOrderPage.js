@@ -347,18 +347,41 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder, on
 
     const currentPssMetrics = useMemo(() => {
         if (!isCurrentOrderPss) return null;
-        const total = Number(pssPlan?.totalAmount || currentOrder?.total_amount || 0);
-        const paid = Number(pssPlan?.paidAmount || (currentOrder?.payment_status === 'paid' ? total : (currentOrder?.subtotal || Math.round(total * 0.25))));
-        const remaining = Math.max(0, Number(pssPlan?.remainingAmount ?? (total - paid)));
+        const total = Number(pssPlan?.total_amount || pssPlan?.totalAmount || currentOrder?.total_amount || 0);
         const schedule = Array.isArray(pssPlan?.schedule) ? pssPlan.schedule : [];
+        
+        // Sum of paid schedule items
+        const schedulePaidSum = schedule.filter(s => s.status === 'paid').reduce((sum, s) => sum + Number(s.amount || 0), 0);
+        let paid = schedulePaidSum;
+        if (paid <= 0) {
+            if (pssPlan?.paid_amount !== undefined && pssPlan?.paid_amount !== null) paid = Number(pssPlan.paid_amount);
+            else if (pssPlan?.paidAmount !== undefined && pssPlan?.paidAmount !== null) paid = Number(pssPlan.paidAmount);
+            else if (pssPlan?.down_payment !== undefined && pssPlan?.down_payment !== null) paid = Number(pssPlan.down_payment);
+            else if (pssPlan?.downPayment !== undefined && pssPlan?.downPayment !== null) paid = Number(pssPlan.downPayment);
+            else if (pssPlan?.remaining_balance !== undefined && pssPlan?.remaining_balance !== null) paid = Math.max(0, total - Number(pssPlan.remaining_balance));
+            else if (pssPlan?.remainingAmount !== undefined && pssPlan?.remainingAmount !== null) paid = Math.max(0, total - Number(pssPlan.remainingAmount));
+            else if (currentOrder?.payment_status === 'paid') paid = total;
+            else paid = Math.round(total * 0.25);
+        }
+
+        let remaining = 0;
+        if (pssPlan?.remaining_balance !== undefined && pssPlan?.remaining_balance !== null) {
+            remaining = Number(pssPlan.remaining_balance);
+        } else if (pssPlan?.remainingAmount !== undefined && pssPlan?.remainingAmount !== null) {
+            remaining = Number(pssPlan.remainingAmount);
+        } else {
+            remaining = Math.max(0, total - paid);
+        }
+
+        const count = Number(pssPlan?.installmentsCount || pssPlan?.installments_count || schedule.length || 4);
+        const paidCount = schedule.filter(s => s.status === 'paid').length || Number(pssPlan?.installments_paid || pssPlan?.installmentsPaid || (paid >= total ? count : (paid > 0 ? 1 : 0)));
+        const isFullyPaid = remaining <= 0 || paidCount >= count;
+
         const nextPending = schedule.find(s => s.status !== 'paid');
         const now = new Date();
         const dueDate = nextPending?.due_date ? new Date(nextPending.due_date) : null;
         const isOverdue = dueDate ? dueDate < now : false;
         const daysRemaining = dueDate ? Math.ceil((dueDate - now) / (1000 * 60 * 60 * 24)) : null;
-        const count = pssPlan?.installmentsCount || schedule.length || 4;
-        const paidCount = pssPlan?.installmentsPaid || schedule.filter(s => s.status === 'paid').length || (paid >= total ? count : 1);
-        const isFullyPaid = remaining <= 0 || paidCount >= count;
 
         return {
             total,
@@ -367,6 +390,8 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder, on
             count,
             paidCount,
             isFullyPaid,
+            schedule,
+            nextPending,
             nextAmount: nextPending?.amount || (remaining > 0 ? Math.round(remaining / Math.max(1, count - paidCount)) : 0),
             dueDate,
             dateStr: dueDate ? dueDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null,
@@ -1116,9 +1141,68 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder, on
                                     <Text style={s.breakdownValue}>{currentOrder?.payment_method || 'Verified Checkout'}</Text>
                                 </View>
                                 <View style={[s.breakdownRow, s.breakdownTotalRow]}>
-                                    <Text style={s.breakdownTotalLabel}>Total Amount</Text>
+                                    <Text style={s.breakdownTotalLabel}>
+                                        {isCurrentOrderPss ? 'Total Contract Value' : 'Total Amount'}
+                                    </Text>
                                     <Text style={s.breakdownTotalValue}>₦{totalAmount.toLocaleString()}</Text>
                                 </View>
+
+                                {isCurrentOrderPss && currentPssMetrics && (
+                                    <View style={{
+                                        marginTop: 12,
+                                        paddingTop: 10,
+                                        borderTopWidth: 1,
+                                        borderTopColor: '#E2E8F0',
+                                        backgroundColor: '#F8FAFC',
+                                        padding: 10,
+                                        borderRadius: 10,
+                                        gap: 6
+                                    }}>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                <Ionicons name="checkmark-circle" size={14} color="#16A34A" />
+                                                <Text style={{ fontSize: 12, fontWeight: '700', color: '#166534' }}>
+                                                    Amount Paid So Far:
+                                                </Text>
+                                            </View>
+                                            <Text style={{ fontSize: 13, fontWeight: '900', color: '#16A34A' }}>
+                                                ₦{currentPssMetrics.paid.toLocaleString()}
+                                            </Text>
+                                        </View>
+
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                <Ionicons name="time-outline" size={14} color="#D97706" />
+                                                <Text style={{ fontSize: 12, fontWeight: '700', color: '#92400E' }}>
+                                                    Remaining Installment Debt:
+                                                </Text>
+                                            </View>
+                                            <Text style={{ fontSize: 13, fontWeight: '900', color: '#D97706' }}>
+                                                ₦{currentPssMetrics.remaining.toLocaleString()}
+                                            </Text>
+                                        </View>
+
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
+                                            <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600' }}>
+                                                Installments Status:
+                                            </Text>
+                                            <Text style={{ fontSize: 11, color: '#0F172A', fontWeight: '800' }}>
+                                                {currentPssMetrics.paidCount} of {currentPssMetrics.count} Paid ({currentPssMetrics.isFullyPaid ? 'Settled' : 'Active Plan'})
+                                            </Text>
+                                        </View>
+
+                                        {!currentPssMetrics.isFullyPaid && currentPssMetrics.nextPending && (
+                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
+                                                <Text style={{ fontSize: 11, color: currentPssMetrics.isOverdue ? '#DC2626' : '#64748B', fontWeight: '700' }}>
+                                                    Next Due ({currentPssMetrics.dateStr || 'Upcoming'}):
+                                                </Text>
+                                                <Text style={{ fontSize: 11, color: currentPssMetrics.isOverdue ? '#DC2626' : '#0F172A', fontWeight: '800' }}>
+                                                    ₦{currentPssMetrics.nextAmount.toLocaleString()}
+                                                </Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                )}
                             </View>
                         </View>
 

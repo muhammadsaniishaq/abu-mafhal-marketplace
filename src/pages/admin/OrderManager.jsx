@@ -82,7 +82,26 @@ export default function OrderManager() {
             case 'cancelled': return 'bg-red-100 text-red-800';
             default: return 'bg-gray-100 text-gray-800';
         }
-    }
+    };
+
+    const getFinances = (ord) => {
+        const rawPlan = ord.installment_plan || ord.shipping_details?.installment_plan || ord.metadata?.installment_plan;
+        const plan = typeof rawPlan === 'string' ? (() => { try { return JSON.parse(rawPlan); } catch (_) { return null; } })() : rawPlan;
+        const isPss = !!(
+            plan ||
+            (ord.payment_method && ord.payment_method.toLowerCase().includes('small')) ||
+            (ord.payment_method && ord.payment_method.toLowerCase().includes('pss')) ||
+            (ord.payment_status && ord.payment_status.toLowerCase().includes('pss')) ||
+            (ord.payment_status && ord.payment_status.toLowerCase().includes('installment'))
+        );
+        if (!isPss) return { isPss: false, total: ord.total_amount };
+        const total = Number(plan?.total_amount || plan?.totalAmount || ord.total_amount || 0);
+        const schedule = Array.isArray(plan?.schedule) ? plan.schedule : [];
+        const paidSum = schedule.filter(s => s.status === 'paid').reduce((acc, s) => acc + Number(s.amount || 0), 0);
+        const paid = paidSum > 0 ? paidSum : (Number(plan?.paid_amount || plan?.paidAmount || plan?.down_payment || plan?.downPayment || (ord.payment_status === 'paid' ? total : Math.round(total * 0.25))));
+        const remaining = Math.max(0, total - paid);
+        return { isPss: true, total, paid, remaining, count: plan?.installmentsCount || schedule.length || 4, paidCount: schedule.filter(s => s.status === 'paid').length || 1 };
+    };
 
     return (
         <AdminShell>
@@ -125,7 +144,22 @@ export default function OrderManager() {
                                                 {order.status}
                                             </span>
                                         </div>
-                                        <h3 className="font-semibold text-gray-900">{formatCurrency(order.total_amount)}</h3>
+                                        {(() => {
+                                            const fin = getFinances(order);
+                                            if (fin.isPss) {
+                                                return (
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-base font-black text-emerald-600">Paid: {formatCurrency(fin.paid)}</span>
+                                                            <span className="text-xs font-bold text-amber-600">Due: {formatCurrency(fin.remaining)}</span>
+                                                            <span className="text-[10px] uppercase font-black bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">0% BNPL</span>
+                                                        </div>
+                                                        <p className="text-xs text-gray-500 font-medium">Contract Total: {formatCurrency(fin.total)}</p>
+                                                    </div>
+                                                );
+                                            }
+                                            return <h3 className="font-semibold text-gray-900">{formatCurrency(order.total_amount)}</h3>;
+                                        })()}
                                         <div className="text-sm text-gray-500 mt-1">
                                             <div className="flex items-center gap-1">
                                                 <User className="w-3 h-3" />

@@ -79,6 +79,34 @@ const BuyerOrders = () => {
     return icons[status] || '📋';
   };
 
+  const parseOrderFinances = (ord) => {
+    if (!ord) return { isPss: false, total: 0, paid: 0, remaining: 0, paidCount: 0, count: 1, isFullyPaid: false };
+    const rawPlan = ord.installment_plan || ord.shipping_details?.installment_plan || ord.metadata?.installment_plan;
+    const plan = typeof rawPlan === 'string' ? (() => { try { return JSON.parse(rawPlan); } catch (_) { return null; } })() : rawPlan;
+    const isPss = !!(
+      plan ||
+      (ord.payment_method && ord.payment_method.toLowerCase().includes('small')) ||
+      (ord.payment_method && ord.payment_method.toLowerCase().includes('pss')) ||
+      (ord.payment_status && ord.payment_status.toLowerCase().includes('pss')) ||
+      (ord.payment_status && ord.payment_status.toLowerCase().includes('installment'))
+    );
+    const total = Number(plan?.total_amount || plan?.totalAmount || ord.total || ord.total_amount || 0);
+    if (!isPss) return { isPss: false, total, paid: total, remaining: 0 };
+    const schedule = Array.isArray(plan?.schedule) ? plan.schedule : [];
+    const paidSum = schedule.filter(s => s.status === 'paid').reduce((acc, s) => acc + Number(s.amount || 0), 0);
+    const paid = paidSum > 0 ? paidSum : Number(plan?.paid_amount || plan?.paidAmount || plan?.down_payment || plan?.downPayment || Math.round(total * 0.25));
+    const remaining = Math.max(0, total - paid);
+    return {
+      isPss: true,
+      total,
+      paid,
+      remaining,
+      count: plan?.installmentsCount || schedule.length || 4,
+      paidCount: schedule.filter(s => s.status === 'paid').length || 1,
+      isFullyPaid: remaining <= 0
+    };
+  };
+
   const filteredOrders = orders
     .filter(order => {
       if (filterStatus !== 'all' && order.status !== filterStatus) return false;
@@ -167,10 +195,30 @@ const BuyerOrders = () => {
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Total</p>
-                    <p className="font-bold text-lg text-gray-900 dark:text-white">
-                      ₦{order.total?.toLocaleString()}
-                    </p>
+                    {(() => {
+                      const fin = parseOrderFinances(order);
+                      if (fin.isPss) {
+                        return (
+                          <div>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">Payment (0% BNPL)</p>
+                            <p className="font-bold text-base text-emerald-600 dark:text-emerald-400">
+                              Paid: ₦{fin.paid?.toLocaleString()}
+                            </p>
+                            <p className="text-xs font-semibold text-amber-600">
+                              Due: ₦{fin.remaining?.toLocaleString()} (Total: ₦{fin.total?.toLocaleString()})
+                            </p>
+                          </div>
+                        );
+                      }
+                      return (
+                        <>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">Total</p>
+                          <p className="font-bold text-lg text-gray-900 dark:text-white">
+                            ₦{(order.total || order.total_amount)?.toLocaleString()}
+                          </p>
+                        </>
+                      );
+                    })()}
                   </div>
                   <div>
                     <span className={`px-4 py-2 rounded-full text-sm font-medium border inline-flex items-center gap-2 ${getStatusColor(order.status)}`}>

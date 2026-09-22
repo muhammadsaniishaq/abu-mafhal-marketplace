@@ -499,11 +499,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
         return Math.max(0, initialTotal + shippingFee + taxAmount - discountAmount);
     }, [initialTotal, shippingFee, taxAmount, discountAmount]);
 
-    // Pay Small Small (BNPL) 5% Surcharge
+    // Pay Small Small (BNPL) 0% Interest (Zero Markup)
     const pssSurcharge = useMemo(() => {
-        if (paymentMethod !== 'pay_small_small') return 0;
-        return Math.round(baseTotal * 0.05);
-    }, [paymentMethod, baseTotal]);
+        return 0; // True 0% interest BNPL - No surcharge or markup
+    }, []);
 
     const finalTotal = useMemo(() => {
         return baseTotal + pssSurcharge;
@@ -1039,22 +1038,35 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             const isPss = paymentMethod === 'pay_small_small' || !!installmentPlan;
             let effectivePlan = installmentPlan;
             if (!effectivePlan && isPss && pssPlanDetails) {
+                const isPaidStatus = (paidAmount > 0 || paymentStatus === 'paid' || paymentStatus === 'pss_active');
+                const initialSchedule = (pssPlanDetails.schedule || []).map(s => {
+                    if (s.installment_number === 1 && isPaidStatus) {
+                        return { ...s, status: 'paid', paid_at: new Date().toISOString(), label: 'Deposit (Down Payment)' };
+                    }
+                    return s;
+                });
+                const depositPaid = isPaidStatus ? (paidAmount || pssPlanDetails.downPayment) : 0;
                 effectivePlan = {
                     id: targetRef,
                     orderNumber: (targetRef || 'ORD').slice(0, 8).toUpperCase(),
                     createdAt: new Date().toISOString(),
                     totalAmount: effectiveTotal,
+                    total_amount: effectiveTotal,
                     baseTotal: pssPlanDetails.baseTotal,
-                    surcharge: pssPlanDetails.surcharge,
-                    paidAmount: paidAmount || pssPlanDetails.downPayment || 0,
-                    remainingAmount: pssPlanDetails.remainingBalance,
+                    surcharge: 0,
+                    down_payment: pssPlanDetails.downPayment,
+                    downPayment: pssPlanDetails.downPayment,
+                    paidAmount: depositPaid,
+                    paid_amount: depositPaid,
+                    remainingAmount: Math.max(0, effectiveTotal - depositPaid),
+                    remaining_balance: Math.max(0, effectiveTotal - depositPaid),
                     planType: `${pssPlanDetails.durationMonths}_months_${pssPlanDetails.frequency}`,
                     durationMonths: pssPlanDetails.durationMonths,
                     frequency: pssPlanDetails.frequency,
                     installmentsCount: pssPlanDetails.installmentsCount,
-                    installmentsPaid: paidAmount > 0 ? 1 : 0,
+                    installmentsPaid: depositPaid > 0 ? 1 : 0,
                     isCompleted: false,
-                    schedule: pssPlanDetails.schedule,
+                    schedule: initialSchedule,
                     items: effectiveCart
                 };
             }
@@ -1202,6 +1214,36 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             const activeFinalTotal = Number(pendingSession?.finalTotal || finalTotal || 0);
             const paidAmount = isPss ? (Number(activePssPlan?.downPayment) || Number(pendingSession?.paidAmount) || 0) : activeFinalTotal;
 
+            // Strict Online Gateway Verification Safeguard
+            const isOnlineGateway = activeGateway && (
+                activeGateway.toLowerCase().includes('paystack') || 
+                activeGateway.toLowerCase().includes('flutterwave') || 
+                activeGateway.toLowerCase().includes('flw')
+            );
+            if (isOnlineGateway && !data.verified) {
+                try {
+                    const { data: { user: authUser } } = await supabase.auth.getUser();
+                    const verifyUid = authUser?.id || profile?.id;
+                    const verifyRes = await PaymentGatewayService.verifyPayment({
+                        reference: targetRef,
+                        gateway: activeGateway,
+                        amount: paidAmount,
+                        userId: verifyUid,
+                        action: isPss ? 'pss_down_payment' : 'order_payment'
+                    });
+                    if (!verifyRes.success) {
+                        showToast('⚠️ Payment could not be verified by gateway');
+                        showAlert(
+                            'Payment Not Confirmed',
+                            verifyRes.error || 'Your payment was not confirmed by the gateway. If you have been debited, please contact customer support with your reference: ' + targetRef
+                        );
+                        return;
+                    }
+                } catch (verifyErr) {
+                    console.warn('[CheckoutPage] Gateway verification error:', verifyErr.message);
+                }
+            }
+
             let supabaseOrderId = null;
             let pssPlanItem = null;
 
@@ -1320,23 +1362,55 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
     // Detect return from external payment gateways (Paystack / Flutterwave) on Web
     useEffect(() => {
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
-            try {
-                const params = new URLSearchParams(window.location.search);
-                const ref = params.get('reference') || params.get('trxref') || params.get('tx_ref');
-                const status = (params.get('status') || '').toLowerCase();
+            const checkWebReturn = async () => {
+                try {
+                    const params = new URLSearchParams(window.location.search);
+                    const ref = params.get('reference') || params.get('trxref') || params.get('tx_ref');
+                    const status = (params.get('status') || '').toLowerCase();
 
-                if (ref) {
-                    window.history.replaceState({}, document.title, window.location.pathname);
-                    if (status === 'cancelled' || status === 'failed') {
-                        showToast('⚠️ Payment was cancelled. You can try again.');
-                        showAlert('Payment Cancelled', 'The payment transaction was cancelled. Please try again.');
-                        return;
+                    if (ref) {
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                        if (status === 'cancelled' || status === 'failed') {
+                            showToast('⚠️ Payment was cancelled. You can try again.');
+                            showAlert('Payment Cancelled', 'The payment transaction was cancelled. Please try again.');
+                            return;
+                        }
+
+                        // Inspect pending session to verify against actual gateway
+                        let gateway = 'Paystack';
+                        let expectedAmount = 0;
+                        try {
+                            const rawPending = window.localStorage.getItem('@abumafhal_pending_checkout_session');
+                            if (rawPending) {
+                                const parsed = JSON.parse(rawPending);
+                                gateway = parsed?.paymentMethod === 'pay_small_small' ? (parsed?.pssDownPaymentMethod || 'Paystack') : (parsed?.paymentMethod || 'Paystack');
+                                expectedAmount = parsed?.paidAmount || parsed?.finalTotal || 0;
+                            }
+                        } catch (_) {}
+
+                        showToast('Verifying payment with gateway...');
+                        const { data: { user: currentUser } } = await supabase.auth.getUser();
+                        const verifyRes = await PaymentGatewayService.verifyPayment({
+                            reference: ref,
+                            gateway,
+                            amount: expectedAmount,
+                            userId: currentUser?.id
+                        });
+
+                        if (verifyRes.success) {
+                            await handlePaymentComplete({ status: 'successful', reference: ref, verified: true });
+                            showToast('✓ Payment completed successfully!');
+                        } else {
+                            showToast('⚠️ Payment was not approved or completed');
+                            showAlert(
+                                'Payment Incomplete',
+                                verifyRes.error || 'Your payment was not approved. If funds were deducted, please contact support with reference: ' + ref
+                            );
+                        }
                     }
-
-                    handlePaymentComplete({ status: 'successful', reference: ref });
-                    showToast('✓ Payment completed successfully!');
-                }
-            } catch (_) {}
+                } catch (_) {}
+            };
+            checkWebReturn();
         }
     }, [handlePaymentComplete, showAlert, showToast]);
 
@@ -3549,14 +3623,14 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                 </View>
                             )}
 
-                            {/* Pay Small Small 5% Financing Surcharge */}
+                            {/* Pay Small Small 0% Financing */}
                             {paymentMethod === 'pay_small_small' && (
                                 <View style={s.invoiceRow}>
                                     <View>
-                                        <Text style={[s.invoiceLabel, { color: '#B45309' }]}>Pay Small Small Service Fee (+5%)</Text>
-                                        <Text style={s.invoiceSubLabel}>BNPL financing for {pssPlanDetails.durationMonths} Mo ({pssPlanDetails.frequency}) plan</Text>
+                                        <Text style={[s.invoiceLabel, { color: EMERALD, fontWeight: '700' }]}>Pay Small Small (0% Interest)</Text>
+                                        <Text style={s.invoiceSubLabel}>BNPL financing for {pssPlanDetails.durationMonths} Mo ({pssPlanDetails.frequency}) plan • ₦0 markup</Text>
                                     </View>
-                                    <Text style={[s.invoiceValue, { color: '#B45309', fontWeight: '800' }]}>+{formatCurrency(pssSurcharge)}</Text>
+                                    <Text style={[s.invoiceValue, { color: EMERALD, fontWeight: '800' }]}>₦0 (0%)</Text>
                                 </View>
                             )}
 
@@ -3663,7 +3737,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                             <Text style={{ fontSize: 9.5, color: '#EA580C', fontWeight: '800' }} numberOfLines={1}>₦0 upfront today</Text>
                         )}
                         {paymentMethod === 'pay_small_small' && (
-                            <Text style={{ fontSize: 9.5, color: '#B45309', fontWeight: '700' }} numberOfLines={1}>Total: {formatCurrency(finalTotal)} (+5%)</Text>
+                            <Text style={{ fontSize: 9.5, color: GOLD, fontWeight: '700' }} numberOfLines={1}>Total Value: {formatCurrency(finalTotal)} (0% Interest)</Text>
                         )}
                     </View>
 

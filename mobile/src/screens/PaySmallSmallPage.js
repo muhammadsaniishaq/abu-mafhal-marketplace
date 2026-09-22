@@ -21,8 +21,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { useAppSettings } from '../context/AppSettingsContext';
 import { paySmallSmallService } from '../services/paySmallSmallService';
+import { PaymentGatewayService } from '../services/paymentGatewayService';
+import FlutterwaveCheckout from '../lib/flutterwave/FlutterwaveCheckout';
 
 const { width } = Dimensions.get('window');
+const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=200&auto=format&fit=crop';
 
 // Luxury Abu Mafhal Palette
 const NAVY = '#0E1A2E';
@@ -55,8 +58,15 @@ export const PaySmallSmallPage = ({ navigation, route, onBack, user: initialUser
     // Payment Modal State
     const [selectedPlan, setSelectedPlan] = useState(null);
     const [paymentModalVisible, setPaymentModalVisible] = useState(false);
-    const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('wallet'); // 'wallet' | 'card'
+    const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('wallet'); // 'wallet' | 'paystack' | 'flutterwave' | 'nowpayments'
     const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
+
+    // External Gateway Modal State (WebView on Mobile)
+    const [gatewayModalVisible, setGatewayModalVisible] = useState(false);
+    const [gatewayCheckoutLink, setGatewayCheckoutLink] = useState('');
+    const [activeGatewayTxRef, setActiveGatewayTxRef] = useState('');
+    const [activeGatewayName, setActiveGatewayName] = useState('Paystack');
+    const [isVerifyingGatewayPayment, setIsVerifyingGatewayPayment] = useState(false);
 
     const storageKey = useMemo(() => {
         return user?.id ? `@abumafhal_pss_plans_${user.id}` : '@abumafhal_pss_plans_guest';
@@ -109,10 +119,10 @@ export const PaySmallSmallPage = ({ navigation, route, onBack, user: initialUser
                 .maybeSingle();
             if (walletData) setWalletBalance(Number(walletData.balance || 0));
 
-            // 3. Fetch BNPL Orders from Supabase using comprehensive ilike pattern
+            // 3. Fetch BNPL Orders from Supabase joining order_items and products
             const { data: orders, error } = await supabase
                 .from('orders')
-                .select('*')
+                .select('*, order_items(*, product:products(*))')
                 .eq('user_id', activeUserId)
                 .or('payment_method.ilike.%pay_small_small%,payment_method.ilike.%pss%,payment_status.ilike.%pss%,payment_status.ilike.%installment%')
                 .order('created_at', { ascending: false });
@@ -148,9 +158,49 @@ export const PaySmallSmallPage = ({ navigation, route, onBack, user: initialUser
                     const remainingAmount = Math.max(0, total - paidAmount);
                     const isCompleted = remainingAmount <= 0 || paidCount === schedule.length;
 
+                    // Parse rich products from order_items with joined products
+                    let parsedItems = [];
+                    if (Array.isArray(order.order_items) && order.order_items.length > 0) {
+                        parsedItems = order.order_items.map(oi => {
+                            const p = oi.product || {};
+                            const prodImg = (Array.isArray(p.images) && p.images[0]) || p.image_url || oi.image || FALLBACK_IMAGE;
+                            return {
+                                id: oi.product_id || oi.id,
+                                name: p.name || oi.name || 'Financed Product',
+                                image: prodImg,
+                                price: Number(oi.price || p.price || 0),
+                                quantity: Number(oi.quantity || 1),
+                                brand: p.brand || '',
+                                category: p.category || '',
+                                condition: p.condition || 'Brand New',
+                                variant: oi.variant || oi.selected_variant || null
+                            };
+                        });
+                    } else if (Array.isArray(order.items) && order.items.length > 0) {
+                        parsedItems = order.items.map(it => ({
+                            id: it.id || it.product_id,
+                            name: it.name || it.title || 'Financed Product',
+                            image: (Array.isArray(it.images) && it.images[0]) || it.image || FALLBACK_IMAGE,
+                            price: Number(it.price || 0),
+                            quantity: Number(it.quantity || 1),
+                            brand: it.brand || '',
+                            category: it.category || '',
+                            condition: it.condition || 'Brand New',
+                            variant: it.variant || it.selected_variant || null
+                        }));
+                    } else if (Array.isArray(rawPlan?.items) && rawPlan.items.length > 0) {
+                        parsedItems = rawPlan.items.map(it => ({
+                            ...it,
+                            image: (Array.isArray(it.images) && it.images[0]) || it.image || FALLBACK_IMAGE
+                        }));
+                    }
+
+                    const shipping = (order.shipping_details && typeof order.shipping_details === 'object') ? order.shipping_details : {};
+
                     return {
                         id: order.id,
                         orderNumber: (order.tracking_number || order.payment_reference || order.id).slice(0, 8).toUpperCase(),
+                        trackingNumber: order.tracking_number || (order.id ? order.id.slice(0, 10).toUpperCase() : ''),
                         createdAt: order.created_at,
                         totalAmount: total,
                         paidAmount,
@@ -160,7 +210,13 @@ export const PaySmallSmallPage = ({ navigation, route, onBack, user: initialUser
                         installmentsPaid: paidCount,
                         isCompleted,
                         schedule,
-                        items: Array.isArray(order.items) ? order.items : (Array.isArray(rawPlan?.items) ? rawPlan.items : [])
+                        items: parsedItems,
+                        shippingDetails: shipping,
+                        deliveryAddress: shipping.address || shipping.shipping_address || '',
+                        deliveryCity: shipping.city || shipping.lga || '',
+                        deliveryState: shipping.state || 'Yobe',
+                        recipientName: shipping.fullName || shipping.name || '',
+                        recipientPhone: shipping.phone || shipping.phoneNumber || ''
                     };
                 });
             }
@@ -277,117 +333,310 @@ export const PaySmallSmallPage = ({ navigation, route, onBack, user: initialUser
         }
     }, [route?.params?.orderId, route?.params?.planId, plans, loading]);
 
+    // Finalize Installment Payment upon verified gateway payment or wallet debit
+    const finalizeInstallmentPayment = useCallback(async ({ targetPlan, installmentToPay, methodUsed, paymentRef }) => {
+        const instAmount = Number(installmentToPay.amount);
+        const activeUserId = user?.id;
+
+        const updatedSchedule = targetPlan.schedule.map(s => {
+            if (s.installment_number === installmentToPay.installment_number) {
+                return {
+                    ...s,
+                    status: 'paid',
+                    paid_at: new Date().toISOString()
+                };
+            }
+            return s;
+        });
+
+        const newPaidAmount = updatedSchedule.reduce((sum, s) => s.status === 'paid' ? sum + Number(s.amount || 0) : sum, 0);
+        const newRemaining = Math.max(0, targetPlan.totalAmount - newPaidAmount);
+        const isCompleted = newRemaining <= 0;
+
+        const updatedPlan = {
+            ...targetPlan,
+            schedule: updatedSchedule,
+            paidAmount: newPaidAmount,
+            remainingAmount: newRemaining,
+            installmentsPaid: targetPlan.installmentsPaid + 1,
+            isCompleted
+        };
+
+        // 1. Persist to Supabase orders table
+        if (targetPlan.id) {
+            try {
+                const planUpdateObj = {
+                    plan_type: targetPlan.planType,
+                    total_amount: targetPlan.totalAmount,
+                    paid_amount: newPaidAmount,
+                    paidAmount: newPaidAmount,
+                    remaining_balance: newRemaining,
+                    remainingAmount: newRemaining,
+                    installments_paid: updatedPlan.installmentsPaid,
+                    installmentsPaid: updatedPlan.installmentsPaid,
+                    schedule: updatedSchedule
+                };
+
+                const { data: existingOrd } = await supabase
+                    .from('orders')
+                    .select('shipping_details')
+                    .eq('id', targetPlan.id)
+                    .maybeSingle();
+
+                const currentShipping = (existingOrd && existingOrd.shipping_details && typeof existingOrd.shipping_details === 'object')
+                    ? existingOrd.shipping_details
+                    : {};
+
+                await supabase.from('orders').update({
+                    installment_plan: planUpdateObj,
+                    shipping_details: {
+                        ...currentShipping,
+                        installment_plan: {
+                            ...targetPlan,
+                            remainingAmount: newRemaining,
+                            installmentsPaid: updatedPlan.installmentsPaid,
+                            schedule: updatedSchedule,
+                            isCompleted
+                        }
+                    },
+                    payment_status: isCompleted ? 'pss_completed' : 'pss_active'
+                }).eq('id', targetPlan.id);
+            } catch (dbErr) {
+                console.warn('[PaySmallSmallPage] Order update notice:', dbErr.message);
+            }
+        }
+
+        // 2. Record Completed Transaction in Supabase
+        if (activeUserId) {
+            try {
+                await PaymentGatewayService.recordTransaction({
+                    userId: activeUserId,
+                    amount: instAmount,
+                    reference: paymentRef || PaymentGatewayService.generateRef('PSS'),
+                    gateway: methodUsed,
+                    type: 'pss_installment_payment',
+                    description: `Pay Small Small Installment #${installmentToPay.installment_number} of ${formatCurrency(instAmount)} via ${methodUsed} (Order #${targetPlan.orderNumber})`
+                });
+            } catch (_) {}
+        }
+
+        // 3. Update local plans state and storage cache
+        setPlans(prev => {
+            const next = prev.map(p => (p.id === targetPlan.id || p.orderNumber === targetPlan.orderNumber) ? updatedPlan : p);
+            AsyncStorage.setItem(storageKey, JSON.stringify(next)).catch(() => {});
+            return next;
+        });
+
+        setPaymentModalVisible(false);
+        setGatewayModalVisible(false);
+        setGatewayCheckoutLink('');
+        setSelectedPlan(null);
+
+        Alert.alert(
+            'Installment Paid Successfully! 🎉',
+            `Your installment #${installmentToPay.installment_number} of ${formatCurrency(instAmount)} via ${methodUsed} has been confirmed.\n\nRemaining Balance: ${formatCurrency(newRemaining)}`,
+            [{ text: 'OK', onPress: () => loadData() }]
+        );
+    }, [user?.id, storageKey, loadData]);
+
+    // Detect return from external payment gateway (Paystack / Flutterwave / NOWPayments) on Web
+    useEffect(() => {
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            const checkPssWebReturn = async () => {
+                try {
+                    const params = new URLSearchParams(window.location.search);
+                    const ref = params.get('reference') || params.get('trxref') || params.get('tx_ref');
+                    const status = (params.get('status') || '').toLowerCase();
+
+                    if (ref && (ref.startsWith('PSS-') || ref.includes('INST') || ref.includes('PSS'))) {
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                        if (status === 'cancelled' || status === 'failed') {
+                            Alert.alert('Payment Cancelled', 'Your installment payment transaction was cancelled. No funds were deducted.');
+                            return;
+                        }
+
+                        let pendingInst = null;
+                        try {
+                            const raw = window.localStorage.getItem('@abumafhal_pending_pss_installment');
+                            if (raw) pendingInst = JSON.parse(raw);
+                        } catch (_) {}
+
+                        if (pendingInst && pendingInst.targetPlan && pendingInst.installmentToPay) {
+                            setIsVerifyingGatewayPayment(true);
+                            const verifyRes = await PaymentGatewayService.verifyPayment({
+                                reference: ref,
+                                gateway: pendingInst.gatewayTitle || 'Paystack',
+                                amount: pendingInst.instAmount,
+                                userId: user?.id,
+                                action: 'pss_installment_payment'
+                            });
+                            setIsVerifyingGatewayPayment(false);
+
+                            if (verifyRes.success) {
+                                try {
+                                    window.localStorage.removeItem('@abumafhal_pending_pss_installment');
+                                } catch (_) {}
+                                await finalizeInstallmentPayment({
+                                    targetPlan: pendingInst.targetPlan,
+                                    installmentToPay: pendingInst.installmentToPay,
+                                    methodUsed: pendingInst.gatewayTitle || 'Paystack',
+                                    paymentRef: ref
+                                });
+                            } else {
+                                Alert.alert('Payment Incomplete', verifyRes.error || 'Your installment payment was not confirmed by the gateway.');
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[PaySmallSmallPage] Web return check note:', e.message);
+                }
+            };
+            checkPssWebReturn();
+        }
+    }, [user?.id, finalizeInstallmentPayment]);
+
     const handleConfirmPayment = async () => {
         if (!selectedPlan || !selectedPlan.targetInstallment) return;
 
         const installmentToPay = selectedPlan.targetInstallment;
         const instAmount = Number(installmentToPay.amount);
+        const activeUserId = user?.id;
 
-        // Wallet Balance Check
-        if (selectedPaymentMethod === 'wallet' && walletBalance < instAmount) {
-            Alert.alert(
-                'Insufficient Wallet Balance',
-                `Your wallet balance is ${formatCurrency(walletBalance)}, which is less than the required installment of ${formatCurrency(instAmount)}. Please top up your wallet or pay with card.`,
-                [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Select Card Payment', onPress: () => setSelectedPaymentMethod('card') }
-                ]
-            );
+        // Option 1: Abu Mafhal Wallet
+        if (selectedPaymentMethod === 'wallet') {
+            if (walletBalance < instAmount) {
+                Alert.alert(
+                    'Insufficient Wallet Balance',
+                    `Your wallet balance is ${formatCurrency(walletBalance)}, which is less than the required installment of ${formatCurrency(instAmount)}. Please choose Paystack, Flutterwave, or NOWPayments (Crypto).`,
+                    [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Pay with Paystack', onPress: () => setSelectedPaymentMethod('paystack') },
+                        { text: 'Pay with Crypto', onPress: () => setSelectedPaymentMethod('nowpayments') }
+                    ]
+                );
+                return;
+            }
+
+            setIsSubmittingPayment(true);
+            try {
+                const newWalletBal = Math.max(0, walletBalance - instAmount);
+                if (activeUserId) {
+                    try {
+                        await supabase.from('profiles').update({ wallet_balance: newWalletBal }).eq('id', activeUserId);
+                        await supabase.from('wallets').update({ balance: newWalletBal }).eq('user_id', activeUserId);
+                    } catch (_) {}
+                    setWalletBalance(newWalletBal);
+                }
+
+                await finalizeInstallmentPayment({
+                    targetPlan: selectedPlan,
+                    installmentToPay,
+                    methodUsed: 'Abu Mafhal Wallet',
+                    paymentRef: PaymentGatewayService.generateRef('PSS-WLT')
+                });
+            } catch (err) {
+                console.error('[PaySmallSmallPage] Wallet payment error:', err);
+                Alert.alert('Payment Error', 'Unable to debit wallet for installment payment. Please try again.');
+            } finally {
+                setIsSubmittingPayment(false);
+            }
             return;
         }
 
+        // Option 2, 3, 4: Real Online Gateways (Paystack, Flutterwave, NOWPayments Crypto)
         setIsSubmittingPayment(true);
         try {
-            // Update local schedule
-            const updatedSchedule = selectedPlan.schedule.map(s => {
-                if (s.installment_number === installmentToPay.installment_number) {
-                    return {
-                        ...s,
-                        status: 'paid',
-                        paid_at: new Date().toISOString()
-                    };
+            const prefix = selectedPaymentMethod === 'flutterwave' ? 'PSS-FLW' : (selectedPaymentMethod === 'nowpayments' ? 'PSS-CRYPTO' : 'PSS-PSTK');
+            const instRef = PaymentGatewayService.generateRef(prefix);
+            const gatewayName = selectedPaymentMethod === 'flutterwave' ? 'Flutterwave' : (selectedPaymentMethod === 'nowpayments' ? 'NOWPayments' : 'Paystack');
+
+            setActiveGatewayName(gatewayName);
+            setActiveGatewayTxRef(instRef);
+
+            const initRes = await PaymentGatewayService.initiate({
+                gateway: gatewayName,
+                amount: instAmount,
+                email: user?.email || user?.user_metadata?.email || 'customer@abumafhal.com',
+                phone: selectedPlan.recipientPhone || user?.phone || '',
+                name: selectedPlan.recipientName || user?.user_metadata?.full_name || user?.full_name || 'Customer',
+                reference: instRef,
+                metadata: {
+                    is_pss_installment: true,
+                    order_id: selectedPlan.id,
+                    order_number: selectedPlan.orderNumber,
+                    installment_number: installmentToPay.installment_number,
+                    amount: instAmount
                 }
-                return s;
             });
 
-            const newPaidAmount = updatedSchedule.reduce((sum, s) => s.status === 'paid' ? sum + Number(s.amount || 0) : sum, 0);
-            const newRemaining = Math.max(0, selectedPlan.totalAmount - newPaidAmount);
-            const isCompleted = newRemaining <= 0;
+            // Modern Web Pop-up if supported (Paystack Inline on Web)
+            if (initRes?.type === 'inline_web' && typeof initRes.openInline === 'function') {
+                setIsSubmittingPayment(false);
+                setPaymentModalVisible(false);
+                initRes.openInline(
+                    async (callbackData) => {
+                        setIsVerifyingGatewayPayment(true);
+                        const vRes = await PaymentGatewayService.verifyPayment({
+                            reference: callbackData?.reference || instRef,
+                            gateway: gatewayName,
+                            amount: instAmount,
+                            userId: activeUserId,
+                            action: 'pss_installment_payment'
+                        });
+                        setIsVerifyingGatewayPayment(false);
 
-            const updatedPlan = {
-                ...selectedPlan,
-                schedule: updatedSchedule,
-                paidAmount: newPaidAmount,
-                remainingAmount: newRemaining,
-                installmentsPaid: selectedPlan.installmentsPaid + 1,
-                isCompleted
-            };
-
-            // 1. If paying via wallet, debit wallet
-            if (selectedPaymentMethod === 'wallet' && user?.id) {
-                const newWalletBal = Math.max(0, walletBalance - instAmount);
-                try {
-                    await supabase.from('profiles').update({ wallet_balance: newWalletBal }).eq('id', user.id);
-                    await supabase.from('wallets').update({ balance: newWalletBal }).eq('user_id', user.id);
-                } catch (_) {}
-                setWalletBalance(newWalletBal);
+                        if (vRes.success) {
+                            await finalizeInstallmentPayment({
+                                targetPlan: selectedPlan,
+                                installmentToPay,
+                                methodUsed: gatewayName,
+                                paymentRef: callbackData?.reference || instRef
+                            });
+                        } else {
+                            Alert.alert('Payment Incomplete', vRes.error || 'Your installment payment was not confirmed by the gateway.');
+                        }
+                    },
+                    () => {
+                        Alert.alert('Payment Cancelled', 'Installment payment window closed without completing payment.');
+                    }
+                );
+                return;
             }
 
-            // 2. Persist update to Supabase orders table (gracefully handle if table absent)
-            if (selectedPlan.id) {
-                try {
-                    const planUpdateObj = {
-                        plan_type: selectedPlan.planType,
-                        total_amount: selectedPlan.totalAmount,
-                        remaining_balance: newRemaining,
-                        installments_paid: updatedPlan.installmentsPaid,
-                        schedule: updatedSchedule
-                    };
-
-                    const { data: existingOrd } = await supabase
-                        .from('orders')
-                        .select('shipping_details')
-                        .eq('id', selectedPlan.id)
-                        .maybeSingle();
-
-                    const currentShipping = (existingOrd && existingOrd.shipping_details && typeof existingOrd.shipping_details === 'object')
-                        ? existingOrd.shipping_details
-                        : {};
-
-                    await supabase.from('orders').update({
-                        installment_plan: planUpdateObj,
-                        shipping_details: {
-                            ...currentShipping,
-                            installment_plan: {
-                                ...selectedPlan,
-                                remainingAmount: newRemaining,
-                                installmentsPaid: updatedPlan.installmentsPaid,
-                                schedule: updatedSchedule,
-                                isCompleted
-                            }
-                        },
-                        payment_status: isCompleted ? 'paid' : 'pss_active'
-                    }).eq('id', selectedPlan.id);
-                } catch (_) {}
+            if (!initRes?.success || !initRes?.checkoutUrl) {
+                throw new Error(`Could not initialize ${gatewayName} installment payment gateway.`);
             }
 
-            // 3. Update local state
-            const updatedPlans = plans.map(p => p.id === selectedPlan.id ? updatedPlan : p);
-            setPlans(updatedPlans);
-            await AsyncStorage.setItem(storageKey, JSON.stringify(updatedPlans));
+            // Web: Redirect to official secure hosted checkout
+            const isHttp = typeof initRes.checkoutUrl === 'string' && (initRes.checkoutUrl.startsWith('http://') || initRes.checkoutUrl.startsWith('https://'));
+            if (Platform.OS === 'web' && typeof window !== 'undefined' && isHttp) {
+                const pendingInstallmentPayload = {
+                    targetPlan: selectedPlan,
+                    installmentToPay,
+                    gatewayTitle: gatewayName,
+                    instRef,
+                    instAmount,
+                    timestamp: Date.now()
+                };
+                try {
+                    window.localStorage.setItem('@abumafhal_pending_pss_installment', JSON.stringify(pendingInstallmentPayload));
+                    await AsyncStorage.setItem('@abumafhal_pending_pss_installment', JSON.stringify(pendingInstallmentPayload));
+                } catch (_) {}
+                setIsSubmittingPayment(false);
+                window.location.href = initRes.checkoutUrl;
+                return;
+            }
 
-            setPaymentModalVisible(false);
-            setSelectedPlan(null);
-
-            Alert.alert(
-                'Installment Received! 🎉',
-                `Successfully processed ${formatCurrency(instAmount)} for Order #${selectedPlan.orderNumber}. Your BNPL ledger has been updated.`
-            );
-        } catch (err) {
-            console.log('Error submitting installment payment:', err);
-            Alert.alert('Payment Error', 'Unable to complete installment payment. Please try again.');
-        } finally {
+            // Mobile: Launch in-app secure WebView modal
             setIsSubmittingPayment(false);
+            setPaymentModalVisible(false);
+            setGatewayCheckoutLink(initRes.checkoutUrl);
+            setGatewayModalVisible(true);
+
+        } catch (error) {
+            console.error('[PaySmallSmallPage] Gateway initiation error:', error);
+            setIsSubmittingPayment(false);
+            Alert.alert('Payment Notice', error?.message || 'Payment initiation failed. Please try another payment method.');
         }
     };
 
@@ -653,6 +902,68 @@ export const PaySmallSmallPage = ({ navigation, route, onBack, user: initialUser
                                             </View>
                                         </View>
 
+                                        {/* ── PRODUCTS IN THIS PLAN ── */}
+                                        {Array.isArray(plan.items) && plan.items.length > 0 && (
+                                            <View style={s.planProductsWrap}>
+                                                <View style={s.planProductsHeader}>
+                                                    <Ionicons name="bag-handle" size={13} color={GOLD} />
+                                                    <Text style={s.planProductsHeaderTxt}>
+                                                        {plan.items.length === 1 ? 'PRODUCT IN THIS PLAN' : `PRODUCTS IN THIS PLAN (${plan.items.length})`}
+                                                    </Text>
+                                                </View>
+
+                                                {plan.items.map((item, itemIdx) => (
+                                                    <View key={item.id || itemIdx} style={s.productItemCard}>
+                                                        <Image
+                                                            source={{ uri: item.image || FALLBACK_IMAGE }}
+                                                            style={s.productItemThumb}
+                                                            resizeMode="cover"
+                                                        />
+                                                        <View style={s.productItemInfo}>
+                                                            <Text style={s.productItemName} numberOfLines={2}>
+                                                                {item.name}
+                                                            </Text>
+
+                                                            <View style={s.productItemMetaRow}>
+                                                                {item.brand ? (
+                                                                    <View style={s.brandBadge}>
+                                                                        <Text style={s.brandBadgeTxt}>{item.brand}</Text>
+                                                                    </View>
+                                                                ) : null}
+                                                                <View style={s.conditionBadge}>
+                                                                    <Text style={s.conditionBadgeTxt}>{item.condition || 'Brand New'}</Text>
+                                                                </View>
+                                                                {item.variant ? (
+                                                                    <Text style={s.variantBadgeTxt}>
+                                                                        • {typeof item.variant === 'string' ? item.variant : item.variant.title || item.variant.name}
+                                                                    </Text>
+                                                                ) : null}
+                                                            </View>
+
+                                                            <View style={s.productItemPriceRow}>
+                                                                <Text style={s.productItemPrice}>
+                                                                    {formatCurrency(item.price)}
+                                                                    <Text style={s.productItemQty}> × {item.quantity || 1}</Text>
+                                                                </Text>
+                                                                <Text style={s.productItemSubtotal}>
+                                                                    {formatCurrency(Number(item.price || 0) * Number(item.quantity || 1))}
+                                                                </Text>
+                                                            </View>
+                                                        </View>
+                                                    </View>
+                                                ))}
+
+                                                {(plan.deliveryAddress || plan.deliveryCity) && (
+                                                    <View style={s.planDeliveryBox}>
+                                                        <Ionicons name="location-outline" size={12} color={SLATE_MUTED} />
+                                                        <Text style={s.planDeliveryTxt} numberOfLines={1}>
+                                                            Ship to: <Text style={{ fontWeight: '600', color: NAVY }}>{plan.recipientName || 'Customer'}</Text> • {[plan.deliveryAddress, plan.deliveryCity, plan.deliveryState].filter(Boolean).join(', ')}
+                                                        </Text>
+                                                    </View>
+                                                )}
+                                            </View>
+                                        )}
+
                                         {/* Installment Milestone Timeline */}
                                         <View style={s.milestoneList}>
                                             {plan.schedule.map((inst, idx) => {
@@ -775,6 +1086,35 @@ export const PaySmallSmallPage = ({ navigation, route, onBack, user: initialUser
                                         </View>
                                         <Ionicons name="shield-checkmark" size={24} color={EMERALD} />
                                     </View>
+
+                                    {/* Products in this Settled Plan */}
+                                    {Array.isArray(plan.items) && plan.items.length > 0 && (
+                                        <View style={[s.planProductsWrap, { marginTop: 10 }]}>
+                                            {plan.items.map((item, itemIdx) => (
+                                                <View key={item.id || itemIdx} style={s.productItemCard}>
+                                                    <Image
+                                                        source={{ uri: item.image || FALLBACK_IMAGE }}
+                                                        style={s.productItemThumb}
+                                                        resizeMode="cover"
+                                                    />
+                                                    <View style={s.productItemInfo}>
+                                                        <Text style={s.productItemName} numberOfLines={2}>
+                                                            {item.name}
+                                                        </Text>
+                                                        <View style={s.productItemPriceRow}>
+                                                            <Text style={s.productItemPrice}>
+                                                                {formatCurrency(item.price)}
+                                                                <Text style={s.productItemQty}> × {item.quantity || 1}</Text>
+                                                            </Text>
+                                                            <Text style={s.productItemSubtotal}>
+                                                                {formatCurrency(Number(item.price || 0) * Number(item.quantity || 1))}
+                                                            </Text>
+                                                        </View>
+                                                    </View>
+                                                </View>
+                                            ))}
+                                        </View>
+                                    )}
                                 </View>
                             ))
                         )}
@@ -871,7 +1211,7 @@ export const PaySmallSmallPage = ({ navigation, route, onBack, user: initialUser
                             </Text>
                         </View>
 
-                        <Text style={s.methodSelectTitle}>Select Payment Source</Text>
+                        <Text style={s.methodSelectTitle}>Select Payment Method</Text>
 
                         {/* Option 1: Wallet */}
                         <TouchableOpacity
@@ -889,6 +1229,7 @@ export const PaySmallSmallPage = ({ navigation, route, onBack, user: initialUser
                                 <Text style={s.methodChoiceName}>Abu Mafhal Wallet</Text>
                                 <Text style={s.methodChoiceSub}>
                                     Available: {formatCurrency(walletBalance)}
+                                    {walletBalance < Number(selectedPlan?.targetInstallment?.amount || 0) ? ' (Insufficient)' : ' (Instant Debit)'}
                                 </Text>
                             </View>
                             <View style={[
@@ -899,27 +1240,75 @@ export const PaySmallSmallPage = ({ navigation, route, onBack, user: initialUser
                             </View>
                         </TouchableOpacity>
 
-                        {/* Option 2: Card / Paystack */}
+                        {/* Option 2: Paystack (Cards, Bank Transfer, USSD) */}
                         <TouchableOpacity
                             style={[
                                 s.methodChoice,
-                                selectedPaymentMethod === 'card' && s.methodChoiceActive
+                                selectedPaymentMethod === 'paystack' && s.methodChoiceActive
                             ]}
-                            onPress={() => setSelectedPaymentMethod('card')}
+                            onPress={() => setSelectedPaymentMethod('paystack')}
                             activeOpacity={0.8}
                         >
-                            <View style={s.methodIconCircle}>
-                                <Ionicons name="card-outline" size={18} color={NAVY} />
+                            <View style={[s.methodIconCircle, { backgroundColor: '#ECFDF5' }]}>
+                                <Ionicons name="card-outline" size={18} color={EMERALD} />
                             </View>
                             <View style={{ flex: 1, marginLeft: 10 }}>
-                                <Text style={s.methodChoiceName}>Debit Card / Instant Transfer</Text>
-                                <Text style={s.methodChoiceSub}>Paystack Secure Checkout</Text>
+                                <Text style={s.methodChoiceName}>Paystack (Cards, Bank & USSD)</Text>
+                                <Text style={s.methodChoiceSub}>ATM Debit Card, Direct Transfer, USSD</Text>
                             </View>
                             <View style={[
                                 s.methodRadio,
-                                selectedPaymentMethod === 'card' && s.methodRadioActive
+                                selectedPaymentMethod === 'paystack' && s.methodRadioActive
                             ]}>
-                                {selectedPaymentMethod === 'card' && <View style={s.methodRadioDot} />}
+                                {selectedPaymentMethod === 'paystack' && <View style={s.methodRadioDot} />}
+                            </View>
+                        </TouchableOpacity>
+
+                        {/* Option 3: Flutterwave (Cards & Mobile Money) */}
+                        <TouchableOpacity
+                            style={[
+                                s.methodChoice,
+                                selectedPaymentMethod === 'flutterwave' && s.methodChoiceActive
+                            ]}
+                            onPress={() => setSelectedPaymentMethod('flutterwave')}
+                            activeOpacity={0.8}
+                        >
+                            <View style={[s.methodIconCircle, { backgroundColor: '#FFFBEB' }]}>
+                                <Ionicons name="flash-outline" size={18} color="#D97706" />
+                            </View>
+                            <View style={{ flex: 1, marginLeft: 10 }}>
+                                <Text style={s.methodChoiceName}>Flutterwave (Cards & Mobile Money)</Text>
+                                <Text style={s.methodChoiceSub}>Barter, Cards & Direct Bank Transfer</Text>
+                            </View>
+                            <View style={[
+                                s.methodRadio,
+                                selectedPaymentMethod === 'flutterwave' && s.methodRadioActive
+                            ]}>
+                                {selectedPaymentMethod === 'flutterwave' && <View style={s.methodRadioDot} />}
+                            </View>
+                        </TouchableOpacity>
+
+                        {/* Option 4: NOWPayments (Crypto - Bitcoin, USDT, ETH) */}
+                        <TouchableOpacity
+                            style={[
+                                s.methodChoice,
+                                selectedPaymentMethod === 'nowpayments' && s.methodChoiceActive
+                            ]}
+                            onPress={() => setSelectedPaymentMethod('nowpayments')}
+                            activeOpacity={0.8}
+                        >
+                            <View style={[s.methodIconCircle, { backgroundColor: '#F5F3FF' }]}>
+                                <Ionicons name="logo-bitcoin" size={18} color="#7C3AED" />
+                            </View>
+                            <View style={{ flex: 1, marginLeft: 10 }}>
+                                <Text style={s.methodChoiceName}>NOWPayments (Crypto)</Text>
+                                <Text style={s.methodChoiceSub}>USDT (TRC20/BEP20), BTC, ETH & 150+ Coins</Text>
+                            </View>
+                            <View style={[
+                                s.methodRadio,
+                                selectedPaymentMethod === 'nowpayments' && s.methodRadioActive
+                            ]}>
+                                {selectedPaymentMethod === 'nowpayments' && <View style={s.methodRadioDot} />}
                             </View>
                         </TouchableOpacity>
 
@@ -936,11 +1325,63 @@ export const PaySmallSmallPage = ({ navigation, route, onBack, user: initialUser
                                 <>
                                     <Ionicons name="lock-closed" size={15} color={WHITE} />
                                     <Text style={s.modalConfirmBtnTxt}>
-                                        Confirm {formatCurrency(selectedPlan?.targetInstallment?.amount)}
+                                        Pay {formatCurrency(selectedPlan?.targetInstallment?.amount)} Now
                                     </Text>
                                 </>
                             )}
                         </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ── EXTERNAL GATEWAY MODAL (MOBILE WEBVIEW) ── */}
+            <FlutterwaveCheckout
+                visible={gatewayModalVisible}
+                link={gatewayCheckoutLink}
+                onAbort={() => {
+                    setGatewayModalVisible(false);
+                    setGatewayCheckoutLink('');
+                }}
+                onRedirect={async (data) => {
+                    setGatewayModalVisible(false);
+                    setGatewayCheckoutLink('');
+                    if (selectedPlan && selectedPlan.targetInstallment) {
+                        setIsVerifyingGatewayPayment(true);
+                        const verifyRes = await PaymentGatewayService.verifyPayment({
+                            reference: data?.reference || data?.tx_ref || activeGatewayTxRef,
+                            gateway: activeGatewayName,
+                            amount: Number(selectedPlan.targetInstallment.amount),
+                            userId: user?.id,
+                            action: 'pss_installment_payment'
+                        });
+                        setIsVerifyingGatewayPayment(false);
+
+                        if (verifyRes.success) {
+                            await finalizeInstallmentPayment({
+                                targetPlan: selectedPlan,
+                                installmentToPay: selectedPlan.targetInstallment,
+                                methodUsed: activeGatewayName,
+                                paymentRef: data?.reference || data?.tx_ref || activeGatewayTxRef
+                            });
+                        } else {
+                            Alert.alert(
+                                'Payment Incomplete',
+                                verifyRes.error || 'Your installment payment could not be confirmed by the payment gateway.'
+                            );
+                        }
+                    }
+                }}
+            />
+
+            {/* ── VERIFYING OVERLAY ── */}
+            <Modal transparent visible={isVerifyingGatewayPayment} animationType="fade">
+                <View style={s.modalBackdrop}>
+                    <View style={[s.modalSheet, { alignItems: 'center', paddingVertical: 32 }]}>
+                        <ActivityIndicator size="large" color={GOLD} />
+                        <Text style={[s.modalTitle, { marginTop: 14 }]}>Verifying Payment...</Text>
+                        <Text style={[s.modalSub, { textAlign: 'center', marginTop: 4 }]}>
+                            Confirming installment with {activeGatewayName}. Please wait...
+                        </Text>
                     </View>
                 </View>
             </Modal>
@@ -1482,6 +1923,124 @@ const s = StyleSheet.create({
         fontSize: 9.5,
         fontWeight: '700',
         color: EMERALD
+    },
+    // Product Items in Plan
+    planProductsWrap: {
+        backgroundColor: SLATE_LIGHT,
+        borderRadius: 10,
+        padding: 10,
+        marginVertical: 10,
+        borderWidth: 1,
+        borderColor: '#EDF2F7'
+    },
+    planProductsHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: 8
+    },
+    planProductsHeaderTxt: {
+        fontSize: 10.5,
+        fontWeight: '700',
+        color: SLATE_MUTED,
+        letterSpacing: 0.5
+    },
+    productItemCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: WHITE,
+        borderRadius: 8,
+        padding: 8,
+        marginBottom: 6,
+        borderWidth: 1,
+        borderColor: BORDER
+    },
+    productItemThumb: {
+        width: 52,
+        height: 52,
+        borderRadius: 6,
+        backgroundColor: SLATE_LIGHT,
+        marginRight: 10
+    },
+    productItemInfo: {
+        flex: 1
+    },
+    productItemName: {
+        fontSize: 12.5,
+        fontWeight: '700',
+        color: NAVY,
+        lineHeight: 16
+    },
+    productItemMetaRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 5,
+        marginTop: 3,
+        marginBottom: 3
+    },
+    brandBadge: {
+        backgroundColor: '#EEF2F6',
+        paddingHorizontal: 5,
+        paddingVertical: 1.5,
+        borderRadius: 4
+    },
+    brandBadgeTxt: {
+        fontSize: 9.5,
+        fontWeight: '600',
+        color: SLATE_DARK
+    },
+    conditionBadge: {
+        backgroundColor: '#ECFDF5',
+        paddingHorizontal: 5,
+        paddingVertical: 1.5,
+        borderRadius: 4
+    },
+    conditionBadgeTxt: {
+        fontSize: 9.5,
+        fontWeight: '600',
+        color: EMERALD
+    },
+    variantBadgeTxt: {
+        fontSize: 10,
+        color: SLATE_MUTED
+    },
+    productItemPriceRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 2
+    },
+    productItemPrice: {
+        fontSize: 11.5,
+        fontWeight: '600',
+        color: SLATE_MUTED
+    },
+    productItemQty: {
+        fontSize: 11,
+        color: SLATE_MUTED
+    },
+    productItemSubtotal: {
+        fontSize: 12.5,
+        fontWeight: '700',
+        color: NAVY
+    },
+    planDeliveryBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        backgroundColor: WHITE,
+        borderRadius: 6,
+        paddingHorizontal: 8,
+        paddingVertical: 6,
+        marginTop: 4,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    planDeliveryTxt: {
+        fontSize: 10.5,
+        color: SLATE_MUTED,
+        flex: 1
     },
     // Info Tab
     infoCard: {

@@ -616,6 +616,73 @@ export const AdminOrders = ({ navigation, onBack }) => {
     };
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
+    const parseOrderFinances = (ord) => {
+        if (!ord) return { isPss: false, total: 0, paid: 0, remaining: 0, paidCount: 0, count: 1, isFullyPaid: false, schedule: [] };
+        const rawPlan = ord.installment_plan || ord.shipping_details?.installment_plan || ord.metadata?.installment_plan;
+        const plan = typeof rawPlan === 'string' ? (() => { try { return JSON.parse(rawPlan); } catch (_) { return null; } })() : rawPlan;
+        const isPss = !!(
+            plan ||
+            (ord.payment_method && ord.payment_method.toLowerCase().includes('small')) ||
+            (ord.payment_method && ord.payment_method.toLowerCase().includes('pss')) ||
+            (ord.payment_status && ord.payment_status.toLowerCase().includes('pss')) ||
+            (ord.payment_status && ord.payment_status.toLowerCase().includes('installment'))
+        );
+
+        const total = Number(plan?.total_amount || plan?.totalAmount || ord.total_amount || 0);
+        if (!isPss) {
+            const isPaid = ord.payment_status === 'paid' || ord.status === 'delivered' || ord.status === 'completed';
+            return {
+                isPss: false,
+                total,
+                paid: isPaid ? total : 0,
+                remaining: isPaid ? 0 : total,
+                paidCount: isPaid ? 1 : 0,
+                count: 1,
+                isFullyPaid: isPaid,
+                schedule: []
+            };
+        }
+
+        const schedule = Array.isArray(plan?.schedule) ? plan.schedule : [];
+        const schedulePaidSum = schedule.filter(s => s.status === 'paid').reduce((sum, s) => sum + Number(s.amount || 0), 0);
+        let paid = schedulePaidSum;
+        if (paid <= 0) {
+            if (plan?.paid_amount !== undefined && plan?.paid_amount !== null) paid = Number(plan.paid_amount);
+            else if (plan?.paidAmount !== undefined && plan?.paidAmount !== null) paid = Number(plan.paidAmount);
+            else if (plan?.down_payment !== undefined && plan?.down_payment !== null) paid = Number(plan.down_payment);
+            else if (plan?.downPayment !== undefined && plan?.downPayment !== null) paid = Number(plan.downPayment);
+            else if (plan?.remaining_balance !== undefined && plan?.remaining_balance !== null) paid = Math.max(0, total - Number(plan.remaining_balance));
+            else if (plan?.remainingAmount !== undefined && plan?.remainingAmount !== null) paid = Math.max(0, total - Number(plan.remainingAmount));
+            else if (ord.payment_status === 'paid') paid = total;
+            else paid = Math.round(total * 0.25);
+        }
+
+        let remaining = 0;
+        if (plan?.remaining_balance !== undefined && plan?.remaining_balance !== null) {
+            remaining = Number(plan.remaining_balance);
+        } else if (plan?.remainingAmount !== undefined && plan?.remainingAmount !== null) {
+            remaining = Number(plan.remainingAmount);
+        } else {
+            remaining = Math.max(0, total - paid);
+        }
+
+        const count = Number(plan?.installmentsCount || plan?.installments_count || schedule.length || 4);
+        const paidCount = schedule.filter(s => s.status === 'paid').length || Number(plan?.installments_paid || plan?.installmentsPaid || (paid >= total ? count : (paid > 0 ? 1 : 0)));
+        const isFullyPaid = remaining <= 0 || paidCount >= count;
+
+        return {
+            isPss: true,
+            plan,
+            total,
+            paid,
+            remaining,
+            count,
+            paidCount,
+            isFullyPaid,
+            schedule
+        };
+    };
+
     const getLevel = (xp) => {
         if (!xp) return 'Bronze';
         if (xp < 100) return 'Bronze';
@@ -631,7 +698,10 @@ export const AdminOrders = ({ navigation, onBack }) => {
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
         const filterDate = dateFilter === 'today' ? startOfToday : dateFilter === 'week' ? startOfWeek : dateFilter === 'month' ? startOfMonth : null;
         const filterable = filterDate ? orders.filter(o => new Date(o.created_at) >= filterDate) : orders;
-        const totalRevenue = filterable.reduce((s, o) => s + (o.payment_status === 'paid' ? (o.total_amount || 0) : 0), 0);
+        const totalRevenue = filterable.reduce((s, o) => {
+            const fin = parseOrderFinances(o);
+            return s + (fin.paid || 0);
+        }, 0);
         const pendingCount = orders.filter(o => o.status === 'pending' || o.status === 'processing').length;
         const deliveredCount = orders.filter(o => o.status === 'delivered').length;
         return { totalRevenue, pendingCount, deliveredCount, total: orders.length };
@@ -669,6 +739,7 @@ export const AdminOrders = ({ navigation, onBack }) => {
         const status = item.status?.toLowerCase() || 'pending';
         const colorSet = STATUS_COLORS[status] || { bg: '#F1F5F9', text: '#64748B' };
         const isSelected = selectedIds.has(item.id);
+        const fin = parseOrderFinances(item);
         return (
             <TouchableOpacity
                 style={[S.orderCard, isSelected && { borderColor: '#3B82F6', borderWidth: 2 }]}
@@ -689,12 +760,38 @@ export const AdminOrders = ({ navigation, onBack }) => {
                 <Text style={{ fontWeight: '600', color: '#0F172A', marginBottom: 2 }}>
                     {item.user?.full_name || item.user?.email || 'Unknown'}
                 </Text>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-                    <Text style={{ fontSize: 12, color: '#64748B' }}>
-                        {item.items_count || '?'} item{item.items_count !== 1 ? 's' : ''} • {item.payment_method || 'N/A'}
-                    </Text>
-                    <Text style={{ fontWeight: '700', color: '#0F172A' }}>₦{(item.total_amount || 0).toLocaleString()}</Text>
-                </View>
+
+                {fin.isPss ? (
+                    <View style={{ marginTop: 6, backgroundColor: '#FFFBEB', padding: 8, borderRadius: 10, borderWidth: 1, borderColor: '#FDE68A' }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Ionicons name="flash" size={11} color="#D97706" />
+                                <Text style={{ fontSize: 10, fontWeight: '800', color: '#B45309' }}>
+                                    0% INTEREST BNPL ({fin.paidCount}/{fin.count} PAID)
+                                </Text>
+                            </View>
+                            <Text style={{ fontSize: 12, fontWeight: '900', color: '#16A34A' }}>
+                                Paid: ₦{fin.paid.toLocaleString()}
+                            </Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 3 }}>
+                            <Text style={{ fontSize: 10.5, color: '#92400E' }}>
+                                Total: ₦{fin.total.toLocaleString()} • {item.payment_method}
+                            </Text>
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: fin.remaining > 0 ? '#DC2626' : '#16A34A' }}>
+                                {fin.remaining > 0 ? `Due: ₦${fin.remaining.toLocaleString()}` : 'Settled'}
+                            </Text>
+                        </View>
+                    </View>
+                ) : (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+                        <Text style={{ fontSize: 12, color: '#64748B' }}>
+                            {item.items_count || '?'} item{item.items_count !== 1 ? 's' : ''} • {item.payment_method || 'N/A'}
+                        </Text>
+                        <Text style={{ fontWeight: '700', color: '#0F172A' }}>₦{(item.total_amount || 0).toLocaleString()}</Text>
+                    </View>
+                )}
+
                 <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
                     {new Date(item.created_at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                 </Text>
@@ -741,6 +838,7 @@ export const AdminOrders = ({ navigation, onBack }) => {
     };
 
     const order = selectedOrder;
+    const selectedFin = useMemo(() => parseOrderFinances(order), [order]);
     const statusColor = order ? (STATUS_COLORS[order.status?.toLowerCase()] || { bg: '#F1F5F9', text: '#64748B' }) : {};
 
     return (
@@ -949,7 +1047,14 @@ export const AdminOrders = ({ navigation, onBack }) => {
 
                                     {/* ─ Payment Details ─ */}
                                     <View style={S.card}>
-                                        <Text style={S.cardTitle}>💳 Payment Details</Text>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                            <Text style={S.cardTitle}>💳 Payment Details</Text>
+                                            {selectedFin.isPss && (
+                                                <View style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1, borderColor: '#FDE68A' }}>
+                                                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#B45309' }}>0% INTEREST BNPL</Text>
+                                                </View>
+                                            )}
+                                        </View>
                                         <View style={S.detailRow}>
                                             <Text style={S.detailLabel}>Method</Text>
                                             <Text style={S.detailValue}>{order.payment_method || 'N/A'}</Text>
@@ -981,9 +1086,60 @@ export const AdminOrders = ({ navigation, onBack }) => {
                                             </View>
                                         )}
                                         <View style={[S.detailRow, { backgroundColor: '#0F172A', borderRadius: 10, padding: 12, marginTop: 8 }]}>
-                                            <Text style={{ color: '#94A3B8', fontWeight: '700' }}>TOTAL</Text>
+                                            <Text style={{ color: '#94A3B8', fontWeight: '700' }}>
+                                                {selectedFin.isPss ? 'TOTAL CONTRACT VALUE' : 'TOTAL'}
+                                            </Text>
                                             <Text style={{ color: 'white', fontWeight: '900', fontSize: 18 }}>₦{(order.total_amount || 0).toLocaleString()}</Text>
                                         </View>
+
+                                        {selectedFin.isPss && (
+                                            <View style={{ marginTop: 12, backgroundColor: '#F8FAFC', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#E2E8F0', gap: 6 }}>
+                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#166534' }}>Paid So Far (Collected):</Text>
+                                                    <Text style={{ fontSize: 14, fontWeight: '900', color: '#16A34A' }}>₦{selectedFin.paid.toLocaleString()}</Text>
+                                                </View>
+                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#92400E' }}>Outstanding Balance (Due):</Text>
+                                                    <Text style={{ fontSize: 14, fontWeight: '900', color: selectedFin.remaining > 0 ? '#D97706' : '#16A34A' }}>
+                                                        ₦{selectedFin.remaining.toLocaleString()}
+                                                    </Text>
+                                                </View>
+                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <Text style={{ fontSize: 11, color: '#64748B' }}>Installments Status:</Text>
+                                                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#0F172A' }}>
+                                                        {selectedFin.paidCount} of {selectedFin.count} Paid ({selectedFin.isFullyPaid ? 'Settled' : 'Active'})
+                                                    </Text>
+                                                </View>
+
+                                                {selectedFin.schedule && selectedFin.schedule.length > 0 && (
+                                                    <View style={{ marginTop: 8, borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 8 }}>
+                                                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#64748B', textTransform: 'uppercase', marginBottom: 6 }}>
+                                                            Installment Schedule
+                                                        </Text>
+                                                        {selectedFin.schedule.map((inst, idx) => (
+                                                            <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 }}>
+                                                                <View>
+                                                                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#0F172A' }}>
+                                                                        {inst.label || `Installment #${inst.installment_number || idx + 1}`}
+                                                                    </Text>
+                                                                    <Text style={{ fontSize: 9.5, color: '#94A3B8' }}>
+                                                                        {inst.due_date ? new Date(inst.due_date).toLocaleDateString() : 'N/A'}
+                                                                    </Text>
+                                                                </View>
+                                                                <View style={{ alignItems: 'flex-end' }}>
+                                                                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>
+                                                                        ₦{(inst.amount || 0).toLocaleString()}
+                                                                    </Text>
+                                                                    <Text style={{ fontSize: 9.5, fontWeight: '800', color: inst.status === 'paid' ? '#16A34A' : '#D97706' }}>
+                                                                        {inst.status === 'paid' ? 'PAID' : 'PENDING'}
+                                                                    </Text>
+                                                                </View>
+                                                            </View>
+                                                        ))}
+                                                    </View>
+                                                )}
+                                            </View>
+                                        )}
                                     </View>
 
                                     {/* ─ Order Items ─ */}
