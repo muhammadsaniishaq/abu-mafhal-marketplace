@@ -70,9 +70,16 @@ export const CartPage = ({
     const [promoApplying, setPromoApplying]     = useState(false);
     const [activeCoupons, setActiveCoupons]     = useState([]);
 
-    // Live Customer Address
-    const [customerAddress, setCustomerAddress] = useState(null);
-    const [loadingAddress, setLoadingAddress]   = useState(true);
+    // Live Customer Address (Guaranteed default to Bade/Gashua, Yobe with live GPS distance)
+    const [customerAddress, setCustomerAddress] = useState({
+        title: 'Delivery Destination',
+        address: 'Bade / Gashua, Yobe State',
+        city: 'Bade',
+        lga: 'Bade',
+        state: 'Yobe',
+        is_default: true
+    });
+    const [loadingAddress, setLoadingAddress]   = useState(false);
 
     // Floating Toast Notification
     const [toastMessage, setToastMessage] = useState('');
@@ -149,8 +156,19 @@ export const CartPage = ({
                         phone: prof.phone || prof.phone_number || '',
                         is_default: true
                     });
+                    return;
                 }
             }
+
+            // 4. Fallback to default destination (Bade / Gashua, Yobe)
+            setCustomerAddress(prev => prev || {
+                title: 'Delivery Destination',
+                address: 'Bade / Gashua, Yobe State',
+                city: 'Bade',
+                lga: 'Bade',
+                state: 'Yobe',
+                is_default: true
+            });
         } catch (e) {
             console.log('Error loading customer address in cart:', e);
         } finally {
@@ -204,7 +222,14 @@ export const CartPage = ({
 
     // Calculate exact multi-vendor shipping identical to CheckoutPage
     const liveShippingResult = useMemo(() => {
-        if (!cart.length || !customerAddress) return null;
+        if (!cart.length) return null;
+        const targetAddr = customerAddress || {
+            title: 'Delivery Destination',
+            address: 'Bade / Gashua, Yobe State',
+            city: 'Bade',
+            lga: 'Bade',
+            state: 'Yobe'
+        };
         const mergedAdminSettings = {
             ...(settings?.shipping_settings || {}),
             default_shipping_fee: settings?.default_shipping_fee,
@@ -213,7 +238,7 @@ export const CartPage = ({
         };
         return ShippingCalculationEngine.calculateMultiVendorShippingInstant({
             cartItems: cart,
-            customerAddress,
+            customerAddress: targetAddr,
             deliveryMethodCode: 'standard',
             adminSettings: mergedAdminSettings,
             storesCache: ShippingCalculationEngine.IN_MEMORY_STORES_CACHE
@@ -721,44 +746,45 @@ export const CartPage = ({
 
                             <View style={{ flex: 1 }}>
                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <Text style={s.addressCardTitle}>Delivery Destination</Text>
+                                    <Text style={s.addressCardTitle}>Wurin Isarwa (Destination)</Text>
                                     <TouchableOpacity
-                                        onPress={() => navigation.navigate('AddressPage')}
+                                        onPress={() => navigation.navigate('CheckoutPage')}
                                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                                     >
-                                        <Text style={s.addressChangeTxt}>Change</Text>
+                                        <Text style={s.addressChangeTxt}>Zabi Garin (LGA)</Text>
                                     </TouchableOpacity>
                                 </View>
 
-                                {loadingAddress ? (
-                                    <ActivityIndicator size="small" color={NAVY} style={{ alignSelf: 'flex-start', marginTop: 6 }} />
-                                ) : customerAddress ? (
+                                {customerAddress ? (
                                     <>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
-                                            <Text style={s.addressRecipient}>{customerAddress.title || 'Home'}</Text>
-                                            {customerAddress.city ? (
-                                                <View style={s.lgaPill}>
-                                                    <Text style={s.lgaPillTxt}>{customerAddress.city} LGA</Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
+                                            <Text style={s.addressRecipient}>{customerAddress.title || 'Wurin Isarwa'}</Text>
+                                            <View style={s.lgaPill}>
+                                                <Text style={s.lgaPillTxt}>{customerAddress.lga || customerAddress.city || 'Bade'} LGA</Text>
+                                            </View>
+                                            {liveShippingResult?.totalDistanceKm ? (
+                                                <View style={[s.lgaPill, { backgroundColor: '#FEF3C7' }]}>
+                                                    <Text style={[s.lgaPillTxt, { color: '#B45309' }]}>~{liveShippingResult.totalDistanceKm} km</Text>
                                                 </View>
                                             ) : null}
                                         </View>
                                         <Text style={s.addressText} numberOfLines={2}>
-                                            {customerAddress.address}
+                                            {customerAddress.address || `${customerAddress.lga || 'Bade'} LGA, ${customerAddress.state || 'Yobe'} State`}
                                         </Text>
                                         <Text style={s.addressRegion}>
                                             {customerAddress.state ? `${customerAddress.state} State` : 'Nigeria'}
-                                            {customerAddress.phone ? ` • ${customerAddress.phone}` : ''}
+                                            {liveShippingResult?.ruleSummary ? ` • ${liveShippingResult.ruleSummary}` : ''}
                                         </Text>
                                     </>
                                 ) : (
                                     <View style={{ marginTop: 4 }}>
-                                        <Text style={s.noAddressTxt}>No saved shipping address selected yet.</Text>
+                                        <Text style={s.noAddressTxt}>Babu adireshin da aka zaba tukuna.</Text>
                                         <TouchableOpacity 
-                                            onPress={() => navigation.navigate('AddressPage')}
+                                            onPress={() => navigation.navigate('CheckoutPage')}
                                             style={{ marginTop: 4 }}
                                         >
                                             <Text style={{ color: GOLD, fontWeight: '800', fontSize: 12 }}>
-                                                + Add Delivery Address & LGA
+                                                + Zabi Garin da za a Kai Kaya
                                             </Text>
                                         </TouchableOpacity>
                                     </View>

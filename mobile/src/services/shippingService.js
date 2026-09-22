@@ -347,10 +347,10 @@ export class ShippingDistanceService {
             }
         }
 
-        // 4. Default Marketplace Center (Yobe / Northern Commercial Corridor)
+        // 4. Default Marketplace Center (Abu Mafhal Flagship Store in Bade / Gashua, Yobe)
         return {
-            lat: 11.7489,
-            lon: 11.9660,
+            lat: 12.8753,
+            lon: 10.9786,
             source: 'marketplace_default'
         };
     }
@@ -724,7 +724,11 @@ export class ShippingCalculationEngine {
         const isSameLga   = Boolean(lgaTier.isSameLga);
         const isSameState = Boolean(lgaTier.isSameState);
 
-        let distanceKm     = distanceResult?.distanceKm || lgaTier.distanceKm;
+        if (!distanceResult || typeof distanceResult.distanceKm !== 'number') {
+            distanceResult = ShippingDistanceService.getDrivingDistanceInstant(vendor, customerAddress);
+        }
+
+        let distanceKm     = (distanceResult && typeof distanceResult.distanceKm === 'number') ? distanceResult.distanceKm : lgaTier.distanceKm;
         let distanceSource = distanceResult?.source || (isSameLga ? 'intra_lga_local' : 'lga_tier');
 
         // 5. Resolve Applicable Zone Override (Hierarchy: Exact LGA match > State-wide match)
@@ -765,6 +769,7 @@ export class ShippingCalculationEngine {
             baseFee = lgaTier.baseFee || 800;
             pricePerKm = 0;
             minFee = lgaTier.minFee || 800;
+            distanceKm = distanceKm || 4.5;
         }
 
         // Delivery Method adjustments
@@ -813,6 +818,22 @@ export class ShippingCalculationEngine {
             if (vendor.custom_max_fee !== null && vendor.custom_max_fee !== undefined) maxFee = Number(vendor.custom_max_fee);
         }
 
+        // Calibrate price per km for realistic Nigerian highway transit if no custom override:
+        let effectivePricePerKm = pricePerKm;
+        if (isSameLga) {
+            effectivePricePerKm = 0;
+        } else if (!matchedZone && !hasVendorOverride) {
+            if (distanceKm <= 50) {
+                effectivePricePerKm = Math.min(pricePerKm, 10);
+            } else if (distanceKm <= 200) {
+                effectivePricePerKm = Math.min(pricePerKm, 5);
+            } else if (distanceKm <= 500) {
+                effectivePricePerKm = Math.min(pricePerKm, 3.5);
+            } else {
+                effectivePricePerKm = Math.min(pricePerKm, 3);
+            }
+        }
+
         // Handling Fees
         const handlingFee = (matchedZone?.handling_fee !== undefined && matchedZone?.handling_fee !== null)
             ? Number(matchedZone.handling_fee)
@@ -823,7 +844,7 @@ export class ShippingCalculationEngine {
         if (isFixedFee) {
             rawFee = fixedFeeAmount + handlingFee;
         } else {
-            const distanceFee = isSameLga ? 0 : Math.round(distanceKm * pricePerKm);
+            const distanceFee = isSameLga ? 0 : Math.round(distanceKm * effectivePricePerKm);
             rawFee = baseFee + distanceFee + handlingFee + remoteAreaFee;
         }
 
@@ -868,8 +889,8 @@ export class ShippingCalculationEngine {
             durationMinutes: distanceResult?.durationMinutes || lgaTier.durationMinutes,
             distanceSource,
             baseFee,
-            perKmRate: pricePerKm,
-            distanceFee: Math.round(distanceKm * pricePerKm),
+            perKmRate: effectivePricePerKm,
+            distanceFee: isSameLga ? 0 : Math.round(distanceKm * effectivePricePerKm),
             handlingFee,
             remoteAreaFee,
             deliveryMethodFee: 0,
@@ -1007,10 +1028,23 @@ export class ShippingCalculationEngine {
         // 3. Compute each vendor package in parallel
         const packagePromises = vendorIds.map(async (vId) => {
             const group = vendorGroups[vId];
-            const vendorStore = storesCache[vId] || 
-                                ShippingCalculationEngine.IN_MEMORY_STORES_CACHE[vId] || 
-                                (group.items[0]?.store || group.items[0]?.vendor) || 
-                                { id: vId, name: 'Abu Mafhal Official Store', state: 'Yobe', city: 'Bade', lga: 'Bade' };
+            let vendorStore = storesCache[vId] || 
+                              ShippingCalculationEngine.IN_MEMORY_STORES_CACHE[vId] || 
+                              (group.items[0]?.store || group.items[0]?.vendor);
+
+            if (!vendorStore || (!vendorStore.latitude && !vendorStore.state && !vendorStore.lga)) {
+                vendorStore = {
+                    ...(vendorStore || {}),
+                    id: vId,
+                    name: vendorStore?.name || vendorStore?.store_name || 'ABU MAFHAL Store',
+                    state: vendorStore?.state || 'Yobe',
+                    lga: vendorStore?.lga || 'Bade',
+                    city: vendorStore?.city || 'Gashua',
+                    address: vendorStore?.address || '123 Goni Aji Street, Gashua, Yobe State',
+                    latitude: vendorStore?.latitude || 12.8753,
+                    longitude: vendorStore?.longitude || 10.9786
+                };
+            }
 
             // Determine distance between this vendor's store LGA/GPS and customer's LGA/GPS
             const distanceRes = await ShippingDistanceService.getDrivingDistance(vendorStore, customerAddress);
@@ -1089,7 +1123,7 @@ export class ShippingCalculationEngine {
         shippingZones = null,
         storesCache = {}
     }) {
-        if (!cartItems.length || !customerAddress) {
+        if (!cartItems.length) {
             return {
                 totalShippingFee: 0,
                 totalDistanceKm: 0,
@@ -1100,6 +1134,13 @@ export class ShippingCalculationEngine {
                 calculatedAt: new Date().toISOString()
             };
         }
+
+        const effectiveCustomerAddress = customerAddress || {
+            state: 'Yobe',
+            lga: 'Bade',
+            city: 'Bade',
+            address: 'Bade / Gashua, Yobe State'
+        };
 
         let globalSettings = DEFAULT_SHIPPING_SETTINGS;
         if (adminSettings) {
@@ -1141,15 +1182,29 @@ export class ShippingCalculationEngine {
         const vendorIds = Object.keys(vendorGroups);
         const breakdowns = vendorIds.map(vId => {
             const group = vendorGroups[vId];
-            const vendorStore = storesCache[vId] || 
-                                ShippingCalculationEngine.IN_MEMORY_STORES_CACHE[vId] || 
-                                (group.items[0]?.store || group.items[0]?.vendor) || 
-                                { id: vId, name: 'Abu Mafhal Official Store', state: 'Yobe', city: 'Bade', lga: 'Bade' };
-            const distanceRes = ShippingDistanceService.getDrivingDistanceInstant(vendorStore, customerAddress);
+            let vendorStore = storesCache[vId] || 
+                              ShippingCalculationEngine.IN_MEMORY_STORES_CACHE[vId] || 
+                              (group.items[0]?.store || group.items[0]?.vendor);
+
+            if (!vendorStore || (!vendorStore.latitude && !vendorStore.state && !vendorStore.lga)) {
+                vendorStore = {
+                    ...(vendorStore || {}),
+                    id: vId,
+                    name: vendorStore?.name || vendorStore?.store_name || 'ABU MAFHAL Store',
+                    state: vendorStore?.state || 'Yobe',
+                    lga: vendorStore?.lga || 'Bade',
+                    city: vendorStore?.city || 'Gashua',
+                    address: vendorStore?.address || '123 Goni Aji Street, Gashua, Yobe State',
+                    latitude: vendorStore?.latitude || 12.8753,
+                    longitude: vendorStore?.longitude || 10.9786
+                };
+            }
+
+            const distanceRes = ShippingDistanceService.getDrivingDistanceInstant(vendorStore, effectiveCustomerAddress);
 
             return this.calculateVendorPackageFee({
                 vendor: vendorStore,
-                customerAddress,
+                customerAddress: effectiveCustomerAddress,
                 deliveryMethod: selectedMethod,
                 packageSubtotal: group.subtotal,
                 allFreeShipping: group.allFree,

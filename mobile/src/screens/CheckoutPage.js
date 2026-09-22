@@ -177,7 +177,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
     const [profile, setProfile]                 = useState(null);
     const [addresses, setAddresses]             = useState(initialAddrs);
     const [selectedAddressId, setSelectedAddressId] = useState(
-        routeAddress?.id || (initialAddrs.find(a => a.is_default)?.id || initialAddrs[0]?.id || null)
+        routeAddress?.id || (initialAddrs.find(a => a.is_default)?.id || initialAddrs[0]?.id || 'lga_dest')
     );
 
     // Step 1: LGA & Destination States
@@ -372,13 +372,13 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
     // Resolve active customer address directly from saved shipping addresses
     const selectedAddrObj = useMemo(() => {
-        if (selectedAddressId === 'lga_dest' && quickDestination) {
+        if (selectedAddressId === 'lga_dest' || !selectedAddressId) {
             return {
                 id: 'lga_dest',
-                title: `${quickDestination.city || quickDestination.lga} Delivery`,
-                address: quickDestination.address || `${quickDestination.city || quickDestination.lga} LGA, ${quickDestination.state} State`,
-                city: quickDestination.city || quickDestination.lga || '',
-                lga: quickDestination.lga || quickDestination.city || '',
+                title: `${quickDestination.city || quickDestination.lga || 'Delivery'} Destination`,
+                address: quickDestination.address || `${quickDestination.city || quickDestination.lga || 'Bade'} LGA, ${quickDestination.state || 'Yobe'} State`,
+                city: quickDestination.city || quickDestination.lga || 'Bade',
+                lga: quickDestination.lga || quickDestination.city || 'Bade',
                 state: quickDestination.state || 'Yobe',
                 phone: profile?.phone || profile?.phone_number || '',
                 is_default: false
@@ -402,7 +402,16 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 is_default: true
             };
         }
-        return null;
+        return {
+            id: 'lga_dest',
+            title: `${quickDestination.city || quickDestination.lga || 'Delivery'} Destination`,
+            address: quickDestination.address || `${quickDestination.city || quickDestination.lga || 'Bade'} LGA, ${quickDestination.state || 'Yobe'} State`,
+            city: quickDestination.city || quickDestination.lga || 'Bade',
+            lga: quickDestination.lga || quickDestination.city || 'Bade',
+            state: quickDestination.state || 'Yobe',
+            phone: profile?.phone || profile?.phone_number || '',
+            is_default: false
+        };
     }, [addresses, selectedAddressId, routeAddress, profile, quickDestination]);
 
     // Instant Synchronous Shipping Calculation (0ms latency, zero delay)
@@ -497,15 +506,31 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
     }, [lgaSearchQuery, activeLgaStateFilter]);
 
     const handleSelectLga = (stateName, lgaName) => {
+        const fullAddr = customStreetAddress.trim()
+            ? `${customStreetAddress.trim()}, ${lgaName} LGA, ${stateName} State`
+            : `${lgaName} LGA, ${stateName} State`;
         setQuickDestination({
             state: stateName,
             city: lgaName,
             lga: lgaName,
-            address: `${lgaName} LGA, ${stateName} State`
+            address: fullAddr
         });
         setSelectedAddressId('lga_dest');
         setLgaModalVisible(false);
-        showToast(`Delivery location set to ${lgaName} LGA, ${stateName}`);
+        showToast(`Wurin isarwa: ${lgaName} LGA, ${stateName} State`);
+    };
+
+    const handleStreetAddressChange = (text) => {
+        setCustomStreetAddress(text);
+        const lgaName = quickDestination.lga || quickDestination.city || 'Bade';
+        const stateName = quickDestination.state || 'Yobe';
+        const fullAddr = text.trim() 
+            ? `${text.trim()}, ${lgaName} LGA, ${stateName} State` 
+            : `${lgaName} LGA, ${stateName} State`;
+        setQuickDestination(prev => ({
+            ...prev,
+            address: fullAddr
+        }));
     };
 
     // Base total before BNPL surcharge
@@ -2395,28 +2420,94 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 ══════════════════════════════════════════════════════════════ */}
                 {currentStep === 1 && (
                     <View>
-                        {/* Section Header */}
+                        {/* ── STEP 1: DELIVERY DESTINATION & ADDRESS SELECTOR ── */}
                         <View style={s.sectionHeader}>
                             <View style={{ flex: 1, marginRight: 8 }}>
-                                <Text style={s.sectionTitle}>Delivery Address</Text>
-                                <Text style={s.sectionSub} numberOfLines={1}>Choose your destination for accurate live calculation</Text>
+                                <Text style={s.sectionTitle}>Wurin Isar da Kaya (Destination)</Text>
+                                <Text style={s.sectionSub} numberOfLines={1}>Ana lissafa kudin aike da nisan tafiya daga shagon vendor</Text>
                             </View>
                             <TouchableOpacity 
-                                onPress={() => navigation.navigate('AddressPage')}
+                                onPress={() => setLgaModalVisible(true)}
                                 hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                                style={[s.manageBtnPill, { flexShrink: 0 }]}
+                                style={[s.manageBtnPill, { flexShrink: 0, backgroundColor: '#FEF3C7', borderColor: GOLD }]}
                                 activeOpacity={0.7}
                             >
-                                <Ionicons name="add-circle-outline" size={14} color={GOLD} />
-                                <Text style={s.manageLink}>Add Address</Text>
+                                <Ionicons name="location" size={14} color="#B45309" />
+                                <Text style={[s.manageLink, { color: '#B45309', fontWeight: '800' }]}>Zabi Garin (LGA)</Text>
                             </TouchableOpacity>
                         </View>
 
-                        {/* ── Direct Saved Shipping Addresses List ── */}
-                        {addresses.length > 0 ? (
-                            <View style={{ marginBottom: 10 }}>
-                                {addresses.map((addr) => {
-                                    const isSelected = (selectedAddrObj?.id === addr.id) || (selectedAddressId === addr.id);
+                        {/* ── Active Destination Card (Always active and accurate) ── */}
+                        <View style={[
+                            s.checkoutCard, 
+                            { 
+                                marginBottom: 12, 
+                                borderWidth: (selectedAddressId === 'lga_dest' || !selectedAddressId) ? 2 : 1, 
+                                borderColor: (selectedAddressId === 'lga_dest' || !selectedAddressId) ? GOLD : '#E2E8F0', 
+                                backgroundColor: (selectedAddressId === 'lga_dest' || !selectedAddressId) ? '#FFFDF5' : WHITE 
+                            }
+                        ]}>
+                            <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                                <TouchableOpacity 
+                                    style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}
+                                    onPress={() => setSelectedAddressId('lga_dest')}
+                                    activeOpacity={0.8}
+                                >
+                                    <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center', marginTop: 2 }}>
+                                        <Ionicons name="navigate-circle" size={22} color={GOLD} />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                            <Text style={{ fontSize: 14, fontWeight: '800', color: NAVY }}>
+                                                {quickDestination.lga || quickDestination.city || 'Bade'} LGA, {quickDestination.state || 'Yobe'} State
+                                            </Text>
+                                            <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#166534' }}>✓ Live Destination</Text>
+                                            </View>
+                                        </View>
+                                        <Text style={{ fontSize: 12, color: SLATE, marginTop: 3 }}>
+                                            {quickDestination.address || `${quickDestination.lga} LGA, ${quickDestination.state} State`}
+                                        </Text>
+                                    </View>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity 
+                                    onPress={() => setLgaModalVisible(true)}
+                                    style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: '#F1F5F9', marginLeft: 8 }}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: NAVY }}>Canza Garin</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* Street / Landmark input */}
+                            <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 10, height: 38 }}>
+                                    <Ionicons name="home-outline" size={14} color={SLATE} style={{ marginRight: 6 }} />
+                                    <TextInput
+                                        style={{ flex: 1, fontSize: 12, color: NAVY, paddingVertical: 0 }}
+                                        placeholder="Shigar da layinku ko wani sanannen wuri (Street / Landmark)..."
+                                        placeholderTextColor="#94A3B8"
+                                        value={customStreetAddress}
+                                        onChangeText={handleStreetAddressChange}
+                                    />
+                                    {customStreetAddress ? (
+                                        <TouchableOpacity onPress={() => handleStreetAddressChange('')}>
+                                            <Ionicons name="close-circle" size={16} color={SLATE} />
+                                        </TouchableOpacity>
+                                    ) : null}
+                                </View>
+                            </View>
+                        </View>
+
+                        {/* ── Saved Addresses List (if user saved multiple addresses in profile) ── */}
+                        {addresses.filter(a => a.id !== 'lga_dest' && a.id !== 'quick_dest_addr').length > 0 && (
+                            <View style={{ marginBottom: 12 }}>
+                                <Text style={{ fontSize: 11.5, fontWeight: '700', color: SLATE, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                                    Ko Zabi Daga Adireshin da ka Ajiye:
+                                </Text>
+                                {addresses.filter(a => a.id !== 'lga_dest' && a.id !== 'quick_dest_addr').map((addr) => {
+                                    const isSelected = selectedAddressId === addr.id;
                                     return (
                                         <CheckoutAddressCard
                                             key={addr.id || addr.address}
@@ -2437,41 +2528,23 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                     <View style={s.addPlusCircle}>
                                         <Ionicons name="add" size={14} color="#B45309" />
                                     </View>
-                                    <Text style={s.addNewAddressTxt}>Add Another Delivery Address</Text>
-                                </TouchableOpacity>
-                            </View>
-                        ) : (
-                            <View style={s.emptyBox}>
-                                <View style={s.emptyIconCircle}>
-                                    <Ionicons name="location-outline" size={28} color={GOLD} />
-                                </View>
-                                <Text style={s.emptyTitle}>No Shipping Address Found</Text>
-                                <Text style={s.emptySub}>
-                                    Add your delivery address to get live shipping calculations and proceed to payment.
-                                </Text>
-                                <TouchableOpacity
-                                    style={s.addAddressBtn}
-                                    onPress={() => navigation.navigate('AddressPage')}
-                                    activeOpacity={0.8}
-                                >
-                                    <Ionicons name="add" size={16} color={NAVY} />
-                                    <Text style={s.addAddressBtnTxt}>Add Delivery Address</Text>
+                                    <Text style={s.addNewAddressTxt}>Sanya Sabon Adireshi a Profile</Text>
                                 </TouchableOpacity>
                             </View>
                         )}
 
-                        {/* ── Live Shipping Intelligence Card (Real Calculation Feedback) ── */}
-                        {selectedAddrObj && shippingCalculation && (
-                            <View style={s.shippingInfoCard}>
+                        {/* ── Live Shipping Intelligence & Route Display ── */}
+                        {shippingCalculation && (
+                            <View style={[s.shippingInfoCard, { marginTop: 4, marginBottom: 12 }]}>
                                 <View style={s.shippingInfoTop}>
                                     <View style={s.shippingInfoLeft}>
                                         <View style={s.shippingInfoIconBox}>
-                                            <Ionicons name="compass-outline" size={18} color={GOLD} />
+                                            <Ionicons name="map" size={18} color={GOLD} />
                                         </View>
                                         <View style={{ flex: 1 }}>
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                                                 <Text style={s.shippingRouteTitle} numberOfLines={1}>
-                                                    {shippingCalculation.ruleSummary || 'Direct Dispatch Route'}
+                                                    {shippingCalculation.ruleSummary || 'Hanyar Isar da Kaya'}
                                                 </Text>
                                                 {shippingCalculation.totalDistanceKm ? (
                                                     <View style={s.shippingKmBadge}>
@@ -2479,20 +2552,39 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                                     </View>
                                                 ) : null}
                                             </View>
-                                            <Text style={s.shippingRouteSub} numberOfLines={1}>
-                                                {selectedAddrObj.lga || selectedAddrObj.city ? `${selectedAddrObj.lga || selectedAddrObj.city} LGA, ` : ''}
-                                                {selectedAddrObj.state || 'Nigeria'}
+                                            <Text style={s.shippingRouteSub} numberOfLines={2}>
+                                                {selectedAddrObj?.lga || selectedAddrObj?.city ? `${selectedAddrObj.lga || selectedAddrObj.city} LGA, ` : ''}
+                                                {selectedAddrObj?.state || 'Nigeria'}
                                                 {shippingCalculation.estimatedDeliveryDays ? ` • ${shippingCalculation.estimatedDeliveryDays}` : ''}
-                                                {shippingCalculation.vendorBreakdown?.length > 1 ? ` • ${shippingCalculation.vendorBreakdown.length} packages` : ''}
+                                                {shippingCalculation.vendorGroups?.length > 0 && shippingCalculation.vendorGroups[0]?.vendorName ? ` • ${shippingCalculation.vendorGroups[0].vendorName}` : ''}
                                             </Text>
                                         </View>
                                     </View>
                                     <View style={s.shippingFeeTag}>
                                         <Text style={s.shippingFeeTagTxt}>
-                                            {selectedDeliveryMethod === 'pickup' ? 'FREE' : isShippingFree ? 'FREE' : formatCurrency(shippingFee)}
+                                            {selectedDeliveryMethod === 'pickup' ? 'KYAUTA' : isShippingFree ? 'KYAUTA' : formatCurrency(shippingFee)}
                                         </Text>
                                     </View>
                                 </View>
+
+                                {/* Multi-vendor package route breakdown */}
+                                {shippingCalculation.vendorGroups && shippingCalculation.vendorGroups.length > 0 && (
+                                    <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                                        {shippingCalculation.vendorGroups.map((vg, idx) => (
+                                            <View key={vg.vendorId || idx} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 2 }}>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                                                    <Ionicons name="storefront-outline" size={13} color={SLATE} />
+                                                    <Text style={{ fontSize: 11, color: NAVY, fontWeight: '700' }} numberOfLines={1}>
+                                                        {vg.vendorName || 'ABU MAFHAL Store'} ({vg.vendorLga || 'Bade'}) ➔ {vg.customerLga || quickDestination.lga || 'Garin Ku'}
+                                                    </Text>
+                                                </View>
+                                                <Text style={{ fontSize: 11, fontWeight: '800', color: GOLD, marginLeft: 6 }}>
+                                                    ~{vg.distanceKm || 0} km • {vg.isFreeShipping ? 'FREE' : formatCurrency(vg.finalShippingFee)}
+                                                </Text>
+                                            </View>
+                                        ))}
+                                    </View>
+                                )}
                             </View>
                         )}
 
@@ -4085,6 +4177,115 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     await handlePaymentComplete(data);
                 }}
             />
+
+            {/* ── LGA & DELIVERY DESTINATION SELECTOR MODAL ────────────────── */}
+            <Modal
+                visible={lgaModalVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setLgaModalVisible(false)}
+            >
+                <TouchableOpacity 
+                    style={s.modalOverlay} 
+                    activeOpacity={1} 
+                    onPress={() => setLgaModalVisible(false)}
+                >
+                    <View style={s.lgaModalContainer} onStartShouldSetResponder={() => true}>
+                        <View style={s.lgaModalHeader}>
+                            <View style={{ flex: 1, marginRight: 8 }}>
+                                <Text style={s.lgaModalTitle}>Zabi Garin da za a Kai Kaya</Text>
+                                <Text style={s.lgaModalSub}>Ana lissafa kudin aike da nisan tafiya bisa ainihin GPS (774 LGAs)</Text>
+                            </View>
+                            <TouchableOpacity onPress={() => setLgaModalVisible(false)} style={s.modalCloseBtn}>
+                                <Ionicons name="close-circle" size={24} color={SLATE} />
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Search Input */}
+                        <View style={s.lgaSearchWrap}>
+                            <Ionicons name="search" size={16} color={SLATE} />
+                            <TextInput
+                                style={s.lgaSearchInput}
+                                placeholder="Nemi LGA ko Jiha (e.g. Bade, Kano, Maiduguri, Abuja)..."
+                                placeholderTextColor={SLATE}
+                                value={lgaSearchQuery}
+                                onChangeText={setLgaSearchQuery}
+                                autoCapitalize="none"
+                            />
+                            {lgaSearchQuery.length > 0 ? (
+                                <TouchableOpacity onPress={() => setLgaSearchQuery('')}>
+                                    <Ionicons name="close" size={16} color={SLATE} />
+                                </TouchableOpacity>
+                            ) : null}
+                        </View>
+
+                        {/* State Filter Tabs */}
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            style={s.stateTabsWrapper}
+                            contentContainerStyle={{ paddingHorizontal: 16, gap: 6 }}
+                        >
+                            {quickStates.map(st => {
+                                const isActive = activeLgaStateFilter === st;
+                                return (
+                                    <TouchableOpacity
+                                        key={st}
+                                        style={[s.stateTabBtn, isActive && s.stateTabBtnActive]}
+                                        onPress={() => setActiveLgaStateFilter(st)}
+                                    >
+                                        <Text style={[s.stateTabBtnTxt, isActive && s.stateTabBtnTxtActive]}>{st}</Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </ScrollView>
+
+                        {/* LGA List */}
+                        <ScrollView style={{ maxHeight: 380, paddingHorizontal: 16 }} showsVerticalScrollIndicator={true} keyboardShouldPersistTaps="handled">
+                            {filteredLgaList.length === 0 ? (
+                                <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+                                    <Text style={{ fontSize: 13, color: SLATE }}>Babu garin da ya dace da bincikenka.</Text>
+                                </View>
+                            ) : (
+                                filteredLgaList.map((item, idx) => {
+                                    const isSel = (quickDestination?.lga || '').toLowerCase() === item.lga.toLowerCase() && 
+                                                  (quickDestination?.state || '').toLowerCase() === item.state.toLowerCase();
+                                    return (
+                                        <TouchableOpacity
+                                            key={`${item.state}-${item.lga}-${idx}`}
+                                            style={[s.lgaItemRow, isSel && s.lgaItemRowSelected]}
+                                            onPress={() => handleSelectLga(item.state, item.lga)}
+                                            activeOpacity={0.7}
+                                        >
+                                            <View style={{ flex: 1 }}>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                    <Text style={[s.lgaItemName, isSel && s.lgaItemNameSelected]}>
+                                                        {item.lga} LGA
+                                                    </Text>
+                                                    {item.tierBadge ? (
+                                                        <View style={s.lgaTierBadge}>
+                                                            <Text style={s.lgaTierBadgeTxt}>{item.tierBadge}</Text>
+                                                        </View>
+                                                    ) : null}
+                                                </View>
+                                                <Text style={s.lgaItemState}>{item.state} State • {item.estimatedDays || '1 - 3 Days'}</Text>
+                                            </View>
+                                            <View style={{ alignItems: 'flex-end' }}>
+                                                <Text style={[s.lgaItemFee, isSel && { color: '#166534' }]}>
+                                                    ~{formatCurrency(item.standardFee)}
+                                                </Text>
+                                                {isSel && (
+                                                    <Ionicons name="checkmark-circle" size={16} color={EMERALD} style={{ marginTop: 2 }} />
+                                                )}
+                                            </View>
+                                        </TouchableOpacity>
+                                    );
+                                })
+                            )}
+                        </ScrollView>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
         </View>
     );
 };
