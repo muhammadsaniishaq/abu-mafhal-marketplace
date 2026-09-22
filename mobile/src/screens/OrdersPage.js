@@ -690,9 +690,10 @@ const OrderCard = React.memo(({ item, isExpanded, onToggle, onCancel, onConfirm,
         return sum + (p * q);
     }, 0);
     const shippingFee = parseFloat(item.shipping_fee || 0) || 0;
+    const taxAmount = parseFloat(item.tax_amount || 0) || 0;
     const discount = parseFloat(item.discount_applied || 0) || 0;
-    const totalPaid = parseFloat(item.total_amount || (itemsSubtotal + shippingFee - discount) || 0);
-    const displaySubtotal = itemsSubtotal > 0 ? itemsSubtotal : Math.max(0, totalPaid - shippingFee + discount);
+    const totalPaid = parseFloat(item.total_amount || (itemsSubtotal + shippingFee + taxAmount - discount) || 0);
+    const displaySubtotal = itemsSubtotal > 0 ? itemsSubtotal : Math.max(0, totalPaid - shippingFee - taxAmount + discount);
 
     // Pay Small Small (BNPL) metrics
     const pssMetrics = useMemo(() => getOrderPssMetrics(item), [item]);
@@ -1003,6 +1004,12 @@ const OrderCard = React.memo(({ item, isExpanded, onToggle, onCancel, onConfirm,
                                 {shippingFee > 0 ? `₦${shippingFee.toLocaleString()}` : 'Free'}
                             </Text>
                         </View>
+                        {taxAmount > 0 && (
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                                <Text style={{ color: '#64748B', fontSize: 12 }}>VAT / Government Tax (7.5%)</Text>
+                                <Text style={{ fontWeight: '700', color: '#0F172A', fontSize: 12 }}>₦{taxAmount.toLocaleString()}</Text>
+                            </View>
+                        )}
                         {discount > 0 && (
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
                                 <Text style={{ color: '#16A34A', fontSize: 12 }}>Discount Applied</Text>

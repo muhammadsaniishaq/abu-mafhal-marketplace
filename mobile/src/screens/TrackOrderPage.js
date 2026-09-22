@@ -440,8 +440,9 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder, on
 
     const totalAmount = parseFloat(currentOrder?.total_amount || 0) || 0;
     const shippingFee = parseFloat(currentOrder?.shipping_fee || 0) || 0;
+    const taxAmount = parseFloat(currentOrder?.tax_amount || 0) || 0;
     const discountApplied = parseFloat(currentOrder?.discount_applied || 0) || 0;
-    const displaySubtotal = itemsSubtotal > 0 ? itemsSubtotal : Math.max(0, totalAmount - shippingFee + discountApplied);
+    const displaySubtotal = itemsSubtotal > 0 ? itemsSubtotal : Math.max(0, totalAmount - shippingFee - taxAmount + discountApplied);
 
     // Shipping Destination Address
     const shippingAddress = useMemo(() => {
@@ -1130,6 +1131,12 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder, on
                                         {shippingFee > 0 ? `₦${shippingFee.toLocaleString()}` : 'Free Delivery'}
                                     </Text>
                                 </View>
+                                {taxAmount > 0 && (
+                                    <View style={s.breakdownRow}>
+                                        <Text style={s.breakdownLabel}>VAT / Government Tax (7.5%)</Text>
+                                        <Text style={s.breakdownValue}>₦{taxAmount.toLocaleString()}</Text>
+                                    </View>
+                                )}
                                 {discountApplied > 0 && (
                                     <View style={s.breakdownRow}>
                                         <Text style={[s.breakdownLabel, { color: '#16A34A' }]}>Discount / Voucher</Text>
