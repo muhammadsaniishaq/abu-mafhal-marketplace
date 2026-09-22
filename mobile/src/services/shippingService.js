@@ -174,6 +174,9 @@ export const DEFAULT_SHIPPING_SETTINGS = {
     currency: 'NGN',
     base_fee: 1000,
     price_per_km: 75,
+    price_per_kg: 100,
+    price_per_cbm: 500,
+    free_weight_allowance_kg: 1,
     min_fee: 800,
     max_fee: 25000,
     free_shipping_enabled: false,
@@ -185,7 +188,17 @@ export const DEFAULT_SHIPPING_SETTINGS = {
     standard_delivery_enabled: true,
     express_delivery_enabled: true,
     same_day_delivery_enabled: true,
-    customer_pickup_enabled: true
+    customer_pickup_enabled: true,
+    marketplace_origin: {
+        id: 'abu_mafhal_hub',
+        name: 'Abu Mafhal Marketplace Hub',
+        address: '123 Goni Aji Street, Gashua, Yobe State',
+        city: 'Gashua',
+        lga: 'Bade',
+        state: 'Yobe',
+        latitude: 12.8753,
+        longitude: 10.9786
+    }
 };
 
 export const DEFAULT_SHIPPING_METHODS = [
@@ -399,9 +412,27 @@ export class ShippingDistanceService {
         const originLga = String(origin?.city || origin?.lga || '').trim().toLowerCase();
         const destLga   = String(destination?.city || destination?.lga || '').trim().toLowerCase();
         if (originLga && destLga && originLga === destLga) {
+            if (originCoords.lat !== destCoords.lat || originCoords.lon !== destCoords.lon) {
+                const preciseKm = this.calculateHaversine(
+                    originCoords.lat,
+                    originCoords.lon,
+                    destCoords.lat,
+                    destCoords.lon
+                );
+                if (preciseKm && preciseKm > 0) {
+                    const res = {
+                        distanceKm: preciseKm,
+                        durationMinutes: Math.round(preciseKm * 4) + 10,
+                        source: 'intra_lga_local',
+                        isEstimated: false
+                    };
+                    _distanceCache.set(cacheKey, res);
+                    return res;
+                }
+            }
             const sameLgaRes = {
-                distanceKm: 4.5,
-                durationMinutes: 20,
+                distanceKm: 3,
+                durationMinutes: 15,
                 source: 'intra_lga_local',
                 isEstimated: false
             };
@@ -678,6 +709,7 @@ export class ShippingCalculationEngine {
         customerAddress,
         deliveryMethod,
         packageSubtotal,
+        packageItems = [],
         allFreeShipping = false,
         globalSettings = DEFAULT_SHIPPING_SETTINGS,
         zoneOverrides = [],
@@ -695,6 +727,10 @@ export class ShippingCalculationEngine {
                 baseFee: 0,
                 perKmRate: 0,
                 distanceFee: 0,
+                totalWeightKg: 0,
+                weightFee: 0,
+                totalCbm: 0,
+                cbmFee: 0,
                 handlingFee: 0,
                 remoteAreaFee: 0,
                 deliveryMethodFee: 0,
@@ -712,65 +748,72 @@ export class ShippingCalculationEngine {
         const isFreeByThreshold = isFreeShippingEnabled && freeThreshold > 0 && packageSubtotal >= freeThreshold;
         const isFree = (allFreeShipping === true) || isFreeByThreshold;
 
-        // 3. Resolve Customer & Vendor Locations (LGA & State)
+        // 3. Resolve Origin (Vendor vs Abu Mafhal Marketplace Fulfillment Hub)
+        // If vendor does NOT have custom shipping enabled, Abu Mafhal fulfills the order from HQ ("Inda Muke"):
+        const isVendorFulfillment = Boolean(vendor?.custom_shipping_enabled) && 
+            (Boolean(vendor?.latitude && vendor?.longitude) || Boolean(vendor?.state && (vendor?.lga || vendor?.city)));
+
+        const marketplaceOrigin = globalSettings?.marketplace_origin || {
+            id: 'abu_mafhal_hub',
+            name: 'Abu Mafhal Marketplace Hub',
+            address: '123 Goni Aji Street, Gashua, Yobe State',
+            city: 'Gashua',
+            lga: 'Bade',
+            state: 'Yobe',
+            latitude: 12.8753,
+            longitude: 10.9786
+        };
+
+        const fulfillmentOrigin = isVendorFulfillment ? vendor : marketplaceOrigin;
+
+        // 4. Resolve Customer & Origin Locations (LGA & State)
         const customerState = (customerAddress?.state || '').toLowerCase().trim();
         const customerLga   = (customerAddress?.lga || customerAddress?.city || '').toLowerCase().trim();
-        const vendorState   = (vendor?.state || 'Yobe').toLowerCase().trim();
-        const vendorLga     = (vendor?.lga || vendor?.city || 'Bade').toLowerCase().trim();
+        const originState   = (fulfillmentOrigin?.state || 'Yobe').toLowerCase().trim();
+        const originLga     = (fulfillmentOrigin?.lga || fulfillmentOrigin?.city || 'Bade').toLowerCase().trim();
 
-        // 4. Resolve Structured LGA Tier
-        const lgaTier = this.resolveLgaTier(customerState, customerLga, vendorState, vendorLga);
-
+        // 5. Resolve Structured LGA Tier
+        const lgaTier = this.resolveLgaTier(customerState, customerLga, originState, originLga);
         const isSameLga   = Boolean(lgaTier.isSameLga);
         const isSameState = Boolean(lgaTier.isSameState);
 
         if (!distanceResult || typeof distanceResult.distanceKm !== 'number') {
-            distanceResult = ShippingDistanceService.getDrivingDistanceInstant(vendor, customerAddress);
+            distanceResult = ShippingDistanceService.getDrivingDistanceInstant(fulfillmentOrigin, customerAddress);
         }
 
         let distanceKm     = (distanceResult && typeof distanceResult.distanceKm === 'number') ? distanceResult.distanceKm : lgaTier.distanceKm;
         let distanceSource = distanceResult?.source || (isSameLga ? 'intra_lga_local' : 'lga_tier');
 
-        // 5. Resolve Applicable Zone Override (Hierarchy: Exact LGA match > State-wide match)
+        // 6. Resolve Applicable Zone Override (Hierarchy: Exact LGA match > State-wide match)
         let matchedZone = null;
         let matchedLgaZone = null;
         let matchedStateZone = null;
 
         if (zoneOverrides && zoneOverrides.length > 0) {
-            // Priority 1: Exact LGA Match in Admin Shipping Zones
             matchedLgaZone = zoneOverrides.find(z => 
                 z.is_active !== false &&
                 (!customerState || !z.state || z.state.toLowerCase().trim() === customerState) &&
                 z.lga && z.lga.toLowerCase().trim() === customerLga
             );
-
-            // Priority 2: State-wide Match in Admin Shipping Zones
             matchedStateZone = zoneOverrides.find(z => 
                 z.is_active !== false &&
                 z.state && z.state.toLowerCase().trim() === customerState &&
                 !z.lga
             );
-
             matchedZone = matchedLgaZone || matchedStateZone;
         }
 
-        // 6. Resolve Pricing Parameters across Hierarchy using Real GPS Distance:
-        // Priority: Vendor Custom Override > Admin LGA Zone > Admin State Zone > Delivery Method > Global Shipping Settings > LGA Tier Baseline
-        let baseFee       = Number(globalSettings?.base_fee) || lgaTier.baseFee || 1000;
-        let pricePerKm    = Number(globalSettings?.price_per_km) || 75;
-        let minFee        = Number(globalSettings?.min_fee) || lgaTier.minFee || 800;
+        // 7. Base Fee & Rates
+        let baseFee       = Number(globalSettings?.base_fee ?? 1000);
+        let pricePerKm    = Number(globalSettings?.price_per_km ?? 75);
+        let pricePerKg    = Number(globalSettings?.price_per_kg ?? 100);
+        let pricePerCbm   = Number(globalSettings?.price_per_cbm ?? 500);
+        let freeWeightAllowanceKg = Number(globalSettings?.free_weight_allowance_kg ?? 1);
+        let minFee        = Number(globalSettings?.min_fee ?? 800);
         let maxFee        = Number(globalSettings?.max_fee ?? 25000);
         let remoteAreaFee = Number(globalSettings?.remote_area_fee || 0);
         let isFixedFee    = false;
         let fixedFeeAmount = 0;
-
-        // If in the exact same LGA (e.g. Bade / Gashua intra-city dispatch)
-        if (isSameLga) {
-            baseFee = lgaTier.baseFee || 800;
-            pricePerKm = 0;
-            minFee = lgaTier.minFee || 800;
-            distanceKm = distanceKm || 4.5;
-        }
 
         // Delivery Method adjustments
         const methodId = deliveryMethod?.id || deliveryMethod?.code || 'standard';
@@ -783,17 +826,12 @@ export class ShippingCalculationEngine {
 
         if (deliveryMethod?.base_fee === undefined) {
             if (methodId === 'express') {
-                baseFee = lgaTier.expressBaseFee || Math.round(baseFee * 1.5);
+                baseFee = Math.round(baseFee * 1.5);
                 minFee  = Math.max(minFee, baseFee);
             } else if (methodId === 'same_day') {
-                baseFee = lgaTier.sameDayBaseFee || Math.round(baseFee * 2.0);
+                baseFee = Math.round(baseFee * 2.0);
                 minFee  = Math.max(minFee, baseFee);
             }
-        }
-
-        if (globalSettings) {
-            if (globalSettings.min_fee !== undefined && globalSettings.min_fee !== null) minFee = Math.max(minFee, Number(globalSettings.min_fee));
-            if (globalSettings.max_fee !== undefined && globalSettings.max_fee !== null) maxFee = Number(globalSettings.max_fee);
         }
 
         // Apply Admin Zone Override (LGA or State) if configured
@@ -818,20 +856,34 @@ export class ShippingCalculationEngine {
             if (vendor.custom_max_fee !== null && vendor.custom_max_fee !== undefined) maxFee = Number(vendor.custom_max_fee);
         }
 
-        // Calibrate price per km for realistic Nigerian highway transit if no custom override:
-        let effectivePricePerKm = pricePerKm;
-        if (isSameLga) {
-            effectivePricePerKm = 0;
-        } else if (!matchedZone && !hasVendorOverride) {
-            if (distanceKm <= 50) {
-                effectivePricePerKm = Math.min(pricePerKm, 10);
-            } else if (distanceKm <= 200) {
-                effectivePricePerKm = Math.min(pricePerKm, 5);
-            } else if (distanceKm <= 500) {
-                effectivePricePerKm = Math.min(pricePerKm, 3.5);
-            } else {
-                effectivePricePerKm = Math.min(pricePerKm, 3);
+        // 8. Distance Fee (KM × Price Per KM)
+        const distanceFee = Math.round(distanceKm * pricePerKm);
+
+        // 9. Weight Calculation (KG)
+        const totalWeightKg = (packageItems || []).reduce((sum, item) => {
+            const w = Number(item.shipping_weight || item.weight || item.weight_kg || item.product?.shipping_weight || 0);
+            const q = Number(item.qty || item.quantity || 1);
+            return sum + (w * q);
+        }, 0);
+
+        let weightFee = 0;
+        if (totalWeightKg > freeWeightAllowanceKg && pricePerKg > 0) {
+            weightFee = Math.round((totalWeightKg - freeWeightAllowanceKg) * pricePerKg);
+        }
+
+        // 10. Volume Calculation (CBM - cubic meters)
+        const totalCbm = (packageItems || []).reduce((sum, item) => {
+            let cbm = Number(item.cbm || item.product?.cbm || item.metadata?.cbm || 0);
+            if (!cbm && (item.length || item.width || item.height)) {
+                cbm = (Number(item.length || 10) * Number(item.width || 10) * Number(item.height || 10)) / 1000000;
             }
+            const q = Number(item.qty || item.quantity || 1);
+            return sum + (cbm * q);
+        }, 0);
+
+        let cbmFee = 0;
+        if (totalCbm > 0 && pricePerCbm > 0) {
+            cbmFee = Math.round(totalCbm * pricePerCbm);
         }
 
         // Handling Fees
@@ -839,16 +891,15 @@ export class ShippingCalculationEngine {
             ? Number(matchedZone.handling_fee)
             : (Number(globalSettings.handling_fee || 0) + Number(globalSettings.vendor_handling_fee || 0));
 
-        // 7. Compute Raw & Final Formula directly from GPS distance (latitude & longitude)
+        // 11. Compute Raw Fee
         let rawFee = 0;
         if (isFixedFee) {
             rawFee = fixedFeeAmount + handlingFee;
         } else {
-            const distanceFee = isSameLga ? 0 : Math.round(distanceKm * effectivePricePerKm);
-            rawFee = baseFee + distanceFee + handlingFee + remoteAreaFee;
+            rawFee = baseFee + distanceFee + weightFee + cbmFee + handlingFee + remoteAreaFee;
         }
 
-        // Clamping (never clamp fixed fees below their explicit amount)
+        // Clamping
         const effectiveMinFee = isFixedFee ? Math.min(minFee, rawFee) : minFee;
         const clampedFee = Math.max(effectiveMinFee, Math.min(maxFee, rawFee));
         let finalFee = clampedFee;
@@ -859,29 +910,27 @@ export class ShippingCalculationEngine {
             finalFee = 0;
         }
 
-        // Generate descriptive rule tag
-        let ruleSummary = lgaTier.tierName;
-        if (hasVendorOverride) {
-            ruleSummary = 'Vendor Custom Rate';
-        } else if (matchedLgaZone) {
-            ruleSummary = `Admin LGA Zone: ${matchedLgaZone.name || customerLga}`;
-        } else if (matchedStateZone) {
-            ruleSummary = `Admin State Zone: ${matchedStateZone.name || customerState}`;
-        } else if (isSameLga) {
-            ruleSummary = 'Intra-LGA Local Delivery (Bade / Gashua)';
-        } else if (distanceSource === 'exact_gps') {
-            ruleSummary = `GPS Distance Transit (${distanceKm} km)`;
+        // Rule summary
+        let ruleSummary = '';
+        if (isFree) {
+            ruleSummary = 'Free Delivery Applied';
+        } else if (isVendorFulfillment) {
+            ruleSummary = `Vendor Dispatch (~${distanceKm} km @ ₦${pricePerKm}/km)`;
         } else {
-            ruleSummary = `${lgaTier.tierName} (${distanceKm} km)`;
+            ruleSummary = `Abu Mafhal Hub (~${distanceKm} km @ ₦${pricePerKm}/km)`;
+        }
+        if (totalWeightKg > freeWeightAllowanceKg) {
+            ruleSummary += ` + ${totalWeightKg.toFixed(1)}kg`;
         }
 
         return {
             vendorId: vendor?.id || 'admin_store',
-            vendorName: vendor?.name || vendor?.store_name || 'Marketplace Store',
-            vendorLga: vendorLga || null,
-            vendorState: vendorState || null,
+            vendorName: isVendorFulfillment ? (vendor?.name || vendor?.store_name || 'Vendor Store') : 'Abu Mafhal Fulfillment Hub',
+            vendorLga: originLga || null,
+            vendorState: originState || null,
             customerLga: customerLga || null,
             customerState: customerState || null,
+            isVendorFulfillment,
             isSameLga,
             isSameState,
             deliveryMethod: methodId,
@@ -889,8 +938,12 @@ export class ShippingCalculationEngine {
             durationMinutes: distanceResult?.durationMinutes || lgaTier.durationMinutes,
             distanceSource,
             baseFee,
-            perKmRate: effectivePricePerKm,
-            distanceFee: isSameLga ? 0 : Math.round(distanceKm * effectivePricePerKm),
+            perKmRate: pricePerKm,
+            distanceFee,
+            totalWeightKg,
+            weightFee,
+            totalCbm,
+            cbmFee,
             handlingFee,
             remoteAreaFee,
             deliveryMethodFee: 0,
@@ -1054,6 +1107,7 @@ export class ShippingCalculationEngine {
                 customerAddress,
                 deliveryMethod: selectedMethod,
                 packageSubtotal: group.subtotal,
+                packageItems: group.items,
                 allFreeShipping: group.allFree,
                 globalSettings,
                 zoneOverrides: zones,
@@ -1207,6 +1261,7 @@ export class ShippingCalculationEngine {
                 customerAddress: effectiveCustomerAddress,
                 deliveryMethod: selectedMethod,
                 packageSubtotal: group.subtotal,
+                packageItems: group.items,
                 allFreeShipping: group.allFree,
                 globalSettings,
                 zoneOverrides: zones,

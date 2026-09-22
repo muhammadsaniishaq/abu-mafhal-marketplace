@@ -165,6 +165,9 @@ export const AdminShippingManagement = ({ navigation, onBack }) => {
                 ...settings,
                 base_fee: Number(settings.base_fee) || 0,
                 price_per_km: Number(settings.price_per_km) || 0,
+                price_per_kg: Number(settings.price_per_kg) || 0,
+                price_per_cbm: Number(settings.price_per_cbm) || 0,
+                free_weight_allowance_kg: Number(settings.free_weight_allowance_kg) || 1,
                 min_fee: Number(settings.min_fee) || 0,
                 max_fee: Number(settings.max_fee) || 0,
                 free_shipping_threshold: Number(settings.free_shipping_threshold) || 0,
@@ -611,6 +614,30 @@ export const AdminShippingManagement = ({ navigation, onBack }) => {
                             onChangeText={v => handleSettingChange('max_fee', v)}
                             keyboardType="numeric"
                             placeholder="25000"
+                        />
+                    </View>
+                </View>
+
+                <View style={s.inputGrid}>
+                    <View style={s.inputCol}>
+                        <Text style={s.inputLabel}>Weight Rate Per KG (₦/kg)</Text>
+                        <TextInput
+                            style={s.textInput}
+                            value={String(settings.price_per_kg ?? '')}
+                            onChangeText={v => handleSettingChange('price_per_kg', v)}
+                            keyboardType="numeric"
+                            placeholder="100"
+                        />
+                    </View>
+
+                    <View style={s.inputCol}>
+                        <Text style={s.inputLabel}>Volume Rate Per CBM (₦/m³)</Text>
+                        <TextInput
+                            style={s.textInput}
+                            value={String(settings.price_per_cbm ?? '')}
+                            onChangeText={v => handleSettingChange('price_per_cbm', v)}
+                            keyboardType="numeric"
+                            placeholder="500"
                         />
                     </View>
                 </View>

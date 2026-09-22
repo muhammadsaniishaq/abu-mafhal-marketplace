@@ -404,6 +404,12 @@ export const AdminSettings = ({ navigation }) => {
     const [taxRate,               setTaxRate]               = useState(settings?.tax_rate?.toString() || '7.5');
     const [freeNationwideShipping,setFreeNationwideShipping]= useState(settings?.free_nationwide_shipping || false);
     const [defaultShippingFee,    setDefaultShippingFee]    = useState(settings?.default_shipping_fee?.toString() || '3000');
+    const [shippingPricePerKm,    setShippingPricePerKm]    = useState(settings?.shipping_settings?.price_per_km?.toString() || settings?.price_per_km?.toString() || '75');
+    const [shippingBaseFee,       setShippingBaseFee]       = useState(settings?.shipping_settings?.base_fee?.toString() || settings?.base_fee?.toString() || '1000');
+    const [shippingPricePerKg,    setShippingPricePerKg]    = useState(settings?.shipping_settings?.price_per_kg?.toString() || '100');
+    const [shippingPricePerCbm,   setShippingPricePerCbm]   = useState(settings?.shipping_settings?.price_per_cbm?.toString() || '500');
+    const [shippingMinFee,        setShippingMinFee]        = useState(settings?.shipping_settings?.min_fee?.toString() || '800');
+    const [shippingMaxFee,        setShippingMaxFee]        = useState(settings?.shipping_settings?.max_fee?.toString() || '25000');
 
     // -- Phase-4 Advanced settings --
     const [adminName,          setAdminName]          = useState(settings?.admin_name || '');
@@ -744,6 +750,20 @@ export const AdminSettings = ({ navigation }) => {
             tax_rate: parseFloat(taxRate) || 7.5,
             free_nationwide_shipping: freeNationwideShipping,
             default_shipping_fee: parseFloat(defaultShippingFee) || 3000,
+            price_per_km: parseFloat(shippingPricePerKm) || 75,
+            base_fee: parseFloat(shippingBaseFee) || 1000,
+            shipping_settings: {
+                ...(settings?.shipping_settings || {}),
+                enabled: !freeNationwideShipping,
+                base_fee: parseFloat(shippingBaseFee) || 1000,
+                price_per_km: parseFloat(shippingPricePerKm) || 75,
+                price_per_kg: parseFloat(shippingPricePerKg) || 100,
+                price_per_cbm: parseFloat(shippingPricePerCbm) || 500,
+                min_fee: parseFloat(shippingMinFee) || 800,
+                max_fee: parseFloat(shippingMaxFee) || 25000,
+                free_shipping_enabled: freeNationwideShipping,
+                free_shipping_threshold: parseFloat(freeShippingMin) || null,
+            },
         });
 
         setLoading(false);
@@ -1403,6 +1423,36 @@ export const AdminSettings = ({ navigation }) => {
                                 );
                                 setUnsaved(true);
                             }} color="#10B981" />
+                        <Inp label="Price Per 1 KM (₦/km) *"
+                            value={shippingPricePerKm}
+                            onChange={v => { setShippingPricePerKm(v); setUnsaved(true); }}
+                            icon="speedometer-outline" keyboard="numeric" placeholder="75"
+                            hint="Farashin kowane Kilomita 1 (e.g. ₦75/km)" color="#3B82F6" />
+                        <Inp label="Base Delivery Fee (₦) *"
+                            value={shippingBaseFee}
+                            onChange={v => { setShippingBaseFee(v); setUnsaved(true); }}
+                            icon="cash-outline" keyboard="numeric" placeholder="1000"
+                            hint="Tushen kudin aike kafin nisan tafiya (e.g. ₦1,000)" color="#3B82F6" />
+                        <Inp label="Weight Surcharge Per KG (₦/kg)"
+                            value={shippingPricePerKg}
+                            onChange={v => { setShippingPricePerKg(v); setUnsaved(true); }}
+                            icon="barbell-outline" keyboard="numeric" placeholder="100"
+                            hint="Kudin kowane 1 KG na nauyin kaya (bayan 1kg na farko)" color="#3B82F6" />
+                        <Inp label="Volume Surcharge Per CBM (₦/m³)"
+                            value={shippingPricePerCbm}
+                            onChange={v => { setShippingPricePerCbm(v); setUnsaved(true); }}
+                            icon="cube-outline" keyboard="numeric" placeholder="500"
+                            hint="Kudin girman kaya a kowane CBM (m³)" color="#3B82F6" />
+                        <Inp label="Minimum Delivery Fee (₦)"
+                            value={shippingMinFee}
+                            onChange={v => { setShippingMinFee(v); setUnsaved(true); }}
+                            icon="arrow-down-circle-outline" keyboard="numeric" placeholder="800"
+                            hint="Mafi karancin kudin aike (e.g. ₦800)" color="#64748B" />
+                        <Inp label="Maximum Delivery Fee Cap (₦)"
+                            value={shippingMaxFee}
+                            onChange={v => { setShippingMaxFee(v); setUnsaved(true); }}
+                            icon="arrow-up-circle-outline" keyboard="numeric" placeholder="25000"
+                            hint="Mafi yawan kudin aike (Cap)" color="#64748B" />
                         <Inp label={`Default Fallback Fee (${selectedCurrency.symbol})`}
                             value={defaultShippingFee}
                             onChange={v => { setDefaultShippingFee(v); setUnsaved(true); }}

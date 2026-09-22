@@ -746,21 +746,21 @@ export const CartPage = ({
 
                             <View style={{ flex: 1 }}>
                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <Text style={s.addressCardTitle}>Wurin Isarwa (Destination)</Text>
+                                    <Text style={s.addressCardTitle}>Delivery Destination</Text>
                                     <TouchableOpacity
-                                        onPress={() => navigation.navigate('CheckoutPage')}
+                                        onPress={() => navigation.navigate('AddressPage')}
                                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                                     >
-                                        <Text style={s.addressChangeTxt}>Zabi Garin (LGA)</Text>
+                                        <Text style={s.addressChangeTxt}>Change</Text>
                                     </TouchableOpacity>
                                 </View>
 
                                 {customerAddress ? (
                                     <>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
-                                            <Text style={s.addressRecipient}>{customerAddress.title || 'Wurin Isarwa'}</Text>
+                                            <Text style={s.addressRecipient}>{customerAddress.title || 'Delivery Address'}</Text>
                                             <View style={s.lgaPill}>
-                                                <Text style={s.lgaPillTxt}>{customerAddress.lga || customerAddress.city || 'Bade'} LGA</Text>
+                                                <Text style={s.lgaPillTxt}>{customerAddress.lga || customerAddress.city || 'Standard'} LGA</Text>
                                             </View>
                                             {liveShippingResult?.totalDistanceKm ? (
                                                 <View style={[s.lgaPill, { backgroundColor: '#FEF3C7' }]}>
@@ -769,7 +769,7 @@ export const CartPage = ({
                                             ) : null}
                                         </View>
                                         <Text style={s.addressText} numberOfLines={2}>
-                                            {customerAddress.address || `${customerAddress.lga || 'Bade'} LGA, ${customerAddress.state || 'Yobe'} State`}
+                                            {customerAddress.address || `${customerAddress.lga || ''} LGA, ${customerAddress.state || ''} State`}
                                         </Text>
                                         <Text style={s.addressRegion}>
                                             {customerAddress.state ? `${customerAddress.state} State` : 'Nigeria'}
@@ -778,13 +778,13 @@ export const CartPage = ({
                                     </>
                                 ) : (
                                     <View style={{ marginTop: 4 }}>
-                                        <Text style={s.noAddressTxt}>Babu adireshin da aka zaba tukuna.</Text>
+                                        <Text style={s.noAddressTxt}>No saved shipping address selected yet.</Text>
                                         <TouchableOpacity 
-                                            onPress={() => navigation.navigate('CheckoutPage')}
+                                            onPress={() => navigation.navigate('AddressPage')}
                                             style={{ marginTop: 4 }}
                                         >
                                             <Text style={{ color: GOLD, fontWeight: '800', fontSize: 12 }}>
-                                                + Zabi Garin da za a Kai Kaya
+                                                + Add Delivery Address
                                             </Text>
                                         </TouchableOpacity>
                                     </View>
