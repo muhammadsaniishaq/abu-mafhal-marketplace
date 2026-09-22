@@ -372,6 +372,18 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
     // Resolve active customer address directly from saved shipping addresses
     const selectedAddrObj = useMemo(() => {
+        if (selectedAddressId === 'lga_dest' && quickDestination) {
+            return {
+                id: 'lga_dest',
+                title: `${quickDestination.city || quickDestination.lga} Delivery`,
+                address: quickDestination.address || `${quickDestination.city || quickDestination.lga} LGA, ${quickDestination.state} State`,
+                city: quickDestination.city || quickDestination.lga || '',
+                lga: quickDestination.lga || quickDestination.city || '',
+                state: quickDestination.state || 'Yobe',
+                phone: profile?.phone || profile?.phone_number || '',
+                is_default: false
+            };
+        }
         const found = addresses.find(a => a.id === selectedAddressId && a.id !== 'lga_dest');
         if (found) return found;
         if (routeAddress) return routeAddress;
@@ -391,7 +403,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             };
         }
         return null;
-    }, [addresses, selectedAddressId, routeAddress, profile]);
+    }, [addresses, selectedAddressId, routeAddress, profile, quickDestination]);
 
     // Instant Synchronous Shipping Calculation (0ms latency, zero delay)
     const shippingCalculation = useMemo(() => {
@@ -400,8 +412,6 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
         const mergedAdminSettings = {
             ...(settings?.shipping_settings || {}),
-            shipping_fees: settings?.shipping_fees,
-            default_shipping_fee: settings?.default_shipping_fee,
             free_shipping_enabled: settings?.free_shipping_enabled || settings?.shipping_settings?.free_shipping_enabled,
             free_shipping_threshold: settings?.free_shipping_threshold || settings?.shipping_settings?.free_shipping_threshold
         };
@@ -416,29 +426,16 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
         });
     }, [selectedAddrObj, selectedDeliveryMethod, cart, settings, deliveryMethods, storesLoaded]);
 
-    // Dynamic Shipping Fee (Instantly computed with zero delay)
+    // Dynamic Shipping Fee (Instantly computed from GPS distance with zero delay)
     const shippingFee = useMemo(() => {
         if (selectedDeliveryMethod === 'pickup') return 0;
         const allFreeShipping = cart.length > 0 && cart.every(item => item.free_shipping === true);
         if (allFreeShipping) return 0;
         if (shippingCalculation && typeof shippingCalculation.totalShippingFee === 'number') {
-            return shippingCalculation.totalShippingFee;
+            return Math.max(0, Number(shippingCalculation.totalShippingFee));
         }
-        const selectedAddr = selectedAddrObj;
-        if (selectedAddr?.state && settings?.shipping_fees) {
-            const stateMatch = Object.keys(settings.shipping_fees).find(
-                k => k.toLowerCase().trim() === selectedAddr.state.toLowerCase().trim() ||
-                     (k.toLowerCase().includes('abuja') && selectedAddr.state.toLowerCase().includes('abuja')) ||
-                     (k.toLowerCase().includes('fct') && selectedAddr.state.toLowerCase().includes('fct'))
-            );
-            if (stateMatch && settings.shipping_fees[stateMatch] !== undefined) {
-                return Number(settings.shipping_fees[stateMatch]);
-            }
-        }
-        const rawDef = settings?.default_shipping_fee;
-        const parsedDef = (typeof rawDef === 'object' && rawDef !== null) ? (rawDef.value ?? rawDef.amount) : rawDef;
-        return parseFloat(parsedDef) || 3000;
-    }, [shippingCalculation, selectedDeliveryMethod, selectedAddrObj, cart, settings]);
+        return 0;
+    }, [shippingCalculation, selectedDeliveryMethod, cart]);
 
     // Tax calculation
     const taxAmount = useMemo(() => {
@@ -1029,7 +1026,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
         customTotal = null,
         customShipping = null,
         customDeliveryMethod = null,
-        customShippingFee = null
+        customShippingFee = null,
+        customTaxAmount = null,
+        customSubtotal = null,
+        customDiscountAmount = null
     }) => {
         try {
             let verifiedUser = user;
@@ -1062,6 +1062,11 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             const effectiveDeliveryMethod = customDeliveryMethod || selectedDeliveryMethod || 'standard';
             const isPickup = effectiveDeliveryMethod === 'pickup';
             const effectiveShippingFee = isPickup ? 0 : (customShippingFee !== null && customShippingFee !== undefined ? Number(customShippingFee) : Number(shippingFee || 0));
+            const effectiveTax = (customTaxAmount !== null && customTaxAmount !== undefined) ? Number(customTaxAmount) : Number(taxAmount || 0);
+            const effectiveDiscount = (customDiscountAmount !== null && customDiscountAmount !== undefined) ? Number(customDiscountAmount) : Number(discountAmount || 0);
+            const effectiveSubtotal = (customSubtotal !== null && customSubtotal !== undefined && Number(customSubtotal) > 0)
+                ? Number(customSubtotal)
+                : (initialTotal > 0 ? initialTotal : Math.max(0, effectiveTotal - effectiveShippingFee - effectiveTax + effectiveDiscount));
 
             const isPss = paymentMethod === 'pay_small_small' || !!installmentPlan;
             let effectivePlan = installmentPlan;
@@ -1124,10 +1129,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 payment_method: effectiveMethod,
                 payment_reference: targetRef,
                 total_amount: effectiveTotal,
-                subtotal: Math.max(0, effectiveTotal - (effectiveShippingFee || 0) - (taxAmount || 0)),
+                subtotal: effectiveSubtotal,
                 shipping_fee: effectiveShippingFee,
-                tax_amount: taxAmount || 0,
-                discount_amount: discountAmount || 0,
+                tax_amount: effectiveTax,
+                discount_amount: effectiveDiscount,
                 shipping_address: shippingAddressStr,
                 shipping_details: shippingDetailsPayload,
                 installment_plan: effectivePlan || null,
@@ -1339,7 +1344,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     customTotal: activeFinalTotal,
                     customShipping: pendingSession?.selectedAddrObj,
                     customDeliveryMethod: pendingSession?.selectedDeliveryMethod || selectedDeliveryMethod || 'standard',
-                    customShippingFee: pendingSession?.shippingFee !== undefined ? pendingSession.shippingFee : shippingFee
+                    customShippingFee: pendingSession?.shippingFee !== undefined ? pendingSession.shippingFee : shippingFee,
+                    customTaxAmount: pendingSession?.taxAmount !== undefined ? pendingSession.taxAmount : taxAmount,
+                    customSubtotal: pendingSession?.subtotal !== undefined ? pendingSession.subtotal : initialTotal,
+                    customDiscountAmount: pendingSession?.discountAmount !== undefined ? pendingSession.discountAmount : discountAmount
                 });
                 if (dbOrderId) supabaseOrderId = dbOrderId;
 
@@ -1861,6 +1869,38 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     }
                 });
 
+                const pendingCheckoutPayload = {
+                    orderRef,
+                    paymentMethod: 'pay_small_small',
+                    pssDownPaymentMethod,
+                    pssPlanDetails,
+                    paidAmount: pssDownPayment,
+                    cart,
+                    finalTotal,
+                    baseTotal,
+                    subtotal: initialTotal,
+                    taxAmount: taxAmount || 0,
+                    shippingFee: selectedDeliveryMethod === 'pickup' ? 0 : Number(shippingFee || 0),
+                    selectedDeliveryMethod: selectedDeliveryMethod || 'standard',
+                    discountAmount: discountAmount || 0,
+                    selectedAddressId,
+                    selectedAddrObj: safeShipping,
+                    orderNote,
+                    deliverySlot,
+                    isGift,
+                    giftRecipientName,
+                    giftRecipientPhone,
+                    giftMessage,
+                    giftWrapStyle,
+                    timestamp: Date.now()
+                };
+                try {
+                    if (typeof window !== 'undefined' && window.localStorage) {
+                        window.localStorage.setItem('@abumafhal_pending_checkout_session', JSON.stringify(pendingCheckoutPayload));
+                    }
+                    await AsyncStorage.setItem('@abumafhal_pending_checkout_session', JSON.stringify(pendingCheckoutPayload));
+                } catch (_) {}
+
                 // Direct Modern Web Overlay if openInline exists
                 if (pssInit?.type === 'inline_web' && typeof pssInit.openInline === 'function') {
                     setIsProcessing(false);
@@ -1881,33 +1921,6 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
                 // Web: Redirect to official secure hosted checkout
                 if (Platform.OS === 'web' && typeof window !== 'undefined' && pssInit.checkoutUrl) {
-                    const pendingCheckoutPayload = {
-                        orderRef,
-                        paymentMethod: 'pay_small_small',
-                        pssDownPaymentMethod,
-                        pssPlanDetails,
-                        paidAmount: pssDownPayment,
-                        cart,
-                        finalTotal,
-                        baseTotal,
-                        shippingFee,
-                        selectedDeliveryMethod: selectedDeliveryMethod || 'standard',
-                        discountAmount,
-                        selectedAddressId,
-                        selectedAddrObj: safeShipping,
-                        orderNote,
-                        deliverySlot,
-                        isGift,
-                        giftRecipientName,
-                        giftRecipientPhone,
-                        giftMessage,
-                        giftWrapStyle,
-                        timestamp: Date.now()
-                    };
-                    try {
-                        window.localStorage.setItem('@abumafhal_pending_checkout_session', JSON.stringify(pendingCheckoutPayload));
-                        await AsyncStorage.setItem('@abumafhal_pending_checkout_session', JSON.stringify(pendingCheckoutPayload));
-                    } catch (_) {}
                     setIsProcessing(false);
                     window.location.href = pssInit.checkoutUrl;
                     return;
@@ -1976,6 +1989,35 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 }
             });
 
+            const pendingCheckoutPayload = {
+                orderRef,
+                paymentMethod,
+                cart,
+                finalTotal,
+                baseTotal,
+                subtotal: initialTotal,
+                taxAmount: taxAmount || 0,
+                shippingFee: selectedDeliveryMethod === 'pickup' ? 0 : Number(shippingFee || 0),
+                selectedDeliveryMethod: selectedDeliveryMethod || 'standard',
+                discountAmount: discountAmount || 0,
+                selectedAddressId,
+                selectedAddrObj: safeShipping,
+                orderNote,
+                deliverySlot,
+                isGift,
+                giftRecipientName,
+                giftRecipientPhone,
+                giftMessage,
+                giftWrapStyle,
+                timestamp: Date.now()
+            };
+            try {
+                if (typeof window !== 'undefined' && window.localStorage) {
+                    window.localStorage.setItem('@abumafhal_pending_checkout_session', JSON.stringify(pendingCheckoutPayload));
+                }
+                await AsyncStorage.setItem('@abumafhal_pending_checkout_session', JSON.stringify(pendingCheckoutPayload));
+            } catch (_) {}
+
             // Direct Modern Web Overlay if openInline exists
             if (initRes?.type === 'inline_web' && typeof initRes.openInline === 'function') {
                 setIsProcessing(false);
@@ -1997,30 +2039,6 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             // Web: Redirect to official secure hosted checkout (Paystack / Flutterwave / NOWPayments) if valid URL
             const isHttpUrl = typeof initRes.checkoutUrl === 'string' && (initRes.checkoutUrl.startsWith('http://') || initRes.checkoutUrl.startsWith('https://'));
             if (Platform.OS === 'web' && typeof window !== 'undefined' && isHttpUrl) {
-                const pendingCheckoutPayload = {
-                    orderRef,
-                    paymentMethod,
-                    cart,
-                    finalTotal,
-                    baseTotal,
-                    shippingFee,
-                    selectedDeliveryMethod: selectedDeliveryMethod || 'standard',
-                    discountAmount,
-                    selectedAddressId,
-                    selectedAddrObj: safeShipping,
-                    orderNote,
-                    deliverySlot,
-                    isGift,
-                    giftRecipientName,
-                    giftRecipientPhone,
-                    giftMessage,
-                    giftWrapStyle,
-                    timestamp: Date.now()
-                };
-                try {
-                    window.localStorage.setItem('@abumafhal_pending_checkout_session', JSON.stringify(pendingCheckoutPayload));
-                    await AsyncStorage.setItem('@abumafhal_pending_checkout_session', JSON.stringify(pendingCheckoutPayload));
-                } catch (_) {}
                 setIsProcessing(false);
                 window.location.href = initRes.checkoutUrl;
                 return;
@@ -2496,7 +2514,6 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                 } else {
                                     const mergedAdminSettings = {
                                         ...(settings?.shipping_settings || {}),
-                                        shipping_fees: settings?.shipping_fees,
                                         default_shipping_fee: settings?.default_shipping_fee
                                     };
                                     const mCalc = ShippingCalculationEngine.calculateMultiVendorShippingInstant({

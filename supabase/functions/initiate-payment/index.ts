@@ -186,11 +186,9 @@ Deno.serve(async (req: any) => {
             if (matchedZone && matchedZone.fixed_fee !== null && matchedZone.fixed_fee !== undefined) {
                 shippingFee = Number(matchedZone.fixed_fee);
             } else if (client_shipping_fee !== undefined && client_shipping_fee !== null && Number(client_shipping_fee) >= 0) {
-                // Client-calculated distance fee from centralized shippingService
+                // Client-calculated distance fee from centralized GPS shippingService
                 const minFee = Number(shippingSettings.min_shipping_fee) || 500;
                 shippingFee = Math.max(minFee, Number(client_shipping_fee));
-            } else if (address?.state && shippingSettings.shipping_fees?.[address.state] !== undefined) {
-                shippingFee = Number(shippingSettings.shipping_fees[address.state]);
             } else {
                 shippingFee = Number(shippingSettings.default_shipping_fee || shippingSettings.base_fee) || 3000;
             }

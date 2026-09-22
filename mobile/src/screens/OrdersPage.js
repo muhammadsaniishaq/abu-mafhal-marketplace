@@ -691,9 +691,11 @@ const OrderCard = React.memo(({ item, isExpanded, onToggle, onCancel, onConfirm,
     }, 0);
     const shippingFee = parseFloat(item.shipping_fee || 0) || 0;
     const taxAmount = parseFloat(item.tax_amount || 0) || 0;
-    const discount = parseFloat(item.discount_applied || 0) || 0;
+    const discount = parseFloat(item.discount_amount || item.discount_applied || 0) || 0;
     const totalPaid = parseFloat(item.total_amount || (itemsSubtotal + shippingFee + taxAmount - discount) || 0);
-    const displaySubtotal = itemsSubtotal > 0 ? itemsSubtotal : Math.max(0, totalPaid - shippingFee - taxAmount + discount);
+    const displaySubtotal = (item.subtotal !== undefined && item.subtotal !== null && Number(item.subtotal) > 0)
+        ? Number(item.subtotal)
+        : (itemsSubtotal > 0 ? itemsSubtotal : Math.max(0, totalPaid - shippingFee - taxAmount + discount));
 
     // Pay Small Small (BNPL) metrics
     const pssMetrics = useMemo(() => getOrderPssMetrics(item), [item]);

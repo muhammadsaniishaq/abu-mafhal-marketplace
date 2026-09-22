@@ -739,7 +739,7 @@ export const AdminSettings = ({ navigation }) => {
             allow_vendor_vacation: allowVendorVacation,
             vendor_daily_payout_limit: parseFloat(vendorDailyPayoutLimit) || 500000,
             // Phase-5 Shipping & Tax
-            shipping_fees: shippingFees,
+            shipping_fees: null,
             tax_enabled: taxEnabled,
             tax_rate: parseFloat(taxRate) || 7.5,
             free_nationwide_shipping: freeNationwideShipping,
@@ -1409,22 +1409,55 @@ export const AdminSettings = ({ navigation }) => {
                             icon="globe" keyboard="numeric" placeholder="3000"
                             hint="Applied when buyer's state is not in the list" color="#3B82F6" />
                     </Card>
-                    <Card>
-                        <Text style={[S.iLabel, { color: T.muted, marginBottom: 14 }]}>PER-STATE FEES ({selectedCurrency.symbol})</Text>
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                            {NIGERIA_STATES.map(state => (
-                                <StateFeeCell
-                                    key={state}
-                                    state={state}
-                                    fee={shippingFees[state]}
-                                    symbol={selectedCurrency.symbol}
-                                    onChange={v => {
-                                        setShippingFees(p => ({ ...p, [state]: parseInt(v) || 0 }));
-                                        setUnsaved(true);
-                                    }}
-                                />
-                            ))}
+                    <Card style={{ backgroundColor: '#3B82F610', borderColor: '#3B82F635', borderWidth: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#3B82F6', alignItems: 'center', justifyContent: 'center' }}>
+                                <Ionicons name="navigate" size={20} color="#fff" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={[S.iLabel, { color: T.text, fontSize: 14, fontWeight: '700' }]}>
+                                    Dynamic GPS Distance Engine
+                                </Text>
+                                <Text style={{ color: '#10B981', fontSize: 11, fontWeight: '600' }}>
+                                    ● Real-Time Latitude &amp; Longitude Active
+                                </Text>
+                            </View>
                         </View>
+                        <Text style={{ color: T.muted, fontSize: 12, lineHeight: 18, marginTop: 4 }}>
+                            Static per-state shipping fees have been removed. Delivery fees are now measured accurately via GPS coordinates (Latitude &amp; Longitude) using the Haversine formula based on actual driving distance (KM) between vendor stores and customer delivery addresses.
+                        </Text>
+                        <View style={{ marginTop: 12, flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                            <View style={{ backgroundColor: '#3B82F620', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 }}>
+                                <Text style={{ color: '#2563EB', fontSize: 11, fontWeight: '600' }}>
+                                    Base Fee + (Distance KM × Price/KM)
+                                </Text>
+                            </View>
+                            <View style={{ backgroundColor: '#10B98120', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 }}>
+                                <Text style={{ color: '#059669', fontSize: 11, fontWeight: '600' }}>
+                                    Store Pickup is Free (₦0)
+                                </Text>
+                            </View>
+                        </View>
+                        {navigation?.navigate && (
+                            <TouchableOpacity
+                                onPress={() => navigation.navigate('AdminShipping')}
+                                style={{
+                                    marginTop: 14,
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: 6,
+                                    backgroundColor: '#3B82F6',
+                                    paddingVertical: 10,
+                                    borderRadius: 8
+                                }}
+                            >
+                                <Ionicons name="settings-outline" size={16} color="#fff" />
+                                <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>
+                                    Open Shipping &amp; Methods Manager
+                                </Text>
+                            </TouchableOpacity>
+                        )}
                     </Card>
                 </Sect>
 

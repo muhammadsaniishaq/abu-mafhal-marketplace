@@ -441,8 +441,10 @@ export const TrackOrderPage = ({ navigation, route, onBack, order: propOrder, on
     const totalAmount = parseFloat(currentOrder?.total_amount || 0) || 0;
     const shippingFee = parseFloat(currentOrder?.shipping_fee || 0) || 0;
     const taxAmount = parseFloat(currentOrder?.tax_amount || 0) || 0;
-    const discountApplied = parseFloat(currentOrder?.discount_applied || 0) || 0;
-    const displaySubtotal = itemsSubtotal > 0 ? itemsSubtotal : Math.max(0, totalAmount - shippingFee - taxAmount + discountApplied);
+    const discountApplied = parseFloat(currentOrder?.discount_amount || currentOrder?.discount_applied || 0) || 0;
+    const displaySubtotal = (currentOrder?.subtotal !== undefined && currentOrder?.subtotal !== null && Number(currentOrder.subtotal) > 0)
+        ? Number(currentOrder.subtotal)
+        : (itemsSubtotal > 0 ? itemsSubtotal : Math.max(0, totalAmount - shippingFee - taxAmount + discountApplied));
 
     // Shipping Destination Address
     const shippingAddress = useMemo(() => {

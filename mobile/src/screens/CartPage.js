@@ -207,7 +207,6 @@ export const CartPage = ({
         if (!cart.length || !customerAddress) return null;
         const mergedAdminSettings = {
             ...(settings?.shipping_settings || {}),
-            shipping_fees: settings?.shipping_fees,
             default_shipping_fee: settings?.default_shipping_fee,
             free_shipping_enabled: settings?.free_shipping_enabled || settings?.shipping_settings?.free_shipping_enabled,
             free_shipping_threshold: settings?.free_shipping_threshold || settings?.shipping_settings?.free_shipping_threshold
@@ -227,16 +226,8 @@ export const CartPage = ({
         if (liveShippingResult && typeof liveShippingResult.totalShippingFee === 'number') {
             return liveShippingResult.totalShippingFee;
         }
-        if (customerAddress?.state && settings?.shipping_fees) {
-            const stateMatch = Object.keys(settings.shipping_fees).find(
-                k => k.toLowerCase().trim() === customerAddress.state.toLowerCase().trim()
-            );
-            if (stateMatch && settings.shipping_fees[stateMatch] !== undefined) {
-                return Number(settings.shipping_fees[stateMatch]);
-            }
-        }
         return baseShippingFee;
-    }, [cart.length, isFreeShipping, liveShippingResult, customerAddress, settings, baseShippingFee]);
+    }, [cart.length, isFreeShipping, liveShippingResult, baseShippingFee]);
 
     const discount = useMemo(() => {
         if (!appliedPromo || cart.length === 0) return 0;

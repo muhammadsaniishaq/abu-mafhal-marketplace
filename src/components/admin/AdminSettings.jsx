@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../config/supabase';
-import { FiChevronRight, FiSave, FiSettings, FiCheck, FiX, FiInfo, FiUploadCloud } from 'react-icons/fi';
+import { FiChevronRight, FiSave, FiSettings, FiCheck, FiX, FiInfo, FiUploadCloud, FiNavigation } from 'react-icons/fi';
 
 const CATEGORIES = [
     { id: 'branding', label: 'Brand & Display' },
@@ -109,7 +109,7 @@ const AdminSettings = () => {
 
             // 2. Save each key-value setting
             for (const [k, val] of Object.entries(settings)) {
-                if (val !== undefined && k !== 'payment_gateways' && k !== 'id' && k !== 'created_at' && k !== 'updated_at') {
+                if (val !== undefined && k !== 'payment_gateways' && k !== 'shipping_fees' && k !== 'id' && k !== 'created_at' && k !== 'updated_at') {
                     const payload = typeof val === 'object' ? val : { value: val };
                     try {
                         const { error: rpcErr } = await supabase.rpc('save_app_setting', {
@@ -353,19 +353,26 @@ const AdminSettings = () => {
                                     <InputField type="number" label="Auto-Free Shipping Cart Minimum" field="free_shipping_min" hint="Cart value to trigger free shipping automatically." />
                                 </div>
 
-                                <h3 className="font-semibold text-gray-800 mb-4 border-b pb-2">Per-State Logistics Rates</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    {NIGERIA_STATES.map(state => (
-                                        <div key={state} className="flex items-center gap-2">
-                                            <label className="w-24 text-sm text-gray-600 truncate">{state}</label>
-                                            <input
-                                                type="number"
-                                                value={settings.shipping_fees?.[state] || 0}
-                                                onChange={(e) => updateNestedField('shipping_fees', state, parseFloat(e.target.value) || 0)}
-                                                className="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded focus:ring-1 focus:ring-primary-500 outline-none"
-                                            />
+                                <div className="mt-4 p-5 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200">
+                                    <div className="flex items-start gap-3">
+                                        <div className="p-2.5 bg-blue-600 text-white rounded-lg shadow-sm">
+                                            <FiNavigation className="text-xl" />
                                         </div>
-                                    ))}
+                                        <div>
+                                            <h3 className="font-bold text-gray-900 text-base">Dynamic GPS Longitude &amp; Latitude Engine Active</h3>
+                                            <p className="text-sm text-gray-600 mt-1 leading-relaxed">
+                                                Static per-state shipping fees have been deprecated. Delivery fees are now measured in real-time using GPS coordinates (Latitude &amp; Longitude) via the Haversine distance formula between Vendor warehouse coordinates and Buyer delivery coordinates.
+                                            </p>
+                                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                                                <span className="inline-flex items-center text-xs font-semibold text-blue-800 bg-blue-100/80 py-1 px-3 rounded-full">
+                                                    ✓ Base Fee + (Distance KM × Price/KM) + Handling Fee
+                                                </span>
+                                                <span className="inline-flex items-center text-xs font-semibold text-emerald-800 bg-emerald-100/80 py-1 px-3 rounded-full">
+                                                    ✓ Store Pickup is 100% Free (₦0)
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         )}

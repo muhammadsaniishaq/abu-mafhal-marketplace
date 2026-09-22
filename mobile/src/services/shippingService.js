@@ -172,7 +172,7 @@ export const NIGERIA_LGA_CENTROIDS = {
 export const DEFAULT_SHIPPING_SETTINGS = {
     enabled: true,
     currency: 'NGN',
-    base_fee: 3000,
+    base_fee: 1000,
     price_per_km: 75,
     min_fee: 800,
     max_fee: 25000,
@@ -280,11 +280,32 @@ export class ShippingDistanceService {
     static resolveCoordinates(location) {
         if (!location) return null;
 
-        // 1. Direct explicit coordinates
+        // 1. Direct explicit coordinates (supports latitude/longitude, lat/lng, lat/lon, coords, coordinates)
         if (this.isValidCoordinate(location.latitude, location.longitude)) {
             return {
                 lat: Number(location.latitude),
                 lon: Number(location.longitude),
+                source: 'exact_gps'
+            };
+        }
+        if (this.isValidCoordinate(location.lat, location.lng || location.lon)) {
+            return {
+                lat: Number(location.lat),
+                lon: Number(location.lng || location.lon),
+                source: 'exact_gps'
+            };
+        }
+        if (location.coords && this.isValidCoordinate(location.coords.latitude, location.coords.longitude)) {
+            return {
+                lat: Number(location.coords.latitude),
+                lon: Number(location.coords.longitude),
+                source: 'exact_gps'
+            };
+        }
+        if (location.coordinates && this.isValidCoordinate(location.coordinates.latitude, location.coordinates.longitude)) {
+            return {
+                lat: Number(location.coordinates.latitude),
+                lon: Number(location.coordinates.longitude),
                 source: 'exact_gps'
             };
         }
@@ -729,15 +750,22 @@ export class ShippingCalculationEngine {
             matchedZone = matchedLgaZone || matchedStateZone;
         }
 
-        // 6. Resolve Pricing Parameters across Hierarchy:
-        // Priority: Vendor Custom Override > Admin LGA Zone > Admin State Zone > Admin Configured State Fee > Delivery Method/Global Override > LGA Tier Baseline
-        let baseFee    = lgaTier.baseFee;
-        let pricePerKm = lgaTier.pricePerKm;
-        let minFee     = lgaTier.minFee;
-        let maxFee     = Number(globalSettings.max_fee ?? 25000);
-        let remoteAreaFee = 0;
-        let isFixedFee = false;
+        // 6. Resolve Pricing Parameters across Hierarchy using Real GPS Distance:
+        // Priority: Vendor Custom Override > Admin LGA Zone > Admin State Zone > Delivery Method > Global Shipping Settings > LGA Tier Baseline
+        let baseFee       = Number(globalSettings?.base_fee) || lgaTier.baseFee || 1000;
+        let pricePerKm    = Number(globalSettings?.price_per_km) || 75;
+        let minFee        = Number(globalSettings?.min_fee) || lgaTier.minFee || 800;
+        let maxFee        = Number(globalSettings?.max_fee ?? 25000);
+        let remoteAreaFee = Number(globalSettings?.remote_area_fee || 0);
+        let isFixedFee    = false;
         let fixedFeeAmount = 0;
+
+        // If in the exact same LGA (e.g. Bade / Gashua intra-city dispatch)
+        if (isSameLga) {
+            baseFee = lgaTier.baseFee || 800;
+            pricePerKm = 0;
+            minFee = lgaTier.minFee || 800;
+        }
 
         // Delivery Method adjustments
         const methodId = deliveryMethod?.id || deliveryMethod?.code || 'standard';
@@ -748,50 +776,9 @@ export class ShippingCalculationEngine {
             if (deliveryMethod.max_fee !== undefined && deliveryMethod.max_fee !== null) maxFee = Number(deliveryMethod.max_fee);
         }
 
-        // Check for Admin State-level Shipping Fee Configuration (from Admin Settings)
-        const adminShippingFees = globalSettings?.shipping_fees || {};
-        let adminConfiguredStateFee = null;
-        if (customerState && adminShippingFees && typeof adminShippingFees === 'object') {
-            const stateMatch = Object.keys(adminShippingFees).find(k => {
-                const normKey = k.toLowerCase().trim();
-                const normState = customerState.toLowerCase().trim();
-                return normKey === normState ||
-                    (normKey.includes('abuja') && normState.includes('abuja')) ||
-                    (normKey.includes('fct') && normState.includes('fct'));
-            });
-            if (stateMatch && adminShippingFees[stateMatch] !== undefined && adminShippingFees[stateMatch] !== null) {
-                adminConfiguredStateFee = Number(adminShippingFees[stateMatch]);
-            }
-        }
-
-        if (adminConfiguredStateFee === null) {
-            const rawDef = globalSettings?.default_shipping_fee;
-            const parsedDef = (typeof rawDef === 'object' && rawDef !== null) ? (rawDef.value ?? rawDef.amount) : rawDef;
-            if (parsedDef && !isNaN(Number(parsedDef)) && Number(parsedDef) > 0) {
-                adminConfiguredStateFee = Number(parsedDef);
-            }
-        }
-
-        if (adminConfiguredStateFee !== null && adminConfiguredStateFee > 0) {
-            if (methodId === 'standard') {
-                baseFee = adminConfiguredStateFee;
-                isFixedFee = true;
-                fixedFeeAmount = adminConfiguredStateFee;
-                minFee = Math.min(minFee, adminConfiguredStateFee);
-            } else if (methodId === 'express') {
-                const expFee = Math.round(adminConfiguredStateFee * 1.5);
-                baseFee = expFee;
-                isFixedFee = true;
-                fixedFeeAmount = expFee;
-            } else if (methodId === 'same_day') {
-                const sameFee = Math.round(adminConfiguredStateFee * 2.0);
-                baseFee = sameFee;
-                isFixedFee = true;
-                fixedFeeAmount = sameFee;
-            }
-        } else if (deliveryMethod?.base_fee === undefined) {
+        if (deliveryMethod?.base_fee === undefined) {
             if (methodId === 'express') {
-                baseFee = lgaTier.expressBaseFee || Math.round(baseFee * 1.6);
+                baseFee = lgaTier.expressBaseFee || Math.round(baseFee * 1.5);
                 minFee  = Math.max(minFee, baseFee);
             } else if (methodId === 'same_day') {
                 baseFee = lgaTier.sameDayBaseFee || Math.round(baseFee * 2.0);
@@ -831,12 +818,12 @@ export class ShippingCalculationEngine {
             ? Number(matchedZone.handling_fee)
             : (Number(globalSettings.handling_fee || 0) + Number(globalSettings.vendor_handling_fee || 0));
 
-        // 7. Compute Raw & Final Formula
+        // 7. Compute Raw & Final Formula directly from GPS distance (latitude & longitude)
         let rawFee = 0;
         if (isFixedFee) {
             rawFee = fixedFeeAmount + handlingFee;
         } else {
-            const distanceFee = Math.round(distanceKm * pricePerKm);
+            const distanceFee = isSameLga ? 0 : Math.round(distanceKm * pricePerKm);
             rawFee = baseFee + distanceFee + handlingFee + remoteAreaFee;
         }
 
@@ -861,6 +848,10 @@ export class ShippingCalculationEngine {
             ruleSummary = `Admin State Zone: ${matchedStateZone.name || customerState}`;
         } else if (isSameLga) {
             ruleSummary = 'Intra-LGA Local Delivery (Bade / Gashua)';
+        } else if (distanceSource === 'exact_gps') {
+            ruleSummary = `GPS Distance Transit (${distanceKm} km)`;
+        } else {
+            ruleSummary = `${lgaTier.tierName} (${distanceKm} km)`;
         }
 
         return {
@@ -1114,9 +1105,7 @@ export class ShippingCalculationEngine {
         if (adminSettings) {
             globalSettings = { 
                 ...globalSettings, 
-                ...(adminSettings.shipping_settings || adminSettings),
-                shipping_fees: adminSettings.shipping_fees || adminSettings.shipping_settings?.shipping_fees,
-                default_shipping_fee: adminSettings.default_shipping_fee || adminSettings.shipping_settings?.default_shipping_fee
+                ...(adminSettings.shipping_settings || adminSettings)
             };
         }
 
