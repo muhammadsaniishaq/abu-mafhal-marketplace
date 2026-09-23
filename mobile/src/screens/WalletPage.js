@@ -3225,12 +3225,12 @@ const localStyles = StyleSheet.create({
     inputAreaContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F8FAFC',
-        borderRadius: 10,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderWidth: 1.5,
-        borderColor: '#E2E8F0'
+        backgroundColor: 'transparent',
+        borderRadius: 0,
+        paddingHorizontal: 0,
+        paddingVertical: 6,
+        borderBottomWidth: 2,
+        borderBottomColor: '#E2E8F0'
     },
     inputPrefix: {
         fontSize: 20,
