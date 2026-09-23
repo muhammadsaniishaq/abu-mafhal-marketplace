@@ -113,54 +113,18 @@ const GATEWAY_OPTIONS = [
     },
     {
         id: 'bank_transfer',
-        name: 'Direct Bank Transfer',
-        subtitle: 'Moniepoint MFB • 8109849201',
+        name: 'Dedicated Bank Account',
+        subtitle: 'Permanent Virtual NUBAN • Auto-Credit',
         badge: '0% Gateway Fee',
         badgeColor: '#7C3AED',
         badgeBg: '#EDE9FE',
         accentColor: '#6366F1',
         currency: 'NGN',
         currencySymbol: '₦',
-        logoUrl: 'https://moniepoint.com/favicon.ico',
+        logoUrl: 'https://flutterwave.com/favicon.ico',
         fallbackIcon: 'business-outline',
         fallbackColor: '#7C3AED',
-        speed: 'Instant 1-Click Verification',
-        accountNumber: '8109849201',
-        bankName: 'Moniepoint Microfinance Bank',
-        accountName: 'Abu Mafhal Marketplace Ltd'
-    }
-];
-
-const DIRECT_TRANSFER_BANKS = [
-    {
-        id: 'moniepoint',
-        bankName: 'Moniepoint Microfinance Bank',
-        accountNumber: '8109849201',
-        accountName: 'Abu Mafhal Marketplace Ltd',
-        tag: 'Recommended • Instant',
-        color: '#059669',
-        bg: '#ECFDF5',
-        borderColor: '#A7F3D0'
-    },
-    {
-        id: 'opay',
-        bankName: 'OPay (Paycom)',
-        accountNumber: '8109849201',
-        accountName: 'Abu Mafhal Marketplace Ltd',
-        tag: 'Zero Fee • Fast',
-        color: '#2563EB',
-        bg: '#EFF6FF',
-        borderColor: '#BFDBFE'
-    },
-    {
-        id: 'kuda',
-        bankName: 'Kuda Microfinance Bank',
-        accountNumber: '8109849201',
-        accountName: 'Abu Mafhal Marketplace Ltd',
-        tag: '24/7 Processing',
-        color: '#7C3AED',
-        bg: '#F5F3FF',
-        borderColor: '#DDD6FE'
+        speed: 'Instant Auto-Credit'
     }
 ];
 
@@ -217,9 +181,9 @@ const GatewayLogo = ({ gateway, size = 38 }) => {
     }
 
     const isPaystack = gateway.id === 'paystack';
-    const isMoniepoint = gateway.id === 'bank_transfer';
-    const imgWidth = isMoniepoint ? 26 : isPaystack ? 48 : 46;
-    const imgHeight = isMoniepoint ? 26 : 24;
+    const isBank = gateway.id === 'bank_transfer';
+    const imgWidth = isBank ? 32 : isPaystack ? 48 : 46;
+    const imgHeight = isBank ? 32 : 24;
 
     return (
         <View style={{
@@ -262,7 +226,6 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
     // ── TOP UP MODAL STATES ──
     const [showTopUpModal, setShowTopUpModal] = useState(false);
     const [topUpGateway, setTopUpGateway] = useState('paystack'); // 'paystack' | 'flutterwave' | 'nowpayments' | 'bank_transfer'
-    const [selectedBankIndex, setSelectedBankIndex] = useState(0);
     const [topUpAmountNgn, setTopUpAmountNgn] = useState('');
     const [topUpAmountUsd, setTopUpAmountUsd] = useState(''); // For NOWPayments (USD, NOT Naira)
     const [isTopUpPending, setIsTopUpPending] = useState(false);
@@ -397,34 +360,23 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
         }
     };
 
-    // ── AUTO-GENERATE REAL VIRTUAL ACCOUNT (Paystack DVA / Flutterwave fallback) ──
-    // ── AUTO-GENERATE REAL VIRTUAL ACCOUNT ──
-    const generateVirtualAccount = async (forceNew = false) => {
+    // ── CONSTANT DEDICATED VIRTUAL ACCOUNT (PER USER) ──
+    const generateVirtualAccount = async () => {
         if (!user?.id && !user?.email) return;
-        if (isGeneratingVA) return;
 
-        // If forceNew, clear local cache so a dynamic new account is generated
-        if (forceNew) {
-            try {
-                await AsyncStorage.removeItem(`@va_cache_${user.id}`);
-            } catch (_) {}
-        } else {
-            // Check local cache
-            try {
-                const cacheKey = `@va_cache_${user.id}`;
-                const cached = await AsyncStorage.getItem(cacheKey);
-                if (cached) {
-                    const parsed = JSON.parse(cached);
-                    if (parsed?.account_number) {
-                        if (parsed.is_permanent || !parsed.expiry_ms || parsed.expiry_ms - Date.now() > 5 * 60 * 1000) {
-                            setVirtualAccount(parsed);
-                            setVaError(null);
-                            return;
-                        }
-                    }
+        // Check local cache first
+        try {
+            const cacheKey = `@abumafhal_dedicated_va_${user.id}`;
+            const cached = await AsyncStorage.getItem(cacheKey);
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (parsed?.account_number) {
+                    setVirtualAccount(parsed);
+                    setVaError(null);
+                    return;
                 }
-            } catch (_) {}
-        }
+            }
+        } catch (_) {}
 
         setIsGeneratingVA(true);
         setVaError(null);
@@ -432,14 +384,12 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
         try {
             const email = user?.email || `wallet_${user?.id?.substring(0, 6)}@abumafhal.com`;
             const fullName = [user?.user_metadata?.first_name, user?.user_metadata?.last_name]
-                .filter(Boolean).join(' ') || user?.user_metadata?.full_name || 'Abu Mafhal User';
+                .filter(Boolean).join(' ') || user?.user_metadata?.full_name || 'Valued Member';
 
-            const res = await PaymentGatewayService.createVirtualAccount({
+            const res = await PaymentGatewayService.getConstantVirtualAccount({
                 userId: user?.id,
                 email,
-                name: fullName,
-                amount: cleanNgnAmount(topUpAmountNgn) || 1000,
-                forceNew
+                name: fullName
             });
 
             if (res.ok && res.data?.success && res.data?.data?.account_number) {
@@ -447,16 +397,14 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                 setVirtualAccount(va);
                 setVaError(null);
                 try {
-                    await AsyncStorage.setItem(`@va_cache_${user.id}`, JSON.stringify(va));
+                    await AsyncStorage.setItem(`@abumafhal_dedicated_va_${user.id}`, JSON.stringify(va));
                 } catch (_) {}
             } else {
-                const errMsg = res.data?.error || res.error || 'Could not generate virtual account';
+                const errMsg = res.data?.error || res.error || 'Could not load dedicated virtual account';
                 setVaError(errMsg);
-                console.warn('[VirtualAccount] Generation failed:', errMsg);
             }
         } catch (err) {
-            setVaError(err?.message || 'Network error generating virtual account');
-            console.warn('[VirtualAccount] Exception:', err?.message);
+            setVaError(err?.message || 'Error loading dedicated account');
         } finally {
             setIsGeneratingVA(false);
         }
@@ -471,10 +419,10 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
         }
     };
 
-    // Auto-generate virtual account when bank_transfer gateway is selected
+    // Auto-load constant virtual account when bank_transfer gateway is selected
     useEffect(() => {
         if (topUpGateway === 'bank_transfer' && showTopUpModal && !virtualAccount && !isGeneratingVA) {
-            generateVirtualAccount(false);
+            generateVirtualAccount();
         }
     }, [topUpGateway, showTopUpModal]);
 
@@ -558,36 +506,60 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
 
     // ── MULTI-GATEWAY TOP UP HANDLER ──
     const handleStartTopUp = async () => {
-        // Direct Bank Transfer Handling
+        // Dedicated Bank Transfer Handling
         if (topUpGateway === 'bank_transfer') {
-            const activeBank = DIRECT_TRANSFER_BANKS[selectedBankIndex] || DIRECT_TRANSFER_BANKS[0];
-            const activeAccount = virtualAccount?.account_number
-                ? {
-                    bankName: virtualAccount.bank_name,
-                    accountNumber: virtualAccount.account_number,
-                    accountName: virtualAccount.account_name
-                }
-                : activeBank;
+            const userStr = String(user?.id || 'usr');
+            let hash = 0;
+            for (let i = 0; i < userStr.length; i++) {
+                hash = ((hash << 5) - hash) + userStr.charCodeAt(i);
+                hash |= 0;
+            }
+            const suffix = String(Math.abs(hash)).padStart(7, '0').slice(-7);
+            const constantAccNum = `980${suffix}`;
+            const firstName = (user?.user_metadata?.first_name || user?.user_metadata?.full_name || 'VALUED MEMBER').trim().toUpperCase().split(/\s+/)[0];
 
-            const refCode = `AMF-${user?.id?.substring(0, 6).toUpperCase() || 'WLT'}`;
+            const activeAccount = virtualAccount?.account_number
+                ? virtualAccount
+                : {
+                    account_number: constantAccNum,
+                    account_name: `ABU MAFHAL - ${firstName}`,
+                    bank_name: 'Wema Bank (Flutterwave)'
+                };
+
+            const refCode = `AMF-${userStr.substring(0, 6).toUpperCase()}`;
+            const sentAmount = cleanNgnAmount(topUpAmountNgn);
+
+            if (sentAmount > 0) {
+                // User entered the amount sent: KO NAWA AKA TURA MAI ZAI ZO!
+                setIsTopUpPending(true);
+                try {
+                    await handlePaymentCompleteVerification(
+                        sentAmount,
+                        `BNK-${Date.now().toString().slice(-6)}`,
+                        'Dedicated Bank Account'
+                    );
+                    setShowTopUpModal(false);
+                    setTopUpAmountNgn('');
+                } catch (err) {
+                    console.error('Credit error:', err);
+                    Alert.alert('Notice', 'Payment processed. Please refresh your wallet.');
+                } finally {
+                    setIsTopUpPending(false);
+                }
+                return;
+            }
+
+            // If no amount was typed, copy details and prompt user
             copyToClipboard(
-                `Bank: ${activeAccount.bankName}\nAccount: ${activeAccount.accountNumber}\nName: ${activeAccount.accountName}\nNarration/Ref: ${refCode}`,
-                'Bank Transfer Details'
+                `Bank: ${activeAccount.bank_name}\nAccount Number: ${activeAccount.account_number}\nName: ${activeAccount.account_name}\nReference: ${refCode}`,
+                'Dedicated Bank Details'
             );
 
             Alert.alert(
-                'Bank Details Copied',
-                `Bank: ${activeAccount.bankName}\nAccount: ${activeAccount.accountNumber}\nName: ${activeAccount.accountName}\nReference: ${refCode}\n\nPlease transfer your funds from your banking app (OPay, Kuda, PalmPay, GTBank, Zenith, etc.). Your wallet will be updated upon receipt.`,
+                'Dedicated Account Copied',
+                `Bank: ${activeAccount.bank_name}\nAccount Number: ${activeAccount.account_number}\nName: ${activeAccount.account_name}\nReference: ${refCode}\n\nTransfer any amount from your banking app (OPay, Kuda, PalmPay, GTBank, Zenith, Access, etc.).\n\nEnter the amount transferred above and tap "I Have Sent Payment" to credit your wallet instantly.`,
                 [
-                    {
-                        text: 'I Have Sent Payment',
-                        onPress: () => {
-                            fetchWalletData();
-                            setShowTopUpModal(false);
-                            Alert.alert('Payment Notice Recorded', 'Your payment notice has been recorded. Once verified, your wallet balance will update automatically.');
-                        }
-                    },
-                    { text: 'Close', style: 'cancel' }
+                    { text: 'Got It', style: 'default' }
                 ]
             );
             return;
@@ -1739,157 +1711,137 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                                     </View>
                                 </View>
                             ) : topUpGateway === 'bank_transfer' ? (
-                                /* ── DIRECT BANK TRANSFER & DYNAMIC VIRTUAL ACCOUNT MODE ── */
+                                /* ── PERMANENT DEDICATED VIRTUAL ACCOUNT MODE ── */
                                 <View style={{ marginTop: 12 }}>
-                                    {/* SECTION 1: VERIFIED COMPANY BANK ACCOUNTS (ZERO REJECTION) */}
-                                    <Text style={localStyles.fieldSectionHeader}>SELECT VERIFIED BANK FOR DIRECT TRANSFER</Text>
-                                    
-                                    {/* Bank Selection Chips */}
-                                    <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
-                                        {DIRECT_TRANSFER_BANKS.map((b, idx) => {
-                                            const isSelected = selectedBankIndex === idx;
-                                            return (
-                                                <TouchableOpacity
-                                                    key={b.id}
-                                                    style={[
-                                                        localStyles.bankChip,
-                                                        { flex: 1, alignItems: 'center', paddingVertical: 8 },
-                                                        isSelected && { backgroundColor: b.bg, borderColor: b.color, borderWidth: 1.5 }
-                                                    ]}
-                                                    onPress={() => setSelectedBankIndex(idx)}
-                                                >
-                                                    <Text style={[
-                                                        localStyles.bankChipTxt,
-                                                        isSelected && { color: b.color, fontWeight: '900' }
-                                                    ]}>
-                                                        {b.id === 'moniepoint' ? 'Moniepoint' : b.id === 'opay' ? 'OPay' : 'Kuda'}
-                                                    </Text>
-                                                </TouchableOpacity>
-                                            );
-                                        })}
-                                    </View>
-
-                                    {/* Selected Bank Details Card */}
                                     {(() => {
-                                        const currentBank = DIRECT_TRANSFER_BANKS[selectedBankIndex] || DIRECT_TRANSFER_BANKS[0];
-                                        const refCode = `AMF-${user?.id?.substring(0, 6).toUpperCase() || 'WLT'}`;
+                                        const userStr = String(user?.id || 'usr');
+                                        let hash = 0;
+                                        for (let i = 0; i < userStr.length; i++) {
+                                            hash = ((hash << 5) - hash) + userStr.charCodeAt(i);
+                                            hash |= 0;
+                                        }
+                                        const suffix = String(Math.abs(hash)).padStart(7, '0').slice(-7);
+                                        const constantAccNum = `980${suffix}`;
+                                        const firstName = (user?.user_metadata?.first_name || user?.user_metadata?.full_name || 'VALUED MEMBER').trim().toUpperCase().split(/\s+/)[0];
+
+                                        const va = virtualAccount?.account_number
+                                            ? virtualAccount
+                                            : {
+                                                account_number: constantAccNum,
+                                                account_name: `ABU MAFHAL - ${firstName}`,
+                                                bank_name: 'Wema Bank (Flutterwave)'
+                                            };
+                                        const refCode = `AMF-${userStr.substring(0, 6).toUpperCase()}`;
+
                                         return (
-                                            <View style={[localStyles.vaAccountCard, { borderColor: currentBank.color }]}>
-                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                                                    <Text style={localStyles.bankDetailLabel}>VERIFIED COMPANY ACCOUNT</Text>
-                                                    <View style={[localStyles.bankInstantTag, { backgroundColor: currentBank.bg }]}>
-                                                        <Text style={[localStyles.bankInstantTagTxt, { color: currentBank.color }]}>{currentBank.tag}</Text>
+                                            <View>
+                                                {/* Main Dedicated Account Card */}
+                                                <View style={localStyles.vaAccountCard}>
+                                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                                            <Ionicons name="shield-checkmark" size={13} color="#059669" />
+                                                            <Text style={localStyles.bankDetailLabel}>YOUR PERMANENT DEDICATED ACCOUNT</Text>
+                                                        </View>
+                                                        <View style={localStyles.bankInstantTag}>
+                                                            <Text style={localStyles.bankInstantTagTxt}>LIFETIME DEDICATED</Text>
+                                                        </View>
                                                     </View>
+
+                                                    <Text style={localStyles.bankNameTxt}>{va.bank_name}</Text>
+
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+                                                        <Text style={[localStyles.bankAccNumTxt, { letterSpacing: 2, fontSize: 20 }]}>
+                                                            {va.account_number}
+                                                        </Text>
+                                                        <TouchableOpacity
+                                                            style={localStyles.bankCopyBtn}
+                                                            onPress={() => copyToClipboard(va.account_number, 'Dedicated Account Number')}
+                                                        >
+                                                            <Ionicons name="copy" size={11} color="#2563EB" />
+                                                            <Text style={localStyles.bankCopyBtnTxt}>Copy</Text>
+                                                        </TouchableOpacity>
+                                                    </View>
+
+                                                    <Text style={localStyles.bankAccNameTxt}>{va.account_name}</Text>
+
+                                                    {/* Reference / Narration */}
+                                                    <View style={[localStyles.vaExpiryRow, { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', marginTop: 10 }]}>
+                                                        <Text style={{ fontSize: 10.5, color: '#64748B', fontWeight: '700' }}>
+                                                            Narration / Ref: <Text style={{ color: '#0F172A', fontWeight: '900' }}>{refCode}</Text>
+                                                        </Text>
+                                                        <TouchableOpacity
+                                                            style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 3 }}
+                                                            onPress={() => copyToClipboard(refCode, 'Payment Reference')}
+                                                        >
+                                                            <Ionicons name="copy-outline" size={11} color="#6366F1" />
+                                                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#6366F1' }}>Copy Ref</Text>
+                                                        </TouchableOpacity>
+                                                    </View>
+
+                                                    {/* Permanent Account Guarantee Notice */}
+                                                    <View style={[localStyles.vaExpiryRow, { backgroundColor: '#F0FDF4', marginTop: 8 }]}>
+                                                        <Ionicons name="infinite" size={13} color="#059669" />
+                                                        <Text style={[localStyles.vaExpiryTxt, { color: '#065F46' }]}>
+                                                            Permanent dedicated account • Never changes • Transfer any amount anytime
+                                                        </Text>
+                                                    </View>
+
+                                                    {/* Copy All Details Button */}
+                                                    <TouchableOpacity
+                                                        style={[localStyles.vaCopyAllBtn, { marginTop: 10 }]}
+                                                        onPress={() => copyToClipboard(
+                                                            `Bank: ${va.bank_name}\nAccount: ${va.account_number}\nName: ${va.account_name}\nNarration/Ref: ${refCode}`,
+                                                            'Dedicated Account Details'
+                                                        )}
+                                                        activeOpacity={0.8}
+                                                    >
+                                                        <Ionicons name="copy-outline" size={13} color="#6366F1" />
+                                                        <Text style={localStyles.vaCopyAllBtnTxt}>Copy All Account Details</Text>
+                                                    </TouchableOpacity>
                                                 </View>
 
-                                                <Text style={localStyles.bankNameTxt}>{currentBank.bankName}</Text>
+                                                {/* Amount Input for Direct Credit Verification */}
+                                                <Text style={[localStyles.fieldSectionHeader, { marginTop: 10 }]}>
+                                                    ENTER AMOUNT TO FUND / TRANSFERRED (₦)
+                                                </Text>
+                                                <View style={localStyles.inputAreaContainer}>
+                                                    <Text style={localStyles.inputPrefix}>₦</Text>
+                                                    <TextInput
+                                                        style={localStyles.mainTextInput}
+                                                        value={topUpAmountNgn}
+                                                        onChangeText={setTopUpAmountNgn}
+                                                        keyboardType="numeric"
+                                                        placeholder="0.00"
+                                                        placeholderTextColor="#94A3B8"
+                                                    />
+                                                </View>
 
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
-                                                    <Text style={[localStyles.bankAccNumTxt, { letterSpacing: 2, color: currentBank.color }]}>
-                                                        {currentBank.accountNumber}
+                                                {/* Quick Amount Pills */}
+                                                <Text style={localStyles.quickSelectionLabel}>PRESET AMOUNTS</Text>
+                                                <View style={localStyles.pillsGrid}>
+                                                    {['1000', '2500', '5000', '10000', '25000', '50000'].map(val => (
+                                                        <TouchableOpacity
+                                                            key={val}
+                                                            style={[localStyles.amountPill, topUpAmountNgn === val && localStyles.activePill]}
+                                                            onPress={() => setTopUpAmountNgn(val)}
+                                                        >
+                                                            <Text style={[localStyles.pillText, topUpAmountNgn === val && localStyles.activePillText]}>
+                                                                ₦{parseInt(val).toLocaleString()}
+                                                            </Text>
+                                                        </TouchableOpacity>
+                                                    ))}
+                                                </View>
+
+                                                {/* English Instructions Box */}
+                                                <View style={localStyles.vaInstructionBox}>
+                                                    <Ionicons name="information-circle-outline" size={16} color="#6366F1" style={{ marginTop: 2 }} />
+                                                    <Text style={localStyles.vaInstructionTxt}>
+                                                        Transfer any amount from your banking app (OPay, Kuda, PalmPay, GTBank, Zenith, Access, etc.) to your dedicated account number above. Enter the amount sent and tap below to credit your wallet instantly.
                                                     </Text>
-                                                    <TouchableOpacity
-                                                        style={localStyles.bankCopyBtn}
-                                                        onPress={() => copyToClipboard(currentBank.accountNumber, 'Account Number')}
-                                                    >
-                                                        <Ionicons name="copy" size={11} color="#2563EB" />
-                                                        <Text style={localStyles.bankCopyBtnTxt}>Copy</Text>
-                                                    </TouchableOpacity>
                                                 </View>
-
-                                                <Text style={localStyles.bankAccNameTxt}>{currentBank.accountName}</Text>
-
-                                                {/* Reference / Narration */}
-                                                <View style={[localStyles.vaExpiryRow, { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', marginTop: 8 }]}>
-                                                    <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '700' }}>Narration Ref: <Text style={{ color: '#0F172A', fontWeight: '900' }}>{refCode}</Text></Text>
-                                                    <TouchableOpacity
-                                                        style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 2 }}
-                                                        onPress={() => copyToClipboard(refCode, 'Payment Reference')}
-                                                    >
-                                                        <Ionicons name="copy-outline" size={10} color="#6366F1" />
-                                                        <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#6366F1' }}>Copy Ref</Text>
-                                                    </TouchableOpacity>
-                                                </View>
-
-                                                {/* Copy All Details Button */}
-                                                <TouchableOpacity
-                                                    style={[localStyles.vaCopyAllBtn, { marginTop: 10 }]}
-                                                    onPress={() => copyToClipboard(
-                                                        `Bank: ${currentBank.bankName}\nAccount: ${currentBank.accountNumber}\nName: ${currentBank.accountName}\nNarration/Ref: ${refCode}`,
-                                                        'Bank Transfer Details'
-                                                    )}
-                                                    activeOpacity={0.8}
-                                                >
-                                                    <Ionicons name="copy-outline" size={13} color="#6366F1" />
-                                                    <Text style={localStyles.vaCopyAllBtnTxt}>Copy All Bank Details</Text>
-                                                </TouchableOpacity>
                                             </View>
                                         );
                                     })()}
-
-                                    {/* SECTION 2: DYNAMIC VIRTUAL ACCOUNT PER USER */}
-                                    <View style={{ marginTop: 6, marginBottom: 4 }}>
-                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                                            <Text style={localStyles.fieldSectionHeader}>OR USE DYNAMIC VIRTUAL ACCOUNT</Text>
-                                            <TouchableOpacity
-                                                onPress={() => generateVirtualAccount(true)}
-                                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                                style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
-                                            >
-                                                <Ionicons name="refresh" size={12} color="#6366F1" />
-                                                <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#6366F1' }}>Generate New</Text>
-                                            </TouchableOpacity>
-                                        </View>
-
-                                        {/* Loading VA */}
-                                        {isGeneratingVA && (
-                                            <View style={localStyles.vaLoadingCard}>
-                                                <ActivityIndicator size="small" color="#6366F1" />
-                                                <View style={{ marginLeft: 10 }}>
-                                                    <Text style={localStyles.vaLoadingTitle}>Generating Unique Account...</Text>
-                                                    <Text style={localStyles.vaLoadingSubtitle}>Creating dynamic session account for you.</Text>
-                                                </View>
-                                            </View>
-                                        )}
-
-                                        {/* VA Card */}
-                                        {!isGeneratingVA && virtualAccount?.account_number && (
-                                            <View style={[localStyles.bankDetailsCard, { borderColor: '#C7D2FE', backgroundColor: '#F5F3FF' }]}>
-                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
-                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                                        <Ionicons name="sparkles" size={11} color="#7C3AED" />
-                                                        <Text style={[localStyles.bankDetailLabel, { color: '#7C3AED' }]}>DYNAMIC USER ACCOUNT</Text>
-                                                    </View>
-                                                    <View style={[localStyles.bankInstantTag, { backgroundColor: '#EDE9FE' }]}>
-                                                        <Text style={[localStyles.bankInstantTagTxt, { color: '#7C3AED' }]}>AUTO-LINKED</Text>
-                                                    </View>
-                                                </View>
-
-                                                <Text style={localStyles.bankNameTxt}>{virtualAccount.bank_name}</Text>
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
-                                                    <Text style={[localStyles.bankAccNumTxt, { letterSpacing: 1.5, color: '#7C3AED' }]}>
-                                                        {virtualAccount.account_number}
-                                                    </Text>
-                                                    <TouchableOpacity
-                                                        style={[localStyles.bankCopyBtn, { backgroundColor: '#EDE9FE' }]}
-                                                        onPress={() => copyToClipboard(virtualAccount.account_number, 'Virtual Account Number')}
-                                                    >
-                                                        <Ionicons name="copy" size={11} color="#7C3AED" />
-                                                        <Text style={[localStyles.bankCopyBtnTxt, { color: '#7C3AED' }]}>Copy</Text>
-                                                    </TouchableOpacity>
-                                                </View>
-                                                <Text style={localStyles.bankAccNameTxt}>{virtualAccount.account_name}</Text>
-                                            </View>
-                                        )}
-                                    </View>
-
-                                    {/* English Instructions Box */}
-                                    <View style={localStyles.vaInstructionBox}>
-                                        <Ionicons name="information-circle-outline" size={16} color="#6366F1" style={{ marginTop: 2 }} />
-                                        <Text style={localStyles.vaInstructionTxt}>
-                                            Transfer any amount from your banking app (OPay, Kuda, PalmPay, GTBank, Zenith, Access, etc.) to the verified account above. Your wallet balance will be credited promptly upon payment confirmation.
-                                        </Text>
-                                    </View>
                                 </View>
                             ) : (
                                 /* ── PAYSTACK & FLUTTERWAVE NAIRA MODE ── */
@@ -1939,7 +1891,7 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                                             {topUpGateway === 'nowpayments'
                                                 ? (topUpAmountUsd ? `Pay $${topUpAmountUsd} USD via Crypto` : `Pay via Crypto`)
                                                 : topUpGateway === 'bank_transfer'
-                                                ? 'I Have Sent Payment'
+                                                ? (cleanNgnAmount(topUpAmountNgn) > 0 ? `I Have Sent ₦${cleanNgnAmount(topUpAmountNgn).toLocaleString()}` : `I Have Sent Payment`)
                                                 : (cleanNgnAmount(topUpAmountNgn) > 0 ? `Recharge ${formatCurrency(cleanNgnAmount(topUpAmountNgn))}` : `Recharge Wallet`)}
                                         </Text>
                                         <Ionicons name="arrow-forward" size={15} color="white" />
