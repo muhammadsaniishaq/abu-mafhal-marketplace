@@ -1440,10 +1440,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
         if (selectedDeliveryMethod !== 'pickup') {
             if (!selectedAddrObj || !selectedAddrObj.address || !selectedAddrObj.address.trim()) {
-                showToast('⚠️ Babu adireshin karbar kaya!');
+                showToast('⚠️ Delivery address required!');
                 showAlert(
-                    'Ana Bukatar Adireshi (Address Required)',
-                    'Dole ne ka sanya ainihin adireshin da za a kai maka kaya kafin ka kammala wannan oda.',
+                    'Delivery Address Required',
+                    'Please select or add a verified delivery address before completing your order.',
                     [
                         { text: 'OK', onPress: () => {
                             setCurrentStep(1);
@@ -2070,13 +2070,13 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
         if (currentStep === 1) {
             if (selectedDeliveryMethod !== 'pickup') {
                 if (!selectedAddrObj || !selectedAddrObj.address || !selectedAddrObj.address.trim() || isFakeAddress(selectedAddrObj)) {
-                    showToast('⚠️ Dole ne ka sanya adireshin karbar kaya!');
+                    showToast('⚠️ Please select or add a delivery address!');
                     showAlert(
-                        'Ana Bukatar Adireshi (Address Required)',
-                        'Don Allah sanya ainihin adireshin da za a kawo maka kaya kafin ka ci gaba zuwa biyan kudi.',
+                        'Delivery Address Required',
+                        'Please select or add a verified delivery address before proceeding to payment.',
                         [
-                            { text: 'Soke (Cancel)', style: 'cancel' },
-                            { text: '+ Sanya Adireshi (Add Address)', onPress: () => setShowAddAddressModal(true) }
+                            { text: 'Cancel', style: 'cancel' },
+                            { text: '+ Add Delivery Address', onPress: () => setShowAddAddressModal(true) }
                         ]
                     );
                     setShowAddAddressModal(true);
@@ -2102,18 +2102,18 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
         const nameClean = (modalFullName || '').trim();
 
         if (!stateClean || !lgaClean) {
-            showToast('⚠️ Da fatan a zabi Jiha da Karamar Hukuma');
-            showAlert('Bayani Bai Cika Ba', 'Da fatan a zabi Jiha (State) da Karamar Hukuma (LGA).');
+            showToast('⚠️ Please select State and LGA');
+            showAlert('Incomplete Details', 'Please select both State and Local Government Area (LGA).');
             return;
         }
         if (!streetClean || streetClean.length < 3) {
-            showToast('⚠️ Da fatan a rubuta ainihin adireshin titi ko unguwa');
-            showAlert('Adireshi Bai Cika Ba', 'Da fatan a rubuta cikakken adireshin titi ko unguwa inda za a kawo kaya.');
+            showToast('⚠️ Please enter street address');
+            showAlert('Address Incomplete', 'Please enter your specific street name and house number.');
             return;
         }
         if (!phoneClean || phoneClean.length < 8) {
-            showToast('⚠️ Da fatan a rubuta lambar waya');
-            showAlert('Lambar Waya Ta Zama Dole', 'Da fatan a rubuta lambar wayar da za a kira idan an kawo kaya.');
+            showToast('⚠️ Please provide phone number');
+            showAlert('Phone Number Required', 'Please provide a contact phone number for courier delivery.');
             return;
         }
 
@@ -2201,10 +2201,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             setShowAddAddressModal(false);
             setModalStreet('');
             setModalLandmark('');
-            showToast('✓ An ajiye adireshin karbar kaya cikin nasara!');
+            showToast('✓ Delivery address saved successfully!');
         } catch (err) {
             console.error('Error saving inline address:', err);
-            showToast('⚠️ An samu matsala wajen ajiye adireshi');
+            showToast('⚠️ Failed to save address. Please try again.');
         } finally {
             setIsSavingAddress(false);
         }
@@ -2526,8 +2526,8 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         {/* ── STEP 1: DELIVERY DESTINATION & ADDRESS SELECTOR ── */}
                         <View style={s.sectionHeader}>
                             <View style={{ flex: 1, marginRight: 8 }}>
-                                <Text style={s.sectionTitle}>Wurin Isar da Kaya (Destination)</Text>
-                                <Text style={s.sectionSub} numberOfLines={1}>Zabi ainihin inda kake son a kawo maka kaya</Text>
+                                <Text style={s.sectionTitle}>Delivery Destination & Address</Text>
+                                <Text style={s.sectionSub} numberOfLines={1}>Select the verified delivery location for your order</Text>
                             </View>
                             <TouchableOpacity 
                                 onPress={() => setShowAddAddressModal(true)}
@@ -2536,7 +2536,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                 activeOpacity={0.7}
                             >
                                 <Ionicons name="add-circle-outline" size={14} color={NAVY} />
-                                <Text style={s.manageLink}>+ Sanya Adireshi</Text>
+                                <Text style={s.manageLink}>+ Add Address</Text>
                             </TouchableOpacity>
                         </View>
 
@@ -2549,16 +2549,16 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                     </View>
                                     <View style={{ flex: 1 }}>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                            <Text style={{ fontSize: 14, fontWeight: '800', color: NAVY }}>Karbar Kaya a Shago (Store Pickup)</Text>
+                                            <Text style={{ fontSize: 14, fontWeight: '800', color: NAVY }}>Fulfillment Hub Pickup (Store Pickup)</Text>
                                             <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                                                <Text style={{ fontSize: 10, fontWeight: '800', color: '#059669' }}>KYAUTA</Text>
+                                                <Text style={{ fontSize: 10, fontWeight: '800', color: '#059669' }}>FREE</Text>
                                             </View>
                                         </View>
                                         <Text style={{ fontSize: 12, color: SLATE, marginTop: 3 }}>
                                             Abu Mafhal Main Fulfillment Hub (Bade / Gashua, Yobe State)
                                         </Text>
                                         <Text style={{ fontSize: 11, fontWeight: '600', color: '#059669', marginTop: 3 }}>
-                                            Kudin Aike: ₦0 • Zaka je ka karbi kayanka a shago da zarar sun shirya.
+                                            Shipping Fee: ₦0 • Collect directly at the hub once packaging is completed.
                                         </Text>
                                     </View>
                                 </View>
@@ -2590,7 +2590,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                         <View style={s.addPlusCircle}>
                                             <Ionicons name="add" size={14} color={NAVY} />
                                         </View>
-                                        <Text style={s.addNewAddressTxt}>+ Sanya Wani</Text>
+                                        <Text style={s.addNewAddressTxt}>+ Add Address</Text>
                                     </TouchableOpacity>
 
                                     <TouchableOpacity
@@ -2629,7 +2629,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                         <View style={s.addPlusCircle}>
                                             <Ionicons name="add" size={14} color={NAVY} />
                                         </View>
-                                        <Text style={s.addNewAddressTxt}>+ Sanya Sabon Adireshi</Text>
+                                        <Text style={s.addNewAddressTxt}>+ Add New Address</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity
                                         style={[s.addNewAddressRow, { flex: 1, backgroundColor: '#F8FAFC' }]}
@@ -2647,9 +2647,9 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                 <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
                                     <Ionicons name="location-outline" size={26} color="#B45309" />
                                 </View>
-                                <Text style={{ fontSize: 15, fontWeight: '800', color: NAVY }}>Babu Adireshin Karbar Kaya (No Address)</Text>
+                                <Text style={{ fontSize: 15, fontWeight: '800', color: NAVY }}>No Delivery Address Found</Text>
                                 <Text style={{ fontSize: 12, color: SLATE, textAlign: 'center', marginTop: 4, marginBottom: 16, lineHeight: 18 }}>
-                                    Ba ka da wani adireshi a ajiye. Dole ne ka sanya ainihin adireshinka domin a lissafa kudin aike da nisan tafiya.
+                                    You do not have a saved address. Please provide your exact location to calculate delivery fee and road distance.
                                 </Text>
                                 <TouchableOpacity
                                     onPress={() => setShowAddAddressModal(true)}
@@ -2669,7 +2669,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                     activeOpacity={0.8}
                                 >
                                     <Ionicons name="add-circle" size={18} color={NAVY} />
-                                    <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY }}>+ Sanya Adireshin Karbar Kaya Yanzu</Text>
+                                    <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY }}>+ Add Delivery Address Now</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                     onPress={() => navigation.navigate('AddressPage', { returnTo: 'CheckoutPage' })}
@@ -2677,7 +2677,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                     activeOpacity={0.7}
                                 >
                                     <Text style={{ fontSize: 12, fontWeight: '600', color: SLATE, textDecorationLine: 'underline' }}>
-                                        Ko kuma duba Address Book
+                                        Or browse Address Book
                                     </Text>
                                 </TouchableOpacity>
                             </View>
@@ -2967,12 +2967,12 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
                                     {/* Recipient Full Name */}
                                     <View style={s.giftInputGroup}>
-                                        <Text style={s.giftInputLabel}>Recipient Full Name (Sunan Wanda Za A Ba)</Text>
+                                        <Text style={s.giftInputLabel}>Recipient Full Name</Text>
                                         <View style={[s.giftInputBox, giftRecipientName ? s.giftInputBoxActive : null]}>
                                             <Ionicons name="person-outline" size={14} color={giftRecipientName ? '#D97706' : SLATE} style={{ marginRight: 7 }} />
                                             <TextInput
                                                 style={s.giftTextInput}
-                                                placeholder="e.g. Hajiya Fatima / Ahmad Bello"
+                                                placeholder="e.g. Fatima Bello / Ahmad Sani"
                                                 placeholderTextColor="#94A3B8"
                                                 value={giftRecipientName}
                                                 onChangeText={setGiftRecipientName}
@@ -3001,10 +3001,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                         <Text style={s.giftInputLabel}>Quick Greetings (Tap to Insert into Message):</Text>
                                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.giftChipsScroll}>
                                             {[
-                                                '🎉 Barka da Sallah!',
+                                                '🎉 Best Wishes & Warm Regards!',
                                                 '🎂 Happy Birthday!',
-                                                '❤️ Barka da Shan Ruwa!',
-                                                '💐 Congratulations!',
+                                                '💐 Congratulations on your special day!',
+                                                '❤️ With Love & Appreciation!',
                                                 '🎁 A Special Gift For You!'
                                             ].map((chip) => (
                                                 <TouchableOpacity
@@ -4184,7 +4184,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                                 ? 'Confirm Order'
                                                 : 'Confirm & Pay'
                                             : (currentStep === 1 && selectedDeliveryMethod !== 'pickup' && !selectedAddrObj)
-                                                ? '+ Sanya Adireshi'
+                                                ? '+ Add Address'
                                                 : 'Continue'}
                                     </Text>
                                     <Ionicons
@@ -4528,8 +4528,8 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                         <Ionicons name="location" size={18} color={NAVY} />
                                     </View>
                                     <View>
-                                        <Text style={s.addrModalTitle}>Sanya Adireshin Karbar Kaya</Text>
-                                        <Text style={s.addrModalSub}>Ainihin wurin da za a kawo maka kaya</Text>
+                                        <Text style={s.addrModalTitle}>Add Delivery Address</Text>
+                                        <Text style={s.addrModalSub}>Exact destination where your order will be delivered</Text>
                                     </View>
                                 </View>
                                 <TouchableOpacity 
@@ -4547,7 +4547,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                 keyboardShouldPersistTaps="handled"
                             >
                                 {/* Title tag selection */}
-                                <Text style={s.formFieldLabel}>Sunan Wuri (Label)</Text>
+                                <Text style={s.formFieldLabel}>Address Label</Text>
                                 <View style={s.tagPillsRow}>
                                     {['Home', 'Office', 'Shop', 'Family'].map((t) => (
                                         <TouchableOpacity
@@ -4567,20 +4567,20 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                 </View>
 
                                 {/* Full Name */}
-                                <Text style={s.formFieldLabel}>Sunan Mai Karba (Full Name)</Text>
+                                <Text style={s.formFieldLabel}>Recipient Full Name *</Text>
                                 <TextInput
                                     style={s.formTextInput}
-                                    placeholder="Sunanka cikakke"
+                                    placeholder="Recipient's full legal name"
                                     placeholderTextColor="#94A3B8"
                                     value={modalFullName}
                                     onChangeText={setModalFullName}
                                 />
 
                                 {/* Phone */}
-                                <Text style={s.formFieldLabel}>Lambar Waya (Phone Number) *</Text>
+                                <Text style={s.formFieldLabel}>Phone Number *</Text>
                                 <TextInput
                                     style={s.formTextInput}
-                                    placeholder="Misali: 08012345678"
+                                    placeholder="e.g. 08012345678"
                                     placeholderTextColor="#94A3B8"
                                     keyboardType="phone-pad"
                                     value={modalPhone}
@@ -4590,7 +4590,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                 {/* State & LGA Pickers */}
                                 <View style={{ flexDirection: 'row', gap: 10 }}>
                                     <View style={{ flex: 1 }}>
-                                        <Text style={s.formFieldLabel}>Jiha (State) *</Text>
+                                        <Text style={s.formFieldLabel}>State *</Text>
                                         <TouchableOpacity
                                             style={s.pickerSelectorBtn}
                                             onPress={() => {
@@ -4599,12 +4599,12 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                             }}
                                             activeOpacity={0.7}
                                         >
-                                            <Text style={s.pickerSelectorTxt} numberOfLines={1}>{modalState || 'Zabi Jiha'}</Text>
+                                            <Text style={s.pickerSelectorTxt} numberOfLines={1}>{modalState || 'Select State'}</Text>
                                             <Ionicons name="chevron-down" size={15} color={NAVY} />
                                         </TouchableOpacity>
                                     </View>
                                     <View style={{ flex: 1 }}>
-                                        <Text style={s.formFieldLabel}>Karamar Hukuma *</Text>
+                                        <Text style={s.formFieldLabel}>Local Government (LGA) *</Text>
                                         <TouchableOpacity
                                             style={s.pickerSelectorBtn}
                                             onPress={() => {
@@ -4613,17 +4613,17 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                             }}
                                             activeOpacity={0.7}
                                         >
-                                            <Text style={s.pickerSelectorTxt} numberOfLines={1}>{modalLga || 'Zabi LGA'}</Text>
+                                            <Text style={s.pickerSelectorTxt} numberOfLines={1}>{modalLga || 'Select LGA'}</Text>
                                             <Ionicons name="chevron-down" size={15} color={NAVY} />
                                         </TouchableOpacity>
                                     </View>
                                 </View>
 
                                 {/* Street address */}
-                                <Text style={s.formFieldLabel}>Unguwa da Titin Gida (Street / Area) *</Text>
+                                <Text style={s.formFieldLabel}>Street Address & House No. *</Text>
                                 <TextInput
                                     style={[s.formTextInput, { minHeight: 64, textAlignVertical: 'top', paddingTop: 10 }]}
-                                    placeholder="Misali: Unguwar Sarki, No. 12 Titin Gidan Gona..."
+                                    placeholder="e.g. No. 14 Airport Road, GRA / Ward..."
                                     placeholderTextColor="#94A3B8"
                                     multiline={true}
                                     value={modalStreet}
@@ -4631,10 +4631,10 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                 />
 
                                 {/* Landmark */}
-                                <Text style={s.formFieldLabel}>Sanannen Wuri a Kusa (Landmark - Na Zabi)</Text>
+                                <Text style={s.formFieldLabel}>Prominent Landmark (Optional)</Text>
                                 <TextInput
                                     style={s.formTextInput}
-                                    placeholder="Misali: Kusa da Babban Masallaci ko Primary School"
+                                    placeholder="e.g. Near Central Mosque, Behind General Hospital..."
                                     placeholderTextColor="#94A3B8"
                                     value={modalLandmark}
                                     onChangeText={setModalLandmark}
@@ -4653,7 +4653,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                 ) : (
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                         <Ionicons name="checkmark-circle" size={16} color={WHITE} />
-                                        <Text style={s.saveAddrModalBtnTxt}>Ajiye & Yi Amfani da Wannan</Text>
+                                        <Text style={s.saveAddrModalBtnTxt}>Save & Use Address</Text>
                                     </View>
                                 )}
                             </TouchableOpacity>
@@ -4672,14 +4672,14 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 <View style={s.modalOverlay}>
                     <View style={s.pickerModalCard}>
                         <View style={s.pickerModalHeader}>
-                            <Text style={s.pickerModalTitle}>Zabi Jiha (State)</Text>
+                            <Text style={s.pickerModalTitle}>Select State</Text>
                             <TouchableOpacity onPress={() => setShowStatePicker(false)}>
                                 <Ionicons name="close" size={20} color={SLATE} />
                             </TouchableOpacity>
                         </View>
                         <TextInput
                             style={s.pickerSearchInput}
-                            placeholder="Nemi Jiha..."
+                            placeholder="Search state..."
                             placeholderTextColor="#94A3B8"
                             value={stateSearch}
                             onChangeText={setStateSearch}
@@ -4726,14 +4726,14 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 <View style={s.modalOverlay}>
                     <View style={s.pickerModalCard}>
                         <View style={s.pickerModalHeader}>
-                            <Text style={s.pickerModalTitle}>Zabi Karamar Hukuma ({modalState})</Text>
+                            <Text style={s.pickerModalTitle}>Select Local Government ({modalState})</Text>
                             <TouchableOpacity onPress={() => setShowLgaPicker(false)}>
                                 <Ionicons name="close" size={20} color={SLATE} />
                             </TouchableOpacity>
                         </View>
                         <TextInput
                             style={s.pickerSearchInput}
-                            placeholder="Nemi Karamar Hukuma..."
+                            placeholder="Search LGA..."
                             placeholderTextColor="#94A3B8"
                             value={lgaSearch}
                             onChangeText={setLgaSearch}
