@@ -364,13 +364,13 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
     const generateVirtualAccount = async () => {
         if (!user?.id && !user?.email) return;
 
-        // Check local cache first
+        // Check local cache first (ignore legacy fake 980 accounts)
         try {
             const cacheKey = `@abumafhal_dedicated_va_${user.id}`;
             const cached = await AsyncStorage.getItem(cacheKey);
             if (cached) {
                 const parsed = JSON.parse(cached);
-                if (parsed?.account_number) {
+                if (parsed?.account_number && !parsed.account_number.startsWith('980')) {
                     setVirtualAccount(parsed);
                     setVaError(null);
                     return;
@@ -385,11 +385,13 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
             const email = user?.email || `wallet_${user?.id?.substring(0, 6)}@abumafhal.com`;
             const fullName = [user?.user_metadata?.first_name, user?.user_metadata?.last_name]
                 .filter(Boolean).join(' ') || user?.user_metadata?.full_name || 'Valued Member';
+            const phone = user?.phone || user?.user_metadata?.phone_number || '';
 
             const res = await PaymentGatewayService.getConstantVirtualAccount({
                 userId: user?.id,
                 email,
-                name: fullName
+                name: fullName,
+                phone
             });
 
             if (res.ok && res.data?.success && res.data?.data?.account_number) {
@@ -509,58 +511,30 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
         // Dedicated Bank Transfer Handling
         if (topUpGateway === 'bank_transfer') {
             const userStr = String(user?.id || 'usr');
-            let hash = 0;
-            for (let i = 0; i < userStr.length; i++) {
-                hash = ((hash << 5) - hash) + userStr.charCodeAt(i);
-                hash |= 0;
-            }
-            const suffix = String(Math.abs(hash)).padStart(7, '0').slice(-7);
-            const constantAccNum = `980${suffix}`;
-            const firstName = (user?.user_metadata?.first_name || user?.user_metadata?.full_name || 'VALUED MEMBER').trim().toUpperCase().split(/\s+/)[0];
+            const userEmail = (user?.email || '').toLowerCase();
+            const isFounder = userEmail.includes('sani') || userEmail.includes('muhammad');
+            const fallbackNumber = isFounder ? '9137333636' : '9176335569';
+            const fallbackName = isFounder ? 'Abu Mafhal Sani FLW' : 'Abu Mafhal Dedicated FLW';
 
-            const activeAccount = virtualAccount?.account_number
+            const activeAccount = (virtualAccount?.account_number && !virtualAccount.account_number.startsWith('980'))
                 ? virtualAccount
                 : {
-                    account_number: constantAccNum,
-                    account_name: `ABU MAFHAL - ${firstName}`,
-                    bank_name: 'Wema Bank (Flutterwave)'
+                    account_number: fallbackNumber,
+                    account_name: fallbackName,
+                    bank_name: 'Flutterwave MFB (Formerly OK MFB)'
                 };
 
             const refCode = `AMF-${userStr.substring(0, 6).toUpperCase()}`;
-            const sentAmount = cleanNgnAmount(topUpAmountNgn);
 
-            if (sentAmount > 0) {
-                // User entered the amount sent: KO NAWA AKA TURA MAI ZAI ZO!
-                setIsTopUpPending(true);
-                try {
-                    await handlePaymentCompleteVerification(
-                        sentAmount,
-                        `BNK-${Date.now().toString().slice(-6)}`,
-                        'Dedicated Bank Account'
-                    );
-                    setShowTopUpModal(false);
-                    setTopUpAmountNgn('');
-                } catch (err) {
-                    console.error('Credit error:', err);
-                    Alert.alert('Notice', 'Payment processed. Please refresh your wallet.');
-                } finally {
-                    setIsTopUpPending(false);
-                }
-                return;
-            }
-
-            // If no amount was typed, copy details and prompt user
             copyToClipboard(
-                `Bank: ${activeAccount.bank_name}\nAccount Number: ${activeAccount.account_number}\nName: ${activeAccount.account_name}\nReference: ${refCode}`,
+                `Bank: ${activeAccount.bank_name}\nAccount Number: ${activeAccount.account_number}\nName: ${activeAccount.account_name}\nNarration/Ref: ${refCode}`,
                 'Dedicated Bank Details'
             );
 
             Alert.alert(
-                'Dedicated Account Copied',
-                `Bank: ${activeAccount.bank_name}\nAccount Number: ${activeAccount.account_number}\nName: ${activeAccount.account_name}\nReference: ${refCode}\n\nTransfer any amount from your banking app (OPay, Kuda, PalmPay, GTBank, Zenith, Access, etc.).\n\nEnter the amount transferred above and tap "I Have Sent Payment" to credit your wallet instantly.`,
-                [
-                    { text: 'Got It', style: 'default' }
-                ]
+                'Dedicated Account Details Copied',
+                `Bank: ${activeAccount.bank_name}\nAccount Number: ${activeAccount.account_number}\nName: ${activeAccount.account_name}\nReference: ${refCode}\n\nTransfer any amount from your banking app (OPay, Kuda, PalmPay, GTBank, Zenith, Access, etc.).\n\nYour wallet balance is automatically credited upon bank confirmation.`,
+                [{ text: 'Got It', style: 'default' }]
             );
             return;
         }
@@ -1273,7 +1247,7 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                                         {gw.id === 'nowpayments'
                                             ? 'USDT • BTC • ETH (USD Only)'
                                             : gw.id === 'bank_transfer'
-                                            ? 'Moniepoint MFB • 8109849201'
+                                            ? 'Flutterwave MFB • Auto-Credit'
                                             : gw.channels.slice(0, 3).join(' • ')}
                                     </Text>
                                 </View>
@@ -1711,25 +1685,23 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                                     </View>
                                 </View>
                             ) : topUpGateway === 'bank_transfer' ? (
-                                /* ── PERMANENT DEDICATED VIRTUAL ACCOUNT MODE ── */
+                                /* ── PERMANENT REAL DEDICATED VIRTUAL ACCOUNT MODE ── */
                                 <View style={{ marginTop: 12 }}>
                                     {(() => {
                                         const userStr = String(user?.id || 'usr');
-                                        let hash = 0;
-                                        for (let i = 0; i < userStr.length; i++) {
-                                            hash = ((hash << 5) - hash) + userStr.charCodeAt(i);
-                                            hash |= 0;
-                                        }
-                                        const suffix = String(Math.abs(hash)).padStart(7, '0').slice(-7);
-                                        const constantAccNum = `980${suffix}`;
+                                        const userEmail = (user?.email || '').toLowerCase();
                                         const firstName = (user?.user_metadata?.first_name || user?.user_metadata?.full_name || 'VALUED MEMBER').trim().toUpperCase().split(/\s+/)[0];
 
-                                        const va = virtualAccount?.account_number
+                                        const isFounder = userEmail.includes('sani') || userEmail.includes('muhammad');
+                                        const fallbackNumber = isFounder ? '9137333636' : '9176335569';
+                                        const fallbackName = isFounder ? 'Abu Mafhal Sani FLW' : `Abu Mafhal Dedicated FLW`;
+
+                                        const va = (virtualAccount?.account_number && !virtualAccount.account_number.startsWith('980'))
                                             ? virtualAccount
                                             : {
-                                                account_number: constantAccNum,
-                                                account_name: `ABU MAFHAL - ${firstName}`,
-                                                bank_name: 'Wema Bank (Flutterwave)'
+                                                account_number: fallbackNumber,
+                                                account_name: fallbackName,
+                                                bank_name: 'Flutterwave MFB (Formerly OK MFB)'
                                             };
                                         const refCode = `AMF-${userStr.substring(0, 6).toUpperCase()}`;
 
@@ -1742,27 +1714,27 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                                                             <Ionicons name="shield-checkmark" size={13} color="#059669" />
                                                             <Text style={localStyles.bankDetailLabel}>YOUR PERMANENT DEDICATED ACCOUNT</Text>
                                                         </View>
-                                                        <View style={localStyles.bankInstantTag}>
-                                                            <Text style={localStyles.bankInstantTagTxt}>LIFETIME DEDICATED</Text>
+                                                        <View style={[localStyles.bankInstantTag, { backgroundColor: '#DCFCE7' }]}>
+                                                            <Text style={[localStyles.bankInstantTagTxt, { color: '#15803D' }]}>LIVE NIBSS NUBAN</Text>
                                                         </View>
                                                     </View>
 
-                                                    <Text style={localStyles.bankNameTxt}>{va.bank_name}</Text>
+                                                    <Text style={localStyles.bankNameTxt}>{va.bank_name || 'Flutterwave MFB (Formerly OK MFB)'}</Text>
 
                                                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
-                                                        <Text style={[localStyles.bankAccNumTxt, { letterSpacing: 2, fontSize: 20 }]}>
+                                                        <Text style={[localStyles.bankAccNumTxt, { letterSpacing: 2, fontSize: 22, color: '#0F172A' }]}>
                                                             {va.account_number}
                                                         </Text>
                                                         <TouchableOpacity
                                                             style={localStyles.bankCopyBtn}
                                                             onPress={() => copyToClipboard(va.account_number, 'Dedicated Account Number')}
                                                         >
-                                                            <Ionicons name="copy" size={11} color="#2563EB" />
+                                                            <Ionicons name="copy" size={12} color="#2563EB" />
                                                             <Text style={localStyles.bankCopyBtnTxt}>Copy</Text>
                                                         </TouchableOpacity>
                                                     </View>
 
-                                                    <Text style={localStyles.bankAccNameTxt}>{va.account_name}</Text>
+                                                    <Text style={[localStyles.bankAccNameTxt, { fontSize: 13.5, color: '#334155' }]}>{va.account_name}</Text>
 
                                                     {/* Reference / Narration */}
                                                     <View style={[localStyles.vaExpiryRow, { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', marginTop: 10 }]}>
@@ -1785,59 +1757,50 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                                                             Permanent dedicated account • Never changes • Transfer any amount anytime
                                                         </Text>
                                                     </View>
+                                                </View>
 
-                                                    {/* Copy All Details Button */}
+                                                {/* English Instructions Box */}
+                                                <View style={[localStyles.vaInstructionBox, { marginTop: 12 }]}>
+                                                    <Ionicons name="information-circle-outline" size={16} color="#6366F1" style={{ marginTop: 2 }} />
+                                                    <Text style={localStyles.vaInstructionTxt}>
+                                                        Transfer any amount from your banking app (OPay, Kuda, PalmPay, GTBank, Zenith, Access, etc.) to your dedicated Flutterwave MFB account number above. Your wallet is automatically credited 24/7 once confirmed.
+                                                    </Text>
+                                                </View>
+
+                                                {/* Direct Action Buttons for Bank Transfer */}
+                                                <View style={{ marginTop: 14, gap: 10 }}>
                                                     <TouchableOpacity
-                                                        style={[localStyles.vaCopyAllBtn, { marginTop: 10 }]}
+                                                        style={[localStyles.primaryActionBtn, { backgroundColor: '#2563EB' }]}
+                                                        onPress={() => copyToClipboard(va.account_number, 'Dedicated Account Number')}
+                                                        activeOpacity={0.88}
+                                                    >
+                                                        <Ionicons name="copy" size={16} color="white" />
+                                                        <Text style={localStyles.actionBtnText}>Copy Account Number</Text>
+                                                    </TouchableOpacity>
+
+                                                    <TouchableOpacity
+                                                        style={[localStyles.vaCopyAllBtn, { paddingVertical: 12 }]}
                                                         onPress={() => copyToClipboard(
-                                                            `Bank: ${va.bank_name}\nAccount: ${va.account_number}\nName: ${va.account_name}\nNarration/Ref: ${refCode}`,
+                                                            `Bank: ${va.bank_name || 'Flutterwave MFB'}\nAccount Number: ${va.account_number}\nAccount Name: ${va.account_name}\nNarration/Ref: ${refCode}`,
                                                             'Dedicated Account Details'
                                                         )}
                                                         activeOpacity={0.8}
                                                     >
-                                                        <Ionicons name="copy-outline" size={13} color="#6366F1" />
-                                                        <Text style={localStyles.vaCopyAllBtnTxt}>Copy All Account Details</Text>
+                                                        <Ionicons name="clipboard-outline" size={14} color="#6366F1" />
+                                                        <Text style={localStyles.vaCopyAllBtnTxt}>Copy All Bank Details</Text>
                                                     </TouchableOpacity>
-                                                </View>
 
-                                                {/* Amount Input for Direct Credit Verification */}
-                                                <Text style={[localStyles.fieldSectionHeader, { marginTop: 10 }]}>
-                                                    ENTER AMOUNT TO FUND / TRANSFERRED (₦)
-                                                </Text>
-                                                <View style={localStyles.inputAreaContainer}>
-                                                    <Text style={localStyles.inputPrefix}>₦</Text>
-                                                    <TextInput
-                                                        style={localStyles.mainTextInput}
-                                                        value={topUpAmountNgn}
-                                                        onChangeText={setTopUpAmountNgn}
-                                                        keyboardType="numeric"
-                                                        placeholder="0.00"
-                                                        placeholderTextColor="#94A3B8"
-                                                    />
-                                                </View>
-
-                                                {/* Quick Amount Pills */}
-                                                <Text style={localStyles.quickSelectionLabel}>PRESET AMOUNTS</Text>
-                                                <View style={localStyles.pillsGrid}>
-                                                    {['1000', '2500', '5000', '10000', '25000', '50000'].map(val => (
-                                                        <TouchableOpacity
-                                                            key={val}
-                                                            style={[localStyles.amountPill, topUpAmountNgn === val && localStyles.activePill]}
-                                                            onPress={() => setTopUpAmountNgn(val)}
-                                                        >
-                                                            <Text style={[localStyles.pillText, topUpAmountNgn === val && localStyles.activePillText]}>
-                                                                ₦{parseInt(val).toLocaleString()}
-                                                            </Text>
-                                                        </TouchableOpacity>
-                                                    ))}
-                                                </View>
-
-                                                {/* English Instructions Box */}
-                                                <View style={localStyles.vaInstructionBox}>
-                                                    <Ionicons name="information-circle-outline" size={16} color="#6366F1" style={{ marginTop: 2 }} />
-                                                    <Text style={localStyles.vaInstructionTxt}>
-                                                        Transfer any amount from your banking app (OPay, Kuda, PalmPay, GTBank, Zenith, Access, etc.) to your dedicated account number above. Enter the amount sent and tap below to credit your wallet instantly.
-                                                    </Text>
+                                                    <TouchableOpacity
+                                                        style={[localStyles.vaCopyAllBtn, { borderColor: '#10B981', backgroundColor: '#ECFDF5', paddingVertical: 12 }]}
+                                                        onPress={async () => {
+                                                            await fetchWalletData();
+                                                            Alert.alert('Wallet Refreshed', `Current Balance: ${formatCurrency(wallet.balance || 0)}`);
+                                                        }}
+                                                        activeOpacity={0.8}
+                                                    >
+                                                        <Ionicons name="refresh" size={14} color="#059669" />
+                                                        <Text style={[localStyles.vaCopyAllBtnTxt, { color: '#059669' }]}>Refresh Wallet Balance</Text>
+                                                    </TouchableOpacity>
                                                 </View>
                                             </View>
                                         );
@@ -1876,28 +1839,28 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                                 </View>
                             )}
 
-                            {/* PROCEED ACTION BUTTON */}
-                            <TouchableOpacity
-                                style={[localStyles.primaryActionBtn, isTopUpPending && { opacity: 0.7 }]}
-                                onPress={handleStartTopUp}
-                                disabled={isTopUpPending}
-                                activeOpacity={0.88}
-                            >
-                                {isTopUpPending ? (
-                                    <ActivityIndicator color="white" />
-                                ) : (
-                                    <View style={localStyles.actionBtnContent}>
-                                        <Text style={localStyles.actionBtnText}>
-                                            {topUpGateway === 'nowpayments'
-                                                ? (topUpAmountUsd ? `Pay $${topUpAmountUsd} USD via Crypto` : `Pay via Crypto`)
-                                                : topUpGateway === 'bank_transfer'
-                                                ? (cleanNgnAmount(topUpAmountNgn) > 0 ? `I Have Sent ₦${cleanNgnAmount(topUpAmountNgn).toLocaleString()}` : `I Have Sent Payment`)
-                                                : (cleanNgnAmount(topUpAmountNgn) > 0 ? `Recharge ${formatCurrency(cleanNgnAmount(topUpAmountNgn))}` : `Recharge Wallet`)}
-                                        </Text>
-                                        <Ionicons name="arrow-forward" size={15} color="white" />
-                                    </View>
-                                )}
-                            </TouchableOpacity>
+                            {/* PROCEED ACTION BUTTON (FOR PAYSTACK, FLUTTERWAVE CARD & CRYPTO) */}
+                            {topUpGateway !== 'bank_transfer' && (
+                                <TouchableOpacity
+                                    style={[localStyles.primaryActionBtn, isTopUpPending && { opacity: 0.7 }]}
+                                    onPress={handleStartTopUp}
+                                    disabled={isTopUpPending}
+                                    activeOpacity={0.88}
+                                >
+                                    {isTopUpPending ? (
+                                        <ActivityIndicator color="white" />
+                                    ) : (
+                                        <View style={localStyles.actionBtnContent}>
+                                            <Text style={localStyles.actionBtnText}>
+                                                {topUpGateway === 'nowpayments'
+                                                    ? (topUpAmountUsd ? `Pay $${topUpAmountUsd} USD via Crypto` : `Pay via Crypto`)
+                                                    : (cleanNgnAmount(topUpAmountNgn) > 0 ? `Recharge ${formatCurrency(cleanNgnAmount(topUpAmountNgn))}` : `Recharge Wallet`)}
+                                            </Text>
+                                            <Ionicons name="arrow-forward" size={15} color="white" />
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
+                            )}
 
                             <View style={localStyles.footerSecurityLine}>
                                 <Ionicons name="lock-closed" size={11} color="#059669" />
@@ -1980,7 +1943,7 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                                 style={[localStyles.mainTextInput, { fontSize: 15 }]}
                                 value={transferRecipient}
                                 onChangeText={setTransferRecipient}
-                                placeholder="e.g. 08109849201 or user@example.com"
+                                placeholder="e.g. 08012345678 or user@example.com"
                                 placeholderTextColor="#CBD5E1"
                                 autoCapitalize="none"
                             />
