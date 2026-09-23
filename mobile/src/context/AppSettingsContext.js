@@ -72,6 +72,22 @@ export const AppSettingsProvider = ({ children }) => {
                     }
                 });
 
+                // Synchronize shipping_settings into merged top-level fields
+                if (merged.shipping_settings && typeof merged.shipping_settings === 'object') {
+                    if (merged.shipping_settings.price_per_km !== undefined) {
+                        merged.price_per_km = merged.shipping_settings.price_per_km;
+                    }
+                    if (merged.shipping_settings.base_fee !== undefined) {
+                        merged.base_fee = merged.shipping_settings.base_fee;
+                    }
+                    if (merged.shipping_settings.free_shipping_enabled !== undefined) {
+                        merged.free_shipping_enabled = merged.shipping_settings.free_shipping_enabled;
+                    }
+                    if (merged.shipping_settings.free_shipping_threshold !== undefined) {
+                        merged.free_shipping_threshold = merged.shipping_settings.free_shipping_threshold;
+                    }
+                }
+
                 // Merge payment_gateways object if present in database
                 if (merged.payment_gateways && typeof merged.payment_gateways === 'object') {
                     const unwrappedGateways = {};

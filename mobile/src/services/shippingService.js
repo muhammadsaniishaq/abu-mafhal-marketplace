@@ -1019,6 +1019,22 @@ export class ShippingCalculationEngine {
                                methods.find(m => m.id === 'standard' || m.code === 'standard') ||
                                DEFAULT_SHIPPING_METHODS[0];
 
+        const isPickup = (selectedMethod?.id === 'pickup' || selectedMethod?.code === 'pickup');
+        const hasValidAddress = Boolean(customerAddress && (customerAddress.address || customerAddress.city || customerAddress.lga || customerAddress.state));
+
+        if (!isPickup && !hasValidAddress) {
+            return {
+                totalShippingFee: 0,
+                totalDistanceKm: 0,
+                vendorBreakdowns: [],
+                vendorGroups: [],
+                isFreeShipping: false,
+                deliveryMethod: selectedMethod,
+                requiresAddress: true,
+                calculatedAt: new Date().toISOString()
+            };
+        }
+
         // 1. Group items by vendor_id
         const vendorGroups = {};
         cartItems.forEach(item => {
@@ -1189,11 +1205,27 @@ export class ShippingCalculationEngine {
             };
         }
 
+        const isPickup = (deliveryMethodCode === 'pickup');
+        const hasValidAddress = Boolean(customerAddress && (customerAddress.address || customerAddress.city || customerAddress.lga || customerAddress.state));
+
+        if (!isPickup && !hasValidAddress) {
+            return {
+                totalShippingFee: 0,
+                totalDistanceKm: 0,
+                vendorBreakdowns: [],
+                vendorGroups: [],
+                isFreeShipping: false,
+                deliveryMethod: null,
+                requiresAddress: true,
+                calculatedAt: new Date().toISOString()
+            };
+        }
+
         const effectiveCustomerAddress = customerAddress || {
-            state: 'Yobe',
-            lga: 'Bade',
-            city: 'Bade',
-            address: 'Bade / Gashua, Yobe State'
+            state: '',
+            lga: '',
+            city: '',
+            address: ''
         };
 
         let globalSettings = DEFAULT_SHIPPING_SETTINGS;

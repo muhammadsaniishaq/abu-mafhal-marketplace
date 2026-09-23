@@ -30,7 +30,9 @@ const NAVY = '#0E1A2E';
 const GOLD = '#D9A73A';
 const QUICK_TITLES = ['Home', 'Office', 'Shop', 'Warehouse', 'Family'];
 
-export const AddressPage = ({ navigation, onBack }) => {
+export const AddressPage = ({ navigation, route, onBack }) => {
+    const returnTo = route?.params?.returnTo;
+    const isCheckoutReturn = returnTo === 'CheckoutPage';
     const handleBack = () => {
         if (onBack) onBack();
         else navigation.goBack();
@@ -494,6 +496,14 @@ export const AddressPage = ({ navigation, onBack }) => {
 
             setAddresses(updatedList);
 
+            if (isCheckoutReturn) {
+                navigation.navigate('CheckoutPage', {
+                    selectedAddress: newRecord,
+                    selectedAddressId: newRecord.id
+                });
+                return;
+            }
+
         } catch (error) {
             console.error('Save address error:', error);
             Alert.alert('Save Error', error.message || 'Could not save address. Please try again.');
@@ -916,6 +926,35 @@ export const AddressPage = ({ navigation, onBack }) => {
                                                 <Text style={localStyles.cardPhone}>
                                                     📞 {addr.phone}
                                                 </Text>
+
+                                                {isCheckoutReturn && (
+                                                    <TouchableOpacity 
+                                                        style={{
+                                                            backgroundColor: GOLD,
+                                                            paddingVertical: 9,
+                                                            paddingHorizontal: 14,
+                                                            borderRadius: 8,
+                                                            flexDirection: 'row',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            gap: 6,
+                                                            marginTop: 10,
+                                                            marginBottom: 6
+                                                        }}
+                                                        onPress={() => {
+                                                            navigation.navigate('CheckoutPage', {
+                                                                selectedAddress: addr,
+                                                                selectedAddressId: addr.id
+                                                            });
+                                                        }}
+                                                        activeOpacity={0.8}
+                                                    >
+                                                        <Ionicons name="checkmark-circle" size={16} color={NAVY} />
+                                                        <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY }}>
+                                                            ✓ Yi Amfani da Wannan (Deliver Here)
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                )}
 
                                                 {/* Action Bar */}
                                                 <View style={localStyles.cardActions}>

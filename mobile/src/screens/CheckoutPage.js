@@ -147,9 +147,17 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
         }
     }, [currentStep, handleBackToShop]);
 
+    // Helper to identify and discard fake/legacy fallback addresses
+    const isFakeAddress = (addr) => {
+        if (!addr) return true;
+        if (addr.id === 'lga_dest' || addr.id === 'fallback_dest' || addr.id === 'quick_dest_addr') return true;
+        if (typeof addr.address === 'string' && addr.address.includes('Bade / Gashua, Yobe State') && !addr.phone) return true;
+        return false;
+    };
+
     // Data State (Immediately pre-populated if address passed or stored)
     const getInitialAddresses = () => {
-        if (routeAddress) return [routeAddress];
+        if (routeAddress && !isFakeAddress(routeAddress)) return [routeAddress];
         try {
             if (typeof window !== 'undefined' && window.localStorage) {
                 const storedUser = window.localStorage.getItem('@abumafhal_user_v1');
@@ -158,13 +166,16 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     const localRaw = window.localStorage.getItem(`@user_addresses_${uId}`);
                     if (localRaw) {
                         const parsed = JSON.parse(localRaw);
-                        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+                        if (Array.isArray(parsed)) {
+                            const valid = parsed.filter(a => a && a.address && !isFakeAddress(a));
+                            if (valid.length > 0) return valid;
+                        }
                     }
                 }
                 const cachedLast = window.localStorage.getItem('@abumafhal_last_selected_address');
                 if (cachedLast) {
                     const parsedLast = JSON.parse(cachedLast);
-                    if (parsedLast && parsedLast.address) return [parsedLast];
+                    if (parsedLast && parsedLast.address && !isFakeAddress(parsedLast)) return [parsedLast];
                 }
             }
         } catch (_) {}
@@ -177,21 +188,51 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
     const [profile, setProfile]                 = useState(null);
     const [addresses, setAddresses]             = useState(initialAddrs);
     const [selectedAddressId, setSelectedAddressId] = useState(
-        routeAddress?.id || (initialAddrs.find(a => a.is_default)?.id || initialAddrs[0]?.id || 'lga_dest')
+        (routeAddress && !isFakeAddress(routeAddress)) 
+            ? routeAddress.id 
+            : (initialAddrs.find(a => a.is_default)?.id || initialAddrs[0]?.id || null)
     );
 
-    // Step 1: LGA & Destination States
-    const [quickDestination, setQuickDestination] = useState({
-        state: 'Yobe',
-        city: 'Bade',
-        lga: 'Bade',
-        address: 'Bade / Gashua, Yobe State'
-    });
-    const [lgaModalVisible, setLgaModalVisible]           = useState(false);
-    const [lgaSearchQuery, setLgaSearchQuery]             = useState('');
-    const [activeLgaStateFilter, setActiveLgaStateFilter] = useState('Yobe');
-    const [streetInputExpanded, setStreetInputExpanded]   = useState(false);
-    const [customStreetAddress, setCustomStreetAddress]   = useState('');
+    // ── Quick Add / Edit Address Modal States (0ms inline entry without leaving checkout) ──
+    const [showAddAddressModal, setShowAddAddressModal] = useState(false);
+    const [modalFullName, setModalFullName]             = useState('');
+    const [modalPhone, setModalPhone]                   = useState('');
+    const [modalState, setModalState]                   = useState('Yobe');
+    const [modalLga, setModalLga]                       = useState('Bade');
+    const [modalStreet, setModalStreet]                 = useState('');
+    const [modalLandmark, setModalLandmark]             = useState('');
+    const [modalTitle, setModalTitle]                   = useState('Home');
+    const [isSavingAddress, setIsSavingAddress]         = useState(false);
+    const [showStatePicker, setShowStatePicker]         = useState(false);
+    const [showLgaPicker, setShowLgaPicker]             = useState(false);
+    const [stateSearch, setStateSearch]                 = useState('');
+    const [lgaSearch, setLgaSearch]                     = useState('');
+
+    // Pre-populate modal fields when profile loads
+    useEffect(() => {
+        if (profile) {
+            if (!modalFullName && (profile.full_name || user?.user_metadata?.full_name)) {
+                setModalFullName(profile.full_name || user?.user_metadata?.full_name || '');
+            }
+            if (!modalPhone && (profile.phone || profile.phone_number)) {
+                setModalPhone(profile.phone || profile.phone_number || '');
+            }
+        }
+    }, [profile, user]);
+
+    // Handle return from AddressPage
+    useEffect(() => {
+        if (route?.params?.selectedAddress && !isFakeAddress(route.params.selectedAddress)) {
+            const passedAddr = route.params.selectedAddress;
+            setAddresses(prev => {
+                const filtered = prev.filter(a => a.id !== passedAddr.id && !isFakeAddress(a));
+                return [passedAddr, ...filtered];
+            });
+            setSelectedAddressId(passedAddr.id);
+        } else if (route?.params?.selectedAddressId) {
+            setSelectedAddressId(route.params.selectedAddressId);
+        }
+    }, [route?.params]);
 
     // Step 2: Payment Gateways
     const [paymentMethod, setPaymentMethod]               = useState('Paystack');
@@ -372,42 +413,47 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
     // Resolve active customer address directly from saved shipping addresses
     const selectedAddrObj = useMemo(() => {
-        if (selectedAddressId && selectedAddressId !== 'lga_dest') {
+        if (selectedAddressId && selectedAddressId !== 'lga_dest' && selectedAddressId !== 'fallback_dest' && selectedAddressId !== 'quick_dest_addr') {
             const found = addresses.find(a => a.id === selectedAddressId);
-            if (found) return found;
+            if (found && found.address && found.address.trim() && !isFakeAddress(found)) return found;
         }
-        if (routeAddress) return routeAddress;
-        const defaultAddr = addresses.find(a => a.is_default);
+        if (routeAddress && routeAddress.address && !isFakeAddress(routeAddress)) return routeAddress;
+
+        const validAddrs = addresses.filter(a => a && a.address && a.address.trim() && !isFakeAddress(a));
+        const defaultAddr = validAddrs.find(a => a.is_default);
         if (defaultAddr) return defaultAddr;
-        if (addresses.length > 0) return addresses[0];
-        if (profile?.address) {
+        if (validAddrs.length > 0) return validAddrs[0];
+
+        if (profile?.address && profile.address.trim().length > 3) {
             return {
                 id: 'profile_default_addr',
                 title: 'Default Address',
-                address: profile.address,
+                address: profile.address.trim(),
                 city: profile.city || profile.lga || '',
                 lga: profile.lga || profile.city || '',
-                state: profile.state || 'Yobe',
+                state: profile.state || '',
                 phone: profile.phone || profile.phone_number || '',
                 is_default: true
             };
         }
-        return {
-            id: 'fallback_dest',
-            title: 'Delivery Destination',
-            address: 'Bade / Gashua, Yobe State',
-            city: 'Bade',
-            lga: 'Bade',
-            state: 'Yobe',
-            phone: profile?.phone || profile?.phone_number || '',
-            is_default: false
-        };
+        return null;
     }, [addresses, selectedAddressId, routeAddress, profile]);
 
     // Instant Synchronous Shipping Calculation (0ms latency, zero delay)
     const shippingCalculation = useMemo(() => {
+        if (selectedDeliveryMethod === 'pickup') {
+            return {
+                totalShippingFee: 0,
+                totalDistanceKm: 0,
+                vendorBreakdowns: [],
+                vendorGroups: [],
+                isFreeShipping: true,
+                deliveryMethod: 'pickup',
+                isPickup: true
+            };
+        }
         const selectedAddr = selectedAddrObj;
-        if (!selectedAddr || !cart.length) return null;
+        if (!selectedAddr || !selectedAddr.address || !cart.length) return null;
 
         const mergedAdminSettings = {
             ...(settings?.shipping_settings || {}),
@@ -430,11 +476,12 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
         if (selectedDeliveryMethod === 'pickup') return 0;
         const allFreeShipping = cart.length > 0 && cart.every(item => item.free_shipping === true);
         if (allFreeShipping) return 0;
+        if (!selectedAddrObj) return 0;
         if (shippingCalculation && typeof shippingCalculation.totalShippingFee === 'number') {
-            return Math.max(0, Number(shippingCalculation.totalShippingFee));
+            return Math.max(0, Math.round(Number(shippingCalculation.totalShippingFee)));
         }
         return 0;
-    }, [shippingCalculation, selectedDeliveryMethod, cart]);
+    }, [shippingCalculation, selectedDeliveryMethod, cart, selectedAddrObj]);
 
     // Tax calculation
     const taxAmount = useMemo(() => {
@@ -445,7 +492,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
     const taxRateLabel = (parseFloat(settings?.tax_rate) || 7.5).toFixed(1);
     const isTaxEnabled = settings?.tax_enabled !== false;
-    const isShippingFree = selectedDeliveryMethod === 'pickup' || shippingFee === 0;
+    const isShippingFree = selectedDeliveryMethod === 'pickup' || (Boolean(selectedAddrObj) && shippingFee === 0);
 
     // ── Local Government Area (LGA) Quick Selector Helpers ────────────────────
     const quickStates = ['Yobe', 'Jigawa', 'Borno', 'Kano', 'Bauchi', 'Gombe', 'Kaduna', 'Abuja', 'Lagos', 'All States'];
@@ -767,7 +814,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     }
                     if (lastSelected) {
                         const parsedLast = JSON.parse(lastSelected);
-                        if (parsedLast && (parsedLast.address || parsedLast.city)) {
+                        if (parsedLast && (parsedLast.address || parsedLast.city) && !isFakeAddress(parsedLast)) {
                             idMap.set(parsedLast.id || 'last_cached_addr', parsedLast);
                         }
                     }
@@ -776,43 +823,33 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 console.log('Local address load error in checkout:', e);
             }
 
-            let loadedAddresses = Array.from(idMap.values());
+            // Clean real addresses - filter out all placeholders
+            let loadedAddresses = Array.from(idMap.values()).filter(a => !isFakeAddress(a));
 
-            // Fallback to profile address if user has saved one in profile
-            if (loadedAddresses.length === 0 && profileRes.status === 'fulfilled' && profileRes.value?.data?.address) {
+            // Use profile address ONLY if the user actually typed a real address in their profile
+            if (loadedAddresses.length === 0 && profileRes.status === 'fulfilled' && profileRes.value?.data?.address && profileRes.value.data.address.trim().length > 3) {
                 const prof = profileRes.value.data;
                 loadedAddresses = [{
                     id: 'profile_default_addr',
                     title: 'Default Address',
-                    address: prof.address,
+                    address: prof.address.trim(),
                     city: prof.city || prof.lga || '',
                     lga: prof.lga || prof.city || '',
-                    state: prof.state || 'Yobe',
+                    state: prof.state || '',
                     phone: prof.phone || prof.phone_number || '',
                     is_default: true
                 }];
             }
 
-            // Fallback to quickDestination so checkout is NEVER stuck with empty addresses
-            if (loadedAddresses.length === 0 && quickDestination?.address) {
-                loadedAddresses = [{
-                    id: 'quick_dest_addr',
-                    title: 'Delivery Address',
-                    address: quickDestination.address,
-                    city: quickDestination.city || quickDestination.lga || 'Bade',
-                    lga: quickDestination.lga || quickDestination.city || 'Bade',
-                    state: quickDestination.state || 'Yobe',
-                    phone: currentUser?.phone || currentUser?.user_metadata?.phone || '',
-                    is_default: true
-                }];
-            }
-
+            // NEVER inject any placeholder or dummy address!
+            setAddresses(loadedAddresses);
             if (loadedAddresses.length > 0) {
-                setAddresses(loadedAddresses);
                 const defaultAddr = loadedAddresses.find(a => a.is_default) || loadedAddresses[0];
-                if (defaultAddr && (!selectedAddressId || selectedAddressId === 'lga_dest' || !loadedAddresses.some(a => a.id === selectedAddressId))) {
+                if (defaultAddr && (!selectedAddressId || !loadedAddresses.some(a => a.id === selectedAddressId))) {
                     setSelectedAddressId(defaultAddr.id);
                 }
+            } else {
+                setSelectedAddressId(null);
             }
             if (methodsRes.status === 'fulfilled' && methodsRes.value?.data?.length > 0) {
                 const normalizedMethods = methodsRes.value.data.map(m => ({
@@ -1060,10 +1097,12 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 ? rawUid
                 : null;
 
+            const effectiveDeliveryMethod = customDeliveryMethod || selectedDeliveryMethod || 'standard';
+            const isPickup = effectiveDeliveryMethod === 'pickup';
             const addrObj = customShipping || selectedAddrObj || addresses.find(a => a.id === selectedAddressId);
-            const shippingAddressStr = addrObj
-                ? [addrObj.address, addrObj.city, addrObj.state].filter(Boolean).join(', ')
-                : (quickDestination?.address || '');
+            const shippingAddressStr = isPickup
+                ? 'Store Pickup - Abu Mafhal Fulfillment Hub'
+                : (addrObj ? [addrObj.address, addrObj.city, addrObj.state].filter(Boolean).join(', ') : '');
             const contactPhone = addrObj?.phone || profile?.phone_number || profile?.phone || '';
 
             const isUUID = (str) => typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
@@ -1073,9 +1112,6 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
             const effectiveCart = (customCart && customCart.length > 0) ? customCart : cart;
             const effectiveTotal = (customTotal != null && customTotal > 0) ? customTotal : finalTotal;
-
-            const effectiveDeliveryMethod = customDeliveryMethod || selectedDeliveryMethod || 'standard';
-            const isPickup = effectiveDeliveryMethod === 'pickup';
             const effectiveShippingFee = isPickup ? 0 : (customShippingFee !== null && customShippingFee !== undefined ? Number(customShippingFee) : Number(shippingFee || 0));
             const effectiveTax = (customTaxAmount !== null && customTaxAmount !== undefined) ? Number(customTaxAmount) : Number(taxAmount || 0);
             const effectiveDiscount = (customDiscountAmount !== null && customDiscountAmount !== undefined) ? Number(customDiscountAmount) : Number(discountAmount || 0);
@@ -1476,6 +1512,25 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             setAgreedToTerms(true);
         }
 
+        if (selectedDeliveryMethod !== 'pickup') {
+            if (!selectedAddrObj || !selectedAddrObj.address || !selectedAddrObj.address.trim()) {
+                showToast('⚠️ Babu adireshin karbar kaya!');
+                showAlert(
+                    'Ana Bukatar Adireshi (Address Required)',
+                    'Dole ne ka sanya ainihin adireshin da za a kai maka kaya kafin ka kammala wannan oda.',
+                    [
+                        { text: 'OK', onPress: () => {
+                            setCurrentStep(1);
+                            setShowAddAddressModal(true);
+                        }}
+                    ]
+                );
+                setCurrentStep(1);
+                setShowAddAddressModal(true);
+                return;
+            }
+        }
+
         if (isWalletInsufficient && !useWalletSplit) {
             showToast('⚠️ Insufficient Wallet Balance');
             showAlert(
@@ -1854,13 +1909,16 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
                 const isDatabaseUUID = (id) => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id) && id !== 'profile_default_addr' && id !== 'lga_dest';
                 const safeAddressId = isDatabaseUUID(selectedAddressId) ? selectedAddressId : 'default';
-                const safeShipping = selectedAddrObj || {
-                    address: quickDestination?.address || 'Delivery Address',
-                    city: quickDestination?.city || 'Bade',
-                    lga: quickDestination?.lga || 'Bade',
-                    state: quickDestination?.state || 'Yobe',
-                    phone: selectedAddrObj?.phone || verifiedUser.phone || ''
-                };
+                const safeShipping = selectedDeliveryMethod === 'pickup'
+                    ? {
+                        title: 'Store Pickup',
+                        address: 'Abu Mafhal Fulfillment Hub',
+                        city: 'Bade',
+                        lga: 'Bade',
+                        state: 'Yobe',
+                        phone: selectedAddrObj?.phone || verifiedUser.phone || ''
+                    }
+                    : selectedAddrObj;
 
                 // 3. Pay Small Small with Paystack, Flutterwave, or NOWPayments
                 const pssInit = await PaymentGatewayService.initiate({
@@ -1968,13 +2026,16 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
             }
             const isDatabaseUUID = (id) => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id) && id !== 'profile_default_addr' && id !== 'lga_dest';
             const safeAddressId = isDatabaseUUID(selectedAddressId) ? selectedAddressId : 'default';
-            const safeShipping = selectedAddrObj || {
-                address: quickDestination?.address || 'Delivery Address',
-                city: quickDestination?.city || 'Bade',
-                lga: quickDestination?.lga || 'Bade',
-                state: quickDestination?.state || 'Yobe',
-                phone: selectedAddrObj?.phone || verifiedUser.phone || ''
-            };
+            const safeShipping = selectedDeliveryMethod === 'pickup'
+                ? {
+                    title: 'Store Pickup',
+                    address: 'Abu Mafhal Fulfillment Hub',
+                    city: 'Bade',
+                    lga: 'Bade',
+                    state: 'Yobe',
+                    phone: selectedAddrObj?.phone || verifiedUser.phone || ''
+                }
+                : selectedAddrObj;
 
             const initRes = await PaymentGatewayService.initiate({
                 gateway: paymentMethod,
@@ -2081,10 +2142,20 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
 
     const validateAndNext = () => {
         if (currentStep === 1) {
-            if (!selectedAddressId) {
-                showToast('⚠️ Please select or add a shipping address');
-                showAlert('Address Required', 'Please select or add a shipping address.');
-                return;
+            if (selectedDeliveryMethod !== 'pickup') {
+                if (!selectedAddrObj || !selectedAddrObj.address || !selectedAddrObj.address.trim() || isFakeAddress(selectedAddrObj)) {
+                    showToast('⚠️ Dole ne ka sanya adireshin karbar kaya!');
+                    showAlert(
+                        'Ana Bukatar Adireshi (Address Required)',
+                        'Don Allah sanya ainihin adireshin da za a kawo maka kaya kafin ka ci gaba zuwa biyan kudi.',
+                        [
+                            { text: 'Soke (Cancel)', style: 'cancel' },
+                            { text: '+ Sanya Adireshi (Add Address)', onPress: () => setShowAddAddressModal(true) }
+                        ]
+                    );
+                    setShowAddAddressModal(true);
+                    return;
+                }
             }
             setCurrentStep(2);
         } else if (currentStep === 2) {
@@ -2094,6 +2165,122 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 return;
             }
             setCurrentStep(3);
+        }
+    };
+
+    const handleSaveInlineAddress = async () => {
+        const stateClean = (modalState || '').trim();
+        const lgaClean = (modalLga || '').trim();
+        const streetClean = (modalStreet || '').trim();
+        const phoneClean = (modalPhone || '').trim();
+        const nameClean = (modalFullName || '').trim();
+
+        if (!stateClean || !lgaClean) {
+            showToast('⚠️ Da fatan a zabi Jiha da Karamar Hukuma');
+            showAlert('Bayani Bai Cika Ba', 'Da fatan a zabi Jiha (State) da Karamar Hukuma (LGA).');
+            return;
+        }
+        if (!streetClean || streetClean.length < 3) {
+            showToast('⚠️ Da fatan a rubuta ainihin adireshin titi ko unguwa');
+            showAlert('Adireshi Bai Cika Ba', 'Da fatan a rubuta cikakken adireshin titi ko unguwa inda za a kawo kaya.');
+            return;
+        }
+        if (!phoneClean || phoneClean.length < 8) {
+            showToast('⚠️ Da fatan a rubuta lambar waya');
+            showAlert('Lambar Waya Ta Zama Dole', 'Da fatan a rubuta lambar wayar da za a kira idan an kawo kaya.');
+            return;
+        }
+
+        setIsSavingAddress(true);
+        try {
+            const { data: { user: authUser } } = await supabase.auth.getUser();
+            const uid = authUser?.id || user?.id || profile?.id || 'guest';
+
+            const fullAddressText = modalLandmark.trim()
+                ? `${streetClean} (Near: ${modalLandmark.trim()})`
+                : streetClean;
+
+            const newRecord = {
+                id: `addr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                user_id: uid !== 'guest' ? uid : null,
+                title: modalTitle || 'Home',
+                full_name: nameClean || profile?.full_name || 'Customer',
+                address: fullAddressText,
+                city: lgaClean,
+                lga: lgaClean,
+                state: stateClean,
+                phone: phoneClean,
+                is_default: true,
+                created_at: new Date().toISOString()
+            };
+
+            // 1. Persist to Supabase if authenticated
+            if (uid && uid !== 'guest') {
+                try {
+                    const { data: inserted, error: insErr } = await supabase
+                        .from('addresses')
+                        .insert({
+                            user_id: uid,
+                            title: newRecord.title,
+                            full_name: newRecord.full_name,
+                            address: newRecord.address,
+                            landmark: modalLandmark.trim() || null,
+                            city: newRecord.city,
+                            lga: newRecord.lga,
+                            state: newRecord.state,
+                            phone: newRecord.phone,
+                            is_default: true
+                        })
+                        .select()
+                        .maybeSingle();
+
+                    if (!insErr && inserted?.id) {
+                        newRecord.id = inserted.id;
+                    }
+
+                    // Also sync profile address
+                    await supabase.from('profiles').update({
+                        address: newRecord.address,
+                        city: newRecord.city,
+                        lga: newRecord.lga,
+                        state: newRecord.state,
+                        phone: newRecord.phone
+                    }).eq('id', uid);
+                } catch (sbErr) {
+                    console.warn('[Checkout] Supabase address save warning:', sbErr);
+                }
+            }
+
+            // 2. Persist to AsyncStorage for 0ms immediate access
+            const storageKey = `@user_addresses_${uid}`;
+            const existingRaw = await AsyncStorage.getItem(storageKey);
+            let existingList = [];
+            try {
+                existingList = existingRaw ? JSON.parse(existingRaw) : [];
+            } catch (_) {}
+
+            const updatedList = [newRecord, ...existingList.filter(a => a.id !== newRecord.id && !isFakeAddress(a))];
+            await AsyncStorage.setItem(storageKey, JSON.stringify(updatedList));
+            await AsyncStorage.setItem('@abumafhal_last_selected_address', JSON.stringify(newRecord));
+            if (typeof window !== 'undefined' && window.localStorage) {
+                try {
+                    window.localStorage.setItem(storageKey, JSON.stringify(updatedList));
+                    window.localStorage.setItem('@abumafhal_last_selected_address', JSON.stringify(newRecord));
+                } catch (_) {}
+            }
+
+            // 3. Update local checkout state
+            setAddresses(prev => [newRecord, ...prev.filter(a => a.id !== newRecord.id && !isFakeAddress(a))]);
+            setSelectedAddressId(newRecord.id);
+            setShowAddAddressModal(false);
+            setModalStreet('');
+            setModalLandmark('');
+            showToast('✓ An ajiye adireshin karbar kaya cikin nasara!');
+        } catch (err) {
+            console.error('Error saving inline address:', err);
+            showToast('⚠️ An samu matsala wajen ajiye adireshi');
+        } finally {
+            setIsSavingAddress(false);
         }
     };
 
@@ -2413,24 +2600,47 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         {/* ── STEP 1: DELIVERY DESTINATION & ADDRESS SELECTOR ── */}
                         <View style={s.sectionHeader}>
                             <View style={{ flex: 1, marginRight: 8 }}>
-                                <Text style={s.sectionTitle}>Delivery Destination</Text>
-                                <Text style={s.sectionSub} numberOfLines={1}>Select where your order should be delivered</Text>
+                                <Text style={s.sectionTitle}>Wurin Isar da Kaya (Destination)</Text>
+                                <Text style={s.sectionSub} numberOfLines={1}>Zabi ainihin inda kake son a kawo maka kaya</Text>
                             </View>
                             <TouchableOpacity 
-                                onPress={() => navigation.navigate('AddressPage')}
+                                onPress={() => setShowAddAddressModal(true)}
                                 hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                                 style={s.manageBtnPill}
                                 activeOpacity={0.7}
                             >
                                 <Ionicons name="add-circle-outline" size={14} color={NAVY} />
-                                <Text style={s.manageLink}>+ Add Address</Text>
+                                <Text style={s.manageLink}>+ Sanya Adireshi</Text>
                             </TouchableOpacity>
                         </View>
 
-                        {/* ── Saved Addresses List ── */}
-                        {addresses.filter(a => a.id !== 'lga_dest' && a.id !== 'quick_dest_addr').length > 0 ? (
+                        {/* ── If Store Pickup is active ── */}
+                        {selectedDeliveryMethod === 'pickup' ? (
+                            <View style={[s.checkoutCard, { marginBottom: 12, borderColor: '#10B981', backgroundColor: '#F0FDF4', padding: 14 }]}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                    <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: '#DCFCE7', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Ionicons name="storefront" size={22} color="#059669" />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                            <Text style={{ fontSize: 14, fontWeight: '800', color: NAVY }}>Karbar Kaya a Shago (Store Pickup)</Text>
+                                            <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                <Text style={{ fontSize: 10, fontWeight: '800', color: '#059669' }}>KYAUTA</Text>
+                                            </View>
+                                        </View>
+                                        <Text style={{ fontSize: 12, color: SLATE, marginTop: 3 }}>
+                                            Abu Mafhal Main Fulfillment Hub (Bade / Gashua, Yobe State)
+                                        </Text>
+                                        <Text style={{ fontSize: 11, fontWeight: '600', color: '#059669', marginTop: 3 }}>
+                                            Kudin Aike: ₦0 • Zaka je ka karbi kayanka a shago da zarar sun shirya.
+                                        </Text>
+                                    </View>
+                                </View>
+                            </View>
+                        ) : addresses.filter(a => a && a.address && a.address.trim() && !isFakeAddress(a)).length > 0 ? (
+                            /* ── Saved Real Addresses List ── */
                             <View style={{ marginBottom: 12 }}>
-                                {addresses.filter(a => a.id !== 'lga_dest' && a.id !== 'quick_dest_addr').map((addr) => {
+                                {addresses.filter(a => a && a.address && a.address.trim() && !isFakeAddress(a)).map((addr) => {
                                     const isSelected = selectedAddressId === addr.id || 
                                         (!selectedAddressId && addr.is_default);
                                     return (
@@ -2445,72 +2655,110 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                     );
                                 })}
 
-                                <TouchableOpacity
-                                    style={s.addNewAddressRow}
-                                    onPress={() => navigation.navigate('AddressPage')}
-                                    activeOpacity={0.7}
-                                >
-                                    <View style={s.addPlusCircle}>
-                                        <Ionicons name="add" size={14} color={NAVY} />
-                                    </View>
-                                    <Text style={s.addNewAddressTxt}>Manage or Add Another Address</Text>
-                                </TouchableOpacity>
+                                <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                                    <TouchableOpacity
+                                        style={[s.addNewAddressRow, { flex: 1 }]}
+                                        onPress={() => setShowAddAddressModal(true)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <View style={s.addPlusCircle}>
+                                            <Ionicons name="add" size={14} color={NAVY} />
+                                        </View>
+                                        <Text style={s.addNewAddressTxt}>+ Sanya Wani</Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        style={[s.addNewAddressRow, { flex: 1, backgroundColor: '#F8FAFC' }]}
+                                        onPress={() => navigation.navigate('AddressPage', { returnTo: 'CheckoutPage' })}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Ionicons name="book-outline" size={14} color={SLATE} style={{ marginRight: 6 }} />
+                                        <Text style={[s.addNewAddressTxt, { color: SLATE }]}>Address Book</Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
-                        ) : profile?.address ? (
+                        ) : (profile?.address && profile.address.trim().length > 3) ? (
+                            /* ── Profile Address Fallback ── */
                             <View style={{ marginBottom: 12 }}>
                                 <CheckoutAddressCard
                                     address={{
                                         id: 'profile_default_addr',
                                         title: 'Default Address',
-                                        address: profile.address,
+                                        address: profile.address.trim(),
                                         city: profile.city || profile.lga || '',
                                         lga: profile.lga || profile.city || '',
-                                        state: profile.state || 'Yobe',
+                                        state: profile.state || '',
                                         phone: profile.phone || profile.phone_number || '',
                                         is_default: true
                                     }}
                                     selected={true}
                                     onSelect={() => {}}
                                 />
-                                <TouchableOpacity
-                                    style={s.addNewAddressRow}
-                                    onPress={() => navigation.navigate('AddressPage')}
-                                    activeOpacity={0.7}
-                                >
-                                    <View style={s.addPlusCircle}>
-                                        <Ionicons name="add" size={14} color={NAVY} />
-                                    </View>
-                                    <Text style={s.addNewAddressTxt}>+ Add New Delivery Address</Text>
-                                </TouchableOpacity>
+                                <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                                    <TouchableOpacity
+                                        style={[s.addNewAddressRow, { flex: 1 }]}
+                                        onPress={() => setShowAddAddressModal(true)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <View style={s.addPlusCircle}>
+                                            <Ionicons name="add" size={14} color={NAVY} />
+                                        </View>
+                                        <Text style={s.addNewAddressTxt}>+ Sanya Sabon Adireshi</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[s.addNewAddressRow, { flex: 1, backgroundColor: '#F8FAFC' }]}
+                                        onPress={() => navigation.navigate('AddressPage', { returnTo: 'CheckoutPage' })}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Ionicons name="book-outline" size={14} color={SLATE} style={{ marginRight: 6 }} />
+                                        <Text style={[s.addNewAddressTxt, { color: SLATE }]}>Address Book</Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
                         ) : (
-                            <View style={[s.checkoutCard, { marginBottom: 12, alignItems: 'center', paddingVertical: 20 }]}>
-                                <Ionicons name="location-outline" size={36} color={SLATE} style={{ marginBottom: 8 }} />
-                                <Text style={{ fontSize: 14, fontWeight: '700', color: NAVY }}>No Delivery Address Saved</Text>
-                                <Text style={{ fontSize: 12, color: SLATE, textAlign: 'center', marginTop: 4, marginBottom: 12, paddingHorizontal: 16 }}>
-                                    Please add a delivery destination so we can calculate exact driving distance and delivery fees.
+                            /* ── Clean Empty State (NO fake fallback!) ── */
+                            <View style={[s.checkoutCard, { marginBottom: 12, alignItems: 'center', paddingVertical: 22, paddingHorizontal: 16, borderColor: '#F59E0B', borderWidth: 1.5, backgroundColor: '#FFFDF5' }]}>
+                                <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+                                    <Ionicons name="location-outline" size={26} color="#B45309" />
+                                </View>
+                                <Text style={{ fontSize: 15, fontWeight: '800', color: NAVY }}>Babu Adireshin Karbar Kaya (No Address)</Text>
+                                <Text style={{ fontSize: 12, color: SLATE, textAlign: 'center', marginTop: 4, marginBottom: 16, lineHeight: 18 }}>
+                                    Ba ka da wani adireshi a ajiye. Dole ne ka sanya ainihin adireshinka domin a lissafa kudin aike da nisan tafiya.
                                 </Text>
                                 <TouchableOpacity
-                                    onPress={() => navigation.navigate('AddressPage')}
+                                    onPress={() => setShowAddAddressModal(true)}
                                     style={{
                                         backgroundColor: GOLD,
-                                        paddingHorizontal: 16,
-                                        paddingVertical: 10,
-                                        borderRadius: 8,
+                                        paddingHorizontal: 20,
+                                        paddingVertical: 12,
+                                        borderRadius: 10,
                                         flexDirection: 'row',
                                         alignItems: 'center',
-                                        gap: 6
+                                        gap: 8,
+                                        shadowColor: GOLD,
+                                        shadowOpacity: 0.25,
+                                        shadowOffset: { width: 0, height: 3 },
+                                        elevation: 3
                                     }}
                                     activeOpacity={0.8}
                                 >
-                                    <Ionicons name="add-circle" size={16} color={NAVY} />
-                                    <Text style={{ fontSize: 13, fontWeight: '700', color: NAVY }}>+ Add Shipping Address</Text>
+                                    <Ionicons name="add-circle" size={18} color={NAVY} />
+                                    <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY }}>+ Sanya Adireshin Karbar Kaya Yanzu</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={() => navigation.navigate('AddressPage', { returnTo: 'CheckoutPage' })}
+                                    style={{ marginTop: 12, paddingVertical: 6 }}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={{ fontSize: 12, fontWeight: '600', color: SLATE, textDecorationLine: 'underline' }}>
+                                        Ko kuma duba Address Book
+                                    </Text>
                                 </TouchableOpacity>
                             </View>
                         )}
 
-                        {/* ── Live Shipping Intelligence & Route Display ── */}
-                        {shippingCalculation && (
+                        {/* ── Live Shipping Intelligence & Route Display (ONLY if real address selected) ── */}
+                        {shippingCalculation && selectedAddrObj && (
                             <View style={[s.shippingInfoCard, { marginTop: 4, marginBottom: 12 }]}>
                                 <View style={s.shippingInfoTop}>
                                     <View style={s.shippingInfoLeft}>
@@ -2932,19 +3180,65 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 {currentStep === 2 && (
                     <View>
                         <View style={s.sectionHeader}>
-                            <View>
-                                <Text style={s.sectionTitle}>Payment Gateway</Text>
-                                <Text style={s.sectionSub}>Choose how you would like to complete payment</Text>
+                            <View style={{ flex: 1, marginRight: 8 }}>
+                                <Text style={s.sectionTitle}>Hanyar Biyan Kudi (Payment)</Text>
+                                <Text style={s.sectionSub}>Zabi hanyar da ta fi dacewa da kai</Text>
                             </View>
                             <TouchableOpacity
                                 onPress={() => setShowEscrowModal(true)}
                                 style={s.escrowHeaderBadge}
                                 activeOpacity={0.8}
                             >
-                                <Ionicons name="shield-checkmark" size={11} color={EMERALD} />
+                                <View style={s.escrowHeaderBadgePulse}>
+                                    <Ionicons name="shield-checkmark" size={11} color="#059669" />
+                                </View>
                                 <Text style={s.escrowHeaderBadgeTxt}>100% Escrow</Text>
+                                <Ionicons name="information-circle-outline" size={12} color="#059669" />
                             </TouchableOpacity>
                         </View>
+
+                        {/* ── 100% ESCROW BUYER PROTECTION TRUST HERO CARD ── */}
+                        <TouchableOpacity
+                            style={s.escrowHeroCard}
+                            onPress={() => setShowEscrowModal(true)}
+                            activeOpacity={0.85}
+                        >
+                            <View style={s.escrowHeroGlowDecor} />
+                            <View style={s.escrowHeroTopRow}>
+                                <View style={s.escrowHeroIconCircle}>
+                                    <Ionicons name="shield-checkmark" size={20} color="#059669" />
+                                </View>
+                                <View style={{ flex: 1, marginLeft: 10 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                                        <Text style={s.escrowHeroTitle}>100% Escrow Guarantee</Text>
+                                        <View style={s.escrowProtectedPill}>
+                                            <Ionicons name="lock-closed" size={9} color="#065F46" />
+                                            <Text style={s.escrowProtectedPillTxt}>Zero Risk</Text>
+                                        </View>
+                                    </View>
+                                    <Text style={s.escrowHeroSub}>
+                                        Kudinka yana cikin amintaccen asusun Escrow har sai kayanka ya isa hannunka ka duba ka gamsu.
+                                    </Text>
+                                </View>
+                            </View>
+
+                            <View style={s.escrowHeroFeaturesRow}>
+                                <View style={s.escrowHeroFeatureItem}>
+                                    <Ionicons name="checkmark-circle" size={13} color={EMERALD} />
+                                    <Text style={s.escrowHeroFeatureTxt}>Kudi a asusun tsaro</Text>
+                                </View>
+                                <View style={s.escrowHeroFeatureDivider} />
+                                <View style={s.escrowHeroFeatureItem}>
+                                    <Ionicons name="sync-circle" size={13} color={GOLD} />
+                                    <Text style={s.escrowHeroFeatureTxt}>Kwanaki 7 na mayarwa</Text>
+                                </View>
+                                <View style={s.escrowHeroFeatureDivider} />
+                                <View style={s.escrowHeroFeatureItem}>
+                                    <Ionicons name="chevron-forward-circle" size={13} color="#059669" />
+                                    <Text style={[s.escrowHeroFeatureTxt, { color: '#065F46', fontWeight: '800' }]}>Karin bayani</Text>
+                                </View>
+                            </View>
+                        </TouchableOpacity>
 
                         {/* ── MODERN FEATURE: WALLET SPLIT PAYMENT ──────────────── */}
                         {walletBalance > 0 && paymentMethod !== 'Wallet' && (
@@ -3357,17 +3651,24 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         )}
 
                         {/* Buyer Protection Trust Callout */}
-                        <View style={s.escrowCallout}>
+                        <TouchableOpacity 
+                            style={s.escrowCallout}
+                            onPress={() => setShowEscrowModal(true)}
+                            activeOpacity={0.8}
+                        >
                             <View style={s.escrowIconBox}>
-                                <Ionicons name="lock-closed" size={16} color={GOLD} />
+                                <Ionicons name="shield-checkmark" size={16} color="#059669" />
                             </View>
                             <View style={{ flex: 1, marginLeft: 10 }}>
-                                <Text style={s.escrowTitle}>Abu Mafhal Escrow Protection</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <Text style={s.escrowTitle}>Abu Mafhal Escrow Protection (100%)</Text>
+                                    <Ionicons name="chevron-forward" size={13} color="#059669" />
+                                </View>
                                 <Text style={s.escrowSub}>
-                                    Your funds are securely held in escrow until you receive and verify your ordered items. Zero risk to buyers.
+                                    Kudinka na nan a kulle a amintaccen asusun Escrow har sai kayanka ya isa hannunka ka duba ka gamsu. Zero risk to buyers.
                                 </Text>
                             </View>
-                        </View>
+                        </TouchableOpacity>
                     </View>
                 )}
 
@@ -3907,10 +4208,16 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                             ? paymentMethod === 'pod'
                                                 ? 'Confirm Order'
                                                 : 'Confirm & Pay'
-                                            : 'Continue'}
+                                            : (currentStep === 1 && selectedDeliveryMethod !== 'pickup' && !selectedAddrObj)
+                                                ? '+ Sanya Adireshi'
+                                                : 'Continue'}
                                     </Text>
                                     <Ionicons
-                                        name={currentStep === 3 ? "shield-checkmark" : "arrow-forward"}
+                                        name={currentStep === 3 
+                                            ? "shield-checkmark" 
+                                            : (currentStep === 1 && selectedDeliveryMethod !== 'pickup' && !selectedAddrObj)
+                                                ? "add-circle"
+                                                : "arrow-forward"}
                                         size={14}
                                         color={WHITE}
                                     />
@@ -4096,38 +4403,46 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         </View>
                         <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
                             <View style={s.escrowFeatureCard}>
-                                <Ionicons name="lock-closed" size={20} color={EMERALD} />
+                                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#DCFCE7', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Ionicons name="lock-closed" size={18} color="#059669" />
+                                </View>
                                 <View style={{ flex: 1, marginLeft: 12 }}>
-                                    <Text style={s.escrowFeatureTitle}>Zero Risk Escrow Vault</Text>
+                                    <Text style={s.escrowFeatureTitle}>Zero Risk Escrow Vault (Rumbun Tsaron Kudi)</Text>
                                     <Text style={s.escrowFeatureDesc}>
-                                        Your payment is held safely in escrow. The seller is only paid after you inspect and accept your package upon delivery.
+                                        Kudinka yana cikin asusun Escrow na Abu Mafhal. Ba za a ba dillali ko mai kaya kudi ba har sai kayanka ya isa hannunka ka duba ka gamsu 100%.
                                     </Text>
                                 </View>
                             </View>
                             <View style={s.escrowFeatureCard}>
-                                <Ionicons name="sync" size={20} color={GOLD} />
+                                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Ionicons name="sync" size={18} color="#D97706" />
+                                </View>
                                 <View style={{ flex: 1, marginLeft: 12 }}>
-                                    <Text style={s.escrowFeatureTitle}>7-Day Return & Replacement</Text>
+                                    <Text style={s.escrowFeatureTitle}>7-Day Return & Replacement (Sauyi & Mayar da Kudi)</Text>
                                     <Text style={s.escrowFeatureDesc}>
-                                        Damaged, wrong, or counterfeit items qualify for immediate replacement or full refund with zero hassle.
+                                        Idan kaya sun lalace, ba su ne kake so ba, ko an samu kuskure, za a iya mayar maka da cikakken kudinka ko a canza maka kaya nan take ba tare da asara ba.
                                     </Text>
                                 </View>
                             </View>
                             <View style={s.escrowFeatureCard}>
-                                <Ionicons name="bicycle" size={20} color="#3B82F6" />
+                                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#DBEAFE', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Ionicons name="bicycle" size={18} color="#2563EB" />
+                                </View>
                                 <View style={{ flex: 1, marginLeft: 12 }}>
-                                    <Text style={s.escrowFeatureTitle}>Verified Express Logistics</Text>
+                                    <Text style={s.escrowFeatureTitle}>Verified Express Logistics (Dillalan Aike Amintattu)</Text>
                                     <Text style={s.escrowFeatureDesc}>
-                                        Track your delivery rider in real-time with continuous WhatsApp and SMS notifications from store dispatch to your door.
+                                        Bibiyar dan aike kai tsaye tare da samun sakonnin WhatsApp da SMS a duk lokacin da kaya suka fito daga shago har zuwa kofarka.
                                     </Text>
                                 </View>
                             </View>
                             <View style={s.escrowFeatureCard}>
-                                <Ionicons name="chatbubbles" size={20} color="#8B5CF6" />
+                                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#EDE9FE', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Ionicons name="chatbubbles" size={18} color="#7C3AED" />
+                                </View>
                                 <View style={{ flex: 1, marginLeft: 12 }}>
-                                    <Text style={s.escrowFeatureTitle}>24/7 Dispute Concierge</Text>
+                                    <Text style={s.escrowFeatureTitle}>24/7 Dispute Concierge (Taimako & Sulhu na Musamman)</Text>
                                     <Text style={s.escrowFeatureDesc}>
-                                        Direct priority WhatsApp line to dedicated resolution officers available 24 hours every day.
+                                        Layin taimako na WhatsApp kai tsaye ga kwararrun jami'anmu don magance kowace irin matsala cikin gaggawa a kowane lokaci.
                                     </Text>
                                 </View>
                             </View>
@@ -4137,7 +4452,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                             onPress={() => setShowEscrowModal(false)}
                             activeOpacity={0.8}
                         >
-                            <Text style={s.escrowModalCloseTxt}>I Understand & Feel Safe</Text>
+                            <Text style={s.escrowModalCloseTxt}>Na Fahimta • Kudina Yana Cikin Aminci</Text>
                         </TouchableOpacity>
                     </View>
                 </TouchableOpacity>
@@ -4152,6 +4467,265 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     await handlePaymentComplete(data);
                 }}
             />
+
+            {/* ── QUICK INLINE ADD ADDRESS MODAL ── */}
+            <Modal
+                visible={showAddAddressModal}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setShowAddAddressModal(false)}
+            >
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                    style={{ flex: 1 }}
+                >
+                    <View style={s.modalOverlay}>
+                        <View style={s.addrModalSheet}>
+                            {/* Modal Header */}
+                            <View style={s.addrModalHeader}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                    <View style={s.addrModalIconCircle}>
+                                        <Ionicons name="location" size={18} color={NAVY} />
+                                    </View>
+                                    <View>
+                                        <Text style={s.addrModalTitle}>Sanya Adireshin Karbar Kaya</Text>
+                                        <Text style={s.addrModalSub}>Ainihin wurin da za a kawo maka kaya</Text>
+                                    </View>
+                                </View>
+                                <TouchableOpacity 
+                                    onPress={() => setShowAddAddressModal(false)}
+                                    style={s.modalCloseBtn}
+                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                >
+                                    <Ionicons name="close-circle" size={24} color={SLATE} />
+                                </TouchableOpacity>
+                            </View>
+
+                            <ScrollView 
+                                style={{ maxHeight: 460 }} 
+                                showsVerticalScrollIndicator={false}
+                                keyboardShouldPersistTaps="handled"
+                            >
+                                {/* Title tag selection */}
+                                <Text style={s.formFieldLabel}>Sunan Wuri (Label)</Text>
+                                <View style={s.tagPillsRow}>
+                                    {['Home', 'Office', 'Shop', 'Family'].map((t) => (
+                                        <TouchableOpacity
+                                            key={t}
+                                            style={[s.tagPill, modalTitle === t && s.tagPillActive]}
+                                            onPress={() => setModalTitle(t)}
+                                            activeOpacity={0.7}
+                                        >
+                                            <Ionicons
+                                                name={t === 'Home' ? 'home' : t === 'Office' ? 'business' : t === 'Shop' ? 'storefront' : 'people'}
+                                                size={13}
+                                                color={modalTitle === t ? WHITE : NAVY}
+                                            />
+                                            <Text style={[s.tagPillTxt, modalTitle === t && s.tagPillTxtActive]}>{t}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+
+                                {/* Full Name */}
+                                <Text style={s.formFieldLabel}>Sunan Mai Karba (Full Name)</Text>
+                                <TextInput
+                                    style={s.formTextInput}
+                                    placeholder="Sunanka cikakke"
+                                    placeholderTextColor="#94A3B8"
+                                    value={modalFullName}
+                                    onChangeText={setModalFullName}
+                                />
+
+                                {/* Phone */}
+                                <Text style={s.formFieldLabel}>Lambar Waya (Phone Number) *</Text>
+                                <TextInput
+                                    style={s.formTextInput}
+                                    placeholder="Misali: 08012345678"
+                                    placeholderTextColor="#94A3B8"
+                                    keyboardType="phone-pad"
+                                    value={modalPhone}
+                                    onChangeText={setModalPhone}
+                                />
+
+                                {/* State & LGA Pickers */}
+                                <View style={{ flexDirection: 'row', gap: 10 }}>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={s.formFieldLabel}>Jiha (State) *</Text>
+                                        <TouchableOpacity
+                                            style={s.pickerSelectorBtn}
+                                            onPress={() => {
+                                                setStateSearch('');
+                                                setShowStatePicker(true);
+                                            }}
+                                            activeOpacity={0.7}
+                                        >
+                                            <Text style={s.pickerSelectorTxt} numberOfLines={1}>{modalState || 'Zabi Jiha'}</Text>
+                                            <Ionicons name="chevron-down" size={15} color={NAVY} />
+                                        </TouchableOpacity>
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={s.formFieldLabel}>Karamar Hukuma *</Text>
+                                        <TouchableOpacity
+                                            style={s.pickerSelectorBtn}
+                                            onPress={() => {
+                                                setLgaSearch('');
+                                                setShowLgaPicker(true);
+                                            }}
+                                            activeOpacity={0.7}
+                                        >
+                                            <Text style={s.pickerSelectorTxt} numberOfLines={1}>{modalLga || 'Zabi LGA'}</Text>
+                                            <Ionicons name="chevron-down" size={15} color={NAVY} />
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+
+                                {/* Street address */}
+                                <Text style={s.formFieldLabel}>Unguwa da Titin Gida (Street / Area) *</Text>
+                                <TextInput
+                                    style={[s.formTextInput, { minHeight: 64, textAlignVertical: 'top', paddingTop: 10 }]}
+                                    placeholder="Misali: Unguwar Sarki, No. 12 Titin Gidan Gona..."
+                                    placeholderTextColor="#94A3B8"
+                                    multiline={true}
+                                    value={modalStreet}
+                                    onChangeText={setModalStreet}
+                                />
+
+                                {/* Landmark */}
+                                <Text style={s.formFieldLabel}>Sanannen Wuri a Kusa (Landmark - Na Zabi)</Text>
+                                <TextInput
+                                    style={s.formTextInput}
+                                    placeholder="Misali: Kusa da Babban Masallaci ko Primary School"
+                                    placeholderTextColor="#94A3B8"
+                                    value={modalLandmark}
+                                    onChangeText={setModalLandmark}
+                                />
+                            </ScrollView>
+
+                            {/* Action Button */}
+                            <TouchableOpacity
+                                style={[s.saveAddrModalBtn, isSavingAddress && { opacity: 0.7 }]}
+                                onPress={handleSaveInlineAddress}
+                                disabled={isSavingAddress}
+                                activeOpacity={0.8}
+                            >
+                                {isSavingAddress ? (
+                                    <ActivityIndicator size="small" color={WHITE} />
+                                ) : (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Ionicons name="checkmark-circle" size={16} color={WHITE} />
+                                        <Text style={s.saveAddrModalBtnTxt}>Ajiye & Yi Amfani da Wannan</Text>
+                                    </View>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
+
+            {/* ── STATE PICKER SUB-MODAL ── */}
+            <Modal
+                visible={showStatePicker}
+                animationType="fade"
+                transparent={true}
+                onRequestClose={() => setShowStatePicker(false)}
+            >
+                <View style={s.modalOverlay}>
+                    <View style={s.pickerModalCard}>
+                        <View style={s.pickerModalHeader}>
+                            <Text style={s.pickerModalTitle}>Zabi Jiha (State)</Text>
+                            <TouchableOpacity onPress={() => setShowStatePicker(false)}>
+                                <Ionicons name="close" size={20} color={SLATE} />
+                            </TouchableOpacity>
+                        </View>
+                        <TextInput
+                            style={s.pickerSearchInput}
+                            placeholder="Nemi Jiha..."
+                            placeholderTextColor="#94A3B8"
+                            value={stateSearch}
+                            onChangeText={setStateSearch}
+                            autoFocus={false}
+                        />
+                        <FlatList
+                            data={(NIGERIA_DATA || []).filter(item => 
+                                !stateSearch || item.state.toLowerCase().includes(stateSearch.toLowerCase())
+                            )}
+                            keyExtractor={(item) => item.state}
+                            style={{ maxHeight: 300 }}
+                            keyboardShouldPersistTaps="handled"
+                            renderItem={({ item }) => (
+                                <TouchableOpacity
+                                    style={[s.pickerItemRow, modalState === item.state && s.pickerItemRowActive]}
+                                    onPress={() => {
+                                        setModalState(item.state);
+                                        if (item.lgas && item.lgas.length > 0) {
+                                            setModalLga(item.lgas[0]);
+                                        }
+                                        setShowStatePicker(false);
+                                    }}
+                                >
+                                    <Text style={[s.pickerItemTxt, modalState === item.state && s.pickerItemTxtActive]}>
+                                        {item.state} State
+                                    </Text>
+                                    {modalState === item.state && (
+                                        <Ionicons name="checkmark" size={16} color={NAVY} />
+                                    )}
+                                </TouchableOpacity>
+                            )}
+                        />
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ── LGA PICKER SUB-MODAL ── */}
+            <Modal
+                visible={showLgaPicker}
+                animationType="fade"
+                transparent={true}
+                onRequestClose={() => setShowLgaPicker(false)}
+            >
+                <View style={s.modalOverlay}>
+                    <View style={s.pickerModalCard}>
+                        <View style={s.pickerModalHeader}>
+                            <Text style={s.pickerModalTitle}>Zabi Karamar Hukuma ({modalState})</Text>
+                            <TouchableOpacity onPress={() => setShowLgaPicker(false)}>
+                                <Ionicons name="close" size={20} color={SLATE} />
+                            </TouchableOpacity>
+                        </View>
+                        <TextInput
+                            style={s.pickerSearchInput}
+                            placeholder="Nemi Karamar Hukuma..."
+                            placeholderTextColor="#94A3B8"
+                            value={lgaSearch}
+                            onChangeText={setLgaSearch}
+                            autoFocus={false}
+                        />
+                        <FlatList
+                            data={((NIGERIA_DATA || []).find(s => s.state === modalState)?.lgas || []).filter(lga => 
+                                !lgaSearch || lga.toLowerCase().includes(lgaSearch.toLowerCase())
+                            )}
+                            keyExtractor={(item) => item}
+                            style={{ maxHeight: 300 }}
+                            keyboardShouldPersistTaps="handled"
+                            renderItem={({ item }) => (
+                                <TouchableOpacity
+                                    style={[s.pickerItemRow, modalLga === item && s.pickerItemRowActive]}
+                                    onPress={() => {
+                                        setModalLga(item);
+                                        setShowLgaPicker(false);
+                                    }}
+                                >
+                                    <Text style={[s.pickerItemTxt, modalLga === item && s.pickerItemTxtActive]}>
+                                        {item}
+                                    </Text>
+                                    {modalLga === item && (
+                                        <Ionicons name="checkmark" size={16} color={NAVY} />
+                                    )}
+                                </TouchableOpacity>
+                            )}
+                        />
+                    </View>
+                </View>
+            </Modal>
 
 
         </View>
@@ -4712,33 +5286,147 @@ const s = StyleSheet.create({
         marginTop: 2,
         lineHeight: 14,
     },
+    // Modern Escrow Header Badge
+    escrowHeaderBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        backgroundColor: '#ECFDF5',
+        borderWidth: 1,
+        borderColor: '#A7F3D0',
+        paddingHorizontal: 9,
+        paddingVertical: 4.5,
+        borderRadius: 20,
+    },
+    escrowHeaderBadgePulse: {
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        backgroundColor: '#D1FAE5',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    escrowHeaderBadgeTxt: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: '#065F46',
+        letterSpacing: 0.2,
+    },
+
+    // 100% Escrow Hero Trust Card
+    escrowHeroCard: {
+        backgroundColor: '#F0FDF4',
+        borderWidth: 1,
+        borderColor: '#BBF7D0',
+        borderRadius: 14,
+        padding: 13,
+        marginBottom: 14,
+        position: 'relative',
+        overflow: 'hidden',
+    },
+    escrowHeroGlowDecor: {
+        position: 'absolute',
+        top: -20,
+        right: -20,
+        width: 70,
+        height: 70,
+        borderRadius: 35,
+        backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    },
+    escrowHeroTopRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    escrowHeroIconCircle: {
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        backgroundColor: '#DCFCE7',
+        borderWidth: 1,
+        borderColor: '#86EFAC',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    escrowHeroTitle: {
+        fontSize: 13.5,
+        fontWeight: '900',
+        color: '#065F46',
+        letterSpacing: -0.2,
+    },
+    escrowProtectedPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+        backgroundColor: '#DCFCE7',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 10,
+    },
+    escrowProtectedPillTxt: {
+        fontSize: 9.5,
+        fontWeight: '800',
+        color: '#065F46',
+    },
+    escrowHeroSub: {
+        fontSize: 11,
+        color: '#047857',
+        lineHeight: 15,
+        marginTop: 3,
+    },
+    escrowHeroFeaturesRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginTop: 10,
+        paddingTop: 9,
+        borderTopWidth: 0.5,
+        borderTopColor: '#BBF7D0',
+    },
+    escrowHeroFeatureItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    escrowHeroFeatureDivider: {
+        width: 1,
+        height: 10,
+        backgroundColor: '#86EFAC',
+    },
+    escrowHeroFeatureTxt: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#065F46',
+    },
+
+    // Bottom Escrow Callout
     escrowCallout: {
         flexDirection: 'row',
-        alignItems: 'flex-start',
-        backgroundColor: '#F8FAFC',
+        alignItems: 'center',
+        backgroundColor: '#F0FDF4',
         borderRadius: 12,
         padding: 12,
         marginTop: 12,
         borderWidth: 1,
-        borderColor: BORDER,
+        borderColor: '#DCFCE7',
     },
     escrowIconBox: {
-        width: 30,
-        height: 30,
-        borderRadius: 8,
-        backgroundColor: '#FEF3C7',
+        width: 32,
+        height: 32,
+        borderRadius: 10,
+        backgroundColor: '#DCFCE7',
+        borderWidth: 1,
+        borderColor: '#BBF7D0',
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: 2,
     },
     escrowTitle: {
         fontSize: 12,
         fontWeight: '800',
-        color: NAVY,
+        color: '#065F46',
     },
     escrowSub: {
         fontSize: 10.5,
-        color: SLATE,
+        color: '#047857',
         marginTop: 2,
         lineHeight: 15,
     },
@@ -6863,6 +7551,176 @@ const s = StyleSheet.create({
         fontSize: 13,
         fontWeight: '800',
         color: WHITE,
+    },
+
+    // Inline Add Address Modal & Pickers
+    addrModalSheet: {
+        backgroundColor: WHITE,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 20,
+        maxWidth: 540,
+        width: '100%',
+        alignSelf: 'center',
+    },
+    addrModalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingBottom: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+        marginBottom: 12,
+    },
+    addrModalIconCircle: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#EFF6FF',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    addrModalTitle: {
+        fontSize: 15,
+        fontWeight: '900',
+        color: NAVY,
+    },
+    addrModalSub: {
+        fontSize: 11,
+        color: SLATE,
+        marginTop: 1,
+    },
+    formFieldLabel: {
+        fontSize: 11.5,
+        fontWeight: '700',
+        color: NAVY,
+        marginBottom: 5,
+        marginTop: 10,
+    },
+    tagPillsRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginBottom: 4,
+    },
+    tagPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    tagPillActive: {
+        backgroundColor: NAVY,
+        borderColor: NAVY,
+    },
+    tagPillTxt: {
+        fontSize: 11.5,
+        fontWeight: '700',
+        color: NAVY,
+    },
+    tagPillTxtActive: {
+        color: WHITE,
+    },
+    formTextInput: {
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 9,
+        fontSize: 13,
+        color: NAVY,
+    },
+    pickerSelectorBtn: {
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    pickerSelectorTxt: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: NAVY,
+        flex: 1,
+        marginRight: 4,
+    },
+    saveAddrModalBtn: {
+        backgroundColor: NAVY,
+        paddingVertical: 14,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 16,
+    },
+    saveAddrModalBtnTxt: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: WHITE,
+    },
+    pickerModalCard: {
+        backgroundColor: WHITE,
+        borderRadius: 18,
+        padding: 16,
+        maxWidth: 420,
+        width: '90%',
+        alignSelf: 'center',
+        maxHeight: '80%',
+    },
+    pickerModalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingBottom: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+        marginBottom: 10,
+    },
+    pickerModalTitle: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: NAVY,
+    },
+    pickerSearchInput: {
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        borderRadius: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 7,
+        fontSize: 12.5,
+        color: NAVY,
+        marginBottom: 10,
+    },
+    pickerItemRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 11,
+        paddingHorizontal: 10,
+        borderBottomWidth: 0.5,
+        borderBottomColor: '#F1F5F9',
+    },
+    pickerItemRowActive: {
+        backgroundColor: '#EFF6FF',
+        borderRadius: 8,
+    },
+    pickerItemTxt: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: NAVY,
+    },
+    pickerItemTxtActive: {
+        fontWeight: '800',
+        color: '#2563EB',
     },
 });
 

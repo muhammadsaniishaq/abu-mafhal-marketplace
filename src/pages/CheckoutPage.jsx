@@ -56,18 +56,38 @@ const CheckoutPage = () => {
 
     const uid = currentUser?.id || currentUser?.uid;
     if (uid) {
-      supabase.from('profiles').select('address, state, city, phone, full_name').eq('id', uid).maybeSingle().then(({ data }) => {
-        if (data && data.address) {
-          setShippingInfo(prev => ({
-            ...prev,
-            fullName: data.full_name || prev.fullName,
-            phone: data.phone || prev.phone,
-            address: data.address || prev.address,
-            city: data.city || prev.city,
-            state: data.state || prev.state
-          }));
-        }
-      });
+      supabase.from('addresses')
+        .select('*')
+        .eq('user_id', uid)
+        .order('is_default', { ascending: false })
+        .limit(1)
+        .then(({ data: addrData }) => {
+          if (addrData && addrData.length > 0 && addrData[0].address) {
+            const addr = addrData[0];
+            setShippingInfo(prev => ({
+              ...prev,
+              fullName: addr.full_name || prev.fullName,
+              phone: addr.phone || prev.phone,
+              address: addr.address || prev.address,
+              city: addr.city || addr.lga || prev.city,
+              state: addr.state || prev.state,
+              zipCode: addr.zip_code || prev.zipCode
+            }));
+          } else {
+            supabase.from('profiles').select('address, state, city, phone, full_name').eq('id', uid).maybeSingle().then(({ data }) => {
+              if (data && data.address) {
+                setShippingInfo(prev => ({
+                  ...prev,
+                  fullName: data.full_name || prev.fullName,
+                  phone: data.phone || prev.phone,
+                  address: data.address || prev.address,
+                  city: data.city || prev.city,
+                  state: data.state || prev.state
+                }));
+              }
+            });
+          }
+        });
     }
   }, [currentUser]);
 
