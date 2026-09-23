@@ -3107,8 +3107,8 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     <View>
                         <View style={s.sectionHeader}>
                             <View style={{ flex: 1, marginRight: 8 }}>
-                                <Text style={s.sectionTitle}>Hanyar Biyan Kudi (Payment)</Text>
-                                <Text style={s.sectionSub}>Zabi hanyar da ta fi dacewa da kai</Text>
+                                <Text style={s.sectionTitle}>Payment Method</Text>
+                                <Text style={s.sectionSub}>Select your preferred secure payment gateway</Text>
                             </View>
                             <TouchableOpacity
                                 onPress={() => setShowEscrowModal(true)}
@@ -3119,7 +3119,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                     <Ionicons name="shield-checkmark" size={11} color="#059669" />
                                 </View>
                                 <Text style={s.escrowHeaderBadgeTxt}>100% Escrow</Text>
-                                <Ionicons name="information-circle-outline" size={12} color="#059669" />
+                                <Ionicons name="information-circle" size={13} color="#059669" />
                             </TouchableOpacity>
                         </View>
 
@@ -3127,41 +3127,85 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         <TouchableOpacity
                             style={s.escrowHeroCard}
                             onPress={() => setShowEscrowModal(true)}
-                            activeOpacity={0.85}
+                            activeOpacity={0.88}
                         >
+                            {/* Decorative Top Accent Bar & Ambient Glow Orbs */}
+                            <View style={s.escrowHeroTopAccentBar} />
                             <View style={s.escrowHeroGlowDecor} />
+                            <View style={s.escrowHeroGlowDecor2} />
+
+                            {/* Header Row */}
                             <View style={s.escrowHeroTopRow}>
-                                <View style={s.escrowHeroIconCircle}>
-                                    <Ionicons name="shield-checkmark" size={20} color="#059669" />
-                                </View>
-                                <View style={{ flex: 1, marginLeft: 10 }}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                                        <Text style={s.escrowHeroTitle}>100% Escrow Guarantee</Text>
-                                        <View style={s.escrowProtectedPill}>
-                                            <Ionicons name="lock-closed" size={9} color="#065F46" />
-                                            <Text style={s.escrowProtectedPillTxt}>Zero Risk</Text>
+                                <View style={s.escrowHeroIconCluster}>
+                                    <View style={s.escrowHeroIconOuterRing}>
+                                        <View style={s.escrowHeroIconCircle}>
+                                            <Ionicons name="shield-checkmark" size={22} color="#059669" />
                                         </View>
                                     </View>
+                                    <View style={s.escrowHeroLockBadge}>
+                                        <Ionicons name="lock-closed" size={9} color="#FFFFFF" />
+                                    </View>
+                                </View>
+                                <View style={{ flex: 1, marginLeft: 12 }}>
+                                    <View style={s.escrowHeroHeaderMeta}>
+                                        <View style={s.escrowProtectedPill}>
+                                            <View style={s.escrowLiveDot} />
+                                            <Text style={s.escrowProtectedPillTxt}>100% ESCROW SECURED</Text>
+                                        </View>
+                                        <View style={s.escrowTierBadge}>
+                                            <Ionicons name="ribbon" size={10} color="#059669" />
+                                            <Text style={s.escrowTierBadgeTxt}>BANK-GRADE</Text>
+                                        </View>
+                                    </View>
+                                    <Text style={s.escrowHeroTitle}>Abu Mafhal Escrow Protection Guarantee</Text>
                                     <Text style={s.escrowHeroSub}>
-                                        Kudinka yana cikin amintaccen asusun Escrow har sai kayanka ya isa hannunka ka duba ka gamsu.
+                                        Your payment is securely held in escrow and only released to the seller after you inspect and accept your delivery.
                                     </Text>
                                 </View>
                             </View>
 
-                            <View style={s.escrowHeroFeaturesRow}>
-                                <View style={s.escrowHeroFeatureItem}>
-                                    <Ionicons name="checkmark-circle" size={13} color={EMERALD} />
-                                    <Text style={s.escrowHeroFeatureTxt}>Kudi a asusun tsaro</Text>
+                            {/* Modern Micro Feature Grid */}
+                            <View style={s.escrowHeroGrid}>
+                                <View style={s.escrowGridCard}>
+                                    <View style={[s.escrowGridIconBox, { backgroundColor: '#DCFCE7' }]}>
+                                        <Ionicons name="lock-closed" size={13} color="#059669" />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={s.escrowGridTitle}>Zero Risk Vault</Text>
+                                        <Text style={s.escrowGridSub}>Merchant not paid upfront</Text>
+                                    </View>
                                 </View>
-                                <View style={s.escrowHeroFeatureDivider} />
-                                <View style={s.escrowHeroFeatureItem}>
-                                    <Ionicons name="sync-circle" size={13} color={GOLD} />
-                                    <Text style={s.escrowHeroFeatureTxt}>Kwanaki 7 na mayarwa</Text>
+
+                                <View style={s.escrowGridCard}>
+                                    <View style={[s.escrowGridIconBox, { backgroundColor: '#FEF3C7' }]}>
+                                        <Ionicons name="repeat" size={13} color="#D97706" />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={s.escrowGridTitle}>7-Day Returns</Text>
+                                        <Text style={s.escrowGridSub}>Full refund or replacement</Text>
+                                    </View>
                                 </View>
-                                <View style={s.escrowHeroFeatureDivider} />
-                                <View style={s.escrowHeroFeatureItem}>
-                                    <Ionicons name="chevron-forward-circle" size={13} color="#059669" />
-                                    <Text style={[s.escrowHeroFeatureTxt, { color: '#065F46', fontWeight: '800' }]}>Karin bayani</Text>
+
+                                <View style={s.escrowGridCard}>
+                                    <View style={[s.escrowGridIconBox, { backgroundColor: '#DBEAFE' }]}>
+                                        <Ionicons name="checkmark-done-circle" size={13} color="#2563EB" />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={s.escrowGridTitle}>Verified Dispatch</Text>
+                                        <Text style={s.escrowGridSub}>Live doorstep inspection</Text>
+                                    </View>
+                                </View>
+                            </View>
+
+                            {/* Modern Trust & Action Footer */}
+                            <View style={s.escrowHeroFooterRow}>
+                                <View style={s.escrowTrustProof}>
+                                    <Ionicons name="star" size={12} color="#F59E0B" />
+                                    <Text style={s.escrowTrustProofTxt}>25,000+ Protected Orders</Text>
+                                </View>
+                                <View style={s.escrowHeroActionBtn}>
+                                    <Text style={s.escrowHeroActionTxt}>How Escrow Protects You</Text>
+                                    <Ionicons name="chevron-forward" size={12} color="#059669" />
                                 </View>
                             </View>
                         </TouchableOpacity>
@@ -3580,18 +3624,23 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                         <TouchableOpacity 
                             style={s.escrowCallout}
                             onPress={() => setShowEscrowModal(true)}
-                            activeOpacity={0.8}
+                            activeOpacity={0.85}
                         >
                             <View style={s.escrowIconBox}>
-                                <Ionicons name="shield-checkmark" size={16} color="#059669" />
+                                <Ionicons name="shield-checkmark" size={18} color="#059669" />
                             </View>
-                            <View style={{ flex: 1, marginLeft: 10 }}>
+                            <View style={{ flex: 1, marginLeft: 12 }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <Text style={s.escrowTitle}>Abu Mafhal Escrow Protection (100%)</Text>
-                                    <Ionicons name="chevron-forward" size={13} color="#059669" />
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Text style={s.escrowTitle}>Abu Mafhal 100% Escrow Guarantee</Text>
+                                        <View style={s.escrowVerifiedPill}>
+                                            <Text style={s.escrowVerifiedPillTxt}>INSURED</Text>
+                                        </View>
+                                    </View>
+                                    <Ionicons name="chevron-forward" size={14} color="#059669" />
                                 </View>
                                 <Text style={s.escrowSub}>
-                                    Kudinka na nan a kulle a amintaccen asusun Escrow har sai kayanka ya isa hannunka ka duba ka gamsu. Zero risk to buyers.
+                                    Payment is safely held in an independent escrow vault. The merchant is never credited until your order is delivered and approved. Zero risk to buyers.
                                 </Text>
                             </View>
                         </TouchableOpacity>
@@ -4313,72 +4362,137 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                     onPress={() => setShowEscrowModal(false)}
                 >
                     <View style={s.escrowModalSheet}>
+                        {/* Decorative Top Accent Bar */}
+                        <View style={s.escrowModalAccentBar} />
+
+                        {/* Modal Header */}
                         <View style={s.escrowModalHeader}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                <View style={s.escrowIconBadge}>
-                                    <Ionicons name="shield-checkmark" size={18} color={EMERALD} />
+                            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                                <View style={s.escrowIconBadgeCluster}>
+                                    <View style={s.escrowIconBadge}>
+                                        <Ionicons name="shield-checkmark" size={22} color="#059669" />
+                                    </View>
+                                    <View style={s.escrowModalBadgeMini}>
+                                        <Ionicons name="lock-closed" size={8} color="#FFFFFF" />
+                                    </View>
                                 </View>
-                                <View>
-                                    <Text style={s.escrowModalTitle}>Abu Mafhal Buyer Protection</Text>
-                                    <Text style={s.escrowModalSub}>100% Safe Escrow Guarantee</Text>
+                                <View style={{ marginLeft: 12, flex: 1 }}>
+                                    <Text style={s.escrowModalTitle}>100% Escrow Buyer Protection</Text>
+                                    <Text style={s.escrowModalSub}>Bank-Grade Fund Security & Guarantee</Text>
                                 </View>
                             </View>
                             <TouchableOpacity onPress={() => setShowEscrowModal(false)} style={s.modalCloseBtn}>
-                                <Ionicons name="close-circle" size={22} color={SLATE} />
+                                <Ionicons name="close-circle" size={24} color={SLATE} />
                             </TouchableOpacity>
                         </View>
-                        <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+
+                        {/* Escrow Highlight Banner */}
+                        <View style={s.escrowModalBanner}>
+                            <Ionicons name="shield-half" size={17} color="#059669" />
+                            <Text style={s.escrowModalBannerTxt}>
+                                Zero Upfront Risk: The merchant receives ₦0 until you physically inspect and accept your delivery.
+                            </Text>
+                        </View>
+
+                        <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+                            {/* Feature 1 */}
                             <View style={s.escrowFeatureCard}>
-                                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#DCFCE7', alignItems: 'center', justifyContent: 'center' }}>
+                                <View style={[s.escrowFeatureIconBox, { backgroundColor: '#DCFCE7' }]}>
                                     <Ionicons name="lock-closed" size={18} color="#059669" />
                                 </View>
                                 <View style={{ flex: 1, marginLeft: 12 }}>
-                                    <Text style={s.escrowFeatureTitle}>Zero Risk Escrow Vault (Rumbun Tsaron Kudi)</Text>
+                                    <View style={s.escrowFeatureHeaderRow}>
+                                        <Text style={s.escrowFeatureTitle}>Zero-Risk Escrow Vault</Text>
+                                        <View style={[s.escrowFeatureTag, { backgroundColor: '#DCFCE7', borderColor: '#A7F3D0' }]}>
+                                            <Text style={[s.escrowFeatureTagTxt, { color: '#065F46' }]}>FUNDS SECURED</Text>
+                                        </View>
+                                    </View>
                                     <Text style={s.escrowFeatureDesc}>
-                                        Kudinka yana cikin asusun Escrow na Abu Mafhal. Ba za a ba dillali ko mai kaya kudi ba har sai kayanka ya isa hannunka ka duba ka gamsu 100%.
+                                        Your payment is held in an independent Abu Mafhal Escrow Account. The merchant is never paid until you physically receive, inspect, and approve your items.
                                     </Text>
                                 </View>
                             </View>
+
+                            {/* Feature 2 */}
                             <View style={s.escrowFeatureCard}>
-                                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center' }}>
+                                <View style={[s.escrowFeatureIconBox, { backgroundColor: '#FEF3C7' }]}>
                                     <Ionicons name="sync" size={18} color="#D97706" />
                                 </View>
                                 <View style={{ flex: 1, marginLeft: 12 }}>
-                                    <Text style={s.escrowFeatureTitle}>7-Day Return & Replacement (Sauyi & Mayar da Kudi)</Text>
+                                    <View style={s.escrowFeatureHeaderRow}>
+                                        <Text style={s.escrowFeatureTitle}>7-Day Return & Replacement</Text>
+                                        <View style={[s.escrowFeatureTag, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]}>
+                                            <Text style={[s.escrowFeatureTagTxt, { color: '#92400E' }]}>100% REFUND</Text>
+                                        </View>
+                                    </View>
                                     <Text style={s.escrowFeatureDesc}>
-                                        Idan kaya sun lalace, ba su ne kake so ba, ko an samu kuskure, za a iya mayar maka da cikakken kudinka ko a canza maka kaya nan take ba tare da asara ba.
+                                        Damaged, defective, or incorrect items? Request an immediate 100% full refund or a free product replacement with zero hassle.
                                     </Text>
                                 </View>
                             </View>
+
+                            {/* Feature 3 */}
                             <View style={s.escrowFeatureCard}>
-                                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#DBEAFE', alignItems: 'center', justifyContent: 'center' }}>
+                                <View style={[s.escrowFeatureIconBox, { backgroundColor: '#DBEAFE' }]}>
                                     <Ionicons name="bicycle" size={18} color="#2563EB" />
                                 </View>
                                 <View style={{ flex: 1, marginLeft: 12 }}>
-                                    <Text style={s.escrowFeatureTitle}>Verified Express Logistics (Dillalan Aike Amintattu)</Text>
+                                    <View style={s.escrowFeatureHeaderRow}>
+                                        <Text style={s.escrowFeatureTitle}>Verified Courier Handover</Text>
+                                        <View style={[s.escrowFeatureTag, { backgroundColor: '#DBEAFE', borderColor: '#BFDBFE' }]}>
+                                            <Text style={[s.escrowFeatureTagTxt, { color: '#1E40AF' }]}>OTP VERIFIED</Text>
+                                        </View>
+                                    </View>
                                     <Text style={s.escrowFeatureDesc}>
-                                        Bibiyar dan aike kai tsaye tare da samun sakonnin WhatsApp da SMS a duk lokacin da kaya suka fito daga shago har zuwa kofarka.
+                                        Track your delivery continuously with live milestone updates via SMS and WhatsApp. Delivery is confirmed only when you provide your secret OTP.
                                     </Text>
                                 </View>
                             </View>
+
+                            {/* Feature 4 */}
                             <View style={s.escrowFeatureCard}>
-                                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#EDE9FE', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Ionicons name="chatbubbles" size={18} color="#7C3AED" />
+                                <View style={[s.escrowFeatureIconBox, { backgroundColor: '#EDE9FE' }]}>
+                                    <Ionicons name="headset" size={18} color="#7C3AED" />
                                 </View>
                                 <View style={{ flex: 1, marginLeft: 12 }}>
-                                    <Text style={s.escrowFeatureTitle}>24/7 Dispute Concierge (Taimako & Sulhu na Musamman)</Text>
+                                    <View style={s.escrowFeatureHeaderRow}>
+                                        <Text style={s.escrowFeatureTitle}>24/7 Dedicated Dispute Concierge</Text>
+                                        <View style={[s.escrowFeatureTag, { backgroundColor: '#EDE9FE', borderColor: '#DDD6FE' }]}>
+                                            <Text style={[s.escrowFeatureTagTxt, { color: '#5B21B6' }]}>24HR RESOLUTION</Text>
+                                        </View>
+                                    </View>
                                     <Text style={s.escrowFeatureDesc}>
-                                        Layin taimako na WhatsApp kai tsaye ga kwararrun jami'anmu don magance kowace irin matsala cikin gaggawa a kowane lokaci.
+                                        Direct priority line to dedicated dispute resolution managers via WhatsApp & Phone to resolve any transaction concerns within 24 hours.
                                     </Text>
+                                </View>
+                            </View>
+
+                            {/* Security Trust Badges Row */}
+                            <View style={s.escrowModalTrustRow}>
+                                <View style={s.escrowModalTrustItem}>
+                                    <Ionicons name="shield-checkmark" size={13} color="#059669" />
+                                    <Text style={s.escrowModalTrustTxt}>256-Bit SSL</Text>
+                                </View>
+                                <View style={s.escrowModalTrustDivider} />
+                                <View style={s.escrowModalTrustItem}>
+                                    <Ionicons name="card" size={13} color="#2563EB" />
+                                    <Text style={s.escrowModalTrustTxt}>CBN Regulated Partners</Text>
+                                </View>
+                                <View style={s.escrowModalTrustDivider} />
+                                <View style={s.escrowModalTrustItem}>
+                                    <Ionicons name="checkmark-circle" size={13} color="#D97706" />
+                                    <Text style={s.escrowModalTrustTxt}>100% Insured</Text>
                                 </View>
                             </View>
                         </ScrollView>
+
                         <TouchableOpacity
                             style={s.escrowModalCloseBtn}
                             onPress={() => setShowEscrowModal(false)}
-                            activeOpacity={0.8}
+                            activeOpacity={0.88}
                         >
-                            <Text style={s.escrowModalCloseTxt}>Na Fahimta • Kudina Yana Cikin Aminci</Text>
+                            <Ionicons name="shield-checkmark" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
+                            <Text style={s.escrowModalCloseTxt}>I Understand • My Order is 100% Protected</Text>
                         </TouchableOpacity>
                     </View>
                 </TouchableOpacity>
@@ -5216,111 +5330,232 @@ const s = StyleSheet.create({
     escrowHeaderBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 5,
+        gap: 6,
         backgroundColor: '#ECFDF5',
-        borderWidth: 1,
-        borderColor: '#A7F3D0',
-        paddingHorizontal: 9,
-        paddingVertical: 4.5,
+        borderWidth: 1.5,
+        borderColor: '#86EFAC',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
         borderRadius: 20,
     },
     escrowHeaderBadgePulse: {
-        width: 16,
-        height: 16,
-        borderRadius: 8,
+        width: 18,
+        height: 18,
+        borderRadius: 9,
         backgroundColor: '#D1FAE5',
         alignItems: 'center',
         justifyContent: 'center',
     },
     escrowHeaderBadgeTxt: {
-        fontSize: 11,
-        fontWeight: '800',
+        fontSize: 11.5,
+        fontWeight: '900',
         color: '#065F46',
-        letterSpacing: 0.2,
+        letterSpacing: 0.3,
     },
 
-    // 100% Escrow Hero Trust Card
+    // 100% Escrow Hero Trust Card (Ultra Modern Fintech Card)
     escrowHeroCard: {
         backgroundColor: '#F0FDF4',
-        borderWidth: 1,
-        borderColor: '#BBF7D0',
-        borderRadius: 14,
-        padding: 13,
-        marginBottom: 14,
+        borderWidth: 1.5,
+        borderColor: '#86EFAC',
+        borderRadius: 16,
+        padding: 15,
+        marginBottom: 16,
         position: 'relative',
         overflow: 'hidden',
     },
+    escrowHeroTopAccentBar: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 3.5,
+        backgroundColor: '#10B981',
+    },
     escrowHeroGlowDecor: {
         position: 'absolute',
-        top: -20,
-        right: -20,
-        width: 70,
-        height: 70,
-        borderRadius: 35,
-        backgroundColor: 'rgba(16, 185, 129, 0.08)',
+        top: -30,
+        right: -30,
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    },
+    escrowHeroGlowDecor2: {
+        position: 'absolute',
+        bottom: -25,
+        left: -25,
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: 'rgba(52, 211, 153, 0.08)',
     },
     escrowHeroTopRow: {
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-start',
     },
-    escrowHeroIconCircle: {
-        width: 38,
-        height: 38,
-        borderRadius: 19,
+    escrowHeroIconCluster: {
+        position: 'relative',
+    },
+    escrowHeroIconOuterRing: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
         backgroundColor: '#DCFCE7',
-        borderWidth: 1,
+        borderWidth: 1.5,
         borderColor: '#86EFAC',
         alignItems: 'center',
         justifyContent: 'center',
     },
-    escrowHeroTitle: {
-        fontSize: 13.5,
-        fontWeight: '900',
-        color: '#065F46',
-        letterSpacing: -0.2,
+    escrowHeroIconCircle: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#ECFDF5',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    escrowHeroLockBadge: {
+        position: 'absolute',
+        bottom: -2,
+        right: -2,
+        backgroundColor: '#059669',
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1.5,
+        borderColor: '#FFFFFF',
+    },
+    escrowHeroHeaderMeta: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: 3,
     },
     escrowProtectedPill: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 3,
+        gap: 4,
         backgroundColor: '#DCFCE7',
-        paddingHorizontal: 6,
+        borderWidth: 1,
+        borderColor: '#86EFAC',
+        paddingHorizontal: 7,
         paddingVertical: 2,
-        borderRadius: 10,
+        borderRadius: 12,
+    },
+    escrowLiveDot: {
+        width: 5,
+        height: 5,
+        borderRadius: 2.5,
+        backgroundColor: '#059669',
     },
     escrowProtectedPillTxt: {
         fontSize: 9.5,
+        fontWeight: '900',
+        color: '#065F46',
+        letterSpacing: 0.4,
+    },
+    escrowTierBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+        backgroundColor: 'rgba(5, 150, 105, 0.08)',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 8,
+    },
+    escrowTierBadgeTxt: {
+        fontSize: 9,
+        fontWeight: '800',
+        color: '#059669',
+        letterSpacing: 0.3,
+    },
+    escrowHeroTitle: {
+        fontSize: 14,
+        fontWeight: '900',
+        color: '#065F46',
+        letterSpacing: -0.2,
+    },
+    escrowHeroSub: {
+        fontSize: 11.5,
+        color: '#047857',
+        lineHeight: 16,
+        marginTop: 3,
+    },
+    // Modern Micro Feature Grid
+    escrowHeroGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginTop: 12,
+        paddingTop: 11,
+        borderTopWidth: 1,
+        borderTopColor: '#BBF7D0',
+    },
+    escrowGridCard: {
+        flex: 1,
+        minWidth: 100,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: 'rgba(255, 255, 255, 0.75)',
+        borderWidth: 1,
+        borderColor: '#BBF7D0',
+        borderRadius: 10,
+        paddingHorizontal: 8,
+        paddingVertical: 7,
+    },
+    escrowGridIconBox: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    escrowGridTitle: {
+        fontSize: 10.5,
         fontWeight: '800',
         color: '#065F46',
     },
-    escrowHeroSub: {
-        fontSize: 11,
+    escrowGridSub: {
+        fontSize: 9,
         color: '#047857',
-        lineHeight: 15,
-        marginTop: 3,
+        lineHeight: 11,
     },
-    escrowHeroFeaturesRow: {
+    // Modern Footer Action Row
+    escrowHeroFooterRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         marginTop: 10,
-        paddingTop: 9,
-        borderTopWidth: 0.5,
+        paddingTop: 8,
+        borderTopWidth: 1,
         borderTopColor: '#BBF7D0',
     },
-    escrowHeroFeatureItem: {
+    escrowTrustProof: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
     },
-    escrowHeroFeatureDivider: {
-        width: 1,
-        height: 10,
-        backgroundColor: '#86EFAC',
-    },
-    escrowHeroFeatureTxt: {
-        fontSize: 10,
+    escrowTrustProofTxt: {
+        fontSize: 10.5,
         fontWeight: '700',
+        color: '#065F46',
+    },
+    escrowHeroActionBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#DCFCE7',
+        paddingHorizontal: 9,
+        paddingVertical: 3.5,
+        borderRadius: 14,
+    },
+    escrowHeroActionTxt: {
+        fontSize: 10.5,
+        fontWeight: '800',
         color: '#065F46',
     },
 
@@ -5329,31 +5564,45 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#F0FDF4',
-        borderRadius: 12,
-        padding: 12,
-        marginTop: 12,
-        borderWidth: 1,
-        borderColor: '#DCFCE7',
+        borderRadius: 14,
+        padding: 13,
+        marginTop: 14,
+        borderWidth: 1.5,
+        borderColor: '#86EFAC',
     },
     escrowIconBox: {
-        width: 32,
-        height: 32,
-        borderRadius: 10,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
         backgroundColor: '#DCFCE7',
-        borderWidth: 1,
-        borderColor: '#BBF7D0',
+        borderWidth: 1.5,
+        borderColor: '#86EFAC',
         alignItems: 'center',
         justifyContent: 'center',
     },
     escrowTitle: {
-        fontSize: 12,
-        fontWeight: '800',
+        fontSize: 12.5,
+        fontWeight: '900',
         color: '#065F46',
     },
+    escrowVerifiedPill: {
+        backgroundColor: '#DCFCE7',
+        borderWidth: 1,
+        borderColor: '#86EFAC',
+        paddingHorizontal: 6,
+        paddingVertical: 1.5,
+        borderRadius: 6,
+    },
+    escrowVerifiedPillTxt: {
+        fontSize: 8.5,
+        fontWeight: '900',
+        color: '#065F46',
+        letterSpacing: 0.3,
+    },
     escrowSub: {
-        fontSize: 10.5,
+        fontSize: 11,
         color: '#047857',
-        marginTop: 2,
+        marginTop: 3,
         lineHeight: 15,
     },
 
@@ -7415,38 +7664,87 @@ const s = StyleSheet.create({
     // Escrow Modal
     escrowModalSheet: {
         backgroundColor: WHITE,
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        padding: 18,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 20,
         maxWidth: 540,
         width: '100%',
         alignSelf: 'center',
+        position: 'relative',
+        overflow: 'hidden',
+    },
+    escrowModalAccentBar: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 4,
+        backgroundColor: '#10B981',
     },
     escrowModalHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingBottom: 12,
+        paddingBottom: 14,
         borderBottomWidth: 1,
         borderBottomColor: '#F1F5F9',
     },
+    escrowIconBadgeCluster: {
+        position: 'relative',
+    },
     escrowIconBadge: {
-        width: 34,
-        height: 34,
-        borderRadius: 17,
+        width: 42,
+        height: 42,
+        borderRadius: 21,
         backgroundColor: '#ECFDF5',
+        borderWidth: 1.5,
+        borderColor: '#86EFAC',
         alignItems: 'center',
         justifyContent: 'center',
     },
+    escrowModalBadgeMini: {
+        position: 'absolute',
+        bottom: -2,
+        right: -2,
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        backgroundColor: '#059669',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1.5,
+        borderColor: WHITE,
+    },
     escrowModalTitle: {
-        fontSize: 14,
+        fontSize: 15,
         fontWeight: '900',
         color: NAVY,
+        letterSpacing: -0.2,
     },
     escrowModalSub: {
-        fontSize: 11,
+        fontSize: 11.5,
         fontWeight: '700',
-        color: EMERALD,
+        color: '#059669',
+    },
+    escrowModalBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: '#F0FDF4',
+        borderWidth: 1,
+        borderColor: '#BBF7D0',
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 9,
+        marginTop: 12,
+        marginBottom: 6,
+    },
+    escrowModalBannerTxt: {
+        flex: 1,
+        fontSize: 11.5,
+        fontWeight: '700',
+        color: '#065F46',
+        lineHeight: 16,
     },
     escrowFeatureCard: {
         flexDirection: 'row',
@@ -7455,28 +7753,82 @@ const s = StyleSheet.create({
         borderBottomWidth: 0.5,
         borderBottomColor: '#F1F5F9',
     },
-    escrowFeatureTitle: {
-        fontSize: 12.5,
-        fontWeight: '800',
-        color: NAVY,
+    escrowFeatureIconBox: {
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    escrowFeatureHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 6,
         marginBottom: 2,
     },
+    escrowFeatureTitle: {
+        fontSize: 13,
+        fontWeight: '800',
+        color: NAVY,
+    },
+    escrowFeatureTag: {
+        borderWidth: 1,
+        borderRadius: 6,
+        paddingHorizontal: 6,
+        paddingVertical: 1.5,
+    },
+    escrowFeatureTagTxt: {
+        fontSize: 9,
+        fontWeight: '900',
+        letterSpacing: 0.3,
+    },
     escrowFeatureDesc: {
-        fontSize: 11,
+        fontSize: 11.5,
         color: SLATE,
-        lineHeight: 15,
+        lineHeight: 16,
+    },
+    escrowModalTrustRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#F8FAFC',
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        marginTop: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    escrowModalTrustItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    escrowModalTrustDivider: {
+        width: 1,
+        height: 12,
+        backgroundColor: '#CBD5E1',
+    },
+    escrowModalTrustTxt: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#475569',
     },
     escrowModalCloseBtn: {
-        backgroundColor: NAVY,
-        paddingVertical: 12,
-        borderRadius: 10,
+        flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#059669',
+        paddingVertical: 13,
+        borderRadius: 12,
         marginTop: 14,
     },
     escrowModalCloseTxt: {
-        fontSize: 13,
+        fontSize: 13.5,
         fontWeight: '800',
         color: WHITE,
+        letterSpacing: 0.2,
     },
 
     // Inline Add Address Modal & Pickers
