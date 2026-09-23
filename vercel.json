@@ -1,5 +1,5 @@
 {
-    "buildCommand": "npm run build && mkdir -p dist/mobile && cp -R mobile/dist/* dist/mobile/ && mkdir -p dist/_expo && cp -R mobile/dist/_expo/* dist/_expo/ && mkdir -p dist/assets && cp -R mobile/dist/assets/* dist/assets/",
+    "buildCommand": "npm run build",
     "outputDirectory": "dist",
     "headers": [
         {
@@ -231,6 +231,10 @@
         }
     ],
     "rewrites": [
+        {
+            "source": "/api/(.*)",
+            "destination": "/api/$1"
+        },
         {
             "source": "/assets/node_modules/(.*)",
             "destination": "/mobile/assets/node_modules/$1"

@@ -33,7 +33,7 @@
   "scripts": {
     "dev": "vite",
     "build:mobile": "cd mobile && npx expo export -p web && node patch-html.js",
-    "build": "vite build && npm run build:mobile",
+    "build": "vite build && node assemble-dist.js",
     "preview": "vite preview",
     "deploy": "npm run build"
   }
