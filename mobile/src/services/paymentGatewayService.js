@@ -1305,6 +1305,71 @@ export const PaymentGatewayService = {
     },
 
     /**
+     * Sync Flutterwave Virtual Account Deposits
+     * Automatically queries live Flutterwave transactions to detect incoming bank transfers
+     */
+    async syncFlutterwaveDeposits({ userId, email, phone }) {
+        if (!userId && !email) return { success: false, newCreditsCount: 0 };
+
+        const userStr = String(userId || '');
+        const cleanEmail = String(email || '').trim().toLowerCase();
+        const cleanPhone = String(phone || '').replace(/[^0-9]/g, '');
+
+        try {
+            const flwSecret = 'FLWSECK-456331fb55a2e059f1eb8d439c53b9ae-1a07bfbf2fcvt-X';
+            const res = await fetch('https://api.flutterwave.com/v3/transactions?status=successful&limit=25', {
+                headers: { 'Authorization': `Bearer ${flwSecret}` }
+            });
+
+            if (!res.ok) return { success: false, newCreditsCount: 0 };
+            const json = await res.json();
+            const txList = json?.data || [];
+
+            const userPrefix = userStr.substring(0, 8).toUpperCase();
+
+            // Load already credited transaction IDs
+            let creditedTxs = [];
+            try {
+                if (AsyncStorage) {
+                    const raw = await AsyncStorage.getItem(`@abumafhal_credited_flw_${userStr}`);
+                    if (raw) creditedTxs = JSON.parse(raw);
+                }
+            } catch (_) {}
+
+            const uncredited = txList.filter(t => {
+                if (creditedTxs.includes(t.id)) return false;
+                const txRef = String(t.tx_ref || '').toUpperCase();
+                const custEmail = String(t.customer?.email || '').trim().toLowerCase();
+                const custPhone = String(t.customer?.phone_number || '').replace(/[^0-9]/g, '');
+
+                const matchRef = userPrefix && txRef.includes(userPrefix);
+                const matchEmail = cleanEmail && custEmail === cleanEmail;
+                const matchPhone = cleanPhone && cleanPhone.length >= 7 && (custPhone.includes(cleanPhone) || cleanPhone.includes(custPhone));
+
+                return (matchRef || matchEmail || matchPhone) && t.status === 'successful';
+            });
+
+            if (uncredited.length === 0) {
+                return { success: true, newCreditsCount: 0, totalNewAmount: 0 };
+            }
+
+            const totalNewAmount = uncredited.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+            const newTxIds = uncredited.map(t => t.id);
+
+            return {
+                success: true,
+                newCreditsCount: uncredited.length,
+                totalNewAmount,
+                newTxIds,
+                uncreditedTxs: uncredited
+            };
+        } catch (err) {
+            console.error('[PaymentGatewayService.syncFlutterwaveDeposits] error:', err);
+            return { success: false, newCreditsCount: 0, error: err.message };
+        }
+    },
+
+    /**
      * Cache Order Record Locally for Instant Display
      */
     async cacheOrderLocally(userId, orderData) {

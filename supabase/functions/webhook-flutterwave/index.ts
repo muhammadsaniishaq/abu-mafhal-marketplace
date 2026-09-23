@@ -20,16 +20,41 @@ Deno.serve(async (req: any) => {
     }
 
     const body = await req.json();
-    // We expect meta.session_id from initiation
-    const session_id = body?.data?.meta?.session_id;
-
-    // Payment status check
-    const status = body?.data?.status;
-    const tx_ref = body?.data?.tx_ref;
-
-    if (!session_id) return new Response("Missing session_id", { status: 400 });
+    const data = body?.data ?? body;
+    const status = data?.status;
+    const tx_ref = data?.tx_ref;
+    const session_id = data?.meta?.session_id;
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // 1. Virtual Account Bank Transfer Auto-Credit Handling
+    if (status === "successful" && (!session_id || tx_ref?.startsWith("AMF-DVA") || data?.payment_type === "bank_transfer")) {
+        const depositAmt = Number(data?.amount || 0);
+        const custEmail = data?.customer?.email;
+
+        let targetUser = null;
+        if (custEmail) {
+            const { data: u } = await supabase.from("profiles").select("id, balance").eq("email", custEmail).maybeSingle();
+            if (u) targetUser = u;
+        }
+
+        if (!targetUser && tx_ref && tx_ref.startsWith("AMF-DVA-")) {
+            const prefix = tx_ref.replace("AMF-DVA-", "").split("-")[0].toLowerCase();
+            const { data: users } = await supabase.from("profiles").select("id, balance");
+            if (users && Array.isArray(users)) {
+                targetUser = users.find(u => u.id.toLowerCase().startsWith(prefix));
+            }
+        }
+
+        if (targetUser && depositAmt > 0) {
+            const newBal = Number(targetUser.balance || 0) + depositAmt;
+            await supabase.from("profiles").update({ balance: newBal }).eq("id", targetUser.id);
+            console.log(`[FLW Webhook] Credited user ${targetUser.id} with ${depositAmt}. New balance: ${newBal}`);
+            return new Response(JSON.stringify({ success: true, credited: depositAmt, user_id: targetUser.id }), { status: 200 });
+        }
+    }
+
+    if (!session_id) return new Response("Missing session_id", { status: 400 });
 
     if (status === "successful") {
       const { data: orderId, error: rpcError } = await supabase.rpc("create_order_from_session", {

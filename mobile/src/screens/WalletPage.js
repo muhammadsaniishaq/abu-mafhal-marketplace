@@ -240,6 +240,7 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
     const [virtualAccount, setVirtualAccount] = useState(null);   // { account_number, account_name, bank_name, is_permanent, expiry, provider }
     const [isGeneratingVA, setIsGeneratingVA] = useState(false);
     const [vaError, setVaError] = useState(null);
+    const [isSyncingBal, setIsSyncingBal] = useState(false);
 
     // ── DEPOSIT SUCCESS CELEBRATION MODAL ──
     const [showDepositSuccessModal, setShowDepositSuccessModal] = useState(false);
@@ -321,24 +322,52 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
             // Parallel DB queries
             const [wRes, pRes, txRes] = await Promise.allSettled([
                 supabase.from('wallets').select('*').eq('user_id', activeUserId).maybeSingle(),
-                supabase.from('profiles').select('mafhal_coins').eq('id', activeUserId).maybeSingle(),
+                supabase.from('profiles').select('mafhal_coins, balance').eq('id', activeUserId).maybeSingle(),
                 supabase.from('wallet_transactions').select('*').eq('user_id', activeUserId).order('created_at', { ascending: false }).limit(40)
             ]);
 
-            let newWallet = { balance: 0, points: 0 };
             const wData = wRes.status === 'fulfilled' ? wRes.value?.data : null;
             const pData = pRes.status === 'fulfilled' ? pRes.value?.data : null;
+            const realBal = Number(pData?.balance ?? wData?.balance ?? 0);
+            const displayPoints = Math.max(wData?.points || 0, pData?.mafhal_coins || 0);
 
-            if (wData) {
-                const displayPoints = Math.max(wData.points || 0, pData?.mafhal_coins || 0);
-                newWallet = {
-                    balance: Number(wData.balance) || 0,
-                    points: displayPoints
-                };
-            } else if (pData) {
-                newWallet = { balance: 0, points: pData.mafhal_coins || 0 };
-            }
+            let newWallet = {
+                balance: realBal,
+                points: displayPoints
+            };
             setWallet(newWallet);
+
+            // Auto-check for newly confirmed Flutterwave bank transfers
+            try {
+                const syncRes = await PaymentGatewayService.syncFlutterwaveDeposits({
+                    userId: activeUserId,
+                    email: user?.email,
+                    phone: user?.phone || user?.user_metadata?.phone_number
+                });
+
+                if (syncRes?.success && syncRes?.totalNewAmount > 0) {
+                    const addedAmt = syncRes.totalNewAmount;
+                    const updatedBal = realBal + addedAmt;
+
+                    await supabase.from('profiles').update({ balance: updatedBal }).eq('id', activeUserId);
+                    newWallet = { ...newWallet, balance: updatedBal };
+                    setWallet(newWallet);
+
+                    if (AsyncStorage && syncRes.newTxIds?.length) {
+                        const raw = await AsyncStorage.getItem(`@abumafhal_credited_flw_${activeUserId}`);
+                        const prevCredited = raw ? JSON.parse(raw) : [];
+                        const combined = [...new Set([...prevCredited, ...syncRes.newTxIds])];
+                        await AsyncStorage.setItem(`@abumafhal_credited_flw_${activeUserId}`, JSON.stringify(combined));
+                    }
+
+                    setDepositSuccessDetails({
+                        amount: addedAmt,
+                        reference: syncRes.uncreditedTxs?.[0]?.flw_ref || 'FLW-TRANSFER',
+                        gateway: 'Flutterwave MFB Bank Transfer'
+                    });
+                    setShowDepositSuccessModal(true);
+                }
+            } catch (_) {}
 
             let newTx = [];
             if (txRes.status === 'fulfilled' && txRes.value?.data) {
@@ -671,6 +700,9 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
 
             const activeUserId = user?.id || (await supabase.auth.getUser()).data?.user?.id;
             if (activeUserId) {
+                // Update primary user balance in profiles table
+                await supabase.from('profiles').update({ balance: newBal }).eq('id', activeUserId);
+
                 const { error: wErr } = await supabase
                     .from('wallets')
                     .upsert({ user_id: activeUserId, balance: newBal }, { onConflict: 'user_id' });
@@ -1793,13 +1825,50 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                                                     <TouchableOpacity
                                                         style={[localStyles.vaCopyAllBtn, { borderColor: '#10B981', backgroundColor: '#ECFDF5', paddingVertical: 12 }]}
                                                         onPress={async () => {
-                                                            await fetchWalletData();
-                                                            Alert.alert('Wallet Refreshed', `Current Balance: ${formatCurrency(wallet.balance || 0)}`);
+                                                            setIsSyncingBal(true);
+                                                            try {
+                                                                const syncRes = await PaymentGatewayService.syncFlutterwaveDeposits({
+                                                                    userId: user?.id,
+                                                                    email: user?.email,
+                                                                    phone: user?.phone || user?.user_metadata?.phone_number
+                                                                });
+                                                                if (syncRes?.success && syncRes?.totalNewAmount > 0) {
+                                                                    const addedAmt = syncRes.totalNewAmount;
+                                                                    const currentB = wallet.balance || 0;
+                                                                    const updatedBal = currentB + addedAmt;
+                                                                    await supabase.from('profiles').update({ balance: updatedBal }).eq('id', user.id);
+                                                                    setWallet(prev => ({ ...prev, balance: updatedBal }));
+
+                                                                    if (AsyncStorage && syncRes.newTxIds?.length) {
+                                                                        const raw = await AsyncStorage.getItem(`@abumafhal_credited_flw_${user.id}`);
+                                                                        const prevCredited = raw ? JSON.parse(raw) : [];
+                                                                        const combined = [...new Set([...prevCredited, ...syncRes.newTxIds])];
+                                                                        await AsyncStorage.setItem(`@abumafhal_credited_flw_${user.id}`, JSON.stringify(combined));
+                                                                    }
+
+                                                                    Alert.alert('Deposit Confirmed! 🎉', `Your bank transfer of ${formatCurrency(addedAmt)} was received! New Balance: ${formatCurrency(updatedBal)}`);
+                                                                    fetchWalletData();
+                                                                    return;
+                                                                }
+                                                                await fetchWalletData();
+                                                                Alert.alert('Wallet Balance', `Current Balance: ${formatCurrency(wallet.balance || 0)}`);
+                                                            } catch (e) {
+                                                                await fetchWalletData();
+                                                            } finally {
+                                                                setIsSyncingBal(false);
+                                                            }
                                                         }}
                                                         activeOpacity={0.8}
+                                                        disabled={isSyncingBal}
                                                     >
-                                                        <Ionicons name="refresh" size={14} color="#059669" />
-                                                        <Text style={[localStyles.vaCopyAllBtnTxt, { color: '#059669' }]}>Refresh Wallet Balance</Text>
+                                                        {isSyncingBal ? (
+                                                            <ActivityIndicator size="small" color="#059669" />
+                                                        ) : (
+                                                            <Ionicons name="refresh" size={14} color="#059669" />
+                                                        )}
+                                                        <Text style={[localStyles.vaCopyAllBtnTxt, { color: '#059669' }]}>
+                                                            {isSyncingBal ? 'Checking Bank Transfers...' : 'Refresh & Sync Wallet Balance'}
+                                                        </Text>
                                                     </TouchableOpacity>
                                                 </View>
                                             </View>
