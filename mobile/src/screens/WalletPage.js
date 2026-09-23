@@ -1588,9 +1588,6 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                                             placeholder="25"
                                             placeholderTextColor="#CBD5E1"
                                         />
-                                        <View style={localStyles.currencyTag}>
-                                            <Text style={localStyles.currencyTagTxt}>USD</Text>
-                                        </View>
                                     </View>
 
                                     {/* Live NGN Equivalent Display */}
@@ -1668,9 +1665,6 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                                             placeholder="5000"
                                             placeholderTextColor="#CBD5E1"
                                         />
-                                        <View style={localStyles.currencyTag}>
-                                            <Text style={localStyles.currencyTagTxt}>NGN</Text>
-                                        </View>
                                     </View>
 
                                     <Text style={localStyles.quickSelectionLabel}>PRESET RECHARGE AMOUNTS</Text>
@@ -3232,7 +3226,7 @@ const localStyles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#F8FAFC',
-        borderRadius: 12,
+        borderRadius: 10,
         paddingHorizontal: 12,
         paddingVertical: 8,
         borderWidth: 1.5,
