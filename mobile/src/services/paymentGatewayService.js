@@ -730,8 +730,16 @@ export const PaymentGatewayService = {
      * Initiate NOWPayments Multi-Crypto Checkout
      * Supports USDT (TRC20/ERC20/BEP20), BTC, ETH, SOL, BNB & 150+ cryptocurrencies
      */
-    async initiateNowPayments({ amount, email, reference, name, phone, appSettings, metadata = {} }) {
-        const safeAmount = Math.max(1, Number(amount) || 0);
+    async initiateNowPayments({ amount, currency = 'usd', email, reference, name, phone, appSettings, metadata = {} }) {
+        const payCurrency = String(currency || 'usd').toLowerCase();
+        let finalAmount = Number(amount) || 0;
+        if (payCurrency === 'usd' && finalAmount >= 500) {
+            // If an NGN amount was passed into USD currency, convert to USD at rate 1500
+            finalAmount = Math.max(1, Number((finalAmount / 1500).toFixed(2)));
+        } else {
+            finalAmount = Math.max(1, Number(Number(finalAmount).toFixed(2)));
+        }
+
         const ref = reference || this.generateRef('NP');
         const userEmail = (email && email.includes('@')) ? email.trim() : `customer_${Date.now()}@abumafhal.com`;
         const userName = name || 'Customer';
@@ -743,10 +751,10 @@ export const PaymentGatewayService = {
         // 1. Try Backend Supabase Edge Function first
         try {
             const edgeRes = await this.invokeEdgeFunction('nowpayments-initiate', {
-                amount: safeAmount,
-                currency: 'ngn',
+                amount: finalAmount,
+                currency: payCurrency,
                 order_id: ref,
-                order_description: `Abu Mafhal Order Ref: ${ref}`,
+                order_description: `Abu Mafhal Order Ref: ${ref} ($${finalAmount} ${payCurrency.toUpperCase()})`,
                 customer_email: userEmail,
                 api_key: apiKey || undefined
             });
@@ -757,7 +765,9 @@ export const PaymentGatewayService = {
                     gateway: 'NOWPayments',
                     checkoutUrl: edgeRes.data.invoice_url,
                     invoiceId: edgeRes.data.id,
-                    type: 'url'
+                    type: 'url',
+                    currency: payCurrency,
+                    amount: finalAmount
                 };
             }
         } catch (_) {}
@@ -772,10 +782,10 @@ export const PaymentGatewayService = {
                         'x-api-key': apiKey.trim()
                     },
                     body: JSON.stringify({
-                        price_amount: safeAmount,
-                        price_currency: 'ngn',
+                        price_amount: finalAmount,
+                        price_currency: payCurrency,
                         order_id: ref,
-                        order_description: `Abu Mafhal Order ${ref}`,
+                        order_description: `Abu Mafhal Order ${ref} ($${finalAmount} ${payCurrency.toUpperCase()})`,
                         ipn_callback_url: 'https://ejqymvjrfqqljzjlwcin.supabase.co/functions/v1/webhook-nowpayments',
                         success_url: 'https://abumafhal.com/payment/verify?status=successful&gateway=nowpayments&reference=' + encodeURIComponent(ref),
                         cancel_url: 'https://abumafhal.com/payment/verify?status=cancelled&gateway=nowpayments&reference=' + encodeURIComponent(ref)
@@ -790,7 +800,9 @@ export const PaymentGatewayService = {
                         gateway: 'NOWPayments',
                         checkoutUrl: data.invoice_url,
                         invoiceId: data.id,
-                        type: 'url'
+                        type: 'url',
+                        currency: payCurrency,
+                        amount: finalAmount
                     };
                 }
                 if (data?.message) {
@@ -815,7 +827,7 @@ export const PaymentGatewayService = {
         }
 
         if (normalized.includes('nowpayment') || normalized.includes('crypto') || normalized.includes('coinbase')) {
-            return this.initiateNowPayments({ amount, email, phone, name, reference, appSettings, metadata });
+            return this.initiateNowPayments({ amount, currency: metadata?.currency || 'usd', email, phone, name, reference, appSettings, metadata });
         }
 
         // Default to Paystack
