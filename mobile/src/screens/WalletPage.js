@@ -56,6 +56,165 @@ const NIGERIAN_BANKS = [
     'Fidelity Bank', 'Stanbic IBTC', 'Union Bank', 'Sterling Bank', 'Wema Bank (ALAT)'
 ];
 
+const GATEWAY_OPTIONS = [
+    {
+        id: 'paystack',
+        name: 'Paystack',
+        subtitle: 'Cards, USSD, Bank Transfer & QR',
+        badge: 'Instant Auto-Credit',
+        badgeColor: '#059669',
+        badgeBg: '#DCFCE7',
+        accentColor: '#0AA5FF',
+        currency: 'NGN',
+        currencySymbol: '₦',
+        logoUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSzFzmpCa0Tav9NttiYF10t9wftJPQ0XYPBkA&s',
+        fallbackIcon: 'card-outline',
+        fallbackColor: '#0AA5FF',
+        speed: 'Instant (10-30s)',
+        channels: ['Mastercard', 'Visa', 'Verve', 'Bank', 'USSD']
+    },
+    {
+        id: 'flutterwave',
+        name: 'Flutterwave',
+        subtitle: 'Cards, Bank & Mobile Money',
+        badge: 'Fast Settlement',
+        badgeColor: '#2563EB',
+        badgeBg: '#EFF6FF',
+        accentColor: '#FB9129',
+        currency: 'NGN',
+        currencySymbol: '₦',
+        logoUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-W6MLvD_saE20EDSZzVPspKqcKxZ89rW8uw&s',
+        fallbackIcon: 'flash-outline',
+        fallbackColor: '#FB9129',
+        speed: 'Instant (15-45s)',
+        channels: ['Cards', 'Direct Bank', 'Barter', 'Mobile Money']
+    },
+    {
+        id: 'nowpayments',
+        name: 'NOWPayments (Crypto USD)',
+        subtitle: 'USDT, BTC, ETH, SOL & 150+ Coins',
+        badge: 'Strictly in USD ($)',
+        badgeColor: '#D97706',
+        badgeBg: '#FEF3C7',
+        accentColor: '#F59E0B',
+        currency: 'USD',
+        currencySymbol: '$',
+        isCrypto: true,
+        logoUrl: 'https://cryptologos.cc/logos/tether-usdt-logo.png',
+        cryptoCoins: [
+            { name: 'USDT', icon: 'https://cryptologos.cc/logos/tether-usdt-logo.png' },
+            { name: 'BTC', icon: 'https://cryptologos.cc/logos/bitcoin-btc-logo.png' },
+            { name: 'ETH', icon: 'https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/eth.png' }
+        ],
+        fallbackIcon: 'logo-bitcoin',
+        fallbackColor: '#F59E0B',
+        speed: '1-3 Blockchain Confirmations',
+        channels: ['USDT (TRC20/BEP20)', 'Bitcoin', 'Ethereum', 'Solana', 'BNB']
+    },
+    {
+        id: 'bank_transfer',
+        name: 'Direct Bank Transfer',
+        subtitle: 'Moniepoint MFB • 8109849201',
+        badge: '0% Gateway Fee',
+        badgeColor: '#7C3AED',
+        badgeBg: '#EDE9FE',
+        accentColor: '#6366F1',
+        currency: 'NGN',
+        currencySymbol: '₦',
+        logoUrl: 'https://moniepoint.com/favicon.ico',
+        fallbackIcon: 'business-outline',
+        fallbackColor: '#7C3AED',
+        speed: 'Instant 1-Click Verification',
+        accountNumber: '8109849201',
+        bankName: 'Moniepoint Microfinance Bank',
+        accountName: 'Abu Mafhal Marketplace Ltd'
+    }
+];
+
+const GatewayLogo = ({ gateway, size = 38 }) => {
+    const [imgErr, setImgErr] = useState(false);
+
+    if (gateway.isCrypto) {
+        return (
+            <View style={{
+                width: 62,
+                height: 38,
+                borderRadius: 10,
+                backgroundColor: '#FFFBEB',
+                borderColor: '#FDE68A',
+                borderWidth: 1.2,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 3,
+                paddingHorizontal: 4,
+                shadowColor: '#F59E0B',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.08,
+                shadowRadius: 2,
+                elevation: 1
+            }}>
+                {gateway.cryptoCoins && gateway.cryptoCoins.map(coin => (
+                    <Image
+                        key={coin.name}
+                        source={{ uri: coin.icon }}
+                        style={{ width: 16, height: 16, borderRadius: 8 }}
+                        resizeMode="contain"
+                    />
+                ))}
+            </View>
+        );
+    }
+
+    if (imgErr || !gateway.logoUrl) {
+        return (
+            <View style={{
+                width: 56,
+                height: 38,
+                borderRadius: 10,
+                backgroundColor: `${gateway.accentColor}15`,
+                borderWidth: 1,
+                borderColor: `${gateway.accentColor}30`,
+                alignItems: 'center',
+                justifyContent: 'center'
+            }}>
+                <Ionicons name={gateway.fallbackIcon} size={20} color={gateway.accentColor} />
+            </View>
+        );
+    }
+
+    const isPaystack = gateway.id === 'paystack';
+    const isMoniepoint = gateway.id === 'bank_transfer';
+    const imgWidth = isMoniepoint ? 26 : isPaystack ? 48 : 46;
+    const imgHeight = isMoniepoint ? 26 : 24;
+
+    return (
+        <View style={{
+            width: 58,
+            height: 38,
+            borderRadius: 10,
+            backgroundColor: '#FFFFFF',
+            borderWidth: 1,
+            borderColor: '#E2E8F0',
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingHorizontal: 4,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.05,
+            shadowRadius: 2,
+            elevation: 1
+        }}>
+            <Image
+                source={{ uri: gateway.logoUrl }}
+                style={{ width: imgWidth, height: imgHeight }}
+                resizeMode="contain"
+                onError={() => setImgErr(true)}
+            />
+        </View>
+    );
+};
+
 const WalletPageInner = ({ user, onBack, onNavigate }) => {
     const [wallet, setWallet] = useState({ balance: 0, points: 0 });
     const [transactions, setTransactions] = useState([]);
@@ -73,6 +232,10 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
     const [topUpAmountNgn, setTopUpAmountNgn] = useState('5000');
     const [topUpAmountUsd, setTopUpAmountUsd] = useState('25'); // For NOWPayments (USD, NOT Naira)
     const [isTopUpPending, setIsTopUpPending] = useState(false);
+
+    // ── DEPOSIT SUCCESS CELEBRATION MODAL ──
+    const [showDepositSuccessModal, setShowDepositSuccessModal] = useState(false);
+    const [depositSuccessDetails, setDepositSuccessDetails] = useState(null);
 
     // ── UNIFIED CHECKOUT WEBVIEW MODAL ──
     const [showCheckoutWebView, setShowCheckoutWebView] = useState(false);
@@ -227,6 +390,47 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
             }
         };
         loadUserData();
+
+        // ── AUTOMATIC REDIRECT URL PAYMENT VERIFICATION ──
+        const checkReturnPayment = async () => {
+            if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+            try {
+                const searchParams = new URLSearchParams(window.location.search);
+                const ref = searchParams.get('reference') || searchParams.get('trxref') || searchParams.get('tx_ref');
+                const status = searchParams.get('status');
+
+                if (ref || status === 'successful') {
+                    let pendingRaw = window.localStorage.getItem('@pending_wallet_topup');
+                    if (!pendingRaw) {
+                        pendingRaw = await AsyncStorage.getItem('@pending_wallet_topup');
+                    }
+                    if (pendingRaw) {
+                        const pending = JSON.parse(pendingRaw);
+                        // Ensure it was created within the last 4 hours
+                        if (Date.now() - (pending.timestamp || 0) < 4 * 3600 * 1000) {
+                            const creditAmt = pending.amount || 0;
+                            const matchedRef = ref || pending.reference;
+                            const gw = pending.gateway || 'Paystack';
+                            const usdAmt = pending.usdAmount || null;
+
+                            // Clean URL parameters cleanly without page refresh
+                            const cleanUrl = window.location.origin + window.location.pathname;
+                            window.history.replaceState({}, document.title, cleanUrl);
+
+                            // Clear pending key
+                            window.localStorage.removeItem('@pending_wallet_topup');
+                            AsyncStorage.removeItem('@pending_wallet_topup').catch(() => {});
+
+                            // Verify & credit
+                            await handlePaymentCompleteVerification(creditAmt, matchedRef, gw, usdAmt);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.log('Return payment verification check:', err);
+            }
+        };
+        checkReturnPayment();
     }, [user?.id]);
 
     const onRefresh = useCallback(async () => {
@@ -293,10 +497,22 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
             const ref = `WLT-${topUpGateway.toUpperCase().slice(0, 3)}-${Date.now()}`;
             setPendingCreditAmountNgn(rechargeAmountNgn);
             setActiveRef(ref);
-            setActiveGatewayName(
-                topUpGateway === 'nowpayments' ? 'NOWPayments (Crypto USD)' :
-                topUpGateway === 'flutterwave' ? 'Flutterwave' : 'Paystack'
-            );
+            const chosenGwName = topUpGateway === 'nowpayments' ? 'NOWPayments (Crypto USD)' :
+                topUpGateway === 'flutterwave' ? 'Flutterwave' : 'Paystack';
+            setActiveGatewayName(chosenGwName);
+
+            // Store pending topup in persistent storage for web/mobile redirect auto-recovery
+            const pendingData = {
+                reference: ref,
+                amount: rechargeAmountNgn,
+                usdAmount: isCryptoMode ? topUpAmountUsd : null,
+                gateway: chosenGwName,
+                timestamp: Date.now()
+            };
+            if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.setItem('@pending_wallet_topup', JSON.stringify(pendingData));
+            }
+            await AsyncStorage.setItem('@pending_wallet_topup', JSON.stringify(pendingData)).catch(() => {});
 
             let res;
             if (topUpGateway === 'nowpayments') {
@@ -318,16 +534,35 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                     email: fallbackEmail,
                     reference: ref,
                     name: user?.user_metadata?.full_name || 'Mafhal Member',
+                    callback_url: Platform.OS === 'web' ? window.location.href : 'https://standard.paystack.co/close',
                     metadata: { action: 'wallet_topup', user_id: user?.id }
                 });
             } else {
-                // Paystack
-                res = await PaymentGatewayService.invokeEdgeFunction('initiate-paystack-payment', {
+                // Paystack via unified PaymentGatewayService (with multi-tier failovers, inline popup, and hosted page)
+                res = await PaymentGatewayService.initiatePaystack({
                     amount: rechargeAmountNgn,
                     email: fallbackEmail,
                     reference: ref,
                     callback_url: Platform.OS === 'web' ? window.location.href : 'https://standard.paystack.co/close'
                 });
+            }
+
+            // Inline Web Popup Option for Paystack (if supported on web)
+            if (res?.type === 'inline_web' && typeof res?.openInline === 'function') {
+                setIsTopUpPending(false);
+                setShowTopUpModal(false);
+                res.openInline(
+                    async (successData) => {
+                        await handlePaymentCompleteVerification(rechargeAmountNgn, successData?.reference || ref, 'Paystack');
+                        if (typeof window !== 'undefined' && window.localStorage) {
+                            window.localStorage.removeItem('@pending_wallet_topup');
+                        }
+                    },
+                    () => {
+                        console.log('Paystack checkout closed by user');
+                    }
+                );
+                return;
             }
 
             if (!res?.ok && !res?.success && !res?.data?.success && !res?.checkoutUrl && !res?.data?.authorization_url) {
@@ -359,34 +594,47 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
         }
     };
 
-    // ── POST-PAYMENT VERIFICATION & CREDIT ──
-    const handlePaymentCompleteVerification = async (creditAmount, reference, gateway) => {
+    // ── POST-PAYMENT VERIFICATION & CELEBRATION CREDIT ──
+    const handlePaymentCompleteVerification = async (creditAmount, reference, gateway, usdAmount = null) => {
         setIsTopUpPending(true);
         try {
             const currentBal = wallet.balance || 0;
             const newBal = currentBal + creditAmount;
 
-            const { error: wErr } = await supabase
-                .from('wallets')
-                .upsert({ user_id: user.id, balance: newBal }, { onConflict: 'user_id' });
+            const activeUserId = user?.id || (await supabase.auth.getUser()).data?.user?.id;
+            if (activeUserId) {
+                const { error: wErr } = await supabase
+                    .from('wallets')
+                    .upsert({ user_id: activeUserId, balance: newBal }, { onConflict: 'user_id' });
 
-            if (wErr) {
-                await supabase.from('wallets').update({ balance: newBal }).eq('user_id', user.id);
+                if (wErr) {
+                    await supabase.from('wallets').update({ balance: newBal }).eq('user_id', activeUserId);
+                }
+
+                const desc = usdAmount 
+                    ? `Wallet Recharge via ${gateway} ($${usdAmount} USD • Ref: ${reference})`
+                    : `Wallet Recharge via ${gateway} (Ref: ${reference})`;
+
+                await supabase.from('wallet_transactions').insert({
+                    user_id: activeUserId,
+                    type: 'topup',
+                    amount: creditAmount,
+                    description: desc
+                });
             }
 
-            await supabase.from('wallet_transactions').insert({
-                user_id: user.id,
-                type: 'topup',
-                amount: creditAmount,
-                description: `Wallet Recharge via ${gateway} (Ref: ${reference})`
-            });
-
             setWallet(prev => ({ ...prev, balance: newBal }));
-            Alert.alert('Payment Verified! 🎉', `${formatCurrency(creditAmount)} has been credited to your wallet balance.`);
+            setDepositSuccessDetails({
+                amount: creditAmount,
+                reference: reference,
+                gateway: gateway,
+                usdAmount: usdAmount
+            });
+            setShowDepositSuccessModal(true);
 
             const depositPhone = user?.phone || user?.user_metadata?.phone_number;
-            if (depositPhone) {
-                whatsappService.sendDirect(depositPhone, `Your Abu Mafhal wallet has been successfully recharged with ${formatCurrency(creditAmount)}. Thank you!`, user.id).catch(() => {});
+            if (depositPhone && activeUserId) {
+                whatsappService.sendDirect(depositPhone, `Your Abu Mafhal wallet has been successfully recharged with ${formatCurrency(creditAmount)}. Thank you!`, activeUserId).catch(() => {});
             }
 
             fetchWalletData();
@@ -891,6 +1139,56 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                 </View>
 
                 {/* ══════════════════════════════════════════════════════════════
+                    FUNDING GATEWAYS SHOWCASE STRIP (PAYSTACK, FLUTTERWAVE, CRYPTO, MONIEPOINT)
+                ══════════════════════════════════════════════════════════════ */}
+                <View style={localStyles.gatewayShowcaseContainer}>
+                    <View style={localStyles.gatewayShowcaseHeader}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Ionicons name="card" size={13} color="#059669" />
+                            <Text style={localStyles.gatewayShowcaseTitle}>INSTANT FUNDING GATEWAYS</Text>
+                        </View>
+                        <TouchableOpacity onPress={() => setShowTopUpModal(true)} activeOpacity={0.7}>
+                            <Text style={localStyles.gatewayShowcaseLink}>Top-up Now ➔</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={{ gap: 8, paddingVertical: 2 }}
+                    >
+                        {GATEWAY_OPTIONS.map((gw) => (
+                            <TouchableOpacity
+                                key={gw.id}
+                                style={localStyles.gatewayShowcasePill}
+                                onPress={() => {
+                                    setTopUpGateway(gw.id);
+                                    setShowTopUpModal(true);
+                                }}
+                                activeOpacity={0.8}
+                            >
+                                <GatewayLogo gateway={gw} size={30} />
+                                <View style={{ marginLeft: 8 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                        <Text style={localStyles.gatewayShowcaseName}>{gw.name}</Text>
+                                        <View style={[localStyles.gwMiniBadge, { backgroundColor: gw.badgeBg }]}>
+                                            <Text style={[localStyles.gwMiniBadgeTxt, { color: gw.badgeColor }]}>{gw.badge}</Text>
+                                        </View>
+                                    </View>
+                                    <Text style={localStyles.gatewayShowcaseChannels} numberOfLines={1}>
+                                        {gw.id === 'nowpayments'
+                                            ? 'USDT • BTC • ETH (USD Only)'
+                                            : gw.id === 'bank_transfer'
+                                            ? 'Moniepoint MFB • 8109849201'
+                                            : gw.channels.slice(0, 3).join(' • ')}
+                                    </Text>
+                                </View>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
+
+                {/* ══════════════════════════════════════════════════════════════
                     4. ESCROW BUYER VAULT STATUS BANNER
                 ══════════════════════════════════════════════════════════════ */}
                 <TouchableOpacity 
@@ -1168,215 +1466,260 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                             </TouchableOpacity>
                         </View>
 
-                        {/* GATEWAY SELECTOR CARDS */}
-                        <Text style={localStyles.fieldSectionHeader}>SELECT PAYMENT METHOD</Text>
-                        <View style={localStyles.gatewayCardRow}>
-                            {/* Paystack */}
-                            <TouchableOpacity
-                                style={[localStyles.gwCard, topUpGateway === 'paystack' && localStyles.gwCardActive]}
-                                onPress={() => setTopUpGateway('paystack')}
-                                activeOpacity={0.8}
-                            >
-                                <View style={[localStyles.gwIconBox, { backgroundColor: '#DCFCE7' }]}>
-                                    <Ionicons name="card" size={16} color="#059669" />
-                                </View>
-                                <Text style={localStyles.gwCardTitle}>Paystack</Text>
-                                <Text style={localStyles.gwCardSub}>Card / USSD</Text>
-                            </TouchableOpacity>
+                        <ScrollView 
+                            showsVerticalScrollIndicator={false}
+                            contentContainerStyle={{ paddingBottom: 16 }}
+                            style={{ maxHeight: Platform.OS === 'web' ? '80vh' : 580 }}
+                        >
+                            {/* LUXURY SELECTABLE GATEWAY LIST */}
+                            <Text style={localStyles.fieldSectionHeader}>SELECT PAYMENT METHOD</Text>
+                            <View style={localStyles.luxuryGatewayList}>
+                                {GATEWAY_OPTIONS.map((gw) => {
+                                    const isSelected = topUpGateway === gw.id;
+                                    return (
+                                        <TouchableOpacity
+                                            key={gw.id}
+                                            style={[
+                                                localStyles.luxuryGwCard,
+                                                isSelected && localStyles.luxuryGwCardActive,
+                                                isSelected && { borderColor: gw.accentColor }
+                                            ]}
+                                            onPress={() => setTopUpGateway(gw.id)}
+                                            activeOpacity={0.82}
+                                        >
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                                                <GatewayLogo gateway={gw} size={36} />
 
-                            {/* Flutterwave */}
-                            <TouchableOpacity
-                                style={[localStyles.gwCard, topUpGateway === 'flutterwave' && localStyles.gwCardActive]}
-                                onPress={() => setTopUpGateway('flutterwave')}
-                                activeOpacity={0.8}
-                            >
-                                <View style={[localStyles.gwIconBox, { backgroundColor: '#EFF6FF' }]}>
-                                    <Ionicons name="wallet" size={16} color="#2563EB" />
-                                </View>
-                                <Text style={localStyles.gwCardTitle}>Flutterwave</Text>
-                                <Text style={localStyles.gwCardSub}>Bank / Cards</Text>
-                            </TouchableOpacity>
+                                                <View style={{ marginLeft: 12, flex: 1 }}>
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                                        <Text style={[localStyles.luxuryGwName, isSelected && { color: '#0F172A', fontWeight: '900' }]}>
+                                                            {gw.name}
+                                                        </Text>
+                                                        <View style={[localStyles.gwMiniBadge, { backgroundColor: gw.badgeBg }]}>
+                                                            <Text style={[localStyles.gwMiniBadgeTxt, { color: gw.badgeColor }]}>
+                                                                {gw.badge}
+                                                            </Text>
+                                                        </View>
+                                                    </View>
 
-                            {/* NOWPayments (CRYPTO USD) */}
-                            <TouchableOpacity
-                                style={[localStyles.gwCard, topUpGateway === 'nowpayments' && [localStyles.gwCardActive, { borderColor: '#F59E0B' }]]}
-                                onPress={() => setTopUpGateway('nowpayments')}
-                                activeOpacity={0.8}
-                            >
-                                <View style={[localStyles.gwIconBox, { backgroundColor: '#FEF3C7' }]}>
-                                    <Ionicons name="logo-bitcoin" size={16} color="#D97706" />
-                                </View>
-                                <Text style={localStyles.gwCardTitle}>Crypto USD</Text>
-                                <Text style={[localStyles.gwCardSub, { color: '#D97706', fontWeight: '800' }]}>USDT / Coins</Text>
-                            </TouchableOpacity>
+                                                    <Text style={localStyles.luxuryGwSub} numberOfLines={1}>
+                                                        {gw.subtitle}
+                                                    </Text>
 
-                            {/* Direct Bank Transfer */}
-                            <TouchableOpacity
-                                style={[localStyles.gwCard, topUpGateway === 'bank_transfer' && localStyles.gwCardActive]}
-                                onPress={() => setTopUpGateway('bank_transfer')}
-                                activeOpacity={0.8}
-                            >
-                                <View style={[localStyles.gwIconBox, { backgroundColor: '#EDE9FE' }]}>
-                                    <Ionicons name="business" size={16} color="#7C3AED" />
-                                </View>
-                                <Text style={localStyles.gwCardTitle}>Bank Transfer</Text>
-                                <Text style={localStyles.gwCardSub}>Virtual Acct</Text>
-                            </TouchableOpacity>
-                        </View>
+                                                    <View style={localStyles.gwChannelsRow}>
+                                                        <View style={localStyles.gwSpeedTag}>
+                                                            <Ionicons name="flash" size={10} color="#059669" />
+                                                            <Text style={localStyles.gwSpeedTagTxt}>{gw.speed}</Text>
+                                                        </View>
+                                                        <Text style={localStyles.gwCurrencyTag}>[{gw.currency}]</Text>
+                                                    </View>
+                                                </View>
+                                            </View>
 
-                        {/* CONDITIONAL CURRENCY & AMOUNT SECTION */}
-                        {topUpGateway === 'nowpayments' ? (
-                            /* ── NOWPAYMENTS CRYPTO MODE (STRICTLY IN USD, NOT NAIRA) ── */
-                            <View style={{ marginTop: 12 }}>
-                                <View style={localStyles.cryptoAlertBanner}>
-                                    <Ionicons name="flash" size={14} color="#D97706" />
-                                    <Text style={localStyles.cryptoAlertTxt}>
-                                        NOWPayments Crypto Invoice is in <Text style={{ fontWeight: '900' }}>USD ($)</Text>. Pay via USDT (TRC20/BEP20), BTC, ETH, SOL, or 150+ coins.
-                                    </Text>
-                                </View>
+                                            <View style={localStyles.gwRadioContainer}>
+                                                <Ionicons
+                                                    name={isSelected ? "checkmark-circle" : "ellipse-outline"}
+                                                    size={22}
+                                                    color={isSelected ? gw.accentColor : "#CBD5E1"}
+                                                />
+                                            </View>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
 
-                                <Text style={localStyles.fieldSectionHeader}>ENTER AMOUNT IN USD ($)</Text>
-                                <View style={localStyles.inputAreaContainer}>
-                                    <Text style={[localStyles.inputPrefix, { color: '#D97706' }]}>$</Text>
-                                    <TextInput
-                                        style={localStyles.mainTextInput}
-                                        value={topUpAmountUsd}
-                                        onChangeText={setTopUpAmountUsd}
-                                        keyboardType="numeric"
-                                        placeholder="25"
-                                        placeholderTextColor="#CBD5E1"
-                                    />
-                                    <View style={localStyles.currencyTag}>
-                                        <Text style={localStyles.currencyTagTxt}>USD</Text>
+                            {/* LIVE BALANCE PROJECTION CARD */}
+                            <View style={localStyles.balanceProjectionCard}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Ionicons name="trending-up" size={14} color="#059669" />
+                                        <Text style={localStyles.projectionTitle}>LIVE BALANCE PROJECTION</Text>
+                                    </View>
+                                    <View style={localStyles.projectionBadge}>
+                                        <Text style={localStyles.projectionBadgeTxt}>INSTANT CREDIT</Text>
                                     </View>
                                 </View>
 
-                                {/* Live NGN Equivalent Display */}
-                                <View style={localStyles.conversionPill}>
-                                    <Ionicons name="swap-horizontal" size={13} color="#059669" />
-                                    <Text style={localStyles.conversionPillTxt}>
-                                        ${topUpAmountUsd || '0'} USD ≈ <Text style={{ fontWeight: '900', color: '#059669' }}>{formatCurrency((parseFloat(topUpAmountUsd) || 0) * USD_RATE)}</Text> credited to wallet
-                                    </Text>
-                                </View>
+                                <View style={localStyles.projectionMathRow}>
+                                    <View style={localStyles.projectionMathCol}>
+                                        <Text style={localStyles.projectionMathLabel}>Current Balance</Text>
+                                        <Text style={localStyles.projectionMathVal}>{formatCurrency(wallet.balance || 0)}</Text>
+                                    </View>
 
-                                {/* USD Quick Presets */}
-                                <Text style={localStyles.quickSelectionLabel}>PRESET CRYPTO AMOUNTS (USD)</Text>
-                                <View style={localStyles.pillsGrid}>
-                                    {['10', '25', '50', '100', '250', '500'].map(val => (
-                                        <TouchableOpacity
-                                            key={val}
-                                            style={[localStyles.amountPill, topUpAmountUsd === val && [localStyles.activePill, { borderColor: '#F59E0B', backgroundColor: '#FFFBEB' }]]}
-                                            onPress={() => setTopUpAmountUsd(val)}
-                                        >
-                                            <Text style={[localStyles.pillText, topUpAmountUsd === val && { color: '#D97706', fontWeight: '900' }]}>
-                                                ${val} USD
-                                            </Text>
-                                        </TouchableOpacity>
-                                    ))}
+                                    <Ionicons name="add" size={15} color="#94A3B8" />
+
+                                    <View style={localStyles.projectionMathCol}>
+                                        <Text style={localStyles.projectionMathLabel}>Top-up</Text>
+                                        <Text style={[localStyles.projectionMathVal, { color: '#059669' }]}>
+                                            +{formatCurrency(topUpGateway === 'nowpayments' ? ((parseFloat(topUpAmountUsd) || 0) * USD_RATE) : (parseInt(topUpAmountNgn) || 0))}
+                                        </Text>
+                                    </View>
+
+                                    <Ionicons name="arrow-forward" size={15} color="#059669" />
+
+                                    <View style={[localStyles.projectionMathCol, { alignItems: 'flex-end' }]}>
+                                        <Text style={localStyles.projectionMathLabel}>New Balance</Text>
+                                        <Text style={[localStyles.projectionMathVal, { color: '#059669', fontWeight: '900', fontSize: 14 }]}>
+                                            {formatCurrency((wallet.balance || 0) + (topUpGateway === 'nowpayments' ? ((parseFloat(topUpAmountUsd) || 0) * USD_RATE) : (parseInt(topUpAmountNgn) || 0)))}
+                                        </Text>
+                                    </View>
                                 </View>
                             </View>
-                        ) : topUpGateway === 'bank_transfer' ? (
-                            /* ── DIRECT BANK TRANSFER MODE ── */
-                            <View style={{ marginTop: 12 }}>
-                                <View style={localStyles.bankDetailsCard}>
-                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <Text style={localStyles.bankDetailLabel}>DESIGNATED ACCOUNT</Text>
-                                        <View style={localStyles.bankInstantTag}>
-                                            <Text style={localStyles.bankInstantTagTxt}>INSTANT VERIFY</Text>
+
+                            {/* CONDITIONAL CURRENCY & AMOUNT SECTION */}
+                            {topUpGateway === 'nowpayments' ? (
+                                /* ── NOWPAYMENTS CRYPTO MODE (STRICTLY IN USD, NOT NAIRA) ── */
+                                <View style={{ marginTop: 12 }}>
+                                    <View style={localStyles.cryptoAlertBanner}>
+                                        <Ionicons name="flash" size={14} color="#D97706" />
+                                        <Text style={localStyles.cryptoAlertTxt}>
+                                            NOWPayments Crypto Invoice is in <Text style={{ fontWeight: '900' }}>USD ($)</Text>. Pay via USDT (TRC20/BEP20), BTC, ETH, SOL, or 150+ coins.
+                                        </Text>
+                                    </View>
+
+                                    <Text style={localStyles.fieldSectionHeader}>ENTER AMOUNT IN USD ($)</Text>
+                                    <View style={localStyles.inputAreaContainer}>
+                                        <Text style={[localStyles.inputPrefix, { color: '#D97706' }]}>$</Text>
+                                        <TextInput
+                                            style={localStyles.mainTextInput}
+                                            value={topUpAmountUsd}
+                                            onChangeText={setTopUpAmountUsd}
+                                            keyboardType="numeric"
+                                            placeholder="25"
+                                            placeholderTextColor="#CBD5E1"
+                                        />
+                                        <View style={localStyles.currencyTag}>
+                                            <Text style={localStyles.currencyTagTxt}>USD</Text>
                                         </View>
                                     </View>
-                                    <Text style={localStyles.bankNameTxt}>Moniepoint Microfinance Bank</Text>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
-                                        <Text style={localStyles.bankAccNumTxt}>8109849201</Text>
-                                        <TouchableOpacity 
-                                            style={localStyles.bankCopyBtn}
-                                            onPress={() => copyToClipboard('8109849201', 'Account Number')}
-                                        >
-                                            <Ionicons name="copy" size={11} color="#2563EB" />
-                                            <Text style={localStyles.bankCopyBtnTxt}>Copy</Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                    <Text style={localStyles.bankAccNameTxt}>Abu Mafhal Marketplace Ltd</Text>
-                                </View>
 
-                                <Text style={localStyles.fieldSectionHeader}>AMOUNT TO TRANSFER (₦)</Text>
-                                <View style={localStyles.inputAreaContainer}>
-                                    <Text style={localStyles.inputPrefix}>₦</Text>
-                                    <TextInput
-                                        style={localStyles.mainTextInput}
-                                        value={topUpAmountNgn}
-                                        onChangeText={setTopUpAmountNgn}
-                                        keyboardType="numeric"
-                                        placeholder="5000"
-                                        placeholderTextColor="#CBD5E1"
-                                    />
-                                </View>
-                            </View>
-                        ) : (
-                            /* ── PAYSTACK & FLUTTERWAVE NAIRA MODE ── */
-                            <View style={{ marginTop: 12 }}>
-                                <Text style={localStyles.fieldSectionHeader}>ENTER AMOUNT IN NAIRA (₦)</Text>
-                                <View style={localStyles.inputAreaContainer}>
-                                    <Text style={localStyles.inputPrefix}>₦</Text>
-                                    <TextInput
-                                        style={localStyles.mainTextInput}
-                                        value={topUpAmountNgn}
-                                        onChangeText={setTopUpAmountNgn}
-                                        keyboardType="numeric"
-                                        placeholder="5000"
-                                        placeholderTextColor="#CBD5E1"
-                                    />
-                                    <View style={localStyles.currencyTag}>
-                                        <Text style={localStyles.currencyTagTxt}>NGN</Text>
+                                    {/* Live NGN Equivalent Display */}
+                                    <View style={localStyles.conversionPill}>
+                                        <Ionicons name="swap-horizontal" size={13} color="#059669" />
+                                        <Text style={localStyles.conversionPillTxt}>
+                                            ${topUpAmountUsd || '0'} USD ≈ <Text style={{ fontWeight: '900', color: '#059669' }}>{formatCurrency((parseFloat(topUpAmountUsd) || 0) * USD_RATE)}</Text> credited to wallet
+                                        </Text>
+                                    </View>
+
+                                    {/* USD Quick Presets */}
+                                    <Text style={localStyles.quickSelectionLabel}>PRESET CRYPTO AMOUNTS (USD)</Text>
+                                    <View style={localStyles.pillsGrid}>
+                                        {['10', '25', '50', '100', '250', '500'].map(val => (
+                                            <TouchableOpacity
+                                                key={val}
+                                                style={[localStyles.amountPill, topUpAmountUsd === val && [localStyles.activePill, { borderColor: '#F59E0B', backgroundColor: '#FFFBEB' }]]}
+                                                onPress={() => setTopUpAmountUsd(val)}
+                                            >
+                                                <Text style={[localStyles.pillText, topUpAmountUsd === val && { color: '#D97706', fontWeight: '900' }]}>
+                                                    ${val} USD
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ))}
                                     </View>
                                 </View>
+                            ) : topUpGateway === 'bank_transfer' ? (
+                                /* ── DIRECT BANK TRANSFER MODE ── */
+                                <View style={{ marginTop: 12 }}>
+                                    <View style={localStyles.bankDetailsCard}>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <Text style={localStyles.bankDetailLabel}>DESIGNATED ACCOUNT</Text>
+                                            <View style={localStyles.bankInstantTag}>
+                                                <Text style={localStyles.bankInstantTagTxt}>INSTANT VERIFY</Text>
+                                            </View>
+                                        </View>
+                                        <Text style={localStyles.bankNameTxt}>Moniepoint Microfinance Bank</Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+                                            <Text style={localStyles.bankAccNumTxt}>8109849201</Text>
+                                            <TouchableOpacity 
+                                                style={localStyles.bankCopyBtn}
+                                                onPress={() => copyToClipboard('8109849201', 'Account Number')}
+                                            >
+                                                <Ionicons name="copy" size={11} color="#2563EB" />
+                                                <Text style={localStyles.bankCopyBtnTxt}>Copy</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                        <Text style={localStyles.bankAccNameTxt}>Abu Mafhal Marketplace Ltd</Text>
+                                    </View>
 
-                                <Text style={localStyles.quickSelectionLabel}>PRESET RECHARGE AMOUNTS</Text>
-                                <View style={localStyles.pillsGrid}>
-                                    {['1000', '2500', '5000', '10000', '25000', '50000'].map(val => (
-                                        <TouchableOpacity
-                                            key={val}
-                                            style={[localStyles.amountPill, topUpAmountNgn === val && localStyles.activePill]}
-                                            onPress={() => setTopUpAmountNgn(val)}
-                                        >
-                                            <Text style={[localStyles.pillText, topUpAmountNgn === val && localStyles.activePillText]}>
-                                                ₦{parseInt(val).toLocaleString()}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    ))}
+                                    <Text style={localStyles.fieldSectionHeader}>AMOUNT TO TRANSFER (₦)</Text>
+                                    <View style={localStyles.inputAreaContainer}>
+                                        <Text style={localStyles.inputPrefix}>₦</Text>
+                                        <TextInput
+                                            style={localStyles.mainTextInput}
+                                            value={topUpAmountNgn}
+                                            onChangeText={setTopUpAmountNgn}
+                                            keyboardType="numeric"
+                                            placeholder="5000"
+                                            placeholderTextColor="#CBD5E1"
+                                        />
+                                    </View>
                                 </View>
-                            </View>
-                        )}
-
-                        {/* PROCEED ACTION BUTTON */}
-                        <TouchableOpacity
-                            style={[localStyles.primaryActionBtn, isTopUpPending && { opacity: 0.7 }]}
-                            onPress={handleStartTopUp}
-                            disabled={isTopUpPending}
-                            activeOpacity={0.88}
-                        >
-                            {isTopUpPending ? (
-                                <ActivityIndicator color="white" />
                             ) : (
-                                <View style={localStyles.actionBtnContent}>
-                                    <Text style={localStyles.actionBtnText}>
-                                        {topUpGateway === 'nowpayments'
-                                            ? `Pay $${topUpAmountUsd || '0'} USD via Crypto`
-                                            : topUpGateway === 'bank_transfer'
-                                            ? `View Bank Transfer Details`
-                                            : `Recharge ${formatCurrency(parseInt(topUpAmountNgn) || 0)}`}
-                                    </Text>
-                                    <Ionicons name="arrow-forward" size={15} color="white" />
+                                /* ── PAYSTACK & FLUTTERWAVE NAIRA MODE ── */
+                                <View style={{ marginTop: 12 }}>
+                                    <Text style={localStyles.fieldSectionHeader}>ENTER AMOUNT IN NAIRA (₦)</Text>
+                                    <View style={localStyles.inputAreaContainer}>
+                                        <Text style={localStyles.inputPrefix}>₦</Text>
+                                        <TextInput
+                                            style={localStyles.mainTextInput}
+                                            value={topUpAmountNgn}
+                                            onChangeText={setTopUpAmountNgn}
+                                            keyboardType="numeric"
+                                            placeholder="5000"
+                                            placeholderTextColor="#CBD5E1"
+                                        />
+                                        <View style={localStyles.currencyTag}>
+                                            <Text style={localStyles.currencyTagTxt}>NGN</Text>
+                                        </View>
+                                    </View>
+
+                                    <Text style={localStyles.quickSelectionLabel}>PRESET RECHARGE AMOUNTS</Text>
+                                    <View style={localStyles.pillsGrid}>
+                                        {['1000', '2500', '5000', '10000', '25000', '50000'].map(val => (
+                                            <TouchableOpacity
+                                                key={val}
+                                                style={[localStyles.amountPill, topUpAmountNgn === val && localStyles.activePill]}
+                                                onPress={() => setTopUpAmountNgn(val)}
+                                            >
+                                                <Text style={[localStyles.pillText, topUpAmountNgn === val && localStyles.activePillText]}>
+                                                    ₦{parseInt(val).toLocaleString()}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
                                 </View>
                             )}
-                        </TouchableOpacity>
 
-                        <View style={localStyles.footerSecurityLine}>
-                            <Ionicons name="lock-closed" size={11} color="#059669" />
-                            <Text style={localStyles.footerSecurityText}>
-                                Bank-Grade 256-Bit SSL • Instant Escrow Credit Guarantee
-                            </Text>
-                        </View>
+                            {/* PROCEED ACTION BUTTON */}
+                            <TouchableOpacity
+                                style={[localStyles.primaryActionBtn, isTopUpPending && { opacity: 0.7 }]}
+                                onPress={handleStartTopUp}
+                                disabled={isTopUpPending}
+                                activeOpacity={0.88}
+                            >
+                                {isTopUpPending ? (
+                                    <ActivityIndicator color="white" />
+                                ) : (
+                                    <View style={localStyles.actionBtnContent}>
+                                        <Text style={localStyles.actionBtnText}>
+                                            {topUpGateway === 'nowpayments'
+                                                ? `Pay $${topUpAmountUsd || '0'} USD via Crypto`
+                                                : topUpGateway === 'bank_transfer'
+                                                ? `View Bank Transfer Details`
+                                                : `Recharge ${formatCurrency(parseInt(topUpAmountNgn) || 0)}`}
+                                        </Text>
+                                        <Ionicons name="arrow-forward" size={15} color="white" />
+                                    </View>
+                                )}
+                            </TouchableOpacity>
+
+                            <View style={localStyles.footerSecurityLine}>
+                                <Ionicons name="lock-closed" size={11} color="#059669" />
+                                <Text style={localStyles.footerSecurityText}>
+                                    Bank-Grade 256-Bit SSL • Instant Escrow Credit Guarantee
+                                </Text>
+                            </View>
+                        </ScrollView>
                     </View>
                 </View>
             </Modal>
@@ -1839,6 +2182,82 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                             ) : (
                                 <Text style={localStyles.actionBtnText}>Redeem Code</Text>
                             )}
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ══════════════════════════════════════════════════════════════
+                MODAL 10: CELEBRATORY DEPOSIT SUCCESS MODAL
+            ══════════════════════════════════════════════════════════════ */}
+            <Modal
+                visible={showDepositSuccessModal}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowDepositSuccessModal(false)}
+            >
+                <View style={localStyles.modalDimLayer}>
+                    <View style={[localStyles.modalContentSheet, { paddingBottom: 28, alignItems: 'center' }]}>
+                        <View style={localStyles.modalHandleBar} />
+
+                        <View style={localStyles.successCelebrationIconRing}>
+                            <View style={localStyles.successCelebrationIconInner}>
+                                <Ionicons name="checkmark-circle" size={44} color="#059669" />
+                            </View>
+                        </View>
+
+                        <Text style={localStyles.successTitle}>Deposit Successful! 🎉</Text>
+                        <Text style={localStyles.successSubtitle}>
+                            Your wallet balance has been credited instantly with 100% Escrow Protection.
+                        </Text>
+
+                        <View style={localStyles.successAmountCard}>
+                            <Text style={localStyles.successAmountLabel}>TOTAL ACCREDITED AMOUNT</Text>
+                            <Text style={localStyles.successAmountBig}>
+                                +{formatCurrency(depositSuccessDetails?.amount || 0)}
+                            </Text>
+                            {depositSuccessDetails?.usdAmount ? (
+                                <Text style={localStyles.successUsdSub}>
+                                    (${depositSuccessDetails.usdAmount} USD via {depositSuccessDetails.gateway || 'NOWPayments'})
+                                </Text>
+                            ) : null}
+                        </View>
+
+                        <View style={localStyles.successReceiptTable}>
+                            <View style={localStyles.receiptRow}>
+                                <Text style={localStyles.receiptKey}>Payment Gateway</Text>
+                                <Text style={localStyles.receiptVal}>{depositSuccessDetails?.gateway || 'Paystack'}</Text>
+                            </View>
+                            <View style={localStyles.receiptRow}>
+                                <Text style={localStyles.receiptKey}>Transaction Ref</Text>
+                                <Text style={[localStyles.receiptVal, { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 11 }]}>
+                                    {depositSuccessDetails?.reference || 'WLT-TX-SUCCESS'}
+                                </Text>
+                            </View>
+                            <View style={localStyles.receiptRow}>
+                                <Text style={localStyles.receiptKey}>New Wallet Balance</Text>
+                                <Text style={[localStyles.receiptVal, { color: '#059669', fontWeight: '900' }]}>
+                                    {formatCurrency(wallet.balance || 0)}
+                                </Text>
+                            </View>
+                            <View style={[localStyles.receiptRow, { borderBottomWidth: 0 }]}>
+                                <Text style={localStyles.receiptKey}>Escrow Status</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                    <Ionicons name="shield-checkmark" size={12} color="#059669" />
+                                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#059669' }}>Secured (Tier 1)</Text>
+                                </View>
+                            </View>
+                        </View>
+
+                        <TouchableOpacity
+                            style={[localStyles.primaryActionBtn, { width: '100%', marginTop: 16 }]}
+                            onPress={() => {
+                                setShowDepositSuccessModal(false);
+                                fetchWalletData();
+                            }}
+                            activeOpacity={0.85}
+                        >
+                            <Text style={localStyles.actionBtnText}>Done / View Updated Wallet</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -2502,7 +2921,274 @@ const localStyles = StyleSheet.create({
         marginBottom: 6
     },
 
-    // GATEWAY CARDS
+    // GATEWAY SHOWCASE STRIP (MAIN WALLET PAGE)
+    gatewayShowcaseContainer: {
+        marginHorizontal: 16,
+        marginTop: 12,
+        marginBottom: 8,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.04,
+        shadowRadius: 3,
+        elevation: 1
+    },
+    gatewayShowcaseHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 10
+    },
+    gatewayShowcaseTitle: {
+        fontSize: 10.5,
+        fontWeight: '900',
+        color: '#334155',
+        letterSpacing: 0.6
+    },
+    gatewayShowcaseLink: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: '#059669'
+    },
+    gatewayShowcasePill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8FAFC',
+        paddingVertical: 7,
+        paddingHorizontal: 10,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    gatewayShowcaseName: {
+        fontSize: 11.5,
+        fontWeight: '800',
+        color: '#0F172A'
+    },
+    gatewayShowcaseChannels: {
+        fontSize: 9.5,
+        color: '#64748B',
+        marginTop: 2
+    },
+
+    // LUXURY SELECTABLE GATEWAY LIST (MODAL 1)
+    luxuryGatewayList: {
+        gap: 8,
+        marginBottom: 12
+    },
+    luxuryGwCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#FFFFFF',
+        borderWidth: 1.5,
+        borderColor: '#E2E8F0',
+        borderRadius: 14,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.04,
+        shadowRadius: 3,
+        elevation: 1
+    },
+    luxuryGwCardActive: {
+        backgroundColor: '#F8FAFC',
+        shadowOpacity: 0.08,
+        shadowRadius: 5
+    },
+    luxuryGwName: {
+        fontSize: 13,
+        fontWeight: '800',
+        color: '#1E293B'
+    },
+    luxuryGwSub: {
+        fontSize: 10.5,
+        color: '#64748B',
+        marginTop: 2
+    },
+    gwMiniBadge: {
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6
+    },
+    gwMiniBadgeTxt: {
+        fontSize: 9,
+        fontWeight: '800'
+    },
+    gwChannelsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginTop: 4
+    },
+    gwSpeedTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+        backgroundColor: '#ECFDF5',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 5
+    },
+    gwSpeedTagTxt: {
+        fontSize: 9,
+        fontWeight: '700',
+        color: '#059669'
+    },
+    gwCurrencyTag: {
+        fontSize: 9.5,
+        fontWeight: '800',
+        color: '#94A3B8'
+    },
+    gwRadioContainer: {
+        marginLeft: 8,
+        justifyContent: 'center',
+        alignItems: 'center'
+    },
+
+    // LIVE BALANCE PROJECTION CARD
+    balanceProjectionCard: {
+        backgroundColor: '#F0FDF4',
+        borderRadius: 14,
+        borderWidth: 1.2,
+        borderColor: '#BBF7D0',
+        padding: 12,
+        marginBottom: 12
+    },
+    projectionTitle: {
+        fontSize: 9.5,
+        fontWeight: '900',
+        color: '#166534',
+        letterSpacing: 0.5
+    },
+    projectionBadge: {
+        backgroundColor: '#DCFCE7',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 5
+    },
+    projectionBadgeTxt: {
+        fontSize: 8.5,
+        fontWeight: '900',
+        color: '#15803D'
+    },
+    projectionMathRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginTop: 8
+    },
+    projectionMathCol: {
+        alignItems: 'flex-start'
+    },
+    projectionMathLabel: {
+        fontSize: 9,
+        fontWeight: '700',
+        color: '#4B5563'
+    },
+    projectionMathVal: {
+        fontSize: 12.5,
+        fontWeight: '800',
+        color: '#1F2937',
+        marginTop: 1
+    },
+
+    // CELEBRATORY DEPOSIT SUCCESS MODAL (MODAL 10)
+    successCelebrationIconRing: {
+        width: 76,
+        height: 76,
+        borderRadius: 38,
+        backgroundColor: '#ECFDF5',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 12,
+        borderWidth: 2,
+        borderColor: '#A7F3D0'
+    },
+    successCelebrationIconInner: {
+        width: 58,
+        height: 58,
+        borderRadius: 29,
+        backgroundColor: '#DCFCE7',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    successTitle: {
+        fontSize: 19,
+        fontWeight: '900',
+        color: '#0F172A',
+        letterSpacing: -0.3
+    },
+    successSubtitle: {
+        fontSize: 12,
+        color: '#64748B',
+        textAlign: 'center',
+        marginTop: 4,
+        paddingHorizontal: 16
+    },
+    successAmountCard: {
+        width: '100%',
+        backgroundColor: '#F8FAFC',
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        padding: 14,
+        alignItems: 'center',
+        marginTop: 14,
+        marginBottom: 12
+    },
+    successAmountLabel: {
+        fontSize: 9.5,
+        fontWeight: '800',
+        color: '#94A3B8',
+        letterSpacing: 0.6
+    },
+    successAmountBig: {
+        fontSize: 26,
+        fontWeight: '900',
+        color: '#059669',
+        marginTop: 2
+    },
+    successUsdSub: {
+        fontSize: 11,
+        color: '#D97706',
+        fontWeight: '700',
+        marginTop: 2
+    },
+    successReceiptTable: {
+        width: '100%',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
+        paddingHorizontal: 12,
+        paddingVertical: 6
+    },
+    receiptRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 7,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F8FAFC'
+    },
+    receiptKey: {
+        fontSize: 11,
+        color: '#64748B',
+        fontWeight: '600'
+    },
+    receiptVal: {
+        fontSize: 11.5,
+        color: '#0F172A',
+        fontWeight: '700'
+    },
+
+    // LEGACY FALLBACK GATEWAY CARDS
     gatewayCardRow: {
         flexDirection: 'row',
         gap: 6,
