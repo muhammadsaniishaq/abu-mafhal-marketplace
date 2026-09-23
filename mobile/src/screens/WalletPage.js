@@ -229,9 +229,15 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
     // ── TOP UP MODAL STATES ──
     const [showTopUpModal, setShowTopUpModal] = useState(false);
     const [topUpGateway, setTopUpGateway] = useState('paystack'); // 'paystack' | 'flutterwave' | 'nowpayments' | 'bank_transfer'
-    const [topUpAmountNgn, setTopUpAmountNgn] = useState('5000');
-    const [topUpAmountUsd, setTopUpAmountUsd] = useState('25'); // For NOWPayments (USD, NOT Naira)
+    const [topUpAmountNgn, setTopUpAmountNgn] = useState('');
+    const [topUpAmountUsd, setTopUpAmountUsd] = useState(''); // For NOWPayments (USD, NOT Naira)
     const [isTopUpPending, setIsTopUpPending] = useState(false);
+
+    const cleanNgnAmount = (val) => {
+        if (!val) return 0;
+        const n = Number(String(val).replace(/[^0-9.]/g, ''));
+        return isNaN(n) ? 0 : Math.round(n);
+    };
 
     // ── VIRTUAL ACCOUNT (AUTO-GENERATED) STATES ──
     const [virtualAccount, setVirtualAccount] = useState(null);   // { account_number, account_name, bank_name, is_permanent, expiry, provider }
@@ -510,53 +516,43 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
 
     // ── MULTI-GATEWAY TOP UP HANDLER ──
     const handleStartTopUp = async () => {
+        // Direct Bank Transfer Handling
+        if (topUpGateway === 'bank_transfer') {
+            if (virtualAccount?.account_number) {
+                copyToClipboard(
+                    `Bank: ${virtualAccount.bank_name}\nAccount: ${virtualAccount.account_number}\nName: ${virtualAccount.account_name}`,
+                    'Bank Transfer Details'
+                );
+                Alert.alert(
+                    'An Kwafi Bayanan Asusu',
+                    `Bank: ${virtualAccount.bank_name}\nAccount: ${virtualAccount.account_number}\nName: ${virtualAccount.account_name}\n\nKa tura kudi daga app ɗin bankinka. Kudin za su shiga wallet ɗinka kai tsaye.`,
+                    [
+                        { text: 'To, Na Gode', onPress: () => { fetchWalletData(); setShowTopUpModal(false); } }
+                    ]
+                );
+            } else {
+                generateVirtualAccount(true);
+            }
+            return;
+        }
+
         let rechargeAmountNgn = 0;
         let isCryptoMode = topUpGateway === 'nowpayments';
 
         if (isCryptoMode) {
-            const usdNum = parseFloat(topUpAmountUsd);
+            const usdNum = parseFloat(String(topUpAmountUsd || '').replace(/[^0-9.]/g, ''));
             if (isNaN(usdNum) || usdNum < 2) {
-                Alert.alert('Invalid Amount', 'Minimum crypto recharge is $2.00 USD');
+                Alert.alert('Shigar da Adadi', 'Da fatan a shigar da a kalla $2.00 USD don biya da crypto');
                 return;
             }
             rechargeAmountNgn = Math.round(usdNum * USD_RATE);
         } else {
-            const ngnNum = parseInt(topUpAmountNgn);
-            if (isNaN(ngnNum) || ngnNum < 100) {
-                Alert.alert('Invalid Amount', 'Minimum top-up is ₦100');
+            const cleanNum = cleanNgnAmount(topUpAmountNgn);
+            if (cleanNum < 100) {
+                Alert.alert('Shigar da Adadi', 'Da fatan a shigar da adadin da kuke son sakawa a wallet (a kalla ₦100)');
                 return;
             }
-            rechargeAmountNgn = ngnNum;
-        }
-
-        // Direct Bank Transfer Handling
-        if (topUpGateway === 'bank_transfer') {
-            setShowTopUpModal(false);
-            Alert.alert(
-                'Direct Bank Transfer',
-                `Please transfer ${formatCurrency(rechargeAmountNgn)} to:\n\nBank: Moniepoint MFB\nAccount: 8109849201\nName: Abu Mafhal Marketplace Ltd\n\nReference: WALLET-${user?.id?.slice(0, 4) || 'TOPUP'}-${Date.now().toString().slice(-6)}\n\nAfter payment, tap "I Have Paid" to notify our 24/7 finance team.`,
-                [
-                    { text: 'Copy Details', onPress: () => copyToClipboard('8109849201', 'Account Number (8109849201 - Moniepoint MFB)') },
-                    { 
-                        text: 'I Have Paid (Notify)', 
-                        onPress: () => {
-                            const ref = `BT-${Date.now().toString().slice(-6)}`;
-                            supabase.from('wallet_transactions').insert({
-                                user_id: user?.id,
-                                type: 'topup',
-                                amount: rechargeAmountNgn,
-                                description: `Direct Bank Transfer (Pending Verification - Ref: ${ref})`
-                            }).then(() => fetchWalletData());
-
-                            const msg = `Hello Abu Mafhal Support, I have just completed a manual bank transfer of ${formatCurrency(rechargeAmountNgn)} to recharge my wallet. Ref: ${ref}, User ID: ${user?.id}`;
-                            whatsappService.sendDirect('2348109849201', msg, user?.id).catch(() => {});
-                            Alert.alert('Confirmation Received', 'Your deposit notification has been sent. Once verified by our finance team, your balance will reflect automatically.');
-                        }
-                    },
-                    { text: 'Close', style: 'cancel' }
-                ]
-            );
-            return;
+            rechargeAmountNgn = cleanNum;
         }
 
         setIsTopUpPending(true);
@@ -1598,42 +1594,44 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                             </View>
 
                             {/* LIVE BALANCE PROJECTION CARD */}
-                            <View style={localStyles.balanceProjectionCard}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                        <Ionicons name="trending-up" size={14} color="#059669" />
-                                        <Text style={localStyles.projectionTitle}>LIVE BALANCE PROJECTION</Text>
+                            {topUpGateway !== 'bank_transfer' && (
+                                <View style={localStyles.balanceProjectionCard}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                            <Ionicons name="trending-up" size={14} color="#059669" />
+                                            <Text style={localStyles.projectionTitle}>LIVE BALANCE PROJECTION</Text>
+                                        </View>
+                                        <View style={localStyles.projectionBadge}>
+                                            <Text style={localStyles.projectionBadgeTxt}>INSTANT CREDIT</Text>
+                                        </View>
                                     </View>
-                                    <View style={localStyles.projectionBadge}>
-                                        <Text style={localStyles.projectionBadgeTxt}>INSTANT CREDIT</Text>
+
+                                    <View style={localStyles.projectionMathRow}>
+                                        <View style={localStyles.projectionMathCol}>
+                                            <Text style={localStyles.projectionMathLabel}>Current Balance</Text>
+                                            <Text style={localStyles.projectionMathVal}>{formatCurrency(wallet.balance || 0)}</Text>
+                                        </View>
+
+                                        <Ionicons name="add" size={15} color="#94A3B8" />
+
+                                        <View style={localStyles.projectionMathCol}>
+                                            <Text style={localStyles.projectionMathLabel}>Top-up</Text>
+                                            <Text style={[localStyles.projectionMathVal, { color: '#059669' }]}>
+                                                +{formatCurrency(topUpGateway === 'nowpayments' ? ((parseFloat(topUpAmountUsd) || 0) * USD_RATE) : (cleanNgnAmount(topUpAmountNgn)))}
+                                            </Text>
+                                        </View>
+
+                                        <Ionicons name="arrow-forward" size={15} color="#059669" />
+
+                                        <View style={[localStyles.projectionMathCol, { alignItems: 'flex-end' }]}>
+                                            <Text style={localStyles.projectionMathLabel}>New Balance</Text>
+                                            <Text style={[localStyles.projectionMathVal, { color: '#059669', fontWeight: '900', fontSize: 14 }]}>
+                                                {formatCurrency((wallet.balance || 0) + (topUpGateway === 'nowpayments' ? ((parseFloat(topUpAmountUsd) || 0) * USD_RATE) : (cleanNgnAmount(topUpAmountNgn))))}
+                                            </Text>
+                                        </View>
                                     </View>
                                 </View>
-
-                                <View style={localStyles.projectionMathRow}>
-                                    <View style={localStyles.projectionMathCol}>
-                                        <Text style={localStyles.projectionMathLabel}>Current Balance</Text>
-                                        <Text style={localStyles.projectionMathVal}>{formatCurrency(wallet.balance || 0)}</Text>
-                                    </View>
-
-                                    <Ionicons name="add" size={15} color="#94A3B8" />
-
-                                    <View style={localStyles.projectionMathCol}>
-                                        <Text style={localStyles.projectionMathLabel}>Top-up</Text>
-                                        <Text style={[localStyles.projectionMathVal, { color: '#059669' }]}>
-                                            +{formatCurrency(topUpGateway === 'nowpayments' ? ((parseFloat(topUpAmountUsd) || 0) * USD_RATE) : (parseInt(topUpAmountNgn) || 0))}
-                                        </Text>
-                                    </View>
-
-                                    <Ionicons name="arrow-forward" size={15} color="#059669" />
-
-                                    <View style={[localStyles.projectionMathCol, { alignItems: 'flex-end' }]}>
-                                        <Text style={localStyles.projectionMathLabel}>New Balance</Text>
-                                        <Text style={[localStyles.projectionMathVal, { color: '#059669', fontWeight: '900', fontSize: 14 }]}>
-                                            {formatCurrency((wallet.balance || 0) + (topUpGateway === 'nowpayments' ? ((parseFloat(topUpAmountUsd) || 0) * USD_RATE) : (parseInt(topUpAmountNgn) || 0)))}
-                                        </Text>
-                                    </View>
-                                </View>
-                            </View>
+                            )}
 
                             {/* CONDITIONAL CURRENCY & AMOUNT SECTION */}
                             {topUpGateway === 'nowpayments' ? (
@@ -1654,8 +1652,8 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                                             value={topUpAmountUsd}
                                             onChangeText={setTopUpAmountUsd}
                                             keyboardType="numeric"
-                                            placeholder="25"
-                                            placeholderTextColor="#CBD5E1"
+                                            placeholder="0.00"
+                                            placeholderTextColor="#94A3B8"
                                         />
                                     </View>
 
@@ -1813,23 +1811,12 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                                                 <Ionicons name="copy-outline" size={13} color="#6366F1" />
                                                 <Text style={localStyles.vaCopyAllBtnTxt}>Copy All Transfer Details</Text>
                                             </TouchableOpacity>
-                                        </View>
-                                    )}
-
-                                    {/* Amount to Transfer */}
-                                    {(!isGeneratingVA) && (
-                                        <View>
-                                            <Text style={[localStyles.fieldSectionHeader, { marginTop: 14 }]}>AMOUNT TO TRANSFER (₦)</Text>
-                                            <View style={localStyles.inputAreaContainer}>
-                                                <Text style={localStyles.inputPrefix}>₦</Text>
-                                                <TextInput
-                                                    style={localStyles.mainTextInput}
-                                                    value={topUpAmountNgn}
-                                                    onChangeText={setTopUpAmountNgn}
-                                                    keyboardType="numeric"
-                                                    placeholder="5000"
-                                                    placeholderTextColor="#CBD5E1"
-                                                />
+                                            {/* Instructions Box */}
+                                            <View style={localStyles.vaInstructionBox}>
+                                                <Ionicons name="information-circle-outline" size={16} color="#6366F1" style={{ marginTop: 2 }} />
+                                                <Text style={localStyles.vaInstructionTxt}>
+                                                    Tura adadin da kake so daga kowane app ɗin banki (kamar OPay, Kuda, PalmPay, GTB, da sauransu) zuwa wannan lambar asusun. Kuɗin za su shiga wallet ɗinka kai tsaye.
+                                                </Text>
                                             </View>
                                         </View>
                                     )}
@@ -1845,8 +1832,8 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                                             value={topUpAmountNgn}
                                             onChangeText={setTopUpAmountNgn}
                                             keyboardType="numeric"
-                                            placeholder="5000"
-                                            placeholderTextColor="#CBD5E1"
+                                            placeholder="0.00"
+                                            placeholderTextColor="#94A3B8"
                                         />
                                     </View>
 
@@ -1880,10 +1867,10 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                                     <View style={localStyles.actionBtnContent}>
                                         <Text style={localStyles.actionBtnText}>
                                             {topUpGateway === 'nowpayments'
-                                                ? `Pay $${topUpAmountUsd || '0'} USD via Crypto`
+                                                ? (topUpAmountUsd ? `Pay $${topUpAmountUsd} USD via Crypto` : `Pay via Crypto`)
                                                 : topUpGateway === 'bank_transfer'
-                                                ? `View Bank Transfer Details`
-                                                : `Recharge ${formatCurrency(parseInt(topUpAmountNgn) || 0)}`}
+                                                ? (virtualAccount?.account_number ? 'Kwafi Bayanan Asusu & Na Tura Kuɗi' : 'Samar da Asusu')
+                                                : (cleanNgnAmount(topUpAmountNgn) > 0 ? `Recharge ${formatCurrency(cleanNgnAmount(topUpAmountNgn))}` : `Recharge Wallet`)}
                                         </Text>
                                         <Ionicons name="arrow-forward" size={15} color="white" />
                                     </View>
@@ -3683,6 +3670,24 @@ const localStyles = StyleSheet.create({
         fontSize: 12,
         fontWeight: '800',
         color: '#6366F1'
+    },
+    vaInstructionBox: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 8,
+        backgroundColor: '#EEF2FF',
+        borderRadius: 10,
+        padding: 10,
+        marginTop: 10,
+        borderWidth: 1,
+        borderColor: '#C7D2FE'
+    },
+    vaInstructionTxt: {
+        fontSize: 11,
+        color: '#3730A3',
+        fontWeight: '600',
+        lineHeight: 16,
+        flex: 1
     },
     bankChip: {
         paddingHorizontal: 10,

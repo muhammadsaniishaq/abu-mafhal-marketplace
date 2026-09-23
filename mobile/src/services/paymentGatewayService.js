@@ -821,7 +821,8 @@ export const PaymentGatewayService = {
      * Supports Flutterwave Virtual Accounts & Serverless API fallback
      */
     async createVirtualAccount({ userId, email, name, phone, amount = 1000, forceNew = false, appSettings = null }) {
-        const safeAmount = Math.max(1, Number(amount) || 1000);
+        const cleanAmt = Number(String(amount || '').replace(/[^0-9.]/g, ''));
+        const safeAmount = (cleanAmt && cleanAmt >= 1) ? cleanAmt : 1000;
         const userEmail = (email && email.includes('@')) ? email.trim() : `wallet_${userId || Date.now()}@abumafhal.com`;
         const userName = name || 'Abu Mafhal User';
         const userPhone = phone || '08000000000';
