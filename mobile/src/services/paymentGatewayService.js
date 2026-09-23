@@ -817,6 +817,143 @@ export const PaymentGatewayService = {
     },
 
     /**
+     * Auto-generate Real Dedicated / Dynamic Virtual Account for Bank Transfer Top-ups
+     * Supports Flutterwave Virtual Accounts & Serverless API fallback
+     */
+    async createVirtualAccount({ userId, email, name, phone, amount = 1000, forceNew = false, appSettings = null }) {
+        const safeAmount = Math.max(1, Number(amount) || 1000);
+        const userEmail = (email && email.includes('@')) ? email.trim() : `wallet_${userId || Date.now()}@abumafhal.com`;
+        const userName = name || 'Abu Mafhal User';
+        const userPhone = phone || '08000000000';
+        const nameParts = userName.trim().split(/\s+/);
+        const firstName = nameParts[0] || 'Valued';
+        const lastName = nameParts.slice(1).join(' ') || 'Customer';
+        const cacheKey = `@va_cache_${userId || 'guest'}`;
+
+        // 1. Check local persistent cache
+        if (!forceNew) {
+            try {
+                let cachedRaw = null;
+                if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+                    cachedRaw = window.localStorage.getItem(cacheKey);
+                }
+                if (!cachedRaw && AsyncStorage) {
+                    cachedRaw = await AsyncStorage.getItem(cacheKey);
+                }
+                if (cachedRaw) {
+                    const parsed = JSON.parse(cachedRaw);
+                    if (parsed?.account_number) {
+                        // Check if valid (not expired)
+                        if (parsed.is_permanent || !parsed.expiry_ms || parsed.expiry_ms - Date.now() > 5 * 60 * 1000) {
+                            return { ok: true, data: { success: true, data: parsed } };
+                        }
+                    }
+                }
+            } catch (_) {}
+        }
+
+        // 2. Try Serverless Endpoint (/api/create-virtual-account)
+        try {
+            const endpointUrl = Platform.OS === 'web' && typeof window !== 'undefined'
+                ? '/api/create-virtual-account'
+                : 'https://abumafhal.com/api/create-virtual-account';
+
+            const srvRes = await fetch(endpointUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: userId,
+                    email: userEmail,
+                    name: userName,
+                    phone: userPhone,
+                    amount: safeAmount
+                })
+            });
+
+            if (srvRes.ok) {
+                const srvData = await srvRes.json();
+                if (srvData?.success && srvData?.data?.account_number) {
+                    try {
+                        const str = JSON.stringify(srvData.data);
+                        if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+                            window.localStorage.setItem(cacheKey, str);
+                        }
+                        if (AsyncStorage) await AsyncStorage.setItem(cacheKey, str);
+                    } catch (_) {}
+                    return { ok: true, data: srvData };
+                }
+            }
+        } catch (srvErr) {
+            console.warn('[PaymentGatewayService] Serverless VA notice:', srvErr.message);
+        }
+
+        // 3. Direct Flutterwave Virtual Account Fallback
+        try {
+            const config = await this.getGatewayConfig(appSettings);
+            const flwSecret = config.flutterwave_secret_key ||
+                (typeof process !== 'undefined' ? (process.env?.EXPO_PUBLIC_FLUTTERWAVE_SECRET_KEY || process.env?.FLUTTERWAVE_SECRET_KEY) : null) ||
+                'FLWSECK-456331fb55a2e059f1eb8d439c53b9ae-1a07bfbf2fcvt-X';
+
+            const txRef = `WVA-${(userId || 'USR').substring(0, 8)}-${Date.now()}`;
+            const flwRes = await fetch('https://api.flutterwave.com/v3/virtual-account-numbers', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${flwSecret.trim()}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    email: userEmail,
+                    is_permanent: false,
+                    bvn: null,
+                    tx_ref: txRef,
+                    phonenumber: userPhone,
+                    firstname: firstName,
+                    lastname: lastName,
+                    narration: `Abu Mafhal Wallet - ${userName}`,
+                    amount: safeAmount
+                })
+            });
+
+            const flwData = await flwRes.json();
+            if (flwData?.status === 'success' && flwData?.data?.account_number) {
+                const d = flwData.data;
+                const result = {
+                    account_number: d.account_number,
+                    account_name: d.note ? d.note.replace(/^Please make a bank transfer to\s+/i, '').trim() : 'ABU MAFHAL LTD FLW',
+                    bank_name: d.bank_name || 'Flutterwave MFB',
+                    order_ref: d.order_ref,
+                    flw_ref: d.flw_ref,
+                    tx_ref: txRef,
+                    amount: d.amount || safeAmount,
+                    expiry: d.expiry_date,
+                    expiry_ms: d.expiry_date ? new Date(d.expiry_date).getTime() : (Date.now() + 60 * 60 * 1000),
+                    is_permanent: false,
+                    provider: 'flutterwave',
+                    created_at: d.created_at || new Date().toISOString()
+                };
+
+                try {
+                    const str = JSON.stringify(result);
+                    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+                        window.localStorage.setItem(cacheKey, str);
+                    }
+                    if (AsyncStorage) await AsyncStorage.setItem(cacheKey, str);
+                } catch (_) {}
+
+                return { ok: true, data: { success: true, data: result } };
+            } else {
+                return {
+                    ok: false,
+                    error: flwData?.message || 'Could not generate virtual account with payment gateway'
+                };
+            }
+        } catch (directErr) {
+            console.error('[PaymentGatewayService] Direct VA generation error:', directErr);
+            return { ok: false, error: directErr.message || 'Network error generating virtual account' };
+        }
+    },
+
+    /**
      * Unified Entry Point
      */
     async initiate({ gateway = 'Paystack', amount, email, phone, name, reference, appSettings, metadata = {} }) {

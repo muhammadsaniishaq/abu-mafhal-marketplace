@@ -233,6 +233,11 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
     const [topUpAmountUsd, setTopUpAmountUsd] = useState('25'); // For NOWPayments (USD, NOT Naira)
     const [isTopUpPending, setIsTopUpPending] = useState(false);
 
+    // ── VIRTUAL ACCOUNT (AUTO-GENERATED) STATES ──
+    const [virtualAccount, setVirtualAccount] = useState(null);   // { account_number, account_name, bank_name, is_permanent, expiry, provider }
+    const [isGeneratingVA, setIsGeneratingVA] = useState(false);
+    const [vaError, setVaError] = useState(null);
+
     // ── DEPOSIT SUCCESS CELEBRATION MODAL ──
     const [showDepositSuccessModal, setShowDepositSuccessModal] = useState(false);
     const [depositSuccessDetails, setDepositSuccessDetails] = useState(null);
@@ -352,6 +357,63 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
         }
     };
 
+    // ── AUTO-GENERATE REAL VIRTUAL ACCOUNT (Paystack DVA / Flutterwave fallback) ──
+    const generateVirtualAccount = async (forceNew = false) => {
+        if (!user?.id && !user?.email) return;
+        if (isGeneratingVA) return;
+
+        // Check local cache first (skip network if cached & valid)
+        if (!forceNew) {
+            try {
+                const cacheKey = `@va_cache_${user.id}`;
+                const cached = await AsyncStorage.getItem(cacheKey);
+                if (cached) {
+                    const parsed = JSON.parse(cached);
+                    if (parsed?.account_number) {
+                        // Permanent accounts never expire; temp accounts: check expiry
+                        if (parsed.is_permanent || !parsed.expiry_ms || parsed.expiry_ms - Date.now() > 5 * 60 * 1000) {
+                            setVirtualAccount(parsed);
+                            setVaError(null);
+                            return;
+                        }
+                    }
+                }
+            } catch (_) {}
+        }
+
+        setIsGeneratingVA(true);
+        setVaError(null);
+
+        try {
+            const email = user?.email || `wallet_${user?.id?.substring(0, 6)}@abumafhal.com`;
+            const fullName = [user?.user_metadata?.first_name, user?.user_metadata?.last_name]
+                .filter(Boolean).join(' ') || user?.user_metadata?.full_name || 'Abu Mafhal';
+
+            const res = await PaymentGatewayService.createVirtualAccount({
+                userId: user?.id,
+                email,
+                name: fullName,
+                amount: Number(topUpAmountNgn) || 1000,
+                forceNew
+            });
+
+            if (res.ok && res.data?.success && res.data?.data?.account_number) {
+                const va = res.data.data;
+                setVirtualAccount(va);
+                setVaError(null);
+            } else {
+                const errMsg = res.data?.error || res.error || 'Could not generate virtual account';
+                setVaError(errMsg);
+                console.warn('[VirtualAccount] Generation failed:', errMsg);
+            }
+        } catch (err) {
+            setVaError(err?.message || 'Network error generating virtual account');
+            console.warn('[VirtualAccount] Exception:', err?.message);
+        } finally {
+            setIsGeneratingVA(false);
+        }
+    };
+
     const saveSavingsGoalsToStorage = async (updatedGoals) => {
         if (!user?.id) return;
         try {
@@ -360,6 +422,13 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
             console.log('Error saving savings goals:', err);
         }
     };
+
+    // Auto-generate virtual account when bank_transfer gateway is selected
+    useEffect(() => {
+        if (topUpGateway === 'bank_transfer' && showTopUpModal && !virtualAccount && !isGeneratingVA) {
+            generateVirtualAccount(false);
+        }
+    }, [topUpGateway, showTopUpModal]);
 
     useEffect(() => {
         fetchWalletData();
@@ -1615,41 +1684,155 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                                     </View>
                                 </View>
                             ) : topUpGateway === 'bank_transfer' ? (
-                                /* ── DIRECT BANK TRANSFER MODE ── */
+                                /* ── DYNAMIC VIRTUAL ACCOUNT MODE ── */
                                 <View style={{ marginTop: 12 }}>
-                                    <View style={localStyles.bankDetailsCard}>
-                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <Text style={localStyles.bankDetailLabel}>DESIGNATED ACCOUNT</Text>
-                                            <View style={localStyles.bankInstantTag}>
-                                                <Text style={localStyles.bankInstantTagTxt}>INSTANT VERIFY</Text>
+
+                                    {/* Loading State */}
+                                    {isGeneratingVA && (
+                                        <View style={localStyles.vaLoadingCard}>
+                                            <ActivityIndicator size="small" color="#6366F1" />
+                                            <View style={{ marginLeft: 10 }}>
+                                                <Text style={localStyles.vaLoadingTitle}>Generating Your Virtual Account...</Text>
+                                                <Text style={localStyles.vaLoadingSubtitle}>Connecting to payment network. Please wait.</Text>
                                             </View>
                                         </View>
-                                        <Text style={localStyles.bankNameTxt}>Moniepoint Microfinance Bank</Text>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
-                                            <Text style={localStyles.bankAccNumTxt}>8109849201</Text>
-                                            <TouchableOpacity 
-                                                style={localStyles.bankCopyBtn}
-                                                onPress={() => copyToClipboard('8109849201', 'Account Number')}
+                                    )}
+
+                                    {/* Error State with Retry */}
+                                    {!isGeneratingVA && vaError && !virtualAccount && (
+                                        <View style={localStyles.vaErrorCard}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                                                <Ionicons name="warning" size={16} color="#DC2626" />
+                                                <Text style={localStyles.vaErrorTitle}>Could Not Generate Account</Text>
+                                            </View>
+                                            <Text style={localStyles.vaErrorMsg}>{vaError}</Text>
+                                            <TouchableOpacity
+                                                style={localStyles.vaRetryBtn}
+                                                onPress={() => generateVirtualAccount(true)}
+                                                activeOpacity={0.8}
                                             >
-                                                <Ionicons name="copy" size={11} color="#2563EB" />
-                                                <Text style={localStyles.bankCopyBtnTxt}>Copy</Text>
+                                                <Ionicons name="refresh" size={12} color="#6366F1" />
+                                                <Text style={localStyles.vaRetryBtnTxt}>Retry</Text>
+                                            </TouchableOpacity>
+                                            {/* Static fallback */}
+                                            <View style={[localStyles.bankDetailsCard, { marginTop: 10 }]}>
+                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <Text style={localStyles.bankDetailLabel}>FALLBACK ACCOUNT</Text>
+                                                    <View style={[localStyles.bankInstantTag, { backgroundColor: '#FEF3C7' }]}>
+                                                        <Text style={[localStyles.bankInstantTagTxt, { color: '#92400E' }]}>MANUAL VERIFY</Text>
+                                                    </View>
+                                                </View>
+                                                <Text style={localStyles.bankNameTxt}>Moniepoint Microfinance Bank</Text>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+                                                    <Text style={localStyles.bankAccNumTxt}>8109849201</Text>
+                                                    <TouchableOpacity
+                                                        style={localStyles.bankCopyBtn}
+                                                        onPress={() => copyToClipboard('8109849201', 'Account Number')}
+                                                    >
+                                                        <Ionicons name="copy" size={11} color="#2563EB" />
+                                                        <Text style={localStyles.bankCopyBtnTxt}>Copy</Text>
+                                                    </TouchableOpacity>
+                                                </View>
+                                                <Text style={localStyles.bankAccNameTxt}>Abu Mafhal Marketplace Ltd</Text>
+                                            </View>
+                                        </View>
+                                    )}
+
+                                    {/* SUCCESS: Generated Virtual Account */}
+                                    {!isGeneratingVA && virtualAccount?.account_number && (
+                                        <View>
+                                            {/* Provider Badge */}
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                                                <View style={localStyles.vaProviderBadge}>
+                                                    <Ionicons name="checkmark-circle" size={11} color="#059669" />
+                                                    <Text style={localStyles.vaProviderBadgeTxt}>
+                                                        {virtualAccount.is_permanent ? 'Permanent Dedicated Account' : 'One-Time Virtual Account'} • via {virtualAccount.provider === 'paystack' ? 'Paystack' : 'Flutterwave'}
+                                                    </Text>
+                                                </View>
+                                                <TouchableOpacity onPress={() => generateVirtualAccount(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                                                    <Ionicons name="refresh-circle-outline" size={18} color="#94A3B8" />
+                                                </TouchableOpacity>
+                                            </View>
+
+                                            {/* Main Account Card */}
+                                            <View style={localStyles.vaAccountCard}>
+                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                                                    <Text style={localStyles.bankDetailLabel}>YOUR DEDICATED ACCOUNT</Text>
+                                                    <View style={localStyles.bankInstantTag}>
+                                                        <Text style={localStyles.bankInstantTagTxt}>AUTO CREDIT</Text>
+                                                    </View>
+                                                </View>
+
+                                                <Text style={localStyles.bankNameTxt}>{virtualAccount.bank_name}</Text>
+
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
+                                                    <Text style={[localStyles.bankAccNumTxt, { letterSpacing: 2 }]}>
+                                                        {virtualAccount.account_number}
+                                                    </Text>
+                                                    <TouchableOpacity
+                                                        style={localStyles.bankCopyBtn}
+                                                        onPress={() => copyToClipboard(virtualAccount.account_number, 'Account Number')}
+                                                    >
+                                                        <Ionicons name="copy" size={11} color="#2563EB" />
+                                                        <Text style={localStyles.bankCopyBtnTxt}>Copy</Text>
+                                                    </TouchableOpacity>
+                                                </View>
+
+                                                <Text style={localStyles.bankAccNameTxt}>{virtualAccount.account_name}</Text>
+
+                                                {/* Expiry notice for temporary accounts */}
+                                                {!virtualAccount.is_permanent && virtualAccount.expiry && (
+                                                    <View style={localStyles.vaExpiryRow}>
+                                                        <Ionicons name="time-outline" size={12} color="#D97706" />
+                                                        <Text style={localStyles.vaExpiryTxt}>
+                                                            Valid for 30 minutes • Expires: {new Date(virtualAccount.expiry).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })}
+                                                        </Text>
+                                                    </View>
+                                                )}
+
+                                                {/* Permanent account notice */}
+                                                {virtualAccount.is_permanent && (
+                                                    <View style={[localStyles.vaExpiryRow, { backgroundColor: '#F0FDF4' }]}>
+                                                        <Ionicons name="infinite-outline" size={12} color="#059669" />
+                                                        <Text style={[localStyles.vaExpiryTxt, { color: '#065F46' }]}>
+                                                            Permanent account — Always use this number to fund your wallet
+                                                        </Text>
+                                                    </View>
+                                                )}
+                                            </View>
+
+                                            {/* Copy All Details Button */}
+                                            <TouchableOpacity
+                                                style={localStyles.vaCopyAllBtn}
+                                                onPress={() => copyToClipboard(
+                                                    `Bank: ${virtualAccount.bank_name}\nAccount: ${virtualAccount.account_number}\nName: ${virtualAccount.account_name}`,
+                                                    'Bank Transfer Details'
+                                                )}
+                                                activeOpacity={0.8}
+                                            >
+                                                <Ionicons name="copy-outline" size={13} color="#6366F1" />
+                                                <Text style={localStyles.vaCopyAllBtnTxt}>Copy All Transfer Details</Text>
                                             </TouchableOpacity>
                                         </View>
-                                        <Text style={localStyles.bankAccNameTxt}>Abu Mafhal Marketplace Ltd</Text>
-                                    </View>
+                                    )}
 
-                                    <Text style={localStyles.fieldSectionHeader}>AMOUNT TO TRANSFER (₦)</Text>
-                                    <View style={localStyles.inputAreaContainer}>
-                                        <Text style={localStyles.inputPrefix}>₦</Text>
-                                        <TextInput
-                                            style={localStyles.mainTextInput}
-                                            value={topUpAmountNgn}
-                                            onChangeText={setTopUpAmountNgn}
-                                            keyboardType="numeric"
-                                            placeholder="5000"
-                                            placeholderTextColor="#CBD5E1"
-                                        />
-                                    </View>
+                                    {/* Amount to Transfer */}
+                                    {(!isGeneratingVA) && (
+                                        <View>
+                                            <Text style={[localStyles.fieldSectionHeader, { marginTop: 14 }]}>AMOUNT TO TRANSFER (₦)</Text>
+                                            <View style={localStyles.inputAreaContainer}>
+                                                <Text style={localStyles.inputPrefix}>₦</Text>
+                                                <TextInput
+                                                    style={localStyles.mainTextInput}
+                                                    value={topUpAmountNgn}
+                                                    onChangeText={setTopUpAmountNgn}
+                                                    keyboardType="numeric"
+                                                    placeholder="5000"
+                                                    placeholderTextColor="#CBD5E1"
+                                                />
+                                            </View>
+                                        </View>
+                                    )}
                                 </View>
                             ) : (
                                 /* ── PAYSTACK & FLUTTERWAVE NAIRA MODE ── */
@@ -3383,6 +3566,123 @@ const localStyles = StyleSheet.create({
         color: '#64748B',
         fontWeight: '700',
         marginTop: 2
+    },
+
+    // VIRTUAL ACCOUNT AUTO-GENERATE STYLES
+    vaLoadingCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#EDE9FE',
+        borderRadius: 12,
+        padding: 14,
+        marginBottom: 10,
+        borderWidth: 1,
+        borderColor: '#C4B5FD'
+    },
+    vaLoadingTitle: {
+        fontSize: 13,
+        fontWeight: '800',
+        color: '#4C1D95'
+    },
+    vaLoadingSubtitle: {
+        fontSize: 11,
+        color: '#7C3AED',
+        marginTop: 2
+    },
+    vaErrorCard: {
+        backgroundColor: '#FEF2F2',
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 10,
+        borderWidth: 1,
+        borderColor: '#FECACA'
+    },
+    vaErrorTitle: {
+        fontSize: 13,
+        fontWeight: '800',
+        color: '#DC2626'
+    },
+    vaErrorMsg: {
+        fontSize: 11,
+        color: '#7F1D1D',
+        marginBottom: 8,
+        lineHeight: 16
+    },
+    vaRetryBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        alignSelf: 'flex-start',
+        backgroundColor: '#EDE9FE',
+        paddingHorizontal: 12,
+        paddingVertical: 5,
+        borderRadius: 8
+    },
+    vaRetryBtnTxt: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: '#6366F1'
+    },
+    vaProviderBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#ECFDF5',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6,
+        flex: 1
+    },
+    vaProviderBadgeTxt: {
+        fontSize: 9.5,
+        fontWeight: '800',
+        color: '#065F46'
+    },
+    vaAccountCard: {
+        backgroundColor: '#F8FAFC',
+        borderRadius: 14,
+        borderWidth: 1.5,
+        borderColor: '#6366F1',
+        padding: 14,
+        marginBottom: 10,
+        shadowColor: '#6366F1',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 6,
+        elevation: 2
+    },
+    vaExpiryRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        marginTop: 8,
+        backgroundColor: '#FFFBEB',
+        borderRadius: 6,
+        paddingHorizontal: 8,
+        paddingVertical: 5
+    },
+    vaExpiryTxt: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#92400E',
+        flex: 1
+    },
+    vaCopyAllBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        justifyContent: 'center',
+        backgroundColor: '#EDE9FE',
+        borderRadius: 10,
+        paddingVertical: 10,
+        marginBottom: 4,
+        borderWidth: 1,
+        borderColor: '#C4B5FD'
+    },
+    vaCopyAllBtnTxt: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#6366F1'
     },
     bankChip: {
         paddingHorizontal: 10,
