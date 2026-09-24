@@ -166,11 +166,45 @@ const Wallet = () => {
     }
   };
 
+  const [notLoggedIn, setNotLoggedIn] = useState(false);
+
   const fetchWalletData = useCallback(async () => {
-    if (!activeUserId) {
+    let resolvedUserId = activeUserId;
+    let resolvedEmail = currentUser?.email;
+    let resolvedPhone = currentUser?.phone;
+
+    // Fast fallback if state not hydrated yet on refresh
+    if (!resolvedUserId) {
+      try {
+        const { data: authData } = await supabase.auth.getUser();
+        if (authData?.user) {
+          resolvedUserId = authData.user.id;
+          resolvedEmail = authData.user.email;
+          resolvedPhone = authData.user.phone || authData.user.user_metadata?.phone_number;
+        }
+      } catch (_) {}
+    }
+
+    if (!resolvedUserId) {
+      try {
+        const cached = localStorage.getItem('auth_user');
+        if (cached) {
+          const u = JSON.parse(cached);
+          resolvedUserId = u?.id || u?.uid;
+          resolvedEmail = u?.email;
+          resolvedPhone = u?.phone;
+        }
+      } catch (_) {}
+    }
+
+    if (!resolvedUserId) {
+      setNotLoggedIn(true);
       setLoading(false);
+      setRefreshing(false);
       return;
     }
+    setNotLoggedIn(false);
+
     try {
       // 0. Auto-sync with Flutterwave deposits
       try {
@@ -178,9 +212,9 @@ const Wallet = () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            user_id: activeUserId,
-            email: currentUser?.email,
-            phone: currentUser?.phone
+            user_id: resolvedUserId,
+            email: resolvedEmail,
+            phone: resolvedPhone
           })
         });
       } catch (syncErr) {
@@ -191,7 +225,7 @@ const Wallet = () => {
       const { data: profile, error: profileErr } = await supabase
         .from('profiles')
         .select('id, balance, email, full_name, phone, custom_id')
-        .eq('id', activeUserId)
+        .eq('id', resolvedUserId)
         .maybeSingle();
 
       // Load persistent virtual account from profile if available
@@ -201,17 +235,41 @@ const Wallet = () => {
           if (parsed?.account_number && !parsed.account_number.startsWith('980')) {
             setUserVirtualAccount(parsed);
             if (typeof window !== 'undefined') {
-              localStorage.setItem(`@abumafhal_va_${activeUserId}`, JSON.stringify(parsed));
+              localStorage.setItem(`@abumafhal_va_${resolvedUserId}`, JSON.stringify(parsed));
             }
           }
         } catch (_) {}
+      }
+
+      // Permanent dedicated account recognition for founder / admin emails
+      const FOUNDER_EMAILS = [
+        'sale.abumafhal@gmail.com',
+        'muhammadsanishaq@gmail.com',
+        'abumafhalhub@gmail.com',
+        'muhammadsanish0@gmail.com',
+        'ceo@abumafhal.com',
+        'muhammadsaniisyaku3@gmail.com'
+      ];
+      const checkEmail = (resolvedEmail || profile?.email || '').toLowerCase().trim();
+      if (FOUNDER_EMAILS.includes(checkEmail)) {
+        const permanentVA = {
+          account_number: '9187255635',
+          account_name: 'Abu Mafhal / Muhammad Sani',
+          bank_name: 'Flutterwave MFB (Formerly OK MFB)',
+          provider: 'flutterwave',
+          is_permanent: true
+        };
+        setUserVirtualAccount(permanentVA);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(`@abumafhal_va_${resolvedUserId}`, JSON.stringify(permanentVA));
+        }
       }
 
       // 2. Fetch transactions from transactions table
       const { data: txData, error: txError } = await supabase
         .from('transactions')
         .select('*')
-        .eq('user_id', activeUserId)
+        .eq('user_id', resolvedUserId)
         .order('created_at', { ascending: false })
         .limit(50);
 
@@ -220,11 +278,11 @@ const Wallet = () => {
 
         // Calculate verified ledger balance to ensure 100% agreement with transaction history
         const totalCredits = txData
-          .filter(t => (t.type === 'topup' || t.type === 'credit' || t.type === 'deposit') && t.status === 'completed')
+          .filter(t => (t.type === 'topup' || t.type === 'credit' || t.type === 'deposit') && (t.status === 'completed' || t.status === 'successful'))
           .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
         const totalDebits = txData
-          .filter(t => (t.type === 'withdrawal' || t.type === 'debit' || t.type === 'wallet_payment' || t.type === 'wallet_purchase') && t.status === 'completed')
+          .filter(t => (t.type === 'withdrawal' || t.type === 'debit' || t.type === 'wallet_payment' || t.type === 'wallet_purchase') && (t.status === 'completed' || t.status === 'successful'))
           .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
         const ledgerBal = Math.max(0, totalCredits - totalDebits);
@@ -234,8 +292,8 @@ const Wallet = () => {
         setBalance(effectiveBal);
 
         // Self-heal DB balance if it lagged behind the transaction ledger
-        if (effectiveBal > profileBal && activeUserId) {
-          await supabase.from('profiles').update({ balance: effectiveBal }).eq('id', activeUserId);
+        if (effectiveBal > profileBal && resolvedUserId) {
+          await supabase.from('profiles').update({ balance: effectiveBal }).eq('id', resolvedUserId);
         }
       } else if (profile) {
         setBalance(Number(profile.balance || 0));
@@ -415,6 +473,34 @@ const Wallet = () => {
           </div>
         </div>
         <p className="mt-4 text-sm font-medium text-gray-500 dark:text-gray-400">Loading your wallet balance...</p>
+      </div>
+    );
+  }
+
+  if (notLoggedIn && !loading) {
+    return (
+      <div className="max-w-2xl mx-auto my-12 p-8 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 text-center">
+        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-amber-50 dark:bg-amber-950/50 flex items-center justify-center">
+          <WalletIcon className="w-8 h-8 text-amber-600 dark:text-amber-400" />
+        </div>
+        <h2 className="text-2xl font-black text-gray-900 dark:text-white">Da Fatan Ka Shiga Asusunka</h2>
+        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+          Kuna buƙatar shiga asusunku (Login) domin duba kuɗin aljihunku (Wallet Balance), asusun bankin ajiya, da tarihin hada-hadarku.
+        </p>
+        <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <a
+            href="/login?redirect=/wallet"
+            className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-md transition-colors"
+          >
+            Shiga Ciki (Login)
+          </a>
+          <button
+            onClick={() => { setLoading(true); fetchWalletData(); }}
+            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold text-sm transition-colors"
+          >
+            Sake Gwada Dubawa (Refresh)
+          </button>
+        </div>
       </div>
     );
   }

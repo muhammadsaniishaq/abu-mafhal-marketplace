@@ -386,6 +386,27 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                 setTransactions(newTx);
             }
 
+            // Calculate verified ledger balance from transactions
+            let ledgerBal = 0;
+            if (newTx && newTx.length > 0) {
+                const totalCredits = newTx
+                    .filter(t => (t.type === 'topup' || t.type === 'credit' || t.type === 'deposit') && (t.status === 'completed' || t.status === 'successful'))
+                    .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+                const totalDebits = newTx
+                    .filter(t => (t.type === 'withdrawal' || t.type === 'debit' || t.type === 'wallet_payment' || t.type === 'wallet_purchase') && (t.status === 'completed' || t.status === 'successful'))
+                    .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+                ledgerBal = Math.max(0, totalCredits - totalDebits);
+            }
+
+            const effectiveBal = Math.max(newWallet.balance, ledgerBal);
+            newWallet = { ...newWallet, balance: effectiveBal };
+            setWallet(newWallet);
+
+            // Self-heal DB profile balance if it lagged behind transaction ledger
+            if (effectiveBal > realBal && activeUserId) {
+                supabase.from('profiles').update({ balance: effectiveBal }).eq('id', activeUserId).catch(() => {});
+            }
+
             // Update persistent cache
             AsyncStorage.setItem(`@abumafhal_wallet_${activeUserId}`, JSON.stringify({
                 wallet: newWallet,
@@ -608,6 +629,12 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
+        try {
+            const activeUserId = user?.id || (await supabase.auth.getUser()).data?.user?.id;
+            if (activeUserId) {
+                await AsyncStorage.removeItem(`@abumafhal_wallet_${activeUserId}`).catch(() => {});
+            }
+        } catch (_) {}
         await fetchWalletData();
         setRefreshing(false);
     }, [user?.id]);
@@ -618,9 +645,9 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
         if (topUpGateway === 'bank_transfer') {
             const userStr = String(user?.id || 'usr');
             const userEmail = (user?.email || '').toLowerCase();
-            const isFounder = userEmail.includes('sani') || userEmail.includes('muhammad');
-            const fallbackNumber = isFounder ? '9137333636' : '9176335569';
-            const fallbackName = isFounder ? 'Abu Mafhal Sani FLW' : 'Abu Mafhal Dedicated FLW';
+            const isFounder = userEmail.includes('sani') || userEmail.includes('muhammad') || userEmail.includes('abumafhal') || userEmail.includes('sale');
+            const fallbackNumber = isFounder ? '9187255635' : '9176335569';
+            const fallbackName = isFounder ? 'Abu Mafhal / Muhammad Sani' : 'Abu Mafhal Dedicated FLW';
 
             const activeAccount = (virtualAccount?.account_number && !virtualAccount.account_number.startsWith('980'))
                 ? virtualAccount
