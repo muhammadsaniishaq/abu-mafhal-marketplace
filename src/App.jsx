@@ -290,11 +290,15 @@ function App() {
                   <Route path="settings" element={<VendorSettings />} />
                 </Route>
 
+                {/* ==================== DIRECT WALLET ROUTE ==================== */}
+                <Route path="/wallet" element={<Wallet />} />
+                <Route path="/user/wallet" element={<Wallet />} />
+
                 {/* ==================== BUYER ROUTES ==================== */}
                 <Route
                   path="/buyer"
                   element={
-                    <ProtectedRoute allowedRoles={['buyer']}>
+                    <ProtectedRoute allowedRoles={['buyer', 'admin', 'vendor']}>
                       <BuyerDashboard />
                     </ProtectedRoute>
                   }

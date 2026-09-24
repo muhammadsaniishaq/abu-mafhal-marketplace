@@ -218,6 +218,8 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
+    const [notLoggedIn, setNotLoggedIn] = useState(false);
+
     // Multi-Currency Card Display Mode: 'NGN' | 'USD' | 'AMC'
     const [balanceCurrency, setBalanceCurrency] = useState('NGN');
     const [hideBalance, setHideBalance] = useState(false);
@@ -301,13 +303,35 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
         try {
             let activeUserId = user?.id;
             if (!activeUserId) {
-                const { data: authData } = await supabase.auth.getUser();
-                activeUserId = authData?.user?.id;
+                try {
+                    const { data: authData } = await supabase.auth.getUser();
+                    activeUserId = authData?.user?.id;
+                } catch (_) {}
             }
             if (!activeUserId) {
+                try {
+                    const raw = await AsyncStorage.getItem('@abumafhal_user_v1');
+                    if (raw) {
+                        const parsed = JSON.parse(raw);
+                        activeUserId = parsed?.id;
+                    }
+                } catch (_) {}
+            }
+            if (!activeUserId && typeof window !== 'undefined' && window.localStorage) {
+                try {
+                    const raw = window.localStorage.getItem('@abumafhal_user_v1') || window.localStorage.getItem('auth_user');
+                    if (raw) {
+                        const parsed = JSON.parse(raw);
+                        activeUserId = parsed?.id || parsed?.uid;
+                    }
+                } catch (_) {}
+            }
+            if (!activeUserId) {
+                setNotLoggedIn(true);
                 setLoading(false);
                 return;
             }
+            setNotLoggedIn(false);
 
             // Cache retrieval
             try {
@@ -1128,6 +1152,37 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                 <ActivityIndicator size="large" color="#0F172A" />
                 <Text style={{ marginTop: 12, color: '#64748B', fontWeight: '700', fontSize: 13 }}>Securing Wallet Session...</Text>
             </View>
+        );
+    }
+
+    if (notLoggedIn && !loading) {
+        return (
+            <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+                <View style={{ width: 68, height: 68, borderRadius: 34, backgroundColor: '#FEF3C7', justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
+                    <Ionicons name="wallet-outline" size={34} color="#D97706" />
+                </View>
+                <Text style={{ fontSize: 18, fontWeight: '900', color: '#0F172A', textAlign: 'center', marginBottom: 8 }}>
+                    Da Fatan Ka Shiga Asusunka
+                </Text>
+                <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center', lineHeight: 20, marginBottom: 24, maxWidth: 300 }}>
+                    Kuna buƙatar shiga asusunku domin duba kuɗin aljihunku (Wallet Balance), lambar bankin ajiya, da tarihin hada-hadar kuɗi.
+                </Text>
+                <TouchableOpacity
+                    style={{ backgroundColor: '#10B981', paddingVertical: 14, paddingHorizontal: 32, borderRadius: 14, width: '100%', maxWidth: 280, alignItems: 'center', marginBottom: 12 }}
+                    onPress={() => {
+                        if (typeof window !== 'undefined') window.location.href = '/login?redirect=/wallet';
+                        else if (typeof onNavigate === 'function') onNavigate('auth');
+                    }}
+                >
+                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>Shiga Ciki (Login)</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={{ backgroundColor: '#E2E8F0', paddingVertical: 12, paddingHorizontal: 24, borderRadius: 14, width: '100%', maxWidth: 280, alignItems: 'center' }}
+                    onPress={() => { setLoading(true); fetchWalletData(); }}
+                >
+                    <Text style={{ color: '#334155', fontWeight: '700', fontSize: 13 }}>Sake Gwada Dubawa (Refresh)</Text>
+                </TouchableOpacity>
+            </SafeAreaView>
         );
     }
 
