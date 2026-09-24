@@ -1315,6 +1315,32 @@ export const PaymentGatewayService = {
         const cleanEmail = String(email || '').trim().toLowerCase();
         const cleanPhone = String(phone || '').replace(/[^0-9]/g, '');
 
+        // 1. Try serverless backend API first (bypasses browser CORS restrictions completely)
+        try {
+            const baseUrl = (typeof window !== 'undefined' && window.location?.origin) 
+                ? window.location.origin 
+                : 'https://abumafhal.com';
+            const apiRes = await fetch(`${baseUrl}/api/sync-flutterwave-deposits`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: userStr, email: cleanEmail, phone: cleanPhone })
+            });
+            if (apiRes.ok) {
+                const apiJson = await apiRes.json();
+                if (apiJson?.success) {
+                    return {
+                        success: true,
+                        newCreditsCount: apiJson.new_credits_count || 0,
+                        totalNewAmount: apiJson.total_credited || 0,
+                        newTxIds: (apiJson.newly_credited || []).map(t => t.flw_id),
+                        uncreditedTxs: apiJson.newly_credited || []
+                    };
+                }
+            }
+        } catch (apiErr) {
+            console.log('[syncFlutterwaveDeposits] Serverless API call skipped:', apiErr.message);
+        }
+
         try {
             const flwSecret = 'FLWSECK-456331fb55a2e059f1eb8d439c53b9ae-1a07bfbf2fcvt-X';
             const res = await fetch('https://api.flutterwave.com/v3/transactions?status=successful&limit=25', {

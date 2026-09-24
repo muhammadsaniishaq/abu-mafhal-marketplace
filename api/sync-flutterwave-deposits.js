@@ -73,7 +73,7 @@ export default async function handler(req, res) {
             return (matchRef || matchEmail || matchPhone) && t.status === 'successful';
         });
 
-        // 4. Fetch current user balance
+        // 4. Fetch current user profile
         let activeUserId = user_id;
         let currentBalance = 0;
 
@@ -90,11 +90,68 @@ export default async function handler(req, res) {
             }
         }
 
+        if (!activeUserId) {
+            return res.status(200).json({ success: false, error: 'User not found', matched_count: matched.length });
+        }
+
+        // 5. Fetch existing recorded transactions to prevent double crediting
+        const { data: userExistingTxs } = await supabase
+            .from('transactions')
+            .select('reference')
+            .eq('user_id', activeUserId);
+
+        const recordedRefs = new Set((userExistingTxs || []).map(t => String(t.reference || '')));
+
+        let totalNewAmount = 0;
+        const newlyCredited = [];
+
+        for (const t of matched) {
+            const flwRefCode = `FLW-${t.id}`;
+            const clientRef = String(t.tx_ref || '');
+
+            // Check if already in DB
+            const isAlreadyCredited = recordedRefs.has(flwRefCode) || (clientRef && recordedRefs.has(clientRef));
+            if (!isAlreadyCredited) {
+                const amt = Number(t.amount || 0);
+                if (amt > 0) {
+                    totalNewAmount += amt;
+                    newlyCredited.push({
+                        flw_id: t.id,
+                        amount: amt,
+                        reference: flwRefCode
+                    });
+
+                    // Insert transaction record
+                    await supabase.from('transactions').insert({
+                        user_id: activeUserId,
+                        type: 'topup',
+                        amount: amt,
+                        status: 'completed',
+                        reference: flwRefCode,
+                        description: `Bank Transfer Deposit of ₦${amt.toLocaleString()} via Flutterwave MFB (Ref: ${clientRef || flwRefCode})`,
+                        created_at: t.created_at || new Date().toISOString()
+                    });
+
+                    recordedRefs.add(flwRefCode);
+                }
+            }
+        }
+
+        let updatedBalance = currentBalance;
+        if (totalNewAmount > 0) {
+            updatedBalance = currentBalance + totalNewAmount;
+            await supabase.from('profiles').update({ balance: updatedBalance }).eq('id', activeUserId);
+            console.log(`[sync-flutterwave-deposits] Credited ₦${totalNewAmount} to user ${activeUserId}. New Balance: ₦${updatedBalance}`);
+        }
+
         return res.status(200).json({
             success: true,
             user_id: activeUserId,
-            current_balance: currentBalance,
-            matched_transactions: matched
+            current_balance: updatedBalance,
+            total_credited: totalNewAmount,
+            new_credits_count: newlyCredited.length,
+            newly_credited: newlyCredited,
+            matched_transactions_count: matched.length
         });
 
     } catch (err) {

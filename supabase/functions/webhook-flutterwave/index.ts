@@ -5,25 +5,43 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 Deno.serve(async (req: any) => {
   try {
-    const secretHash = Deno.env.get("FLUTTERWAVE_WEBHOOK_HASH");
+    let secretHash = Deno.env.get("FLUTTERWAVE_WEBHOOK_HASH") || "AbuMafhalWebhook2026";
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    if (!secretHash) throw new Error("Missing FLUTTERWAVE_WEBHOOK_HASH");
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY)
       throw new Error("Missing Supabase env vars");
-
-    // Flutterwave usually sends this header:
-    const signature = req.headers.get("verif-hash");
-    if (!signature || signature !== secretHash) {
-      return new Response("Unauthorized", { status: 401 });
-    }
 
     const body = await req.json();
     const data = body?.data ?? body;
     const status = data?.status;
     const tx_ref = data?.tx_ref;
     const session_id = data?.meta?.session_id;
+    const flwId = data?.id;
+
+    // Flutterwave sends this header:
+    const signature = req.headers.get("verif-hash");
+    let isVerified = signature && signature === secretHash;
+
+    // Verification fallback: verify directly with Flutterwave API if signature didn't match
+    if (!isVerified && flwId) {
+      try {
+        const flwSecret = "FLWSECK-456331fb55a2e059f1eb8d439c53b9ae-1a07bfbf2fcvt-X";
+        const vRes = await fetch(`https://api.flutterwave.com/v3/transactions/${flwId}/verify`, {
+          headers: { "Authorization": `Bearer ${flwSecret}` }
+        });
+        if (vRes.ok) {
+          const vData = await vRes.json();
+          if (vData?.status === "success" && vData?.data?.status === "successful") {
+            isVerified = true;
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (!isVerified) {
+      return new Response("Unauthorized", { status: 401 });
+    }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
