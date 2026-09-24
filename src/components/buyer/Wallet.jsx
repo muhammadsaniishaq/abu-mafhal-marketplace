@@ -23,12 +23,6 @@ import {
   Sparkles
 } from 'lucide-react';
 
-const DEDICATED_ACCOUNT = {
-  bankName: 'Flutterwave MFB',
-  accountNumber: '9187255635',
-  accountName: 'Abu Mafhal Valued'
-};
-
 const NIGERIAN_BANKS = [
   'OPay',
   'PalmPay',
@@ -59,6 +53,13 @@ const Wallet = () => {
   const [showBankTransferModal, setShowBankTransferModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
 
+  // Dedicated Virtual Account States (Unique Per User)
+  const [userVirtualAccount, setUserVirtualAccount] = useState(null);
+  const [isGeneratingVa, setIsGeneratingVa] = useState(false);
+  const [vaAmount, setVaAmount] = useState('2500');
+  const [vaError, setVaError] = useState('');
+  const [vaVerifyStatus, setVaVerifyStatus] = useState('');
+
   // Top-up states
   const [topUpAmount, setTopUpAmount] = useState('5000');
   const [topUpGateway, setTopUpGateway] = useState('paystack'); // 'paystack' | 'flutterwave'
@@ -78,6 +79,85 @@ const Wallet = () => {
   const [searchQuery, setSearchQuery] = useState('');
 
   const activeUserId = currentUser?.id || currentUser?.uid;
+
+  // Load existing cached virtual account for this specific user
+  useEffect(() => {
+    if (activeUserId && typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem(`@abumafhal_va_${activeUserId}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed?.account_number && !parsed.account_number.startsWith('980')) {
+            setUserVirtualAccount(parsed);
+          }
+        }
+      } catch (_) {}
+    }
+  }, [activeUserId]);
+
+  // Generate unique dedicated virtual account on Flutterwave
+  const handleGenerateDynamicAccount = async (targetAmt) => {
+    if (!activeUserId) return;
+    setIsGeneratingVa(true);
+    setVaError('');
+    setVaVerifyStatus('');
+    try {
+      const amt = Number(targetAmt || vaAmount) || 1000;
+      const res = await fetch('/api/create-virtual-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: activeUserId,
+          email: currentUser?.email,
+          name: currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0],
+          phone: currentUser?.phone,
+          amount: amt
+        })
+      });
+      const json = await res.json();
+      if (json?.success && json?.data?.account_number) {
+        setUserVirtualAccount(json.data);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(`@abumafhal_va_${activeUserId}`, JSON.stringify(json.data));
+        }
+      } else {
+        setVaError(json?.error || 'Could not generate virtual account. Please try again.');
+      }
+    } catch (err) {
+      setVaError(err.message || 'Connection error. Please try again.');
+    } finally {
+      setIsGeneratingVa(false);
+    }
+  };
+
+  // Verify bank transfer deposit
+  const handleVerifyTransfer = async () => {
+    setRefreshing(true);
+    setVaVerifyStatus('Checking Flutterwave for incoming bank deposit...');
+    try {
+      const syncRes = await fetch('/api/sync-flutterwave-deposits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: activeUserId,
+          email: currentUser?.email,
+          phone: currentUser?.phone
+        })
+      });
+      const syncJson = await syncRes.json();
+      if (syncJson?.total_credited > 0) {
+        setVaVerifyStatus(`🎉 Success! ₦${syncJson.total_credited.toLocaleString()} credited to your wallet!`);
+        await fetchWalletData();
+      } else {
+        setVaVerifyStatus('No new transfer detected yet. Bank transfers usually reflect within 30-90 seconds. If you just transferred, please wait a moment and tap verify again.');
+        await fetchWalletData();
+      }
+    } catch (err) {
+      setVaVerifyStatus('Network check error. Please check your connection.');
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const fetchWalletData = useCallback(async () => {
     if (!activeUserId) {
@@ -393,36 +473,62 @@ const Wallet = () => {
               </span>
             </div>
 
-            <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
-              {DEDICATED_ACCOUNT.bankName}
-            </p>
-
-            {/* Account Number Box */}
-            <div className="mt-3 p-3.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Account Number</p>
-                <p className="text-xl font-black font-mono tracking-widest text-blue-600 dark:text-blue-400">
-                  {DEDICATED_ACCOUNT.accountNumber}
+            {userVirtualAccount ? (
+              <>
+                <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                  {userVirtualAccount.bank_name || 'Flutterwave MFB'}
                 </p>
-              </div>
-              <button
-                onClick={() => handleCopy(DEDICATED_ACCOUNT.accountNumber, 'acc')}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 text-xs font-bold hover:bg-blue-100 transition-colors"
-              >
-                {copiedField === 'acc' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                {copiedField === 'acc' ? 'Copied' : 'Copy'}
-              </button>
-            </div>
 
-            <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mt-2">
-              Name: <span className="font-semibold text-gray-900 dark:text-white">{DEDICATED_ACCOUNT.accountName}</span>
-            </p>
+                {/* Account Number Box */}
+                <div className="mt-3 p-3.5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Account Number</p>
+                    <p className="text-xl font-black font-mono tracking-widest text-blue-600 dark:text-blue-400">
+                      {userVirtualAccount.account_number}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleCopy(userVirtualAccount.account_number, 'acc')}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 text-xs font-bold hover:bg-blue-100 transition-colors"
+                  >
+                    {copiedField === 'acc' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copiedField === 'acc' ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+
+                <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mt-2 truncate">
+                  Name: <span className="font-semibold text-gray-900 dark:text-white">{userVirtualAccount.account_name}</span>
+                </p>
+              </>
+            ) : (
+              <div className="py-2">
+                <p className="text-sm font-bold text-gray-800 dark:text-gray-200">
+                  Instant Bank NUBAN Account
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
+                  Generate your dedicated personal bank account for 100% automated credit from any bank.
+                </p>
+                <button
+                  onClick={() => setShowBankTransferModal(true)}
+                  className="mt-4 w-full py-2.5 px-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 dark:hover:bg-blue-900/60 font-bold text-xs flex items-center justify-center gap-1.5 border border-blue-200 dark:border-blue-800 transition-colors"
+                >
+                  <Building2 className="w-4 h-4" />
+                  Generate Dedicated Account ➔
+                </button>
+              </div>
+            )}
           </div>
 
-          <div className="pt-4 border-t border-gray-100 dark:border-gray-700 mt-4">
-            <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-              Transfer from OPay, PalmPay, Kuda, or your bank app. Your balance credits automatically.
-            </p>
+          <div className="pt-4 border-t border-gray-100 dark:border-gray-700 mt-4 flex items-center justify-between text-xs">
+            <span className="text-gray-500 dark:text-gray-400">Funds reflect automatically</span>
+            {userVirtualAccount && (
+              <button
+                onClick={() => setShowBankTransferModal(true)}
+                className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline"
+              >
+                View Details ➔
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -714,13 +820,16 @@ const Wallet = () => {
       )}
 
       {/* ══════════════════════════════════════════════════════════════
-          MODAL 2: DEDICATED BANK TRANSFER MODAL (VIRTUAL NUBAN)
+          MODAL 2: DEDICATED BANK TRANSFER MODAL (DYNAMIC VIRTUAL NUBAN)
       ══════════════════════════════════════════════════════════════ */}
       {showBankTransferModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fadeIn">
           <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 dark:border-gray-700 relative">
             <button
-              onClick={() => setShowBankTransferModal(false)}
+              onClick={() => {
+                setShowBankTransferModal(false);
+                setVaVerifyStatus('');
+              }}
               className="absolute top-5 right-5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
             >
               <X className="w-5 h-5" />
@@ -730,84 +839,201 @@ const Wallet = () => {
               <h3 className="text-xl font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
                 Dedicated Bank Transfer
                 <span className="text-[10px] font-bold bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300 px-2 py-0.5 rounded-full">
-                  LIVE NUBAN
+                  PERSONAL NUBAN
                 </span>
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Your permanent virtual account. Transfer any amount anytime.
+                Unique dedicated account in your name with 100% automated wallet crediting.
               </p>
             </div>
 
-            <div className="space-y-4">
-              {/* Account Details Box */}
-              <div className="rounded-xl p-5 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-blue-950/40 border border-blue-100 dark:border-blue-900/40">
-                <div className="text-xs font-semibold text-blue-800 dark:text-blue-300 uppercase">
-                  Bank Name
-                </div>
-                <div className="text-base font-bold text-gray-900 dark:text-white mt-0.5">
-                  {DEDICATED_ACCOUNT.bankName}
-                </div>
-
-                <div className="mt-4 flex items-center justify-between bg-white dark:bg-gray-900 p-3.5 rounded-lg border border-blue-200 dark:border-gray-700">
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-gray-400">Account Number</span>
-                    <p className="text-2xl font-black font-mono tracking-widest text-blue-600 dark:text-blue-400">
-                      {DEDICATED_ACCOUNT.accountNumber}
-                    </p>
+            {!userVirtualAccount ? (
+              /* ── STEP 1: CHOOSE AMOUNT & GENERATE ACCOUNT ── */
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-1.5">
+                    How much do you want to deposit?
+                  </label>
+                  <div className="relative rounded-xl shadow-sm">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <span className="text-gray-500 font-bold text-lg">₦</span>
+                    </div>
+                    <input
+                      type="number"
+                      value={vaAmount}
+                      onChange={(e) => setVaAmount(e.target.value)}
+                      placeholder="2500"
+                      min="100"
+                      className="block w-full pl-9 pr-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white font-bold text-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    />
                   </div>
-                  <button
-                    onClick={() => handleCopy(DEDICATED_ACCOUNT.accountNumber, 'modal_acc')}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-white font-bold text-xs hover:bg-blue-500 shadow-sm"
-                  >
-                    {copiedField === 'modal_acc' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    {copiedField === 'modal_acc' ? 'Copied!' : 'Copy'}
-                  </button>
                 </div>
 
-                <div className="mt-3 flex items-center justify-between text-xs">
-                  <span className="text-gray-500 dark:text-gray-400">Account Name:</span>
-                  <span className="font-bold text-gray-900 dark:text-white">{DEDICATED_ACCOUNT.accountName}</span>
+                {/* Preset Chips */}
+                <div>
+                  <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2">Preset Amounts</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {PRESET_AMOUNTS.map((amt) => (
+                      <button
+                        key={amt}
+                        type="button"
+                        onClick={() => setVaAmount(String(amt))}
+                        className={`py-2 px-3 text-xs font-bold rounded-lg border transition-colors ${
+                          vaAmount === String(amt)
+                            ? 'bg-blue-50 text-blue-700 border-blue-500 dark:bg-blue-950 dark:text-blue-300'
+                            : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100 dark:bg-gray-900 dark:text-gray-300 dark:border-gray-700'
+                        }`}
+                      >
+                        ₦{amt.toLocaleString()}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                <div className="mt-2 flex items-center justify-between text-xs">
-                  <span className="text-gray-500 dark:text-gray-400">Narration / Ref:</span>
-                  <span className="font-mono font-bold text-gray-900 dark:text-white">{narrationRef}</span>
-                </div>
-              </div>
+                {vaError && (
+                  <div className="p-3 rounded-lg bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    <span>{vaError}</span>
+                  </div>
+                )}
 
-              {/* Instructions */}
-              <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-700/60 text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
-                Open your banking app (OPay, Kuda, PalmPay, Moniepoint, GTBank, Zenith, Access, etc.) and transfer any amount to the account above. Your Abu Mafhal wallet balance will be credited automatically.
-              </div>
-
-              {/* Refresh Balance Action */}
-              <button
-                type="button"
-                onClick={async () => {
-                  setRefreshing(true);
-                  await fetchWalletData();
-                  alert(`Balance Refreshed! Current balance: ${formatCurrency(balance)}`);
-                }}
-                disabled={refreshing}
-                className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 transition-all"
-              >
-                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-                <span>{refreshing ? 'Checking confirmation...' : '🔄 I Have Transferred • Refresh Balance'}</span>
-              </button>
-
-              <div className="text-center pt-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowBankTransferModal(false);
-                    setShowTopUpModal(true);
-                  }}
-                  className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline"
+                  onClick={() => handleGenerateDynamicAccount(vaAmount)}
+                  disabled={isGeneratingVa}
+                  className="w-full py-3.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 disabled:opacity-70 transition-all"
                 >
-                  Want to pay with ATM Debit Card instead? Click here ➔
+                  {isGeneratingVa ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Generating Your Dedicated NUBAN...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Building2 className="w-4 h-4" />
+                      <span>Generate Dedicated Account for ₦{Number(vaAmount || 0).toLocaleString()}</span>
+                    </>
+                  )}
                 </button>
+
+                <div className="text-center pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowBankTransferModal(false);
+                      setShowTopUpModal(true);
+                    }}
+                    className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
+                  >
+                    Want to pay instantly with ATM Debit Card instead? Click here ➔
+                  </button>
+                </div>
               </div>
-            </div>
+            ) : (
+              /* ── STEP 2: ACTIVE DEDICATED ACCOUNT DISPLAY ── */
+              <div className="space-y-4">
+                <div className="rounded-xl p-5 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-blue-950/40 border border-blue-100 dark:border-blue-900/40">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-[11px] font-semibold text-blue-800 dark:text-blue-300 uppercase">
+                        Bank Name
+                      </div>
+                      <div className="text-base font-bold text-gray-900 dark:text-white mt-0.5">
+                        {userVirtualAccount.bank_name || 'Flutterwave MFB'}
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 px-2 py-0.5 rounded-full">
+                      ACTIVE NUBAN
+                    </span>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between bg-white dark:bg-gray-900 p-3.5 rounded-lg border border-blue-200 dark:border-gray-700">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-gray-400">Account Number</span>
+                      <p className="text-2xl font-black font-mono tracking-widest text-blue-600 dark:text-blue-400">
+                        {userVirtualAccount.account_number}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleCopy(userVirtualAccount.account_number, 'modal_acc')}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-white font-bold text-xs hover:bg-blue-500 shadow-sm transition-all"
+                    >
+                      {copiedField === 'modal_acc' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copiedField === 'modal_acc' ? 'Copied!' : 'Copy'}
+                    </button>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between text-xs">
+                    <span className="text-gray-500 dark:text-gray-400">Account Name:</span>
+                    <span className="font-bold text-gray-900 dark:text-white truncate max-w-[240px]">
+                      {userVirtualAccount.account_name}
+                    </span>
+                  </div>
+
+                  <div className="mt-2 flex items-center justify-between text-xs pt-2 border-t border-blue-100 dark:border-gray-800">
+                    <span className="text-gray-500 dark:text-gray-400">Deposit Amount:</span>
+                    <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                      ₦{Number(userVirtualAccount.amount || vaAmount).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Instructions */}
+                <div className="p-3.5 rounded-xl bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-700/60 text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+                  Open your bank app (OPay, Kuda, PalmPay, Moniepoint, GTBank, Zenith, Access, etc.) and transfer ₦{Number(userVirtualAccount.amount || vaAmount).toLocaleString()} to the account above. Your Abu Mafhal wallet balance credits automatically.
+                </div>
+
+                {vaVerifyStatus && (
+                  <div className={`p-3 rounded-lg text-xs flex items-center gap-2 ${
+                    vaVerifyStatus.includes('🎉') 
+                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' 
+                      : 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                  }`}>
+                    {vaVerifyStatus.includes('🎉') ? (
+                      <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    )}
+                    <span>{vaVerifyStatus}</span>
+                  </div>
+                )}
+
+                {/* Refresh Balance Action */}
+                <button
+                  type="button"
+                  onClick={handleVerifyTransfer}
+                  disabled={refreshing}
+                  className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 transition-all"
+                >
+                  <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                  <span>{refreshing ? 'Checking confirmation with Flutterwave...' : '🔄 I Have Transferred • Verify Deposit'}</span>
+                </button>
+
+                <div className="flex items-center justify-between pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserVirtualAccount(null);
+                      setVaVerifyStatus('');
+                    }}
+                    className="text-xs font-semibold text-gray-500 hover:text-gray-800 dark:hover:text-gray-200"
+                  >
+                    ← Change Amount
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowBankTransferModal(false);
+                      setShowTopUpModal(true);
+                    }}
+                    className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    Pay with Card ➔
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

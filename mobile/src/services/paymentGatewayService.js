@@ -1166,28 +1166,7 @@ export const PaymentGatewayService = {
             }
         } catch (_) {}
 
-        // Special verified account mapping for founder / admin (Real live Flutterwave MFB NUBAN)
-        if (userEmail.toLowerCase().includes('sani') || userEmail.toLowerCase().includes('muhammad') || userEmail.toLowerCase().includes('sale')) {
-            const founderVA = {
-                account_number: '9187255635',
-                account_name: 'Abu Mafhal Valued',
-                bank_name: 'Flutterwave MFB (Formerly OK MFB)',
-                provider: 'flutterwave',
-                is_permanent: true,
-                tx_ref: `AMF-DVA-${userStr.substring(0, 8).toUpperCase()}`,
-                expiry: null,
-                expiry_ms: null,
-                created_at: '2026-09-24T00:00:00.000Z'
-            };
-            try {
-                if (AsyncStorage) {
-                    await AsyncStorage.setItem(`@abumafhal_dedicated_va_${userStr}`, JSON.stringify(founderVA));
-                }
-            } catch (_) {}
-            return { ok: true, data: { success: true, data: founderVA } };
-        }
-
-        // 2. Query backend endpoint or call Flutterwave API
+        // 1. Query backend endpoint or call Flutterwave API to generate/retrieve unique account
         try {
             const apiBase = Platform.OS === 'web' && typeof window !== 'undefined'
                 ? window.location.origin
@@ -1196,7 +1175,7 @@ export const PaymentGatewayService = {
             const res = await fetch(`${apiBase}/api/create-virtual-account`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: userStr, email: userEmail, name, phone })
+                body: JSON.stringify({ user_id: userStr, email: userEmail, name, phone, amount: 1000 })
             });
 
             if (res.ok) {
@@ -1214,10 +1193,11 @@ export const PaymentGatewayService = {
             console.log('[PaymentGatewayService] Server VA fetch notice:', apiErr.message);
         }
 
-        // 3. Direct live call to Flutterwave API if backend unreachable
+        // 2. Direct live call to Flutterwave API if backend endpoint unreachable
         try {
             const flwSecret = 'FLWSECK-456331fb55a2e059f1eb8d439c53b9ae-1a07bfbf2fcvt-X';
-            const txRef = `AMF-VA-${userStr.substring(0, 8)}-${Date.now()}`;
+            const userSlug = userStr.replace(/[^a-zA-Z0-9]/g, '').slice(0, 10).toUpperCase();
+            const txRef = `AMF-${userSlug}-${Date.now()}`;
             const flwRes = await fetch('https://api.flutterwave.com/v3/virtual-account-numbers', {
                 method: 'POST',
                 headers: {
@@ -1226,8 +1206,8 @@ export const PaymentGatewayService = {
                 },
                 body: JSON.stringify({
                     email: userEmail,
-                    is_permanent: true,
-                    bvn: '22222222222',
+                    is_permanent: false,
+                    amount: 1000,
                     tx_ref: txRef,
                     phonenumber: phone || '08000000000',
                     firstname: firstName,
@@ -1251,7 +1231,7 @@ export const PaymentGatewayService = {
                         provider: 'flutterwave',
                         is_permanent: true,
                         tx_ref: txRef,
-                        expiry: null,
+                        expiry: d.expiry_date,
                         expiry_ms: null,
                         created_at: d.created_at || new Date().toISOString()
                     };
@@ -1269,31 +1249,9 @@ export const PaymentGatewayService = {
             console.log('[PaymentGatewayService] Direct FLW call error:', flwErr.message);
         }
 
-        // Live verified permanent account fallback
-        const permanentLiveVA = {
-            account_number: '9176335569',
-            account_name: `Abu Mafhal Dedicated FLW`,
-            bank_name: 'Flutterwave MFB (Formerly OK MFB)',
-            provider: 'flutterwave',
-            is_permanent: true,
-            tx_ref: `AMF-DVA-${userStr.substring(0, 8).toUpperCase()}`,
-            expiry: null,
-            expiry_ms: null,
-            created_at: '2026-09-23T23:04:02.000Z'
-        };
-
-        try {
-            if (AsyncStorage) {
-                await AsyncStorage.setItem(`@abumafhal_dedicated_va_${userStr}`, JSON.stringify(permanentLiveVA));
-            }
-        } catch (_) {}
-
         return {
-            ok: true,
-            data: {
-                success: true,
-                data: permanentLiveVA
-            }
+            ok: false,
+            error: 'Could not generate dedicated virtual account. Please check internet connection.'
         };
     },
 

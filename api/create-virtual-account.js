@@ -22,20 +22,43 @@ export default async function handler(req, res) {
             user_id,
             email,
             name,
-            phone
+            phone,
+            amount
         } = body;
 
-        const userEmail = (email && email.includes('@')) ? email.trim() : `user_${String(user_id || 'wallet').substring(0, 8)}@abumafhal.com`;
-        const userName = (name || 'Valued Member').trim();
-        const userPhone = phone || '08000000000';
-        const nameParts = userName.split(/\s+/);
+        if (!user_id && !email) {
+            return res.status(400).json({ success: false, error: 'Missing user_id or email' });
+        }
+
+        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // Fetch live user info from profiles if missing
+        let targetEmail = email;
+        let targetName = name;
+        let targetPhone = phone;
+
+        if (user_id && (!targetEmail || !targetName)) {
+            const { data: p } = await supabase.from('profiles').select('email, full_name, phone').eq('id', user_id).maybeSingle();
+            if (p) {
+                if (!targetEmail) targetEmail = p.email;
+                if (!targetName) targetName = p.full_name;
+                if (!targetPhone) targetPhone = p.phone;
+            }
+        }
+
+        const cleanEmail = (targetEmail && targetEmail.includes('@')) 
+            ? targetEmail.trim().toLowerCase() 
+            : `user_${String(user_id || 'wallet').substring(0, 8)}@abumafhal.com`;
+        
+        const cleanName = (targetName || 'Valued Member').trim();
+        const cleanPhone = (targetPhone || '08000000000').replace(/[^0-9]/g, '');
+        const nameParts = cleanName.split(/\s+/);
         const firstName = nameParts[0] || 'Member';
         const lastName = nameParts.slice(1).join(' ') || 'Customer';
 
-        // 1. Fetch live Flutterwave secret key from app_settings or env
+        // Fetch Flutterwave secret key
         let flwSecret = process.env.FLUTTERWAVE_SECRET_KEY || process.env.EXPO_PUBLIC_FLUTTERWAVE_SECRET_KEY;
         try {
-            const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             const { data: rows } = await supabase.from('app_settings').select('*');
             if (rows && Array.isArray(rows)) {
                 for (const r of rows) {
@@ -52,88 +75,74 @@ export default async function handler(req, res) {
             flwSecret = 'FLWSECK-456331fb55a2e059f1eb8d439c53b9ae-1a07bfbf2fcvt-X';
         }
 
-        const userStr = String(user_id || 'USR');
-        const txRef = `AMF-DVA-${userStr.substring(0, 8).toUpperCase()}`;
+        const reqAmount = Math.max(100, Number(amount) || 1000);
+        const userSlug = String(user_id || cleanEmail).replace(/[^a-zA-Z0-9]/g, '').slice(0, 10).toUpperCase();
+        const txRef = `AMF-${userSlug}-${Date.now()}`;
 
-        // 2. Call Flutterwave Live API to create or fetch real permanent virtual account
-        try {
-            const flwRes = await fetch('https://api.flutterwave.com/v3/virtual-account-numbers', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${flwSecret.trim()}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    email: userEmail,
-                    is_permanent: true,
-                    bvn: '22222222222',
-                    tx_ref: txRef,
-                    phonenumber: userPhone,
-                    firstname: firstName,
-                    lastname: lastName,
-                    narration: `Abu Mafhal ${firstName}`
-                })
-            });
+        // Call Flutterwave API to create unique dynamic virtual account for this specific user
+        const flwRes = await fetch('https://api.flutterwave.com/v3/virtual-account-numbers', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${flwSecret.trim()}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                email: cleanEmail,
+                is_permanent: false,
+                amount: reqAmount,
+                tx_ref: txRef,
+                phonenumber: cleanPhone,
+                firstname: firstName,
+                lastname: lastName,
+                narration: `Abu Mafhal ${firstName}`
+            })
+        });
 
-            if (flwRes.ok) {
-                const flwData = await flwRes.json();
-                if (flwData?.status === 'success' && flwData?.data?.account_number) {
-                    const d = flwData.data;
-                    const cleanedName = d.note 
-                        ? d.note.replace(/^Please make a bank transfer to\s+/i, '').trim()
-                        : `Abu Mafhal ${firstName} FLW`;
+        const flwData = await flwRes.json();
 
-                    return res.status(200).json({
-                        success: true,
-                        data: {
-                            account_number: d.account_number,
-                            account_name: cleanedName,
-                            bank_name: d.bank_name || 'Flutterwave MFB (Formerly OK MFB)',
-                            order_ref: d.order_ref,
-                            flw_ref: d.flw_ref,
-                            tx_ref: txRef,
-                            is_permanent: true,
-                            expiry: null,
-                            expiry_ms: null,
-                            provider: 'flutterwave',
-                            created_at: d.created_at || new Date().toISOString()
-                        }
+        if (flwData?.status === 'success' && flwData?.data?.account_number) {
+            const d = flwData.data;
+            const accountName = d.note 
+                ? d.note.replace(/^Please make a bank transfer to\s+/i, '').trim()
+                : `Abu Mafhal ${firstName} FLW`;
+
+            // Record in virtual_accounts table for reference
+            try {
+                if (user_id) {
+                    await supabase.from('virtual_accounts').insert({
+                        user_id: user_id,
+                        bank_name: d.bank_name || 'Flutterwave MFB',
+                        account_number: d.account_number,
+                        account_name: accountName,
+                        provider: 'flutterwave',
+                        currency: 'NGN'
                     });
                 }
+            } catch (dbErr) {
+                console.warn('[create-virtual-account] DB insert note:', dbErr.message);
             }
-        } catch (apiErr) {
-            console.error('[API create-virtual-account Flutterwave call failed]', apiErr);
-        }
 
-        // Verified live Flutterwave MFB account for founder / admin or fallback
-        if (userEmail.toLowerCase().includes('sani') || userEmail.toLowerCase().includes('muhammad')) {
             return res.status(200).json({
                 success: true,
                 data: {
-                    account_number: '9137333636',
-                    account_name: 'Abu Mafhal Sani FLW',
-                    bank_name: 'Flutterwave MFB (Formerly OK MFB)',
-                    is_permanent: true,
-                    expiry: null,
-                    expiry_ms: null,
+                    account_number: d.account_number,
+                    account_name: accountName,
+                    bank_name: d.bank_name || 'Flutterwave MFB',
+                    amount: reqAmount,
+                    expected_amount: d.amount || reqAmount,
+                    order_ref: d.order_ref,
+                    flw_ref: d.flw_ref,
+                    tx_ref: txRef,
+                    expiry_date: d.expiry_date,
                     provider: 'flutterwave',
-                    created_at: '2026-09-23T23:21:11.000Z'
+                    created_at: d.created_at || new Date().toISOString()
                 }
             });
         }
 
-        return res.status(200).json({
-            success: true,
-            data: {
-                account_number: '9176335569',
-                account_name: `Abu Mafhal Dedicated FLW`,
-                bank_name: 'Flutterwave MFB (Formerly OK MFB)',
-                is_permanent: true,
-                expiry: null,
-                expiry_ms: null,
-                provider: 'flutterwave',
-                created_at: '2026-09-23T23:04:02.000Z'
-            }
+        return res.status(400).json({
+            success: false,
+            error: flwData?.message || 'Could not generate virtual account from payment gateway'
         });
 
     } catch (err) {

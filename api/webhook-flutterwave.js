@@ -60,27 +60,32 @@ export default async function handler(req, res) {
             const depositAmt = Number(data?.amount || 0);
             const custEmail = (data?.customer?.email || '').trim().toLowerCase();
             const custPhone = (data?.customer?.phone_number || '').replace(/[^0-9]/g, '');
-
             let targetUser = null;
 
-            // 1. Match by email
-            if (custEmail) {
+            // 1. Match by email first (direct exact match on user profile email)
+            if (custEmail && custEmail.includes('@')) {
                 const { data: u } = await supabase.from('profiles').select('id, balance, email').eq('email', custEmail).maybeSingle();
                 if (u) targetUser = u;
             }
 
-            // 2. Match by tx_ref prefix (e.g. AMF-DVA-6D3DF1F5)
-            if (!targetUser && tx_ref && tx_ref.startsWith('AMF-DVA-')) {
-                const prefix = tx_ref.replace('AMF-DVA-', '').split('-')[0].toLowerCase();
-                const { data: users } = await supabase.from('profiles').select('id, balance');
-                if (users && Array.isArray(users)) {
-                    targetUser = users.find(u => u.id.toLowerCase().startsWith(prefix));
+            // 2. Match by tx_ref prefix (e.g. AMF-8F429903-1727... or AMF-DVA-6D3DF1F5)
+            if (!targetUser && tx_ref && tx_ref.startsWith('AMF-')) {
+                const cleanRef = tx_ref.replace(/^AMF-(DVA-)?/i, '');
+                const token = cleanRef.split('-')[0].toLowerCase().trim();
+                if (token && token.length >= 4) {
+                    const { data: users } = await supabase.from('profiles').select('id, balance, email');
+                    if (users && Array.isArray(users)) {
+                        targetUser = users.find(u => {
+                            const rawId = u.id.replace(/-/g, '').toLowerCase();
+                            return rawId.startsWith(token) || rawId.includes(token);
+                        });
+                    }
                 }
             }
 
-            // 3. Match by phone
-            if (!targetUser && custPhone && custPhone.length >= 7) {
-                const { data: users } = await supabase.from('profiles').select('id, balance, phone');
+            // 3. Match by phone if still not resolved
+            if (!targetUser && custPhone && custPhone.length >= 9) {
+                const { data: users } = await supabase.from('profiles').select('id, balance, phone, email');
                 if (users && Array.isArray(users)) {
                     targetUser = users.find(u => u.phone && u.phone.replace(/[^0-9]/g, '').includes(custPhone));
                 }
@@ -104,15 +109,6 @@ export default async function handler(req, res) {
                 return res.status(200).json({ status: 'already_processed', tx_id: existingTx.id });
             }
 
-            const FOUNDER_EMAILS = [
-                'sale.abumafhal@gmail.com',
-                'muhammadsanishaq@gmail.com',
-                'abumafhalhub@gmail.com',
-                'muhammadsanish0@gmail.com',
-                'ceo@abumafhal.com',
-                'muhammadsaniisyaku3@gmail.com'
-            ];
-
             if (depositAmt > 0) {
                 const newBal = Number(targetUser.balance || 0) + depositAmt;
                 await supabase.from('profiles').update({ balance: newBal }).eq('id', targetUser.id);
@@ -125,29 +121,7 @@ export default async function handler(req, res) {
                     description: `Bank Transfer Deposit of ₦${depositAmt.toLocaleString()} via Flutterwave MFB (Ref: ${tx_ref || refCode})`
                 });
 
-                // If user is founder/admin, also sync other founder profiles so they never see zero on any device
-                if (FOUNDER_EMAILS.includes(targetUser.email?.toLowerCase())) {
-                    for (const fEmail of FOUNDER_EMAILS) {
-                        if (fEmail !== targetUser.email?.toLowerCase()) {
-                            try {
-                                const { data: fp } = await supabase.from('profiles').select('id, balance').eq('email', fEmail).maybeSingle();
-                                if (fp) {
-                                    await supabase.from('profiles').update({ balance: Number(fp.balance || 0) + depositAmt }).eq('id', fp.id);
-                                    await supabase.from('transactions').insert({
-                                        user_id: fp.id,
-                                        type: 'topup',
-                                        amount: depositAmt,
-                                        status: 'completed',
-                                        reference: refCode,
-                                        description: `Bank Transfer Deposit of ₦${depositAmt.toLocaleString()} via Flutterwave MFB (Ref: ${tx_ref || refCode})`
-                                    });
-                                }
-                            } catch (_) {}
-                        }
-                    }
-                }
-
-                console.log(`[Webhook FLW] Successfully credited ₦${depositAmt} to user ${targetUser.id}. New Balance: ₦${newBal}`);
+                console.log(`[Webhook FLW] Successfully credited ₦${depositAmt} to user ${targetUser.id} (${targetUser.email}). New Balance: ₦${newBal}`);
                 return res.status(200).json({
                     success: true,
                     credited: depositAmt,
