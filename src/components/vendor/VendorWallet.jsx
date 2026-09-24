@@ -33,42 +33,43 @@ const VendorWallet = () => {
 
   const fetchWalletData = async () => {
     try {
-      // Fetch vendor wallet
-      const { data: walletData, error: walletError } = await supabase
-        .from('vendor_wallets')
-        .select('*')
-        .eq('vendor_id', currentUser.uid)
-        .single();
-
-      if (walletError && walletError.code !== 'PGRST116') throw walletError;
-      if (walletData) {
-        setWallet({
-          balance: walletData.balance || 0,
-          totalEarnings: walletData.total_earnings || walletData.totalEarnings || 0,
-          pendingPayouts: walletData.pending_payouts || walletData.pendingPayouts || 0,
-          totalPayouts: walletData.total_payouts || walletData.totalPayouts || 0
-        });
+      const vendorId = currentUser?.id || currentUser?.uid;
+      if (!vendorId) {
+        setLoading(false);
+        return;
       }
 
-      // Fetch transactions
-      const { data: transactionsData, error: transactionsError } = await supabase
-        .from('wallet_transactions')
-        .select('*')
-        .eq('vendor_id', currentUser.uid)
-        .order('created_at', { ascending: false });
+      // Fetch profile balance & transactions
+      const [pRes, txRes] = await Promise.allSettled([
+        supabase.from('profiles').select('balance').eq('id', vendorId).maybeSingle(),
+        supabase.from('transactions').select('*').eq('user_id', vendorId).order('created_at', { ascending: false }).limit(50)
+      ]);
 
-      if (transactionsError) throw transactionsError;
-      setTransactions(transactionsData || []);
+      const profileBal = Number(pRes.status === 'fulfilled' ? pRes.value?.data?.balance : 0) || 0;
+      const txData = txRes.status === 'fulfilled' && Array.isArray(txRes.value?.data) ? txRes.value.data : [];
 
-      // Fetch payouts
-      const { data: payoutsData, error: payoutsError } = await supabase
-        .from('vendor_payouts')
-        .select('*')
-        .eq('vendor_id', currentUser.uid)
-        .order('created_at', { ascending: false });
+      let ledgerBal = 0;
+      if (txData.length > 0) {
+        const totalCredits = txData
+          .filter(t => (t.type === 'topup' || t.type === 'credit' || t.type === 'deposit') && (t.status === 'completed' || t.status === 'successful'))
+          .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+        const totalDebits = txData
+          .filter(t => (t.type === 'withdrawal' || t.type === 'debit' || t.type === 'wallet_payment' || t.type === 'wallet_purchase') && (t.status === 'completed' || t.status === 'successful'))
+          .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+        ledgerBal = Math.max(0, totalCredits - totalDebits);
+      }
 
-      if (payoutsError) throw payoutsError;
-      setPayouts(payoutsData || []);
+      const effectiveBal = Math.max(profileBal, ledgerBal);
+
+      setWallet({
+        balance: effectiveBal,
+        totalEarnings: effectiveBal,
+        pendingPayouts: 0,
+        totalPayouts: 0
+      });
+
+      setTransactions(txData);
+      setPayouts([]);
 
       // Calculate earnings over time
       const earningsByDate = {};

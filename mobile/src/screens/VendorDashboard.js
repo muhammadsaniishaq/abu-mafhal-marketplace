@@ -74,8 +74,8 @@ export const VendorDashboard = ({ user, onLogout }) => {
             if (vendorData) setVendor({ ...vendorData, delivery_type: deliveryType });
 
             // 2. Fetch Wallet
-            const { data: walletData } = await supabase.from('wallets').select('*').eq('user_id', user.id).maybeSingle();
-            if (walletData) setWallet(walletData);
+            const { data: profileData } = await supabase.from('profiles').select('balance').eq('id', user.id).maybeSingle();
+            setWallet({ balance: Number(profileData?.balance || 0), total_sales: 0 });
 
             // 3. Fetch Products
             const { data: productsData } = await supabase

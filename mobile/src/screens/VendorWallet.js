@@ -16,12 +16,13 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
 
     const fetchWalletDirect = async () => {
         try {
-            // 1. Get wallet row
-            const { data: walletData, error: walletErr } = await supabase
-                .from('wallets')
-                .select('*')
-                .eq('user_id', user.id)
-                .maybeSingle();
+            // 1. Get vendor profile balance & transactions
+            const [pRes, txRes] = await Promise.allSettled([
+                supabase.from('profiles').select('balance').eq('id', user.id).maybeSingle(),
+                supabase.from('transactions').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50)
+            ]);
+            const pBal = Number(pRes.status === 'fulfilled' ? pRes.value?.data?.balance : 0) || 0;
+
             // 2. Get vendor orders to calculate pending amount (non‑delivered, non‑cancelled)
             const { data: ordersData, error: ordersErr } = await supabase.rpc('get_vendor_dashboard_orders', { p_vendor_id: user.id });
             let pendingSum = 0;
@@ -33,11 +34,22 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                     }
                 });
             }
-            if (walletErr) console.log('Wallet fetch error:', walletErr.message);
+
+            let ledgerBal = 0;
+            if (txRes.status === 'fulfilled' && Array.isArray(txRes.value?.data)) {
+                const totalCredits = txRes.value.data
+                    .filter(t => (t.type === 'topup' || t.type === 'credit' || t.type === 'deposit') && (t.status === 'completed' || t.status === 'successful'))
+                    .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+                const totalDebits = txRes.value.data
+                    .filter(t => (t.type === 'withdrawal' || t.type === 'debit' || t.type === 'wallet_payment' || t.type === 'wallet_purchase') && (t.status === 'completed' || t.status === 'successful'))
+                    .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+                ledgerBal = Math.max(0, totalCredits - totalDebits);
+            }
+            const effectiveBalance = Math.max(pBal, ledgerBal);
+
             if (ordersErr) console.log('Orders fetch error for pending:', ordersErr.message);
             const merged = {
-                balance: 0,
-                ...(walletData || {}),
+                balance: effectiveBalance,
                 pending_balance: pendingSum,
             };
             setLocalWallet(merged);

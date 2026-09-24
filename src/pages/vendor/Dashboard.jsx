@@ -14,20 +14,21 @@ export default function VendorDashboard() {
     const { currentUser } = useAuth();
     
     // 🚀 SWR Caching: Load from localStorage instantly, fetch in background
+    const vendorId = currentUser?.id || currentUser?.uid;
     const fetchStats = async () => {
-        if (!currentUser?.uid) return null;
-        const products = await vendorService.getVendorProducts(currentUser.uid);
-        const wallet = await vendorService.getWalletStats(currentUser.uid);
+        if (!vendorId) return null;
+        const products = await vendorService.getVendorProducts(vendorId);
+        const wallet = await vendorService.getWalletStats(vendorId);
         return {
             products: products?.length || 0,
             orders: 0, // Placeholder
-            balance: wallet.balance || 0,
+            balance: wallet?.balance || 0,
             pending: 0
         };
     };
 
     const { data: stats, loading } = useDataCache(
-        `vendor_stats_${currentUser?.uid}`, 
+        `vendor_stats_${vendorId}`, 
         fetchStats, 
         { products: 0, orders: 0, balance: 0, pending: 0 }
     );

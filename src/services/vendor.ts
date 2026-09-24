@@ -132,18 +132,18 @@ export const vendorService = {
      * Get Wallet Stats
      */
     async getWalletStats(vendorId: string) {
-        // WALLETS table uses USER_ID as per schema audit
+        // PROFILES table stores the authentic balance
         const { data, error } = await supabase
-            .from('wallets')
-            .select('*')
-            .eq('user_id', vendorId) // Confirmed: wallets table logic uses user_id
+            .from('profiles')
+            .select('balance')
+            .eq('id', vendorId)
             .maybeSingle();
 
-        if (error) throw error;
+        if (error) {
+            console.warn('Error fetching profile balance:', error.message);
+            return { balance: 0, currency: 'NGN' };
+        }
 
-        // If no wallet exists, return mock or create one (optional)
-        if (!data) return { balance: 0, currency: 'NGN' };
-
-        return data;
+        return { balance: Number(data?.balance || 0), currency: 'NGN' };
     }
 };
