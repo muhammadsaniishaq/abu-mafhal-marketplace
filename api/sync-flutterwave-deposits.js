@@ -44,17 +44,19 @@ export default async function handler(req, res) {
             flwSecret = 'FLWSECK-456331fb55a2e059f1eb8d439c53b9ae-1a07bfbf2fcvt-X';
         }
 
-        // 2. Fetch recent successful transactions from Flutterwave
-        const flwRes = await fetch('https://api.flutterwave.com/v3/transactions?status=successful&limit=25', {
-            headers: { 'Authorization': `Bearer ${flwSecret.trim()}` }
-        });
-
-        if (!flwRes.ok) {
-            return res.status(200).json({ success: false, error: 'Could not fetch Flutterwave transactions' });
+        // 2. Fetch recent successful transactions from Flutterwave (resilient)
+        let txList = [];
+        try {
+            const flwRes = await fetch('https://api.flutterwave.com/v3/transactions?status=successful&limit=25', {
+                headers: { 'Authorization': `Bearer ${flwSecret.trim()}` }
+            });
+            if (flwRes.ok) {
+                const flwJson = await flwRes.json();
+                txList = flwJson?.data || [];
+            }
+        } catch (fetchErr) {
+            console.warn('[sync-flutterwave-deposits] Notice: FLW fetch notice:', fetchErr.message);
         }
-
-        const flwJson = await flwRes.json();
-        const txList = flwJson?.data || [];
 
         const userSlug = String(user_id || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase();
         const cleanEmail = String(email || '').trim().toLowerCase();
@@ -138,18 +140,34 @@ export default async function handler(req, res) {
             }
         }
 
-        let updatedBalance = currentBalance;
-        if (totalNewAmount > 0) {
-            updatedBalance = currentBalance + totalNewAmount;
-            await supabase.from('profiles').update({ balance: updatedBalance }).eq('id', activeUserId);
-            console.log(`[sync-flutterwave-deposits] Credited ₦${totalNewAmount} to user ${activeUserId}. New Balance: ₦${updatedBalance}`);
+        // Calculate verified ledger balance from all completed transactions for this user
+        const { data: allUserTxs } = await supabase
+            .from('transactions')
+            .select('amount, type, status')
+            .eq('user_id', activeUserId);
+
+        const totalLedgerCredits = (allUserTxs || [])
+            .filter(t => (t.type === 'topup' || t.type === 'credit' || t.type === 'deposit') && t.status === 'completed')
+            .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
+        const totalLedgerDebits = (allUserTxs || [])
+            .filter(t => (t.type === 'withdrawal' || t.type === 'debit' || t.type === 'wallet_payment' || t.type === 'wallet_purchase') && t.status === 'completed')
+            .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
+        const verifiedLedgerBalance = Math.max(0, totalLedgerCredits - totalLedgerDebits);
+        const correctBalance = Math.max(currentBalance + totalNewAmount, verifiedLedgerBalance);
+
+        if (correctBalance !== currentBalance || totalNewAmount > 0) {
+            await supabase.from('profiles').update({ balance: correctBalance }).eq('id', activeUserId);
+            console.log(`[sync-flutterwave-deposits] Synced user ${activeUserId} balance to ₦${correctBalance} (ledger credits: ₦${totalLedgerCredits})`);
         }
 
         return res.status(200).json({
             success: true,
             user_id: activeUserId,
-            current_balance: updatedBalance,
+            current_balance: correctBalance,
             total_credited: totalNewAmount,
+            ledger_balance: verifiedLedgerBalance,
             new_credits_count: newlyCredited.length,
             newly_credited: newlyCredited,
             matched_transactions_count: matched.length

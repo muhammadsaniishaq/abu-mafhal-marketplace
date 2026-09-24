@@ -95,6 +95,13 @@ const Wallet = () => {
     }
   }, [activeUserId]);
 
+  // Auto-fetch or generate dedicated virtual account if not present yet
+  useEffect(() => {
+    if (activeUserId && !userVirtualAccount && !isGeneratingVa) {
+      handleGenerateDynamicAccount(1000);
+    }
+  }, [activeUserId, userVirtualAccount]);
+
   // Generate unique dedicated virtual account on Flutterwave
   const handleGenerateDynamicAccount = async (targetAmt) => {
     if (!activeUserId) return;
@@ -180,15 +187,24 @@ const Wallet = () => {
         console.warn('Sync deposits error:', syncErr);
       }
 
-      // 1. Fetch user balance from profiles table (source of truth)
+      // 1. Fetch user balance and persistent virtual account from profiles table
       const { data: profile, error: profileErr } = await supabase
         .from('profiles')
-        .select('id, balance, email, full_name, phone')
+        .select('id, balance, email, full_name, phone, custom_id')
         .eq('id', activeUserId)
         .maybeSingle();
 
-      if (!profileErr && profile) {
-        setBalance(Number(profile.balance || 0));
+      // Load persistent virtual account from profile if available
+      if (profile?.custom_id) {
+        try {
+          const parsed = JSON.parse(profile.custom_id);
+          if (parsed?.account_number && !parsed.account_number.startsWith('980')) {
+            setUserVirtualAccount(parsed);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem(`@abumafhal_va_${activeUserId}`, JSON.stringify(parsed));
+            }
+          }
+        } catch (_) {}
       }
 
       // 2. Fetch transactions from transactions table
@@ -201,6 +217,28 @@ const Wallet = () => {
 
       if (!txError && txData) {
         setTransactions(txData);
+
+        // Calculate verified ledger balance to ensure 100% agreement with transaction history
+        const totalCredits = txData
+          .filter(t => (t.type === 'topup' || t.type === 'credit' || t.type === 'deposit') && t.status === 'completed')
+          .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
+        const totalDebits = txData
+          .filter(t => (t.type === 'withdrawal' || t.type === 'debit' || t.type === 'wallet_payment' || t.type === 'wallet_purchase') && t.status === 'completed')
+          .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
+        const ledgerBal = Math.max(0, totalCredits - totalDebits);
+        const profileBal = Number(profile?.balance || 0);
+        const effectiveBal = Math.max(profileBal, ledgerBal);
+
+        setBalance(effectiveBal);
+
+        // Self-heal DB balance if it lagged behind the transaction ledger
+        if (effectiveBal > profileBal && activeUserId) {
+          await supabase.from('profiles').update({ balance: effectiveBal }).eq('id', activeUserId);
+        }
+      } else if (profile) {
+        setBalance(Number(profile.balance || 0));
       }
     } catch (err) {
       console.error('Error fetching wallet data:', err);

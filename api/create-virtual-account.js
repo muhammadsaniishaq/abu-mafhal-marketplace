@@ -32,18 +32,35 @@ export default async function handler(req, res) {
 
         const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        // Fetch live user info from profiles if missing
         let targetEmail = email;
         let targetName = name;
         let targetPhone = phone;
 
-        if (user_id && (!targetEmail || !targetName)) {
-            const { data: p } = await supabase.from('profiles').select('email, full_name, phone').eq('id', user_id).maybeSingle();
+        // Check profiles for existing dedicated virtual account
+        let existingVA = null;
+        if (user_id) {
+            const { data: p } = await supabase.from('profiles').select('email, full_name, phone, custom_id').eq('id', user_id).maybeSingle();
             if (p) {
                 if (!targetEmail) targetEmail = p.email;
                 if (!targetName) targetName = p.full_name;
                 if (!targetPhone) targetPhone = p.phone;
+                if (p.custom_id) {
+                    try {
+                        const parsed = JSON.parse(p.custom_id);
+                        if (parsed && parsed.account_number && !parsed.account_number.startsWith('980')) {
+                            existingVA = parsed;
+                        }
+                    } catch (_) {}
+                }
             }
+        }
+
+        // If user already has an active dedicated virtual account, return it immediately!
+        if (existingVA && !body.force_refresh) {
+            return res.status(200).json({
+                success: true,
+                data: existingVA
+            });
         }
 
         const cleanEmail = (targetEmail && targetEmail.includes('@')) 
@@ -106,7 +123,32 @@ export default async function handler(req, res) {
                 ? d.note.replace(/^Please make a bank transfer to\s+/i, '').trim()
                 : `Abu Mafhal ${firstName} FLW`;
 
-            // Record in virtual_accounts table for reference
+            const vaPayload = {
+                account_number: d.account_number,
+                account_name: accountName,
+                bank_name: d.bank_name || 'Flutterwave MFB',
+                amount: reqAmount,
+                expected_amount: d.amount || reqAmount,
+                order_ref: d.order_ref,
+                flw_ref: d.flw_ref,
+                tx_ref: txRef,
+                expiry_date: d.expiry_date,
+                provider: 'flutterwave',
+                created_at: d.created_at || new Date().toISOString()
+            };
+
+            // Save in profiles table so it persists across all devices and logins
+            try {
+                if (user_id) {
+                    await supabase.from('profiles').update({
+                        custom_id: JSON.stringify(vaPayload)
+                    }).eq('id', user_id);
+                }
+            } catch (pErr) {
+                console.warn('[create-virtual-account] Profile save notice:', pErr.message);
+            }
+
+            // Also record in virtual_accounts table if permitted
             try {
                 if (user_id) {
                     await supabase.from('virtual_accounts').insert({
