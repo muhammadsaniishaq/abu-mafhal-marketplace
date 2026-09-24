@@ -62,7 +62,18 @@ export default async function handler(req, res) {
         const cleanEmail = String(email || '').trim().toLowerCase();
         const cleanPhone = String(phone || '').replace(/[^0-9]/g, '');
 
-        // 3. Match user transactions strictly for this user
+        const FOUNDER_EMAILS = [
+            'sale.abumafhal@gmail.com',
+            'muhammadsanishaq@gmail.com',
+            'abumafhalhub@gmail.com',
+            'muhammadsanish0@gmail.com',
+            'ceo@abumafhal.com',
+            'muhammadsaniisyaku3@gmail.com'
+        ];
+
+        const isFounder = FOUNDER_EMAILS.includes(cleanEmail) || ['6D3DF1F5', '8F429903', '9F58F703', '5B5CF3AE'].includes(userSlug);
+
+        // 3. Match user transactions
         const matched = txList.filter(t => {
             if (t.status !== 'successful') return false;
             const txRef = String(t.tx_ref || '').toUpperCase();
@@ -73,7 +84,13 @@ export default async function handler(req, res) {
             const matchEmail = cleanEmail && cleanEmail.includes('@') && custEmail === cleanEmail;
             const matchPhone = cleanPhone && cleanPhone.length >= 9 && (custPhone.includes(cleanPhone) || cleanPhone.includes(custPhone));
 
-            return matchRef || matchEmail || matchPhone;
+            // If founder is logged in, also match deposits made to the founder permanent account 9187255635
+            const matchFounder = isFounder && (
+                txRef.includes('6D3DF1F5') ||
+                FOUNDER_EMAILS.includes(custEmail)
+            );
+
+            return matchRef || matchEmail || matchPhone || matchFounder;
         });
 
         // 4. Fetch current user profile

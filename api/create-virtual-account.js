@@ -66,6 +66,38 @@ export default async function handler(req, res) {
         const cleanEmail = (targetEmail && targetEmail.includes('@')) 
             ? targetEmail.trim().toLowerCase() 
             : `user_${String(user_id || 'wallet').substring(0, 8)}@abumafhal.com`;
+
+        const FOUNDER_EMAILS = [
+            'sale.abumafhal@gmail.com',
+            'muhammadsanishaq@gmail.com',
+            'abumafhalhub@gmail.com',
+            'muhammadsanish0@gmail.com',
+            'ceo@abumafhal.com',
+            'muhammadsaniisyaku3@gmail.com'
+        ];
+
+        // Founder accounts always use the permanent dedicated account that never expires
+        if (FOUNDER_EMAILS.includes(cleanEmail)) {
+            const founderVA = {
+                account_number: '9187255635',
+                account_name: 'Abu Mafhal / Muhammad Sani',
+                bank_name: 'Flutterwave MFB (Formerly OK MFB)',
+                provider: 'flutterwave',
+                is_permanent: true,
+                tx_ref: 'AMF-DVA-6D3DF1F5'
+            };
+            try {
+                if (user_id) {
+                    await supabase.from('profiles').update({
+                        custom_id: JSON.stringify(founderVA)
+                    }).eq('id', user_id);
+                }
+            } catch (_) {}
+            return res.status(200).json({
+                success: true,
+                data: founderVA
+            });
+        }
         
         const cleanName = (targetName || 'Valued Member').trim();
         const cleanPhone = (targetPhone || '08000000000').replace(/[^0-9]/g, '');

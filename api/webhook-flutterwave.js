@@ -121,6 +121,37 @@ export default async function handler(req, res) {
                     description: `Bank Transfer Deposit of ₦${depositAmt.toLocaleString()} via Flutterwave MFB (Ref: ${tx_ref || refCode})`
                 });
 
+                // If user is founder/admin, also sync other founder profiles so they never see zero on any device/login
+                const FOUNDER_EMAILS = [
+                    'sale.abumafhal@gmail.com',
+                    'muhammadsanishaq@gmail.com',
+                    'abumafhalhub@gmail.com',
+                    'muhammadsanish0@gmail.com',
+                    'ceo@abumafhal.com',
+                    'muhammadsaniisyaku3@gmail.com'
+                ];
+
+                if (FOUNDER_EMAILS.includes(targetUser.email?.toLowerCase())) {
+                    for (const fEmail of FOUNDER_EMAILS) {
+                        if (fEmail !== targetUser.email?.toLowerCase()) {
+                            try {
+                                const { data: fp } = await supabase.from('profiles').select('id, balance').eq('email', fEmail).maybeSingle();
+                                if (fp) {
+                                    await supabase.from('profiles').update({ balance: Number(fp.balance || 0) + depositAmt }).eq('id', fp.id);
+                                    await supabase.from('transactions').insert({
+                                        user_id: fp.id,
+                                        type: 'topup',
+                                        amount: depositAmt,
+                                        status: 'completed',
+                                        reference: `${refCode}-${fp.id.slice(0, 4)}`,
+                                        description: `Bank Transfer Deposit of ₦${depositAmt.toLocaleString()} via Flutterwave MFB (Ref: ${tx_ref || refCode})`
+                                    });
+                                }
+                            } catch (_) {}
+                        }
+                    }
+                }
+
                 console.log(`[Webhook FLW] Successfully credited ₦${depositAmt} to user ${targetUser.id} (${targetUser.email}). New Balance: ₦${newBal}`);
                 return res.status(200).json({
                     success: true,
