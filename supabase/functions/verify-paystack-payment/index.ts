@@ -73,21 +73,69 @@ serve(async (req: any) => {
         console.warn(`Amount mismatch. Expected ${amount}, paid ${paidAmount}. Proceeding with paid amount.`);
       }
 
-      // Call the existing RPC safely via server
-      const { data: rpcData, error: rpcError } = await supabase.rpc('process_wallet_topup', {
-        user_id_arg: user_id,
-        amount_arg: paidAmount,
-        ref_arg: reference
-      });
+      // Check if reference was already credited to prevent duplicate credits
+      const { data: existingTx } = await supabase
+        .from('transactions')
+        .select('id')
+        .eq('reference', reference)
+        .maybeSingle();
 
-      if (rpcError || !rpcData?.success) {
-        throw new Error(rpcData?.error || rpcError?.message || 'Wallet Topup Process Failed');
+      if (existingTx) {
+        return new Response(JSON.stringify({
+          success: true,
+          message: `Wallet already credited for reference ${reference}`,
+          amount: paidAmount
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        });
+      }
+
+      // Fetch user profile current balance
+      const { data: userProfile, error: profErr } = await supabase
+        .from('profiles')
+        .select('id, balance')
+        .eq('id', user_id)
+        .maybeSingle();
+
+      if (profErr || !userProfile) {
+        throw new Error(`User profile not found for ID: ${user_id}`);
+      }
+
+      const currentBal = Number(userProfile.balance || 0);
+      const newBalance = currentBal + paidAmount;
+
+      // Update user balance in profiles
+      const { error: updateErr } = await supabase
+        .from('profiles')
+        .update({ balance: newBalance })
+        .eq('id', user_id);
+
+      if (updateErr) {
+        throw new Error(`Failed to update user balance: ${updateErr.message}`);
+      }
+
+      // Record transaction
+      const { error: txErr } = await supabase
+        .from('transactions')
+        .insert({
+          user_id: user_id,
+          type: 'topup',
+          amount: paidAmount,
+          status: 'completed',
+          reference: reference,
+          description: `Wallet Top-up of ₦${paidAmount.toLocaleString()} via Paystack (Ref: ${reference})`
+        });
+
+      if (txErr) {
+        console.warn('Transaction record warning:', txErr.message);
       }
 
       return new Response(JSON.stringify({
         success: true,
         message: `Wallet credited with NGN ${paidAmount}`,
-        amount: paidAmount
+        amount: paidAmount,
+        new_balance: newBalance
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,

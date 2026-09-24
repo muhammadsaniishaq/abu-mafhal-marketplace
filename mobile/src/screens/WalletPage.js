@@ -223,11 +223,13 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
     const [hideBalance, setHideBalance] = useState(false);
     const [cardTheme, setCardTheme] = useState('midnight');
 
-    // ── TOP UP MODAL STATES ──
+    // ── TOP UP & PAYMENT MODAL STATES ──
     const [showTopUpModal, setShowTopUpModal] = useState(false);
-    const [topUpGateway, setTopUpGateway] = useState('paystack'); // 'paystack' | 'flutterwave' | 'nowpayments' | 'bank_transfer'
-    const [topUpAmountNgn, setTopUpAmountNgn] = useState('');
-    const [topUpAmountUsd, setTopUpAmountUsd] = useState(''); // For NOWPayments (USD, NOT Naira)
+    const [showBankTransferModal, setShowBankTransferModal] = useState(false);
+    const [showCryptoModal, setShowCryptoModal] = useState(false);
+    const [topUpGateway, setTopUpGateway] = useState('paystack'); // 'paystack' | 'flutterwave' | 'bank_transfer' | 'nowpayments'
+    const [topUpAmountNgn, setTopUpAmountNgn] = useState('5000');
+    const [topUpAmountUsd, setTopUpAmountUsd] = useState('25'); // For NOWPayments (USD, NOT Naira)
     const [isTopUpPending, setIsTopUpPending] = useState(false);
 
     const cleanNgnAmount = (val) => {
@@ -319,17 +321,15 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                 }
             } catch (_) {}
 
-            // Parallel DB queries
-            const [wRes, pRes, txRes] = await Promise.allSettled([
-                supabase.from('wallets').select('*').eq('user_id', activeUserId).maybeSingle(),
-                supabase.from('profiles').select('mafhal_coins, balance').eq('id', activeUserId).maybeSingle(),
-                supabase.from('wallet_transactions').select('*').eq('user_id', activeUserId).order('created_at', { ascending: false }).limit(40)
+            // Robust Database queries: Read profiles.balance and transactions table
+            const [pRes, txRes] = await Promise.allSettled([
+                supabase.from('profiles').select('id, balance, mafhal_coins, email, full_name, phone').eq('id', activeUserId).maybeSingle(),
+                supabase.from('transactions').select('*').eq('user_id', activeUserId).order('created_at', { ascending: false }).limit(50)
             ]);
 
-            const wData = wRes.status === 'fulfilled' ? wRes.value?.data : null;
             const pData = pRes.status === 'fulfilled' ? pRes.value?.data : null;
-            const realBal = Number(pData?.balance ?? wData?.balance ?? 0);
-            const displayPoints = Math.max(wData?.points || 0, pData?.mafhal_coins || 0);
+            const realBal = Number(pData?.balance ?? 0);
+            const displayPoints = Number(pData?.mafhal_coins || 0);
 
             let newWallet = {
                 balance: realBal,
@@ -341,8 +341,8 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
             try {
                 const syncRes = await PaymentGatewayService.syncFlutterwaveDeposits({
                     userId: activeUserId,
-                    email: user?.email,
-                    phone: user?.phone || user?.user_metadata?.phone_number
+                    email: user?.email || pData?.email,
+                    phone: user?.phone || pData?.phone || user?.user_metadata?.phone_number
                 });
 
                 if (syncRes?.success && syncRes?.totalNewAmount > 0) {
@@ -353,6 +353,17 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                     newWallet = { ...newWallet, balance: updatedBal };
                     setWallet(newWallet);
 
+                    const firstFlwTx = syncRes.uncreditedTxs?.[0];
+                    const flwRefCode = firstFlwTx?.flw_ref || firstFlwTx?.tx_ref || `FLW-${Date.now()}`;
+                    await supabase.from('transactions').insert({
+                        user_id: activeUserId,
+                        type: 'topup',
+                        amount: addedAmt,
+                        status: 'completed',
+                        reference: flwRefCode,
+                        description: `Dedicated Bank Transfer Deposit of ₦${addedAmt.toLocaleString()} via Flutterwave MFB`
+                    });
+
                     if (AsyncStorage && syncRes.newTxIds?.length) {
                         const raw = await AsyncStorage.getItem(`@abumafhal_credited_flw_${activeUserId}`);
                         const prevCredited = raw ? JSON.parse(raw) : [];
@@ -362,7 +373,7 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
 
                     setDepositSuccessDetails({
                         amount: addedAmt,
-                        reference: syncRes.uncreditedTxs?.[0]?.flw_ref || 'FLW-TRANSFER',
+                        reference: flwRefCode,
                         gateway: 'Flutterwave MFB Bank Transfer'
                     });
                     setShowDepositSuccessModal(true);
@@ -370,7 +381,7 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
             } catch (_) {}
 
             let newTx = [];
-            if (txRes.status === 'fulfilled' && txRes.value?.data) {
+            if (txRes.status === 'fulfilled' && Array.isArray(txRes.value?.data)) {
                 newTx = txRes.value.data;
                 setTransactions(newTx);
             }
@@ -386,6 +397,72 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
             console.log('Wallet Data Error:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    // ── LIVE MANUAL BANK DEPOSIT SYNC ──
+    const handleManualBankSync = async () => {
+        setIsSyncingBal(true);
+        try {
+            const activeUserId = user?.id || (await supabase.auth.getUser()).data?.user?.id;
+            const syncRes = await PaymentGatewayService.syncFlutterwaveDeposits({
+                userId: activeUserId,
+                email: user?.email,
+                phone: user?.phone || user?.user_metadata?.phone_number
+            });
+
+            if (syncRes?.success && syncRes?.totalNewAmount > 0) {
+                const addedAmt = syncRes.totalNewAmount;
+                const { data: p } = await supabase.from('profiles').select('balance').eq('id', activeUserId).maybeSingle();
+                const updatedBal = (Number(p?.balance) || wallet.balance) + addedAmt;
+
+                await supabase.from('profiles').update({ balance: updatedBal }).eq('id', activeUserId);
+                setWallet(prev => ({ ...prev, balance: updatedBal }));
+
+                const firstFlwTx = syncRes.uncreditedTxs?.[0];
+                const flwRefCode = firstFlwTx?.flw_ref || firstFlwTx?.tx_ref || `FLW-${Date.now()}`;
+                await supabase.from('transactions').insert({
+                    user_id: activeUserId,
+                    type: 'topup',
+                    amount: addedAmt,
+                    status: 'completed',
+                    reference: flwRefCode,
+                    description: `Dedicated Bank Transfer Deposit of ₦${addedAmt.toLocaleString()} via Flutterwave MFB`
+                });
+
+                if (AsyncStorage && syncRes.newTxIds?.length) {
+                    const raw = await AsyncStorage.getItem(`@abumafhal_credited_flw_${activeUserId}`);
+                    const prevCredited = raw ? JSON.parse(raw) : [];
+                    const combined = [...new Set([...prevCredited, ...syncRes.newTxIds])];
+                    await AsyncStorage.setItem(`@abumafhal_credited_flw_${activeUserId}`, JSON.stringify(combined));
+                }
+
+                setShowBankTransferModal(false);
+                setDepositSuccessDetails({
+                    amount: addedAmt,
+                    reference: flwRefCode,
+                    gateway: 'Flutterwave MFB Bank Transfer'
+                });
+                setShowDepositSuccessModal(true);
+                fetchWalletData();
+            } else {
+                const { data: p } = await supabase.from('profiles').select('balance').eq('id', activeUserId).maybeSingle();
+                if (p && Number(p.balance) !== wallet.balance) {
+                    setWallet(prev => ({ ...prev, balance: Number(p.balance) }));
+                    Alert.alert('Balance Synced! ✅', `Your latest wallet balance is ${formatCurrency(Number(p.balance))}.`);
+                } else {
+                    Alert.alert(
+                        'Checking Complete',
+                        'No new bank transfer detected yet. Bank transfers usually reflect within 30-90 seconds. If you just transferred, please wait a moment and tap refresh again.'
+                    );
+                }
+                fetchWalletData();
+            }
+        } catch (syncErr) {
+            console.error('Manual sync error:', syncErr);
+            Alert.alert('Notice', 'Could not refresh bank transactions. Please check internet connection.');
+        } finally {
+            setIsSyncingBal(false);
         }
     };
 
@@ -703,22 +780,16 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                 // Update primary user balance in profiles table
                 await supabase.from('profiles').update({ balance: newBal }).eq('id', activeUserId);
 
-                const { error: wErr } = await supabase
-                    .from('wallets')
-                    .upsert({ user_id: activeUserId, balance: newBal }, { onConflict: 'user_id' });
-
-                if (wErr) {
-                    await supabase.from('wallets').update({ balance: newBal }).eq('user_id', activeUserId);
-                }
-
                 const desc = usdAmount 
                     ? `Wallet Recharge via ${gateway} ($${usdAmount} USD • Ref: ${reference})`
                     : `Wallet Recharge via ${gateway} (Ref: ${reference})`;
 
-                await supabase.from('wallet_transactions').insert({
+                await supabase.from('transactions').insert({
                     user_id: activeUserId,
                     type: 'topup',
                     amount: creditAmount,
+                    status: 'completed',
+                    reference: reference,
                     description: desc
                 });
             }
@@ -767,18 +838,45 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
             const cleanTarget = transferRecipient.trim().toLowerCase();
             const newBal = wallet.balance - amt;
 
+            // 1. Deduct sender balance in profiles
             const { error: debitErr } = await supabase
-                .from('wallets')
+                .from('profiles')
                 .update({ balance: newBal })
-                .eq('user_id', user.id);
+                .eq('id', user.id);
 
             if (debitErr) throw debitErr;
 
-            const txDesc = `Transfer to ${cleanTarget}${transferNote ? ` • "${transferNote.trim()}"` : ''}`;
-            await supabase.from('wallet_transactions').insert({
+            // 2. Find recipient in profiles
+            let recipientUser = null;
+            try {
+                const { data: matchedProfiles } = await supabase
+                    .from('profiles')
+                    .select('id, full_name, email, phone, balance')
+                    .or(`email.ilike.%${cleanTarget}%,phone.ilike.%${cleanTarget}%,username.ilike.%${cleanTarget}%`);
+
+                if (matchedProfiles && matchedProfiles.length > 0) {
+                    recipientUser = matchedProfiles[0];
+                    const recNewBal = Number(recipientUser.balance || 0) + amt;
+                    await supabase.from('profiles').update({ balance: recNewBal }).eq('id', recipientUser.id);
+                    await supabase.from('transactions').insert({
+                        user_id: recipientUser.id,
+                        type: 'transfer_in',
+                        amount: amt,
+                        status: 'completed',
+                        reference: `TRF-${Date.now()}`,
+                        description: `Transfer received from ${user?.user_metadata?.full_name || user?.email || 'Mafhal Member'}`
+                    });
+                }
+            } catch (_) {}
+
+            const txRef = `TRF-${Date.now()}`;
+            const txDesc = `Transfer to ${recipientUser?.full_name || cleanTarget}${transferNote ? ` • "${transferNote.trim()}"` : ''}`;
+            await supabase.from('transactions').insert({
                 user_id: user.id,
                 type: 'debit',
                 amount: -amt,
+                status: 'completed',
+                reference: txRef,
                 description: txDesc
             });
 
@@ -788,7 +886,7 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
             setTransferAmount('');
             setTransferNote('');
 
-            Alert.alert('Transfer Successful! 🚀', `Successfully sent ${formatCurrency(amt)} to ${cleanTarget}.`);
+            Alert.alert('Transfer Successful! 🚀', `Successfully sent ${formatCurrency(amt)} to ${recipientUser?.full_name || cleanTarget}.`);
             fetchWalletData();
         } catch (p2pErr) {
             console.error('P2P Transfer Error:', p2pErr);
@@ -817,14 +915,17 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
         setIsWithdrawPending(true);
         try {
             const newBal = wallet.balance - amt;
-            await supabase.from('wallets').update({ balance: newBal }).eq('user_id', user.id);
+            const { error: wUpdateErr } = await supabase.from('profiles').update({ balance: newBal }).eq('id', user.id);
+            if (wUpdateErr) throw wUpdateErr;
 
             const ref = `WTH-${Date.now().toString().slice(-6)}`;
             const desc = `Bank Cashout to ${withdrawBank} (${withdrawAccountNum}) - Ref: ${ref}`;
-            await supabase.from('wallet_transactions').insert({
+            await supabase.from('transactions').insert({
                 user_id: user.id,
                 type: 'withdrawal',
                 amount: -amt,
+                status: 'pending',
+                reference: ref,
                 description: desc
             });
 
@@ -1262,8 +1363,14 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                                 key={gw.id}
                                 style={localStyles.gatewayShowcasePill}
                                 onPress={() => {
-                                    setTopUpGateway(gw.id);
-                                    setShowTopUpModal(true);
+                                    if (gw.id === 'bank_transfer') {
+                                        setShowBankTransferModal(true);
+                                    } else if (gw.id === 'nowpayments') {
+                                        setShowCryptoModal(true);
+                                    } else {
+                                        setTopUpGateway(gw.id);
+                                        setShowTopUpModal(true);
+                                    }
                                 }}
                                 activeOpacity={0.8}
                             >
@@ -1544,7 +1651,7 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
             </ScrollView>
 
             {/* ══════════════════════════════════════════════════════════════
-                MODAL 1: MODERN MULTI-GATEWAY TOP-UP MODAL (NOWPAYMENTS IN USD)
+                MODAL 1: CARD & INSTANT ONLINE TOP-UP (PAYSTACK & FLUTTERWAVE)
             ══════════════════════════════════════════════════════════════ */}
             <Modal
                 visible={showTopUpModal}
@@ -1559,7 +1666,7 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                         <View style={localStyles.modalHeaderSection}>
                             <View>
                                 <Text style={localStyles.modalMainTitle}>Top-up Wallet</Text>
-                                <Text style={localStyles.modalSecondaryTitle}>Choose your preferred funding gateway</Text>
+                                <Text style={localStyles.modalSecondaryTitle}>Instant credit via Debit Card, USSD & Online Pay</Text>
                             </View>
                             <TouchableOpacity style={localStyles.modalCloseCircle} onPress={() => setShowTopUpModal(false)}>
                                 <Ionicons name="close" size={18} color="#64748B" />
@@ -1568,13 +1675,81 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
 
                         <ScrollView 
                             showsVerticalScrollIndicator={false}
-                            contentContainerStyle={{ paddingBottom: 16 }}
+                            contentContainerStyle={{ paddingBottom: 20 }}
                             style={{ maxHeight: Platform.OS === 'web' ? '80vh' : 580 }}
                         >
-                            {/* LUXURY SELECTABLE GATEWAY LIST */}
-                            <Text style={localStyles.fieldSectionHeader}>SELECT PAYMENT METHOD</Text>
+                            {/* AMOUNT IN NAIRA INPUT */}
+                            <Text style={localStyles.fieldSectionHeader}>ENTER AMOUNT IN NAIRA (₦)</Text>
+                            <View style={localStyles.inputAreaContainer}>
+                                <Text style={localStyles.inputPrefix}>₦</Text>
+                                <TextInput
+                                    style={localStyles.mainTextInput}
+                                    value={topUpAmountNgn}
+                                    onChangeText={setTopUpAmountNgn}
+                                    keyboardType="numeric"
+                                    placeholder="0.00"
+                                    placeholderTextColor="#94A3B8"
+                                />
+                            </View>
+
+                            {/* QUICK RECHARGE PRESETS */}
+                            <Text style={localStyles.quickSelectionLabel}>PRESET RECHARGE AMOUNTS</Text>
+                            <View style={localStyles.pillsGrid}>
+                                {['1000', '2500', '5000', '10000', '25000', '50000'].map(val => (
+                                    <TouchableOpacity
+                                        key={val}
+                                        style={[localStyles.amountPill, topUpAmountNgn === val && localStyles.activePill]}
+                                        onPress={() => setTopUpAmountNgn(val)}
+                                    >
+                                        <Text style={[localStyles.pillText, topUpAmountNgn === val && localStyles.activePillText]}>
+                                            ₦{parseInt(val).toLocaleString()}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+
+                            {/* LIVE BALANCE PROJECTION */}
+                            <View style={localStyles.balanceProjectionCard}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Ionicons name="trending-up" size={14} color="#059669" />
+                                        <Text style={localStyles.projectionTitle}>LIVE BALANCE PROJECTION</Text>
+                                    </View>
+                                    <View style={localStyles.projectionBadge}>
+                                        <Text style={localStyles.projectionBadgeTxt}>INSTANT CREDIT</Text>
+                                    </View>
+                                </View>
+
+                                <View style={localStyles.projectionMathRow}>
+                                    <View style={localStyles.projectionMathCol}>
+                                        <Text style={localStyles.projectionMathLabel}>Current</Text>
+                                        <Text style={localStyles.projectionMathVal}>{formatCurrency(wallet.balance || 0)}</Text>
+                                    </View>
+
+                                    <Ionicons name="add" size={15} color="#94A3B8" />
+
+                                    <View style={localStyles.projectionMathCol}>
+                                        <Text style={localStyles.projectionMathLabel}>Top-up</Text>
+                                        <Text style={[localStyles.projectionMathVal, { color: '#059669' }]}>
+                                            +{formatCurrency(cleanNgnAmount(topUpAmountNgn))}
+                                        </Text>
+                                    </View>
+
+                                    <Ionicons name="arrow-forward" size={15} color="#059669" />
+
+                                    <View style={[localStyles.projectionMathCol, { alignItems: 'flex-end' }]}>
+                                        <Text style={localStyles.projectionMathLabel}>New Balance</Text>
+                                        <Text style={[localStyles.projectionMathVal, { color: '#059669', fontWeight: '900', fontSize: 14 }]}>
+                                            {formatCurrency((wallet.balance || 0) + cleanNgnAmount(topUpAmountNgn))}
+                                        </Text>
+                                    </View>
+                                </View>
+                            </View>
+
+                            {/* SELECT ONLINE GATEWAY */}
+                            <Text style={localStyles.fieldSectionHeader}>SELECT PAYMENT GATEWAY</Text>
                             <View style={localStyles.luxuryGatewayList}>
-                                {GATEWAY_OPTIONS.map((gw) => {
+                                {GATEWAY_OPTIONS.filter(gw => gw.id === 'paystack' || gw.id === 'flutterwave').map((gw) => {
                                     const isSelected = topUpGateway === gw.id;
                                     return (
                                         <TouchableOpacity
@@ -1611,7 +1786,7 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                                                             <Ionicons name="flash" size={10} color="#059669" />
                                                             <Text style={localStyles.gwSpeedTagTxt}>{gw.speed}</Text>
                                                         </View>
-                                                        <Text style={localStyles.gwCurrencyTag}>[{gw.currency}]</Text>
+                                                        <Text style={localStyles.gwCurrencyTag}>[NGN ₦]</Text>
                                                     </View>
                                                 </View>
                                             </View>
@@ -1628,314 +1803,366 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                                 })}
                             </View>
 
-                            {/* LIVE BALANCE PROJECTION CARD */}
-                            {topUpGateway !== 'bank_transfer' && (
-                                <View style={localStyles.balanceProjectionCard}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                            <Ionicons name="trending-up" size={14} color="#059669" />
-                                            <Text style={localStyles.projectionTitle}>LIVE BALANCE PROJECTION</Text>
-                                        </View>
-                                        <View style={localStyles.projectionBadge}>
-                                            <Text style={localStyles.projectionBadgeTxt}>INSTANT CREDIT</Text>
-                                        </View>
-                                    </View>
-
-                                    <View style={localStyles.projectionMathRow}>
-                                        <View style={localStyles.projectionMathCol}>
-                                            <Text style={localStyles.projectionMathLabel}>Current Balance</Text>
-                                            <Text style={localStyles.projectionMathVal}>{formatCurrency(wallet.balance || 0)}</Text>
-                                        </View>
-
-                                        <Ionicons name="add" size={15} color="#94A3B8" />
-
-                                        <View style={localStyles.projectionMathCol}>
-                                            <Text style={localStyles.projectionMathLabel}>Top-up</Text>
-                                            <Text style={[localStyles.projectionMathVal, { color: '#059669' }]}>
-                                                +{formatCurrency(topUpGateway === 'nowpayments' ? ((parseFloat(topUpAmountUsd) || 0) * USD_RATE) : (cleanNgnAmount(topUpAmountNgn)))}
-                                            </Text>
-                                        </View>
-
-                                        <Ionicons name="arrow-forward" size={15} color="#059669" />
-
-                                        <View style={[localStyles.projectionMathCol, { alignItems: 'flex-end' }]}>
-                                            <Text style={localStyles.projectionMathLabel}>New Balance</Text>
-                                            <Text style={[localStyles.projectionMathVal, { color: '#059669', fontWeight: '900', fontSize: 14 }]}>
-                                                {formatCurrency((wallet.balance || 0) + (topUpGateway === 'nowpayments' ? ((parseFloat(topUpAmountUsd) || 0) * USD_RATE) : (cleanNgnAmount(topUpAmountNgn))))}
-                                            </Text>
-                                        </View>
-                                    </View>
-                                </View>
-                            )}
-
-                            {/* CONDITIONAL CURRENCY & AMOUNT SECTION */}
-                            {topUpGateway === 'nowpayments' ? (
-                                /* ── NOWPAYMENTS CRYPTO MODE (STRICTLY IN USD, NOT NAIRA) ── */
-                                <View style={{ marginTop: 12 }}>
-                                    <View style={localStyles.cryptoAlertBanner}>
-                                        <Ionicons name="flash" size={14} color="#D97706" />
-                                        <Text style={localStyles.cryptoAlertTxt}>
-                                            NOWPayments Crypto Invoice is in <Text style={{ fontWeight: '900' }}>USD ($)</Text>. Pay via USDT (TRC20/BEP20), BTC, ETH, SOL, or 150+ coins.
+                            {/* RECHARGE ACTION BUTTON */}
+                            <TouchableOpacity
+                                style={[localStyles.primaryActionBtn, isTopUpPending && { opacity: 0.7 }]}
+                                onPress={handleStartTopUp}
+                                disabled={isTopUpPending}
+                                activeOpacity={0.88}
+                            >
+                                {isTopUpPending ? (
+                                    <ActivityIndicator color="white" />
+                                ) : (
+                                    <View style={localStyles.actionBtnContent}>
+                                        <Text style={localStyles.actionBtnText}>
+                                            {cleanNgnAmount(topUpAmountNgn) > 0 ? `Recharge ${formatCurrency(cleanNgnAmount(topUpAmountNgn))} Now` : `Recharge Wallet`}
                                         </Text>
+                                        <Ionicons name="arrow-forward" size={15} color="white" />
                                     </View>
+                                )}
+                            </TouchableOpacity>
 
-                                    <Text style={localStyles.fieldSectionHeader}>ENTER AMOUNT IN USD ($)</Text>
-                                    <View style={localStyles.inputAreaContainer}>
-                                        <Text style={[localStyles.inputPrefix, { color: '#D97706' }]}>$</Text>
-                                        <TextInput
-                                            style={localStyles.mainTextInput}
-                                            value={topUpAmountUsd}
-                                            onChangeText={setTopUpAmountUsd}
-                                            keyboardType="numeric"
-                                            placeholder="0.00"
-                                            placeholderTextColor="#94A3B8"
-                                        />
-                                    </View>
+                            {/* CLEAN SHORTCUT SWITCHERS TO DEDICATED MODALS */}
+                            <View style={{ marginTop: 18, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 14 }}>
+                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' }}>
+                                    OTHER PAYMENT OPTIONS
+                                </Text>
 
-                                    {/* Live NGN Equivalent Display */}
-                                    <View style={localStyles.conversionPill}>
-                                        <Ionicons name="swap-horizontal" size={13} color="#059669" />
-                                        <Text style={localStyles.conversionPillTxt}>
-                                            ${topUpAmountUsd || '0'} USD ≈ <Text style={{ fontWeight: '900', color: '#059669' }}>{formatCurrency((parseFloat(topUpAmountUsd) || 0) * USD_RATE)}</Text> credited to wallet
-                                        </Text>
-                                    </View>
-
-                                    {/* USD Quick Presets */}
-                                    <Text style={localStyles.quickSelectionLabel}>PRESET CRYPTO AMOUNTS (USD)</Text>
-                                    <View style={localStyles.pillsGrid}>
-                                        {['10', '25', '50', '100', '250', '500'].map(val => (
-                                            <TouchableOpacity
-                                                key={val}
-                                                style={[localStyles.amountPill, topUpAmountUsd === val && [localStyles.activePill, { borderColor: '#F59E0B', backgroundColor: '#FFFBEB' }]]}
-                                                onPress={() => setTopUpAmountUsd(val)}
-                                            >
-                                                <Text style={[localStyles.pillText, topUpAmountUsd === val && { color: '#D97706', fontWeight: '900' }]}>
-                                                    ${val} USD
-                                                </Text>
-                                            </TouchableOpacity>
-                                        ))}
-                                    </View>
-                                </View>
-                            ) : topUpGateway === 'bank_transfer' ? (
-                                /* ── PERMANENT REAL DEDICATED VIRTUAL ACCOUNT MODE ── */
-                                <View style={{ marginTop: 12 }}>
-                                    {(() => {
-                                        const userStr = String(user?.id || 'usr');
-                                        const userEmail = (user?.email || '').toLowerCase();
-                                        const firstName = (user?.user_metadata?.first_name || user?.user_metadata?.full_name || 'VALUED MEMBER').trim().toUpperCase().split(/\s+/)[0];
-
-                                        const isFounder = userEmail.includes('sani') || userEmail.includes('muhammad');
-                                        const fallbackNumber = isFounder ? '9137333636' : '9176335569';
-                                        const fallbackName = isFounder ? 'Abu Mafhal Sani FLW' : `Abu Mafhal Dedicated FLW`;
-
-                                        const va = (virtualAccount?.account_number && !virtualAccount.account_number.startsWith('980'))
-                                            ? virtualAccount
-                                            : {
-                                                account_number: fallbackNumber,
-                                                account_name: fallbackName,
-                                                bank_name: 'Flutterwave MFB (Formerly OK MFB)'
-                                            };
-                                        const refCode = `AMF-${userStr.substring(0, 6).toUpperCase()}`;
-
-                                        return (
-                                            <View>
-                                                {/* Main Dedicated Account Card */}
-                                                <View style={localStyles.vaAccountCard}>
-                                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                                                            <Ionicons name="shield-checkmark" size={13} color="#059669" />
-                                                            <Text style={localStyles.bankDetailLabel}>YOUR PERMANENT DEDICATED ACCOUNT</Text>
-                                                        </View>
-                                                        <View style={[localStyles.bankInstantTag, { backgroundColor: '#DCFCE7' }]}>
-                                                            <Text style={[localStyles.bankInstantTagTxt, { color: '#15803D' }]}>LIVE NIBSS NUBAN</Text>
-                                                        </View>
-                                                    </View>
-
-                                                    <Text style={localStyles.bankNameTxt}>{va.bank_name || 'Flutterwave MFB (Formerly OK MFB)'}</Text>
-
-                                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
-                                                        <Text style={[localStyles.bankAccNumTxt, { letterSpacing: 2, fontSize: 22, color: '#0F172A' }]}>
-                                                            {va.account_number}
-                                                        </Text>
-                                                        <TouchableOpacity
-                                                            style={localStyles.bankCopyBtn}
-                                                            onPress={() => copyToClipboard(va.account_number, 'Dedicated Account Number')}
-                                                        >
-                                                            <Ionicons name="copy" size={12} color="#2563EB" />
-                                                            <Text style={localStyles.bankCopyBtnTxt}>Copy</Text>
-                                                        </TouchableOpacity>
-                                                    </View>
-
-                                                    <Text style={[localStyles.bankAccNameTxt, { fontSize: 13.5, color: '#334155' }]}>{va.account_name}</Text>
-
-                                                    {/* Reference / Narration */}
-                                                    <View style={[localStyles.vaExpiryRow, { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', marginTop: 10 }]}>
-                                                        <Text style={{ fontSize: 10.5, color: '#64748B', fontWeight: '700' }}>
-                                                            Narration / Ref: <Text style={{ color: '#0F172A', fontWeight: '900' }}>{refCode}</Text>
-                                                        </Text>
-                                                        <TouchableOpacity
-                                                            style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 3 }}
-                                                            onPress={() => copyToClipboard(refCode, 'Payment Reference')}
-                                                        >
-                                                            <Ionicons name="copy-outline" size={11} color="#6366F1" />
-                                                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#6366F1' }}>Copy Ref</Text>
-                                                        </TouchableOpacity>
-                                                    </View>
-
-                                                    {/* Permanent Account Guarantee Notice */}
-                                                    <View style={[localStyles.vaExpiryRow, { backgroundColor: '#F0FDF4', marginTop: 8 }]}>
-                                                        <Ionicons name="infinite" size={13} color="#059669" />
-                                                        <Text style={[localStyles.vaExpiryTxt, { color: '#065F46' }]}>
-                                                            Permanent dedicated account • Never changes • Transfer any amount anytime
-                                                        </Text>
-                                                    </View>
-                                                </View>
-
-                                                {/* English Instructions Box */}
-                                                <View style={[localStyles.vaInstructionBox, { marginTop: 12 }]}>
-                                                    <Ionicons name="information-circle-outline" size={16} color="#6366F1" style={{ marginTop: 2 }} />
-                                                    <Text style={localStyles.vaInstructionTxt}>
-                                                        Transfer any amount from your banking app (OPay, Kuda, PalmPay, GTBank, Zenith, Access, etc.) to your dedicated Flutterwave MFB account number above. Your wallet is automatically credited 24/7 once confirmed.
-                                                    </Text>
-                                                </View>
-
-                                                {/* Direct Action Buttons for Bank Transfer */}
-                                                <View style={{ marginTop: 14, gap: 10 }}>
-                                                    <TouchableOpacity
-                                                        style={[localStyles.primaryActionBtn, { backgroundColor: '#2563EB' }]}
-                                                        onPress={() => copyToClipboard(va.account_number, 'Dedicated Account Number')}
-                                                        activeOpacity={0.88}
-                                                    >
-                                                        <Ionicons name="copy" size={16} color="white" />
-                                                        <Text style={localStyles.actionBtnText}>Copy Account Number</Text>
-                                                    </TouchableOpacity>
-
-                                                    <TouchableOpacity
-                                                        style={[localStyles.vaCopyAllBtn, { paddingVertical: 12 }]}
-                                                        onPress={() => copyToClipboard(
-                                                            `Bank: ${va.bank_name || 'Flutterwave MFB'}\nAccount Number: ${va.account_number}\nAccount Name: ${va.account_name}\nNarration/Ref: ${refCode}`,
-                                                            'Dedicated Account Details'
-                                                        )}
-                                                        activeOpacity={0.8}
-                                                    >
-                                                        <Ionicons name="clipboard-outline" size={14} color="#6366F1" />
-                                                        <Text style={localStyles.vaCopyAllBtnTxt}>Copy All Bank Details</Text>
-                                                    </TouchableOpacity>
-
-                                                    <TouchableOpacity
-                                                        style={[localStyles.vaCopyAllBtn, { borderColor: '#10B981', backgroundColor: '#ECFDF5', paddingVertical: 12 }]}
-                                                        onPress={async () => {
-                                                            setIsSyncingBal(true);
-                                                            try {
-                                                                const syncRes = await PaymentGatewayService.syncFlutterwaveDeposits({
-                                                                    userId: user?.id,
-                                                                    email: user?.email,
-                                                                    phone: user?.phone || user?.user_metadata?.phone_number
-                                                                });
-                                                                if (syncRes?.success && syncRes?.totalNewAmount > 0) {
-                                                                    const addedAmt = syncRes.totalNewAmount;
-                                                                    const currentB = wallet.balance || 0;
-                                                                    const updatedBal = currentB + addedAmt;
-                                                                    await supabase.from('profiles').update({ balance: updatedBal }).eq('id', user.id);
-                                                                    setWallet(prev => ({ ...prev, balance: updatedBal }));
-
-                                                                    if (AsyncStorage && syncRes.newTxIds?.length) {
-                                                                        const raw = await AsyncStorage.getItem(`@abumafhal_credited_flw_${user.id}`);
-                                                                        const prevCredited = raw ? JSON.parse(raw) : [];
-                                                                        const combined = [...new Set([...prevCredited, ...syncRes.newTxIds])];
-                                                                        await AsyncStorage.setItem(`@abumafhal_credited_flw_${user.id}`, JSON.stringify(combined));
-                                                                    }
-
-                                                                    Alert.alert('Deposit Confirmed! 🎉', `Your bank transfer of ${formatCurrency(addedAmt)} was received! New Balance: ${formatCurrency(updatedBal)}`);
-                                                                    fetchWalletData();
-                                                                    return;
-                                                                }
-                                                                await fetchWalletData();
-                                                                Alert.alert('Wallet Balance', `Current Balance: ${formatCurrency(wallet.balance || 0)}`);
-                                                            } catch (e) {
-                                                                await fetchWalletData();
-                                                            } finally {
-                                                                setIsSyncingBal(false);
-                                                            }
-                                                        }}
-                                                        activeOpacity={0.8}
-                                                        disabled={isSyncingBal}
-                                                    >
-                                                        {isSyncingBal ? (
-                                                            <ActivityIndicator size="small" color="#059669" />
-                                                        ) : (
-                                                            <Ionicons name="refresh" size={14} color="#059669" />
-                                                        )}
-                                                        <Text style={[localStyles.vaCopyAllBtnTxt, { color: '#059669' }]}>
-                                                            {isSyncingBal ? 'Checking Bank Transfers...' : 'Refresh & Sync Wallet Balance'}
-                                                        </Text>
-                                                    </TouchableOpacity>
-                                                </View>
-                                            </View>
-                                        );
-                                    })()}
-                                </View>
-                            ) : (
-                                /* ── PAYSTACK & FLUTTERWAVE NAIRA MODE ── */
-                                <View style={{ marginTop: 12 }}>
-                                    <Text style={localStyles.fieldSectionHeader}>ENTER AMOUNT IN NAIRA (₦)</Text>
-                                    <View style={localStyles.inputAreaContainer}>
-                                        <Text style={localStyles.inputPrefix}>₦</Text>
-                                        <TextInput
-                                            style={localStyles.mainTextInput}
-                                            value={topUpAmountNgn}
-                                            onChangeText={setTopUpAmountNgn}
-                                            keyboardType="numeric"
-                                            placeholder="0.00"
-                                            placeholderTextColor="#94A3B8"
-                                        />
-                                    </View>
-
-                                    <Text style={localStyles.quickSelectionLabel}>PRESET RECHARGE AMOUNTS</Text>
-                                    <View style={localStyles.pillsGrid}>
-                                        {['1000', '2500', '5000', '10000', '25000', '50000'].map(val => (
-                                            <TouchableOpacity
-                                                key={val}
-                                                style={[localStyles.amountPill, topUpAmountNgn === val && localStyles.activePill]}
-                                                onPress={() => setTopUpAmountNgn(val)}
-                                            >
-                                                <Text style={[localStyles.pillText, topUpAmountNgn === val && localStyles.activePillText]}>
-                                                    ₦{parseInt(val).toLocaleString()}
-                                                </Text>
-                                            </TouchableOpacity>
-                                        ))}
-                                    </View>
-                                </View>
-                            )}
-
-                            {/* PROCEED ACTION BUTTON (FOR PAYSTACK, FLUTTERWAVE CARD & CRYPTO) */}
-                            {topUpGateway !== 'bank_transfer' && (
                                 <TouchableOpacity
-                                    style={[localStyles.primaryActionBtn, isTopUpPending && { opacity: 0.7 }]}
-                                    onPress={handleStartTopUp}
-                                    disabled={isTopUpPending}
-                                    activeOpacity={0.88}
+                                    style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        backgroundColor: '#F8FAFC',
+                                        padding: 12,
+                                        borderRadius: 12,
+                                        borderWidth: 1,
+                                        borderColor: '#E2E8F0',
+                                        marginBottom: 8
+                                    }}
+                                    onPress={() => {
+                                        setShowTopUpModal(false);
+                                        setShowBankTransferModal(true);
+                                    }}
+                                    activeOpacity={0.75}
                                 >
-                                    {isTopUpPending ? (
-                                        <ActivityIndicator color="white" />
-                                    ) : (
-                                        <View style={localStyles.actionBtnContent}>
-                                            <Text style={localStyles.actionBtnText}>
-                                                {topUpGateway === 'nowpayments'
-                                                    ? (topUpAmountUsd ? `Pay $${topUpAmountUsd} USD via Crypto` : `Pay via Crypto`)
-                                                    : (cleanNgnAmount(topUpAmountNgn) > 0 ? `Recharge ${formatCurrency(cleanNgnAmount(topUpAmountNgn))}` : `Recharge Wallet`)}
-                                            </Text>
-                                            <Ionicons name="arrow-forward" size={15} color="white" />
-                                        </View>
-                                    )}
+                                    <View style={{ width: 34, height: 34, borderRadius: 9, backgroundColor: '#EDE9FE', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Ionicons name="business" size={17} color="#7C3AED" />
+                                    </View>
+                                    <View style={{ flex: 1, marginLeft: 10 }}>
+                                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>Dedicated Bank Transfer</Text>
+                                        <Text style={{ fontSize: 11, color: '#64748B' }}>Transfer from OPay, PalmPay, Kuda or your bank app</Text>
+                                    </View>
+                                    <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
                                 </TouchableOpacity>
-                            )}
+
+                                <TouchableOpacity
+                                    style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        backgroundColor: '#F8FAFC',
+                                        padding: 12,
+                                        borderRadius: 12,
+                                        borderWidth: 1,
+                                        borderColor: '#E2E8F0'
+                                    }}
+                                    onPress={() => {
+                                        setShowTopUpModal(false);
+                                        setShowCryptoModal(true);
+                                    }}
+                                    activeOpacity={0.75}
+                                >
+                                    <View style={{ width: 34, height: 34, borderRadius: 9, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Ionicons name="logo-bitcoin" size={17} color="#D97706" />
+                                    </View>
+                                    <View style={{ flex: 1, marginLeft: 10 }}>
+                                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>Deposit with Crypto (USD)</Text>
+                                        <Text style={{ fontSize: 11, color: '#64748B' }}>USDT, BTC, ETH via NOWPayments</Text>
+                                    </View>
+                                    <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
+                                </TouchableOpacity>
+                            </View>
 
                             <View style={localStyles.footerSecurityLine}>
                                 <Ionicons name="lock-closed" size={11} color="#059669" />
                                 <Text style={localStyles.footerSecurityText}>
                                     Bank-Grade 256-Bit SSL • Instant Escrow Credit Guarantee
                                 </Text>
+                            </View>
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ══════════════════════════════════════════════════════════════
+                MODAL 1B: DEDICATED BANK TRANSFER MODAL (FLUTTERWAVE MFB)
+            ══════════════════════════════════════════════════════════════ */}
+            <Modal
+                visible={showBankTransferModal}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setShowBankTransferModal(false)}
+            >
+                <View style={localStyles.modalDimLayer}>
+                    <View style={localStyles.modalContentSheet}>
+                        <View style={localStyles.modalHandleBar} />
+
+                        <View style={localStyles.modalHeaderSection}>
+                            <View>
+                                <Text style={localStyles.modalMainTitle}>Bank Transfer</Text>
+                                <Text style={localStyles.modalSecondaryTitle}>Instant 24/7 top-up via your banking app</Text>
+                            </View>
+                            <TouchableOpacity style={localStyles.modalCloseCircle} onPress={() => setShowBankTransferModal(false)}>
+                                <Ionicons name="close" size={18} color="#64748B" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView 
+                            showsVerticalScrollIndicator={false}
+                            contentContainerStyle={{ paddingBottom: 20 }}
+                            style={{ maxHeight: Platform.OS === 'web' ? '80vh' : 580 }}
+                        >
+                            {(() => {
+                                const userStr = String(user?.id || 'usr');
+                                const refCode = `AMF-${userStr.substring(0, 6).toUpperCase()}`;
+                                const accNum = '9187255635';
+                                const accName = 'Abu Mafhal Valued';
+                                const bankName = 'Flutterwave MFB';
+
+                                return (
+                                    <View>
+                                        {/* Main Dedicated Account Card */}
+                                        <View style={localStyles.vaAccountCard}>
+                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                                    <Ionicons name="shield-checkmark" size={13} color="#059669" />
+                                                    <Text style={localStyles.bankDetailLabel}>YOUR PERMANENT DEDICATED ACCOUNT</Text>
+                                                </View>
+                                                <View style={[localStyles.bankInstantTag, { backgroundColor: '#DCFCE7' }]}>
+                                                    <Text style={[localStyles.bankInstantTagTxt, { color: '#15803D' }]}>LIVE NIBSS NUBAN</Text>
+                                                </View>
+                                            </View>
+
+                                            <Text style={localStyles.bankNameTxt}>{bankName}</Text>
+
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+                                                <Text style={[localStyles.bankAccNumTxt, { letterSpacing: 2, fontSize: 24, color: '#0F172A', fontWeight: '900' }]}>
+                                                    {accNum}
+                                                </Text>
+                                                <TouchableOpacity
+                                                    style={localStyles.bankCopyBtn}
+                                                    onPress={() => copyToClipboard(accNum, 'Dedicated Account Number')}
+                                                >
+                                                    <Ionicons name="copy" size={13} color="#2563EB" />
+                                                    <Text style={localStyles.bankCopyBtnTxt}>Copy</Text>
+                                                </TouchableOpacity>
+                                            </View>
+
+                                            <Text style={[localStyles.bankAccNameTxt, { fontSize: 14, color: '#334155', fontWeight: '700' }]}>
+                                                {accName}
+                                            </Text>
+
+                                            {/* Reference / Narration */}
+                                            <View style={[localStyles.vaExpiryRow, { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', marginTop: 10 }]}>
+                                                <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '700' }}>
+                                                    Narration / Ref: <Text style={{ color: '#0F172A', fontWeight: '900' }}>{refCode}</Text>
+                                                </Text>
+                                                <TouchableOpacity
+                                                    style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 3 }}
+                                                    onPress={() => copyToClipboard(refCode, 'Payment Reference')}
+                                                >
+                                                    <Ionicons name="copy-outline" size={11} color="#6366F1" />
+                                                    <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#6366F1' }}>Copy Ref</Text>
+                                                </TouchableOpacity>
+                                            </View>
+
+                                            {/* Permanent Account Guarantee Notice */}
+                                            <View style={[localStyles.vaExpiryRow, { backgroundColor: '#F0FDF4', marginTop: 8 }]}>
+                                                <Ionicons name="infinite" size={13} color="#059669" />
+                                                <Text style={[localStyles.vaExpiryTxt, { color: '#065F46' }]}>
+                                                    Permanent dedicated account • Never changes • Transfer any amount anytime
+                                                </Text>
+                                            </View>
+                                        </View>
+
+                                        {/* Instructions Box */}
+                                        <View style={[localStyles.vaInstructionBox, { marginTop: 12 }]}>
+                                            <Ionicons name="information-circle-outline" size={16} color="#6366F1" style={{ marginTop: 2 }} />
+                                            <Text style={localStyles.vaInstructionTxt}>
+                                                Transfer any amount from your bank app (OPay, Kuda, PalmPay, Moniepoint, GTBank, Zenith, Access, etc.) to your dedicated Flutterwave MFB account above. Your Abu Mafhal wallet is automatically credited 24/7 upon bank confirmation.
+                                            </Text>
+                                        </View>
+
+                                        {/* Direct Action Buttons for Bank Transfer */}
+                                        <View style={{ marginTop: 14, gap: 10 }}>
+                                            <TouchableOpacity
+                                                style={[localStyles.primaryActionBtn, { backgroundColor: '#2563EB' }]}
+                                                onPress={() => copyToClipboard(accNum, 'Dedicated Account Number')}
+                                                activeOpacity={0.88}
+                                            >
+                                                <Ionicons name="copy" size={16} color="white" />
+                                                <Text style={localStyles.actionBtnText}>Copy Account Number</Text>
+                                            </TouchableOpacity>
+
+                                            <TouchableOpacity
+                                                style={[localStyles.vaCopyAllBtn, { borderColor: '#059669', backgroundColor: '#ECFDF5', paddingVertical: 13 }]}
+                                                onPress={handleManualBankSync}
+                                                activeOpacity={0.8}
+                                                disabled={isSyncingBal}
+                                            >
+                                                {isSyncingBal ? (
+                                                    <ActivityIndicator size="small" color="#059669" />
+                                                ) : (
+                                                    <Ionicons name="refresh" size={15} color="#059669" />
+                                                )}
+                                                <Text style={[localStyles.vaCopyAllBtnTxt, { color: '#059669', fontWeight: '800' }]}>
+                                                    {isSyncingBal ? 'Checking Bank Transfers...' : '🔄 I Have Transferred • Check & Refresh Balance'}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        </View>
+
+                                        {/* Switcher to Card Payment */}
+                                        <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 12 }}>
+                                            <TouchableOpacity
+                                                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, gap: 6 }}
+                                                onPress={() => {
+                                                    setShowBankTransferModal(false);
+                                                    setShowTopUpModal(true);
+                                                }}
+                                                activeOpacity={0.75}
+                                            >
+                                                <Ionicons name="card-outline" size={14} color="#2563EB" />
+                                                <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#2563EB' }}>
+                                                    Prefer paying with Debit Card or USSD? Pay Online ➔
+                                                </Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+                                );
+                            })()}
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ══════════════════════════════════════════════════════════════
+                MODAL 1C: CRYPTO TOP-UP MODAL (NOWPAYMENTS IN USD)
+            ══════════════════════════════════════════════════════════════ */}
+            <Modal
+                visible={showCryptoModal}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setShowCryptoModal(false)}
+            >
+                <View style={localStyles.modalDimLayer}>
+                    <View style={localStyles.modalContentSheet}>
+                        <View style={localStyles.modalHandleBar} />
+
+                        <View style={localStyles.modalHeaderSection}>
+                            <View>
+                                <Text style={localStyles.modalMainTitle}>Deposit with Crypto</Text>
+                                <Text style={localStyles.modalSecondaryTitle}>USDT, BTC, ETH & 150+ Coins via NOWPayments</Text>
+                            </View>
+                            <TouchableOpacity style={localStyles.modalCloseCircle} onPress={() => setShowCryptoModal(false)}>
+                                <Ionicons name="close" size={18} color="#64748B" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView 
+                            showsVerticalScrollIndicator={false}
+                            contentContainerStyle={{ paddingBottom: 20 }}
+                            style={{ maxHeight: Platform.OS === 'web' ? '80vh' : 580 }}
+                        >
+                            <View style={localStyles.cryptoAlertBanner}>
+                                <Ionicons name="flash" size={14} color="#D97706" />
+                                <Text style={localStyles.cryptoAlertTxt}>
+                                    NOWPayments Crypto Invoice is in <Text style={{ fontWeight: '900' }}>USD ($)</Text>. Auto-converted to Naira at live rate ($1 = ₦1,500).
+                                </Text>
+                            </View>
+
+                            <Text style={localStyles.fieldSectionHeader}>ENTER AMOUNT IN USD ($)</Text>
+                            <View style={localStyles.inputAreaContainer}>
+                                <Text style={[localStyles.inputPrefix, { color: '#D97706' }]}>$</Text>
+                                <TextInput
+                                    style={localStyles.mainTextInput}
+                                    value={topUpAmountUsd}
+                                    onChangeText={setTopUpAmountUsd}
+                                    keyboardType="numeric"
+                                    placeholder="25.00"
+                                    placeholderTextColor="#94A3B8"
+                                />
+                            </View>
+
+                            {/* Live NGN Equivalent Display */}
+                            <View style={localStyles.conversionPill}>
+                                <Ionicons name="swap-horizontal" size={13} color="#059669" />
+                                <Text style={localStyles.conversionPillTxt}>
+                                    ${topUpAmountUsd || '0'} USD ≈ <Text style={{ fontWeight: '900', color: '#059669' }}>{formatCurrency((parseFloat(topUpAmountUsd) || 0) * USD_RATE)}</Text> credited to wallet
+                                </Text>
+                            </View>
+
+                            {/* USD Quick Presets */}
+                            <Text style={localStyles.quickSelectionLabel}>PRESET CRYPTO AMOUNTS (USD)</Text>
+                            <View style={localStyles.pillsGrid}>
+                                {['10', '25', '50', '100', '250', '500'].map(val => (
+                                    <TouchableOpacity
+                                        key={val}
+                                        style={[localStyles.amountPill, topUpAmountUsd === val && [localStyles.activePill, { borderColor: '#F59E0B', backgroundColor: '#FFFBEB' }]]}
+                                        onPress={() => setTopUpAmountUsd(val)}
+                                    >
+                                        <Text style={[localStyles.pillText, topUpAmountUsd === val && { color: '#D97706', fontWeight: '900' }]}>
+                                            ${val} USD
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+
+                            {/* Supported Coins Showcase */}
+                            <Text style={localStyles.quickSelectionLabel}>ACCEPTED CRYPTOCURRENCIES</Text>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
+                                {['USDT (TRC20)', 'USDT (BEP20)', 'Bitcoin (BTC)', 'Ethereum (ETH)', 'Solana (SOL)', 'USDC'].map(coin => (
+                                    <View key={coin} style={{ backgroundColor: '#F8FAFC', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>{coin}</Text>
+                                    </View>
+                                ))}
+                            </View>
+
+                            {/* Submit Crypto Top-up */}
+                            <TouchableOpacity
+                                style={[localStyles.primaryActionBtn, { backgroundColor: '#D97706' }, isTopUpPending && { opacity: 0.7 }]}
+                                onPress={() => {
+                                    setTopUpGateway('nowpayments');
+                                    handleStartTopUp();
+                                }}
+                                disabled={isTopUpPending}
+                                activeOpacity={0.88}
+                            >
+                                {isTopUpPending ? (
+                                    <ActivityIndicator color="white" />
+                                ) : (
+                                    <View style={localStyles.actionBtnContent}>
+                                        <Text style={localStyles.actionBtnText}>
+                                            Pay ${topUpAmountUsd || '0'} USD via Crypto
+                                        </Text>
+                                        <Ionicons name="arrow-forward" size={15} color="white" />
+                                    </View>
+                                )}
+                            </TouchableOpacity>
+
+                            {/* Switcher to Naira */}
+                            <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 12 }}>
+                                <TouchableOpacity
+                                    style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, gap: 6 }}
+                                    onPress={() => {
+                                        setShowCryptoModal(false);
+                                        setShowTopUpModal(true);
+                                    }}
+                                    activeOpacity={0.75}
+                                >
+                                    <Ionicons name="cash-outline" size={14} color="#059669" />
+                                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#059669' }}>
+                                        Prefer paying in Naira (₦) via Card or Bank? Click here ➔
+                                    </Text>
+                                </TouchableOpacity>
                             </View>
                         </ScrollView>
                     </View>

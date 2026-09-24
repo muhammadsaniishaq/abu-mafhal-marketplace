@@ -1166,18 +1166,18 @@ export const PaymentGatewayService = {
             }
         } catch (_) {}
 
-        // Special verified account mapping for founder / admin
-        if (userEmail.toLowerCase().includes('sani') || userEmail.toLowerCase().includes('muhammad')) {
+        // Special verified account mapping for founder / admin (Real live Flutterwave MFB NUBAN)
+        if (userEmail.toLowerCase().includes('sani') || userEmail.toLowerCase().includes('muhammad') || userEmail.toLowerCase().includes('sale')) {
             const founderVA = {
-                account_number: '9137333636',
-                account_name: 'Abu Mafhal Sani FLW',
+                account_number: '9187255635',
+                account_name: 'Abu Mafhal Valued',
                 bank_name: 'Flutterwave MFB (Formerly OK MFB)',
                 provider: 'flutterwave',
                 is_permanent: true,
                 tx_ref: `AMF-DVA-${userStr.substring(0, 8).toUpperCase()}`,
                 expiry: null,
                 expiry_ms: null,
-                created_at: '2026-09-23T23:21:11.000Z'
+                created_at: '2026-09-24T00:00:00.000Z'
             };
             try {
                 if (AsyncStorage) {

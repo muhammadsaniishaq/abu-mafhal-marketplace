@@ -63,9 +63,52 @@ Deno.serve(async (req: any) => {
     const reference = data?.reference;
     const session_id = data?.metadata?.session_id;
 
-    if (!session_id) return new Response("Missing session_id", { status: 400 });
-
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // ── 1. WALLET TOP-UP HANDLING ──
+    if (event === "charge.success" && (reference?.startsWith("WLT-") || data?.metadata?.action === "wallet_topup")) {
+      const paidAmount = Number(data?.amount || 0) / 100; // Paystack kobo to naira
+      const userId = data?.metadata?.user_id;
+      const custEmail = data?.customer?.email?.trim().toLowerCase();
+
+      // Check if reference already processed
+      const { data: existingTx } = await supabase
+        .from("transactions")
+        .select("id")
+        .eq("reference", reference)
+        .maybeSingle();
+
+      if (existingTx) {
+        return new Response("Already Processed", { status: 200 });
+      }
+
+      let targetUser = null;
+      if (userId) {
+        const { data: u } = await supabase.from("profiles").select("id, balance").eq("id", userId).maybeSingle();
+        if (u) targetUser = u;
+      }
+      if (!targetUser && custEmail) {
+        const { data: u } = await supabase.from("profiles").select("id, balance").eq("email", custEmail).maybeSingle();
+        if (u) targetUser = u;
+      }
+
+      if (targetUser && paidAmount > 0) {
+        const newBal = Number(targetUser.balance || 0) + paidAmount;
+        await supabase.from("profiles").update({ balance: newBal }).eq("id", targetUser.id);
+        await supabase.from("transactions").insert({
+          user_id: targetUser.id,
+          type: "topup",
+          amount: paidAmount,
+          status: "completed",
+          reference: reference,
+          description: `Wallet Top-up of ₦${paidAmount.toLocaleString()} via Paystack (Ref: ${reference})`
+        });
+        console.log(`[Paystack Webhook] Credited user ${targetUser.id} with ${paidAmount}. New balance: ${newBal}`);
+        return new Response(JSON.stringify({ success: true, credited: paidAmount, user_id: targetUser.id }), { status: 200 });
+      }
+    }
+
+    if (!session_id) return new Response("Missing session_id", { status: 400 });
 
     if (event === "charge.success") {
       const { data: orderId, error: rpcError } = await supabase.rpc("create_order_from_session", {

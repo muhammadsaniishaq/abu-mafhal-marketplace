@@ -46,9 +46,29 @@ Deno.serve(async (req: any) => {
             }
         }
 
+        // Check if reference already recorded
+        const refCode = data?.flw_ref || tx_ref || `FLW-${data?.id || Date.now()}`;
+        const { data: existingTx } = await supabase
+            .from("transactions")
+            .select("id")
+            .eq("reference", refCode)
+            .maybeSingle();
+
+        if (existingTx) {
+            return new Response("Already Processed", { status: 200 });
+        }
+
         if (targetUser && depositAmt > 0) {
             const newBal = Number(targetUser.balance || 0) + depositAmt;
             await supabase.from("profiles").update({ balance: newBal }).eq("id", targetUser.id);
+            await supabase.from("transactions").insert({
+                user_id: targetUser.id,
+                type: "topup",
+                amount: depositAmt,
+                status: "completed",
+                reference: refCode,
+                description: `Bank Transfer Deposit of ₦${depositAmt.toLocaleString()} via Flutterwave MFB (Ref: ${refCode})`
+            });
             console.log(`[FLW Webhook] Credited user ${targetUser.id} with ${depositAmt}. New balance: ${newBal}`);
             return new Response(JSON.stringify({ success: true, credited: depositAmt, user_id: targetUser.id }), { status: 200 });
         }
