@@ -85,6 +85,21 @@ const Wallet = () => {
       return;
     }
     try {
+      // 0. Auto-sync with Flutterwave deposits
+      try {
+        await fetch('/api/sync-flutterwave-deposits', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: activeUserId,
+            email: currentUser?.email,
+            phone: currentUser?.phone
+          })
+        });
+      } catch (syncErr) {
+        console.warn('Sync deposits error:', syncErr);
+      }
+
       // 1. Fetch user balance from profiles table (source of truth)
       const { data: profile, error: profileErr } = await supabase
         .from('profiles')
@@ -113,7 +128,7 @@ const Wallet = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [activeUserId]);
+  }, [activeUserId, currentUser]);
 
   useEffect(() => {
     fetchWalletData();

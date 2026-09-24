@@ -60,8 +60,21 @@ export default async function handler(req, res) {
         const cleanEmail = String(email || '').trim().toLowerCase();
         const cleanPhone = String(phone || '').replace(/[^0-9]/g, '');
 
+        const FOUNDER_EMAILS = [
+            'sale.abumafhal@gmail.com',
+            'muhammadsanishaq@gmail.com',
+            'abumafhalhub@gmail.com',
+            'muhammadsanish0@gmail.com',
+            'ceo@abumafhal.com',
+            'muhammadsaniisyaku3@gmail.com'
+        ];
+
+        const isFounderUser = FOUNDER_EMAILS.includes(cleanEmail) || 
+            ['6D3DF1F5', '8F429903', '9F58F703', '60798440', '5B5CF3AE'].includes(userPrefix);
+
         // 3. Match user transactions
         const matched = txList.filter(t => {
+            if (t.status !== 'successful') return false;
             const txRef = String(t.tx_ref || '').toUpperCase();
             const custEmail = String(t.customer?.email || '').trim().toLowerCase();
             const custPhone = String(t.customer?.phone_number || '').replace(/[^0-9]/g, '');
@@ -70,7 +83,14 @@ export default async function handler(req, res) {
             const matchEmail = cleanEmail && custEmail === cleanEmail;
             const matchPhone = cleanPhone && (custPhone.includes(cleanPhone) || cleanPhone.includes(custPhone));
 
-            return (matchRef || matchEmail || matchPhone) && t.status === 'successful';
+            // If it's a founder account, also match transactions made to the founder's shared virtual account (9187255635 / AMF-DVA-6D3DF1F5 / sale.abumafhal@gmail.com)
+            const matchFounder = isFounderUser && (
+                FOUNDER_EMAILS.includes(custEmail) ||
+                txRef.includes('6D3DF1F5') ||
+                txRef.includes('AMF-DVA-')
+            );
+
+            return matchRef || matchEmail || matchPhone || matchFounder;
         });
 
         // 4. Fetch current user profile
