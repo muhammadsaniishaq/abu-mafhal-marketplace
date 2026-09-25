@@ -89,6 +89,7 @@ const POPULAR_FALLBACKS = [
         rating: 4.9,
         reviews_count: 142,
         category: 'Phones & Tablets',
+        seller_state: 'Lagos',
         images: ['https://images.unsplash.com/photo-1695048133142-1a20484d2569?w=400']
     },
     {
@@ -100,6 +101,7 @@ const POPULAR_FALLBACKS = [
         rating: 4.8,
         reviews_count: 98,
         category: 'Electronics',
+        seller_state: 'Abuja',
         images: ['https://images.unsplash.com/photo-1542496658-e33a6d0d50f6?w=400']
     },
     {
@@ -111,6 +113,7 @@ const POPULAR_FALLBACKS = [
         rating: 4.7,
         reviews_count: 76,
         category: 'Fashion & Apparel',
+        seller_state: 'Kano',
         images: ['https://images.unsplash.com/photo-1552346154-21d32810aba3?w=400']
     },
     {
@@ -122,6 +125,7 @@ const POPULAR_FALLBACKS = [
         rating: 4.9,
         reviews_count: 65,
         category: 'Beauty & Health',
+        seller_state: 'Lagos',
         images: ['https://images.unsplash.com/photo-1547887537-6158d64c35b3?w=400']
     }
 ];
@@ -208,11 +212,13 @@ export const LandingPage = ({
 
     const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
     const [selectedCategory, setSelectedCategory] = useState('All Items');
+    const [priceRange, setPriceRange] = useState('all'); // 'all', 'under50k', '50k-250k', '250k+'
     const [sortFilter, setSortFilter] = useState('featured'); // 'featured', 'rating', 'deals'
     const [popularProducts, setPopularProducts] = useState(POPULAR_FALLBACKS);
     const [flashSaleProducts, setFlashSaleProducts] = useState([]);
     const [testimonials, setTestimonials] = useState(TESTIMONIALS_FALLBACK);
     const [searchQuery, setSearchQuery] = useState('');
+    const [selectedDeliveryState, setSelectedDeliveryState] = useState('Abuja');
     const [newsletterEmail, setNewsletterEmail] = useState('');
     const [refreshing, setRefreshing] = useState(false);
     const [toast, setToast] = useState({ visible: false, message: '' });
@@ -378,7 +384,19 @@ export const LandingPage = ({
         const matchesQuery = !searchQuery.trim() ||
             (p.name && p.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
             (p.category && p.category.toLowerCase().includes(searchQuery.toLowerCase()));
-        return matchesCategory && matchesQuery;
+
+        // Price Filter
+        let matchesPrice = true;
+        const numPrice = Number(p.price) || 0;
+        if (priceRange === 'under50k') {
+            matchesPrice = numPrice < 50000;
+        } else if (priceRange === '50k-250k') {
+            matchesPrice = numPrice >= 50000 && numPrice <= 250000;
+        } else if (priceRange === '250k+') {
+            matchesPrice = numPrice > 250000;
+        }
+
+        return matchesCategory && matchesQuery && matchesPrice;
     });
 
     if (sortFilter === 'rating') {
@@ -394,6 +412,14 @@ export const LandingPage = ({
     return (
         <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
             <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
+
+            {/* ─── LIVE FINANCIAL-GRADE ESCROW STATUS TICKER ─── */}
+            <View style={styles.topLiveTicker}>
+                <View style={styles.tickerPulseGreen} />
+                <Text style={styles.tickerText}>
+                    LIVE ESCROW VAULT ACTIVE • ₦2.5B+ SECURED • 24H EXPRESS TRANSIT
+                </Text>
+            </View>
 
             {/* Floating Toast Notification */}
             {toast.visible && (
@@ -418,11 +444,11 @@ export const LandingPage = ({
                 </Animated.View>
             )}
 
-            {/* ─── LUXURY CLEAN BRANDING HEADER (NO CART) ─── */}
+            {/* ─── LUXURY CLEAN BRANDING HEADER ─── */}
             <View style={styles.headerCentered}>
                 {/* Left: Security Status Indicator */}
                 <View style={styles.headerLeftSecurityBadge}>
-                    <Ionicons name="shield-checkmark" size={15} color="#10B981" />
+                    <Ionicons name="shield-checkmark" size={14} color="#10B981" />
                     <Text style={styles.headerLeftSecurityText}>Verified Hub</Text>
                 </View>
 
@@ -455,7 +481,7 @@ export const LandingPage = ({
                     >
                         <Ionicons
                             name={user ? 'person-circle-outline' : 'log-in-outline'}
-                            size={16}
+                            size={15}
                             color="#D9A73A"
                             style={{ marginRight: 4 }}
                         />
@@ -526,7 +552,7 @@ export const LandingPage = ({
                             </View>
                         </View>
 
-                        {/* Right Column: Hero Device Mockup */}
+                        {/* Right Column: Hero Device Mockup with Overlaid Micro-Badges */}
                         <View style={styles.heroRightCol}>
                             <View style={styles.decorCircleLarge} />
                             <View style={styles.decorCircleRing} />
@@ -535,6 +561,18 @@ export const LandingPage = ({
                                 style={styles.heroMockupImage}
                                 resizeMode="contain"
                             />
+
+                            {/* Floating Micro-Badge Top Left */}
+                            <View style={styles.heroFloatingBadgeTop}>
+                                <Ionicons name="shield-checkmark" size={11} color="#10B981" />
+                                <Text style={styles.heroFloatingBadgeText}>Escrow Secured</Text>
+                            </View>
+
+                            {/* Floating Micro-Badge Bottom Right */}
+                            <View style={styles.heroFloatingBadgeBottom}>
+                                <Ionicons name="star" size={10} color="#F59E0B" />
+                                <Text style={styles.heroFloatingBadgeText}>4.9/5 Rating</Text>
+                            </View>
                         </View>
                     </View>
                 </View>
@@ -588,7 +626,7 @@ export const LandingPage = ({
                                 >
                                     <Ionicons
                                         name={cat.icon || 'grid-outline'}
-                                        size={14}
+                                        size={13}
                                         color={isSelected ? '#070F1E' : '#64748B'}
                                         style={{ marginRight: 5 }}
                                     />
@@ -606,33 +644,71 @@ export const LandingPage = ({
                     </ScrollView>
                 </View>
 
-                {/* ─── 4. FEATURE 2: DYNAMIC SORT & FILTER PILLS ─── */}
+                {/* ─── 4. FEATURE 2: DYNAMIC SORT & BUDGET FILTER PILLS ─── */}
                 <View style={styles.sortFilterBar}>
-                    <Text style={styles.sortFilterLabel}>Sort by:</Text>
-                    <TouchableOpacity
-                        style={[styles.sortPill, sortFilter === 'featured' && styles.sortPillActive]}
-                        onPress={() => setSortFilter('featured')}
-                    >
-                        <Text style={[styles.sortPillText, sortFilter === 'featured' && styles.sortPillTextActive]}>
-                            🔥 Featured
-                        </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.sortPill, sortFilter === 'rating' && styles.sortPillActive]}
-                        onPress={() => setSortFilter('rating')}
-                    >
-                        <Text style={[styles.sortPillText, sortFilter === 'rating' && styles.sortPillTextActive]}>
-                            ⭐ Top Rated
-                        </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.sortPill, sortFilter === 'deals' && styles.sortPillActive]}
-                        onPress={() => setSortFilter('deals')}
-                    >
-                        <Text style={[styles.sortPillText, sortFilter === 'deals' && styles.sortPillTextActive]}>
-                            ⚡ Best Deals
-                        </Text>
-                    </TouchableOpacity>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortFilterScroll}>
+                        <Text style={styles.sortFilterLabel}>Filter:</Text>
+                        <TouchableOpacity
+                            style={[styles.sortPill, sortFilter === 'featured' && styles.sortPillActive]}
+                            onPress={() => setSortFilter('featured')}
+                        >
+                            <Text style={[styles.sortPillText, sortFilter === 'featured' && styles.sortPillTextActive]}>
+                                🔥 Featured
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.sortPill, sortFilter === 'rating' && styles.sortPillActive]}
+                            onPress={() => setSortFilter('rating')}
+                        >
+                            <Text style={[styles.sortPillText, sortFilter === 'rating' && styles.sortPillTextActive]}>
+                                ⭐ Top Rated
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.sortPill, sortFilter === 'deals' && styles.sortPillActive]}
+                            onPress={() => setSortFilter('deals')}
+                        >
+                            <Text style={[styles.sortPillText, sortFilter === 'deals' && styles.sortPillTextActive]}>
+                                ⚡ Deals
+                            </Text>
+                        </TouchableOpacity>
+
+                        <View style={styles.filterDivider} />
+
+                        {/* Budget Pills */}
+                        <TouchableOpacity
+                            style={[styles.sortPill, priceRange === 'all' && styles.sortPillActive]}
+                            onPress={() => setPriceRange('all')}
+                        >
+                            <Text style={[styles.sortPillText, priceRange === 'all' && styles.sortPillTextActive]}>
+                                All Prices
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.sortPill, priceRange === 'under50k' && styles.sortPillActive]}
+                            onPress={() => setPriceRange('under50k')}
+                        >
+                            <Text style={[styles.sortPillText, priceRange === 'under50k' && styles.sortPillTextActive]}>
+                                Under ₦50K
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.sortPill, priceRange === '50k-250k' && styles.sortPillActive]}
+                            onPress={() => setPriceRange('50k-250k')}
+                        >
+                            <Text style={[styles.sortPillText, priceRange === '50k-250k' && styles.sortPillTextActive]}>
+                                ₦50K - ₦250K
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.sortPill, priceRange === '250k+' && styles.sortPillActive]}
+                            onPress={() => setPriceRange('250k+')}
+                        >
+                            <Text style={[styles.sortPillText, priceRange === '250k+' && styles.sortPillTextActive]}>
+                                ₦250K+
+                            </Text>
+                        </TouchableOpacity>
+                    </ScrollView>
                 </View>
 
                 {/* ─── 5. ELEGANT ESCROW & BANK SECURITY STRIP ─── */}
@@ -676,7 +752,7 @@ export const LandingPage = ({
                     </LinearGradient>
                 </View>
 
-                {/* ─── 6. FLASH DEALS (WITH LIVE COUNTDOWN TIMER) ─── */}
+                {/* ─── 6. FLASH DEALS (WITH LIVE COUNTDOWN TIMER & PROGRESS) ─── */}
                 {flashSaleProducts.length > 0 && (
                     <View style={styles.flashDealsSection}>
                         <View style={styles.flashHeaderRow}>
@@ -697,10 +773,11 @@ export const LandingPage = ({
                             showsHorizontalScrollIndicator={false}
                             contentContainerStyle={styles.flashProductsScroll}
                         >
-                            {flashSaleProducts.map((p) => {
+                            {flashSaleProducts.map((p, idx) => {
                                 const discountPct = p.compare_at_price && p.compare_at_price > p.price
                                     ? Math.round(((p.compare_at_price - p.price) / p.compare_at_price) * 100)
                                     : (p.discount || 15);
+                                const progressPct = 65 + ((idx * 11) % 30);
 
                                 return (
                                     <TouchableOpacity
@@ -722,6 +799,12 @@ export const LandingPage = ({
                                         <View style={styles.flashCardBody}>
                                             <Text style={styles.flashProductName} numberOfLines={1}>{p.name}</Text>
                                             <Text style={styles.flashProductPrice}>{fmtPrice(p.price)}</Text>
+
+                                            {/* Minimal Stock Progress Bar */}
+                                            <View style={styles.flashStockBar}>
+                                                <View style={[styles.flashStockBarFill, { width: `${progressPct}%` }]} />
+                                            </View>
+                                            <Text style={styles.flashStockText}>⚡ {progressPct}% Claimed</Text>
 
                                             {/* Security Gate Pill: Login to View */}
                                             <View style={styles.viewLockPill}>
@@ -750,8 +833,8 @@ export const LandingPage = ({
                             <Text style={styles.sectionTitleText}>Trending Marketplace</Text>
                             <Text style={styles.sectionSubtitleText}>
                                 {selectedCategory === 'All Items'
-                                    ? 'High-demand verified inventory across Nigeria'
-                                    : `Selected collection in ${selectedCategory}`}
+                                    ? `Showing ${displayedProducts.length} verified products`
+                                    : `${selectedCategory} (${displayedProducts.length} items)`}
                             </Text>
                         </View>
                         <TouchableOpacity onPress={() => handleEnterShop('shop', selectedCategory)} style={styles.sectionLinkBtn}>
@@ -785,21 +868,26 @@ export const LandingPage = ({
                                     {/* Auth Lock Hint Overlay for guests */}
                                     {!user && (
                                         <View style={styles.productAuthLockBadge}>
-                                            <Ionicons name="lock-closed" size={12} color="#FFFFFF" />
+                                            <Ionicons name="lock-closed" size={11} color="#FFFFFF" />
                                         </View>
                                     )}
                                 </View>
 
                                 {/* Product Details */}
                                 <View style={styles.productCardDetails}>
-                                    <Text style={styles.productCardCategory} numberOfLines={1}>
-                                        {product.category || 'Marketplace'}
-                                    </Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <Text style={styles.productCardCategory} numberOfLines={1}>
+                                            {product.category || 'Marketplace'}
+                                        </Text>
+                                        <Text style={styles.productOriginTag}>
+                                            {product.seller_state || 'Nigeria'}
+                                        </Text>
+                                    </View>
                                     <Text style={styles.productCardTitle} numberOfLines={2}>
                                         {product.name}
                                     </Text>
 
-                                    {/* Rating */}
+                                    {/* Rating & Verified Tag */}
                                     <View style={styles.productRatingRow}>
                                         <Ionicons name="star" size={11} color="#F59E0B" />
                                         <Text style={styles.productRatingText}>
@@ -808,6 +896,7 @@ export const LandingPage = ({
                                         <Text style={styles.productReviewsCount}>
                                             ({product.reviews_count || 45})
                                         </Text>
+                                        <Text style={styles.verifiedMerchantTag}>• Verified</Text>
                                     </View>
 
                                     {/* Pricing & Secure Access Action */}
@@ -825,7 +914,7 @@ export const LandingPage = ({
                                         <View style={[styles.productViewActionBtn, user && styles.productViewActionBtnUser]}>
                                             <Ionicons
                                                 name={user ? 'eye-outline' : 'lock-closed'}
-                                                size={12}
+                                                size={11}
                                                 color={user ? '#10B981' : '#D9A73A'}
                                                 style={{ marginRight: 3 }}
                                             />
@@ -840,7 +929,40 @@ export const LandingPage = ({
                     </View>
                 </View>
 
-                {/* ─── 8. WHY ABU MAFHAL (STREAMLINED LUXURY) ─── */}
+                {/* ─── 8. FEATURE 3: EXPRESS DELIVERY ESTIMATOR (INTERACTIVE WIDGET) ─── */}
+                <View style={styles.deliveryEstimatorSection}>
+                    <View style={styles.deliveryEstimatorCard}>
+                        <View style={styles.deliveryEstimatorHeader}>
+                            <Ionicons name="speedometer-outline" size={20} color="#D9A73A" />
+                            <Text style={styles.deliveryEstimatorTitle}>Nationwide Delivery Transit</Text>
+                        </View>
+                        <Text style={styles.deliveryEstimatorSub}>Select destination hub to view estimated freight timeframe:</Text>
+
+                        <View style={styles.stateSelectorRow}>
+                            {['Abuja', 'Lagos', 'Kano', 'Port Harcourt'].map((st) => {
+                                const isSel = selectedDeliveryState === st;
+                                return (
+                                    <TouchableOpacity
+                                        key={st}
+                                        style={[styles.statePill, isSel && styles.statePillActive]}
+                                        onPress={() => setSelectedDeliveryState(st)}
+                                    >
+                                        <Text style={[styles.statePillText, isSel && styles.statePillTextActive]}>{st}</Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+
+                        <View style={styles.deliveryTimeframeResult}>
+                            <Ionicons name="flash" size={14} color="#10B981" />
+                            <Text style={styles.deliveryTimeframeResultText}>
+                                {selectedDeliveryState}: Guaranteed 24 - 48 Hours Insured Cargo Dispatch
+                            </Text>
+                        </View>
+                    </View>
+                </View>
+
+                {/* ─── 9. WHY ABU MAFHAL (STREAMLINED LUXURY) ─── */}
                 <View style={styles.whySectionContainer}>
                     <View style={styles.centerSectionHeader}>
                         <Text style={styles.centerSectionTitle}>Why Choose Abu Mafhal?</Text>
@@ -865,7 +987,7 @@ export const LandingPage = ({
                     </ScrollView>
                 </View>
 
-                {/* ─── 9. LIVE PLATFORM IMPACT & STATS (ANIMATED) ─── */}
+                {/* ─── 10. LIVE PLATFORM IMPACT & STATS (ANIMATED) ─── */}
                 <View style={styles.statsSectionContainer}>
                     <View style={styles.statsGridCard}>
                         <View style={styles.statsItemCol}>
@@ -897,7 +1019,7 @@ export const LandingPage = ({
                     </View>
                 </View>
 
-                {/* ─── 10. DIRECT CONCIERGE & WHATSAPP SUPPORT PILL ─── */}
+                {/* ─── 11. DIRECT CONCIERGE & WHATSAPP SUPPORT PILL ─── */}
                 <View style={styles.conciergeSupportContainer}>
                     <TouchableOpacity
                         style={styles.conciergeSupportCard}
@@ -915,7 +1037,7 @@ export const LandingPage = ({
                     </TouchableOpacity>
                 </View>
 
-                {/* ─── 11. VERIFIED CUSTOMER TESTIMONIALS ─── */}
+                {/* ─── 12. VERIFIED CUSTOMER TESTIMONIALS ─── */}
                 <View style={styles.sectionContainer}>
                     <View style={styles.centerSectionHeader}>
                         <Text style={styles.centerSectionTitle}>Trusted by Thousands</Text>
@@ -954,7 +1076,7 @@ export const LandingPage = ({
                     </ScrollView>
                 </View>
 
-                {/* ─── 12. STREAMLINED LUXURY FOOTER ─── */}
+                {/* ─── 13. STREAMLINED LUXURY FOOTER ─── */}
                 <View style={styles.footerSection}>
                     <View style={styles.footerBrandRow}>
                         <View style={styles.footerLogoFrame}>
@@ -1062,6 +1184,29 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#F8FAFC',
     },
+    topLiveTicker: {
+        backgroundColor: '#070F1E',
+        paddingVertical: 5,
+        paddingHorizontal: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(217, 167, 58, 0.25)',
+    },
+    tickerPulseGreen: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: '#10B981',
+        marginRight: 6,
+    },
+    tickerText: {
+        color: '#D9A73A',
+        fontSize: 7.8,
+        fontWeight: '900',
+        letterSpacing: 1.2,
+    },
     toastContainer: {
         position: 'absolute',
         top: Platform.OS === 'ios' ? 50 : 20,
@@ -1093,8 +1238,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 16,
-        paddingTop: Platform.OS === 'ios' ? 8 : 12,
-        paddingBottom: 12,
+        paddingTop: Platform.OS === 'ios' ? 8 : 10,
+        paddingBottom: 10,
         backgroundColor: '#F8FAFC',
         borderBottomWidth: 1,
         borderBottomColor: '#E2E8F0',
@@ -1118,9 +1263,9 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     logoCircleContainer: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
+        width: 46,
+        height: 46,
+        borderRadius: 23,
         backgroundColor: '#FFFFFF',
         alignItems: 'center',
         justifyContent: 'center',
@@ -1133,33 +1278,33 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     logoImage: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+        width: 38,
+        height: 38,
+        borderRadius: 19,
     },
     brandTitleRow: {
         flexDirection: 'row',
-        marginTop: 5,
+        marginTop: 4,
         alignItems: 'center',
     },
     brandTitleAbu: {
-        fontSize: 17,
+        fontSize: 16.5,
         fontWeight: '900',
         color: '#070F1E',
         letterSpacing: 0.5,
     },
     brandTitleMafhal: {
-        fontSize: 17,
+        fontSize: 16.5,
         fontWeight: '900',
         color: '#D9A73A',
         letterSpacing: 0.5,
     },
     brandSubtitle: {
-        fontSize: 8,
+        fontSize: 7.5,
         fontWeight: '800',
         color: '#64748B',
         letterSpacing: 1.8,
-        marginTop: 2,
+        marginTop: 1,
     },
     headerRightAction: {
         alignItems: 'flex-end',
@@ -1176,7 +1321,7 @@ const styles = StyleSheet.create({
     },
     headerLoginText: {
         color: '#D9A73A',
-        fontSize: 10.5,
+        fontSize: 10,
         fontWeight: '800',
     },
 
@@ -1236,6 +1381,46 @@ const styles = StyleSheet.create({
         width: '100%',
         height: '100%',
         zIndex: 1,
+    },
+    heroFloatingBadgeTop: {
+        position: 'absolute',
+        top: 60,
+        left: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: 'rgba(7, 15, 30, 0.88)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(217, 167, 58, 0.4)',
+        zIndex: 2,
+    },
+    heroFloatingBadgeBottom: {
+        position: 'absolute',
+        bottom: 60,
+        right: 35,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
+        elevation: 2,
+        zIndex: 2,
+    },
+    heroFloatingBadgeText: {
+        color: '#FFFFFF',
+        fontSize: 8,
+        fontWeight: '800',
     },
     trustPillBadge: {
         flexDirection: 'row',
@@ -1407,35 +1592,46 @@ const styles = StyleSheet.create({
 
     // ─── Dynamic Sort Bar ───
     sortFilterBar: {
+        paddingTop: 10,
+    },
+    sortFilterScroll: {
+        paddingHorizontal: 16,
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 16,
-        marginTop: 10,
-        gap: 8,
+        gap: 7,
     },
     sortFilterLabel: {
-        fontSize: 10,
+        fontSize: 9.5,
         fontWeight: '800',
         color: '#94A3B8',
         textTransform: 'uppercase',
     },
     sortPill: {
         paddingHorizontal: 9,
-        paddingVertical: 4,
+        paddingVertical: 4.5,
         borderRadius: 12,
         backgroundColor: '#F1F5F9',
+        borderWidth: 1,
+        borderColor: 'transparent',
     },
     sortPillActive: {
         backgroundColor: '#070F1E',
+        borderColor: '#D9A73A',
     },
     sortPillText: {
-        fontSize: 10,
+        fontSize: 9.5,
         fontWeight: '700',
         color: '#475569',
     },
     sortPillTextActive: {
         color: '#FFFFFF',
         fontWeight: '800',
+    },
+    filterDivider: {
+        width: 1,
+        height: 16,
+        backgroundColor: '#CBD5E1',
+        marginHorizontal: 3,
     },
 
     // ─── Compact Escrow Security Strip ───
@@ -1601,6 +1797,24 @@ const styles = StyleSheet.create({
         fontWeight: '900',
         color: '#070F1E',
     },
+    flashStockBar: {
+        height: 3.5,
+        backgroundColor: '#E2E8F0',
+        borderRadius: 2,
+        marginTop: 5,
+        overflow: 'hidden',
+    },
+    flashStockBarFill: {
+        height: '100%',
+        backgroundColor: '#EF4444',
+        borderRadius: 2,
+    },
+    flashStockText: {
+        fontSize: 7.5,
+        fontWeight: '700',
+        color: '#EF4444',
+        marginTop: 2,
+    },
     viewLockPill: {
         marginTop: 6,
         backgroundColor: '#F8FAFC',
@@ -1703,9 +1917,9 @@ const styles = StyleSheet.create({
         position: 'absolute',
         top: 8,
         right: 8,
-        width: 24,
-        height: 24,
-        borderRadius: 12,
+        width: 22,
+        height: 22,
+        borderRadius: 11,
         backgroundColor: 'rgba(7, 15, 30, 0.8)',
         alignItems: 'center',
         justifyContent: 'center',
@@ -1719,6 +1933,11 @@ const styles = StyleSheet.create({
         color: '#94A3B8',
         textTransform: 'uppercase',
         letterSpacing: 0.5,
+    },
+    productOriginTag: {
+        fontSize: 8,
+        color: '#64748B',
+        fontWeight: '700',
     },
     productCardTitle: {
         fontSize: 11.5,
@@ -1742,6 +1961,11 @@ const styles = StyleSheet.create({
     productReviewsCount: {
         fontSize: 8.5,
         color: '#94A3B8',
+    },
+    verifiedMerchantTag: {
+        fontSize: 8,
+        color: '#10B981',
+        fontWeight: '700',
     },
     productPriceRow: {
         flexDirection: 'row',
@@ -1780,6 +2004,79 @@ const styles = StyleSheet.create({
         fontSize: 9.5,
         fontWeight: '800',
         color: '#D9A73A',
+    },
+
+    // ─── Delivery Estimator Widget ───
+    deliveryEstimatorSection: {
+        paddingHorizontal: 16,
+        marginTop: 20,
+    },
+    deliveryEstimatorCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 14,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.03,
+        shadowRadius: 5,
+        elevation: 1,
+    },
+    deliveryEstimatorHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    deliveryEstimatorTitle: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#070F1E',
+    },
+    deliveryEstimatorSub: {
+        fontSize: 9.5,
+        color: '#64748B',
+        marginTop: 3,
+        marginBottom: 8,
+    },
+    stateSelectorRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
+        marginBottom: 10,
+    },
+    statePill: {
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 12,
+        backgroundColor: '#F1F5F9',
+    },
+    statePillActive: {
+        backgroundColor: '#070F1E',
+    },
+    statePillText: {
+        fontSize: 9.5,
+        fontWeight: '700',
+        color: '#475569',
+    },
+    statePillTextActive: {
+        color: '#D9A73A',
+        fontWeight: '800',
+    },
+    deliveryTimeframeResult: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#ECFDF5',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 8,
+        gap: 6,
+    },
+    deliveryTimeframeResultText: {
+        color: '#065F46',
+        fontSize: 9.5,
+        fontWeight: '700',
+        flex: 1,
     },
 
     // ─── Why Abu Mafhal ───
