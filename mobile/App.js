@@ -35,6 +35,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ComparisonProvider } from './src/context/ComparisonContext';
 import { clearFollowedStoresCache } from './src/services/vendorFollowerService';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { ModernSplashScreen } from './src/components/ModernSplashScreen';
 
 // Screens
 import { ProductComparison } from './src/screens/ProductComparison';
@@ -109,6 +110,7 @@ export default function App() {
     const [loading, setLoading] = useState(() => !getStoredUserSync());
     const [cartLines, setCartLines] = useState(getStoredCartSync);
     const [lastHeartbeat, setLastHeartbeat] = useState(0);
+    const [showSplash, setShowSplash] = useState(true);
 
     const CART_STORAGE_KEY = '@abumafhal_cart_v1';
     const USER_STORAGE_KEY = '@abumafhal_user_v1';
@@ -625,6 +627,11 @@ export default function App() {
                             </Stack.Screen>
                         </Stack.Navigator>
                     </NavigationContainer>
+
+                    {showSplash && (
+                        <ModernSplashScreen onFinish={() => setShowSplash(false)} />
+                    )}
+
                     </ComparisonProvider>
                 </AppSettingsProvider>
             </SafeAreaProvider>
