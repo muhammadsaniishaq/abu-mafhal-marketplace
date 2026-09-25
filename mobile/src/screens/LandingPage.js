@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import {
     View, Text, Image, TouchableOpacity, ScrollView, Dimensions,
     Platform, StatusBar, StyleSheet, TextInput, RefreshControl,
-    Animated, Linking, Alert
+    Animated, Linking, Alert, Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,14 +33,6 @@ const resolveImage = (item) => {
     if (item.image && typeof item.image === 'string') return item.image;
     return 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=400';
 };
-
-// Trust Strip Items
-const TRUST_ITEMS = [
-    { icon: 'shield-checkmark', label: '100% Escrow Vault', color: '#10B981', desc: 'Protected until delivered' },
-    { icon: 'lock-closed', label: '256-Bit SSL Security', color: '#D9A73A', desc: 'Bank-grade encryption' },
-    { icon: 'airplane', label: 'Insured Delivery', color: '#3B82F6', desc: 'Doorstep tracked freight' },
-    { icon: 'chatbubbles', label: '24/7 VIP Concierge', color: '#8B5CF6', desc: 'Dedicated personal support' },
-];
 
 // Why Choose Us Items
 const WHY_CHOOSE_US = [
@@ -209,6 +201,7 @@ export const LandingPage = ({
     onNavigate
 }) => {
     const { settings } = useAppSettings();
+    const scrollViewRef = useRef(null);
 
     const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
     const [selectedCategory, setSelectedCategory] = useState('All Items');
@@ -223,6 +216,17 @@ export const LandingPage = ({
     const [refreshing, setRefreshing] = useState(false);
     const [toast, setToast] = useState({ visible: false, message: '' });
 
+    // Interactive Policy & Info Modal State (Keeps users on Landing Page without entering MainApp)
+    const [infoModal, setInfoModal] = useState({
+        visible: false,
+        type: '',
+        title: '',
+        subtitle: ''
+    });
+
+    const [trackInput, setTrackInput] = useState('');
+    const [trackResult, setTrackResult] = useState(null);
+
     const toastAnim = useRef(new Animated.Value(0)).current;
 
     const showToast = (message) => {
@@ -232,16 +236,6 @@ export const LandingPage = ({
             Animated.delay(2400),
             Animated.timing(toastAnim, { toValue: 0, duration: 250, useNativeDriver: true })
         ]).start(() => setToast({ visible: false, message: '' }));
-    };
-
-    // Safe navigation helper
-    const handleEnterShop = (tab = 'home', params = {}) => {
-        const routeParams = typeof params === 'string' ? { category: params } : params;
-        if (typeof onEnterShop === 'function') {
-            onEnterShop(tab, routeParams);
-        } else if (navigation) {
-            navigation.navigate('Main', { screen: tab, ...routeParams });
-        }
     };
 
     // 🔒 STRICT SECURITY GATE: User MUST be authenticated to view Product Details!
@@ -274,30 +268,96 @@ export const LandingPage = ({
         }
     };
 
-    const handleSearchSubmit = () => {
-        if (!searchQuery.trim()) {
-            handleEnterShop('shop');
-            return;
+    // Footer Info Modal Opener
+    const openInfoModal = (type) => {
+        switch (type) {
+            case 'escrow-policy':
+                setInfoModal({
+                    visible: true,
+                    type,
+                    title: '100% Escrow Protection Policy',
+                    subtitle: 'Bank-Grade Financial Custody & Buyer Shield'
+                });
+                break;
+            case 'buyer-protection':
+                setInfoModal({
+                    visible: true,
+                    type,
+                    title: 'Buyer Protection Guarantee',
+                    subtitle: 'Genuine Products, Insured Transit & 7-Day Returns'
+                });
+                break;
+            case 'dispute-arbitration':
+                setInfoModal({
+                    visible: true,
+                    type,
+                    title: 'Dispute Arbitration Center',
+                    subtitle: 'Neutral 24-Hour Resolution & Full Refund Recourse'
+                });
+                break;
+            case 'order-tracking':
+                setInfoModal({
+                    visible: true,
+                    type,
+                    title: 'Consignment Tracking Hub',
+                    subtitle: 'Enter your Waybill or Tracking ID below'
+                });
+                setTrackResult(null);
+                break;
+            case 'help-center':
+                setInfoModal({
+                    visible: true,
+                    type,
+                    title: 'Support & Help Center',
+                    subtitle: 'Direct 24/7 Concierge & Inquiries'
+                });
+                break;
+            case 'become-seller':
+                setInfoModal({
+                    visible: true,
+                    type,
+                    title: 'Become a Verified Merchant',
+                    subtitle: 'Sell to 50,000+ Verified Buyers Across Nigeria'
+                });
+                break;
+            case 'terms-of-service':
+                setInfoModal({
+                    visible: true,
+                    type,
+                    title: 'Terms of Service',
+                    subtitle: 'Platform Agreement & Escrow Protocol'
+                });
+                break;
+            case 'privacy-policy':
+                setInfoModal({
+                    visible: true,
+                    type,
+                    title: 'Privacy & Data Protection',
+                    subtitle: 'NDPR & 256-Bit Financial Encryption'
+                });
+                break;
+            case 'return-policy':
+                setInfoModal({
+                    visible: true,
+                    type,
+                    title: '7-Day Return & Refund Policy',
+                    subtitle: 'Buyer Safe Harbor & Reimbursement'
+                });
+                break;
+            default:
+                break;
         }
-        handleEnterShop('shop', { query: searchQuery.trim() });
     };
 
-    const handleBecomeSeller = () => {
-        if (!user) {
-            if (onNavigate) {
-                onNavigate('Auth', { redirectTo: 'VendorRegister' });
-            } else if (onLogin) {
-                onLogin();
-            } else if (navigation) {
-                navigation.navigate('Auth', { redirectTo: 'VendorRegister' });
-            }
-        } else {
-            if (onNavigate) {
-                onNavigate('VendorRegister');
-            } else if (navigation) {
-                navigation.navigate('VendorRegister');
-            }
-        }
+    // Category Footer Handler: Scrolls smoothly to trending section without entering MainApp!
+    const handleFooterCategory = (catName) => {
+        setSelectedCategory(catName);
+        scrollViewRef.current?.scrollTo({ y: 430, animated: true });
+        showToast(`Showing ${catName} collection on landing page`);
+    };
+
+    const handleSearchSubmit = () => {
+        scrollViewRef.current?.scrollTo({ y: 430, animated: true });
     };
 
     const handleNewsletterSubmit = () => {
@@ -307,6 +367,21 @@ export const LandingPage = ({
         }
         Alert.alert('Thank You', `You have been subscribed successfully with: ${newsletterEmail}`);
         setNewsletterEmail('');
+    };
+
+    const handleSimulatedTracking = () => {
+        if (!trackInput.trim()) {
+            Alert.alert('Tracking Error', 'Please enter a valid tracking number.');
+            return;
+        }
+        setTrackResult({
+            id: trackInput.trim().toUpperCase(),
+            status: 'In Transit via Priority Freight',
+            origin: 'Lagos Central Hub',
+            destination: `${selectedDeliveryState} Regional Depot`,
+            estimatedDelivery: 'Within 24 - 48 Hours',
+            escrowStatus: 'Funds Protected in Escrow Vault'
+        });
     };
 
     // Load Live Supabase Data
@@ -456,7 +531,7 @@ export const LandingPage = ({
                 <TouchableOpacity
                     style={styles.logoAndBrandContainer}
                     activeOpacity={0.9}
-                    onPress={() => handleEnterShop('home')}
+                    onPress={() => scrollViewRef.current?.scrollTo({ y: 0, animated: true })}
                 >
                     <View style={styles.logoCircleContainer}>
                         <Image
@@ -475,7 +550,7 @@ export const LandingPage = ({
                 {/* Right: Sign In / Account Action */}
                 <View style={styles.headerRightAction}>
                     <TouchableOpacity
-                        onPress={user ? () => handleEnterShop('profile') : (onLogin || (() => handleEnterShop('shop')))}
+                        onPress={onLogin || (() => navigation.navigate('Auth'))}
                         style={styles.headerLoginButton}
                         activeOpacity={0.85}
                     >
@@ -494,6 +569,7 @@ export const LandingPage = ({
 
             {/* ─── SCROLLABLE PAGE CONTAINER ─── */}
             <ScrollView
+                ref={scrollViewRef}
                 showsVerticalScrollIndicator={false}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#D9A73A']} />}
                 contentContainerStyle={{ paddingBottom: 60 }}
@@ -523,13 +599,13 @@ export const LandingPage = ({
                             {/* Dual Call To Actions */}
                             <View style={styles.heroButtonsStack}>
                                 <TouchableOpacity
-                                    onPress={() => user ? handleEnterShop('shop') : (onLogin ? onLogin() : handleEnterShop('shop'))}
+                                    onPress={() => scrollViewRef.current?.scrollTo({ y: 430, animated: true })}
                                     style={styles.btnStartShopping}
                                     activeOpacity={0.9}
                                 >
                                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                         <Ionicons name="bag-handle" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
-                                        <Text style={styles.btnStartShoppingText} numberOfLines={1}>Start Shopping</Text>
+                                        <Text style={styles.btnStartShoppingText} numberOfLines={1}>Browse Market</Text>
                                     </View>
                                     <View style={styles.circleArrowNavy}>
                                         <Ionicons name="arrow-forward" size={12} color="#070F1E" />
@@ -537,7 +613,7 @@ export const LandingPage = ({
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
-                                    onPress={handleBecomeSeller}
+                                    onPress={() => openInfoModal('become-seller')}
                                     style={styles.btnStartSelling}
                                     activeOpacity={0.9}
                                 >
@@ -596,7 +672,7 @@ export const LandingPage = ({
                             </TouchableOpacity>
                         ) : (
                             <TouchableOpacity
-                                onPress={() => handleEnterShop('shop')}
+                                onPress={() => scrollViewRef.current?.scrollTo({ y: 430, animated: true })}
                                 style={styles.searchFilterButton}
                             >
                                 <Ionicons name="options-outline" size={18} color="#070F1E" />
@@ -712,7 +788,11 @@ export const LandingPage = ({
                 </View>
 
                 {/* ─── 5. ELEGANT ESCROW & BANK SECURITY STRIP ─── */}
-                <View style={styles.escrowCompactSection}>
+                <TouchableOpacity
+                    style={styles.escrowCompactSection}
+                    activeOpacity={0.9}
+                    onPress={() => openInfoModal('escrow-policy')}
+                >
                     <LinearGradient
                         colors={['#070F1E', '#0A192F', '#0F2746']}
                         start={{ x: 0, y: 0 }}
@@ -726,7 +806,7 @@ export const LandingPage = ({
                             <View style={{ flex: 1, marginLeft: 10 }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                     <Text style={styles.escrowCompactTitle}>100% ESCROW BUYER VAULT</Text>
-                                    <View style={styles.activeTagBadge}><Text style={styles.activeTagBadgeText}>LOCKED</Text></View>
+                                    <View style={styles.activeTagBadge}><Text style={styles.activeTagBadgeText}>TAP FOR POLICY</Text></View>
                                 </View>
                                 <Text style={styles.escrowCompactSub}>Funds are safely preserved in escrow until you receive and verify your package.</Text>
                             </View>
@@ -750,7 +830,7 @@ export const LandingPage = ({
                             </View>
                         </View>
                     </LinearGradient>
-                </View>
+                </TouchableOpacity>
 
                 {/* ─── 6. FLASH DEALS (WITH LIVE COUNTDOWN TIMER & PROGRESS) ─── */}
                 {flashSaleProducts.length > 0 && (
@@ -837,9 +917,12 @@ export const LandingPage = ({
                                     : `${selectedCategory} (${displayedProducts.length} items)`}
                             </Text>
                         </View>
-                        <TouchableOpacity onPress={() => handleEnterShop('shop', selectedCategory)} style={styles.sectionLinkBtn}>
-                            <Text style={styles.sectionLinkText}>View All</Text>
-                            <Ionicons name="arrow-forward" size={14} color="#D9A73A" />
+                        <TouchableOpacity
+                            onPress={() => scrollViewRef.current?.scrollTo({ y: 430, animated: true })}
+                            style={styles.sectionLinkBtn}
+                        >
+                            <Text style={styles.sectionLinkText}>Filter</Text>
+                            <Ionicons name="arrow-up" size={14} color="#D9A73A" />
                         </TouchableOpacity>
                     </View>
 
@@ -929,7 +1012,7 @@ export const LandingPage = ({
                     </View>
                 </View>
 
-                {/* ─── 8. FEATURE 3: EXPRESS DELIVERY ESTIMATOR (INTERACTIVE WIDGET) ─── */}
+                {/* ─── 8. DELIVERY ESTIMATOR WIDGET ─── */}
                 <View style={styles.deliveryEstimatorSection}>
                     <View style={styles.deliveryEstimatorCard}>
                         <View style={styles.deliveryEstimatorHeader}>
@@ -1076,7 +1159,7 @@ export const LandingPage = ({
                     </ScrollView>
                 </View>
 
-                {/* ─── 13. STREAMLINED LUXURY FOOTER ─── */}
+                {/* ─── 13. STREAMLINED LUXURY FOOTER (ALL LINKS OPEN WITHOUT ENTERING APP) ─── */}
                 <View style={styles.footerSection}>
                     <View style={styles.footerBrandRow}>
                         <View style={styles.footerLogoFrame}>
@@ -1115,27 +1198,45 @@ export const LandingPage = ({
                         ))}
                     </View>
 
-                    {/* Multi-column Navigation Links (No Cart) */}
+                    {/* Multi-column Navigation Links (ALL OPEN IN-PAGE MODALS OR IN-PAGE FILTERS) */}
                     <View style={styles.footerLinksGrid}>
                         <View style={styles.footerLinkCol}>
                             <Text style={styles.footerColTitle}>Marketplace</Text>
-                            <TouchableOpacity onPress={() => handleEnterShop('shop')}><Text style={styles.footerLinkText}>All Products</Text></TouchableOpacity>
-                            <TouchableOpacity onPress={() => handleEnterShop('shop', 'Phones & Tablets')}><Text style={styles.footerLinkText}>Phones & Gadgets</Text></TouchableOpacity>
-                            <TouchableOpacity onPress={() => handleEnterShop('shop', 'Fashion & Apparel')}><Text style={styles.footerLinkText}>Fashion & Apparel</Text></TouchableOpacity>
+                            <TouchableOpacity onPress={() => handleFooterCategory('All Items')}>
+                                <Text style={styles.footerLinkText}>All Products</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => handleFooterCategory('Phones & Tablets')}>
+                                <Text style={styles.footerLinkText}>Phones & Gadgets</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => handleFooterCategory('Fashion & Apparel')}>
+                                <Text style={styles.footerLinkText}>Fashion & Apparel</Text>
+                            </TouchableOpacity>
                         </View>
 
                         <View style={styles.footerLinkCol}>
                             <Text style={styles.footerColTitle}>Company</Text>
-                            <TouchableOpacity onPress={handleBecomeSeller}><Text style={styles.footerLinkText}>Become a Seller</Text></TouchableOpacity>
-                            <TouchableOpacity onPress={() => handleEnterShop('shop')}><Text style={styles.footerLinkText}>Escrow Policy</Text></TouchableOpacity>
-                            <TouchableOpacity onPress={() => handleEnterShop('shop')}><Text style={styles.footerLinkText}>Buyer Protection</Text></TouchableOpacity>
+                            <TouchableOpacity onPress={() => openInfoModal('become-seller')}>
+                                <Text style={styles.footerLinkText}>Become a Seller</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => openInfoModal('escrow-policy')}>
+                                <Text style={styles.footerLinkText}>Escrow Policy</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => openInfoModal('buyer-protection')}>
+                                <Text style={styles.footerLinkText}>Buyer Protection</Text>
+                            </TouchableOpacity>
                         </View>
 
                         <View style={styles.footerLinkCol}>
                             <Text style={styles.footerColTitle}>Support</Text>
-                            <TouchableOpacity onPress={() => handleEnterShop('profile')}><Text style={styles.footerLinkText}>Help Center</Text></TouchableOpacity>
-                            <TouchableOpacity onPress={() => handleEnterShop('shop')}><Text style={styles.footerLinkText}>Order Tracking</Text></TouchableOpacity>
-                            <TouchableOpacity onPress={() => handleEnterShop('shop')}><Text style={styles.footerLinkText}>Dispute Arbitration</Text></TouchableOpacity>
+                            <TouchableOpacity onPress={() => openInfoModal('help-center')}>
+                                <Text style={styles.footerLinkText}>Help Center</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => openInfoModal('order-tracking')}>
+                                <Text style={styles.footerLinkText}>Order Tracking</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => openInfoModal('dispute-arbitration')}>
+                                <Text style={styles.footerLinkText}>Dispute Arbitration</Text>
+                            </TouchableOpacity>
                         </View>
                     </View>
 
@@ -1163,8 +1264,21 @@ export const LandingPage = ({
                         </View>
                     </View>
 
-                    {/* Bottom Legal & Copyright Bar */}
+                    {/* Bottom Legal & Copyright Bar (All Links Open In-Page Modals) */}
                     <View style={styles.footerBottomLegal}>
+                        <View style={styles.footerLegalLinksRow}>
+                            <TouchableOpacity onPress={() => openInfoModal('terms-of-service')} activeOpacity={0.7}>
+                                <Text style={styles.footerLegalLinkText}>Terms of Service</Text>
+                            </TouchableOpacity>
+                            <Text style={styles.footerLegalDot}>•</Text>
+                            <TouchableOpacity onPress={() => openInfoModal('privacy-policy')} activeOpacity={0.7}>
+                                <Text style={styles.footerLegalLinkText}>Privacy Policy</Text>
+                            </TouchableOpacity>
+                            <Text style={styles.footerLegalDot}>•</Text>
+                            <TouchableOpacity onPress={() => openInfoModal('return-policy')} activeOpacity={0.7}>
+                                <Text style={styles.footerLegalLinkText}>Return & Refund Policy</Text>
+                            </TouchableOpacity>
+                        </View>
                         <Text style={styles.footerBottomCopy}>
                             © 2026 Abu Mafhal Marketplace. All rights reserved.
                         </Text>
@@ -1175,6 +1289,264 @@ export const LandingPage = ({
                 </View>
 
             </ScrollView>
+
+            {/* ─── DEDICATED INFORMATION & POLICY MODAL (OPENS CLEANLY WITHOUT ENTERING MAIN APP) ─── */}
+            <Modal
+                visible={infoModal.visible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setInfoModal({ visible: false, type: '', title: '', subtitle: '' })}
+            >
+                <View style={styles.modalBackdrop}>
+                    <View style={styles.modalSheetContainer}>
+                        {/* Header */}
+                        <View style={styles.modalSheetHeader}>
+                            <View style={{ flex: 1, paddingRight: 10 }}>
+                                <Text style={styles.modalSheetTitle}>{infoModal.title}</Text>
+                                <Text style={styles.modalSheetSubtitle}>{infoModal.subtitle}</Text>
+                            </View>
+                            <TouchableOpacity
+                                onPress={() => setInfoModal({ visible: false, type: '', title: '', subtitle: '' })}
+                                style={styles.modalCloseButton}
+                                activeOpacity={0.8}
+                            >
+                                <Ionicons name="close" size={20} color="#070F1E" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Modal Body Content */}
+                        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalBodyScroll}>
+                            {infoModal.type === 'escrow-policy' && (
+                                <View style={styles.modalContentBlock}>
+                                    <View style={styles.modalHighlightBox}>
+                                        <Ionicons name="shield-checkmark" size={22} color="#10B981" />
+                                        <Text style={styles.modalHighlightText}>
+                                            Your money is 100% safe. Abu Mafhal acts as an impartial escrow vault protecting both buyer and seller on every order.
+                                        </Text>
+                                    </View>
+                                    <Text style={styles.modalSectionHeading}>How the Escrow Process Operates:</Text>
+                                    <View style={styles.modalStepItem}>
+                                        <View style={styles.modalStepNum}><Text style={styles.modalStepNumText}>1</Text></View>
+                                        <View style={{ flex: 1, marginLeft: 10 }}>
+                                            <Text style={styles.modalStepTitle}>Secure Vault Custody</Text>
+                                            <Text style={styles.modalStepDesc}>When you checkout, your funds are deposited into an independent, CBN-regulated escrow account. The merchant does not receive payout yet.</Text>
+                                        </View>
+                                    </View>
+                                    <View style={styles.modalStepItem}>
+                                        <View style={styles.modalStepNum}><Text style={styles.modalStepNumText}>2</Text></View>
+                                        <View style={{ flex: 1, marginLeft: 10 }}>
+                                            <Text style={styles.modalStepTitle}>Insured Cargo Transit</Text>
+                                            <Text style={styles.modalStepDesc}>The merchant dispatches your package using tracked freight logistics. You monitor live location at every checkpoint.</Text>
+                                        </View>
+                                    </View>
+                                    <View style={styles.modalStepItem}>
+                                        <View style={styles.modalStepNum}><Text style={styles.modalStepNumText}>3</Text></View>
+                                        <View style={{ flex: 1, marginLeft: 10 }}>
+                                            <Text style={styles.modalStepTitle}>Inspection & Payout Release</Text>
+                                            <Text style={styles.modalStepDesc}>Inspect and verify your item upon receipt. Once you are satisfied, escrow releases payout to the merchant. If defective, receive a 100% refund immediately.</Text>
+                                        </View>
+                                    </View>
+                                </View>
+                            )}
+
+                            {infoModal.type === 'buyer-protection' && (
+                                <View style={styles.modalContentBlock}>
+                                    <View style={styles.modalHighlightBox}>
+                                        <Ionicons name="ribbon-outline" size={22} color="#D9A73A" />
+                                        <Text style={styles.modalHighlightText}>
+                                            Comprehensive Buyer Shield: Genuine products, verified dealers, and instant recourse in case of discrepancy.
+                                        </Text>
+                                    </View>
+                                    <Text style={styles.modalSectionHeading}>Our 3 Pillars of Buyer Safety:</Text>
+                                    <Text style={styles.modalBulletText}>• <Text style={{ fontWeight: '800', color: '#070F1E' }}>Authenticity Commitment:</Text> All sellers submit CAC registration or valid NIN credentials prior to listing.</Text>
+                                    <Text style={styles.modalBulletText}>• <Text style={{ fontWeight: '800', color: '#070F1E' }}>7-Day Return Window:</Text> Return items in original condition if they fail to match manufacturer specifications.</Text>
+                                    <Text style={styles.modalBulletText}>• <Text style={{ fontWeight: '800', color: '#070F1E' }}>Freight Loss Coverage:</Text> If consignment is damaged or lost in transit, escrow issues an immediate replacement or full refund.</Text>
+                                </View>
+                            )}
+
+                            {infoModal.type === 'dispute-arbitration' && (
+                                <View style={styles.modalContentBlock}>
+                                    <View style={styles.modalHighlightBox}>
+                                        <Ionicons name="scale-outline" size={22} color="#3B82F6" />
+                                        <Text style={styles.modalHighlightText}>
+                                            Fair, impartial dispute settlement mediated by our dedicated 24-hour compliance team.
+                                        </Text>
+                                    </View>
+                                    <Text style={styles.modalSectionHeading}>Arbitration Protocol:</Text>
+                                    <Text style={styles.modalBulletText}>• <Text style={{ fontWeight: '800', color: '#070F1E' }}>Instant Dispute Flag:</Text> Tap 'Dispute Order' within 48 hours of delivery to freeze escrow disbursement instantly.</Text>
+                                    <Text style={styles.modalBulletText}>• <Text style={{ fontWeight: '800', color: '#070F1E' }}>Evidence Review:</Text> Submit unboxing photos or testing videos via our secure portal.</Text>
+                                    <Text style={styles.modalBulletText}>• <Text style={{ fontWeight: '800', color: '#070F1E' }}>24-Hour Settlement:</Text> Our compliance department arbitrates and processes refunds directly back to your source account.</Text>
+                                </View>
+                            )}
+
+                            {infoModal.type === 'order-tracking' && (
+                                <View style={styles.modalContentBlock}>
+                                    <Text style={styles.modalSectionHeading}>Enter Consignment or Waybill ID:</Text>
+                                    <View style={styles.modalTrackingInputRow}>
+                                        <TextInput
+                                            placeholder="e.g. AM-84920-NG"
+                                            placeholderTextColor="#94A3B8"
+                                            value={trackInput}
+                                            onChangeText={setTrackInput}
+                                            style={styles.modalTrackingInput}
+                                            autoCapitalize="characters"
+                                        />
+                                        <TouchableOpacity
+                                            style={styles.btnModalTrackSubmit}
+                                            onPress={handleSimulatedTracking}
+                                            activeOpacity={0.85}
+                                        >
+                                            <Ionicons name="search" size={16} color="#FFFFFF" />
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    {trackResult && (
+                                        <View style={styles.trackingResultCard}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                                                <Ionicons name="cube" size={16} color="#10B981" style={{ marginRight: 6 }} />
+                                                <Text style={styles.trackingResultId}>Consignment: {trackResult.id}</Text>
+                                            </View>
+                                            <Text style={styles.trackingResultStatus}>Status: <Text style={{ color: '#10B981', fontWeight: '800' }}>{trackResult.status}</Text></Text>
+                                            <Text style={styles.trackingResultRoute}>Route: {trackResult.origin} → {trackResult.destination}</Text>
+                                            <Text style={styles.trackingResultDelivery}>ETA: {trackResult.estimatedDelivery}</Text>
+                                            <View style={styles.trackingEscrowPill}>
+                                                <Ionicons name="shield-checkmark" size={12} color="#D9A73A" />
+                                                <Text style={styles.trackingEscrowPillText}>{trackResult.escrowStatus}</Text>
+                                            </View>
+                                        </View>
+                                    )}
+
+                                    <Text style={[styles.modalBulletText, { marginTop: 14 }]}>
+                                        💡 Need urgent assistance with your shipment? Contact our 24/7 Logistics Desk directly on WhatsApp.
+                                    </Text>
+                                </View>
+                            )}
+
+                            {infoModal.type === 'help-center' && (
+                                <View style={styles.modalContentBlock}>
+                                    <Text style={styles.modalSectionHeading}>Connect with Abu Mafhal Support:</Text>
+                                    <TouchableOpacity
+                                        style={styles.modalSupportOptionCard}
+                                        activeOpacity={0.9}
+                                        onPress={() => Linking.openURL('https://wa.me/2348000000000').catch(() => {})}
+                                    >
+                                        <Ionicons name="logo-whatsapp" size={26} color="#10B981" />
+                                        <View style={{ flex: 1, marginLeft: 12 }}>
+                                            <Text style={styles.modalSupportOptionTitle}>WhatsApp VIP Concierge</Text>
+                                            <Text style={styles.modalSupportOptionSub}>Average reply time: under 3 minutes (24/7)</Text>
+                                        </View>
+                                        <Ionicons name="chevron-forward" size={18} color="#64748B" />
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        style={styles.modalSupportOptionCard}
+                                        activeOpacity={0.9}
+                                        onPress={() => Linking.openURL('mailto:support@abumafhal.com').catch(() => {})}
+                                    >
+                                        <Ionicons name="mail-outline" size={24} color="#3B82F6" />
+                                        <View style={{ flex: 1, marginLeft: 12 }}>
+                                            <Text style={styles.modalSupportOptionTitle}>Email Desk</Text>
+                                            <Text style={styles.modalSupportOptionSub}>support@abumafhal.com</Text>
+                                        </View>
+                                        <Ionicons name="chevron-forward" size={18} color="#64748B" />
+                                    </TouchableOpacity>
+
+                                    <View style={styles.modalSupportOptionCard}>
+                                        <Ionicons name="business-outline" size={24} color="#D9A73A" />
+                                        <View style={{ flex: 1, marginLeft: 12 }}>
+                                            <Text style={styles.modalSupportOptionTitle}>Headquarters Hub</Text>
+                                            <Text style={styles.modalSupportOptionSub}>Abuja Commercial District, FCT, Nigeria</Text>
+                                        </View>
+                                    </View>
+                                </View>
+                            )}
+
+                            {infoModal.type === 'become-seller' && (
+                                <View style={styles.modalContentBlock}>
+                                    <View style={styles.modalHighlightBox}>
+                                        <Ionicons name="trending-up" size={22} color="#10B981" />
+                                        <Text style={styles.modalHighlightText}>
+                                            Reach over 50,000 active buyers across Nigeria with zero listing fees and guaranteed next-day bank disbursements.
+                                        </Text>
+                                    </View>
+                                    <Text style={styles.modalSectionHeading}>Seller Benefits on Abu Mafhal:</Text>
+                                    <Text style={styles.modalBulletText}>• <Text style={{ fontWeight: '800', color: '#070F1E' }}>0% Commission:</Text> Enjoy 0% commission on your first 10 successful deliveries.</Text>
+                                    <Text style={styles.modalBulletText}>• <Text style={{ fontWeight: '800', color: '#070F1E' }}>Fraud-Free Sales:</Text> Every order is verified with escrow deposits before you dispatch.</Text>
+                                    <Text style={styles.modalBulletText}>• <Text style={{ fontWeight: '800', color: '#070F1E' }}>Nationwide Logistics:</Text> Access discounted cargo freight and automatic customer waybill printing.</Text>
+
+                                    <TouchableOpacity
+                                        style={styles.modalBtnActionPrimary}
+                                        onPress={() => {
+                                            setInfoModal({ visible: false, type: '', title: '', subtitle: '' });
+                                            if (onLogin) onLogin();
+                                            else navigation.navigate('Auth', { redirectTo: 'VendorRegister' });
+                                        }}
+                                        activeOpacity={0.9}
+                                    >
+                                        <Text style={styles.modalBtnActionPrimaryText}>Sign In / Register as Merchant</Text>
+                                        <Ionicons name="arrow-forward" size={16} color="#070F1E" />
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+
+                            {infoModal.type === 'terms-of-service' && (
+                                <View style={styles.modalContentBlock}>
+                                    <View style={styles.modalHighlightBox}>
+                                        <Ionicons name="document-text" size={22} color="#10B981" />
+                                        <Text style={styles.modalHighlightText}>
+                                            All transactions on Abu Mafhal Marketplace are protected by the Escrow Safe Harbor protocol for mutual buyer and seller safety.
+                                        </Text>
+                                    </View>
+                                    <Text style={styles.modalSectionHeading}>Core Platform Rules:</Text>
+                                    <Text style={styles.modalBulletText}>• <Text style={{ fontWeight: '800', color: '#070F1E' }}>Escrow Custody:</Text> Payment remains in neutral custody until buyer inspection passes.</Text>
+                                    <Text style={styles.modalBulletText}>• <Text style={{ fontWeight: '800', color: '#070F1E' }}>Merchant Fulfillment:</Text> Vendors must dispatch genuine items with valid consignment waybills within 48 hours.</Text>
+                                    <Text style={styles.modalBulletText}>• <Text style={{ fontWeight: '800', color: '#070F1E' }}>Counterfeit Ban:</Text> Zero tolerance for non-genuine goods. Violations lead to immediate termination and full refund to buyer.</Text>
+                                </View>
+                            )}
+
+                            {infoModal.type === 'privacy-policy' && (
+                                <View style={styles.modalContentBlock}>
+                                    <View style={styles.modalHighlightBox}>
+                                        <Ionicons name="shield-checkmark" size={22} color="#10B981" />
+                                        <Text style={styles.modalHighlightText}>
+                                            Your personal data and payment credentials are protected with 256-bit SSL encryption under Nigeria Data Protection Regulations (NDPR).
+                                        </Text>
+                                    </View>
+                                    <Text style={styles.modalSectionHeading}>Our Privacy Guarantees:</Text>
+                                    <Text style={styles.modalBulletText}>• <Text style={{ fontWeight: '800', color: '#070F1E' }}>Confidentiality:</Text> We do not sell or rent your personal data to third parties.</Text>
+                                    <Text style={styles.modalBulletText}>• <Text style={{ fontWeight: '800', color: '#070F1E' }}>Secure Channels:</Text> All monetary processing is handled through CBN-licensed payment switches.</Text>
+                                    <Text style={styles.modalBulletText}>• <Text style={{ fontWeight: '800', color: '#070F1E' }}>Data Sovereignty:</Text> You have the right to request deletion or data portability at any time.</Text>
+                                </View>
+                            )}
+
+                            {infoModal.type === 'return-policy' && (
+                                <View style={styles.modalContentBlock}>
+                                    <View style={styles.modalHighlightBox}>
+                                        <Ionicons name="repeat" size={22} color="#10B981" />
+                                        <Text style={styles.modalHighlightText}>
+                                            Every purchase includes our 7-Day Money-Back Guarantee. If goods are damaged, defective, or not as described, return them easily.
+                                        </Text>
+                                    </View>
+                                    <Text style={styles.modalSectionHeading}>Return & Refund Terms:</Text>
+                                    <Text style={styles.modalBulletText}>• <Text style={{ fontWeight: '800', color: '#070F1E' }}>Inspection Window:</Text> Buyers have 7 days upon package delivery to inspect items and initiate a return.</Text>
+                                    <Text style={styles.modalBulletText}>• <Text style={{ fontWeight: '800', color: '#070F1E' }}>Condition:</Text> Items must be in original condition with security tags and serial tags intact.</Text>
+                                    <Text style={styles.modalBulletText}>• <Text style={{ fontWeight: '800', color: '#070F1E' }}>Automatic Reimbursement:</Text> Once package return is verified, escrow funds are instantly credited back to your account.</Text>
+                                </View>
+                            )}
+                        </ScrollView>
+
+                        {/* Footer dismiss button */}
+                        <TouchableOpacity
+                            style={styles.modalDismissBtn}
+                            onPress={() => setInfoModal({ visible: false, type: '', title: '', subtitle: '' })}
+                            activeOpacity={0.8}
+                        >
+                            <Text style={styles.modalDismissBtnText}>Close Window</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
         </SafeAreaView>
     );
 };
@@ -2414,6 +2786,23 @@ const styles = StyleSheet.create({
         marginTop: 18,
         alignItems: 'center',
     },
+    footerLegalLinksRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexWrap: 'wrap',
+        marginBottom: 8,
+        gap: 6,
+    },
+    footerLegalLinkText: {
+        fontSize: 9.5,
+        fontWeight: '700',
+        color: '#D9A73A',
+    },
+    footerLegalDot: {
+        fontSize: 9,
+        color: '#64748B',
+    },
     footerBottomCopy: {
         fontSize: 8.5,
         color: '#64748B',
@@ -2425,5 +2814,238 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         textAlign: 'center',
         marginTop: 3,
+    },
+
+    // ─── Interactive In-Page Policy & Info Modal Styles ───
+    modalBackdrop: {
+        flex: 1,
+        backgroundColor: 'rgba(7, 15, 30, 0.75)',
+        justifyContent: 'flex-end',
+    },
+    modalSheetContainer: {
+        backgroundColor: '#FFFFFF',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        paddingTop: 18,
+        paddingBottom: Platform.OS === 'ios' ? 36 : 20,
+        paddingHorizontal: 20,
+        maxHeight: Dimensions.get('window').height * 0.82,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+        elevation: 8,
+    },
+    modalSheetHeader: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        paddingBottom: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+    },
+    modalSheetTitle: {
+        fontSize: 17,
+        fontWeight: '900',
+        color: '#070F1E',
+        letterSpacing: -0.3,
+    },
+    modalSheetSubtitle: {
+        fontSize: 10.5,
+        color: '#64748B',
+        marginTop: 2,
+        fontWeight: '500',
+    },
+    modalCloseButton: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: '#F1F5F9',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    modalBodyScroll: {
+        paddingVertical: 16,
+    },
+    modalContentBlock: {
+        gap: 12,
+    },
+    modalHighlightBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8FAFC',
+        padding: 12,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        gap: 10,
+    },
+    modalHighlightText: {
+        fontSize: 11,
+        color: '#1E293B',
+        lineHeight: 16,
+        fontWeight: '600',
+        flex: 1,
+    },
+    modalSectionHeading: {
+        fontSize: 13,
+        fontWeight: '900',
+        color: '#070F1E',
+        marginTop: 6,
+    },
+    modalStepItem: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        marginTop: 8,
+    },
+    modalStepNum: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        backgroundColor: '#070F1E',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    modalStepNumText: {
+        color: '#D9A73A',
+        fontSize: 10,
+        fontWeight: '900',
+    },
+    modalStepTitle: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#070F1E',
+    },
+    modalStepDesc: {
+        fontSize: 10.5,
+        color: '#64748B',
+        lineHeight: 15,
+        marginTop: 2,
+    },
+    modalBulletText: {
+        fontSize: 11,
+        color: '#475569',
+        lineHeight: 17,
+    },
+    modalTrackingInputRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 8,
+        gap: 8,
+    },
+    modalTrackingInput: {
+        flex: 1,
+        backgroundColor: '#F8FAFC',
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: Platform.OS === 'ios' ? 10 : 6,
+        fontSize: 12,
+        color: '#070F1E',
+        fontWeight: '700',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    btnModalTrackSubmit: {
+        backgroundColor: '#070F1E',
+        width: 40,
+        height: 40,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    trackingResultCard: {
+        backgroundColor: '#F0FDF4',
+        borderRadius: 12,
+        padding: 12,
+        borderWidth: 1,
+        borderColor: '#BBF7D0',
+        marginTop: 12,
+    },
+    trackingResultId: {
+        fontSize: 11.5,
+        fontWeight: '900',
+        color: '#166534',
+    },
+    trackingResultStatus: {
+        fontSize: 11,
+        color: '#1E293B',
+        marginBottom: 3,
+    },
+    trackingResultRoute: {
+        fontSize: 10,
+        color: '#64748B',
+        marginBottom: 2,
+    },
+    trackingResultDelivery: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#070F1E',
+        marginBottom: 8,
+    },
+    trackingEscrowPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        alignSelf: 'flex-start',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 8,
+        gap: 4,
+        borderWidth: 1,
+        borderColor: '#D9A73A50',
+    },
+    trackingEscrowPillText: {
+        fontSize: 9,
+        fontWeight: '800',
+        color: '#070F1E',
+    },
+    modalSupportOptionCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8FAFC',
+        padding: 12,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        marginTop: 8,
+    },
+    modalSupportOptionTitle: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#070F1E',
+    },
+    modalSupportOptionSub: {
+        fontSize: 10,
+        color: '#64748B',
+        marginTop: 1,
+    },
+    modalBtnActionPrimary: {
+        backgroundColor: '#D9A73A',
+        borderRadius: 12,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 16,
+        gap: 8,
+    },
+    modalBtnActionPrimaryText: {
+        color: '#070F1E',
+        fontSize: 12.5,
+        fontWeight: '900',
+    },
+    modalDismissBtn: {
+        backgroundColor: '#F1F5F9',
+        borderRadius: 12,
+        paddingVertical: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 10,
+    },
+    modalDismissBtnText: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: '#475569',
     },
 });
