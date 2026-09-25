@@ -18,7 +18,7 @@ export default async function handler(req, res) {
             try { body = JSON.parse(body); } catch (_) { body = {}; }
         }
 
-        const { user_id, email, phone } = body;
+        const { user_id, email, phone, tx_ref, reference, transaction_id } = body;
         if (!user_id && !email) {
             return res.status(400).json({ success: false, error: 'Missing user_id or email' });
         }
@@ -44,10 +44,73 @@ export default async function handler(req, res) {
             flwSecret = 'FLWSECK-456331fb55a2e059f1eb8d439c53b9ae-1a07bfbf2fcvt-X';
         }
 
-        // 2. Fetch recent successful transactions from Flutterwave (resilient)
+        // Direct verification by transaction ID or specific reference if provided
+        const directRef = reference || tx_ref;
+        if (directRef || transaction_id) {
+            try {
+                const verifyUrl = transaction_id 
+                    ? `https://api.flutterwave.com/v3/transactions/${transaction_id}/verify`
+                    : `https://api.flutterwave.com/v3/transactions/verify_by_reference?tx_ref=${encodeURIComponent(directRef)}`;
+                
+                const vRes = await fetch(verifyUrl, {
+                    headers: { 'Authorization': `Bearer ${flwSecret.trim()}` }
+                });
+                if (vRes.ok) {
+                    const vJson = await vRes.json();
+                    if (vJson?.status === 'success' && vJson?.data?.status === 'successful') {
+                        const verifiedTx = vJson.data;
+                        const verifiedAmt = Number(verifiedTx.amount || 0);
+                        const verifiedRef = `FLW-${verifiedTx.id}`;
+
+                        // Check if already in DB
+                        const { data: existing } = await supabase
+                            .from('transactions')
+                            .select('id')
+                            .or(`reference.eq.${verifiedRef},reference.eq.${directRef}`)
+                            .maybeSingle();
+
+                        if (!existing && verifiedAmt > 0) {
+                            let targetUid = user_id;
+                            if (!targetUid && email) {
+                                const { data: p } = await supabase.from('profiles').select('id, balance').eq('email', email.trim().toLowerCase()).maybeSingle();
+                                if (p) targetUid = p.id;
+                            }
+
+                            if (targetUid) {
+                                const { data: p } = await supabase.from('profiles').select('balance').eq('id', targetUid).maybeSingle();
+                                const newBal = (Number(p?.balance) || 0) + verifiedAmt;
+
+                                await supabase.from('profiles').update({ balance: newBal }).eq('id', targetUid);
+                                await supabase.from('transactions').insert({
+                                    user_id: targetUid,
+                                    type: 'topup',
+                                    amount: verifiedAmt,
+                                    status: 'completed',
+                                    reference: verifiedRef,
+                                    description: `Deposit of ₦${verifiedAmt.toLocaleString()} via Flutterwave (Ref: ${directRef || verifiedRef})`,
+                                    created_at: verifiedTx.created_at || new Date().toISOString()
+                                });
+
+                                return res.status(200).json({
+                                    success: true,
+                                    verified: true,
+                                    credited_amount: verifiedAmt,
+                                    new_balance: newBal,
+                                    reference: verifiedRef
+                                });
+                            }
+                        }
+                    }
+                }
+            } catch (vErr) {
+                console.warn('[sync-flutterwave-deposits] Direct verify note:', vErr.message);
+            }
+        }
+
+        // 2. Fetch recent successful transactions from Flutterwave (expanded to 100)
         let txList = [];
         try {
-            const flwRes = await fetch('https://api.flutterwave.com/v3/transactions?status=successful&limit=25', {
+            const flwRes = await fetch('https://api.flutterwave.com/v3/transactions?status=successful&limit=100', {
                 headers: { 'Authorization': `Bearer ${flwSecret.trim()}` }
             });
             if (flwRes.ok) {

@@ -264,13 +264,7 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
     const [transferNote, setTransferNote] = useState('');
     const [isTransferPending, setIsTransferPending] = useState(false);
 
-    // ── WITHDRAWAL MODAL STATES ──
-    const [showWithdrawModal, setShowWithdrawModal] = useState(false);
-    const [withdrawBank, setWithdrawBank] = useState('Opay');
-    const [withdrawAccountNum, setWithdrawAccountNum] = useState('');
-    const [withdrawAccountName, setWithdrawAccountName] = useState('');
-    const [withdrawAmount, setWithdrawAmount] = useState('');
-    const [isWithdrawPending, setIsWithdrawPending] = useState(false);
+    // Withdrawal feature completely removed as requested
 
     // ── ESCROW MODAL STATE ──
     const [showEscrowModal, setShowEscrowModal] = useState(false);
@@ -947,57 +941,7 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
         }
     };
 
-    // ── BANK WITHDRAWAL HANDLER ──
-    const handleWithdrawal = async () => {
-        const amt = parseInt(withdrawAmount);
-        if (isNaN(amt) || amt < 1000) {
-            Alert.alert('Minimum Limit', 'Minimum withdrawal amount is ₦1,000');
-            return;
-        }
-        if (amt > wallet.balance) {
-            Alert.alert('Insufficient Funds', `You cannot withdraw ${formatCurrency(amt)}. Available balance is ${formatCurrency(wallet.balance)}.`);
-            return;
-        }
-        if (!withdrawAccountNum.trim() || withdrawAccountNum.trim().length < 10) {
-            Alert.alert('Account Required', 'Please enter a valid 10-digit Nigerian bank account number.');
-            return;
-        }
 
-        setIsWithdrawPending(true);
-        try {
-            const newBal = wallet.balance - amt;
-            const { error: wUpdateErr } = await supabase.from('profiles').update({ balance: newBal }).eq('id', user.id);
-            if (wUpdateErr) throw wUpdateErr;
-
-            const ref = `WTH-${Date.now().toString().slice(-6)}`;
-            const desc = `Bank Cashout to ${withdrawBank} (${withdrawAccountNum}) - Ref: ${ref}`;
-            await supabase.from('transactions').insert({
-                user_id: user.id,
-                type: 'withdrawal',
-                amount: -amt,
-                status: 'pending',
-                reference: ref,
-                description: desc
-            });
-
-            setWallet(prev => ({ ...prev, balance: newBal }));
-            setShowWithdrawModal(false);
-            setWithdrawAmount('');
-            setWithdrawAccountNum('');
-            setWithdrawAccountName('');
-
-            Alert.alert(
-                'Withdrawal Submitted! 🏦',
-                `Your request to withdraw ${formatCurrency(amt)} to ${withdrawBank} (${withdrawAccountNum}) is processing. Funds arrive within 5–15 minutes.`
-            );
-            fetchWalletData();
-        } catch (wErr) {
-            console.error('Withdrawal Error:', wErr);
-            Alert.alert('Error', 'Could not submit withdrawal. Please try again.');
-        } finally {
-            setIsWithdrawPending(false);
-        }
-    };
 
     // ── VOUCHER REDEEM HANDLER ──
     const handleRedeemVoucher = () => {
@@ -1384,16 +1328,16 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                         <Text style={localStyles.actionLabel}>Transfer</Text>
                     </TouchableOpacity>
 
-                    {/* 3. CASHOUT / WITHDRAW */}
+                    {/* 3. DEDICATED BANK NUBAN */}
                     <TouchableOpacity 
                         activeOpacity={0.75} 
                         style={localStyles.actionItem} 
-                        onPress={() => setShowWithdrawModal(true)}
+                        onPress={() => setShowBankTransferModal(true)}
                     >
-                        <View style={[localStyles.actionIconWrapper, { backgroundColor: '#FEF3C7' }]}>
-                            <Ionicons name="arrow-up-circle" size={18} color="#D97706" />
+                        <View style={[localStyles.actionIconWrapper, { backgroundColor: '#EDE9FE' }]}>
+                            <Ionicons name="business" size={17} color="#7C3AED" />
                         </View>
-                        <Text style={localStyles.actionLabel}>Withdraw</Text>
+                        <Text style={localStyles.actionLabel}>Bank NUBAN</Text>
                     </TouchableOpacity>
 
                     {/* 4. REDEEM VOUCHER */}
@@ -1589,8 +1533,8 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                                             `Target: ${formatCurrency(goal.target)}\nSaved: ${formatCurrency(goal.saved)} (${pct}%)`,
                                             [
                                                 { text: 'Cancel', style: 'cancel' },
-                                                { text: '📥 Deposit', onPress: () => processSavingsTransfer(goal.id, 2000, 'deposit') },
-                                                { text: '📤 Withdraw', onPress: () => processSavingsTransfer(goal.id, goal.saved, 'withdraw') }
+                                                { text: '📥 Add to Pot', onPress: () => processSavingsTransfer(goal.id, 2000, 'deposit') },
+                                                { text: '🔓 Release to Wallet', onPress: () => processSavingsTransfer(goal.id, goal.saved, 'withdraw') }
                                             ]
                                         );
                                     }}
@@ -2369,89 +2313,7 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                 </View>
             </Modal>
 
-            {/* ══════════════════════════════════════════════════════════════
-                MODAL 4: BANK WITHDRAWAL / CASHOUT MODAL
-            ══════════════════════════════════════════════════════════════ */}
-            <Modal
-                visible={showWithdrawModal}
-                transparent={true}
-                animationType="slide"
-                onRequestClose={() => setShowWithdrawModal(false)}
-            >
-                <View style={localStyles.modalDimLayer}>
-                    <View style={localStyles.modalContentSheet}>
-                        <View style={localStyles.modalHandleBar} />
-                        <View style={localStyles.modalHeaderSection}>
-                            <View>
-                                <Text style={localStyles.modalMainTitle}>Withdraw to Bank</Text>
-                                <Text style={localStyles.modalSecondaryTitle}>Cashout funds directly to your Nigerian bank</Text>
-                            </View>
-                            <TouchableOpacity style={localStyles.modalCloseCircle} onPress={() => setShowWithdrawModal(false)}>
-                                <Ionicons name="close" size={18} color="#64748B" />
-                            </TouchableOpacity>
-                        </View>
 
-                        <Text style={localStyles.fieldSectionHeader}>SELECT BANK</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-                            <View style={{ flexDirection: 'row', gap: 6 }}>
-                                {NIGERIAN_BANKS.slice(0, 7).map(bank => (
-                                    <TouchableOpacity
-                                        key={bank}
-                                        style={[localStyles.bankChip, withdrawBank === bank && localStyles.bankChipActive]}
-                                        onPress={() => setWithdrawBank(bank)}
-                                    >
-                                        <Text style={[localStyles.bankChipTxt, withdrawBank === bank && localStyles.bankChipTxtActive]}>
-                                            {bank}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-                        </ScrollView>
-
-                        <Text style={localStyles.fieldSectionHeader}>10-DIGIT ACCOUNT NUMBER</Text>
-                        <View style={[localStyles.inputAreaContainer, { marginBottom: 12 }]}>
-                            <Ionicons name="keypad-outline" size={16} color="#94A3B8" style={{ marginRight: 8 }} />
-                            <TextInput
-                                style={[localStyles.mainTextInput, { fontSize: 16 }]}
-                                value={withdrawAccountNum}
-                                onChangeText={setWithdrawAccountNum}
-                                keyboardType="numeric"
-                                maxLength={10}
-                                placeholder="0123456789"
-                                placeholderTextColor="#CBD5E1"
-                            />
-                        </View>
-
-                        <Text style={localStyles.fieldSectionHeader}>AMOUNT TO WITHDRAW (₦)</Text>
-                        <View style={[localStyles.inputAreaContainer, { marginBottom: 18 }]}>
-                            <Text style={localStyles.inputPrefix}>₦</Text>
-                            <TextInput
-                                style={localStyles.mainTextInput}
-                                value={withdrawAmount}
-                                onChangeText={setWithdrawAmount}
-                                keyboardType="numeric"
-                                placeholder="1000"
-                                placeholderTextColor="#CBD5E1"
-                            />
-                        </View>
-
-                        <TouchableOpacity
-                            style={[localStyles.primaryActionBtn, { backgroundColor: '#D97706' }, isWithdrawPending && { opacity: 0.7 }]}
-                            onPress={handleWithdrawal}
-                            disabled={isWithdrawPending}
-                        >
-                            {isWithdrawPending ? (
-                                <ActivityIndicator color="white" />
-                            ) : (
-                                <View style={localStyles.actionBtnContent}>
-                                    <Text style={localStyles.actionBtnText}>Cashout to {withdrawBank}</Text>
-                                    <Ionicons name="arrow-up" size={14} color="white" />
-                                </View>
-                            )}
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
 
             {/* ══════════════════════════════════════════════════════════════
                 MODAL 5: 100% ESCROW DETAILS MODAL
@@ -3754,40 +3616,49 @@ const localStyles = StyleSheet.create({
         marginTop: 1
     },
 
-    // INPUTS
+    // MODERN FINTECH INPUTS (CLEAN ROUNDED CARD - NO INNER TURBAN/RAWANI WRAPPERS)
     inputAreaContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'transparent',
-        borderRadius: 0,
-        paddingHorizontal: 0,
-        paddingVertical: 6,
-        borderBottomWidth: 2,
-        borderBottomColor: '#E2E8F0'
+        backgroundColor: '#F8FAFC',
+        borderRadius: 16,
+        paddingHorizontal: 16,
+        paddingVertical: 13,
+        borderWidth: 1.5,
+        borderColor: '#E2E8F0',
+        shadowColor: '#64748B',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.04,
+        shadowRadius: 3,
+        elevation: 1,
     },
     inputPrefix: {
         fontSize: 20,
         fontWeight: '900',
         color: '#0F172A',
-        marginRight: 6
+        marginRight: 8
     },
     mainTextInput: {
         flex: 1,
-        fontSize: 20,
-        fontWeight: '900',
+        fontSize: 18,
+        fontWeight: '800',
         color: '#0F172A',
-        padding: 0
+        padding: 0,
+        letterSpacing: 0.5
     },
     currencyTag: {
-        backgroundColor: '#E2E8F0',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 6
+        backgroundColor: '#EEF2FF',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: '#E0E7FF'
     },
     currencyTagTxt: {
-        fontSize: 9.5,
+        fontSize: 11,
         fontWeight: '900',
-        color: '#334155'
+        color: '#4F46E5',
+        letterSpacing: 0.5
     },
 
     // PRESETS
