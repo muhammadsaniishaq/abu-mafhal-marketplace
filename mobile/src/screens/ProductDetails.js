@@ -80,10 +80,10 @@ export const ProductDetails = ({ route, navigation, addToCart, user }) => {
                     <Ionicons name="lock-closed" size={38} color="#D9A73A" />
                 </View>
                 <Text style={{ fontSize: 20, fontWeight: '900', color: '#FFFFFF', textAlign: 'center', marginBottom: 10 }}>
-                    Tsaron Shiga (Login Required)
+                    Authentication Required
                 </Text>
                 <Text style={{ fontSize: 13, color: '#94A3B8', textAlign: 'center', lineHeight: 20, marginBottom: 26, maxWidth: 320 }}>
-                    Domin tsaro da kare haƙƙin masu sayayya da 'yan kasuwa, sai ka yi rajista ko shiga asusunka kafin ka duba cikakken bayanin kaya da farashinsa.
+                    To ensure secure transactions and protect verified merchant inventory, please sign in or create an account to view full product specifications and pricing.
                 </Text>
                 <TouchableOpacity
                     onPress={() => navigation.navigate('Auth', {
@@ -93,13 +93,13 @@ export const ProductDetails = ({ route, navigation, addToCart, user }) => {
                     style={{ backgroundColor: '#D9A73A', paddingVertical: 14, paddingHorizontal: 28, borderRadius: 14, width: '100%', maxWidth: 300, alignItems: 'center', shadowColor: '#D9A73A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 }}
                     activeOpacity={0.9}
                 >
-                    <Text style={{ color: '#070F1E', fontWeight: '900', fontSize: 14 }}>Shiga Asusunka (Sign In)</Text>
+                    <Text style={{ color: '#070F1E', fontWeight: '900', fontSize: 14 }}>Sign In / Register</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                     onPress={() => navigation.goBack()}
                     style={{ marginTop: 16, padding: 10 }}
                 >
-                    <Text style={{ color: '#64748B', fontWeight: '700', fontSize: 13 }}>Koma Baya (Go Back)</Text>
+                    <Text style={{ color: '#64748B', fontWeight: '700', fontSize: 13 }}>Go Back</Text>
                 </TouchableOpacity>
             </SafeAreaView>
         );

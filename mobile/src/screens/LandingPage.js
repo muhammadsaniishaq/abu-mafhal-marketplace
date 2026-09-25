@@ -36,10 +36,10 @@ const resolveImage = (item) => {
 
 // Trust Strip Items
 const TRUST_ITEMS = [
-    { icon: 'shield-checkmark', label: '100% Escrow Vault', color: '#10B981', desc: 'Kuɗi yana amana har a karɓi kaya' },
-    { icon: 'lock-closed', label: '256-Bit SSL Safe', color: '#D9A73A', desc: 'Tsaron babban banki' },
-    { icon: 'airplane', label: 'Priority Cargo', color: '#3B82F6', desc: 'Isar da sako cikin sauri' },
-    { icon: 'chatbubbles', label: 'Live Support', color: '#8B5CF6', desc: 'Taimako a kowane lokaci' },
+    { icon: 'shield-checkmark', label: '100% Escrow Vault', color: '#10B981', desc: 'Protected until delivered' },
+    { icon: 'lock-closed', label: '256-Bit SSL Security', color: '#D9A73A', desc: 'Bank-grade encryption' },
+    { icon: 'airplane', label: 'Insured Delivery', color: '#3B82F6', desc: 'Doorstep tracked freight' },
+    { icon: 'chatbubbles', label: '24/7 VIP Concierge', color: '#8B5CF6', desc: 'Dedicated personal support' },
 ];
 
 // Why Choose Us Items
@@ -48,31 +48,31 @@ const WHY_CHOOSE_US = [
         id: 1,
         icon: 'shield-checkmark',
         title: '100% Escrow Protection',
-        desc: 'Kuɗin sayayya na zaune a amana. Ba za a taɓa sakin kuɗi ga mai sayarwa ba sai mai saye ya gamsu.',
+        desc: 'Buyer funds are safeguarded in an independent vault. Payment is released only after you verify satisfaction.',
         color: '#10B981',
         bgColor: '#ECFDF5'
     },
     {
         id: 2,
         icon: 'card-outline',
-        title: 'Bank-Grade Payment Security',
-        desc: 'Haɗin gwiwa da manyan hanyoyin biyan kuɗi masu lasisin CBN (Paystack, Flutterwave, Monnify).',
+        title: 'Bank-Grade Payment Gateways',
+        desc: 'Seamless transactions secured by CBN-licensed financial channels (Paystack, Flutterwave, Monnify).',
         color: '#D9A73A',
         bgColor: '#FEF3C7'
     },
     {
         id: 3,
-        icon: 'checkmark-circle-outline',
-        title: 'Tantantattun Masu Sayarwa',
-        desc: 'Dukkan masu sayarwa an tantance su da lambar rajista ta CAC ko lambar zama ɗan ƙasa ta NIN.',
+        icon: 'ribbon-outline',
+        title: 'Identity-Verified Merchants',
+        desc: 'Every seller undergoes stringent background authentication via government CAC registration or NIN credentials.',
         color: '#3B82F6',
         bgColor: '#EFF6FF'
     },
     {
         id: 4,
         icon: 'refresh-circle-outline',
-        title: 'Garantin Mayar da Kuɗi',
-        desc: 'Idan kaya bai zo daidai yadda kake buƙata ba, ana mayar da kuɗin ka cikin gaggawa.',
+        title: 'Guaranteed Rapid Refunds',
+        desc: 'Dispute arbitration guarantees prompt refunds if goods arrive damaged or not as described.',
         color: '#EF4444',
         bgColor: '#FEF2F2'
     },
@@ -82,7 +82,7 @@ const WHY_CHOOSE_US = [
 const POPULAR_FALLBACKS = [
     {
         id: 'pop-1',
-        name: 'iPhone 15 Pro Max 256GB',
+        name: 'iPhone 15 Pro Max 256GB Natural Titanium',
         price: 1250000,
         compare_at_price: 1470000,
         discount: 15,
@@ -93,7 +93,7 @@ const POPULAR_FALLBACKS = [
     },
     {
         id: 'pop-2',
-        name: 'Apple Watch Series 9 GPS',
+        name: 'Apple Watch Series 9 GPS 45mm Starlight',
         price: 390000,
         compare_at_price: 450000,
         discount: 20,
@@ -104,7 +104,7 @@ const POPULAR_FALLBACKS = [
     },
     {
         id: 'pop-3',
-        name: 'Nike Air Jordan 1 Retro High',
+        name: 'Nike Air Jordan 1 Retro High Chicago Edition',
         price: 85000,
         compare_at_price: 95000,
         discount: 10,
@@ -115,7 +115,7 @@ const POPULAR_FALLBACKS = [
     },
     {
         id: 'pop-4',
-        name: 'Dior Sauvage Eau De Parfum',
+        name: 'Dior Sauvage Eau De Parfum Vaporisateur 100ml',
         price: 78000,
         compare_at_price: 95000,
         discount: 18,
@@ -128,7 +128,7 @@ const POPULAR_FALLBACKS = [
 
 // Default categories
 const DEFAULT_CATEGORIES = [
-    { id: 'all', name: 'All Products', icon: 'sparkles-outline' },
+    { id: 'all', name: 'All Items', icon: 'sparkles-outline' },
     { id: 'cat-phones', name: 'Phones & Tablets', icon: 'phone-portrait-outline' },
     { id: 'cat-fashion', name: 'Fashion & Apparel', icon: 'shirt-outline' },
     { id: 'cat-electronics', name: 'Electronics & Gadgets', icon: 'desktop-outline' },
@@ -141,18 +141,26 @@ const DEFAULT_CATEGORIES = [
 const TESTIMONIALS_FALLBACK = [
     {
         id: 't-1',
-        quote: "Tsarin Escrow na Abu Mafhal shine ya bani kwarin gwiwar siya a yanar gizo. Kudina basu taba tafiya ba tare da na karbi kaya na ba.",
+        quote: "Abu Mafhal's Escrow Vault gave me total peace of mind. My funds were never exposed until I held and tested my phone in person.",
         name: "Ibrahim Sani",
-        role: "Tabbataccen Mai Saye (Kano)",
+        role: "Verified Buyer (Kano)",
         avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
         rating: 5,
     },
     {
         id: 't-2',
-        quote: "Tun lokacin da na yi rajistar shagona a Abu Mafhal, samun kwastomomi ya zama mai sauki sosai kuma biyan kudi na zuwa cikin amana.",
+        quote: "Registering my store on Abu Mafhal expanded my customer reach nationwide. Instant payouts and zero fraud make it unmatched.",
         name: "Amina Yusuf",
-        role: "Tantantacciyar Mai Sayarwa (Abuja)",
+        role: "Verified Merchant (Abuja)",
         avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
+        rating: 5,
+    },
+    {
+        id: 't-3',
+        quote: "Fastest dispatch I've ever experienced in Nigeria. Tracking was accurate, and product condition was 100% genuine.",
+        name: "David Adeleke",
+        role: "Verified Buyer (Lagos)",
+        avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150",
         rating: 5,
     }
 ];
@@ -199,7 +207,8 @@ export const LandingPage = ({
     const { settings } = useAppSettings();
 
     const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
-    const [selectedCategory, setSelectedCategory] = useState('All Products');
+    const [selectedCategory, setSelectedCategory] = useState('All Items');
+    const [sortFilter, setSortFilter] = useState('featured'); // 'featured', 'rating', 'deals'
     const [popularProducts, setPopularProducts] = useState(POPULAR_FALLBACKS);
     const [flashSaleProducts, setFlashSaleProducts] = useState([]);
     const [testimonials, setTestimonials] = useState(TESTIMONIALS_FALLBACK);
@@ -214,12 +223,12 @@ export const LandingPage = ({
         setToast({ visible: true, message });
         Animated.sequence([
             Animated.timing(toastAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
-            Animated.delay(2200),
+            Animated.delay(2400),
             Animated.timing(toastAnim, { toValue: 0, duration: 250, useNativeDriver: true })
         ]).start(() => setToast({ visible: false, message: '' }));
     };
 
-    // Navigation safe helpers
+    // Safe navigation helper
     const handleEnterShop = (tab = 'home', params = {}) => {
         const routeParams = typeof params === 'string' ? { category: params } : params;
         if (typeof onEnterShop === 'function') {
@@ -229,10 +238,10 @@ export const LandingPage = ({
         }
     };
 
-    // 🔒 STRICT SECURITY GATE: User MUST be logged in before viewing Product Details!
+    // 🔒 STRICT SECURITY GATE: User MUST be authenticated to view Product Details!
     const handleProductPress = (product) => {
         if (!user) {
-            showToast('🔒 Da fatan za a shiga asusunka (Sign In) don duba cikakken bayanin kaya da farashinsa.');
+            showToast('🔒 Please sign in or create an account to view full specifications and pricing.');
             setTimeout(() => {
                 if (onNavigate) {
                     onNavigate('Auth', {
@@ -247,11 +256,11 @@ export const LandingPage = ({
                         redirectParams: { product, id: product?.id }
                     });
                 }
-            }, 500);
+            }, 600);
             return;
         }
 
-        // Authenticated users can open ProductDetails safely
+        // Authenticated access granted
         if (onNavigate) {
             onNavigate('ProductDetails', { product, id: product?.id });
         } else if (navigation) {
@@ -287,10 +296,10 @@ export const LandingPage = ({
 
     const handleNewsletterSubmit = () => {
         if (!newsletterEmail || !newsletterEmail.includes('@')) {
-            Alert.alert('Sanarwa', 'Da fatan za a saka ingantaccen adireshin email.');
+            Alert.alert('Notice', 'Please provide a valid email address.');
             return;
         }
-        Alert.alert('Godiya', `Mun gode! An yi rajistar ${newsletterEmail} don samun labaran ragi.`);
+        Alert.alert('Thank You', `You have been subscribed successfully with: ${newsletterEmail}`);
         setNewsletterEmail('');
     };
 
@@ -309,19 +318,19 @@ export const LandingPage = ({
                     .select('*')
                     .eq('is_active', true)
                     .order('rating', { ascending: false })
-                    .limit(16),
+                    .limit(20),
                 supabase
                     .from('testimonials')
                     .select('*')
                     .eq('is_active', true)
                     .order('display_order', { ascending: true })
-                    .limit(4)
+                    .limit(6)
             ]);
 
             // Categories
             if (catsRes.status === 'fulfilled' && catsRes.value.data?.length > 0) {
                 const dbCats = catsRes.value.data;
-                const merged = [{ id: 'all', name: 'All Products', icon: 'sparkles-outline' }];
+                const merged = [{ id: 'all', name: 'All Items', icon: 'sparkles-outline' }];
                 dbCats.forEach(dbC => {
                     if (!merged.some(c => c.name.toLowerCase() === dbC.name.toLowerCase())) {
                         merged.push({
@@ -362,15 +371,25 @@ export const LandingPage = ({
         loadData();
     };
 
-    // Filter products dynamically by Category Chip & Search Query
-    const displayedProducts = popularProducts.filter(p => {
-        const matchesCategory = selectedCategory === 'All Products' ||
+    // Filter and Sort products dynamically
+    let displayedProducts = popularProducts.filter(p => {
+        const matchesCategory = selectedCategory === 'All Items' ||
             (p.category && p.category.toLowerCase().includes(selectedCategory.toLowerCase()));
         const matchesQuery = !searchQuery.trim() ||
             (p.name && p.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
             (p.category && p.category.toLowerCase().includes(searchQuery.toLowerCase()));
         return matchesCategory && matchesQuery;
     });
+
+    if (sortFilter === 'rating') {
+        displayedProducts = [...displayedProducts].sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    } else if (sortFilter === 'deals') {
+        displayedProducts = [...displayedProducts].sort((a, b) => {
+            const discA = a.compare_at_price ? (a.compare_at_price - a.price) : 0;
+            const discB = b.compare_at_price ? (b.compare_at_price - b.price) : 0;
+            return discB - discA;
+        });
+    }
 
     return (
         <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
@@ -399,12 +418,12 @@ export const LandingPage = ({
                 </Animated.View>
             )}
 
-            {/* ─── LUXURY CLEAN BRANDING HEADER (NO CART BUTTON) ─── */}
+            {/* ─── LUXURY CLEAN BRANDING HEADER (NO CART) ─── */}
             <View style={styles.headerCentered}>
                 {/* Left: Security Status Indicator */}
                 <View style={styles.headerLeftSecurityBadge}>
-                    <Ionicons name="shield-checkmark" size={16} color="#10B981" />
-                    <Text style={styles.headerLeftSecurityText}>Verified</Text>
+                    <Ionicons name="shield-checkmark" size={15} color="#10B981" />
+                    <Text style={styles.headerLeftSecurityText}>Verified Hub</Text>
                 </View>
 
                 {/* Center: Logo & Branding */}
@@ -441,7 +460,7 @@ export const LandingPage = ({
                             style={{ marginRight: 4 }}
                         />
                         <Text style={styles.headerLoginText} numberOfLines={1}>
-                            {user ? (user.full_name?.split(' ')[0] || 'Profile') : 'Sign In'}
+                            {user ? (user.full_name?.split(' ')[0] || 'Account') : 'Sign In'}
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -472,7 +491,7 @@ export const LandingPage = ({
                             </View>
 
                             <Text style={styles.heroDescriptionText}>
-                                Babban dandalin kasuwanci a Najeriya mai tsaron Asusun Amana (Escrow Vault).
+                                Nigeria's premier multi-vendor marketplace fortified with 100% Escrow Vault protection.
                             </Text>
 
                             {/* Dual Call To Actions */}
@@ -525,7 +544,7 @@ export const LandingPage = ({
                     <View style={styles.searchBox}>
                         <Ionicons name="search-outline" size={19} color="#64748B" style={{ marginRight: 8 }} />
                         <TextInput
-                            placeholder="Search products, brands, categories..."
+                            placeholder="Search verified products, brands, stores..."
                             placeholderTextColor="#94A3B8"
                             value={searchQuery}
                             onChangeText={setSearchQuery}
@@ -548,7 +567,7 @@ export const LandingPage = ({
                     </View>
                 </View>
 
-                {/* ─── 3. NEW FEATURE: INTERACTIVE CATEGORY CHIP TABS ─── */}
+                {/* ─── 3. FEATURE 1: INTERACTIVE CATEGORY CHIP TABS ─── */}
                 <View style={styles.categoryChipsSection}>
                     <ScrollView
                         horizontal
@@ -587,7 +606,36 @@ export const LandingPage = ({
                     </ScrollView>
                 </View>
 
-                {/* ─── 4. ELEGANT ESCROW & BANK SECURITY STRIP (UNCLUTTERED) ─── */}
+                {/* ─── 4. FEATURE 2: DYNAMIC SORT & FILTER PILLS ─── */}
+                <View style={styles.sortFilterBar}>
+                    <Text style={styles.sortFilterLabel}>Sort by:</Text>
+                    <TouchableOpacity
+                        style={[styles.sortPill, sortFilter === 'featured' && styles.sortPillActive]}
+                        onPress={() => setSortFilter('featured')}
+                    >
+                        <Text style={[styles.sortPillText, sortFilter === 'featured' && styles.sortPillTextActive]}>
+                            🔥 Featured
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.sortPill, sortFilter === 'rating' && styles.sortPillActive]}
+                        onPress={() => setSortFilter('rating')}
+                    >
+                        <Text style={[styles.sortPillText, sortFilter === 'rating' && styles.sortPillTextActive]}>
+                            ⭐ Top Rated
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.sortPill, sortFilter === 'deals' && styles.sortPillActive]}
+                        onPress={() => setSortFilter('deals')}
+                    >
+                        <Text style={[styles.sortPillText, sortFilter === 'deals' && styles.sortPillTextActive]}>
+                            ⚡ Best Deals
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* ─── 5. ELEGANT ESCROW & BANK SECURITY STRIP ─── */}
                 <View style={styles.escrowCompactSection}>
                     <LinearGradient
                         colors={['#070F1E', '#0A192F', '#0F2746']}
@@ -601,34 +649,34 @@ export const LandingPage = ({
                             </View>
                             <View style={{ flex: 1, marginLeft: 10 }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                    <Text style={styles.escrowCompactTitle}>100% ESCROW PROTECTION VAULT</Text>
+                                    <Text style={styles.escrowCompactTitle}>100% ESCROW BUYER VAULT</Text>
                                     <View style={styles.activeTagBadge}><Text style={styles.activeTagBadgeText}>LOCKED</Text></View>
                                 </View>
-                                <Text style={styles.escrowCompactSub}>Ba a sakin kudi ga mai shago sai bayan ka karbi kaya ka gamsu 100%.</Text>
+                                <Text style={styles.escrowCompactSub}>Funds are safely preserved in escrow until you receive and verify your package.</Text>
                             </View>
                         </View>
 
                         {/* 3 Clean Compact Security Pillars */}
                         <View style={styles.escrowPillarsRow}>
                             <View style={styles.escrowPillarItem}>
-                                <Ionicons name="wallet-outline" size={16} color="#D9A73A" />
-                                <Text style={styles.escrowPillarText}>1. Killace Kuɗi</Text>
+                                <Ionicons name="wallet-outline" size={15} color="#D9A73A" />
+                                <Text style={styles.escrowPillarText}>1. Vault Deposit</Text>
                             </View>
-                            <Ionicons name="chevron-forward" size={14} color="#475569" />
+                            <Ionicons name="chevron-forward" size={13} color="#475569" />
                             <View style={styles.escrowPillarItem}>
-                                <Ionicons name="cube-outline" size={16} color="#38BDF8" />
-                                <Text style={styles.escrowPillarText}>2. Isar da Sako</Text>
+                                <Ionicons name="cube-outline" size={15} color="#38BDF8" />
+                                <Text style={styles.escrowPillarText}>2. Tracked Transit</Text>
                             </View>
-                            <Ionicons name="chevron-forward" size={14} color="#475569" />
+                            <Ionicons name="chevron-forward" size={13} color="#475569" />
                             <View style={styles.escrowPillarItem}>
-                                <Ionicons name="checkmark-done-circle" size={16} color="#10B981" />
-                                <Text style={styles.escrowPillarText}>3. Gamsuwa/Refund</Text>
+                                <Ionicons name="checkmark-done-circle" size={15} color="#10B981" />
+                                <Text style={styles.escrowPillarText}>3. Approve / Refund</Text>
                             </View>
                         </View>
                     </LinearGradient>
                 </View>
 
-                {/* ─── 5. FLASH DEALS (WITH COUNTDOWN TIMER) ─── */}
+                {/* ─── 6. FLASH DEALS (WITH LIVE COUNTDOWN TIMER) ─── */}
                 {flashSaleProducts.length > 0 && (
                     <View style={styles.flashDealsSection}>
                         <View style={styles.flashHeaderRow}>
@@ -638,7 +686,7 @@ export const LandingPage = ({
                                 </View>
                                 <View style={{ marginLeft: 8 }}>
                                     <Text style={styles.flashSectionTitle}>Flash Deals</Text>
-                                    <Text style={styles.flashSectionSub}>Farashin ragi mai karewa nan kusa</Text>
+                                    <Text style={styles.flashSectionSub}>Limited-time verified clearance sales</Text>
                                 </View>
                             </View>
                             <CountdownTimer />
@@ -684,7 +732,7 @@ export const LandingPage = ({
                                                     style={{ marginRight: 4 }}
                                                 />
                                                 <Text style={[styles.viewLockPillText, user && { color: '#10B981' }]}>
-                                                    {user ? 'Duba Kaya' : 'Shiga don Dubawa'}
+                                                    {user ? 'View Deal' : 'Sign In to View'}
                                                 </Text>
                                             </View>
                                         </View>
@@ -695,15 +743,15 @@ export const LandingPage = ({
                     </View>
                 )}
 
-                {/* ─── 6. CURATED POPULAR PRODUCTS (SECURITY GATED ON CLICK) ─── */}
+                {/* ─── 7. POPULAR PRODUCTS (STRICT AUTH GATE ON CLICK) ─── */}
                 <View style={styles.sectionContainer}>
                     <View style={styles.sectionHeaderRow}>
                         <View>
-                            <Text style={styles.sectionTitleText}>Popular Right Now</Text>
+                            <Text style={styles.sectionTitleText}>Trending Marketplace</Text>
                             <Text style={styles.sectionSubtitleText}>
-                                {selectedCategory === 'All Products'
-                                    ? 'Kayayyakin da suka fi samun sha\'awa'
-                                    : `Kayayyaki a rukunin ${selectedCategory}`}
+                                {selectedCategory === 'All Items'
+                                    ? 'High-demand verified inventory across Nigeria'
+                                    : `Selected collection in ${selectedCategory}`}
                             </Text>
                         </View>
                         <TouchableOpacity onPress={() => handleEnterShop('shop', selectedCategory)} style={styles.sectionLinkBtn}>
@@ -713,7 +761,7 @@ export const LandingPage = ({
                     </View>
 
                     <View style={styles.popularGridContainer}>
-                        {displayedProducts.slice(0, 6).map((product) => (
+                        {displayedProducts.slice(0, 8).map((product) => (
                             <TouchableOpacity
                                 key={product.id}
                                 style={styles.productGridCard}
@@ -734,7 +782,7 @@ export const LandingPage = ({
                                         <Text style={styles.productEscrowPillText}>Escrow Safe</Text>
                                     </View>
 
-                                    {/* Auth Lock Hint Overlay if guest */}
+                                    {/* Auth Lock Hint Overlay for guests */}
                                     {!user && (
                                         <View style={styles.productAuthLockBadge}>
                                             <Ionicons name="lock-closed" size={12} color="#FFFFFF" />
@@ -782,7 +830,7 @@ export const LandingPage = ({
                                                 style={{ marginRight: 3 }}
                                             />
                                             <Text style={[styles.productViewActionBtnText, user && { color: '#10B981' }]}>
-                                                {user ? 'Duba' : 'Shiga'}
+                                                {user ? 'View' : 'Unlock'}
                                             </Text>
                                         </View>
                                     </View>
@@ -792,11 +840,11 @@ export const LandingPage = ({
                     </View>
                 </View>
 
-                {/* ─── 7. WHY ABU MAFHAL (STREAMLINED & CLEAN) ─── */}
+                {/* ─── 8. WHY ABU MAFHAL (STREAMLINED LUXURY) ─── */}
                 <View style={styles.whySectionContainer}>
                     <View style={styles.centerSectionHeader}>
-                        <Text style={styles.centerSectionTitle}>Me Yasa Za Ka Zaɓi Abu Mafhal?</Text>
-                        <Text style={styles.centerSectionSub}>Ingantaccen tsaro da amana da aka gina domin cigaban kowa</Text>
+                        <Text style={styles.centerSectionTitle}>Why Choose Abu Mafhal?</Text>
+                        <Text style={styles.centerSectionSub}>Built on bank-grade security, transparency, and verified integrity</Text>
                         <View style={styles.goldUnderline} />
                     </View>
 
@@ -817,7 +865,7 @@ export const LandingPage = ({
                     </ScrollView>
                 </View>
 
-                {/* ─── 8. LIVE PLATFORM IMPACT & STATS (ANIMATED) ─── */}
+                {/* ─── 9. LIVE PLATFORM IMPACT & STATS (ANIMATED) ─── */}
                 <View style={styles.statsSectionContainer}>
                     <View style={styles.statsGridCard}>
                         <View style={styles.statsItemCol}>
@@ -849,7 +897,7 @@ export const LandingPage = ({
                     </View>
                 </View>
 
-                {/* ─── 9. DIRECT CONCIERGE & WHATSAPP SUPPORT PILL ─── */}
+                {/* ─── 10. DIRECT CONCIERGE & WHATSAPP SUPPORT PILL ─── */}
                 <View style={styles.conciergeSupportContainer}>
                     <TouchableOpacity
                         style={styles.conciergeSupportCard}
@@ -860,18 +908,18 @@ export const LandingPage = ({
                             <Ionicons name="logo-whatsapp" size={24} color="#10B981" />
                         </View>
                         <View style={{ flex: 1, marginLeft: 12 }}>
-                            <Text style={styles.conciergeTitle}>Kuna buƙatar Taimako ko Tambaya?</Text>
-                            <Text style={styles.conciergeSub}>Yi magana da wakilinmu kai tsaye a WhatsApp 24/7</Text>
+                            <Text style={styles.conciergeTitle}>Need Shopping Assistance?</Text>
+                            <Text style={styles.conciergeSub}>Chat with our personal shopping concierge on WhatsApp 24/7</Text>
                         </View>
                         <Ionicons name="arrow-forward" size={18} color="#10B981" />
                     </TouchableOpacity>
                 </View>
 
-                {/* ─── 10. VERIFIED CUSTOMER TESTIMONIALS ─── */}
+                {/* ─── 11. VERIFIED CUSTOMER TESTIMONIALS ─── */}
                 <View style={styles.sectionContainer}>
                     <View style={styles.centerSectionHeader}>
-                        <Text style={styles.centerSectionTitle}>Abin da Kwastomominmu Ke Faɗi</Text>
-                        <Text style={styles.centerSectionSub}>Tabbacin gaskiya da amana daga bakin masu amfani da manhaja</Text>
+                        <Text style={styles.centerSectionTitle}>Trusted by Thousands</Text>
+                        <Text style={styles.centerSectionSub}>Real feedback from verified buyers and sellers nationwide</Text>
                         <View style={styles.goldUnderline} />
                     </View>
 
@@ -906,7 +954,7 @@ export const LandingPage = ({
                     </ScrollView>
                 </View>
 
-                {/* ─── 11. STREAMLINED LUXURY FOOTER ─── */}
+                {/* ─── 12. STREAMLINED LUXURY FOOTER ─── */}
                 <View style={styles.footerSection}>
                     <View style={styles.footerBrandRow}>
                         <View style={styles.footerLogoFrame}>
@@ -923,7 +971,7 @@ export const LandingPage = ({
                     </View>
 
                     <Text style={styles.footerMissionBlurb}>
-                        Buy. Sell. Earn. Grow Together. Dandalin kasuwanci na zamani mai kariya 100% ta Asusun Amana na Escrow.
+                        Buy. Sell. Earn. Grow Together. Modern e-commerce ecosystem safeguarded by 100% Escrow Protection.
                     </Text>
 
                     {/* Social Media Links */}
@@ -948,34 +996,34 @@ export const LandingPage = ({
                     {/* Multi-column Navigation Links (No Cart) */}
                     <View style={styles.footerLinksGrid}>
                         <View style={styles.footerLinkCol}>
-                            <Text style={styles.footerColTitle}>Kasuwa</Text>
+                            <Text style={styles.footerColTitle}>Marketplace</Text>
                             <TouchableOpacity onPress={() => handleEnterShop('shop')}><Text style={styles.footerLinkText}>All Products</Text></TouchableOpacity>
                             <TouchableOpacity onPress={() => handleEnterShop('shop', 'Phones & Tablets')}><Text style={styles.footerLinkText}>Phones & Gadgets</Text></TouchableOpacity>
                             <TouchableOpacity onPress={() => handleEnterShop('shop', 'Fashion & Apparel')}><Text style={styles.footerLinkText}>Fashion & Apparel</Text></TouchableOpacity>
                         </View>
 
                         <View style={styles.footerLinkCol}>
-                            <Text style={styles.footerColTitle}>Hukuma</Text>
+                            <Text style={styles.footerColTitle}>Company</Text>
                             <TouchableOpacity onPress={handleBecomeSeller}><Text style={styles.footerLinkText}>Become a Seller</Text></TouchableOpacity>
                             <TouchableOpacity onPress={() => handleEnterShop('shop')}><Text style={styles.footerLinkText}>Escrow Policy</Text></TouchableOpacity>
                             <TouchableOpacity onPress={() => handleEnterShop('shop')}><Text style={styles.footerLinkText}>Buyer Protection</Text></TouchableOpacity>
                         </View>
 
                         <View style={styles.footerLinkCol}>
-                            <Text style={styles.footerColTitle}>Taimako</Text>
-                            <TouchableOpacity onPress={() => handleEnterShop('profile')}><Text style={styles.footerLinkText}>Support Center</Text></TouchableOpacity>
+                            <Text style={styles.footerColTitle}>Support</Text>
+                            <TouchableOpacity onPress={() => handleEnterShop('profile')}><Text style={styles.footerLinkText}>Help Center</Text></TouchableOpacity>
                             <TouchableOpacity onPress={() => handleEnterShop('shop')}><Text style={styles.footerLinkText}>Order Tracking</Text></TouchableOpacity>
-                            <TouchableOpacity onPress={() => handleEnterShop('shop')}><Text style={styles.footerLinkText}>Refunds & Dispute</Text></TouchableOpacity>
+                            <TouchableOpacity onPress={() => handleEnterShop('shop')}><Text style={styles.footerLinkText}>Dispute Arbitration</Text></TouchableOpacity>
                         </View>
                     </View>
 
                     {/* Newsletter Box */}
                     <View style={styles.newsletterCard}>
-                        <Text style={styles.newsletterCardTitle}>Kasance tare da mu</Text>
-                        <Text style={styles.newsletterCardSub}>Sami labaran ragi da sabbin kayayyaki a email dinka.</Text>
+                        <Text style={styles.newsletterCardTitle}>Stay Connected</Text>
+                        <Text style={styles.newsletterCardSub}>Get exclusive flash deals and inventory alerts delivered to your inbox.</Text>
                         <View style={styles.newsletterInputRow}>
                             <TextInput
-                                placeholder="Shigar da email dinka..."
+                                placeholder="Enter your email address..."
                                 placeholderTextColor="#64748B"
                                 value={newsletterEmail}
                                 onChangeText={setNewsletterEmail}
@@ -999,7 +1047,7 @@ export const LandingPage = ({
                             © 2026 Abu Mafhal Marketplace. All rights reserved.
                         </Text>
                         <Text style={styles.footerBottomBadge}>
-                            🔒 100% Escrow Protection • 256-Bit SSL Safe • Regulated Channels
+                            🔒 100% Escrow Protection • 256-Bit SSL Encrypted • Regulated Banking Channels
                         </Text>
                     </View>
                 </View>
@@ -1325,7 +1373,7 @@ const styles = StyleSheet.create({
         paddingLeft: 6,
     },
 
-    // ─── Feature: Category Chip Tabs ───
+    // ─── Category Chip Tabs ───
     categoryChipsSection: {
         marginTop: 12,
     },
@@ -1355,6 +1403,39 @@ const styles = StyleSheet.create({
     categoryChipTextActive: {
         color: '#070F1E',
         fontWeight: '900',
+    },
+
+    // ─── Dynamic Sort Bar ───
+    sortFilterBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        marginTop: 10,
+        gap: 8,
+    },
+    sortFilterLabel: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: '#94A3B8',
+        textTransform: 'uppercase',
+    },
+    sortPill: {
+        paddingHorizontal: 9,
+        paddingVertical: 4,
+        borderRadius: 12,
+        backgroundColor: '#F1F5F9',
+    },
+    sortPillActive: {
+        backgroundColor: '#070F1E',
+    },
+    sortPillText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#475569',
+    },
+    sortPillTextActive: {
+        color: '#FFFFFF',
+        fontWeight: '800',
     },
 
     // ─── Compact Escrow Security Strip ───
@@ -1812,7 +1893,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#E2E8F0',
     },
 
-    // ─── Feature: Concierge WhatsApp Support Pill ───
+    // ─── Concierge WhatsApp Support Pill ───
     conciergeSupportContainer: {
         paddingHorizontal: 16,
         marginTop: 20,
