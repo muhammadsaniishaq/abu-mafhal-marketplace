@@ -276,20 +276,29 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
     useEffect(() => {
         const fetchLiveCoupons = async () => {
             try {
-                const { data } = await supabase
+                const { data, error } = await supabase
                     .from('coupons')
                     .select('*')
                     .eq('is_active', true)
                     .order('created_at', { ascending: false });
-                if (Array.isArray(data)) {
-                    const now = new Date();
-                    const valid = data.filter(c => {
-                        if (c.expires_at && new Date(c.expires_at) < now) return false;
-                        if (c.usage_limit && (c.usage_count || 0) >= c.usage_limit) return false;
-                        return true;
-                    });
-                    setAvailableLiveCoupons(valid);
+
+                let list = [];
+                if (!error && Array.isArray(data)) {
+                    list = data;
+                } else if (error?.code === 'PGRST205') {
+                    // Fallback to app_settings.coupons_list
+                    const { data: row } = await supabase
+                        .from('app_settings').select('value').eq('key', 'coupons_list').maybeSingle();
+                    if (Array.isArray(row?.value)) list = row.value.filter(c => c.is_active);
                 }
+
+                const now = new Date();
+                const valid = list.filter(c => {
+                    if (c.expires_at && new Date(c.expires_at) < now) return false;
+                    if (c.usage_limit && (c.usage_count || 0) >= c.usage_limit) return false;
+                    return true;
+                });
+                setAvailableLiveCoupons(valid);
             } catch (err) {
                 console.log('Error loading coupons in checkout:', err);
             }
@@ -972,6 +981,8 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
         if (!code) return;
         setValidatingCoupon(true);
         try {
+            // 1. Try dedicated coupons table
+            let coupon = null;
             const { data, error } = await supabase
                 .from('coupons')
                 .select('*')
@@ -979,7 +990,18 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 .eq('is_active', true)
                 .maybeSingle();
 
-            if (error || !data) {
+            if (!error && data) {
+                coupon = data;
+            } else if (error?.code === 'PGRST205') {
+                // 2. Fallback: check app_settings.coupons_list
+                const { data: row } = await supabase
+                    .from('app_settings').select('value').eq('key', 'coupons_list').maybeSingle();
+                if (Array.isArray(row?.value)) {
+                    coupon = row.value.find(c => c.code === code && c.is_active) || null;
+                }
+            }
+
+            if (!coupon) {
                 showToast(`⚠️ Voucher "${code}" is invalid or inactive`);
                 showAlert('Invalid Coupon', `Voucher "${code}" is invalid or inactive.`);
                 setDiscountAmount(0);
@@ -987,7 +1009,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 return;
             }
 
-            if (data.expires_at && new Date(data.expires_at) < new Date()) {
+            if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {
                 showToast(`⚠️ Voucher "${code}" has expired`);
                 showAlert('Coupon Expired', `Voucher "${code}" has expired.`);
                 setDiscountAmount(0);
@@ -995,7 +1017,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 return;
             }
 
-            if (data.usage_limit && (data.usage_count || 0) >= data.usage_limit) {
+            if (coupon.usage_limit && (coupon.usage_count || 0) >= coupon.usage_limit) {
                 showToast(`⚠️ Voucher "${code}" usage limit reached`);
                 showAlert('Coupon Depleted', `This voucher is no longer available.`);
                 setDiscountAmount(0);
@@ -1003,22 +1025,22 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 return;
             }
 
-            if (data.min_order_amount && initialTotal < Number(data.min_order_amount)) {
-                showToast(`⚠️ Minimum subtotal required: ₦${Number(data.min_order_amount).toLocaleString()}`);
-                showAlert('Minimum Order Required', `This coupon requires a minimum subtotal of ₦${Number(data.min_order_amount).toLocaleString()}.`);
+            if (coupon.min_order_amount && initialTotal < Number(coupon.min_order_amount)) {
+                showToast(`⚠️ Minimum subtotal required: ₦${Number(coupon.min_order_amount).toLocaleString()}`);
+                showAlert('Minimum Order Required', `This coupon requires a minimum subtotal of ₦${Number(coupon.min_order_amount).toLocaleString()}.`);
                 return;
             }
 
-            let discount = data.discount_type === 'percentage'
-                ? Math.round((initialTotal * Number(data.discount_value)) / 100)
-                : Number(data.discount_value);
+            let discount = coupon.discount_type === 'percentage'
+                ? Math.round((initialTotal * Number(coupon.discount_value)) / 100)
+                : Number(coupon.discount_value);
 
-            if (data.max_discount && discount > Number(data.max_discount)) {
-                discount = Number(data.max_discount);
+            if (coupon.max_discount && discount > Number(coupon.max_discount)) {
+                discount = Number(coupon.max_discount);
             }
 
             setDiscountAmount(discount);
-            setAppliedCoupon(data);
+            setAppliedCoupon(coupon);
             showToast(`✓ ₦${discount.toLocaleString()} discount applied!`);
         } catch (e) {
             console.log('Coupon Error:', e);

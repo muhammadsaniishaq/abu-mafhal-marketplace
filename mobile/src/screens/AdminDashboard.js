@@ -45,15 +45,16 @@ const GOLD = '#D9A73A';
 // Top Quick Pill Tabs
 const QUICK_TABS = [
     { id: 'overview', label: 'Overview', icon: 'grid-outline', activeIcon: 'grid' },
-    { id: 'store_profile', label: 'Store Profile', icon: 'storefront-outline', activeIcon: 'storefront' },
+    { id: 'coupons', label: '🎟️ Coupons & Vouchers', icon: 'ticket-outline', activeIcon: 'ticket' },
     { id: 'orders', label: 'Orders', icon: 'cart-outline', activeIcon: 'cart' },
     { id: 'products', label: 'Products', icon: 'cube-outline', activeIcon: 'cube' },
     { id: 'vendors', label: 'Vendors', icon: 'storefront-outline', activeIcon: 'storefront' },
     { id: 'users', label: 'Customers', icon: 'people-outline', activeIcon: 'people' },
     { id: 'financials', label: 'Financials', icon: 'cash-outline', activeIcon: 'cash' },
     { id: 'shipping', label: 'Shipping', icon: 'car-outline', activeIcon: 'car' },
-    { id: 'analytics', label: 'Analytics', icon: 'stats-chart-outline', activeIcon: 'stats-chart' },
+    { id: 'store_profile', label: 'Store Profile', icon: 'storefront-outline', activeIcon: 'storefront' },
     { id: 'banners', label: 'Banners', icon: 'images-outline', activeIcon: 'images' },
+    { id: 'analytics', label: 'Analytics', icon: 'stats-chart-outline', activeIcon: 'stats-chart' },
     { id: 'settings', label: 'Settings', icon: 'settings-outline', activeIcon: 'settings' },
 ];
 
@@ -552,6 +553,43 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
                         </Text>
                     </TouchableOpacity>
                 </View>
+
+                {/* ── VIP DISCOUNT COUPONS SHORTCUT BANNER ───────────────────────────── */}
+                <TouchableOpacity
+                    activeOpacity={0.88}
+                    onPress={() => setActiveTab('coupons')}
+                    style={{
+                        backgroundColor: '#065F46',
+                        borderRadius: 18,
+                        padding: 14,
+                        marginBottom: 18,
+                        borderWidth: 1,
+                        borderColor: 'rgba(16, 185, 129, 0.4)',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 12,
+                        shadowColor: '#059669',
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.2,
+                        shadowRadius: 8,
+                        elevation: 3
+                    }}
+                >
+                    <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(16, 185, 129, 0.25)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.4)' }}>
+                        <Ionicons name="ticket" size={22} color="#34D399" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#34D399' }} />
+                            <Text style={{ color: '#34D399', fontSize: 9.5, fontWeight: '900', letterSpacing: 0.5 }}>MARKETING TOOLS</Text>
+                        </View>
+                        <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '900' }}>🎟️ Discount Coupons & Vouchers</Text>
+                        <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10.5, marginTop: 2 }}>Create promo codes, set % / fixed discounts & manage all vouchers</Text>
+                    </View>
+                    <View style={{ backgroundColor: 'rgba(52, 211, 153, 0.2)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(52, 211, 153, 0.35)' }}>
+                        <Text style={{ color: '#34D399', fontSize: 11, fontWeight: '900' }}>Create →</Text>
+                    </View>
+                </TouchableOpacity>
 
                 {/* COMPREHENSIVE MODULAR GRID OF ALL 26 ADMIN CAPABILITIES */}
                 {MODULE_SECTIONS.map((section, sIndex) => (

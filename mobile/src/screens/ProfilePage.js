@@ -1078,6 +1078,7 @@ const ProfilePageInner = ({
                 {/* ── CONTEXTUAL ROLE ACCESS BANNER (COMPACT) ── */}
                 {user && (
                     isAdmin ? (
+                        <React.Fragment>
                         <TouchableOpacity
                             style={s.adminConsoleCard}
                             activeOpacity={0.88}
@@ -1112,6 +1113,45 @@ const ProfilePageInner = ({
                                 </View>
                             </View>
                         </TouchableOpacity>
+
+                        {/* ── ADMIN QUICK SHORTCUTS: Coupons Direct Button ── */}
+                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                            <TouchableOpacity
+                                onPress={handleOpenAdminConsole}
+                                activeOpacity={0.82}
+                                style={{
+                                    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6,
+                                    backgroundColor: 'rgba(217, 167, 58, 0.13)',
+                                    borderRadius: 10, paddingVertical: 9, paddingHorizontal: 10,
+                                    borderWidth: 1, borderColor: 'rgba(217, 167, 58, 0.3)',
+                                }}
+                            >
+                                <Ionicons name="grid-outline" size={14} color="#D4AF37" />
+                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#0A192F' }}>Overview</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    try {
+                                        if (typeof window !== 'undefined' && window.localStorage) {
+                                            window.localStorage.setItem('@abumafhal_last_screen', 'AdminDashboard');
+                                        }
+                                    } catch (_) {}
+                                    if (typeof onOpenAdmin === 'function') onOpenAdmin();
+                                    else if (typeof onNavigate === 'function') onNavigate('AdminDashboard');
+                                }}
+                                activeOpacity={0.82}
+                                style={{
+                                    flex: 2, flexDirection: 'row', alignItems: 'center', gap: 6,
+                                    backgroundColor: '#059669',
+                                    borderRadius: 10, paddingVertical: 9, paddingHorizontal: 10,
+                                }}
+                            >
+                                <Ionicons name="ticket" size={14} color="#FFFFFF" />
+                                <Text style={{ fontSize: 11, fontWeight: '900', color: '#FFFFFF' }}>🎟️ Manage Coupons</Text>
+                                <Ionicons name="arrow-forward" size={12} color="#FFFFFF" style={{ marginLeft: 'auto' }} />
+                            </TouchableOpacity>
+                        </View>
+                        </React.Fragment>
                     ) : isVendor ? (
                         <TouchableOpacity
                             style={[s.roleCard, s.roleCardVendor]}

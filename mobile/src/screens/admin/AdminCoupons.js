@@ -234,14 +234,50 @@ const CouponFormModal = ({ visible, editTarget, duplicateTarget, onClose, onSucc
                 is_active: form.is_active,
             };
 
-            let error;
+            // ── Dual-Storage Engine ────────────────────────────────────────────
+            // 1. Try the dedicated `coupons` table first
+            let saved = false;
             if (editTarget) {
-                ({ error } = await supabase.from('coupons').update(payload).eq('id', editTarget.id));
+                const { error } = await supabase.from('coupons').update(payload).eq('id', editTarget.id);
+                if (!error) { saved = true; }
+                else if (error.code !== 'PGRST205') throw new Error(error.message);
             } else {
-                ({ error } = await supabase.from('coupons').insert([payload]));
+                const { error } = await supabase.from('coupons').insert([{ ...payload, usage_count: 0 }]);
+                if (!error) { saved = true; }
+                else if (error.code !== 'PGRST205') throw new Error(error.message);
             }
 
-            if (error) throw new Error(error.message);
+            // 2. Fallback: persist to app_settings.coupons_list (JSON array)
+            if (!saved) {
+                const { data: row } = await supabase
+                    .from('app_settings')
+                    .select('value')
+                    .eq('key', 'coupons_list')
+                    .maybeSingle();
+                let list = Array.isArray(row?.value) ? [...row.value] : [];
+
+                if (editTarget) {
+                    // Update existing by id
+                    list = list.map(c => c.id === editTarget.id ? { ...c, ...payload, updated_at: new Date().toISOString() } : c);
+                } else {
+                    // Insert new with generated id
+                    list.unshift({
+                        id: `coup_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                        ...payload,
+                        usage_count: 0,
+                        created_at: new Date().toISOString(),
+                    });
+                }
+
+                const { error: upsErr } = await supabase.from('app_settings').upsert({
+                    key: 'coupons_list',
+                    value: list,
+                    description: 'Platform Discount Coupons and Vouchers',
+                    updated_at: new Date().toISOString(),
+                });
+                if (upsErr) throw new Error('Failed to save coupon: ' + upsErr.message);
+            }
+
             onSuccess(payload);
         } catch (err) {
             console.error('Save coupon error:', err);
@@ -460,7 +496,7 @@ const CouponFormModal = ({ visible, editTarget, duplicateTarget, onClose, onSucc
 };
 
 // ─── MAIN COMPONENT ────────────────────────────────────────────────────────────
-export const AdminCoupons = () => {
+export const AdminCoupons = ({ onBack, navigation }) => {
     const insets = useSafeAreaInsets();
 
     // Data
@@ -476,16 +512,37 @@ export const AdminCoupons = () => {
     const [duplicateTarget, setDuplicateTarget] = useState(null);
     const [detailCoupon, setDetailCoupon] = useState(null);
 
-    // ── Fetch ──────────────────────────────────────────────────────────────────
+    // ── Fetch (Dual-Storage) ───────────────────────────────────────────────────
     const fetchCoupons = useCallback(async () => {
         setLoading(true);
         try {
+            // 1. Try dedicated table first
             const { data, error } = await supabase
                 .from('coupons')
                 .select('*')
                 .order('created_at', { ascending: false });
-            if (data) setCoupons(data);
-            if (error) console.error('Fetch coupons error:', error.message);
+
+            if (!error && data) {
+                setCoupons(data);
+            } else if (error?.code === 'PGRST205') {
+                // 2. Fallback: load from app_settings.coupons_list
+                const { data: row, error: settErr } = await supabase
+                    .from('app_settings')
+                    .select('value')
+                    .eq('key', 'coupons_list')
+                    .maybeSingle();
+                if (!settErr && Array.isArray(row?.value)) {
+                    // Sort by created_at desc
+                    const sorted = [...row.value].sort((a, b) =>
+                        (b.created_at || '').localeCompare(a.created_at || '')
+                    );
+                    setCoupons(sorted);
+                } else {
+                    setCoupons([]);
+                }
+            } else if (error) {
+                console.error('Fetch coupons error:', error.message);
+            }
         } catch (e) {
             console.error('Fetch coupons catch:', e);
         } finally {
@@ -525,11 +582,19 @@ export const AdminCoupons = () => {
         return list;
     }, [coupons, filter, search]);
 
-    // ── Toggle Active ──────────────────────────────────────────────────────────
+    // ── Toggle Active (Dual-Storage) ───────────────────────────────────────────
     const toggleActive = async (c) => {
         const nextState = !c.is_active;
-        await supabase.from('coupons').update({ is_active: nextState }).eq('id', c.id);
+        // Optimistic update
         setCoupons(prev => prev.map(x => x.id === c.id ? { ...x, is_active: nextState } : x));
+
+        const { error } = await supabase.from('coupons').update({ is_active: nextState }).eq('id', c.id);
+        if (error?.code === 'PGRST205') {
+            // Fallback: update in app_settings
+            const { data: row } = await supabase.from('app_settings').select('value').eq('key', 'coupons_list').maybeSingle();
+            const list = Array.isArray(row?.value) ? row.value.map(x => x.id === c.id ? { ...x, is_active: nextState } : x) : [];
+            await supabase.from('app_settings').upsert({ key: 'coupons_list', value: list, updated_at: new Date().toISOString() });
+        }
     };
 
     // ── Duplicate ──────────────────────────────────────────────────────────────
@@ -546,16 +611,24 @@ export const AdminCoupons = () => {
         setShowForm(true);
     };
 
-    // ── Delete ──────────────────────────────────────────────────────────────────
+    // ── Delete (Dual-Storage) ──────────────────────────────────────────────────
     const deleteCoupon = (c) => {
         Alert.alert('Delete Coupon', `Are you sure you want to delete "${c.code}"? This action cannot be undone.`, [
             { text: 'Cancel', style: 'cancel' },
             {
                 text: 'Delete', style: 'destructive',
                 onPress: async () => {
-                    await supabase.from('coupons').delete().eq('id', c.id);
+                    // Optimistic remove
                     setCoupons(prev => prev.filter(x => x.id !== c.id));
                     if (detailCoupon?.id === c.id) setDetailCoupon(null);
+
+                    const { error } = await supabase.from('coupons').delete().eq('id', c.id);
+                    if (error?.code === 'PGRST205') {
+                        // Fallback: remove from app_settings
+                        const { data: row } = await supabase.from('app_settings').select('value').eq('key', 'coupons_list').maybeSingle();
+                        const list = Array.isArray(row?.value) ? row.value.filter(x => x.id !== c.id) : [];
+                        await supabase.from('app_settings').upsert({ key: 'coupons_list', value: list, updated_at: new Date().toISOString() });
+                    }
                 },
             },
         ]);
@@ -731,12 +804,19 @@ export const AdminCoupons = () => {
             {/* LIGHT HEADER */}
             <View style={[S.hdr, { paddingTop: 10 }]}>
                 <View style={S.hdrRow}>
-                    <View style={S.hdrTitleWrap}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            <Ionicons name="ticket" size={22} color={GOLD} />
-                            <Text style={S.hdrTitle}>Discount Coupons</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                        {onBack && (
+                            <TouchableOpacity onPress={onBack} style={S.backBtn} activeOpacity={0.7}>
+                                <Ionicons name="arrow-back" size={18} color={NAVY} />
+                            </TouchableOpacity>
+                        )}
+                        <View style={S.hdrTitleWrap}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <Ionicons name="ticket" size={22} color={GOLD} />
+                                <Text style={S.hdrTitle}>Discount Coupons</Text>
+                            </View>
+                            <Text style={S.hdrSub}>{stats.total} total coupons · {stats.active} active</Text>
                         </View>
-                        <Text style={S.hdrSub}>{stats.total} total coupons · {stats.active} active</Text>
                     </View>
                     <TouchableOpacity
                         onPress={() => { setEditTarget(null); setDuplicateTarget(null); setShowForm(true); }}
@@ -846,6 +926,16 @@ const S = StyleSheet.create({
         shadowRadius: 2
     },
     hdrRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    backBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: '#F1F5F9',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
     hdrTitleWrap: { flex: 1 },
     hdrTitle: { color: NAVY, fontSize: 20, fontWeight: '900', letterSpacing: -0.5 },
     hdrSub: { color: '#64748B', fontSize: 12, marginTop: 2, fontWeight: '500' },

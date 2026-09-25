@@ -185,15 +185,25 @@ export const CartPage = ({
                 .order('created_at', { ascending: false })
                 .limit(6);
 
+            let list = [];
             if (!error && Array.isArray(data)) {
-                const now = new Date();
-                const valid = data.filter(c => {
-                    if (c.expires_at && new Date(c.expires_at) < now) return false;
-                    if (c.usage_limit && (c.usage_count || 0) >= c.usage_limit) return false;
-                    return true;
-                });
-                setActiveCoupons(valid);
+                list = data;
+            } else if (error?.code === 'PGRST205') {
+                // Fallback: load from app_settings.coupons_list
+                const { data: row } = await supabase
+                    .from('app_settings').select('value').eq('key', 'coupons_list').maybeSingle();
+                if (Array.isArray(row?.value)) {
+                    list = row.value.filter(c => c.is_active);
+                }
             }
+
+            const now = new Date();
+            const valid = list.filter(c => {
+                if (c.expires_at && new Date(c.expires_at) < now) return false;
+                if (c.usage_limit && (c.usage_count || 0) >= c.usage_limit) return false;
+                return true;
+            });
+            setActiveCoupons(valid);
         } catch (e) {
             console.log('Active coupons fetch note:', e?.message);
         }
@@ -383,7 +393,7 @@ export const CartPage = ({
         }
     };
 
-    // ── Live Coupon Validation (Supabase Database + Smart Verification) ───────
+    // ── Live Coupon Validation (Dual-Storage: coupons table → app_settings) ────
     const handleApplyPromo = async (codeOverride) => {
         const code = (codeOverride || promoInput).trim().toUpperCase();
         setPromoError('');
@@ -395,6 +405,7 @@ export const CartPage = ({
         setPromoApplying(true);
         try {
             // 1. Query live Supabase coupons table
+            let coupon = null;
             const { data, error } = await supabase
                 .from('coupons')
                 .select('*')
@@ -403,24 +414,34 @@ export const CartPage = ({
                 .maybeSingle();
 
             if (!error && data) {
+                coupon = data;
+            } else if (error?.code === 'PGRST205') {
+                // 2. Fallback: search app_settings.coupons_list
+                const { data: row } = await supabase
+                    .from('app_settings').select('value').eq('key', 'coupons_list').maybeSingle();
+                if (Array.isArray(row?.value)) {
+                    coupon = row.value.find(c => c.code === code && c.is_active) || null;
+                }
+            }
+
+            if (coupon) {
                 // Check expiration
-                if (data.expires_at && new Date(data.expires_at) < new Date()) {
+                if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {
                     setPromoError(`Voucher "${code}" has expired.`);
                     return;
                 }
                 // Check minimum order amount
-                if (data.min_order_amount && subtotal < Number(data.min_order_amount)) {
-                    setPromoError(`Requires minimum order of ${formatNaira(data.min_order_amount)}.`);
+                if (coupon.min_order_amount && subtotal < Number(coupon.min_order_amount)) {
+                    setPromoError(`Requires minimum order of ${formatNaira(coupon.min_order_amount)}.`);
                     return;
                 }
-
                 // Check usage limit
-                if (data.usage_limit && (data.usage_count || 0) >= data.usage_limit) {
+                if (coupon.usage_limit && (coupon.usage_count || 0) >= coupon.usage_limit) {
                     setPromoError(`Voucher "${code}" usage limit has been reached.`);
                     return;
                 }
 
-                setAppliedPromo(data);
+                setAppliedPromo(coupon);
                 setPromoInput('');
                 setPromoError('');
                 showToast(`✓ Voucher ${code} applied successfully!`);
