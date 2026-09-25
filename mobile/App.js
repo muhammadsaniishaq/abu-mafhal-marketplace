@@ -604,7 +604,7 @@ export default function App() {
                                 {props => <DriverDashboard {...props} user={user} onLogout={handleLogout} />}
                             </Stack.Screen>
                             <Stack.Screen name="ProductDetails">
-                                {props => <ProductDetails {...props} addToCart={handleAddToCart} />}
+                                {props => <ProductDetails {...props} user={user} addToCart={handleAddToCart} />}
                             </Stack.Screen>
                             <Stack.Screen name="VendorRegister">
                                 {props => <VendorRegister {...props} user={user} onBack={() => props.navigation.goBack()} />}

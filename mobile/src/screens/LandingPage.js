@@ -37,9 +37,9 @@ const resolveImage = (item) => {
 // Trust Strip Items
 const TRUST_ITEMS = [
     { icon: 'shield-checkmark', label: '100% Escrow Vault', color: '#10B981', desc: 'Kuɗi yana amana har a karɓi kaya' },
-    { icon: 'airplane', label: 'Priority Cargo', color: '#3B82F6', desc: 'Isar da sako cikin sauri' },
     { icon: 'lock-closed', label: '256-Bit SSL Safe', color: '#D9A73A', desc: 'Tsaron babban banki' },
-    { icon: 'headset', label: '24/7 Live Support', color: '#8B5CF6', desc: 'Taimako a kowane lokaci' },
+    { icon: 'airplane', label: 'Priority Cargo', color: '#3B82F6', desc: 'Isar da sako cikin sauri' },
+    { icon: 'chatbubbles', label: 'Live Support', color: '#8B5CF6', desc: 'Taimako a kowane lokaci' },
 ];
 
 // Why Choose Us Items
@@ -56,7 +56,7 @@ const WHY_CHOOSE_US = [
         id: 2,
         icon: 'card-outline',
         title: 'Bank-Grade Payment Security',
-        desc: 'Hadin gwiwa da manyan hanyoyin biyan kuɗi masu lasisin CBN (Paystack, Flutterwave, Monnify).',
+        desc: 'Haɗin gwiwa da manyan hanyoyin biyan kuɗi masu lasisin CBN (Paystack, Flutterwave, Monnify).',
         color: '#D9A73A',
         bgColor: '#FEF3C7'
     },
@@ -72,17 +72,9 @@ const WHY_CHOOSE_US = [
         id: 4,
         icon: 'refresh-circle-outline',
         title: 'Garantin Mayar da Kuɗi',
-        desc: 'Idan kaya bai zo daidai yadda kake buƙata ba, ana mayar da kuɗin ka cikin gaggawa ba tare da bata lokaci ba.',
+        desc: 'Idan kaya bai zo daidai yadda kake buƙata ba, ana mayar da kuɗin ka cikin gaggawa.',
         color: '#EF4444',
         bgColor: '#FEF2F2'
-    },
-    {
-        id: 5,
-        icon: 'airplane-outline',
-        title: 'Sufuri Cikin Sauri',
-        desc: 'Sufuri na musamman da bibiyar sako (live tracking) kai tsaye a cikin manhaja har ƙofar gida.',
-        color: '#8B5CF6',
-        bgColor: '#F5F3FF'
     },
 ];
 
@@ -112,7 +104,7 @@ const POPULAR_FALLBACKS = [
     },
     {
         id: 'pop-3',
-        name: 'Nike Air Jordan 1 Retro',
+        name: 'Nike Air Jordan 1 Retro High',
         price: 85000,
         compare_at_price: 95000,
         discount: 10,
@@ -134,6 +126,17 @@ const POPULAR_FALLBACKS = [
     }
 ];
 
+// Default categories
+const DEFAULT_CATEGORIES = [
+    { id: 'all', name: 'All Products', icon: 'sparkles-outline' },
+    { id: 'cat-phones', name: 'Phones & Tablets', icon: 'phone-portrait-outline' },
+    { id: 'cat-fashion', name: 'Fashion & Apparel', icon: 'shirt-outline' },
+    { id: 'cat-electronics', name: 'Electronics & Gadgets', icon: 'desktop-outline' },
+    { id: 'cat-shoes', name: 'Shoes & Footwear', icon: 'footsteps-outline' },
+    { id: 'cat-beauty', name: 'Beauty & Health', icon: 'sparkles-outline' },
+    { id: 'cat-home', name: 'Home & Living', icon: 'home-outline' },
+];
+
 // Fallback Testimonials
 const TESTIMONIALS_FALLBACK = [
     {
@@ -143,7 +146,6 @@ const TESTIMONIALS_FALLBACK = [
         role: "Tabbataccen Mai Saye (Kano)",
         avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
         rating: 5,
-        is_verified: true
     },
     {
         id: 't-2',
@@ -152,28 +154,7 @@ const TESTIMONIALS_FALLBACK = [
         role: "Tantantacciyar Mai Sayarwa (Abuja)",
         avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
         rating: 5,
-        is_verified: true
-    },
-    {
-        id: 't-3',
-        quote: "Na yi odar waya daga Legas zuwa Kaduna, cikin kwanaki 2 ta iso. Kayan ya zo lafiya kuma komai ya tafi daidai.",
-        name: "Usman Bello",
-        role: "Tabbataccen Mai Saye (Kaduna)",
-        avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150",
-        rating: 5,
-        is_verified: true
     }
-];
-
-// Default categories
-const DEFAULT_CATEGORIES = [
-    { id: 'cat-phones', name: 'Phones & Tablets', icon: 'phone-portrait-outline' },
-    { id: 'cat-fashion', name: 'Fashion & Apparel', icon: 'shirt-outline' },
-    { id: 'cat-electronics', name: 'Electronics & Gadgets', icon: 'desktop-outline' },
-    { id: 'cat-shoes', name: 'Shoes & Footwear', icon: 'footsteps-outline' },
-    { id: 'cat-beauty', name: 'Beauty & Health', icon: 'sparkles-outline' },
-    { id: 'cat-home', name: 'Home & Living', icon: 'home-outline' },
-    { id: 'cat-digital', name: 'Digital Services', icon: 'code-slash-outline' },
 ];
 
 // Animated Counter component
@@ -211,24 +192,18 @@ const AnimatedCounter = ({ target, suffix = '', duration = 1200 }) => {
 export const LandingPage = ({
     navigation,
     onEnterShop,
-    cartCount = 0,
-    cartLines = [],
-    onAddToCart,
-    addToCart,
     onLogin,
     user,
-    onGoToProfile,
     onNavigate
 }) => {
     const { settings } = useAppSettings();
 
     const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+    const [selectedCategory, setSelectedCategory] = useState('All Products');
     const [popularProducts, setPopularProducts] = useState(POPULAR_FALLBACKS);
     const [flashSaleProducts, setFlashSaleProducts] = useState([]);
     const [testimonials, setTestimonials] = useState(TESTIMONIALS_FALLBACK);
-    const [banners, setBanners] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
-    const [wishlist, setWishlist] = useState({});
     const [newsletterEmail, setNewsletterEmail] = useState('');
     const [refreshing, setRefreshing] = useState(false);
     const [toast, setToast] = useState({ visible: false, message: '' });
@@ -254,11 +229,33 @@ export const LandingPage = ({
         }
     };
 
+    // 🔒 STRICT SECURITY GATE: User MUST be logged in before viewing Product Details!
     const handleProductPress = (product) => {
+        if (!user) {
+            showToast('🔒 Da fatan za a shiga asusunka (Sign In) don duba cikakken bayanin kaya da farashinsa.');
+            setTimeout(() => {
+                if (onNavigate) {
+                    onNavigate('Auth', {
+                        redirectTo: 'ProductDetails',
+                        redirectParams: { product, id: product?.id }
+                    });
+                } else if (onLogin) {
+                    onLogin();
+                } else if (navigation) {
+                    navigation.navigate('Auth', {
+                        redirectTo: 'ProductDetails',
+                        redirectParams: { product, id: product?.id }
+                    });
+                }
+            }, 500);
+            return;
+        }
+
+        // Authenticated users can open ProductDetails safely
         if (onNavigate) {
-            onNavigate('ProductDetails', { product, id: product.id });
+            onNavigate('ProductDetails', { product, id: product?.id });
         } else if (navigation) {
-            navigation.navigate('ProductDetails', { product, id: product.id });
+            navigation.navigate('ProductDetails', { product, id: product?.id });
         }
     };
 
@@ -288,47 +285,19 @@ export const LandingPage = ({
         }
     };
 
-    const handleAddToCartPress = (product, e) => {
-        if (e && e.stopPropagation) e.stopPropagation();
-        const addFn = onAddToCart || addToCart;
-        if (typeof addFn === 'function') {
-            addFn(product);
-            showToast(`An ƙara "${product.name || 'kayan'}" a kwandon sayayya! 🛒`);
-        } else {
-            handleEnterShop('shop');
-        }
-    };
-
-    const toggleWishlist = async (id) => {
-        const updated = { ...wishlist, [id]: !wishlist[id] };
-        setWishlist(updated);
-        try {
-            await AsyncStorage.setItem('@abumafhal_wishlist', JSON.stringify(updated));
-        } catch (_) {}
-    };
-
     const handleNewsletterSubmit = () => {
         if (!newsletterEmail || !newsletterEmail.includes('@')) {
             Alert.alert('Sanarwa', 'Da fatan za a saka ingantaccen adireshin email.');
             return;
         }
-        Alert.alert('Godiya', `Mun gode! An yi rajistar ${newsletterEmail} don samun rangwame da sabbin bayanai.`);
+        Alert.alert('Godiya', `Mun gode! An yi rajistar ${newsletterEmail} don samun labaran ragi.`);
         setNewsletterEmail('');
     };
-
-    // Load initial wishlist
-    useEffect(() => {
-        AsyncStorage.getItem('@abumafhal_wishlist').then(cached => {
-            if (cached) {
-                try { setWishlist(JSON.parse(cached)); } catch (_) {}
-            }
-        }).catch(() => {});
-    }, []);
 
     // Load Live Supabase Data
     const loadData = async () => {
         try {
-            const [catsRes, prodsRes, testRes, bansRes] = await Promise.allSettled([
+            const [catsRes, prodsRes, testRes] = await Promise.allSettled([
                 supabase
                     .from('categories')
                     .select('id, name, icon')
@@ -340,24 +309,19 @@ export const LandingPage = ({
                     .select('*')
                     .eq('is_active', true)
                     .order('rating', { ascending: false })
-                    .limit(12),
+                    .limit(16),
                 supabase
                     .from('testimonials')
                     .select('*')
                     .eq('is_active', true)
                     .order('display_order', { ascending: true })
-                    .limit(6),
-                supabase
-                    .from('banners')
-                    .select('*')
-                    .eq('is_active', true)
-                    .order('display_order', { ascending: true })
+                    .limit(4)
             ]);
 
             // Categories
             if (catsRes.status === 'fulfilled' && catsRes.value.data?.length > 0) {
                 const dbCats = catsRes.value.data;
-                const merged = [...DEFAULT_CATEGORIES];
+                const merged = [{ id: 'all', name: 'All Products', icon: 'sparkles-outline' }];
                 dbCats.forEach(dbC => {
                     if (!merged.some(c => c.name.toLowerCase() === dbC.name.toLowerCase())) {
                         merged.push({
@@ -382,11 +346,6 @@ export const LandingPage = ({
             if (testRes.status === 'fulfilled' && testRes.value.data?.length > 0) {
                 setTestimonials(testRes.value.data);
             }
-
-            // Banners
-            if (bansRes.status === 'fulfilled' && bansRes.value.data?.length > 0) {
-                setBanners(bansRes.value.data);
-            }
         } catch (err) {
             console.warn('LandingPage: Supabase fetch error, using safe fallback data', err);
         } finally {
@@ -402,6 +361,16 @@ export const LandingPage = ({
         setRefreshing(true);
         loadData();
     };
+
+    // Filter products dynamically by Category Chip & Search Query
+    const displayedProducts = popularProducts.filter(p => {
+        const matchesCategory = selectedCategory === 'All Products' ||
+            (p.category && p.category.toLowerCase().includes(selectedCategory.toLowerCase()));
+        const matchesQuery = !searchQuery.trim() ||
+            (p.name && p.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+            (p.category && p.category.toLowerCase().includes(searchQuery.toLowerCase()));
+        return matchesCategory && matchesQuery;
+    });
 
     return (
         <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
@@ -425,30 +394,20 @@ export const LandingPage = ({
                         }
                     ]}
                 >
-                    <Ionicons name="checkmark-circle" size={18} color="#10B981" style={{ marginRight: 8 }} />
+                    <Ionicons name="shield-checkmark" size={18} color="#D9A73A" style={{ marginRight: 8 }} />
                     <Text style={styles.toastText} numberOfLines={2}>{toast.message}</Text>
                 </Animated.View>
             )}
 
-            {/* ─── LUXURY CENTERED BRANDING HEADER ─── */}
+            {/* ─── LUXURY CLEAN BRANDING HEADER (NO CART BUTTON) ─── */}
             <View style={styles.headerCentered}>
-                <View style={styles.headerLeftButtonPlaceholder}>
-                    {/* Cart Quick Access */}
-                    <TouchableOpacity
-                        onPress={() => handleEnterShop('cart')}
-                        style={styles.headerCartButton}
-                        activeOpacity={0.8}
-                    >
-                        <Ionicons name="cart-outline" size={22} color="#070F1E" />
-                        {cartCount > 0 && (
-                            <View style={styles.cartBadge}>
-                                <Text style={styles.cartBadgeText}>{cartCount > 99 ? '99+' : cartCount}</Text>
-                            </View>
-                        )}
-                    </TouchableOpacity>
+                {/* Left: Security Status Indicator */}
+                <View style={styles.headerLeftSecurityBadge}>
+                    <Ionicons name="shield-checkmark" size={16} color="#10B981" />
+                    <Text style={styles.headerLeftSecurityText}>Verified</Text>
                 </View>
 
-                {/* Logo & Central Identity */}
+                {/* Center: Logo & Branding */}
                 <TouchableOpacity
                     style={styles.logoAndBrandContainer}
                     activeOpacity={0.9}
@@ -468,7 +427,7 @@ export const LandingPage = ({
                     <Text style={styles.brandSubtitle}>ONLINE MARKETPLACE</Text>
                 </TouchableOpacity>
 
-                {/* Sign In / Account Action */}
+                {/* Right: Sign In / Account Action */}
                 <View style={styles.headerRightAction}>
                     <TouchableOpacity
                         onPress={user ? () => handleEnterShop('profile') : (onLogin || (() => handleEnterShop('shop')))}
@@ -501,7 +460,7 @@ export const LandingPage = ({
                         <View style={styles.heroLeftCol}>
                             {/* Security Trust Pill */}
                             <View style={styles.trustPillBadge}>
-                                <Ionicons name="shield-checkmark" size={13} color="#10B981" />
+                                <Ionicons name="shield-checkmark" size={12} color="#10B981" />
                                 <Text style={styles.trustPillBadgeText}>100% Escrow & Verified Market</Text>
                             </View>
 
@@ -513,18 +472,18 @@ export const LandingPage = ({
                             </View>
 
                             <Text style={styles.heroDescriptionText}>
-                                Babban dandali mai amana a Najeriya. Sayi, sayar, kuma sami kariya 100% ta hanyar Asusun Amana (Escrow Vault).
+                                Babban dandalin kasuwanci a Najeriya mai tsaron Asusun Amana (Escrow Vault).
                             </Text>
 
                             {/* Dual Call To Actions */}
                             <View style={styles.heroButtonsStack}>
                                 <TouchableOpacity
-                                    onPress={() => handleEnterShop('shop')}
+                                    onPress={() => user ? handleEnterShop('shop') : (onLogin ? onLogin() : handleEnterShop('shop'))}
                                     style={styles.btnStartShopping}
                                     activeOpacity={0.9}
                                 >
                                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <Ionicons name="bag-handle" size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
+                                        <Ionicons name="bag-handle" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
                                         <Text style={styles.btnStartShoppingText} numberOfLines={1}>Start Shopping</Text>
                                     </View>
                                     <View style={styles.circleArrowNavy}>
@@ -538,7 +497,7 @@ export const LandingPage = ({
                                     activeOpacity={0.9}
                                 >
                                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <Ionicons name="storefront-outline" size={15} color="#D9A73A" style={{ marginRight: 6 }} />
+                                        <Ionicons name="storefront-outline" size={14} color="#D9A73A" style={{ marginRight: 6 }} />
                                         <Text style={styles.btnStartSellingText} numberOfLines={1}>Start Selling</Text>
                                     </View>
                                     <View style={styles.circleArrowGold}>
@@ -548,7 +507,7 @@ export const LandingPage = ({
                             </View>
                         </View>
 
-                        {/* Right Column: Hero Graphic Illustration */}
+                        {/* Right Column: Hero Device Mockup */}
                         <View style={styles.heroRightCol}>
                             <View style={styles.decorCircleLarge} />
                             <View style={styles.decorCircleRing} />
@@ -561,103 +520,12 @@ export const LandingPage = ({
                     </View>
                 </View>
 
-                {/* ─── 2. FORTIFIED 100% ESCROW PROTECTION VAULT (TSARO & AMANA) ─── */}
-                <View style={styles.escrowVaultContainer}>
-                    <LinearGradient
-                        colors={['#070F1E', '#0A192F', '#0E2A4D']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={styles.escrowVaultCard}
-                    >
-                        {/* Escrow Header with Glowing Vault Badge */}
-                        <View style={styles.escrowHeaderRow}>
-                            <View style={styles.escrowIconBadge}>
-                                <Ionicons name="shield-checkmark" size={22} color="#10B981" />
-                            </View>
-                            <View style={{ flex: 1, marginLeft: 10 }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                    <Text style={styles.escrowCardTitle}>100% ESCROW PROTECTION VAULT</Text>
-                                    <View style={styles.liveVerifiedTag}>
-                                        <Text style={styles.liveVerifiedTagText}>ACTIVE</Text>
-                                    </View>
-                                </View>
-                                <Text style={styles.escrowCardSubtitle}>Kariyar Biyan Kuɗi & Sayayya Ta Amana</Text>
-                            </View>
-                        </View>
-
-                        {/* Guarantee Statement */}
-                        <View style={styles.escrowGuaranteeBox}>
-                            <Ionicons name="lock-closed" size={14} color="#D9A73A" style={{ marginRight: 6 }} />
-                            <Text style={styles.escrowGuaranteeText}>
-                                Ba za a taɓa sakin kuɗi ga mai sayarwa ba har sai ka karɓi kayanka lafiya kuma ka gamsu 100%.
-                            </Text>
-                        </View>
-
-                        {/* 3 Steps of Safe Escrow Execution */}
-                        <View style={styles.escrowStepsRow}>
-                            {/* Step 1 */}
-                            <View style={styles.escrowStepItem}>
-                                <View style={styles.escrowStepCircle}>
-                                    <Ionicons name="wallet-outline" size={16} color="#D9A73A" />
-                                    <View style={styles.stepNumBadge}><Text style={styles.stepNumText}>1</Text></View>
-                                </View>
-                                <Text style={styles.escrowStepTitle}>Killace Kuɗi</Text>
-                                <Text style={styles.escrowStepDesc}>Kudinka na zaune a amana ba tare da mai shago ya taba ba.</Text>
-                            </View>
-
-                            <View style={styles.escrowStepArrow}>
-                                <Ionicons name="chevron-forward" size={16} color="#475569" />
-                            </View>
-
-                            {/* Step 2 */}
-                            <View style={styles.escrowStepItem}>
-                                <View style={styles.escrowStepCircle}>
-                                    <Ionicons name="cube-outline" size={16} color="#3B82F6" />
-                                    <View style={styles.stepNumBadge}><Text style={styles.stepNumText}>2</Text></View>
-                                </View>
-                                <Text style={styles.escrowStepTitle}>Isar da Sako</Text>
-                                <Text style={styles.escrowStepDesc}>Mai sayarwa zai tura kaya tare da lambar bibiya (tracking).</Text>
-                            </View>
-
-                            <View style={styles.escrowStepArrow}>
-                                <Ionicons name="chevron-forward" size={16} color="#475569" />
-                            </View>
-
-                            {/* Step 3 */}
-                            <View style={styles.escrowStepItem}>
-                                <View style={styles.escrowStepCircle}>
-                                    <Ionicons name="checkmark-done-circle" size={16} color="#10B981" />
-                                    <View style={styles.stepNumBadge}><Text style={styles.stepNumText}>3</Text></View>
-                                </View>
-                                <Text style={styles.escrowStepTitle}>Gamsuwa / Refund</Text>
-                                <Text style={styles.escrowStepDesc}>Sakin kudi bayan ka gamsu, ko mayar da kudi idan an samu kuskure.</Text>
-                            </View>
-                        </View>
-
-                        {/* Security Certification Strip */}
-                        <View style={styles.escrowBadgesRow}>
-                            <View style={styles.escrowBadgeMini}>
-                                <Ionicons name="finger-print-outline" size={12} color="#10B981" />
-                                <Text style={styles.escrowBadgeMiniText}>256-Bit SSL Safe</Text>
-                            </View>
-                            <View style={styles.escrowBadgeMini}>
-                                <Ionicons name="ribbon-outline" size={12} color="#D9A73A" />
-                                <Text style={styles.escrowBadgeMiniText}>CAC & NIN Verified</Text>
-                            </View>
-                            <View style={styles.escrowBadgeMini}>
-                                <Ionicons name="refresh-outline" size={12} color="#38BDF8" />
-                                <Text style={styles.escrowBadgeMiniText}>Fast Refund Guarantee</Text>
-                            </View>
-                        </View>
-                    </LinearGradient>
-                </View>
-
-                {/* ─── 3. MODERN SEARCH & DISCOVERY BAR ─── */}
+                {/* ─── 2. SEARCH & INSTANT DISCOVERY ─── */}
                 <View style={styles.searchBarSection}>
                     <View style={styles.searchBox}>
                         <Ionicons name="search-outline" size={19} color="#64748B" style={{ marginRight: 8 }} />
                         <TextInput
-                            placeholder="Search products, verified sellers, brands..."
+                            placeholder="Search products, brands, categories..."
                             placeholderTextColor="#94A3B8"
                             value={searchQuery}
                             onChangeText={setSearchQuery}
@@ -680,30 +548,93 @@ export const LandingPage = ({
                     </View>
                 </View>
 
-                {/* ─── 4. SECURITY & TRUST VALUES STRIP ─── */}
-                <View style={styles.trustStripContainer}>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trustStripContent}>
-                        {TRUST_ITEMS.map((item, idx) => (
-                            <View key={idx} style={styles.trustPillItem}>
-                                <View style={[styles.trustIconCircle, { backgroundColor: item.color + '15' }]}>
-                                    <Ionicons name={item.icon} size={15} color={item.color} />
-                                </View>
-                                <View>
-                                    <Text style={styles.trustItemLabel}>{item.label}</Text>
-                                    <Text style={styles.trustItemDesc}>{item.desc}</Text>
-                                </View>
-                            </View>
-                        ))}
+                {/* ─── 3. NEW FEATURE: INTERACTIVE CATEGORY CHIP TABS ─── */}
+                <View style={styles.categoryChipsSection}>
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.categoryChipsScroll}
+                    >
+                        {categories.map((cat, idx) => {
+                            const isSelected = selectedCategory === cat.name;
+                            return (
+                                <TouchableOpacity
+                                    key={cat.id || idx}
+                                    style={[
+                                        styles.categoryChip,
+                                        isSelected && styles.categoryChipActive
+                                    ]}
+                                    onPress={() => setSelectedCategory(cat.name)}
+                                    activeOpacity={0.8}
+                                >
+                                    <Ionicons
+                                        name={cat.icon || 'grid-outline'}
+                                        size={14}
+                                        color={isSelected ? '#070F1E' : '#64748B'}
+                                        style={{ marginRight: 5 }}
+                                    />
+                                    <Text
+                                        style={[
+                                            styles.categoryChipText,
+                                            isSelected && styles.categoryChipTextActive
+                                        ]}
+                                    >
+                                        {cat.name}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
                     </ScrollView>
                 </View>
 
-                {/* ─── 5. FLASH DEALS WITH COUNTDOWN TIMER ─── */}
+                {/* ─── 4. ELEGANT ESCROW & BANK SECURITY STRIP (UNCLUTTERED) ─── */}
+                <View style={styles.escrowCompactSection}>
+                    <LinearGradient
+                        colors={['#070F1E', '#0A192F', '#0F2746']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.escrowCompactCard}
+                    >
+                        <View style={styles.escrowCompactHeader}>
+                            <View style={styles.escrowShieldIconBadge}>
+                                <Ionicons name="shield-checkmark" size={18} color="#10B981" />
+                            </View>
+                            <View style={{ flex: 1, marginLeft: 10 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Text style={styles.escrowCompactTitle}>100% ESCROW PROTECTION VAULT</Text>
+                                    <View style={styles.activeTagBadge}><Text style={styles.activeTagBadgeText}>LOCKED</Text></View>
+                                </View>
+                                <Text style={styles.escrowCompactSub}>Ba a sakin kudi ga mai shago sai bayan ka karbi kaya ka gamsu 100%.</Text>
+                            </View>
+                        </View>
+
+                        {/* 3 Clean Compact Security Pillars */}
+                        <View style={styles.escrowPillarsRow}>
+                            <View style={styles.escrowPillarItem}>
+                                <Ionicons name="wallet-outline" size={16} color="#D9A73A" />
+                                <Text style={styles.escrowPillarText}>1. Killace Kuɗi</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={14} color="#475569" />
+                            <View style={styles.escrowPillarItem}>
+                                <Ionicons name="cube-outline" size={16} color="#38BDF8" />
+                                <Text style={styles.escrowPillarText}>2. Isar da Sako</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={14} color="#475569" />
+                            <View style={styles.escrowPillarItem}>
+                                <Ionicons name="checkmark-done-circle" size={16} color="#10B981" />
+                                <Text style={styles.escrowPillarText}>3. Gamsuwa/Refund</Text>
+                            </View>
+                        </View>
+                    </LinearGradient>
+                </View>
+
+                {/* ─── 5. FLASH DEALS (WITH COUNTDOWN TIMER) ─── */}
                 {flashSaleProducts.length > 0 && (
                     <View style={styles.flashDealsSection}>
                         <View style={styles.flashHeaderRow}>
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                 <View style={styles.flashIconBox}>
-                                    <Ionicons name="flash" size={18} color="#EF4444" />
+                                    <Ionicons name="flash" size={16} color="#EF4444" />
                                 </View>
                                 <View style={{ marginLeft: 8 }}>
                                     <Text style={styles.flashSectionTitle}>Flash Deals</Text>
@@ -727,7 +658,7 @@ export const LandingPage = ({
                                     <TouchableOpacity
                                         key={p.id}
                                         style={styles.flashDealCard}
-                                        activeOpacity={0.9}
+                                        activeOpacity={0.92}
                                         onPress={() => handleProductPress(p)}
                                     >
                                         <View style={styles.flashImgWrapper}>
@@ -743,18 +674,19 @@ export const LandingPage = ({
                                         <View style={styles.flashCardBody}>
                                             <Text style={styles.flashProductName} numberOfLines={1}>{p.name}</Text>
                                             <Text style={styles.flashProductPrice}>{fmtPrice(p.price)}</Text>
-                                            {p.compare_at_price ? (
-                                                <Text style={styles.flashOldPrice}>{fmtPrice(p.compare_at_price)}</Text>
-                                            ) : null}
 
-                                            <TouchableOpacity
-                                                style={styles.btnFlashAddToCart}
-                                                onPress={(e) => handleAddToCartPress(p, e)}
-                                                activeOpacity={0.8}
-                                            >
-                                                <Ionicons name="cart-outline" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
-                                                <Text style={styles.btnFlashAddToCartText}>Add to Cart</Text>
-                                            </TouchableOpacity>
+                                            {/* Security Gate Pill: Login to View */}
+                                            <View style={styles.viewLockPill}>
+                                                <Ionicons
+                                                    name={user ? 'eye-outline' : 'lock-closed'}
+                                                    size={11}
+                                                    color={user ? '#10B981' : '#D9A73A'}
+                                                    style={{ marginRight: 4 }}
+                                                />
+                                                <Text style={[styles.viewLockPillText, user && { color: '#10B981' }]}>
+                                                    {user ? 'Duba Kaya' : 'Shiga don Dubawa'}
+                                                </Text>
+                                            </View>
                                         </View>
                                     </TouchableOpacity>
                                 );
@@ -763,144 +695,107 @@ export const LandingPage = ({
                     </View>
                 )}
 
-                {/* ─── 6. MARKET CATEGORIES ─── */}
-                <View style={styles.sectionContainer}>
-                    <View style={styles.sectionHeaderRow}>
-                        <View>
-                            <Text style={styles.sectionTitleText}>Market Categories</Text>
-                            <Text style={styles.sectionSubtitleText}>Zaɓi rukuni don ganin kayayyaki masu inganci</Text>
-                        </View>
-                        <TouchableOpacity onPress={() => handleEnterShop('shop')} style={styles.sectionLinkBtn}>
-                            <Text style={styles.sectionLinkText}>Duba Duka</Text>
-                            <Ionicons name="chevron-forward" size={14} color="#D9A73A" />
-                        </TouchableOpacity>
-                    </View>
-
-                    <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.categoriesScrollContainer}
-                    >
-                        {categories.map((cat, index) => (
-                            <TouchableOpacity
-                                key={cat.id || index}
-                                style={styles.categoryCardItem}
-                                activeOpacity={0.85}
-                                onPress={() => handleEnterShop('shop', cat.name)}
-                            >
-                                <View style={styles.categoryIconCircle}>
-                                    <Ionicons name={cat.icon || 'grid-outline'} size={22} color="#D9A73A" />
-                                </View>
-                                <Text style={styles.categoryCardLabel} numberOfLines={2}>{cat.name}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </ScrollView>
-                </View>
-
-                {/* ─── 7. POPULAR PRODUCTS (REAL DATA + ESCROW TAG) ─── */}
+                {/* ─── 6. CURATED POPULAR PRODUCTS (SECURITY GATED ON CLICK) ─── */}
                 <View style={styles.sectionContainer}>
                     <View style={styles.sectionHeaderRow}>
                         <View>
                             <Text style={styles.sectionTitleText}>Popular Right Now</Text>
-                            <Text style={styles.sectionSubtitleText}>Kayan da suka fi samun sha'awa da kyakkyawan sharhi</Text>
+                            <Text style={styles.sectionSubtitleText}>
+                                {selectedCategory === 'All Products'
+                                    ? 'Kayayyakin da suka fi samun sha\'awa'
+                                    : `Kayayyaki a rukunin ${selectedCategory}`}
+                            </Text>
                         </View>
-                        <TouchableOpacity onPress={() => handleEnterShop('shop')} style={styles.sectionLinkBtn}>
+                        <TouchableOpacity onPress={() => handleEnterShop('shop', selectedCategory)} style={styles.sectionLinkBtn}>
                             <Text style={styles.sectionLinkText}>View All</Text>
                             <Ionicons name="arrow-forward" size={14} color="#D9A73A" />
                         </TouchableOpacity>
                     </View>
 
                     <View style={styles.popularGridContainer}>
-                        {popularProducts.slice(0, 6).map((product) => {
-                            const isLiked = !!wishlist[product.id];
-                            return (
-                                <TouchableOpacity
-                                    key={product.id}
-                                    style={styles.productGridCard}
-                                    activeOpacity={0.92}
-                                    onPress={() => handleProductPress(product)}
-                                >
-                                    {/* Image Wrapper */}
-                                    <View style={styles.productImgContainer}>
-                                        <Image
-                                            source={{ uri: resolveImage(product) }}
-                                            style={styles.productImg}
-                                            resizeMode="cover"
-                                        />
+                        {displayedProducts.slice(0, 6).map((product) => (
+                            <TouchableOpacity
+                                key={product.id}
+                                style={styles.productGridCard}
+                                activeOpacity={0.92}
+                                onPress={() => handleProductPress(product)}
+                            >
+                                {/* Image Container */}
+                                <View style={styles.productImgContainer}>
+                                    <Image
+                                        source={{ uri: resolveImage(product) }}
+                                        style={styles.productImg}
+                                        resizeMode="cover"
+                                    />
 
-                                        {/* Escrow badge pill */}
-                                        <View style={styles.productEscrowPill}>
-                                            <Ionicons name="shield-checkmark" size={10} color="#10B981" />
-                                            <Text style={styles.productEscrowPillText}>Escrow Safe</Text>
+                                    {/* Escrow badge pill */}
+                                    <View style={styles.productEscrowPill}>
+                                        <Ionicons name="shield-checkmark" size={10} color="#10B981" />
+                                        <Text style={styles.productEscrowPillText}>Escrow Safe</Text>
+                                    </View>
+
+                                    {/* Auth Lock Hint Overlay if guest */}
+                                    {!user && (
+                                        <View style={styles.productAuthLockBadge}>
+                                            <Ionicons name="lock-closed" size={12} color="#FFFFFF" />
+                                        </View>
+                                    )}
+                                </View>
+
+                                {/* Product Details */}
+                                <View style={styles.productCardDetails}>
+                                    <Text style={styles.productCardCategory} numberOfLines={1}>
+                                        {product.category || 'Marketplace'}
+                                    </Text>
+                                    <Text style={styles.productCardTitle} numberOfLines={2}>
+                                        {product.name}
+                                    </Text>
+
+                                    {/* Rating */}
+                                    <View style={styles.productRatingRow}>
+                                        <Ionicons name="star" size={11} color="#F59E0B" />
+                                        <Text style={styles.productRatingText}>
+                                            {product.rating ? Number(product.rating).toFixed(1) : '4.8'}
+                                        </Text>
+                                        <Text style={styles.productReviewsCount}>
+                                            ({product.reviews_count || 45})
+                                        </Text>
+                                    </View>
+
+                                    {/* Pricing & Secure Access Action */}
+                                    <View style={styles.productPriceRow}>
+                                        <View>
+                                            <Text style={styles.productCurrentPrice}>{fmtPrice(product.price)}</Text>
+                                            {product.compare_at_price ? (
+                                                <Text style={styles.productComparePrice}>
+                                                    {fmtPrice(product.compare_at_price)}
+                                                </Text>
+                                            ) : null}
                                         </View>
 
-                                        {/* Wishlist toggle button */}
-                                        <TouchableOpacity
-                                            style={styles.productWishlistBtn}
-                                            onPress={(e) => {
-                                                if (e && e.stopPropagation) e.stopPropagation();
-                                                toggleWishlist(product.id);
-                                            }}
-                                            activeOpacity={0.8}
-                                        >
+                                        {/* Security Gated Action Button */}
+                                        <View style={[styles.productViewActionBtn, user && styles.productViewActionBtnUser]}>
                                             <Ionicons
-                                                name={isLiked ? 'heart' : 'heart-outline'}
-                                                size={16}
-                                                color={isLiked ? '#EF4444' : '#64748B'}
+                                                name={user ? 'eye-outline' : 'lock-closed'}
+                                                size={12}
+                                                color={user ? '#10B981' : '#D9A73A'}
+                                                style={{ marginRight: 3 }}
                                             />
-                                        </TouchableOpacity>
-                                    </View>
-
-                                    {/* Product Details */}
-                                    <View style={styles.productCardDetails}>
-                                        <Text style={styles.productCardCategory} numberOfLines={1}>
-                                            {product.category || 'Marketplace'}
-                                        </Text>
-                                        <Text style={styles.productCardTitle} numberOfLines={2}>
-                                            {product.name}
-                                        </Text>
-
-                                        {/* Rating Stars */}
-                                        <View style={styles.productRatingRow}>
-                                            <Ionicons name="star" size={12} color="#F59E0B" />
-                                            <Text style={styles.productRatingText}>
-                                                {product.rating ? Number(product.rating).toFixed(1) : '4.8'}
-                                            </Text>
-                                            <Text style={styles.productReviewsCount}>
-                                                ({product.reviews_count || 45})
+                                            <Text style={[styles.productViewActionBtnText, user && { color: '#10B981' }]}>
+                                                {user ? 'Duba' : 'Shiga'}
                                             </Text>
                                         </View>
-
-                                        {/* Pricing Row */}
-                                        <View style={styles.productPriceRow}>
-                                            <View>
-                                                <Text style={styles.productCurrentPrice}>{fmtPrice(product.price)}</Text>
-                                                {product.compare_at_price ? (
-                                                    <Text style={styles.productComparePrice}>
-                                                        {fmtPrice(product.compare_at_price)}
-                                                    </Text>
-                                                ) : null}
-                                            </View>
-
-                                            <TouchableOpacity
-                                                style={styles.productAddToCartIconBtn}
-                                                onPress={(e) => handleAddToCartPress(product, e)}
-                                                activeOpacity={0.8}
-                                            >
-                                                <Ionicons name="cart-outline" size={16} color="#FFFFFF" />
-                                            </TouchableOpacity>
-                                        </View>
                                     </View>
-                                </TouchableOpacity>
-                            );
-                        })}
+                                </View>
+                            </TouchableOpacity>
+                        ))}
                     </View>
                 </View>
 
-                {/* ─── 8. WHY ABU MAFHAL (FEATURE HIGHLIGHTS) ─── */}
+                {/* ─── 7. WHY ABU MAFHAL (STREAMLINED & CLEAN) ─── */}
                 <View style={styles.whySectionContainer}>
                     <View style={styles.centerSectionHeader}>
-                        <Text style={styles.centerSectionTitle}>Me Yasa Za Ka Zabi Abu Mafhal?</Text>
+                        <Text style={styles.centerSectionTitle}>Me Yasa Za Ka Zaɓi Abu Mafhal?</Text>
                         <Text style={styles.centerSectionSub}>Ingantaccen tsaro da amana da aka gina domin cigaban kowa</Text>
                         <View style={styles.goldUnderline} />
                     </View>
@@ -913,7 +808,7 @@ export const LandingPage = ({
                         {WHY_CHOOSE_US.map((item) => (
                             <View key={item.id} style={styles.whyCardItem}>
                                 <View style={[styles.whyCardIconBox, { backgroundColor: item.bgColor }]}>
-                                    <Ionicons name={item.icon} size={24} color={item.color} />
+                                    <Ionicons name={item.icon} size={22} color={item.color} />
                                 </View>
                                 <Text style={styles.whyCardTitleText}>{item.title}</Text>
                                 <Text style={styles.whyCardDescText}>{item.desc}</Text>
@@ -922,107 +817,57 @@ export const LandingPage = ({
                     </ScrollView>
                 </View>
 
-                {/* ─── 9. LIVE PLATFORM IMPACT & STATS (ANIMATED) ─── */}
+                {/* ─── 8. LIVE PLATFORM IMPACT & STATS (ANIMATED) ─── */}
                 <View style={styles.statsSectionContainer}>
                     <View style={styles.statsGridCard}>
                         <View style={styles.statsItemCol}>
-                            <Ionicons name="people-outline" size={18} color="#D9A73A" style={{ marginBottom: 4 }} />
+                            <Ionicons name="people-outline" size={17} color="#D9A73A" style={{ marginBottom: 3 }} />
                             <AnimatedCounter target={50} suffix="K+" />
                             <Text style={styles.statsItemLabel}>Active Buyers</Text>
                         </View>
                         <View style={styles.statsDividerVertical} />
 
                         <View style={styles.statsItemCol}>
-                            <Ionicons name="shield-checkmark-outline" size={18} color="#10B981" style={{ marginBottom: 4 }} />
+                            <Ionicons name="shield-checkmark-outline" size={17} color="#10B981" style={{ marginBottom: 3 }} />
                             <AnimatedCounter target={2.5} suffix="B+" />
                             <Text style={styles.statsItemLabel}>₦ Escrow Secured</Text>
                         </View>
                         <View style={styles.statsDividerVertical} />
 
                         <View style={styles.statsItemCol}>
-                            <Ionicons name="storefront-outline" size={18} color="#3B82F6" style={{ marginBottom: 4 }} />
+                            <Ionicons name="storefront-outline" size={17} color="#3B82F6" style={{ marginBottom: 3 }} />
                             <AnimatedCounter target={15} suffix="K+" />
                             <Text style={styles.statsItemLabel}>Verified Sellers</Text>
                         </View>
                         <View style={styles.statsDividerVertical} />
 
                         <View style={styles.statsItemCol}>
-                            <Ionicons name="star-outline" size={18} color="#F59E0B" style={{ marginBottom: 4 }} />
+                            <Ionicons name="star-outline" size={17} color="#F59E0B" style={{ marginBottom: 3 }} />
                             <AnimatedCounter target={4.9} suffix="/5" />
                             <Text style={styles.statsItemLabel}>Satisfaction</Text>
                         </View>
                     </View>
                 </View>
 
-                {/* ─── 10. MISSION STATEMENT SECTION ─── */}
-                <View style={styles.missionCardContainer}>
-                    <View style={styles.missionInnerCard}>
-                        <View style={styles.missionTagBadge}>
-                            <Text style={styles.missionTagText}>OUR MISSION</Text>
-                        </View>
-                        <Text style={styles.missionTitleText}>
-                            Empowering People. Building Opportunities. Stronger Community.
-                        </Text>
-                        <Text style={styles.missionParagraphText}>
-                            Abu Mafhal ya wuce kawai kasuwa ta saye da sayarwa. Mun sadaukar da kai wajen bunkasa kasuwancin 'yan gida da basu kariya ta tsarin Escrow domin tabbatar da amana a kowace hulɗa.
-                        </Text>
-
-                        <View style={styles.missionPhotoContainer}>
-                            <Image
-                                source={{ uri: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?q=80&w=800' }}
-                                style={styles.missionImage}
-                                resizeMode="cover"
-                            />
-                            <View style={styles.missionImageOverlay}>
-                                <Ionicons name="shield-checkmark" size={16} color="#10B981" />
-                                <Text style={styles.missionImageOverlayText}>
-                                    Amintacciyar kasuwar da ta haɗa dubban 'yan kasuwa da masu saye.
-                                </Text>
-                            </View>
-                        </View>
-                    </View>
-                </View>
-
-                {/* ─── 11. SELLER CALL-TO-ACTION BANNER ─── */}
-                <View style={styles.sellerBannerContainer}>
-                    <LinearGradient
-                        colors={['#070F1E', '#0B2240']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={styles.sellerBannerCard}
+                {/* ─── 9. DIRECT CONCIERGE & WHATSAPP SUPPORT PILL ─── */}
+                <View style={styles.conciergeSupportContainer}>
+                    <TouchableOpacity
+                        style={styles.conciergeSupportCard}
+                        activeOpacity={0.9}
+                        onPress={() => Linking.openURL('https://wa.me/2348000000000').catch(() => {})}
                     >
-                        <View style={styles.sellerBannerContent}>
-                            <Text style={styles.sellerBannerHeadline}>
-                                Sell Anything.{"\n"}
-                                <Text style={{ color: '#D9A73A' }}>Earn With 100% Peace of Mind.</Text>
-                            </Text>
-                            <Text style={styles.sellerBannerSubtitle}>
-                                Bude shagonka a Abu Mafhal. Sami kwastomomi daga ko'ina a Najeriya tare da garantin samun kudadenka ba tare da fargaba ba.
-                            </Text>
-
-                            <TouchableOpacity
-                                onPress={handleBecomeSeller}
-                                style={styles.btnBecomeSellerCard}
-                                activeOpacity={0.9}
-                            >
-                                <Text style={styles.btnBecomeSellerCardText}>Start Selling Today</Text>
-                                <View style={styles.circleArrowNavy}>
-                                    <Ionicons name="arrow-forward" size={13} color="#070F1E" />
-                                </View>
-                            </TouchableOpacity>
+                        <View style={styles.conciergeIconBox}>
+                            <Ionicons name="logo-whatsapp" size={24} color="#10B981" />
                         </View>
-
-                        {/* Visual Badge Indicator */}
-                        <View style={styles.sellerVisualBadge}>
-                            <Ionicons name="trending-up" size={32} color="#10B981" />
-                            <Text style={{ fontSize: 9, fontWeight: '800', color: '#94A3B8', marginTop: 4 }}>MONTHLY PAYOUT</Text>
-                            <Text style={{ fontSize: 13, fontWeight: '900', color: '#FFFFFF', marginTop: 2 }}>₦2,500,000+</Text>
-                            <Text style={{ fontSize: 8, fontWeight: '800', color: '#10B981', marginTop: 2 }}>Instant Settlements</Text>
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                            <Text style={styles.conciergeTitle}>Kuna buƙatar Taimako ko Tambaya?</Text>
+                            <Text style={styles.conciergeSub}>Yi magana da wakilinmu kai tsaye a WhatsApp 24/7</Text>
                         </View>
-                    </LinearGradient>
+                        <Ionicons name="arrow-forward" size={18} color="#10B981" />
+                    </TouchableOpacity>
                 </View>
 
-                {/* ─── 12. VERIFIED CUSTOMER TESTIMONIALS ─── */}
+                {/* ─── 10. VERIFIED CUSTOMER TESTIMONIALS ─── */}
                 <View style={styles.sectionContainer}>
                     <View style={styles.centerSectionHeader}>
                         <Text style={styles.centerSectionTitle}>Abin da Kwastomominmu Ke Faɗi</Text>
@@ -1039,7 +884,7 @@ export const LandingPage = ({
                             <View key={t.id} style={styles.testimonialCardItem}>
                                 <View style={styles.testimonialStarsRow}>
                                     {[1, 2, 3, 4, 5].map((s) => (
-                                        <Ionicons key={s} name="star" size={14} color="#F59E0B" style={{ marginRight: 2 }} />
+                                        <Ionicons key={s} name="star" size={13} color="#F59E0B" style={{ marginRight: 2 }} />
                                     ))}
                                 </View>
                                 <Text style={styles.testimonialQuoteText}>"{t.quote}"</Text>
@@ -1051,7 +896,7 @@ export const LandingPage = ({
                                     <View style={{ marginLeft: 10, flex: 1 }}>
                                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                             <Text style={styles.testimonialNameText}>{t.name}</Text>
-                                            <Ionicons name="checkmark-circle" size={14} color="#10B981" style={{ marginLeft: 4 }} />
+                                            <Ionicons name="checkmark-circle" size={13} color="#10B981" style={{ marginLeft: 4 }} />
                                         </View>
                                         <Text style={styles.testimonialRoleText}>{t.role || 'Verified User'}</Text>
                                     </View>
@@ -1061,7 +906,7 @@ export const LandingPage = ({
                     </ScrollView>
                 </View>
 
-                {/* ─── 13. RICH FOOTER & LEGAL CERTIFICATIONS ─── */}
+                {/* ─── 11. STREAMLINED LUXURY FOOTER ─── */}
                 <View style={styles.footerSection}>
                     <View style={styles.footerBrandRow}>
                         <View style={styles.footerLogoFrame}>
@@ -1078,7 +923,7 @@ export const LandingPage = ({
                     </View>
 
                     <Text style={styles.footerMissionBlurb}>
-                        Buy. Sell. Earn. Grow Together. Dandalin kasuwanci na zamani da ke ba da kariya 100% ga mai saye da mai sayarwa ta hanyar Asusun Amana na Escrow.
+                        Buy. Sell. Earn. Grow Together. Dandalin kasuwanci na zamani mai kariya 100% ta Asusun Amana na Escrow.
                     </Text>
 
                     {/* Social Media Links */}
@@ -1095,19 +940,18 @@ export const LandingPage = ({
                                 onPress={() => Linking.openURL(soc.url).catch(() => {})}
                                 activeOpacity={0.8}
                             >
-                                <Ionicons name={soc.icon} size={18} color="#D9A73A" />
+                                <Ionicons name={soc.icon} size={17} color="#D9A73A" />
                             </TouchableOpacity>
                         ))}
                     </View>
 
-                    {/* Multi-column Navigation Links */}
+                    {/* Multi-column Navigation Links (No Cart) */}
                     <View style={styles.footerLinksGrid}>
                         <View style={styles.footerLinkCol}>
                             <Text style={styles.footerColTitle}>Kasuwa</Text>
                             <TouchableOpacity onPress={() => handleEnterShop('shop')}><Text style={styles.footerLinkText}>All Products</Text></TouchableOpacity>
                             <TouchableOpacity onPress={() => handleEnterShop('shop', 'Phones & Tablets')}><Text style={styles.footerLinkText}>Phones & Gadgets</Text></TouchableOpacity>
-                            <TouchableOpacity onPress={() => handleEnterShop('shop', 'Fashion & Apparel')}><Text style={styles.footerLinkText}>Fashion & Shoes</Text></TouchableOpacity>
-                            <TouchableOpacity onPress={() => handleEnterShop('cart')}><Text style={styles.footerLinkText}>My Cart</Text></TouchableOpacity>
+                            <TouchableOpacity onPress={() => handleEnterShop('shop', 'Fashion & Apparel')}><Text style={styles.footerLinkText}>Fashion & Apparel</Text></TouchableOpacity>
                         </View>
 
                         <View style={styles.footerLinkCol}>
@@ -1115,7 +959,6 @@ export const LandingPage = ({
                             <TouchableOpacity onPress={handleBecomeSeller}><Text style={styles.footerLinkText}>Become a Seller</Text></TouchableOpacity>
                             <TouchableOpacity onPress={() => handleEnterShop('shop')}><Text style={styles.footerLinkText}>Escrow Policy</Text></TouchableOpacity>
                             <TouchableOpacity onPress={() => handleEnterShop('shop')}><Text style={styles.footerLinkText}>Buyer Protection</Text></TouchableOpacity>
-                            <TouchableOpacity onPress={() => handleEnterShop('shop')}><Text style={styles.footerLinkText}>Seller Terms</Text></TouchableOpacity>
                         </View>
 
                         <View style={styles.footerLinkCol}>
@@ -1123,14 +966,13 @@ export const LandingPage = ({
                             <TouchableOpacity onPress={() => handleEnterShop('profile')}><Text style={styles.footerLinkText}>Support Center</Text></TouchableOpacity>
                             <TouchableOpacity onPress={() => handleEnterShop('shop')}><Text style={styles.footerLinkText}>Order Tracking</Text></TouchableOpacity>
                             <TouchableOpacity onPress={() => handleEnterShop('shop')}><Text style={styles.footerLinkText}>Refunds & Dispute</Text></TouchableOpacity>
-                            <TouchableOpacity onPress={() => handleEnterShop('shop')}><Text style={styles.footerLinkText}>Contact Us</Text></TouchableOpacity>
                         </View>
                     </View>
 
                     {/* Newsletter Box */}
                     <View style={styles.newsletterCard}>
                         <Text style={styles.newsletterCardTitle}>Kasance tare da mu</Text>
-                        <Text style={styles.newsletterCardSub}>Sami labaran ragi da sabbin kayayyaki kai tsaye a email dinka.</Text>
+                        <Text style={styles.newsletterCardSub}>Sami labaran ragi da sabbin kayayyaki a email dinka.</Text>
                         <View style={styles.newsletterInputRow}>
                             <TextInput
                                 placeholder="Shigar da email dinka..."
@@ -1146,7 +988,7 @@ export const LandingPage = ({
                                 style={styles.btnNewsletterSubmit}
                                 activeOpacity={0.85}
                             >
-                                <Ionicons name="paper-plane" size={16} color="#070F1E" />
+                                <Ionicons name="paper-plane" size={15} color="#070F1E" />
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -1157,7 +999,7 @@ export const LandingPage = ({
                             © 2026 Abu Mafhal Marketplace. All rights reserved.
                         </Text>
                         <Text style={styles.footerBottomBadge}>
-                            🔒 100% Escrow Protection • 256-Bit SSL Encrypted • NDIC & CBN Partners
+                            🔒 100% Escrow Protection • 256-Bit SSL Safe • Regulated Channels
                         </Text>
                     </View>
                 </View>
@@ -1203,54 +1045,34 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 16,
-        paddingTop: Platform.OS === 'ios' ? 8 : 14,
-        paddingBottom: 14,
+        paddingTop: Platform.OS === 'ios' ? 8 : 12,
+        paddingBottom: 12,
         backgroundColor: '#F8FAFC',
         borderBottomWidth: 1,
         borderBottomColor: '#E2E8F0',
     },
-    headerLeftButtonPlaceholder: {
-        width: 44,
-        alignItems: 'flex-start',
-    },
-    headerCartButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#FFFFFF',
+    headerLeftSecurityBadge: {
+        flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        position: 'relative',
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        gap: 4,
     },
-    cartBadge: {
-        position: 'absolute',
-        top: -4,
-        right: -4,
-        backgroundColor: '#EF4444',
-        borderRadius: 10,
-        minWidth: 18,
-        height: 18,
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingHorizontal: 3,
-        borderWidth: 1.5,
-        borderColor: '#FFFFFF',
-    },
-    cartBadgeText: {
-        color: '#FFFFFF',
-        fontSize: 9,
-        fontWeight: '900',
+    headerLeftSecurityText: {
+        color: '#10B981',
+        fontSize: 9.5,
+        fontWeight: '800',
     },
     logoAndBrandContainer: {
         alignItems: 'center',
         justifyContent: 'center',
     },
     logoCircleContainer: {
-        width: 52,
-        height: 52,
-        borderRadius: 26,
+        width: 48,
+        height: 48,
+        borderRadius: 24,
         backgroundColor: '#FFFFFF',
         alignItems: 'center',
         justifyContent: 'center',
@@ -1263,66 +1085,65 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     logoImage: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
     },
     brandTitleRow: {
         flexDirection: 'row',
-        marginTop: 6,
+        marginTop: 5,
         alignItems: 'center',
     },
     brandTitleAbu: {
-        fontSize: 18,
+        fontSize: 17,
         fontWeight: '900',
         color: '#070F1E',
         letterSpacing: 0.5,
     },
     brandTitleMafhal: {
-        fontSize: 18,
+        fontSize: 17,
         fontWeight: '900',
         color: '#D9A73A',
         letterSpacing: 0.5,
     },
     brandSubtitle: {
-        fontSize: 8.5,
+        fontSize: 8,
         fontWeight: '800',
         color: '#64748B',
-        letterSpacing: 2,
+        letterSpacing: 1.8,
         marginTop: 2,
     },
     headerRightAction: {
-        width: 70,
         alignItems: 'flex-end',
     },
     headerLoginButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(217, 167, 58, 0.1)',
+        backgroundColor: 'rgba(217, 167, 58, 0.12)',
         borderWidth: 1,
         borderColor: '#D9A73A',
-        paddingHorizontal: 8,
+        paddingHorizontal: 9,
         paddingVertical: 5,
         borderRadius: 8,
     },
     headerLoginText: {
         color: '#D9A73A',
-        fontSize: 10,
+        fontSize: 10.5,
         fontWeight: '800',
     },
 
     // ─── Hero Styles ───
     heroSection: {
         backgroundColor: '#F8FAFC',
-        paddingTop: 10,
-        paddingBottom: 6,
+        paddingTop: 8,
+        paddingBottom: 4,
     },
     heroRow: {
         flexDirection: 'row',
         paddingLeft: 16,
         paddingRight: 0,
         alignItems: 'center',
-        minHeight: 390,
+        minHeight: 380,
         position: 'relative',
     },
     heroLeftCol: {
@@ -1342,9 +1163,9 @@ const styles = StyleSheet.create({
     },
     decorCircleLarge: {
         position: 'absolute',
-        width: 230,
-        height: 230,
-        borderRadius: 115,
+        width: 220,
+        height: 220,
+        borderRadius: 110,
         backgroundColor: '#E2E8F0',
         bottom: 20,
         right: -10,
@@ -1353,9 +1174,9 @@ const styles = StyleSheet.create({
     },
     decorCircleRing: {
         position: 'absolute',
-        width: 170,
-        height: 170,
-        borderRadius: 85,
+        width: 160,
+        height: 160,
+        borderRadius: 80,
         borderWidth: 2,
         borderColor: '#D9A73A30',
         top: 20,
@@ -1375,7 +1196,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFFFFF',
         paddingHorizontal: 8,
         paddingVertical: 4,
-        borderRadius: 16,
+        borderRadius: 14,
         borderWidth: 1,
         borderColor: '#CBD5E1',
         marginBottom: 8,
@@ -1390,30 +1211,30 @@ const styles = StyleSheet.create({
         marginTop: 2,
     },
     heroHeadlineDark: {
-        fontSize: 27,
+        fontSize: 26,
         fontWeight: '900',
         color: '#070F1E',
         letterSpacing: -0.6,
-        lineHeight: 31,
+        lineHeight: 30,
     },
     heroHeadlineGold: {
-        fontSize: 27,
+        fontSize: 26,
         fontWeight: '900',
         color: '#D9A73A',
         letterSpacing: -0.6,
-        lineHeight: 31,
+        lineHeight: 30,
         marginTop: 1,
-        marginBottom: 8,
+        marginBottom: 7,
     },
     heroDescriptionText: {
-        fontSize: 11,
+        fontSize: 10.5,
         color: '#475569',
-        lineHeight: 16,
+        lineHeight: 15,
         fontWeight: '600',
     },
     heroButtonsStack: {
         flexDirection: 'column',
-        gap: 9,
+        gap: 8,
         marginTop: 14,
         width: '100%',
     },
@@ -1436,7 +1257,7 @@ const styles = StyleSheet.create({
     btnStartShoppingText: {
         color: '#FFFFFF',
         fontWeight: '800',
-        fontSize: 12,
+        fontSize: 11.5,
     },
     circleArrowNavy: {
         width: 22,
@@ -1462,7 +1283,7 @@ const styles = StyleSheet.create({
     btnStartSellingText: {
         color: '#070F1E',
         fontWeight: '800',
-        fontSize: 12,
+        fontSize: 11.5,
     },
     circleArrowGold: {
         width: 22,
@@ -1473,159 +1294,10 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
 
-    // ─── Fortified Escrow Vault Card ───
-    escrowVaultContainer: {
-        paddingHorizontal: 16,
-        marginTop: 12,
-    },
-    escrowVaultCard: {
-        borderRadius: 20,
-        padding: 18,
-        borderWidth: 1,
-        borderColor: '#D9A73A40',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.12,
-        shadowRadius: 10,
-        elevation: 3,
-    },
-    escrowHeaderRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    escrowIconBadge: {
-        width: 42,
-        height: 42,
-        borderRadius: 21,
-        backgroundColor: 'rgba(16, 185, 129, 0.15)',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: '#10B981',
-    },
-    escrowCardTitle: {
-        color: '#FFFFFF',
-        fontSize: 11.5,
-        fontWeight: '900',
-        letterSpacing: 0.8,
-    },
-    liveVerifiedTag: {
-        backgroundColor: '#10B981',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 4,
-        marginLeft: 6,
-    },
-    liveVerifiedTagText: {
-        color: '#FFFFFF',
-        fontSize: 7.5,
-        fontWeight: '900',
-    },
-    escrowCardSubtitle: {
-        color: '#D9A73A',
-        fontSize: 10,
-        fontWeight: '700',
-        marginTop: 2,
-    },
-    escrowGuaranteeBox: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(217, 167, 58, 0.12)',
-        borderRadius: 10,
-        paddingHorizontal: 10,
-        paddingVertical: 7,
-        marginTop: 12,
-        borderLeftWidth: 3,
-        borderLeftColor: '#D9A73A',
-    },
-    escrowGuaranteeText: {
-        color: '#E2E8F0',
-        fontSize: 9.5,
-        fontWeight: '600',
-        flex: 1,
-        lineHeight: 14,
-    },
-    escrowStepsRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginTop: 16,
-    },
-    escrowStepItem: {
-        flex: 1,
-        alignItems: 'center',
-    },
-    escrowStepCircle: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: 'rgba(255, 255, 255, 0.08)',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.15)',
-        position: 'relative',
-        marginBottom: 6,
-    },
-    stepNumBadge: {
-        position: 'absolute',
-        top: -4,
-        right: -4,
-        backgroundColor: '#D9A73A',
-        width: 14,
-        height: 14,
-        borderRadius: 7,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    stepNumText: {
-        color: '#070F1E',
-        fontSize: 8,
-        fontWeight: '900',
-    },
-    escrowStepTitle: {
-        color: '#FFFFFF',
-        fontSize: 9.5,
-        fontWeight: '800',
-        textAlign: 'center',
-        marginBottom: 2,
-    },
-    escrowStepDesc: {
-        color: '#94A3B8',
-        fontSize: 7.5,
-        fontWeight: '500',
-        textAlign: 'center',
-        lineHeight: 11,
-    },
-    escrowStepArrow: {
-        paddingHorizontal: 2,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    escrowBadgesRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-around',
-        marginTop: 16,
-        paddingTop: 12,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(255, 255, 255, 0.1)',
-    },
-    escrowBadgeMini: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    escrowBadgeMiniText: {
-        color: '#CBD5E1',
-        fontSize: 8,
-        fontWeight: '700',
-    },
-
     // ─── Search Bar ───
     searchBarSection: {
         paddingHorizontal: 16,
-        marginTop: 18,
+        marginTop: 16,
     },
     searchBox: {
         flexDirection: 'row',
@@ -1653,48 +1325,117 @@ const styles = StyleSheet.create({
         paddingLeft: 6,
     },
 
-    // ─── Trust Values Strip ───
-    trustStripContainer: {
-        marginTop: 14,
+    // ─── Feature: Category Chip Tabs ───
+    categoryChipsSection: {
+        marginTop: 12,
     },
-    trustStripContent: {
+    categoryChipsScroll: {
         paddingHorizontal: 16,
-        gap: 10,
+        gap: 8,
     },
-    trustPillItem: {
+    categoryChip: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#FFFFFF',
-        borderRadius: 14,
         paddingHorizontal: 12,
         paddingVertical: 8,
+        borderRadius: 20,
         borderWidth: 1,
         borderColor: '#E2E8F0',
-        gap: 8,
     },
-    trustIconCircle: {
-        width: 30,
-        height: 30,
-        borderRadius: 15,
+    categoryChipActive: {
+        backgroundColor: '#D9A73A',
+        borderColor: '#D9A73A',
+    },
+    categoryChipText: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#64748B',
+    },
+    categoryChipTextActive: {
+        color: '#070F1E',
+        fontWeight: '900',
+    },
+
+    // ─── Compact Escrow Security Strip ───
+    escrowCompactSection: {
+        paddingHorizontal: 16,
+        marginTop: 16,
+    },
+    escrowCompactCard: {
+        borderRadius: 18,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: '#D9A73A40',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 2,
+    },
+    escrowCompactHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    escrowShieldIconBadge: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: 'rgba(16, 185, 129, 0.15)',
         alignItems: 'center',
         justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#10B981',
     },
-    trustItemLabel: {
+    escrowCompactTitle: {
+        color: '#FFFFFF',
         fontSize: 11,
-        fontWeight: '800',
-        color: '#070F1E',
+        fontWeight: '900',
+        letterSpacing: 0.8,
     },
-    trustItemDesc: {
-        fontSize: 8.5,
-        color: '#64748B',
+    activeTagBadge: {
+        backgroundColor: '#10B981',
+        paddingHorizontal: 5,
+        paddingVertical: 1.5,
+        borderRadius: 4,
+        marginLeft: 6,
+    },
+    activeTagBadgeText: {
+        color: '#FFFFFF',
+        fontSize: 7,
+        fontWeight: '900',
+    },
+    escrowCompactSub: {
+        color: '#94A3B8',
+        fontSize: 9,
         fontWeight: '500',
+        marginTop: 2,
+    },
+    escrowPillarsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginTop: 14,
+        paddingTop: 10,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255, 255, 255, 0.08)',
+    },
+    escrowPillarItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+    },
+    escrowPillarText: {
+        color: '#E2E8F0',
+        fontSize: 9,
+        fontWeight: '700',
     },
 
     // ─── Flash Deals ───
     flashDealsSection: {
-        marginTop: 24,
+        marginTop: 22,
         backgroundColor: '#FFF7ED',
-        paddingVertical: 18,
+        paddingVertical: 16,
         borderTopWidth: 1,
         borderBottomWidth: 1,
         borderColor: '#FFEDD5',
@@ -1707,20 +1448,20 @@ const styles = StyleSheet.create({
         marginBottom: 12,
     },
     flashIconBox: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+        width: 30,
+        height: 30,
+        borderRadius: 15,
         backgroundColor: '#FEE2E2',
         alignItems: 'center',
         justifyContent: 'center',
     },
     flashSectionTitle: {
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: '900',
         color: '#070F1E',
     },
     flashSectionSub: {
-        fontSize: 9.5,
+        fontSize: 9,
         color: '#64748B',
         fontWeight: '600',
     },
@@ -1729,7 +1470,7 @@ const styles = StyleSheet.create({
         gap: 12,
     },
     flashDealCard: {
-        width: 145,
+        width: 140,
         backgroundColor: '#FFFFFF',
         borderRadius: 16,
         borderWidth: 1,
@@ -1743,7 +1484,7 @@ const styles = StyleSheet.create({
     },
     flashImgWrapper: {
         width: '100%',
-        height: 120,
+        height: 115,
         position: 'relative',
         backgroundColor: '#F1F5F9',
     },
@@ -1756,68 +1497,66 @@ const styles = StyleSheet.create({
         top: 6,
         right: 6,
         backgroundColor: '#EF4444',
-        paddingHorizontal: 6,
+        paddingHorizontal: 5,
         paddingVertical: 2,
-        borderRadius: 6,
+        borderRadius: 5,
     },
     flashDiscountBadgeText: {
         color: '#FFFFFF',
-        fontSize: 9,
+        fontSize: 8.5,
         fontWeight: '900',
     },
     flashCardBody: {
-        padding: 10,
+        padding: 9,
     },
     flashProductName: {
-        fontSize: 11.5,
+        fontSize: 11,
         fontWeight: '700',
         color: '#1E293B',
-        marginBottom: 3,
+        marginBottom: 2,
     },
     flashProductPrice: {
-        fontSize: 13,
+        fontSize: 12.5,
         fontWeight: '900',
         color: '#070F1E',
     },
-    flashOldPrice: {
-        fontSize: 10,
-        color: '#94A3B8',
-        textDecorationLine: 'line-through',
-    },
-    btnFlashAddToCart: {
-        marginTop: 8,
-        backgroundColor: '#070F1E',
-        borderRadius: 8,
-        paddingVertical: 6,
+    viewLockPill: {
+        marginTop: 6,
+        backgroundColor: '#F8FAFC',
+        borderRadius: 6,
+        paddingVertical: 4,
+        paddingHorizontal: 6,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
     },
-    btnFlashAddToCartText: {
-        color: '#FFFFFF',
-        fontSize: 9.5,
+    viewLockPillText: {
+        color: '#D9A73A',
+        fontSize: 8.5,
         fontWeight: '800',
     },
 
-    // ─── Categories ───
+    // ─── Popular Products Grid ───
     sectionContainer: {
-        marginTop: 26,
+        marginTop: 24,
     },
     sectionHeaderRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-end',
         paddingHorizontal: 16,
-        marginBottom: 14,
+        marginBottom: 12,
     },
     sectionTitleText: {
-        fontSize: 17,
+        fontSize: 16.5,
         fontWeight: '900',
         color: '#070F1E',
         letterSpacing: -0.3,
     },
     sectionSubtitleText: {
-        fontSize: 10,
+        fontSize: 9.5,
         color: '#64748B',
         fontWeight: '500',
         marginTop: 2,
@@ -1832,39 +1571,6 @@ const styles = StyleSheet.create({
         fontSize: 11.5,
         marginRight: 2,
     },
-    categoriesScrollContainer: {
-        paddingHorizontal: 16,
-        gap: 12,
-    },
-    categoryCardItem: {
-        width: 76,
-        alignItems: 'center',
-    },
-    categoryIconCircle: {
-        width: 58,
-        height: 58,
-        borderRadius: 18,
-        backgroundColor: '#FFFFFF',
-        borderWidth: 1.5,
-        borderColor: '#E2E8F0',
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.03,
-        shadowRadius: 5,
-        elevation: 1,
-        marginBottom: 6,
-    },
-    categoryCardLabel: {
-        fontSize: 10,
-        fontWeight: '700',
-        color: '#475569',
-        textAlign: 'center',
-        lineHeight: 13,
-    },
-
-    // ─── Popular Products Grid ───
     popularGridContainer: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -1887,7 +1593,7 @@ const styles = StyleSheet.create({
     },
     productImgContainer: {
         width: '100%',
-        height: 145,
+        height: 140,
         backgroundColor: '#F1F5F9',
         position: 'relative',
     },
@@ -1912,53 +1618,48 @@ const styles = StyleSheet.create({
         fontSize: 8,
         fontWeight: '800',
     },
-    productWishlistBtn: {
+    productAuthLockBadge: {
         position: 'absolute',
         top: 8,
         right: 8,
-        width: 28,
-        height: 28,
-        borderRadius: 14,
-        backgroundColor: '#FFFFFF',
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: 'rgba(7, 15, 30, 0.8)',
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-        elevation: 2,
     },
     productCardDetails: {
         padding: 10,
     },
     productCardCategory: {
-        fontSize: 9,
+        fontSize: 8.5,
         fontWeight: '700',
         color: '#94A3B8',
         textTransform: 'uppercase',
         letterSpacing: 0.5,
     },
     productCardTitle: {
-        fontSize: 12,
+        fontSize: 11.5,
         fontWeight: '800',
         color: '#070F1E',
         marginTop: 3,
-        lineHeight: 16,
-        minHeight: 32,
+        lineHeight: 15,
+        minHeight: 30,
     },
     productRatingRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 4,
+        marginTop: 3,
         gap: 3,
     },
     productRatingText: {
-        fontSize: 10,
+        fontSize: 9.5,
         fontWeight: '800',
         color: '#1E293B',
     },
     productReviewsCount: {
-        fontSize: 9,
+        fontSize: 8.5,
         color: '#94A3B8',
     },
     productPriceRow: {
@@ -1971,7 +1672,7 @@ const styles = StyleSheet.create({
         borderTopColor: '#F1F5F9',
     },
     productCurrentPrice: {
-        fontSize: 13,
+        fontSize: 12.5,
         fontWeight: '900',
         color: '#070F1E',
     },
@@ -1980,20 +1681,31 @@ const styles = StyleSheet.create({
         color: '#94A3B8',
         textDecorationLine: 'line-through',
     },
-    productAddToCartIconBtn: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: '#070F1E',
+    productViewActionBtn: {
+        flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
+        backgroundColor: 'rgba(217, 167, 58, 0.1)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: '#D9A73A40',
+    },
+    productViewActionBtnUser: {
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        borderColor: '#10B98140',
+    },
+    productViewActionBtnText: {
+        fontSize: 9.5,
+        fontWeight: '800',
+        color: '#D9A73A',
     },
 
     // ─── Why Abu Mafhal ───
     whySectionContainer: {
-        marginTop: 32,
+        marginTop: 28,
         backgroundColor: '#FFFFFF',
-        paddingVertical: 24,
+        paddingVertical: 22,
         borderTopWidth: 1,
         borderBottomWidth: 1,
         borderColor: '#E2E8F0',
@@ -2001,27 +1713,27 @@ const styles = StyleSheet.create({
     centerSectionHeader: {
         alignItems: 'center',
         paddingHorizontal: 20,
-        marginBottom: 16,
+        marginBottom: 14,
     },
     centerSectionTitle: {
-        fontSize: 18,
+        fontSize: 17,
         fontWeight: '900',
         color: '#070F1E',
         textAlign: 'center',
     },
     centerSectionSub: {
-        fontSize: 11,
+        fontSize: 10.5,
         color: '#64748B',
         fontWeight: '500',
         textAlign: 'center',
         marginTop: 3,
     },
     goldUnderline: {
-        width: 44,
+        width: 40,
         height: 3,
         backgroundColor: '#D9A73A',
         borderRadius: 2,
-        marginTop: 8,
+        marginTop: 7,
     },
     whyCardsScroll: {
         paddingHorizontal: 16,
@@ -2029,53 +1741,53 @@ const styles = StyleSheet.create({
         paddingBottom: 4,
     },
     whyCardItem: {
-        width: 210,
+        width: 200,
         backgroundColor: '#F8FAFC',
-        borderRadius: 18,
-        padding: 16,
+        borderRadius: 16,
+        padding: 15,
         borderWidth: 1,
         borderColor: '#E2E8F0',
     },
     whyCardIconBox: {
-        width: 44,
-        height: 44,
-        borderRadius: 14,
+        width: 40,
+        height: 40,
+        borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 10,
+        marginBottom: 8,
     },
     whyCardTitleText: {
-        fontSize: 13,
+        fontSize: 12.5,
         fontWeight: '800',
         color: '#070F1E',
-        marginBottom: 4,
+        marginBottom: 3,
     },
     whyCardDescText: {
-        fontSize: 10.5,
+        fontSize: 10,
         fontWeight: '500',
         color: '#64748B',
-        lineHeight: 15,
+        lineHeight: 14,
     },
 
     // ─── Live Stats ───
     statsSectionContainer: {
         paddingHorizontal: 16,
-        marginTop: 24,
+        marginTop: 22,
     },
     statsGridCard: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         backgroundColor: '#FFFFFF',
-        borderRadius: 20,
-        paddingVertical: 16,
+        borderRadius: 18,
+        paddingVertical: 14,
         paddingHorizontal: 8,
         borderWidth: 1,
         borderColor: '#E2E8F0',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 8,
+        shadowOpacity: 0.03,
+        shadowRadius: 6,
         elevation: 1,
     },
     statsItemCol: {
@@ -2083,12 +1795,12 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     statsNumber: {
-        fontSize: 14,
+        fontSize: 13.5,
         fontWeight: '900',
         color: '#070F1E',
     },
     statsItemLabel: {
-        fontSize: 8,
+        fontSize: 7.5,
         fontWeight: '700',
         color: '#64748B',
         textAlign: 'center',
@@ -2096,136 +1808,46 @@ const styles = StyleSheet.create({
     },
     statsDividerVertical: {
         width: 1,
-        height: 28,
+        height: 26,
         backgroundColor: '#E2E8F0',
     },
 
-    // ─── Mission ───
-    missionCardContainer: {
+    // ─── Feature: Concierge WhatsApp Support Pill ───
+    conciergeSupportContainer: {
         paddingHorizontal: 16,
-        marginTop: 26,
+        marginTop: 20,
     },
-    missionInnerCard: {
+    conciergeSupportCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
         backgroundColor: '#FFFFFF',
-        borderRadius: 22,
-        padding: 18,
+        borderRadius: 16,
+        padding: 14,
         borderWidth: 1,
         borderColor: '#E2E8F0',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.03,
+        shadowRadius: 6,
+        elevation: 1,
     },
-    missionTagBadge: {
-        backgroundColor: '#070F1E',
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 6,
-        alignSelf: 'flex-start',
-        marginBottom: 8,
+    conciergeIconBox: {
+        width: 42,
+        height: 42,
+        borderRadius: 21,
+        backgroundColor: '#ECFDF5',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    missionTagText: {
-        color: '#D9A73A',
-        fontSize: 8,
-        fontWeight: '900',
-        letterSpacing: 1,
-    },
-    missionTitleText: {
-        fontSize: 18,
-        fontWeight: '900',
+    conciergeTitle: {
+        fontSize: 12,
+        fontWeight: '800',
         color: '#070F1E',
-        lineHeight: 23,
-        marginBottom: 8,
     },
-    missionParagraphText: {
-        fontSize: 11,
+    conciergeSub: {
+        fontSize: 9.5,
         color: '#64748B',
-        lineHeight: 17,
-        fontWeight: '500',
-        marginBottom: 14,
-    },
-    missionPhotoContainer: {
-        borderRadius: 16,
-        overflow: 'hidden',
-        position: 'relative',
-        height: 150,
-    },
-    missionImage: {
-        width: '100%',
-        height: '100%',
-    },
-    missionImageOverlay: {
-        position: 'absolute',
-        bottom: 10,
-        left: 10,
-        right: 10,
-        backgroundColor: 'rgba(7, 15, 30, 0.88)',
-        borderRadius: 10,
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-    },
-    missionImageOverlayText: {
-        color: '#FFFFFF',
-        fontSize: 9.5,
-        fontWeight: '700',
-        flex: 1,
-    },
-
-    // ─── Seller CTA ───
-    sellerBannerContainer: {
-        paddingHorizontal: 16,
-        marginTop: 24,
-    },
-    sellerBannerCard: {
-        borderRadius: 20,
-        padding: 18,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        borderWidth: 1,
-        borderColor: '#D9A73A40',
-    },
-    sellerBannerContent: {
-        width: '64%',
-    },
-    sellerBannerHeadline: {
-        fontSize: 16,
-        fontWeight: '900',
-        color: '#FFFFFF',
-        lineHeight: 21,
-    },
-    sellerBannerSubtitle: {
-        fontSize: 9.5,
-        color: '#94A3B8',
-        fontWeight: '500',
-        lineHeight: 14,
-        marginTop: 5,
-        marginBottom: 12,
-    },
-    btnBecomeSellerCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: '#D9A73A',
-        borderRadius: 10,
-        paddingLeft: 12,
-        paddingRight: 6,
-        paddingVertical: 8,
-        alignSelf: 'flex-start',
-        gap: 6,
-    },
-    btnBecomeSellerCardText: {
-        color: '#070F1E',
-        fontWeight: '900',
-        fontSize: 11,
-    },
-    sellerVisualBadge: {
-        width: '32%',
-        backgroundColor: 'rgba(255, 255, 255, 0.06)',
-        borderRadius: 14,
-        padding: 10,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
+        marginTop: 1,
     },
 
     // ─── Testimonials ───
@@ -2235,10 +1857,10 @@ const styles = StyleSheet.create({
         paddingBottom: 6,
     },
     testimonialCardItem: {
-        width: 250,
+        width: 240,
         backgroundColor: '#FFFFFF',
-        borderRadius: 18,
-        padding: 16,
+        borderRadius: 16,
+        padding: 14,
         borderWidth: 1,
         borderColor: '#E2E8F0',
         shadowColor: '#000',
@@ -2249,37 +1871,37 @@ const styles = StyleSheet.create({
     },
     testimonialStarsRow: {
         flexDirection: 'row',
-        marginBottom: 8,
+        marginBottom: 6,
     },
     testimonialQuoteText: {
-        fontSize: 11,
+        fontSize: 10.5,
         fontWeight: '500',
         color: '#334155',
-        lineHeight: 16,
+        lineHeight: 15,
         fontStyle: 'italic',
-        minHeight: 48,
+        minHeight: 45,
     },
     testimonialAuthorRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 12,
+        marginTop: 10,
         paddingTop: 8,
         borderTopWidth: 1,
         borderTopColor: '#F1F5F9',
     },
     testimonialAvatar: {
-        width: 34,
-        height: 34,
-        borderRadius: 17,
+        width: 32,
+        height: 32,
+        borderRadius: 16,
         backgroundColor: '#E2E8F0',
     },
     testimonialNameText: {
-        fontSize: 11.5,
+        fontSize: 11,
         fontWeight: '800',
         color: '#070F1E',
     },
     testimonialRoleText: {
-        fontSize: 9,
+        fontSize: 8.5,
         color: '#64748B',
         fontWeight: '500',
     },
@@ -2287,9 +1909,9 @@ const styles = StyleSheet.create({
     // ─── Footer ───
     footerSection: {
         backgroundColor: '#070F1E',
-        marginTop: 36,
-        paddingTop: 28,
-        paddingBottom: 24,
+        marginTop: 32,
+        paddingTop: 24,
+        paddingBottom: 22,
         paddingHorizontal: 16,
     },
     footerBrandRow: {
@@ -2297,9 +1919,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     footerLogoFrame: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         backgroundColor: '#FFFFFF',
         alignItems: 'center',
         justifyContent: 'center',
@@ -2307,39 +1929,39 @@ const styles = StyleSheet.create({
         borderColor: '#D9A73A',
     },
     footerLogoImg: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+        width: 32,
+        height: 32,
+        borderRadius: 16,
     },
     footerBrandTitle: {
-        fontSize: 17,
+        fontSize: 16,
         fontWeight: '900',
         color: '#FFFFFF',
         letterSpacing: 0.5,
     },
     footerBrandSub: {
-        fontSize: 8,
+        fontSize: 7.5,
         fontWeight: '800',
         color: '#D9A73A',
         letterSpacing: 1.5,
     },
     footerMissionBlurb: {
-        fontSize: 10.5,
+        fontSize: 10,
         color: '#94A3B8',
-        lineHeight: 16,
-        marginTop: 12,
+        lineHeight: 15,
+        marginTop: 10,
         fontWeight: '500',
     },
     footerSocialIconsRow: {
         flexDirection: 'row',
         gap: 10,
-        marginTop: 14,
-        marginBottom: 20,
+        marginTop: 12,
+        marginBottom: 16,
     },
     footerSocialCircle: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+        width: 34,
+        height: 34,
+        borderRadius: 17,
         backgroundColor: 'rgba(255, 255, 255, 0.06)',
         alignItems: 'center',
         justifyContent: 'center',
@@ -2349,7 +1971,7 @@ const styles = StyleSheet.create({
     footerLinksGrid: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        paddingVertical: 16,
+        paddingVertical: 14,
         borderTopWidth: 1,
         borderBottomWidth: 1,
         borderColor: 'rgba(255, 255, 255, 0.08)',
@@ -2358,35 +1980,35 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     footerColTitle: {
-        fontSize: 11,
+        fontSize: 10.5,
         fontWeight: '900',
         color: '#D9A73A',
-        marginBottom: 8,
+        marginBottom: 6,
     },
     footerLinkText: {
-        fontSize: 9.5,
+        fontSize: 9,
         color: '#CBD5E1',
         fontWeight: '500',
-        marginBottom: 6,
+        marginBottom: 5,
     },
     newsletterCard: {
         backgroundColor: 'rgba(255, 255, 255, 0.04)',
-        borderRadius: 16,
-        padding: 14,
-        marginTop: 18,
+        borderRadius: 14,
+        padding: 12,
+        marginTop: 16,
         borderWidth: 1,
         borderColor: 'rgba(255, 255, 255, 0.08)',
     },
     newsletterCardTitle: {
-        fontSize: 12,
+        fontSize: 11.5,
         fontWeight: '800',
         color: '#FFFFFF',
     },
     newsletterCardSub: {
-        fontSize: 9,
+        fontSize: 8.5,
         color: '#94A3B8',
         marginTop: 2,
-        marginBottom: 10,
+        marginBottom: 8,
     },
     newsletterInputRow: {
         flexDirection: 'row',
@@ -2396,34 +2018,34 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: 'rgba(255, 255, 255, 0.08)',
         borderRadius: 8,
-        paddingHorizontal: 12,
-        paddingVertical: Platform.OS === 'ios' ? 9 : 5,
+        paddingHorizontal: 10,
+        paddingVertical: Platform.OS === 'ios' ? 8 : 4,
         color: '#FFFFFF',
-        fontSize: 11,
+        fontSize: 10.5,
     },
     btnNewsletterSubmit: {
         backgroundColor: '#D9A73A',
-        width: 36,
-        height: 36,
+        width: 32,
+        height: 32,
         borderRadius: 8,
         alignItems: 'center',
         justifyContent: 'center',
         marginLeft: 8,
     },
     footerBottomLegal: {
-        marginTop: 20,
+        marginTop: 18,
         alignItems: 'center',
     },
     footerBottomCopy: {
-        fontSize: 9,
+        fontSize: 8.5,
         color: '#64748B',
         textAlign: 'center',
     },
     footerBottomBadge: {
-        fontSize: 8,
+        fontSize: 7.5,
         color: '#10B981',
         fontWeight: '700',
         textAlign: 'center',
-        marginTop: 4,
+        marginTop: 3,
     },
 });

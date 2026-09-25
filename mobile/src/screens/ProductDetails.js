@@ -8,7 +8,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useComparison } from '../context/ComparisonContext';
 import { Video, ResizeMode } from 'expo-av';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { resolveVendorOrStore } from '../services/vendorResolver';
 import { whatsappService } from '../services/whatsappService';
@@ -42,12 +43,67 @@ const fmtPrice = (n) => {
     return `₦${num.toLocaleString()}`;
 };
 
-export const ProductDetails = ({ route, navigation, addToCart }) => {
+export const ProductDetails = ({ route, navigation, addToCart, user }) => {
     const initialProduct = route?.params?.product || null;
     const productId = route?.params?.id || route?.params?.productId || initialProduct?.id;
 
     const insets = useSafeAreaInsets();
     const { addToComparison } = useComparison();
+
+    const [currentUser, setCurrentUser] = useState(() => {
+        if (user) return user;
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                const raw = window.localStorage.getItem('@abumafhal_user_v1');
+                if (raw) return JSON.parse(raw);
+            }
+        } catch (_) {}
+        return null;
+    });
+
+    useEffect(() => {
+        if (!currentUser) {
+            AsyncStorage.getItem('@abumafhal_user_v1').then((raw) => {
+                if (raw) {
+                    try { setCurrentUser(JSON.parse(raw)); } catch (_) {}
+                }
+            }).catch(() => {});
+        }
+    }, [user]);
+
+    // Gating check: User MUST be logged in to view product details
+    if (!user && !currentUser) {
+        return (
+            <SafeAreaView style={{ flex: 1, backgroundColor: '#070F1E', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+                <StatusBar barStyle="light-content" backgroundColor="#070F1E" />
+                <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(217, 167, 58, 0.15)', alignItems: 'center', justifyContent: 'center', marginBottom: 20, borderWidth: 1.5, borderColor: '#D9A73A' }}>
+                    <Ionicons name="lock-closed" size={38} color="#D9A73A" />
+                </View>
+                <Text style={{ fontSize: 20, fontWeight: '900', color: '#FFFFFF', textAlign: 'center', marginBottom: 10 }}>
+                    Tsaron Shiga (Login Required)
+                </Text>
+                <Text style={{ fontSize: 13, color: '#94A3B8', textAlign: 'center', lineHeight: 20, marginBottom: 26, maxWidth: 320 }}>
+                    Domin tsaro da kare haƙƙin masu sayayya da 'yan kasuwa, sai ka yi rajista ko shiga asusunka kafin ka duba cikakken bayanin kaya da farashinsa.
+                </Text>
+                <TouchableOpacity
+                    onPress={() => navigation.navigate('Auth', {
+                        redirectTo: 'ProductDetails',
+                        redirectParams: route?.params
+                    })}
+                    style={{ backgroundColor: '#D9A73A', paddingVertical: 14, paddingHorizontal: 28, borderRadius: 14, width: '100%', maxWidth: 300, alignItems: 'center', shadowColor: '#D9A73A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 }}
+                    activeOpacity={0.9}
+                >
+                    <Text style={{ color: '#070F1E', fontWeight: '900', fontSize: 14 }}>Shiga Asusunka (Sign In)</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    onPress={() => navigation.goBack()}
+                    style={{ marginTop: 16, padding: 10 }}
+                >
+                    <Text style={{ color: '#64748B', fontWeight: '700', fontSize: 13 }}>Koma Baya (Go Back)</Text>
+                </TouchableOpacity>
+            </SafeAreaView>
+        );
+    }
 
     // ── States ────────────────────────────────────────────────────────────────
     const [product, setProduct] = useState(initialProduct);
