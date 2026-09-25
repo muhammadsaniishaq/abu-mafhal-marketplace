@@ -13,8 +13,54 @@ const NAVY = '#0E1A2E';
 const DEEP_NAVY = '#1E293B';
 const GOLD = '#D9A73A';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+// ─── Date & Formatting Helpers ───────────────────────────────────────────────
+const pad2 = (n) => String(n).padStart(2, '0');
+const toDateStr = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+const fmtDate = (d) => {
+    if (!d) return '—';
+    const dateObj = new Date(d);
+    if (isNaN(dateObj.getTime())) return String(d);
+    return dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
+const fmtDateFull = (d) => {
+    if (!d) return 'No date selected';
+    const dateObj = new Date(d);
+    if (isNaN(dateObj.getTime())) return String(d);
+    return dateObj.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+};
+
+const addDaysStr = (n) => {
+    const d = new Date();
+    d.setDate(d.getDate() + n);
+    return toDateStr(d);
+};
+
+const getRelativeDaysText = (dateStr, isExpiry = true) => {
+    if (!dateStr) {
+        return isExpiry 
+            ? { text: '♾️ Lifetime (No Expiry)', color: '#059669', bg: '#ECFDF5' } 
+            : { text: '⚡ Starts Immediately', color: '#059669', bg: '#ECFDF5' };
+    }
+    const target = new Date(dateStr);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    target.setHours(0, 0, 0, 0);
+    const diffTime = target.getTime() - today.getTime();
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) {
+        return { text: `⚠️ Expired ${Math.abs(diffDays)}d ago`, color: '#EF4444', bg: '#FEF2F2' };
+    } else if (diffDays === 0) {
+        return { text: '⏳ Expires today!', color: '#D97706', bg: '#FFFBEB' };
+    } else if (diffDays === 1) {
+        return { text: '⏳ Expires tomorrow', color: '#D97706', bg: '#FFFBEB' };
+    } else {
+        return { text: `⏳ In ${diffDays} days`, color: '#059669', bg: '#ECFDF5' };
+    }
+};
+
 const fmtNum = (n) => n == null ? '∞' : Number(n).toLocaleString();
 const usagePercent = (c) => {
     if (!c.usage_limit) return null;
@@ -33,100 +79,288 @@ const genCode = () => {
     return Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 };
 
-// ─── Mini Calendar ─────────────────────────────────────────────────────────────
-const DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+// ─── Modern Date Card (Form Input) ───────────────────────────────────────────
+const ModernDateCard = ({ label, value, icon, active, onPress, onClear, isExpiry }) => {
+    const rel = getRelativeDaysText(value, isExpiry);
+    return (
+        <TouchableOpacity
+            onPress={onPress}
+            activeOpacity={0.82}
+            style={[
+                CS.modernDateCard,
+                active && CS.modernDateCardActive,
+                value && CS.modernDateCardSet,
+            ]}
+        >
+            <View style={CS.cardTopRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                    <View style={[CS.cardIconBadge, value ? { backgroundColor: '#FEF3C7' } : { backgroundColor: '#F1F5F9' }]}>
+                        <Ionicons name={icon || "calendar"} size={13} color={value ? GOLD : '#64748B'} />
+                    </View>
+                    <Text style={CS.cardLabelTxt}>{label}</Text>
+                </View>
+                {value ? (
+                    <TouchableOpacity
+                        onPress={onClear}
+                        style={CS.cardClearIconBtn}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                        <Ionicons name="close-circle" size={17} color="#94A3B8" />
+                    </TouchableOpacity>
+                ) : (
+                    <Ionicons name="chevron-forward" size={13} color="#CBD5E1" />
+                )}
+            </View>
 
-const MiniCalendar = ({ value, onSelect, onClose }) => {
-    const init = value ? new Date(value) : new Date();
-    const [view, setView] = React.useState({ year: init.getFullYear(), month: init.getMonth() });
+            <Text style={[CS.cardValTxt, !value && CS.cardValTxtEmpty]} numberOfLines={1}>
+                {value ? fmtDate(value) : (isExpiry ? 'Never (Lifetime)' : 'Immediately')}
+            </Text>
+
+            <View style={[CS.cardBadge, { backgroundColor: rel.bg }]}>
+                <Text style={[CS.cardBadgeTxt, { color: rel.color }]} numberOfLines={1}>{rel.text}</Text>
+            </View>
+        </TouchableOpacity>
+    );
+};
+
+// ─── Modern Full-Featured Calendar Card ───────────────────────────────────────
+const DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+const ModernDatePickerCard = ({ title, field, value, onSelect, onClose }) => {
+    const initDate = value ? new Date(value) : new Date();
+    const validInit = isNaN(initDate.getTime()) ? new Date() : initDate;
+
+    const [selectedDateStr, setSelectedDateStr] = React.useState(value || '');
+    const [view, setView] = React.useState({ year: validInit.getFullYear(), month: validInit.getMonth() });
     const { year, month } = view;
-    const selected = value ? new Date(value) : null;
-    const today = new Date();
+
+    const todayStr = toDateStr(new Date());
 
     const firstDay = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const cells = Array(firstDay).fill(null).concat(Array.from({ length: daysInMonth }, (_, i) => i + 1));
     while (cells.length % 7 !== 0) cells.push(null);
 
-    const prev = () => setView(v => v.month === 0 ? { year: v.year - 1, month: 11 } : { year: v.year, month: v.month - 1 });
-    const next = () => setView(v => v.month === 11 ? { year: v.year + 1, month: 0 } : { year: v.year, month: v.month + 1 });
+    const prevMonth = () => setView(v => v.month === 0 ? { year: v.year - 1, month: 11 } : { year: v.year, month: v.month - 1 });
+    const nextMonth = () => setView(v => v.month === 11 ? { year: v.year + 1, month: 0 } : { year: v.year, month: v.month + 1 });
+    const prevYear = () => setView(v => ({ ...v, year: v.year - 1 }));
+    const nextYear = () => setView(v => ({ ...v, year: v.year + 1 }));
+
+    const handlePickDay = (d) => {
+        if (!d) return;
+        const dStr = `${year}-${pad2(month + 1)}-${pad2(d)}`;
+        setSelectedDateStr(dStr);
+    };
+
+    const applyPreset = (dateStr) => {
+        setSelectedDateStr(dateStr || '');
+        if (dateStr) {
+            const dt = new Date(dateStr);
+            if (!isNaN(dt.getTime())) {
+                setView({ year: dt.getFullYear(), month: dt.getMonth() });
+            }
+        }
+    };
 
     const isSelected = (d) => {
-        if (!d || !selected) return false;
-        return selected.getFullYear() === year && selected.getMonth() === month && selected.getDate() === d;
+        if (!d || !selectedDateStr) return false;
+        const targetStr = `${year}-${pad2(month + 1)}-${pad2(d)}`;
+        return selectedDateStr === targetStr;
     };
+
     const isToday = (d) => {
         if (!d) return false;
-        return today.getFullYear() === year && today.getMonth() === month && today.getDate() === d;
+        const targetStr = `${year}-${pad2(month + 1)}-${pad2(d)}`;
+        return todayStr === targetStr;
     };
 
-    const pick = (d) => {
-        if (!d) return;
-        const pad = n => String(n).padStart(2, '0');
-        onSelect(`${year}-${pad(month + 1)}-${pad(d)}`);
-    };
+    const rel = getRelativeDaysText(selectedDateStr, field === 'expires_at');
 
     return (
-        <View style={CS.calWrap}>
-            {/* Month nav */}
-            <View style={CS.calNav}>
-                <TouchableOpacity onPress={prev} style={CS.calArrow}>
-                    <Ionicons name="chevron-back" size={16} color={NAVY} />
-                </TouchableOpacity>
-                <Text style={CS.calMonth}>{MONTHS[month]} {year}</Text>
-                <TouchableOpacity onPress={next} style={CS.calArrow}>
-                    <Ionicons name="chevron-forward" size={16} color={NAVY} />
-                </TouchableOpacity>
-            </View>
-
-            {/* Day headers */}
-            <View style={CS.calRow}>
-                {DAYS.map(d => <Text key={d} style={CS.calDayHdr}>{d}</Text>)}
-            </View>
-
-            {/* Cells */}
-            {Array.from({ length: cells.length / 7 }, (_, wi) => (
-                <View key={wi} style={CS.calRow}>
-                    {cells.slice(wi * 7, wi * 7 + 7).map((d, ci) => (
-                        <TouchableOpacity
-                            key={ci}
-                            onPress={() => pick(d)}
-                            disabled={!d}
-                            style={[CS.calCell, isSelected(d) && CS.calCellSel, isToday(d) && !isSelected(d) && CS.calCellToday]}
-                        >
-                            <Text style={[CS.calCellTxt, isSelected(d) && { color: NAVY, fontWeight: '800' }, isToday(d) && !isSelected(d) && { color: GOLD, fontWeight: '800' }]}>
-                                {d || ''}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
+        <View style={CS.calCardWrap}>
+            {/* Header with Luxury Navy Background */}
+            <View style={CS.calHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={CS.calHeaderIcon}>
+                        <Ionicons name="calendar" size={17} color={GOLD} />
+                    </View>
+                    <View>
+                        <Text style={CS.calHeaderTitle}>{title || 'Select Date'}</Text>
+                        <Text style={CS.calHeaderSub}>
+                            {field === 'expires_at' ? 'Set when this discount code expires' : 'Set when this code becomes redeemable'}
+                        </Text>
+                    </View>
                 </View>
-            ))}
+                <TouchableOpacity onPress={onClose} style={CS.calCloseBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Ionicons name="close" size={18} color="#FFFFFF" />
+                </TouchableOpacity>
+            </View>
 
-            {/* Actions */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 14 }}>
-                <TouchableOpacity onPress={() => onSelect(null)} style={CS.calClearBtn}>
-                    <Text style={CS.calClearTxt}>Clear</Text>
+            {/* Selected Date Hero Preview */}
+            <View style={CS.calHeroWrap}>
+                <View style={{ flex: 1 }}>
+                    <Text style={CS.calHeroLabel}>CURRENT SELECTION</Text>
+                    <Text style={CS.calHeroDate}>
+                        {selectedDateStr ? fmtDateFull(selectedDateStr) : 'No Date Set (Valid Lifetime)'}
+                    </Text>
+                </View>
+                <View style={[CS.calHeroBadge, { backgroundColor: rel.bg }]}>
+                    <Text style={[CS.calHeroBadgeTxt, { color: rel.color }]}>{rel.text}</Text>
+                </View>
+            </View>
+
+            {/* Quick Preset Buttons Bar */}
+            <View style={CS.calPresetsRow}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingHorizontal: 2 }}>
+                    <TouchableOpacity
+                        onPress={() => applyPreset(todayStr)}
+                        style={[CS.calPresetChip, selectedDateStr === todayStr && CS.calPresetChipActive]}
+                    >
+                        <Text style={[CS.calPresetChipTxt, selectedDateStr === todayStr && CS.calPresetChipTxtActive]}>Today</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={() => applyPreset(addDaysStr(7))}
+                        style={[CS.calPresetChip, selectedDateStr === addDaysStr(7) && CS.calPresetChipActive]}
+                    >
+                        <Text style={[CS.calPresetChipTxt, selectedDateStr === addDaysStr(7) && CS.calPresetChipTxtActive]}>+7 Days</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={() => applyPreset(addDaysStr(14))}
+                        style={[CS.calPresetChip, selectedDateStr === addDaysStr(14) && CS.calPresetChipActive]}
+                    >
+                        <Text style={[CS.calPresetChipTxt, selectedDateStr === addDaysStr(14) && CS.calPresetChipTxtActive]}>+14 Days</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={() => applyPreset(addDaysStr(30))}
+                        style={[CS.calPresetChip, selectedDateStr === addDaysStr(30) && CS.calPresetChipActive]}
+                    >
+                        <Text style={[CS.calPresetChipTxt, selectedDateStr === addDaysStr(30) && CS.calPresetChipTxtActive]}>+30 Days</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={() => applyPreset(addDaysStr(90))}
+                        style={[CS.calPresetChip, selectedDateStr === addDaysStr(90) && CS.calPresetChipActive]}
+                    >
+                        <Text style={[CS.calPresetChipTxt, selectedDateStr === addDaysStr(90) && CS.calPresetChipTxtActive]}>+90 Days</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={() => applyPreset(`${new Date().getFullYear()}-12-31`)}
+                        style={[CS.calPresetChip, selectedDateStr === `${new Date().getFullYear()}-12-31` && CS.calPresetChipActive]}
+                    >
+                        <Text style={[CS.calPresetChipTxt, selectedDateStr === `${new Date().getFullYear()}-12-31` && CS.calPresetChipTxtActive]}>End of Year</Text>
+                    </TouchableOpacity>
+                    {selectedDateStr ? (
+                        <TouchableOpacity
+                            onPress={() => applyPreset('')}
+                            style={[CS.calPresetChip, { borderColor: '#FCA5A5', backgroundColor: '#FEF2F2' }]}
+                        >
+                            <Text style={[CS.calPresetChipTxt, { color: '#EF4444' }]}>Clear</Text>
+                        </TouchableOpacity>
+                    ) : null}
+                </ScrollView>
+            </View>
+
+            {/* Month & Year Stepper Navigator */}
+            <View style={CS.calNav}>
+                <View style={{ flexDirection: 'row', gap: 4 }}>
+                    <TouchableOpacity onPress={prevYear} style={CS.calNavBtn} hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}>
+                        <Ionicons name="play-back" size={13} color={NAVY} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={prevMonth} style={CS.calNavBtn} hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}>
+                        <Ionicons name="chevron-back" size={16} color={NAVY} />
+                    </TouchableOpacity>
+                </View>
+
+                <View style={CS.calNavCenter}>
+                    <Text style={CS.calNavMonth}>{MONTHS[month]}</Text>
+                    <Text style={CS.calNavYear}>{year}</Text>
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 4 }}>
+                    <TouchableOpacity onPress={nextMonth} style={CS.calNavBtn} hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}>
+                        <Ionicons name="chevron-forward" size={16} color={NAVY} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={nextYear} style={CS.calNavBtn} hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}>
+                        <Ionicons name="play-forward" size={13} color={NAVY} />
+                    </TouchableOpacity>
+                </View>
+            </View>
+
+            {/* Day Header Row */}
+            <View style={CS.calDaysHdrRow}>
+                {DAYS.map((d, idx) => (
+                    <Text key={idx} style={[CS.calDayHdrTxt, (idx === 0 || idx === 6) && { color: GOLD }]}>{d}</Text>
+                ))}
+            </View>
+
+            {/* Days Grid */}
+            <View style={CS.calGrid}>
+                {Array.from({ length: cells.length / 7 }, (_, wi) => (
+                    <View key={wi} style={CS.calGridRow}>
+                        {cells.slice(wi * 7, wi * 7 + 7).map((d, ci) => {
+                            const sel = isSelected(d);
+                            const tod = isToday(d);
+                            return (
+                                <TouchableOpacity
+                                    key={ci}
+                                    onPress={() => handlePickDay(d)}
+                                    disabled={!d}
+                                    activeOpacity={0.7}
+                                    style={[
+                                        CS.calDayCell,
+                                        sel && CS.calDayCellSel,
+                                        tod && !sel && CS.calDayCellToday,
+                                    ]}
+                                >
+                                    <Text style={[
+                                        CS.calDayTxt,
+                                        sel && CS.calDayTxtSel,
+                                        tod && !sel && CS.calDayTxtToday,
+                                        !d && { opacity: 0 }
+                                    ]}>
+                                        {d || ''}
+                                    </Text>
+                                    {tod && !sel ? <View style={CS.todayDot} /> : null}
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+                ))}
+            </View>
+
+            {/* Footer Action Bar */}
+            <View style={CS.calFooter}>
+                <TouchableOpacity
+                    onPress={() => {
+                        onSelect('');
+                        onClose();
+                    }}
+                    style={CS.calFooterClearBtn}
+                >
+                    <Ionicons name="trash-outline" size={14} color="#64748B" />
+                    <Text style={CS.calFooterClearTxt}>Clear</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={onClose} style={CS.calDoneBtn}>
-                    <Text style={CS.calDoneTxt}>Done</Text>
-                </TouchableOpacity>
+
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity onPress={onClose} style={CS.calFooterCancelBtn}>
+                        <Text style={CS.calFooterCancelTxt}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={() => {
+                            onSelect(selectedDateStr || '');
+                            onClose();
+                        }}
+                        style={CS.calFooterDoneBtn}
+                        activeOpacity={0.85}
+                    >
+                        <Ionicons name="checkmark-circle" size={16} color={NAVY} />
+                        <Text style={CS.calFooterDoneTxt}>Confirm Date</Text>
+                    </TouchableOpacity>
+                </View>
             </View>
         </View>
     );
 };
-
-// ─── Date Picker Button ────────────────────────────────────────────────────────
-const DatePickerBtn = ({ label, value, active, onPress }) => (
-    <TouchableOpacity onPress={onPress} style={[CS.dateBtn, active && { borderColor: GOLD, backgroundColor: '#FFFBEB' }]}>
-        <Ionicons name="calendar" size={16} color={active ? GOLD : value ? NAVY : '#CBD5E1'} />
-        <View style={{ flex: 1 }}>
-            <Text style={[CS.dateBtnLbl, active && { color: NAVY }]}>{label}</Text>
-            <Text style={[CS.dateBtnVal, !value && { color: '#94A3B8' }]}>{value ? fmtDate(value) : 'Select Date'}</Text>
-        </View>
-        <Ionicons name={active ? 'chevron-up' : 'chevron-down'} size={13} color={active ? GOLD : '#CBD5E1'} />
-    </TouchableOpacity>
-);
 
 // ─── Stat Card ─────────────────────────────────────────────────────────────────
 const StatCard = ({ icon, label, value, color, bg }) => (
@@ -433,19 +667,57 @@ const CouponFormModal = ({ visible, editTarget, duplicateTarget, onClose, onSucc
                             </View>
                         </View>
 
-                        <View style={{ flexDirection: 'row', gap: 10 }}>
-                            <DatePickerBtn
-                                label="Start Date"
-                                value={form.valid_from}
-                                active={calPicker.field === 'valid_from' && calPicker.visible}
-                                onPress={() => setCalPicker({ field: 'valid_from', visible: true })}
-                            />
-                            <DatePickerBtn
-                                label="Expiry Date"
-                                value={form.expires_at}
-                                active={calPicker.field === 'expires_at' && calPicker.visible}
-                                onPress={() => setCalPicker({ field: 'expires_at', visible: true })}
-                            />
+                        {/* ── Validity & Expiry Dates Section ─────────────────────────────── */}
+                        <View style={{ gap: 8 }}>
+                            <Text style={S.fieldLabel}>Validity & Expiry Dates</Text>
+                            <View style={{ flexDirection: 'row', gap: 10 }}>
+                                <ModernDateCard
+                                    label="Start Date"
+                                    value={form.valid_from}
+                                    icon="play-circle-outline"
+                                    active={calPicker.field === 'valid_from' && calPicker.visible}
+                                    onPress={() => setCalPicker({ field: 'valid_from', visible: true })}
+                                    onClear={() => setF('valid_from', '')}
+                                    isExpiry={false}
+                                />
+                                <ModernDateCard
+                                    label="Expiry Date"
+                                    value={form.expires_at}
+                                    icon="time-outline"
+                                    active={calPicker.field === 'expires_at' && calPicker.visible}
+                                    onPress={() => setCalPicker({ field: 'expires_at', visible: true })}
+                                    onClear={() => setF('expires_at', '')}
+                                    isExpiry={true}
+                                />
+                            </View>
+
+                            {/* Quick Expiry Shortcuts */}
+                            <View style={CS.quickPresetsWrap}>
+                                <Text style={CS.quickPresetsLabel}>⚡ Quick Expiry Presets</Text>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                                    {[
+                                        { label: '+7 Days', val: addDaysStr(7) },
+                                        { label: '+14 Days', val: addDaysStr(14) },
+                                        { label: '+30 Days', val: addDaysStr(30) },
+                                        { label: '+90 Days', val: addDaysStr(90) },
+                                        { label: 'End of Year', val: `${new Date().getFullYear()}-12-31` },
+                                        { label: '♾️ Lifetime', val: '' },
+                                    ].map(p => {
+                                        const isSel = (p.val === '' && !form.expires_at) || (p.val && form.expires_at === p.val);
+                                        return (
+                                            <TouchableOpacity
+                                                key={p.label}
+                                                onPress={() => setF('expires_at', p.val)}
+                                                style={[CS.quickPresetChip, isSel && CS.quickPresetChipActive]}
+                                            >
+                                                <Text style={[CS.quickPresetChipTxt, isSel && CS.quickPresetChipTxtActive]}>
+                                                    {p.label}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </ScrollView>
+                            </View>
                         </View>
 
                         <View style={S.toggleRow}>
@@ -470,27 +742,24 @@ const CouponFormModal = ({ visible, editTarget, duplicateTarget, onClose, onSucc
                             )}
                         </TouchableOpacity>
                     </ScrollView>
-
-                    {calPicker.visible && calPicker.field && (
-                        <TouchableOpacity
-                            style={CS.calOverlay}
-                            activeOpacity={1}
-                            onPress={() => setCalPicker({ field: null, visible: false })}
-                        >
-                            <TouchableOpacity activeOpacity={1} onPress={() => { }}>
-                                <MiniCalendar
-                                    value={form[calPicker.field]}
-                                    onSelect={(dateStr) => {
-                                        setF(calPicker.field, dateStr || '');
-                                        setCalPicker({ field: null, visible: false });
-                                    }}
-                                    onClose={() => setCalPicker({ field: null, visible: false })}
-                                />
-                            </TouchableOpacity>
-                        </TouchableOpacity>
-                    )}
                 </View>
             </View>
+
+            {/* ── Modern Centered Calendar Modal Overlay ─────────────────── */}
+            {calPicker.visible && calPicker.field && (
+                <View style={CS.calOverlayFull}>
+                    <ModernDatePickerCard
+                        title={calPicker.field === 'valid_from' ? 'Select Start Date' : 'Select Expiry Date'}
+                        field={calPicker.field}
+                        value={form[calPicker.field]}
+                        onSelect={(dateStr) => {
+                            setF(calPicker.field, dateStr || '');
+                            setCalPicker({ field: null, visible: false });
+                        }}
+                        onClose={() => setCalPicker({ field: null, visible: false })}
+                    />
+                </View>
+            )}
         </Modal>
     );
 };
@@ -794,9 +1063,14 @@ export const AdminCoupons = ({ onBack, navigation }) => {
                             </View>
                         )}
                         {c.expires_at && (
-                            <View style={S.metaItem}>
-                                <Ionicons name="time-outline" size={12} color="#64748B" />
-                                <Text style={S.metaTxt}>{fmtDate(c.expires_at)}</Text>
+                            <View style={[
+                                S.metaItem,
+                                isExpired(c) && { backgroundColor: '#FEF2F2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }
+                            ]}>
+                                <Ionicons name="time-outline" size={12} color={isExpired(c) ? '#EF4444' : '#64748B'} />
+                                <Text style={[S.metaTxt, isExpired(c) && { color: '#EF4444', fontWeight: '800' }]}>
+                                    {isExpired(c) ? `Expired (${fmtDate(c.expires_at)})` : `Exp: ${fmtDate(c.expires_at)}`}
+                                </Text>
                             </View>
                         )}
                     </View>
@@ -1226,27 +1500,403 @@ const S = StyleSheet.create({
 
 // ─── Calendar Styles ───────────────────────────────────────────────────────────
 const CS = StyleSheet.create({
-    dateBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F8FAFC', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' },
-    dateBtnLbl: { fontSize: 9, fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.5 },
-    dateBtnVal: { fontSize: 13, fontWeight: '700', color: NAVY, marginTop: 2 },
+    // Form Date Cards
+    modernDateCard: {
+        flex: 1,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 14,
+        padding: 12,
+        borderWidth: 1.5,
+        borderColor: '#E2E8F0',
+        shadowColor: NAVY,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.04,
+        shadowRadius: 4,
+        elevation: 1,
+    },
+    modernDateCardActive: {
+        borderColor: GOLD,
+        backgroundColor: '#FFFDF5',
+        shadowOpacity: 0.08,
+    },
+    modernDateCardSet: {
+        borderColor: '#CBD5E1',
+    },
+    cardTopRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 6,
+    },
+    cardIconBadge: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    cardLabelTxt: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: '#64748B',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    cardClearIconBtn: {
+        padding: 2,
+    },
+    cardValTxt: {
+        fontSize: 13,
+        fontWeight: '800',
+        color: NAVY,
+        marginBottom: 6,
+    },
+    cardValTxtEmpty: {
+        fontWeight: '600',
+        color: '#94A3B8',
+    },
+    cardBadge: {
+        alignSelf: 'flex-start',
+        paddingHorizontal: 7,
+        paddingVertical: 3,
+        borderRadius: 8,
+    },
+    cardBadgeTxt: {
+        fontSize: 10,
+        fontWeight: '700',
+    },
 
-    calOverlay: { flex: 1, backgroundColor: 'rgba(14, 26, 46, 0.65)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-    calWrap: { backgroundColor: 'white', borderRadius: 20, padding: 18, width: Math.min(width - 40, 340), shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 10 },
+    // Quick Presets Row in Form
+    quickPresetsWrap: {
+        backgroundColor: '#F8FAFC',
+        borderRadius: 12,
+        padding: 10,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        marginTop: 4,
+    },
+    quickPresetsLabel: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: '#64748B',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginBottom: 6,
+    },
+    quickPresetChip: {
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    quickPresetChipActive: {
+        backgroundColor: '#FFFBEB',
+        borderColor: GOLD,
+    },
+    quickPresetChipTxt: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#64748B',
+    },
+    quickPresetChipTxtActive: {
+        color: NAVY,
+        fontWeight: '800',
+    },
 
-    calNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
-    calArrow: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
-    calMonth: { fontSize: 15, fontWeight: '900', color: NAVY },
+    // Full Screen Centered Modal Overlay
+    calOverlayFull: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(10, 25, 47, 0.78)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 99999,
+        padding: 16,
+        elevation: 25,
+    },
+    calCardWrap: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 22,
+        width: Math.min(width - 32, 380),
+        maxWidth: 380,
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.25,
+        shadowRadius: 28,
+        elevation: 20,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(217, 167, 58, 0.3)',
+    },
 
-    calRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-    calDayHdr: { width: 36, textAlign: 'center', fontSize: 11, fontWeight: '800', color: '#64748B' },
+    // Calendar Header
+    calHeader: {
+        backgroundColor: NAVY,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderBottomWidth: 1.5,
+        borderBottomColor: GOLD,
+    },
+    calHeaderIcon: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: 'rgba(217, 167, 58, 0.2)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: GOLD,
+    },
+    calHeaderTitle: {
+        fontSize: 15,
+        fontWeight: '900',
+        color: '#FFFFFF',
+    },
+    calHeaderSub: {
+        fontSize: 10,
+        color: '#94A3B8',
+        marginTop: 1,
+    },
+    calCloseBtn: {
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        backgroundColor: 'rgba(255, 255, 255, 0.12)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
 
-    calCell: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-    calCellSel: { backgroundColor: GOLD },
-    calCellToday: { backgroundColor: '#FFFBEB' },
-    calCellTxt: { fontSize: 13, fontWeight: '600', color: NAVY },
+    // Hero Preview Box
+    calHeroWrap: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#F8FAFC',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E2E8F0',
+        gap: 8,
+    },
+    calHeroLabel: {
+        fontSize: 9,
+        fontWeight: '800',
+        color: '#94A3B8',
+        letterSpacing: 0.5,
+    },
+    calHeroDate: {
+        fontSize: 13,
+        fontWeight: '800',
+        color: NAVY,
+        marginTop: 1,
+    },
+    calHeroBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    calHeroBadgeTxt: {
+        fontSize: 10,
+        fontWeight: '800',
+    },
 
-    calClearBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12, backgroundColor: '#F1F5F9' },
-    calClearTxt: { fontSize: 12, fontWeight: '700', color: '#64748B' },
-    calDoneBtn: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 12, backgroundColor: NAVY },
-    calDoneTxt: { fontSize: 12, fontWeight: '800', color: GOLD },
+    // Presets Row
+    calPresetsRow: {
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        backgroundColor: '#FFFFFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+    },
+    calPresetChip: {
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 12,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    calPresetChipActive: {
+        backgroundColor: '#FFFBEB',
+        borderColor: GOLD,
+    },
+    calPresetChipTxt: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#64748B',
+    },
+    calPresetChipTxtActive: {
+        color: NAVY,
+        fontWeight: '800',
+    },
+
+    // Month / Year Nav
+    calNav: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+    },
+    calNavBtn: {
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        backgroundColor: '#F8FAFC',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    calNavCenter: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    calNavMonth: {
+        fontSize: 14,
+        fontWeight: '900',
+        color: NAVY,
+    },
+    calNavYear: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: GOLD,
+    },
+
+    // Days Header
+    calDaysHdrRow: {
+        flexDirection: 'row',
+        paddingHorizontal: 14,
+        paddingBottom: 6,
+        justifyContent: 'space-between',
+    },
+    calDayHdrTxt: {
+        width: 38,
+        textAlign: 'center',
+        fontSize: 11,
+        fontWeight: '800',
+        color: '#64748B',
+    },
+
+    // Calendar Grid
+    calGrid: {
+        paddingHorizontal: 14,
+        paddingBottom: 8,
+    },
+    calGridRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 4,
+    },
+    calDayCell: {
+        width: 38,
+        height: 36,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative',
+    },
+    calDayCellSel: {
+        backgroundColor: GOLD,
+        shadowColor: GOLD,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.4,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    calDayCellToday: {
+        borderWidth: 1.5,
+        borderColor: GOLD,
+        backgroundColor: '#FFFDF5',
+    },
+    calDayTxt: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: NAVY,
+    },
+    calDayTxtSel: {
+        color: NAVY,
+        fontWeight: '900',
+    },
+    calDayTxtToday: {
+        color: NAVY,
+        fontWeight: '900',
+    },
+    todayDot: {
+        position: 'absolute',
+        bottom: 2,
+        width: 4,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: GOLD,
+    },
+
+    // Footer
+    calFooter: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderTopWidth: 1,
+        borderTopColor: '#F1F5F9',
+        backgroundColor: '#FFFFFF',
+    },
+    calFooterClearBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 10,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    calFooterClearTxt: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#64748B',
+    },
+    calFooterCancelBtn: {
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 10,
+        backgroundColor: '#F1F5F9',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    calFooterCancelTxt: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#64748B',
+    },
+    calFooterDoneBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 10,
+        backgroundColor: GOLD,
+        shadowColor: GOLD,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    calFooterDoneTxt: {
+        fontSize: 12,
+        fontWeight: '900',
+        color: NAVY,
+    },
 });
