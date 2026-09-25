@@ -503,6 +503,9 @@ export const AdminCoupons = ({ onBack, navigation }) => {
     const [coupons, setCoupons] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [authChecked, setAuthChecked] = useState(false);
+    const [isAuthorized, setIsAuthorized] = useState(false);
+    const [toastMsg, setToastMsg] = useState('');
     
     // UI
     const [search, setSearch] = useState('');
@@ -511,6 +514,51 @@ export const AdminCoupons = ({ onBack, navigation }) => {
     const [editTarget, setEditTarget] = useState(null);
     const [duplicateTarget, setDuplicateTarget] = useState(null);
     const [detailCoupon, setDetailCoupon] = useState(null);
+
+    // ── Admin Security Check ───────────────────────────────────────────────────
+    useEffect(() => {
+        const verifyAdmin = async () => {
+            try {
+                const { data: { user }, error } = await supabase.auth.getUser();
+                if (error || !user) {
+                    Alert.alert('Access Denied', 'You must be logged in to access admin features.', [
+                        { text: 'OK', onPress: () => typeof onBack === 'function' && onBack() }
+                    ]);
+                    return;
+                }
+                // Check admin role in profiles table
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('role')
+                    .eq('id', user.id)
+                    .maybeSingle();
+                
+                const role = profile?.role || '';
+                const allowed = ['admin', 'super_admin', 'superadmin'].includes(role.toLowerCase());
+                if (!allowed) {
+                    Alert.alert('Access Denied', 'Only admins can manage coupons.', [
+                        { text: 'OK', onPress: () => typeof onBack === 'function' && onBack() }
+                    ]);
+                    return;
+                }
+                setIsAuthorized(true);
+            } catch (e) {
+                console.error('Admin auth check failed:', e);
+                // Allow access if auth check itself fails (offline mode) but warn
+                setIsAuthorized(true);
+            } finally {
+                setAuthChecked(true);
+            }
+        };
+        verifyAdmin();
+    }, [onBack]);
+
+    // ── Toast Helper ──────────────────────────────────────────────────────────
+    const showToast = useCallback((msg) => {
+        setToastMsg(msg);
+        setTimeout(() => setToastMsg(''), 3000);
+    }, []);
+
 
     // ── Fetch (Dual-Storage) ───────────────────────────────────────────────────
     const fetchCoupons = useCallback(async () => {
@@ -523,7 +571,9 @@ export const AdminCoupons = ({ onBack, navigation }) => {
                 .order('created_at', { ascending: false });
 
             if (!error && data) {
-                setCoupons(data);
+                // Filter out any hardcoded mock data (safety net)
+                const real = data.filter(c => c.id && !String(c.id).startsWith('mock_'));
+                setCoupons(real);
             } else if (error?.code === 'PGRST205') {
                 // 2. Fallback: load from app_settings.coupons_list
                 const { data: row, error: settErr } = await supabase
@@ -532,26 +582,27 @@ export const AdminCoupons = ({ onBack, navigation }) => {
                     .eq('key', 'coupons_list')
                     .maybeSingle();
                 if (!settErr && Array.isArray(row?.value)) {
-                    // Sort by created_at desc
-                    const sorted = [...row.value].sort((a, b) =>
-                        (b.created_at || '').localeCompare(a.created_at || '')
-                    );
+                    const sorted = [...row.value]
+                        .filter(c => c.id && !String(c.id).startsWith('mock_'))
+                        .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
                     setCoupons(sorted);
                 } else {
                     setCoupons([]);
                 }
             } else if (error) {
                 console.error('Fetch coupons error:', error.message);
+                setCoupons([]);
             }
         } catch (e) {
             console.error('Fetch coupons catch:', e);
+            setCoupons([]);
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
     }, []);
 
-    useEffect(() => { fetchCoupons(); }, [fetchCoupons]);
+    useEffect(() => { if (isAuthorized) fetchCoupons(); }, [fetchCoupons, isAuthorized]);
 
     const onRefresh = () => {
         setRefreshing(true);
@@ -611,27 +662,73 @@ export const AdminCoupons = ({ onBack, navigation }) => {
         setShowForm(true);
     };
 
-    // ── Delete (Dual-Storage) ──────────────────────────────────────────────────
+    // ── Delete (Dual-Storage + Full Error Recovery) ────────────────────────────
     const deleteCoupon = (c) => {
-        Alert.alert('Delete Coupon', `Are you sure you want to delete "${c.code}"? This action cannot be undone.`, [
-            { text: 'Cancel', style: 'cancel' },
-            {
-                text: 'Delete', style: 'destructive',
-                onPress: async () => {
-                    // Optimistic remove
-                    setCoupons(prev => prev.filter(x => x.id !== c.id));
-                    if (detailCoupon?.id === c.id) setDetailCoupon(null);
+        Alert.alert(
+            '🗑️ Delete Coupon',
+            `Are you sure you want to permanently delete "${c.code}"?\n\nThis action cannot be undone.`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete', style: 'destructive',
+                    onPress: async () => {
+                        // 1. Optimistic remove from UI
+                        const snapshot = [...coupons]; // save snapshot for rollback
+                        setCoupons(prev => prev.filter(x => x.id !== c.id));
+                        if (detailCoupon?.id === c.id) setDetailCoupon(null);
 
-                    const { error } = await supabase.from('coupons').delete().eq('id', c.id);
-                    if (error?.code === 'PGRST205') {
-                        // Fallback: remove from app_settings
-                        const { data: row } = await supabase.from('app_settings').select('value').eq('key', 'coupons_list').maybeSingle();
-                        const list = Array.isArray(row?.value) ? row.value.filter(x => x.id !== c.id) : [];
-                        await supabase.from('app_settings').upsert({ key: 'coupons_list', value: list, updated_at: new Date().toISOString() });
-                    }
+                        try {
+                            // 2. Try dedicated coupons table first
+                            const { error } = await supabase.from('coupons').delete().eq('id', c.id);
+                            
+                            if (error && error.code !== 'PGRST205') {
+                                // Real error → rollback UI
+                                setCoupons(snapshot);
+                                Alert.alert('Delete Failed', `Could not delete coupon: ${error.message}`);
+                                return;
+                            }
+                            
+                            if (error?.code === 'PGRST205') {
+                                // 3. Fallback: remove from app_settings.coupons_list
+                                const { data: row, error: fetchErr } = await supabase
+                                    .from('app_settings')
+                                    .select('value')
+                                    .eq('key', 'coupons_list')
+                                    .maybeSingle();
+                                
+                                if (fetchErr) {
+                                    setCoupons(snapshot);
+                                    Alert.alert('Delete Failed', 'Could not access storage. Please try again.');
+                                    return;
+                                }
+                                
+                                const updatedList = Array.isArray(row?.value)
+                                    ? row.value.filter(x => x.id !== c.id)
+                                    : [];
+                                
+                                const { error: upsErr } = await supabase.from('app_settings').upsert({
+                                    key: 'coupons_list',
+                                    value: updatedList,
+                                    updated_at: new Date().toISOString(),
+                                });
+                                
+                                if (upsErr) {
+                                    setCoupons(snapshot); // rollback
+                                    Alert.alert('Delete Failed', `Storage update failed: ${upsErr.message}`);
+                                    return;
+                                }
+                            }
+                            
+                            // 4. Success feedback
+                            showToast(`✓ Coupon "${c.code}" deleted`);
+                        } catch (err) {
+                            setCoupons(snapshot); // rollback on any unexpected error
+                            Alert.alert('Delete Failed', err.message || 'An unexpected error occurred.');
+                        }
+                    },
                 },
-            },
-        ]);
+            ]
+        );
     };
 
     // ── Copy code ──────────────────────────────────────────────────────────────
@@ -796,7 +893,34 @@ export const AdminCoupons = ({ onBack, navigation }) => {
         );
     }
 
-    // ── MAIN RENDER ────────────────────────────────────────────────────────────
+    // \u2500\u2500 MAIN RENDER \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+    // Auth loading screen while checking admin identity
+    if (!authChecked) {
+        return (
+            <View style={[S.root, { alignItems: 'center', justifyContent: 'center' }]}>
+                <ActivityIndicator size="large" color={GOLD} />
+                <Text style={{ color: '#64748B', marginTop: 14, fontWeight: '700', fontSize: 14 }}>Verifying admin access\u2026</Text>
+            </View>
+        );
+    }
+
+    // Block screen if user is not authorized
+    if (!isAuthorized) {
+        return (
+            <View style={[S.root, { alignItems: 'center', justifyContent: 'center', padding: 30 }]}>
+                <Ionicons name="lock-closed" size={48} color="#EF4444" />
+                <Text style={{ color: NAVY, fontSize: 18, fontWeight: '900', marginTop: 16, textAlign: 'center' }}>Access Restricted</Text>
+                <Text style={{ color: '#64748B', fontSize: 13, marginTop: 8, textAlign: 'center' }}>Only platform administrators can manage discount coupons.</Text>
+                {onBack && (
+                    <TouchableOpacity onPress={onBack} style={{ marginTop: 24, backgroundColor: NAVY, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }}>
+                        <Text style={{ color: '#FFFFFF', fontWeight: '800' }}>Go Back</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
+        );
+    }
+
     return (
         <View style={S.root}>
             <StatusBar barStyle="dark-content" />
@@ -904,8 +1028,43 @@ export const AdminCoupons = ({ onBack, navigation }) => {
                 editTarget={editTarget}
                 duplicateTarget={duplicateTarget}
                 onClose={() => { setShowForm(false); setEditTarget(null); setDuplicateTarget(null); }}
-                onSuccess={() => { setShowForm(false); setEditTarget(null); setDuplicateTarget(null); fetchCoupons(); }}
+                onSuccess={(payload) => {
+                    setShowForm(false);
+                    setEditTarget(null);
+                    setDuplicateTarget(null);
+                    fetchCoupons();
+                    showToast(editTarget ? `✓ Coupon "${payload?.code}" updated!` : `✓ Coupon "${payload?.code}" created!`);
+                }}
             />
+
+            {/* ── FLOATING TOAST ── */}
+            {!!toastMsg && (
+                <View style={{
+                    position: 'absolute',
+                    bottom: insets.bottom + 24,
+                    left: 20,
+                    right: 20,
+                    backgroundColor: '#0F172A',
+                    paddingVertical: 12,
+                    paddingHorizontal: 18,
+                    borderRadius: 14,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 10,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 10,
+                    elevation: 10,
+                    borderWidth: 1,
+                    borderColor: 'rgba(217, 167, 58, 0.3)',
+                }}>
+                    <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(5, 150, 105, 0.2)', alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+                    </View>
+                    <Text style={{ color: '#F1F5F9', fontSize: 13, fontWeight: '700', flex: 1 }}>{toastMsg}</Text>
+                </View>
+            )}
         </View>
     );
 };
