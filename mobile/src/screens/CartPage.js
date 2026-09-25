@@ -180,17 +180,38 @@ export const CartPage = ({
         try {
             const { data, error } = await supabase
                 .from('coupons')
-                .select('code, discount_type, discount_value, min_order_amount, description')
+                .select('code, discount_type, discount_value, min_order_amount, description, expires_at, usage_limit, usage_count')
                 .eq('is_active', true)
-                .limit(4);
+                .order('created_at', { ascending: false })
+                .limit(6);
 
-            if (!error && Array.isArray(data) && data.length > 0) {
-                setActiveCoupons(data);
+            if (!error && Array.isArray(data)) {
+                const now = new Date();
+                const valid = data.filter(c => {
+                    if (c.expires_at && new Date(c.expires_at) < now) return false;
+                    if (c.usage_limit && (c.usage_count || 0) >= c.usage_limit) return false;
+                    return true;
+                });
+                setActiveCoupons(valid);
             }
         } catch (e) {
             console.log('Active coupons fetch note:', e?.message);
         }
     };
+
+    // Realtime coupons channel for Cart
+    useEffect(() => {
+        const channel = supabase
+            .channel('public:coupons:cart')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'coupons' }, () => {
+                loadActiveCoupons();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, []);
 
     // ── Financial Calculations ────────────────────────────────────────────────
     const subtotal = useMemo(() => {
@@ -393,6 +414,12 @@ export const CartPage = ({
                     return;
                 }
 
+                // Check usage limit
+                if (data.usage_limit && (data.usage_count || 0) >= data.usage_limit) {
+                    setPromoError(`Voucher "${code}" usage limit has been reached.`);
+                    return;
+                }
+
                 setAppliedPromo(data);
                 setPromoInput('');
                 setPromoError('');
@@ -400,31 +427,7 @@ export const CartPage = ({
                 return;
             }
 
-            // 2. Platform Fallback Codes (for offline testing or welcome promo)
-            if (code === 'WELCOME10') {
-                setAppliedPromo({
-                    code: 'WELCOME10',
-                    discount_type: 'percentage',
-                    discount_value: 10,
-                    max_discount: 10000,
-                    description: '10% Welcome Discount'
-                });
-                setPromoInput('');
-                setPromoError('');
-                showToast('✓ Welcome voucher applied!');
-            } else if (code === 'FREESHIP') {
-                setAppliedPromo({
-                    code: 'FREESHIP',
-                    discount_type: 'shipping',
-                    discount_value: baseShippingFee,
-                    description: 'Free Shipping Voucher'
-                });
-                setPromoInput('');
-                setPromoError('');
-                showToast('✓ Free delivery voucher applied!');
-            } else {
-                setPromoError(`Promo code "${code}" is invalid or expired.`);
-            }
+            setPromoError(`Promo code "${code}" is invalid or inactive.`);
         } catch (err) {
             console.error('Coupon validation error:', err);
             setPromoError('Could not validate coupon. Please try again.');

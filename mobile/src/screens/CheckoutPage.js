@@ -270,6 +270,43 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
     const [orderNote, setOrderNote]             = useState('');
     const [agreedToTerms, setAgreedToTerms]     = useState(true);
     const [showItemsAccordion, setShowItemsAccordion] = useState(true);
+    const [availableLiveCoupons, setAvailableLiveCoupons] = useState([]);
+
+    // Live Admin Coupons fetcher & Realtime sync
+    useEffect(() => {
+        const fetchLiveCoupons = async () => {
+            try {
+                const { data } = await supabase
+                    .from('coupons')
+                    .select('*')
+                    .eq('is_active', true)
+                    .order('created_at', { ascending: false });
+                if (Array.isArray(data)) {
+                    const now = new Date();
+                    const valid = data.filter(c => {
+                        if (c.expires_at && new Date(c.expires_at) < now) return false;
+                        if (c.usage_limit && (c.usage_count || 0) >= c.usage_limit) return false;
+                        return true;
+                    });
+                    setAvailableLiveCoupons(valid);
+                }
+            } catch (err) {
+                console.log('Error loading coupons in checkout:', err);
+            }
+        };
+        fetchLiveCoupons();
+
+        const channel = supabase
+            .channel('public:coupons:checkout')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'coupons' }, () => {
+                fetchLiveCoupons();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, []);
 
     // Vendor store location resolution cache state
     const [storesLoaded, setStoresLoaded] = useState(0);
@@ -943,16 +980,24 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                 .maybeSingle();
 
             if (error || !data) {
-                // Fallback test coupons
-                if (code === 'WELCOME10') {
-                    const discount = Math.round((initialTotal * 10) / 100);
-                    setDiscountAmount(discount);
-                    setAppliedCoupon({ code: 'WELCOME10', discount_type: 'percentage', discount_value: 10 });
-                    showToast('✓ 10% Welcome discount applied!');
-                    return;
-                }
-                showToast(`⚠️ Voucher "${code}" is invalid or expired`);
-                showAlert('Invalid Coupon', `Voucher "${code}" is invalid or expired.`);
+                showToast(`⚠️ Voucher "${code}" is invalid or inactive`);
+                showAlert('Invalid Coupon', `Voucher "${code}" is invalid or inactive.`);
+                setDiscountAmount(0);
+                setAppliedCoupon(null);
+                return;
+            }
+
+            if (data.expires_at && new Date(data.expires_at) < new Date()) {
+                showToast(`⚠️ Voucher "${code}" has expired`);
+                showAlert('Coupon Expired', `Voucher "${code}" has expired.`);
+                setDiscountAmount(0);
+                setAppliedCoupon(null);
+                return;
+            }
+
+            if (data.usage_limit && (data.usage_count || 0) >= data.usage_limit) {
+                showToast(`⚠️ Voucher "${code}" usage limit reached`);
+                showAlert('Coupon Depleted', `This voucher is no longer available.`);
                 setDiscountAmount(0);
                 setAppliedCoupon(null);
                 return;
@@ -3889,26 +3934,26 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                         Applied: {appliedCoupon.code} (-{formatCurrency(discountAmount)})
                                     </Text>
                                 ) : (
-                                    <View style={s.popularVouchersWrap}>
-                                        <Text style={s.popularVouchersTitle}>Popular Vouchers (Tap to Apply):</Text>
-                                        <View style={s.popularVouchersRow}>
-                                            {[
-                                                { code: 'WELCOME10', label: 'WELCOME10 (-10%)' },
-                                                { code: 'FASTSHIP', label: 'FASTSHIP (-₦500)' },
-                                                { code: 'ABUVIP', label: 'ABUVIP (-₦1,000)' }
-                                            ].map((v) => (
-                                                <TouchableOpacity
-                                                    key={v.code}
-                                                    style={s.popularVoucherPill}
-                                                    onPress={() => setCouponCode(v.code)}
-                                                    activeOpacity={0.7}
-                                                >
-                                                    <Ionicons name="pricetag-outline" size={10} color="#B45309" />
-                                                    <Text style={s.popularVoucherPillTxt}>{v.label}</Text>
-                                                </TouchableOpacity>
-                                            ))}
+                                    availableLiveCoupons.length > 0 ? (
+                                        <View style={s.popularVouchersWrap}>
+                                            <Text style={s.popularVouchersTitle}>Active Vouchers (Tap to Apply):</Text>
+                                            <View style={s.popularVouchersRow}>
+                                                {availableLiveCoupons.map((v) => (
+                                                    <TouchableOpacity
+                                                        key={v.id || v.code}
+                                                        style={s.popularVoucherPill}
+                                                        onPress={() => setCouponCode(v.code)}
+                                                        activeOpacity={0.7}
+                                                    >
+                                                        <Ionicons name="pricetag-outline" size={10} color="#B45309" />
+                                                        <Text style={s.popularVoucherPillTxt}>
+                                                            {v.code} ({v.discount_type === 'percentage' ? `-${v.discount_value}%` : `-₦${Number(v.discount_value).toLocaleString()}`})
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </View>
                                         </View>
-                                    </View>
+                                    ) : null
                                 )}
                             </View>
                         )}

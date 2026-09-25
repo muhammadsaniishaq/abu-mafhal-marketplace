@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -122,35 +122,118 @@ const ProfilePageInner = ({
     const [showMemberPassModal, setShowMemberPassModal] = useState(false);
     const [copiedCode, setCopiedCode] = useState(null);
 
-    const availableVouchers = [
-        {
-            id: 'v1',
-            code: 'MAFHALGOLD',
-            title: '₦2,500 Off Storewide',
-            minSpend: 'Orders above ₦20,000',
-            expiry: 'Expires in 5 days',
-            badge: 'EXCLUSIVE',
-            badgeColor: '#D97706'
-        },
-        {
-            id: 'v2',
-            code: 'FREESHIP26',
-            title: '100% Free Express Delivery',
-            minSpend: 'Next 2 store orders',
-            expiry: 'Expires in 7 days',
-            badge: 'POPULAR',
-            badgeColor: '#059669'
-        },
-        {
-            id: 'v3',
-            code: 'VIPCASH5',
-            title: '5% Instant Wallet Rebate',
-            minSpend: 'Electronics & Fashion category',
-            expiry: 'Valid all month',
-            badge: 'CASHBACK',
-            badgeColor: '#7C3AED'
+    // Live Admin Vouchers State (100% dynamic, synced from Supabase coupons table)
+    const [vouchers, setVouchers] = useState([]);
+    const [vouchersLoading, setVouchersLoading] = useState(false);
+
+    const loadAdminVouchers = useCallback(async () => {
+        try {
+            setVouchersLoading(true);
+            const { data, error } = await supabase
+                .from('coupons')
+                .select('*')
+                .eq('is_active', true)
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.error('Error fetching admin coupons:', error.message);
+                return;
+            }
+
+            if (Array.isArray(data)) {
+                const now = new Date();
+                // Filter out any coupon whose expires_at has passed or usage reached limit
+                const validCoupons = data.filter(c => {
+                    if (c.expires_at && new Date(c.expires_at) < now) return false;
+                    if (c.usage_limit && (c.usage_count || 0) >= c.usage_limit) return false;
+                    return true;
+                });
+
+                const formatted = validCoupons.map((c, idx) => {
+                    const isPct = c.discount_type === 'percentage';
+                    const discountTitle = isPct
+                        ? `${c.discount_value}% Off Entire Order`
+                        : `₦${Number(c.discount_value).toLocaleString()} Instant Voucher`;
+
+                    const minSpendText = c.min_order_amount && Number(c.min_order_amount) > 0
+                        ? `Orders above ₦${Number(c.min_order_amount).toLocaleString()}`
+                        : 'No minimum order required';
+
+                    let expiryText = 'Valid indefinitely';
+                    if (c.expires_at) {
+                        const expDate = new Date(c.expires_at);
+                        const diffDays = Math.ceil((expDate - now) / (1000 * 60 * 60 * 24));
+                        if (diffDays <= 0) {
+                            expiryText = 'Expires today';
+                        } else if (diffDays === 1) {
+                            expiryText = 'Expires tomorrow';
+                        } else if (diffDays <= 30) {
+                            expiryText = `Expires in ${diffDays} days`;
+                        } else {
+                            expiryText = `Valid until ${expDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+                        }
+                    }
+
+                    // Luxury Badge & Accent Color based on coupon attributes
+                    let badge = 'ACTIVE';
+                    let badgeColor = '#059669'; // Emerald
+                    if (c.applicable_to === 'first_order') {
+                        badge = 'FIRST ORDER';
+                        badgeColor = '#7C3AED'; // Purple
+                    } else if (isPct && Number(c.discount_value) >= 20) {
+                        badge = 'MEGA SAVER';
+                        badgeColor = '#D97706'; // Amber
+                    } else if (!isPct && Number(c.discount_value) >= 5000) {
+                        badge = 'VIP REWARD';
+                        badgeColor = '#2563EB'; // Royal Blue
+                    } else if (idx === 0) {
+                        badge = 'FEATURED';
+                        badgeColor = '#D9A73A'; // Gold
+                    }
+
+                    return {
+                        id: c.id,
+                        code: c.code,
+                        title: discountTitle,
+                        description: c.description || null,
+                        minSpend: minSpendText,
+                        expiry: expiryText,
+                        badge,
+                        badgeColor,
+                        maxDiscount: c.max_discount,
+                        discountType: c.discount_type,
+                        discountValue: c.discount_value
+                    };
+                });
+
+                setVouchers(formatted);
+            }
+        } catch (err) {
+            console.error('loadAdminVouchers catch:', err);
+        } finally {
+            setVouchersLoading(false);
         }
-    ];
+    }, []);
+
+    useEffect(() => {
+        loadAdminVouchers();
+
+        // Realtime Subscription to coupons table so admin updates reflect instantly
+        const channel = supabase
+            .channel('public:coupons:profile')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'coupons' },
+                () => {
+                    loadAdminVouchers();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [loadAdminVouchers]);
 
     const copyCodeToClipboard = (code, desc = 'Voucher code') => {
         try {
@@ -854,14 +937,16 @@ const ProfilePageInner = ({
                                 <View style={s.quickHubTileTopRow}>
                                     <View style={[s.quickHubIconBox, { backgroundColor: 'rgba(245, 158, 11, 0.12)', borderColor: 'rgba(245, 158, 11, 0.25)' }]}>
                                         <Ionicons name="ticket" size={19} color="#F59E0B" />
-                                        <View style={[s.quickHubBadge, { backgroundColor: '#F59E0B' }]}>
-                                            <Text style={s.quickHubBadgeText}>3</Text>
+                                        <View style={[s.quickHubBadge, { backgroundColor: vouchers.length > 0 ? '#F59E0B' : '#94A3B8' }]}>
+                                            <Text style={s.quickHubBadgeText}>{vouchers.length}</Text>
                                         </View>
                                     </View>
                                     <Ionicons name="chevron-forward" size={13} color="#D4AF37" />
                                 </View>
                                 <Text style={s.quickHubTitle}>Vouchers</Text>
-                                <Text style={s.quickHubSub}>3 Coupons Ready</Text>
+                                <Text style={s.quickHubSub}>
+                                    {vouchers.length === 1 ? '1 Live Coupon' : `${vouchers.length} Live Coupons`}
+                                </Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity
@@ -1560,7 +1645,7 @@ const ProfilePageInner = ({
                 </View>
             </Modal>
 
-            {/* ── VOUCHERS & PROMOS MODAL (NEW FEATURE) ── */}
+            {/* ── EXCLUSIVE VOUCHERS & REWARDS MODAL (100% LIVE ADMIN SYNC) ── */}
             <Modal
                 visible={showVouchersModal}
                 animationType="slide"
@@ -1570,61 +1655,110 @@ const ProfilePageInner = ({
                 <View style={s.modalOverlay}>
                     <View style={s.modalCard}>
                         <View style={s.modalHeader}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
                                 <View style={[s.modalHeaderIconWrap, { backgroundColor: 'rgba(217, 167, 58, 0.15)', borderColor: '#D9A73A' }]}>
                                     <Ionicons name="ticket" size={16} color="#D9A73A" />
                                 </View>
-                                <View>
+                                <View style={{ flex: 1 }}>
                                     <Text style={s.modalTitle}>Vouchers & Rewards</Text>
-                                    <Text style={s.modalSubtitle}>{availableVouchers.length} active coupons available</Text>
+                                    <Text style={s.modalSubtitle}>
+                                        {vouchersLoading ? 'Syncing with Admin...' : (vouchers.length === 1 ? '1 active coupon available' : `${vouchers.length} active coupons available`)}
+                                    </Text>
                                 </View>
                             </View>
-                            <TouchableOpacity
-                                onPress={() => setShowVouchersModal(false)}
-                                style={s.modalCloseBtn}
-                                activeOpacity={0.7}
-                            >
-                                <Ionicons name="close" size={18} color="#D9A73A" />
-                            </TouchableOpacity>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <TouchableOpacity
+                                    onPress={loadAdminVouchers}
+                                    disabled={vouchersLoading}
+                                    style={s.modalRefreshBtn}
+                                    activeOpacity={0.7}
+                                >
+                                    {vouchersLoading ? (
+                                        <ActivityIndicator size="small" color="#D9A73A" />
+                                    ) : (
+                                        <Ionicons name="refresh" size={16} color="#D9A73A" />
+                                    )}
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={() => setShowVouchersModal(false)}
+                                    style={s.modalCloseBtn}
+                                    activeOpacity={0.7}
+                                >
+                                    <Ionicons name="close" size={18} color="#D9A73A" />
+                                </TouchableOpacity>
+                            </View>
                         </View>
 
                         <ScrollView style={s.modalScroll} showsVerticalScrollIndicator={false}>
                             <View style={{ gap: 10, paddingBottom: 24, paddingTop: 8 }}>
-                                {availableVouchers.map((v) => (
-                                    <View key={v.id} style={s.voucherCard}>
-                                        <View style={[s.voucherLeftAccent, { backgroundColor: v.badgeColor }]} />
-                                        <View style={s.voucherContent}>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-                                                <View style={[s.voucherBadge, { backgroundColor: v.badgeColor + '18' }]}>
-                                                    <Text style={[s.voucherBadgeText, { color: v.badgeColor }]}>{v.badge}</Text>
+                                {vouchersLoading && vouchers.length === 0 ? (
+                                    <View style={s.vouchersLoadingBox}>
+                                        <ActivityIndicator size="large" color="#D9A73A" />
+                                        <Text style={s.vouchersLoadingTxt}>Syncing live coupons from Admin...</Text>
+                                    </View>
+                                ) : vouchers.length === 0 ? (
+                                    <View style={s.emptyVoucherBox}>
+                                        <View style={s.emptyVoucherIconBox}>
+                                            <Ionicons name="ticket-outline" size={38} color="#D9A73A" />
+                                        </View>
+                                        <Text style={s.emptyVoucherTitle}>No Active Vouchers Right Now</Text>
+                                        <Text style={s.emptyVoucherDesc}>
+                                            All promotional discount vouchers are managed and issued directly by the Abu-Mafhal Administration. Check back soon for seasonal discounts!
+                                        </Text>
+                                        <TouchableOpacity
+                                            style={s.emptyVoucherRefreshBtn}
+                                            activeOpacity={0.8}
+                                            onPress={loadAdminVouchers}
+                                        >
+                                            <Ionicons name="sync" size={14} color="#0A192F" />
+                                            <Text style={s.emptyVoucherRefreshTxt}>Check for New Coupons</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                ) : (
+                                    vouchers.map((v) => (
+                                        <View key={v.id} style={s.voucherCard}>
+                                            <View style={[s.voucherLeftAccent, { backgroundColor: v.badgeColor }]} />
+                                            <View style={s.voucherContent}>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                                                    <View style={[s.voucherBadge, { backgroundColor: v.badgeColor + '18' }]}>
+                                                        <Text style={[s.voucherBadgeText, { color: v.badgeColor }]}>{v.badge}</Text>
+                                                    </View>
+                                                    <Text style={s.voucherExpiryText}>{v.expiry}</Text>
                                                 </View>
-                                                <Text style={s.voucherExpiryText}>{v.expiry}</Text>
-                                            </View>
-                                            <Text style={s.voucherTitle}>{v.title}</Text>
-                                            <Text style={s.voucherMinSpend}>{v.minSpend}</Text>
+                                                <Text style={s.voucherTitle}>{v.title}</Text>
+                                                {v.description ? (
+                                                    <Text style={s.voucherDescTxt} numberOfLines={2}>{v.description}</Text>
+                                                ) : null}
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 8, marginTop: 2 }}>
+                                                    <Text style={s.voucherMinSpend}>{v.minSpend}</Text>
+                                                    {v.maxDiscount ? (
+                                                        <Text style={s.voucherMaxCap}>• Max Cap: ₦{Number(v.maxDiscount).toLocaleString()}</Text>
+                                                    ) : null}
+                                                </View>
 
-                                            <View style={s.voucherCodeRow}>
-                                                <View style={s.voucherCodeBox}>
-                                                    <Text style={s.voucherCodeText}>{v.code}</Text>
+                                                <View style={s.voucherCodeRow}>
+                                                    <View style={s.voucherCodeBox}>
+                                                        <Text style={s.voucherCodeText}>{v.code}</Text>
+                                                    </View>
+                                                    <TouchableOpacity
+                                                        style={s.voucherCopyBtn}
+                                                        activeOpacity={0.8}
+                                                        onPress={() => copyCodeToClipboard(v.code, 'Voucher')}
+                                                    >
+                                                        <Ionicons
+                                                            name={copiedCode === v.code ? 'checkmark-circle' : 'copy-outline'}
+                                                            size={12}
+                                                            color={copiedCode === v.code ? '#10B981' : '#D9A73A'}
+                                                        />
+                                                        <Text style={[s.voucherCopyBtnText, copiedCode === v.code && { color: '#10B981' }]}>
+                                                            {copiedCode === v.code ? 'Copied' : 'Copy'}
+                                                        </Text>
+                                                    </TouchableOpacity>
                                                 </View>
-                                                <TouchableOpacity
-                                                    style={s.voucherCopyBtn}
-                                                    activeOpacity={0.8}
-                                                    onPress={() => copyCodeToClipboard(v.code, 'Voucher')}
-                                                >
-                                                    <Ionicons
-                                                        name={copiedCode === v.code ? 'checkmark-circle' : 'copy-outline'}
-                                                        size={12}
-                                                        color={copiedCode === v.code ? '#10B981' : '#D9A73A'}
-                                                    />
-                                                    <Text style={[s.voucherCopyBtnText, copiedCode === v.code && { color: '#10B981' }]}>
-                                                        {copiedCode === v.code ? 'Copied' : 'Copy'}
-                                                    </Text>
-                                                </TouchableOpacity>
                                             </View>
                                         </View>
-                                    </View>
-                                ))}
+                                    ))
+                                )}
                             </View>
                         </ScrollView>
                     </View>
@@ -3258,6 +3392,89 @@ const s = StyleSheet.create({
         fontSize: 9.5,
         fontWeight: '800',
         color: '#92400E'
+    },
+    modalRefreshBtn: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: 'rgba(217, 167, 58, 0.1)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(217, 167, 58, 0.25)'
+    },
+    vouchersLoadingBox: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 40,
+        gap: 12
+    },
+    vouchersLoadingTxt: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#64748B'
+    },
+    emptyVoucherBox: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 36,
+        paddingHorizontal: 20,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        borderStyle: 'dashed'
+    },
+    emptyVoucherIconBox: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: 'rgba(217, 167, 58, 0.12)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(217, 167, 58, 0.3)'
+    },
+    emptyVoucherTitle: {
+        fontSize: 14,
+        fontWeight: '900',
+        color: '#0A192F',
+        marginBottom: 6,
+        textAlign: 'center'
+    },
+    emptyVoucherDesc: {
+        fontSize: 11.5,
+        color: '#64748B',
+        textAlign: 'center',
+        lineHeight: 17,
+        marginBottom: 16
+    },
+    emptyVoucherRefreshBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: '#D9A73A',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 9
+    },
+    emptyVoucherRefreshTxt: {
+        fontSize: 11.5,
+        fontWeight: '800',
+        color: '#0A192F'
+    },
+    voucherDescTxt: {
+        fontSize: 11,
+        color: '#475569',
+        marginTop: 2,
+        marginBottom: 4,
+        lineHeight: 15
+    },
+    voucherMaxCap: {
+        fontSize: 10,
+        color: '#D97706',
+        fontWeight: '700'
     },
 
     /* Digital Member Pass Modal Styles */

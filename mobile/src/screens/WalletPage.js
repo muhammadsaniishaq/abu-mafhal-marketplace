@@ -944,43 +944,41 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
 
 
     // ── VOUCHER REDEEM HANDLER ──
-    const handleRedeemVoucher = () => {
+    const handleRedeemVoucher = async () => {
         if (!voucherCode.trim()) {
             Alert.alert('Error', 'Please enter a valid voucher code.');
             return;
         }
 
         setIsVoucherRedeeming(true);
-        setTimeout(async () => {
+        try {
             const codeClean = voucherCode.trim().toUpperCase();
 
-            if (codeClean === 'MAFHALE500' || codeClean === 'WELCOME100' || codeClean === 'VIPBONUS') {
-                const value = codeClean === 'MAFHALE500' ? 500 : codeClean === 'VIPBONUS' ? 1000 : 100;
-                try {
-                    const currentPoints = wallet.points || 0;
-                    const newPoints = currentPoints + value;
+            // Check if it exists in coupons database
+            const { data: coupon, error } = await supabase
+                .from('coupons')
+                .select('*')
+                .eq('code', codeClean)
+                .eq('is_active', true)
+                .maybeSingle();
 
-                    await supabase.from('profiles').update({ mafhal_coins: newPoints }).eq('id', user.id);
-                    await supabase.from('wallet_transactions').insert({
-                        user_id: user.id,
-                        type: 'bonus',
-                        amount: 0,
-                        points_change: value,
-                        description: `Voucher Code ${codeClean} Redeemed (+${value} AMC)`
-                    });
-
-                    Alert.alert('Success!', `Congratulations! You received ${value} Mafhal Coins.`);
-                    setShowVoucherModal(false);
-                    setVoucherCode('');
-                    fetchWalletData();
-                } catch (e) {
-                    Alert.alert('Oops', 'Could not process voucher redemption.');
-                }
+            if (coupon && !error) {
+                const isPct = coupon.discount_type === 'percentage';
+                const discountDesc = isPct ? `${coupon.discount_value}% off` : `₦${Number(coupon.discount_value).toLocaleString()} off`;
+                Alert.alert(
+                    'Shopping Voucher Verified',
+                    `Code "${codeClean}" is an active marketplace coupon offering ${discountDesc}! You can apply it directly during Checkout or in your Shopping Cart.`
+                );
+                setShowVoucherModal(false);
+                setVoucherCode('');
             } else {
                 Alert.alert('Invalid Code', 'The voucher code entered is invalid or has expired.');
             }
+        } catch (e) {
+            Alert.alert('Error', 'Could not validate voucher code at this time.');
+        } finally {
             setIsVoucherRedeeming(false);
-        }, 700);
+        }
     };
 
     // ── SAVINGS POTS LOGIC ──
@@ -2555,7 +2553,7 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                                 style={[localStyles.mainTextInput, { fontSize: 17 }]}
                                 value={voucherCode}
                                 onChangeText={setVoucherCode}
-                                placeholder="e.g. MAFHALE500 or VIPBONUS"
+                                placeholder="e.g. Enter discount voucher code"
                                 placeholderTextColor="#CBD5E1"
                                 autoCapitalize="characters"
                             />
