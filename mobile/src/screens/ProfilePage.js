@@ -531,12 +531,12 @@ const ProfilePageInner = ({
                     activeOpacity={0.7}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                    <Ionicons name="chevron-back" size={19} color="#D9A73A" />
+                    <Ionicons name="chevron-back" size={19} color="#0A192F" />
                 </TouchableOpacity>
 
                 <View style={{ alignItems: 'center' }}>
                     <Text style={s.topBarTitle}>My Profile</Text>
-                    <Text style={s.topBarSubtitle}>Account & Settings</Text>
+                    <Text style={s.topBarSubtitle}>Account & Verified Services</Text>
                 </View>
 
                 {user ? (
@@ -547,7 +547,7 @@ const ProfilePageInner = ({
                             activeOpacity={0.7}
                             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         >
-                            <Ionicons name="qr-code-outline" size={15} color="#D9A73A" />
+                            <Ionicons name="qr-code-outline" size={16} color="#0A192F" />
                         </TouchableOpacity>
                         <TouchableOpacity
                             onPress={() => onNavigate && onNavigate('editProfile')}
@@ -555,7 +555,7 @@ const ProfilePageInner = ({
                             activeOpacity={0.7}
                             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         >
-                            <Ionicons name="create-outline" size={15} color="#D9A73A" />
+                            <Ionicons name="create-outline" size={16} color="#0A192F" />
                         </TouchableOpacity>
                     </View>
                 ) : (
@@ -568,10 +568,10 @@ const ProfilePageInner = ({
                 contentContainerStyle={s.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
-                {/* ── USER HERO CARD (LUXURY NAVY & GOLD VIP PASSPORT CARD) ── */}
+                {/* ── USER HERO CARD (LUXURY ROYAL NAVY & GOLD VIP PASSPORT CARD) ── */}
                 {user ? (
                     <LinearGradient
-                        colors={['#0E223D', '#0A192F', '#070F1E']}
+                        colors={['#071932', '#0A2540', '#10375C']}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
                         style={s.heroCard}
@@ -683,24 +683,22 @@ const ProfilePageInner = ({
                     </LinearGradient>
                 )}
 
-                {/* ── UNIFIED 3-IN-1 QUICK METRICS CARD (COMPACT & SMOOTH) ── */}
+                {/* ── UNIFIED 3-IN-1 QUICK METRICS CARD (CLEAN WHITE & ROYAL NAVY) ── */}
                 {user && (
-                    <LinearGradient
-                        colors={['#0D213E', '#0A192F']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={s.metricsCard}
-                    >
+                    <View style={s.metricsCard}>
                         <TouchableOpacity
                             style={s.metricColumn}
                             activeOpacity={0.7}
                             onPress={() => onNavigate && onNavigate('wallet')}
                         >
-                            <Text style={s.metricLabel}>WALLET</Text>
+                            <Text style={s.metricLabel}>WALLET BALANCE</Text>
                             <Text style={s.metricValue} numberOfLines={1}>
                                 {loading ? '...' : formatCurrency(wallet.balance)}
                             </Text>
-                            <Text style={[s.metricSub, { color: '#D9A73A' }]}>Balance →</Text>
+                            <View style={s.metricActionRow}>
+                                <Ionicons name="add-circle" size={11} color="#D4AF37" />
+                                <Text style={s.metricActionText}>Top Up ↗</Text>
+                            </View>
                         </TouchableOpacity>
 
                         <View style={s.metricDivider} />
@@ -710,13 +708,16 @@ const ProfilePageInner = ({
                             activeOpacity={0.7}
                             onPress={() => onNavigate && onNavigate('orders')}
                         >
-                            <Text style={s.metricLabel}>ORDERS</Text>
+                            <Text style={s.metricLabel}>MY ORDERS</Text>
                             <Text style={s.metricValue} numberOfLines={1}>
                                 {loading ? '...' : `${ordersCount}`}
                             </Text>
-                            <Text style={[s.metricSub, pendingOrders > 0 && { color: '#F59E0B', fontWeight: '700' }]}>
-                                {pendingOrders > 0 ? `${pendingOrders} Pending` : 'Completed'}
-                            </Text>
+                            <View style={s.metricActionRow}>
+                                <View style={[s.metricDot, pendingOrders > 0 ? { backgroundColor: '#F59E0B' } : { backgroundColor: '#10B981' }]} />
+                                <Text style={[s.metricActionText, pendingOrders > 0 && { color: '#F59E0B' }]}>
+                                    {pendingOrders > 0 ? `${pendingOrders} Active` : 'History →'}
+                                </Text>
+                            </View>
                         </TouchableOpacity>
 
                         <View style={s.metricDivider} />
@@ -726,83 +727,89 @@ const ProfilePageInner = ({
                             activeOpacity={0.7}
                             onPress={() => onNavigate && onNavigate('referral')}
                         >
-                            <Text style={s.metricLabel}>POINTS</Text>
+                            <Text style={s.metricLabel}>REWARD PTS</Text>
                             <Text style={s.metricValue} numberOfLines={1}>
                                 {loading ? '...' : `${wallet.points}`}
                             </Text>
-                            <Text style={[s.metricSub, { color: loyalty.color || '#D9A73A', fontWeight: '700' }]}>
-                                {loyalty.tier}
-                            </Text>
-                        </TouchableOpacity>
-                    </LinearGradient>
-                )}
-
-                {/* ── QUICK ACTION DOCK (LUXURY NAVY & GOLD MICRO-RIBBON) ── */}
-                {user && (
-                    <View style={s.actionDock}>
-                        <TouchableOpacity
-                            style={s.dockItem}
-                            activeOpacity={0.75}
-                            onPress={() => onNavigate && onNavigate('wallet')}
-                        >
-                            <View style={[s.dockIconWrap, { backgroundColor: 'rgba(217, 167, 58, 0.12)', borderColor: 'rgba(217, 167, 58, 0.35)' }]}>
-                                <Ionicons name="add-circle" size={17} color="#D9A73A" />
+                            <View style={s.metricActionRow}>
+                                <Ionicons name="sparkles" size={10} color="#D4AF37" />
+                                <Text style={[s.metricActionText, { color: loyalty.color || '#D4AF37' }]}>
+                                    {loyalty.tier}
+                                </Text>
                             </View>
-                            <Text style={s.dockLabel}>Top Up</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={s.dockItem}
-                            activeOpacity={0.75}
-                            onPress={() => setShowVouchersModal(true)}
-                        >
-                            <View style={[s.dockIconWrap, { backgroundColor: 'rgba(245, 158, 11, 0.12)', borderColor: 'rgba(245, 158, 11, 0.35)' }]}>
-                                <Ionicons name="ticket" size={16} color="#F59E0B" />
-                                <View style={s.dockBadge}>
-                                    <Text style={s.dockBadgeText}>3</Text>
-                                </View>
-                            </View>
-                            <Text style={s.dockLabel}>Vouchers</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={s.dockItem}
-                            activeOpacity={0.75}
-                            onPress={() => setShowMemberPassModal(true)}
-                        >
-                            <View style={[s.dockIconWrap, { backgroundColor: 'rgba(217, 167, 58, 0.15)', borderColor: '#D9A73A' }]}>
-                                <Ionicons name="qr-code" size={16} color="#D9A73A" />
-                            </View>
-                            <Text style={s.dockLabel}>VIP Pass</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={s.dockItem}
-                            activeOpacity={0.75}
-                            onPress={() => {
-                                const refCode = user?.referral_code || `AM-${(user?.id || '2026').slice(0, 6).toUpperCase()}`;
-                                copyCodeToClipboard(refCode, 'Referral code');
-                            }}
-                        >
-                            <View style={[s.dockIconWrap, { backgroundColor: 'rgba(16, 185, 129, 0.12)', borderColor: 'rgba(16, 185, 129, 0.35)' }]}>
-                                <Ionicons name="gift" size={16} color="#10B981" />
-                            </View>
-                            <Text style={s.dockLabel}>Share ID</Text>
                         </TouchableOpacity>
                     </View>
                 )}
 
-                {/* ── VIP LOYALTY TIER PROGRESS TRACKER (COMPACT & MODERN) ── */}
+                {/* ── QUICK HUB 4-TILE SERVICES GRID (NEW CLEAN ARRANGEMENT) ── */}
                 {user && (
-                    <LinearGradient
-                        colors={['#0F2445', '#0A192F']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={s.loyaltyCard}
-                    >
+                    <View style={s.quickHubWrap}>
+                        <View style={s.quickHubGrid}>
+                            <TouchableOpacity
+                                style={s.quickHubTile}
+                                activeOpacity={0.8}
+                                onPress={() => onNavigate && onNavigate('orders')}
+                            >
+                                <View style={[s.quickHubIconBox, { backgroundColor: 'rgba(217, 167, 58, 0.12)' }]}>
+                                    <Ionicons name="cube-outline" size={20} color="#D4AF37" />
+                                    {pendingOrders > 0 && (
+                                        <View style={s.quickHubBadge}>
+                                            <Text style={s.quickHubBadgeText}>{pendingOrders}</Text>
+                                        </View>
+                                    )}
+                                </View>
+                                <Text style={s.quickHubTitle}>My Orders</Text>
+                                <Text style={s.quickHubSub}>Track & History</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={s.quickHubTile}
+                                activeOpacity={0.8}
+                                onPress={() => onNavigate && onNavigate('wallet')}
+                            >
+                                <View style={[s.quickHubIconBox, { backgroundColor: 'rgba(10, 25, 47, 0.08)' }]}>
+                                    <Ionicons name="wallet-outline" size={20} color="#0A192F" />
+                                </View>
+                                <Text style={s.quickHubTitle}>Mafhal Pay</Text>
+                                <Text style={s.quickHubSub}>Top Up & Send</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={s.quickHubTile}
+                                activeOpacity={0.8}
+                                onPress={() => setShowVouchersModal(true)}
+                            >
+                                <View style={[s.quickHubIconBox, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
+                                    <Ionicons name="ticket-outline" size={20} color="#F59E0B" />
+                                    <View style={[s.quickHubBadge, { backgroundColor: '#F59E0B' }]}>
+                                        <Text style={s.quickHubBadgeText}>3</Text>
+                                    </View>
+                                </View>
+                                <Text style={s.quickHubTitle}>Vouchers</Text>
+                                <Text style={s.quickHubSub}>3 Coupons Ready</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={s.quickHubTile}
+                                activeOpacity={0.8}
+                                onPress={() => setShowMemberPassModal(true)}
+                            >
+                                <View style={[s.quickHubIconBox, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
+                                    <Ionicons name="qr-code-outline" size={20} color="#10B981" />
+                                </View>
+                                <Text style={s.quickHubTitle}>VIP Pass</Text>
+                                <Text style={s.quickHubSub}>Digital Hub QR</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                )}
+
+                {/* ── VIP LOYALTY TIER PROGRESS TRACKER (CLEAN ELEVATED CARD) ── */}
+                {user && (
+                    <View style={s.loyaltyCard}>
                         <View style={s.loyaltyTopRow}>
-                            <View style={[s.loyaltyTierBadge, { backgroundColor: 'rgba(217, 167, 58, 0.15)', borderColor: '#D9A73A' }]}>
-                                <Ionicons name={loyalty.icon || 'trophy'} size={12} color="#D9A73A" />
+                            <View style={s.loyaltyTierBadge}>
+                                <Ionicons name={loyalty.icon || 'trophy'} size={12} color="#D4AF37" />
                                 <Text style={s.loyaltyTierName}>{loyalty.tier}</Text>
                             </View>
                             <Text style={s.loyaltyPointsText}>
@@ -817,10 +824,10 @@ const ProfilePageInner = ({
 
                         {/* Perk Subtext */}
                         <View style={s.loyaltyPerkRow}>
-                            <Ionicons name="sparkles" size={11} color="#D9A73A" />
+                            <Ionicons name="sparkles" size={11} color="#D4AF37" />
                             <Text style={s.loyaltyPerkText} numberOfLines={1}>{loyalty.perk}</Text>
                         </View>
-                    </LinearGradient>
+                    </View>
                 )}
 
                 {/* ── FOLLOWED STORES LIVE STRIP (QUICK STORE CAROUSEL) ── */}
@@ -1535,74 +1542,76 @@ export const ProfilePage = (props) => {
     return <ProfilePageInner {...props} />;
 };
 
+export default ProfilePage;
+
 const s = StyleSheet.create({
     safeArea: {
         flex: 1,
-        backgroundColor: '#070F1E'
+        backgroundColor: '#F8FAFC'
     },
     topBar: {
-        height: 48,
+        height: 50,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 16,
-        backgroundColor: '#070F1E',
+        backgroundColor: '#FFFFFF',
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(217, 167, 58, 0.22)'
+        borderBottomColor: '#E2E8F0'
     },
     topBarBtn: {
-        width: 32,
-        height: 32,
-        borderRadius: 8,
-        backgroundColor: 'rgba(217, 167, 58, 0.08)',
+        width: 34,
+        height: 34,
+        borderRadius: 10,
+        backgroundColor: '#F8FAFC',
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: 'rgba(217, 167, 58, 0.28)'
+        borderColor: '#E2E8F0'
     },
     topBarTitle: {
-        fontSize: 14.5,
+        fontSize: 15,
         fontWeight: '900',
-        color: '#FFFFFF',
+        color: '#0A192F',
         letterSpacing: -0.2
     },
     topBarSubtitle: {
         fontSize: 9.5,
-        color: '#D9A73A',
+        color: '#D4AF37',
         fontWeight: '700',
         marginTop: 0.5
     },
     scroll: {
         flex: 1,
-        backgroundColor: '#070F1E'
+        backgroundColor: '#F8FAFC'
     },
     scrollContent: {
         paddingHorizontal: 14,
-        paddingTop: 10,
-        paddingBottom: 36
+        paddingTop: 12,
+        paddingBottom: 40
     },
 
-    /* Hero Card (Luxury Navy & Gold VIP Passport) */
+    /* Hero Card (Luxury Royal Navy & Gold Centerpiece) */
     heroCard: {
-        borderRadius: 18,
-        padding: 14,
+        borderRadius: 20,
+        padding: 16,
         borderWidth: 1.5,
-        borderColor: '#D9A73A',
+        borderColor: '#D4AF37',
         marginBottom: 12,
-        shadowColor: '#D9A73A',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 12,
-        elevation: 4
+        shadowColor: '#0A192F',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.18,
+        shadowRadius: 16,
+        elevation: 6
     },
     heroTopBarDecor: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 10,
+        marginBottom: 12,
         paddingBottom: 8,
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(217, 167, 58, 0.18)'
+        borderBottomColor: 'rgba(217, 167, 58, 0.2)'
     },
     passportBadge: {
         flexDirection: 'row',
@@ -1613,7 +1622,7 @@ const s = StyleSheet.create({
         paddingVertical: 3,
         borderRadius: 6,
         borderWidth: 1,
-        borderColor: '#D9A73A'
+        borderColor: '#D4AF37'
     },
     passportText: {
         fontSize: 8.5,
@@ -1625,12 +1634,12 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 5,
-        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-        paddingHorizontal: 7,
-        paddingVertical: 2.5,
+        backgroundColor: 'rgba(16, 185, 129, 0.15)',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
         borderRadius: 10,
         borderWidth: 1,
-        borderColor: 'rgba(16, 185, 129, 0.25)'
+        borderColor: 'rgba(16, 185, 129, 0.3)'
     },
     activeDot: {
         width: 6,
@@ -1655,9 +1664,9 @@ const s = StyleSheet.create({
         padding: 2,
         borderRadius: 28,
         borderWidth: 2,
-        borderColor: '#D9A73A',
-        backgroundColor: '#070F1E',
-        shadowColor: '#D9A73A',
+        borderColor: '#D4AF37',
+        backgroundColor: '#071932',
+        shadowColor: '#D4AF37',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.35,
         shadowRadius: 6,
@@ -1670,9 +1679,9 @@ const s = StyleSheet.create({
         width: 17,
         height: 17,
         borderRadius: 8.5,
-        backgroundColor: '#070F1E',
+        backgroundColor: '#0A192F',
         borderWidth: 1.5,
-        borderColor: '#D9A73A',
+        borderColor: '#D4AF37',
         alignItems: 'center',
         justifyContent: 'center'
     },
@@ -1688,7 +1697,7 @@ const s = StyleSheet.create({
         marginBottom: 2
     },
     heroName: {
-        fontSize: 15.5,
+        fontSize: 16,
         fontWeight: '900',
         color: '#FFFFFF',
         letterSpacing: -0.2
@@ -1701,14 +1710,14 @@ const s = StyleSheet.create({
     },
     roleBadgeBuyer: {
         backgroundColor: 'rgba(217, 167, 58, 0.18)',
-        borderColor: '#D9A73A'
+        borderColor: '#D4AF37'
     },
     roleBadgeVendor: {
         backgroundColor: 'rgba(16, 185, 129, 0.18)',
         borderColor: '#10B981'
     },
     roleBadgeAdmin: {
-        backgroundColor: 'rgba(220, 38, 38, 0.18)',
+        backgroundColor: 'rgba(239, 68, 68, 0.18)',
         borderColor: '#EF4444'
     },
     roleBadgeDriver: {
@@ -1726,7 +1735,7 @@ const s = StyleSheet.create({
     roleTextDriver: { color: '#C4B5FD' },
     heroSub: {
         fontSize: 10.5,
-        color: '#94A3B8',
+        color: '#CBD5E1',
         marginBottom: 8
     },
     heroPillsRow: {
@@ -1748,7 +1757,7 @@ const s = StyleSheet.create({
     editPillText: {
         fontSize: 10,
         fontWeight: '800',
-        color: '#D9A73A'
+        color: '#D4AF37'
     },
     heroStoresPill: {
         flexDirection: 'row',
@@ -1787,15 +1796,21 @@ const s = StyleSheet.create({
         alignItems: 'center',
         borderRadius: 18,
         padding: 16,
+        backgroundColor: '#FFFFFF',
         borderWidth: 1.5,
-        borderColor: '#D9A73A',
+        borderColor: '#D4AF37',
         marginBottom: 12,
-        gap: 12
+        gap: 12,
+        shadowColor: 'rgba(10, 25, 47, 0.06)',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 1,
+        shadowRadius: 8,
+        elevation: 2
     },
     guestIconWrap: {
-        width: 42,
-        height: 42,
-        borderRadius: 21,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         backgroundColor: 'rgba(217, 167, 58, 0.12)',
         borderWidth: 1,
         borderColor: 'rgba(217, 167, 58, 0.3)',
@@ -1803,45 +1818,46 @@ const s = StyleSheet.create({
         justifyContent: 'center'
     },
     guestTitle: {
-        fontSize: 13.5,
+        fontSize: 14,
         fontWeight: '900',
-        color: '#FFFFFF'
+        color: '#0A192F'
     },
     guestSub: {
         fontSize: 10.5,
-        color: '#94A3B8',
+        color: '#64748B',
         marginTop: 1
     },
     guestSignInBtn: {
         paddingHorizontal: 14,
         paddingVertical: 8,
         borderRadius: 8,
-        backgroundColor: '#D9A73A',
+        backgroundColor: '#0A192F',
         borderWidth: 1,
-        borderColor: '#FCD34D'
+        borderColor: '#D4AF37'
     },
     guestSignInBtnText: {
         fontSize: 11,
         fontWeight: '900',
-        color: '#070F1E'
+        color: '#D4AF37'
     },
 
-    /* Metrics Card (Luxury Navy & Gold) */
+    /* Metrics Card (Clean White & Royal Navy Elevated Bar) */
     metricsCard: {
         flexDirection: 'row',
         borderRadius: 16,
-        paddingVertical: 12,
-        paddingHorizontal: 8,
-        borderWidth: 1.5,
-        borderColor: 'rgba(217, 167, 58, 0.35)',
+        paddingVertical: 14,
+        paddingHorizontal: 10,
+        backgroundColor: '#FFFFFF',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
         marginBottom: 12,
         alignItems: 'center',
         justifyContent: 'space-between',
-        shadowColor: '#D9A73A',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
+        shadowColor: 'rgba(10, 25, 47, 0.06)',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 1,
         shadowRadius: 10,
-        elevation: 3
+        elevation: 2
     },
     metricColumn: {
         flex: 1,
@@ -1851,94 +1867,108 @@ const s = StyleSheet.create({
     metricLabel: {
         fontSize: 8.5,
         fontWeight: '900',
-        color: '#D9A73A',
-        letterSpacing: 1,
-        marginBottom: 2
+        color: '#64748B',
+        letterSpacing: 0.8,
+        marginBottom: 3
     },
     metricValue: {
-        fontSize: 14,
+        fontSize: 14.5,
         fontWeight: '900',
-        color: '#FFFFFF',
-        marginBottom: 1
+        color: '#0A192F',
+        marginBottom: 3
     },
-    metricSub: {
+    metricActionRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3
+    },
+    metricActionText: {
         fontSize: 9.5,
-        color: '#FCD34D',
-        fontWeight: '700'
+        color: '#D4AF37',
+        fontWeight: '800'
+    },
+    metricDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        marginRight: 2
     },
     metricDivider: {
         width: 1,
-        height: 28,
-        backgroundColor: 'rgba(217, 167, 58, 0.18)'
+        height: 32,
+        backgroundColor: '#F1F5F9'
     },
 
-    /* Quick Action Dock (Modern Micro-Ribbon) */
-    actionDock: {
+    /* Quick Hub 4-Tile Grid (New Organized Layout) */
+    quickHubWrap: {
+        marginBottom: 12
+    },
+    quickHubGrid: {
         flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: '#0A192F',
-        borderRadius: 16,
-        paddingVertical: 12,
-        paddingHorizontal: 8,
+        flexWrap: 'wrap',
+        gap: 10,
+        justifyContent: 'space-between'
+    },
+    quickHubTile: {
+        width: '48.5%',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 14,
+        padding: 12,
         borderWidth: 1,
-        borderColor: 'rgba(217, 167, 58, 0.22)',
-        marginBottom: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.15,
+        borderColor: '#E2E8F0',
+        shadowColor: 'rgba(10, 25, 47, 0.04)',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 1,
         shadowRadius: 6,
         elevation: 2
     },
-    dockItem: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center'
-    },
-    dockIconWrap: {
+    quickHubIconBox: {
         width: 38,
         height: 38,
-        borderRadius: 12,
-        borderWidth: 1,
+        borderRadius: 10,
         alignItems: 'center',
         justifyContent: 'center',
-        position: 'relative',
-        marginBottom: 4
+        marginBottom: 8,
+        position: 'relative'
     },
-    dockLabel: {
-        fontSize: 10,
-        fontWeight: '700',
-        color: '#F8FAFC'
-    },
-    dockBadge: {
+    quickHubBadge: {
         position: 'absolute',
         top: -3,
-        right: -3,
-        backgroundColor: '#D9A73A',
+        right: -4,
+        backgroundColor: '#D97706',
         borderRadius: 6,
         paddingHorizontal: 4,
-        paddingVertical: 0.5,
-        borderWidth: 1,
-        borderColor: '#0A192F'
+        paddingVertical: 1
     },
-    dockBadgeText: {
+    quickHubBadgeText: {
         fontSize: 8,
         fontWeight: '900',
-        color: '#070F1E'
+        color: '#FFFFFF'
+    },
+    quickHubTitle: {
+        fontSize: 12.5,
+        fontWeight: '800',
+        color: '#0A192F',
+        marginBottom: 1
+    },
+    quickHubSub: {
+        fontSize: 9.5,
+        color: '#64748B'
     },
 
-    /* VIP Loyalty Progress Tracker */
+    /* VIP Loyalty Progress Tracker (Clean White Card) */
     loyaltyCard: {
+        backgroundColor: '#FFFFFF',
         borderRadius: 16,
         padding: 12,
-        borderWidth: 1.5,
-        borderColor: '#D9A73A',
+        borderWidth: 1,
+        borderColor: 'rgba(217, 167, 58, 0.35)',
         marginBottom: 12,
-        shadowColor: '#D9A73A',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.18,
-        shadowRadius: 10,
-        elevation: 3
+        shadowColor: 'rgba(10, 25, 47, 0.04)',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 1,
+        shadowRadius: 6,
+        elevation: 2
     },
     loyaltyTopRow: {
         flexDirection: 'row',
@@ -1953,32 +1983,34 @@ const s = StyleSheet.create({
         paddingHorizontal: 8,
         paddingVertical: 3,
         borderRadius: 6,
-        borderWidth: 1
+        backgroundColor: 'rgba(217, 167, 58, 0.12)',
+        borderWidth: 1,
+        borderColor: '#D4AF37'
     },
     loyaltyTierName: {
         fontSize: 10,
         fontWeight: '900',
-        color: '#D9A73A'
+        color: '#0A192F'
     },
     loyaltyPointsText: {
         fontSize: 10,
-        color: '#94A3B8',
+        color: '#64748B',
         fontWeight: '600'
     },
     loyaltyPointsBold: {
         fontWeight: '900',
-        color: '#FFFFFF'
+        color: '#0A192F'
     },
     loyaltyTrack: {
         height: 6,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        backgroundColor: '#F1F5F9',
         borderRadius: 3,
         overflow: 'hidden',
         marginBottom: 8
     },
     loyaltyBar: {
         height: '100%',
-        backgroundColor: '#D9A73A',
+        backgroundColor: '#D4AF37',
         borderRadius: 3
     },
     loyaltyPerkRow: {
@@ -1988,7 +2020,7 @@ const s = StyleSheet.create({
     },
     loyaltyPerkText: {
         fontSize: 9.5,
-        color: '#FCD34D',
+        color: '#475569',
         fontWeight: '600',
         flex: 1
     },
@@ -2005,15 +2037,15 @@ const s = StyleSheet.create({
         paddingHorizontal: 2
     },
     liveStoresTitle: {
-        fontSize: 10,
+        fontSize: 10.5,
         fontWeight: '900',
-        color: '#D9A73A',
-        letterSpacing: 1
+        color: '#0A192F',
+        letterSpacing: 0.8
     },
     liveStoresViewAll: {
-        fontSize: 10,
+        fontSize: 10.5,
         fontWeight: '800',
-        color: '#D9A73A'
+        color: '#D4AF37'
     },
     liveStoresScroll: {
         gap: 10,
@@ -2021,28 +2053,30 @@ const s = StyleSheet.create({
     },
     liveStoreItem: {
         alignItems: 'center',
-        width: 54
+        width: 56
     },
     liveStoreRing: {
-        width: 46,
-        height: 46,
-        borderRadius: 23,
+        width: 48,
+        height: 48,
+        borderRadius: 24,
         borderWidth: 1.5,
-        borderColor: '#D9A73A',
+        borderColor: '#D4AF37',
         padding: 1.5,
-        backgroundColor: '#0A192F',
+        backgroundColor: '#FFFFFF',
         position: 'relative'
     },
     liveStoreAvatar: {
         width: '100%',
         height: '100%',
-        borderRadius: 21
+        borderRadius: 22
     },
     liveStoreFallback: {
         width: '100%',
         height: '100%',
-        borderRadius: 21,
-        backgroundColor: 'rgba(217, 167, 58, 0.15)',
+        borderRadius: 22,
+        backgroundColor: 'rgba(217, 167, 58, 0.12)',
+        borderWidth: 1,
+        borderColor: 'rgba(217, 167, 58, 0.25)',
         alignItems: 'center',
         justifyContent: 'center'
     },
@@ -2055,45 +2089,45 @@ const s = StyleSheet.create({
         borderRadius: 5,
         backgroundColor: '#10B981',
         borderWidth: 1.5,
-        borderColor: '#070F1E'
+        borderColor: '#FFFFFF'
     },
     liveStoreName: {
-        fontSize: 9,
+        fontSize: 9.5,
         fontWeight: '700',
-        color: '#E2E8F0',
+        color: '#0A192F',
         marginTop: 3,
         textAlign: 'center'
     },
     liveStoreAddBtn: {
         alignItems: 'center',
-        width: 54
+        width: 56
     },
     liveStoreAddIconWrap: {
-        width: 46,
-        height: 46,
-        borderRadius: 23,
-        backgroundColor: '#0A192F',
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: '#FFFFFF',
         borderWidth: 1,
-        borderColor: 'rgba(217, 167, 58, 0.35)',
+        borderColor: '#CBD5E1',
         alignItems: 'center',
         justifyContent: 'center'
     },
 
     /* Executive Admin Command Console Card */
     adminConsoleCard: {
-        backgroundColor: '#070F1E',
+        backgroundColor: '#0A192F',
         borderRadius: 18,
         padding: 14,
         marginBottom: 14,
         borderWidth: 1.5,
-        borderColor: '#D9A73A',
-        shadowColor: '#D9A73A',
+        borderColor: '#D4AF37',
+        shadowColor: '#0A192F',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.25,
-        shadowRadius: 12,
+        shadowOpacity: 0.18,
+        shadowRadius: 10,
         elevation: 4,
         position: 'relative',
-        overflow: 'hidden',
+        overflow: 'hidden'
     },
     adminConsoleGlow: {
         position: 'absolute',
@@ -2102,12 +2136,12 @@ const s = StyleSheet.create({
         width: 110,
         height: 110,
         borderRadius: 55,
-        backgroundColor: 'rgba(217, 167, 58, 0.15)',
+        backgroundColor: 'rgba(217, 167, 58, 0.15)'
     },
     adminConsoleLeft: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
+        gap: 12
     },
     adminShieldCircle: {
         width: 44,
@@ -2115,39 +2149,39 @@ const s = StyleSheet.create({
         borderRadius: 22,
         backgroundColor: 'rgba(217, 167, 58, 0.15)',
         borderWidth: 1.5,
-        borderColor: '#D9A73A',
+        borderColor: '#D4AF37',
         alignItems: 'center',
-        justifyContent: 'center',
+        justifyContent: 'center'
     },
     adminBadgeRow: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 5,
-        marginBottom: 2,
+        marginBottom: 2
     },
     adminLiveDot: {
         width: 7,
         height: 7,
         borderRadius: 4,
-        backgroundColor: '#10B981',
+        backgroundColor: '#10B981'
     },
     adminBadgeText: {
         fontSize: 9.5,
         fontWeight: '900',
-        color: '#D9A73A',
-        letterSpacing: 0.8,
+        color: '#D4AF37',
+        letterSpacing: 0.8
     },
     adminConsoleTitle: {
         fontSize: 15,
         fontWeight: '900',
         color: '#FFFFFF',
-        letterSpacing: 0.2,
+        letterSpacing: 0.2
     },
     adminConsoleSub: {
         fontSize: 11,
-        color: '#94A3B8',
+        color: '#CBD5E1',
         marginTop: 2,
-        lineHeight: 15,
+        lineHeight: 15
     },
     adminConsoleRight: {
         marginTop: 10,
@@ -2156,30 +2190,30 @@ const s = StyleSheet.create({
         borderTopColor: 'rgba(255, 255, 255, 0.1)',
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
+        alignItems: 'center'
     },
     adminConsoleStatusTxt: {
         fontSize: 11,
         color: '#E2E8F0',
-        fontWeight: '600',
+        fontWeight: '600'
     },
     adminEnterBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        backgroundColor: '#D9A73A',
+        backgroundColor: '#D4AF37',
         paddingHorizontal: 13,
         paddingVertical: 6,
-        borderRadius: 18,
+        borderRadius: 18
     },
     adminEnterBtnTxt: {
         color: '#070F1E',
         fontSize: 12,
         fontWeight: '900',
-        letterSpacing: 0.3,
+        letterSpacing: 0.3
     },
 
-    /* Role Card (Compact) */
+    /* Role Card (Clean White with Colored Left Accent) */
     roleCard: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -2187,104 +2221,106 @@ const s = StyleSheet.create({
         padding: 12,
         borderWidth: 1,
         marginBottom: 12,
-        gap: 10
+        gap: 10,
+        backgroundColor: '#FFFFFF',
+        shadowColor: 'rgba(10, 25, 47, 0.04)',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 1,
+        shadowRadius: 6,
+        elevation: 2
     },
     roleCardBuyer: {
-        backgroundColor: '#0A192F',
-        borderColor: 'rgba(217, 167, 58, 0.35)',
+        borderColor: '#E2E8F0',
         borderLeftWidth: 3.5,
-        borderLeftColor: '#D9A73A'
+        borderLeftColor: '#D4AF37'
     },
     roleCardVendor: {
-        backgroundColor: '#0A192F',
-        borderColor: 'rgba(16, 185, 129, 0.35)',
+        borderColor: '#E2E8F0',
         borderLeftWidth: 3.5,
         borderLeftColor: '#10B981'
     },
     roleCardAdmin: {
-        backgroundColor: '#0A192F',
-        borderColor: 'rgba(239, 68, 68, 0.35)',
+        borderColor: '#E2E8F0',
         borderLeftWidth: 3.5,
         borderLeftColor: '#EF4444'
     },
     roleCardDriver: {
-        backgroundColor: '#0A192F',
-        borderColor: 'rgba(167, 139, 250, 0.35)',
+        borderColor: '#E2E8F0',
         borderLeftWidth: 3.5,
         borderLeftColor: '#A78BFA'
     },
     roleIconCircle: {
-        width: 34,
-        height: 34,
-        borderRadius: 17,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(217, 167, 58, 0.15)',
+        backgroundColor: '#F8FAFC',
         borderWidth: 1,
-        borderColor: 'rgba(217, 167, 58, 0.3)'
+        borderColor: '#E2E8F0'
     },
     roleCardTitle: {
-        fontSize: 12.5,
+        fontSize: 13,
         fontWeight: '800',
-        color: '#FFFFFF'
+        color: '#0A192F'
     },
     roleCardSub: {
         fontSize: 10,
-        color: '#94A3B8',
+        color: '#64748B',
         marginTop: 1
     },
 
-    /* Menu Groups (Refined & Compact) */
+    /* Menu Groups (Clean White Cards with Soft Shadow) */
     sectionHeader: {
-        fontSize: 10,
+        fontSize: 10.5,
         fontWeight: '900',
-        color: '#D9A73A',
-        letterSpacing: 1,
-        marginTop: 10,
+        color: '#0A192F',
+        letterSpacing: 0.8,
+        marginTop: 12,
         marginBottom: 6,
         marginLeft: 2
     },
     sectionHeaderSpark: {
-        color: '#D9A73A',
-        fontSize: 9
+        color: '#D4AF37',
+        fontSize: 10
     },
     menuGroup: {
-        backgroundColor: '#0A192F',
+        backgroundColor: '#FFFFFF',
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: 'rgba(217, 167, 58, 0.18)',
+        borderColor: '#E2E8F0',
         marginBottom: 12,
         overflow: 'hidden',
-        shadowColor: '#000',
+        shadowColor: 'rgba(10, 25, 47, 0.04)',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.12,
+        shadowOpacity: 1,
         shadowRadius: 6,
         elevation: 2
     },
     menuRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 10,
+        paddingVertical: 12,
         paddingHorizontal: 14,
         gap: 12
     },
     menuIconBox: {
-        width: 30,
-        height: 30,
-        borderRadius: 9,
+        width: 32,
+        height: 32,
+        borderRadius: 10,
         borderWidth: 1,
         borderColor: 'rgba(217, 167, 58, 0.2)',
         alignItems: 'center',
         justifyContent: 'center'
     },
     menuLabel: {
-        fontSize: 13,
+        fontSize: 13.5,
         fontWeight: '700',
-        color: '#F8FAFC'
+        color: '#0A192F'
     },
     menuSubLabel: {
-        fontSize: 9.5,
-        color: '#94A3B8',
+        fontSize: 10,
+        color: '#64748B',
         marginTop: 1
     },
     menuBadge: {
@@ -2296,64 +2332,69 @@ const s = StyleSheet.create({
     menuBadgeText: {
         fontSize: 9,
         fontWeight: '900',
-        color: '#070F1E'
+        color: '#FFFFFF'
     },
     menuExtra: {
         fontSize: 12,
         fontWeight: '800',
-        color: '#D9A73A',
+        color: '#0A192F',
         marginRight: 4
     },
     menuDivider: {
         height: 1,
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        marginLeft: 54
+        backgroundColor: '#F1F5F9',
+        marginLeft: 56
     },
 
     /* Security Trust Card */
     securityCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#0A192F',
+        backgroundColor: '#FFFFFF',
         borderRadius: 14,
         padding: 12,
         borderWidth: 1,
-        borderColor: 'rgba(217, 167, 58, 0.25)',
+        borderColor: '#E2E8F0',
         marginBottom: 14,
-        gap: 10
+        gap: 10,
+        shadowColor: 'rgba(10, 25, 47, 0.03)',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 1,
+        shadowRadius: 4,
+        elevation: 1
     },
     securityIconWrap: {
         width: 32,
         height: 32,
         borderRadius: 16,
-        backgroundColor: 'rgba(16, 185, 129, 0.15)',
+        backgroundColor: 'rgba(16, 185, 129, 0.12)',
         borderWidth: 1,
-        borderColor: 'rgba(16, 185, 129, 0.3)',
+        borderColor: 'rgba(16, 185, 129, 0.25)',
         alignItems: 'center',
         justifyContent: 'center'
     },
     securityTitle: {
         fontSize: 11.5,
         fontWeight: '800',
-        color: '#FFFFFF'
+        color: '#0A192F'
     },
     securityBadge: {
-        backgroundColor: 'rgba(217, 167, 58, 0.15)',
+        backgroundColor: 'rgba(217, 167, 58, 0.12)',
         paddingHorizontal: 5,
         paddingVertical: 1.5,
         borderRadius: 4,
         borderWidth: 1,
-        borderColor: '#D9A73A'
+        borderColor: '#D4AF37'
     },
     securityBadgeText: {
         fontSize: 7.5,
         fontWeight: '900',
-        color: '#D9A73A',
+        color: '#92400E',
         letterSpacing: 0.4
     },
     securitySub: {
         fontSize: 9.5,
-        color: '#94A3B8',
+        color: '#64748B',
         marginTop: 2
     },
 
@@ -2368,91 +2409,84 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(220, 38, 38, 0.1)',
+        backgroundColor: '#FEF2F2',
         borderWidth: 1,
-        borderColor: 'rgba(220, 38, 38, 0.35)',
+        borderColor: '#FECACA',
         borderRadius: 12,
-        paddingVertical: 10,
+        paddingVertical: 11,
         width: '100%'
     },
     logoutText: {
-        fontSize: 12,
+        fontSize: 12.5,
         fontWeight: '800',
-        color: '#EF4444'
+        color: '#DC2626'
     },
     loginBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#D9A73A',
+        backgroundColor: '#0A192F',
+        borderWidth: 1,
+        borderColor: '#D4AF37',
         borderRadius: 12,
-        paddingVertical: 10,
+        paddingVertical: 11,
         width: '100%'
     },
     loginText: {
-        fontSize: 12,
+        fontSize: 12.5,
         fontWeight: '900',
-        color: '#070F1E'
+        color: '#D4AF37'
     },
     versionText: {
         fontSize: 9.5,
-        color: '#64748B',
+        color: '#94A3B8',
         fontWeight: '600'
     },
 
-    /* Followed Stores Modal */
+    /* Followed Stores Modal (Crisp White with Royal Navy Header) */
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(3, 7, 18, 0.78)',
+        backgroundColor: 'rgba(10, 25, 47, 0.65)',
         justifyContent: 'flex-end'
     },
     modalCard: {
-        backgroundColor: '#0A192F',
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        borderTopWidth: 1.5,
-        borderLeftWidth: 1,
-        borderRightWidth: 1,
-        borderColor: '#D9A73A',
+        backgroundColor: '#FFFFFF',
+        borderTopLeftRadius: 22,
+        borderTopRightRadius: 22,
+        borderTopWidth: 2,
+        borderTopColor: '#D4AF37',
         maxHeight: '85%',
-        paddingBottom: 20,
-        shadowColor: '#D9A73A',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.25,
-        shadowRadius: 16,
-        elevation: 8
+        paddingBottom: 20
     },
     modalHeader: {
-        backgroundColor: '#0D213E',
+        backgroundColor: '#0A192F',
         paddingHorizontal: 16,
-        paddingVertical: 12,
+        paddingVertical: 14,
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(217, 167, 58, 0.25)'
+        justifyContent: 'space-between'
     },
     modalHeaderIconWrap: {
-        width: 30,
-        height: 30,
+        width: 32,
+        height: 32,
         borderRadius: 8,
         backgroundColor: 'rgba(217, 167, 58, 0.15)',
         borderWidth: 1,
-        borderColor: '#D9A73A',
+        borderColor: '#D4AF37',
         alignItems: 'center',
         justifyContent: 'center'
     },
     modalTitle: {
-        fontSize: 14,
-        fontWeight: '800',
+        fontSize: 14.5,
+        fontWeight: '900',
         color: '#FFFFFF',
         letterSpacing: 0.2
     },
     modalSubtitle: {
         fontSize: 10,
-        color: '#D9A73A',
+        color: '#D4AF37',
         fontWeight: '700',
         marginTop: 0.5
     },
@@ -2460,7 +2494,7 @@ const s = StyleSheet.create({
         width: 28,
         height: 28,
         borderRadius: 14,
-        backgroundColor: 'rgba(255, 255, 255, 0.08)',
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
         borderWidth: 1,
         borderColor: 'rgba(217, 167, 58, 0.3)',
         alignItems: 'center',
@@ -2469,20 +2503,20 @@ const s = StyleSheet.create({
     storeSearchBox: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#070F1E',
+        backgroundColor: '#F8FAFC',
         marginHorizontal: 14,
         marginTop: 10,
         marginBottom: 6,
         borderRadius: 10,
         paddingHorizontal: 10,
-        height: 36,
+        height: 38,
         borderWidth: 1,
-        borderColor: 'rgba(217, 167, 58, 0.35)'
+        borderColor: '#E2E8F0'
     },
     storeSearchInput: {
         flex: 1,
         fontSize: 11.5,
-        color: '#FFFFFF',
+        color: '#0A192F',
         padding: 0
     },
     modalScroll: {
@@ -2496,14 +2530,14 @@ const s = StyleSheet.create({
     },
     modalLoaderText: {
         fontSize: 11,
-        color: '#D9A73A'
+        color: '#64748B'
     },
     modalEmptyWrap: {
-        backgroundColor: '#070F1E',
+        backgroundColor: '#F8FAFC',
         borderRadius: 14,
         padding: 20,
         borderWidth: 1,
-        borderColor: 'rgba(217, 167, 58, 0.25)',
+        borderColor: '#E2E8F0',
         alignItems: 'center',
         marginTop: 10,
         gap: 6
@@ -2521,19 +2555,21 @@ const s = StyleSheet.create({
     modalEmptyTitle: {
         fontSize: 13,
         fontWeight: '800',
-        color: '#FFFFFF',
+        color: '#0A192F',
         marginTop: 2
     },
     modalEmptySub: {
         fontSize: 10.5,
-        color: '#94A3B8',
+        color: '#64748B',
         textAlign: 'center',
         lineHeight: 15
     },
     modalDiscoverBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#D9A73A',
+        backgroundColor: '#0A192F',
+        borderWidth: 1,
+        borderColor: '#D4AF37',
         paddingHorizontal: 14,
         paddingVertical: 7.5,
         borderRadius: 8,
@@ -2542,18 +2578,23 @@ const s = StyleSheet.create({
     modalDiscoverBtnText: {
         fontSize: 11,
         fontWeight: '900',
-        color: '#070F1E'
+        color: '#D4AF37'
     },
     storesListWrap: {
         gap: 8,
         paddingBottom: 16
     },
     followedCard: {
-        backgroundColor: '#070F1E',
+        backgroundColor: '#FFFFFF',
         borderRadius: 12,
         padding: 11,
         borderWidth: 1,
-        borderColor: 'rgba(217, 167, 58, 0.25)'
+        borderColor: '#E2E8F0',
+        shadowColor: 'rgba(10, 25, 47, 0.04)',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 1,
+        shadowRadius: 3,
+        elevation: 1
     },
     followedTopRow: {
         flexDirection: 'row',
@@ -2567,17 +2608,17 @@ const s = StyleSheet.create({
         width: 40,
         height: 40,
         borderRadius: 10,
-        backgroundColor: '#0A192F',
+        backgroundColor: '#F8FAFC',
         borderWidth: 1,
-        borderColor: 'rgba(217, 167, 58, 0.3)'
+        borderColor: '#E2E8F0'
     },
     storeLogoFallback: {
         width: 40,
         height: 40,
         borderRadius: 10,
-        backgroundColor: 'rgba(217, 167, 58, 0.15)',
+        backgroundColor: 'rgba(217, 167, 58, 0.12)',
         borderWidth: 1,
-        borderColor: 'rgba(217, 167, 58, 0.3)',
+        borderColor: 'rgba(217, 167, 58, 0.25)',
         alignItems: 'center',
         justifyContent: 'center'
     },
@@ -2592,7 +2633,7 @@ const s = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1.5,
-        borderColor: '#D9A73A'
+        borderColor: '#FFFFFF'
     },
     storeMetaCol: {
         flex: 1,
@@ -2601,10 +2642,10 @@ const s = StyleSheet.create({
     storeCardName: {
         fontSize: 12.5,
         fontWeight: '800',
-        color: '#FFFFFF'
+        color: '#0A192F'
     },
     officialBadge: {
-        backgroundColor: '#D9A73A',
+        backgroundColor: '#D4AF37',
         paddingHorizontal: 4,
         paddingVertical: 1,
         borderRadius: 3
@@ -2612,12 +2653,12 @@ const s = StyleSheet.create({
     officialBadgeText: {
         fontSize: 7.5,
         fontWeight: '900',
-        color: '#070F1E',
+        color: '#0A192F',
         letterSpacing: 0.4
     },
     storeCategory: {
         fontSize: 10,
-        color: '#94A3B8',
+        color: '#64748B',
         marginTop: 1,
         marginBottom: 2
     },
@@ -2634,15 +2675,15 @@ const s = StyleSheet.create({
     storeStatTextBold: {
         fontSize: 10,
         fontWeight: '800',
-        color: '#FFFFFF'
+        color: '#0A192F'
     },
     storeStatTextDim: {
         fontSize: 9.5,
-        color: '#94A3B8'
+        color: '#64748B'
     },
     storeStatDot: {
         fontSize: 9,
-        color: '#64748B'
+        color: '#CBD5E1'
     },
     followedActionsRow: {
         flexDirection: 'row',
@@ -2650,16 +2691,16 @@ const s = StyleSheet.create({
         gap: 6,
         paddingTop: 8,
         borderTopWidth: 1,
-        borderTopColor: 'rgba(217, 167, 58, 0.15)'
+        borderTopColor: '#F1F5F9'
     },
     actionVisitBtn: {
         flex: 1.2,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(217, 167, 58, 0.12)',
+        backgroundColor: '#EFF6FF',
         borderWidth: 1,
-        borderColor: '#D9A73A',
+        borderColor: '#BFDBFE',
         paddingVertical: 6,
         borderRadius: 7,
         gap: 3
@@ -2667,16 +2708,16 @@ const s = StyleSheet.create({
     actionVisitText: {
         fontSize: 10,
         fontWeight: '800',
-        color: '#D9A73A'
+        color: '#0A192F'
     },
     actionWhatsAppBtn: {
         flex: 1.1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(16, 185, 129, 0.12)',
+        backgroundColor: '#ECFDF5',
         borderWidth: 1,
-        borderColor: 'rgba(16, 185, 129, 0.4)',
+        borderColor: '#A7F3D0',
         paddingVertical: 6,
         borderRadius: 7,
         gap: 3
@@ -2684,16 +2725,16 @@ const s = StyleSheet.create({
     actionWhatsAppText: {
         fontSize: 10,
         fontWeight: '800',
-        color: '#10B981'
+        color: '#059669'
     },
     actionUnfollowBtn: {
         flex: 0.9,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+        backgroundColor: '#FEF2F2',
         borderWidth: 1,
-        borderColor: 'rgba(239, 68, 68, 0.35)',
+        borderColor: '#FECACA',
         paddingVertical: 6,
         borderRadius: 7,
         gap: 3
@@ -2701,7 +2742,7 @@ const s = StyleSheet.create({
     actionUnfollowText: {
         fontSize: 10,
         fontWeight: '800',
-        color: '#EF4444'
+        color: '#DC2626'
     },
 
     /* Follower Card (Vendor/Admin Followers Modal) */
@@ -2709,11 +2750,11 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#070F1E',
+        backgroundColor: '#FFFFFF',
         borderRadius: 11,
         padding: 10,
         borderWidth: 1,
-        borderColor: 'rgba(217, 167, 58, 0.25)',
+        borderColor: '#E2E8F0',
         marginBottom: 8
     },
     followerLeft: {
@@ -2730,24 +2771,20 @@ const s = StyleSheet.create({
         width: 38,
         height: 38,
         borderRadius: 19,
-        backgroundColor: '#0A192F',
-        borderWidth: 1,
-        borderColor: 'rgba(217, 167, 58, 0.3)'
+        backgroundColor: '#F8FAFC'
     },
     followerAvatarFallback: {
         width: 38,
         height: 38,
         borderRadius: 19,
-        backgroundColor: 'rgba(217, 167, 58, 0.15)',
-        borderWidth: 1,
-        borderColor: '#D9A73A',
+        backgroundColor: '#EFF6FF',
         alignItems: 'center',
         justifyContent: 'center'
     },
     followerAvatarInitial: {
         fontSize: 15,
         fontWeight: '800',
-        color: '#D9A73A'
+        color: '#0A192F'
     },
     followerOnlineDot: {
         position: 'absolute',
@@ -2758,16 +2795,16 @@ const s = StyleSheet.create({
         borderRadius: 5,
         backgroundColor: '#10B981',
         borderWidth: 2,
-        borderColor: '#070F1E'
+        borderColor: '#FFFFFF'
     },
     followerName: {
         fontSize: 12.5,
         fontWeight: '800',
-        color: '#FFFFFF'
+        color: '#0A192F'
     },
     followerMeta: {
         fontSize: 10,
-        color: '#94A3B8',
+        color: '#64748B',
         marginTop: 1
     },
     followerChatBtn: {
@@ -2776,24 +2813,29 @@ const s = StyleSheet.create({
         paddingHorizontal: 9,
         paddingVertical: 5,
         borderRadius: 7,
-        backgroundColor: 'rgba(16, 185, 129, 0.15)',
+        backgroundColor: '#ECFDF5',
         borderWidth: 1,
-        borderColor: 'rgba(16, 185, 129, 0.4)'
+        borderColor: '#A7F3D0'
     },
     followerChatText: {
         fontSize: 10.5,
         fontWeight: '800',
-        color: '#10B981'
+        color: '#059669'
     },
 
     /* Voucher Card & Modal Styles */
     voucherCard: {
         flexDirection: 'row',
-        backgroundColor: '#070F1E',
+        backgroundColor: '#FFFFFF',
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: 'rgba(217, 167, 58, 0.3)',
-        overflow: 'hidden'
+        borderColor: '#E2E8F0',
+        overflow: 'hidden',
+        shadowColor: 'rgba(10, 25, 47, 0.04)',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 1,
+        shadowRadius: 3,
+        elevation: 1
     },
     voucherLeftAccent: {
         width: 4
@@ -2814,25 +2856,24 @@ const s = StyleSheet.create({
     },
     voucherExpiryText: {
         fontSize: 9.5,
-        color: '#D9A73A',
-        fontWeight: '600'
+        color: '#64748B'
     },
     voucherTitle: {
         fontSize: 12.5,
         fontWeight: '800',
-        color: '#FFFFFF',
+        color: '#0A192F',
         marginTop: 2
     },
     voucherMinSpend: {
         fontSize: 10,
-        color: '#94A3B8',
+        color: '#64748B',
         marginBottom: 8
     },
     voucherCodeRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#0A192F',
+        backgroundColor: '#F8FAFC',
         borderRadius: 7,
         paddingHorizontal: 8,
         paddingVertical: 5,
@@ -2847,24 +2888,24 @@ const s = StyleSheet.create({
     voucherCodeText: {
         fontSize: 11,
         fontWeight: '900',
-        color: '#D9A73A',
+        color: '#0A192F',
         letterSpacing: 0.8
     },
     voucherCopyBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 3,
-        backgroundColor: 'rgba(217, 167, 58, 0.15)',
+        backgroundColor: 'rgba(217, 167, 58, 0.12)',
         paddingHorizontal: 8,
         paddingVertical: 3,
         borderRadius: 5,
         borderWidth: 1,
-        borderColor: '#D9A73A'
+        borderColor: '#D4AF37'
     },
     voucherCopyBtnText: {
         fontSize: 9.5,
         fontWeight: '800',
-        color: '#D9A73A'
+        color: '#92400E'
     },
 
     /* Digital Member Pass Modal Styles */
@@ -2874,9 +2915,9 @@ const s = StyleSheet.create({
         maxWidth: 360,
         borderRadius: 20,
         borderWidth: 1.5,
-        borderColor: '#D9A73A',
+        borderColor: '#D4AF37',
         overflow: 'hidden',
-        shadowColor: '#D9A73A',
+        shadowColor: '#0A192F',
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.3,
         shadowRadius: 20,
@@ -2895,7 +2936,7 @@ const s = StyleSheet.create({
     passHeaderTitle: {
         fontSize: 9.5,
         fontWeight: '900',
-        color: '#D9A73A',
+        color: '#D4AF37',
         letterSpacing: 0.8
     },
     passCloseBtn: {
@@ -2909,13 +2950,11 @@ const s = StyleSheet.create({
         justifyContent: 'center'
     },
     passInterior: {
-        backgroundColor: '#070F1E',
+        backgroundColor: '#FFFFFF',
         margin: 10,
         borderRadius: 14,
         padding: 14,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: 'rgba(217, 167, 58, 0.25)'
+        alignItems: 'center'
     },
     passUserRow: {
         flexDirection: 'row',
@@ -2924,24 +2963,24 @@ const s = StyleSheet.create({
         width: '100%',
         paddingBottom: 10,
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(217, 167, 58, 0.15)'
+        borderBottomColor: '#F1F5F9'
     },
     passAvatarRing: {
         padding: 1.5,
         borderRadius: 25,
         borderWidth: 1.5,
-        borderColor: '#D9A73A',
-        backgroundColor: '#0A192F'
+        borderColor: '#D4AF37',
+        backgroundColor: '#F8FAFC'
     },
     passUserName: {
         fontSize: 13.5,
         fontWeight: '800',
-        color: '#FFFFFF'
+        color: '#0A192F'
     },
     passMemberId: {
         fontSize: 9,
         fontWeight: '700',
-        color: '#D9A73A',
+        color: '#64748B',
         letterSpacing: 0.5,
         marginTop: 1
     },
@@ -2949,18 +2988,18 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         alignSelf: 'flex-start',
-        backgroundColor: 'rgba(217, 167, 58, 0.15)',
+        backgroundColor: 'rgba(217, 167, 58, 0.12)',
         paddingHorizontal: 5,
         paddingVertical: 1,
         borderRadius: 4,
         marginTop: 3,
         borderWidth: 1,
-        borderColor: '#D9A73A'
+        borderColor: '#D4AF37'
     },
     passTierBadgeText: {
         fontSize: 8,
         fontWeight: '900',
-        color: '#D9A73A',
+        color: '#92400E',
         letterSpacing: 0.5
     },
     qrBoxContainer: {
@@ -2969,16 +3008,16 @@ const s = StyleSheet.create({
     },
     qrFrame: {
         padding: 10,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: '#F8FAFC',
         borderRadius: 12,
-        borderWidth: 2,
-        borderColor: '#D9A73A',
+        borderWidth: 1.5,
+        borderColor: '#E2E8F0',
         alignItems: 'center',
         justifyContent: 'center'
     },
     qrScanPrompt: {
         fontSize: 9.5,
-        color: '#94A3B8',
+        color: '#64748B',
         marginTop: 6,
         textAlign: 'center',
         fontWeight: '600'
@@ -2988,7 +3027,7 @@ const s = StyleSheet.create({
         alignItems: 'center',
         paddingTop: 8,
         borderTopWidth: 1,
-        borderTopColor: 'rgba(217, 167, 58, 0.15)'
+        borderTopColor: '#F1F5F9'
     },
     barcodeLinesRow: {
         flexDirection: 'row',
@@ -2998,7 +3037,7 @@ const s = StyleSheet.create({
     barcodeText: {
         fontSize: 7.5,
         fontWeight: '800',
-        color: '#D9A73A',
+        color: '#64748B',
         letterSpacing: 1,
         marginTop: 3
     }
