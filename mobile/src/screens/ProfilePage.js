@@ -523,44 +523,57 @@ const ProfilePageInner = ({
 
     return (
         <SafeAreaView style={s.safeArea}>
-            {/* ── TOP NAV BAR (COMPACT & SLEEK) ── */}
-            <View style={s.topBar}>
-                <TouchableOpacity
-                    onPress={onBack}
-                    style={s.topBarBtn}
-                    activeOpacity={0.7}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                    <Ionicons name="chevron-back" size={19} color="#0A192F" />
-                </TouchableOpacity>
+            {/* ── TOP NAV BAR (LUXURY DECORATED) ── */}
+            <View style={s.topBarContainer}>
+                <View style={s.topBar}>
+                    <TouchableOpacity
+                        onPress={onBack}
+                        style={s.topBarBtn}
+                        activeOpacity={0.7}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                        <Ionicons name="chevron-back" size={19} color="#0A192F" />
+                    </TouchableOpacity>
 
-                <View style={{ alignItems: 'center' }}>
-                    <Text style={s.topBarTitle}>My Profile</Text>
-                    <Text style={s.topBarSubtitle}>Account & Verified Services</Text>
-                </View>
-
-                {user ? (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <TouchableOpacity
-                            onPress={() => setShowMemberPassModal(true)}
-                            style={s.topBarBtn}
-                            activeOpacity={0.7}
-                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                            <Ionicons name="qr-code-outline" size={16} color="#0A192F" />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            onPress={() => onNavigate && onNavigate('editProfile')}
-                            style={s.topBarBtn}
-                            activeOpacity={0.7}
-                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                            <Ionicons name="create-outline" size={16} color="#0A192F" />
-                        </TouchableOpacity>
+                    <View style={{ alignItems: 'center' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Ionicons name="sparkles" size={11} color="#D4AF37" />
+                            <Text style={s.topBarTitle}>My Profile</Text>
+                            <Ionicons name="sparkles" size={11} color="#D4AF37" />
+                        </View>
+                        <Text style={s.topBarSubtitle}>Account & Verified Escrow Services</Text>
                     </View>
-                ) : (
-                    <View style={{ width: 32 }} />
-                )}
+
+                    {user ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <TouchableOpacity
+                                onPress={() => setShowMemberPassModal(true)}
+                                style={s.topBarBtn}
+                                activeOpacity={0.7}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            >
+                                <Ionicons name="qr-code-outline" size={16} color="#0A192F" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => onNavigate && onNavigate('editProfile')}
+                                style={s.topBarBtn}
+                                activeOpacity={0.7}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            >
+                                <Ionicons name="create-outline" size={16} color="#0A192F" />
+                            </TouchableOpacity>
+                        </View>
+                    ) : (
+                        <View style={{ width: 34 }} />
+                    )}
+                </View>
+                {/* Shimmering Gold Underline Accent */}
+                <LinearGradient
+                    colors={['#D4AF37', '#FDE68A', '#D4AF37']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={s.topBarGoldLine}
+                />
             </View>
 
             <ScrollView
@@ -568,7 +581,7 @@ const ProfilePageInner = ({
                 contentContainerStyle={s.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
-                {/* ── USER HERO CARD (LUXURY ROYAL NAVY & GOLD VIP PASSPORT CARD) ── */}
+                {/* ── USER HERO CARD (ULTRA-LUXURY ROYAL NAVY & GOLD VIP PASSPORT EMBLEM) ── */}
                 {user ? (
                     <LinearGradient
                         colors={['#071932', '#0A2540', '#10375C']}
@@ -576,25 +589,33 @@ const ProfilePageInner = ({
                         end={{ x: 1, y: 1 }}
                         style={s.heroCard}
                     >
+                        {/* Background Watermark Shield for Depth */}
+                        <Ionicons
+                            name="shield-checkmark"
+                            size={160}
+                            color="rgba(212, 175, 55, 0.05)"
+                            style={s.heroWatermark}
+                        />
+
                         {/* Decorative Top Passport Accent */}
                         <View style={s.heroTopBarDecor}>
                             <View style={s.passportBadge}>
-                                <Ionicons name="sparkles" size={10} color="#D4AF37" />
-                                <Text style={s.passportText}>✦ VIP ESCROW PASSPORT</Text>
+                                <Ionicons name="sparkles" size={11} color="#D4AF37" />
+                                <Text style={s.passportText}>✦ ROYAL VIP PASSPORT</Text>
                             </View>
-                            <View style={s.heroStatusPill}>
-                                <View style={s.activeDot} />
-                                <Text style={s.heroStatusText}>Active Escrow Member</Text>
+                            <View style={s.heroChipBox}>
+                                <Ionicons name="hardware-chip-outline" size={16} color="#D4AF37" />
+                                <Text style={s.heroChipText}>ESCROW 256</Text>
                             </View>
                         </View>
 
                         <View style={s.heroMainRow}>
                             <View style={s.avatarWrap}>
                                 <View style={s.avatarRing}>
-                                    <UserAvatar user={user} size={48} />
+                                    <UserAvatar user={user} size={50} />
                                 </View>
                                 <View style={s.verifiedDot}>
-                                    <Ionicons name="checkmark" size={9} color="#D9A73A" />
+                                    <Ionicons name="checkmark" size={10} color="#D4AF37" />
                                 </View>
                             </View>
 
@@ -615,7 +636,10 @@ const ProfilePageInner = ({
                                 </View>
 
                                 {displaySubtitle ? (
-                                    <Text style={s.heroSub} numberOfLines={1}>{displaySubtitle}</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 }}>
+                                        <Ionicons name="mail-outline" size={11} color="#D4AF37" />
+                                        <Text style={s.heroSub} numberOfLines={1}>{displaySubtitle}</Text>
+                                    </View>
                                 ) : null}
 
                                 {/* Compact Action Pills Row */}
@@ -643,7 +667,7 @@ const ProfilePageInner = ({
                                         </TouchableOpacity>
                                     )}
 
-                                    {/* Following Pill - Available to ALL roles (Admin, Vendor, Buyer, Driver) */}
+                                    {/* Following Pill - Available to ALL roles */}
                                     <TouchableOpacity
                                         style={s.heroStoresPill}
                                         activeOpacity={0.75}
@@ -655,6 +679,22 @@ const ProfilePageInner = ({
                                         </Text>
                                     </TouchableOpacity>
                                 </View>
+                            </View>
+                        </View>
+
+                        {/* Luxury Membership Footer Ribbon inside Card */}
+                        <View style={s.heroPassportFooter}>
+                            <View style={s.heroIdBadge}>
+                                <Ionicons name="card-outline" size={11} color="#D4AF37" />
+                                <Text style={s.heroIdText}>ID: AM-{(user?.id || '202688').slice(0, 8).toUpperCase()}</Text>
+                            </View>
+                            <View style={s.heroTierTag}>
+                                <Ionicons name="sparkles" size={10} color="#D4AF37" />
+                                <Text style={s.heroTierTagText}>{loyalty.tier.toUpperCase()}</Text>
+                            </View>
+                            <View style={s.heroSecTag}>
+                                <View style={s.heroSecDot} />
+                                <Text style={s.heroSecText}>VERIFIED ESCROW</Text>
                             </View>
                         </View>
                     </LinearGradient>
@@ -683,15 +723,28 @@ const ProfilePageInner = ({
                     </LinearGradient>
                 )}
 
-                {/* ── UNIFIED 3-IN-1 QUICK METRICS CARD (CLEAN WHITE & ROYAL NAVY) ── */}
+                {/* ── UNIFIED 3-IN-1 QUICK METRICS CARD (LUXURY FINTECH BAR) ── */}
                 {user && (
                     <View style={s.metricsCard}>
+                        {/* Golden Top Accent Hairline */}
+                        <LinearGradient
+                            colors={['#D4AF37', '#FDE68A', '#D4AF37']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={s.metricsTopAccent}
+                        />
+
                         <TouchableOpacity
                             style={s.metricColumn}
                             activeOpacity={0.7}
                             onPress={() => onNavigate && onNavigate('wallet')}
                         >
-                            <Text style={s.metricLabel}>WALLET BALANCE</Text>
+                            <View style={s.metricHeaderRow}>
+                                <View style={[s.metricIconCircle, { backgroundColor: 'rgba(217, 167, 58, 0.12)' }]}>
+                                    <Ionicons name="wallet" size={13} color="#D4AF37" />
+                                </View>
+                                <Text style={s.metricLabel}>WALLET</Text>
+                            </View>
                             <Text style={s.metricValue} numberOfLines={1}>
                                 {loading ? '...' : formatCurrency(wallet.balance)}
                             </Text>
@@ -708,7 +761,12 @@ const ProfilePageInner = ({
                             activeOpacity={0.7}
                             onPress={() => onNavigate && onNavigate('orders')}
                         >
-                            <Text style={s.metricLabel}>MY ORDERS</Text>
+                            <View style={s.metricHeaderRow}>
+                                <View style={[s.metricIconCircle, { backgroundColor: 'rgba(10, 25, 47, 0.08)' }]}>
+                                    <Ionicons name="bag-handle" size={13} color="#0A192F" />
+                                </View>
+                                <Text style={s.metricLabel}>ORDERS</Text>
+                            </View>
                             <Text style={s.metricValue} numberOfLines={1}>
                                 {loading ? '...' : `${ordersCount}`}
                             </Text>
@@ -727,7 +785,12 @@ const ProfilePageInner = ({
                             activeOpacity={0.7}
                             onPress={() => onNavigate && onNavigate('referral')}
                         >
-                            <Text style={s.metricLabel}>REWARD PTS</Text>
+                            <View style={s.metricHeaderRow}>
+                                <View style={[s.metricIconCircle, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
+                                    <Ionicons name="trophy" size={13} color="#F59E0B" />
+                                </View>
+                                <Text style={s.metricLabel}>REWARDS</Text>
+                            </View>
                             <Text style={s.metricValue} numberOfLines={1}>
                                 {loading ? '...' : `${wallet.points}`}
                             </Text>
@@ -741,7 +804,7 @@ const ProfilePageInner = ({
                     </View>
                 )}
 
-                {/* ── QUICK HUB 4-TILE SERVICES GRID (NEW CLEAN ARRANGEMENT) ── */}
+                {/* ── QUICK HUB 4-TILE SERVICES GRID (MODULAR LUXURY TILES) ── */}
                 {user && (
                     <View style={s.quickHubWrap}>
                         <View style={s.quickHubGrid}>
@@ -750,16 +813,20 @@ const ProfilePageInner = ({
                                 activeOpacity={0.8}
                                 onPress={() => onNavigate && onNavigate('orders')}
                             >
-                                <View style={[s.quickHubIconBox, { backgroundColor: 'rgba(217, 167, 58, 0.12)' }]}>
-                                    <Ionicons name="cube-outline" size={20} color="#D4AF37" />
-                                    {pendingOrders > 0 && (
-                                        <View style={s.quickHubBadge}>
-                                            <Text style={s.quickHubBadgeText}>{pendingOrders}</Text>
-                                        </View>
-                                    )}
+                                <Ionicons name="cube-outline" size={54} color="rgba(10, 25, 47, 0.04)" style={s.tileWatermark} />
+                                <View style={s.quickHubTileTopRow}>
+                                    <View style={[s.quickHubIconBox, { backgroundColor: 'rgba(217, 167, 58, 0.12)', borderColor: 'rgba(217, 167, 58, 0.25)' }]}>
+                                        <Ionicons name="cube" size={19} color="#D4AF37" />
+                                        {pendingOrders > 0 && (
+                                            <View style={s.quickHubBadge}>
+                                                <Text style={s.quickHubBadgeText}>{pendingOrders}</Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                    <Ionicons name="chevron-forward" size={13} color="#D4AF37" />
                                 </View>
                                 <Text style={s.quickHubTitle}>My Orders</Text>
-                                <Text style={s.quickHubSub}>Track & History</Text>
+                                <Text style={s.quickHubSub}>Track & Returns</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity
@@ -767,11 +834,15 @@ const ProfilePageInner = ({
                                 activeOpacity={0.8}
                                 onPress={() => onNavigate && onNavigate('wallet')}
                             >
-                                <View style={[s.quickHubIconBox, { backgroundColor: 'rgba(10, 25, 47, 0.08)' }]}>
-                                    <Ionicons name="wallet-outline" size={20} color="#0A192F" />
+                                <Ionicons name="wallet-outline" size={54} color="rgba(10, 25, 47, 0.04)" style={s.tileWatermark} />
+                                <View style={s.quickHubTileTopRow}>
+                                    <View style={[s.quickHubIconBox, { backgroundColor: 'rgba(10, 25, 47, 0.08)', borderColor: 'rgba(10, 25, 47, 0.15)' }]}>
+                                        <Ionicons name="wallet" size={19} color="#0A192F" />
+                                    </View>
+                                    <Ionicons name="chevron-forward" size={13} color="#D4AF37" />
                                 </View>
                                 <Text style={s.quickHubTitle}>Mafhal Pay</Text>
-                                <Text style={s.quickHubSub}>Top Up & Send</Text>
+                                <Text style={s.quickHubSub}>Deposit & Send</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity
@@ -779,11 +850,15 @@ const ProfilePageInner = ({
                                 activeOpacity={0.8}
                                 onPress={() => setShowVouchersModal(true)}
                             >
-                                <View style={[s.quickHubIconBox, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
-                                    <Ionicons name="ticket-outline" size={20} color="#F59E0B" />
-                                    <View style={[s.quickHubBadge, { backgroundColor: '#F59E0B' }]}>
-                                        <Text style={s.quickHubBadgeText}>3</Text>
+                                <Ionicons name="ticket-outline" size={54} color="rgba(245, 158, 11, 0.04)" style={s.tileWatermark} />
+                                <View style={s.quickHubTileTopRow}>
+                                    <View style={[s.quickHubIconBox, { backgroundColor: 'rgba(245, 158, 11, 0.12)', borderColor: 'rgba(245, 158, 11, 0.25)' }]}>
+                                        <Ionicons name="ticket" size={19} color="#F59E0B" />
+                                        <View style={[s.quickHubBadge, { backgroundColor: '#F59E0B' }]}>
+                                            <Text style={s.quickHubBadgeText}>3</Text>
+                                        </View>
                                     </View>
+                                    <Ionicons name="chevron-forward" size={13} color="#D4AF37" />
                                 </View>
                                 <Text style={s.quickHubTitle}>Vouchers</Text>
                                 <Text style={s.quickHubSub}>3 Coupons Ready</Text>
@@ -794,8 +869,12 @@ const ProfilePageInner = ({
                                 activeOpacity={0.8}
                                 onPress={() => setShowMemberPassModal(true)}
                             >
-                                <View style={[s.quickHubIconBox, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
-                                    <Ionicons name="qr-code-outline" size={20} color="#10B981" />
+                                <Ionicons name="qr-code-outline" size={54} color="rgba(16, 185, 129, 0.04)" style={s.tileWatermark} />
+                                <View style={s.quickHubTileTopRow}>
+                                    <View style={[s.quickHubIconBox, { backgroundColor: 'rgba(16, 185, 129, 0.12)', borderColor: 'rgba(16, 185, 129, 0.25)' }]}>
+                                        <Ionicons name="qr-code" size={19} color="#10B981" />
+                                    </View>
+                                    <Ionicons name="chevron-forward" size={13} color="#D4AF37" />
                                 </View>
                                 <Text style={s.quickHubTitle}>VIP Pass</Text>
                                 <Text style={s.quickHubSub}>Digital Hub QR</Text>
@@ -804,7 +883,7 @@ const ProfilePageInner = ({
                     </View>
                 )}
 
-                {/* ── VIP LOYALTY TIER PROGRESS TRACKER (CLEAN ELEVATED CARD) ── */}
+                {/* ── VIP LOYALTY TIER PROGRESS TRACKER (LUXURY MILESTONES & PERKS) ── */}
                 {user && (
                     <View style={s.loyaltyCard}>
                         <View style={s.loyaltyTopRow}>
@@ -817,15 +896,38 @@ const ProfilePageInner = ({
                             </Text>
                         </View>
 
-                        {/* Gold Progress Track */}
-                        <View style={s.loyaltyTrack}>
-                            <View style={[s.loyaltyBar, { width: `${Math.round(loyalty.progress * 100)}%` }]} />
+                        {/* Milestone Step Labels */}
+                        <View style={s.loyaltyMilestoneLabels}>
+                            <Text style={s.milestoneStepText}>Bronze</Text>
+                            <Text style={s.milestoneStepText}>Silver (500)</Text>
+                            <Text style={s.milestoneStepText}>Platinum (1.5k)</Text>
+                            <Text style={[s.milestoneStepText, { color: '#D4AF37', fontWeight: '800' }]}>VIP Gold (5k)</Text>
                         </View>
 
-                        {/* Perk Subtext */}
-                        <View style={s.loyaltyPerkRow}>
-                            <Ionicons name="sparkles" size={11} color="#D4AF37" />
-                            <Text style={s.loyaltyPerkText} numberOfLines={1}>{loyalty.perk}</Text>
+                        {/* Gold Progress Track with Markers */}
+                        <View style={s.loyaltyTrack}>
+                            <LinearGradient
+                                colors={['#D4AF37', '#F59E0B']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 0 }}
+                                style={[s.loyaltyBar, { width: `${Math.round(loyalty.progress * 100)}%` }]}
+                            />
+                        </View>
+
+                        {/* Exclusive Perks Ribbon Chips */}
+                        <View style={s.loyaltyPerksPillRow}>
+                            <View style={s.perkPill}>
+                                <Ionicons name="cash-outline" size={10} color="#D4AF37" />
+                                <Text style={s.perkPillText}>5% Cashback</Text>
+                            </View>
+                            <View style={s.perkPill}>
+                                <Ionicons name="shield-checkmark-outline" size={10} color="#10B981" />
+                                <Text style={s.perkPillText}>Free Escrow</Text>
+                            </View>
+                            <View style={s.perkPill}>
+                                <Ionicons name="paper-plane-outline" size={10} color="#F59E0B" />
+                                <Text style={s.perkPillText}>Priority Dispatch</Text>
+                            </View>
                         </View>
                     </View>
                 )}
@@ -982,7 +1084,11 @@ const ProfilePageInner = ({
                 )}
 
                 {/* ── GROUP 1: SHOPPING & ACTIVITY ── */}
-                <Text style={s.sectionHeader}><Text style={s.sectionHeaderSpark}>✦ </Text>SHOPPING & ACTIVITY</Text>
+                <View style={s.sectionHeaderWrap}>
+                    <Ionicons name="bag-handle" size={13} color="#D4AF37" />
+                    <Text style={s.sectionHeader}>ORDERS & SHOPPING HUB</Text>
+                    <View style={s.sectionHeaderLine} />
+                </View>
                 <View style={s.menuGroup}>
                     {shoppingItems.map((item, idx) => (
                         <View key={item.label}>
@@ -1007,7 +1113,9 @@ const ProfilePageInner = ({
                                     </View>
                                 ) : null}
 
-                                <Ionicons name="chevron-forward" size={14} color="#D9A73A" />
+                                <View style={s.menuChevronBox}>
+                                    <Ionicons name="chevron-forward" size={12} color="#D4AF37" />
+                                </View>
                             </TouchableOpacity>
                             {idx < shoppingItems.length - 1 && <View style={s.menuDivider} />}
                         </View>
@@ -1015,7 +1123,11 @@ const ProfilePageInner = ({
                 </View>
 
                 {/* ── GROUP 2: FINANCES & REWARDS ── */}
-                <Text style={s.sectionHeader}><Text style={s.sectionHeaderSpark}>✦ </Text>FINANCE & REWARDS</Text>
+                <View style={s.sectionHeaderWrap}>
+                    <Ionicons name="wallet" size={13} color="#D4AF37" />
+                    <Text style={s.sectionHeader}>FINANCIAL & ESCROW SUITE</Text>
+                    <View style={s.sectionHeaderLine} />
+                </View>
                 <View style={s.menuGroup}>
                     {financeItems.map((item, idx) => (
                         <View key={item.label}>
@@ -1027,17 +1139,22 @@ const ProfilePageInner = ({
                                 <View style={[s.menuIconBox, { backgroundColor: item.iconBg }]}>
                                     <Ionicons name={item.icon} size={16} color={item.iconColor} />
                                 </View>
-                                <Text style={s.menuLabel}>{item.label}</Text>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={s.menuLabel}>{item.label}</Text>
+                                    {item.extra && (
+                                        <Text style={s.menuSubLabel}>Balance: {item.extra}</Text>
+                                    )}
+                                </View>
 
-                                {item.extra ? (
-                                    <Text style={s.menuExtra}>{item.extra}</Text>
-                                ) : item.badge ? (
+                                {item.badge ? (
                                     <View style={[s.menuBadge, { backgroundColor: item.badgeColor }]}>
                                         <Text style={s.menuBadgeText}>{item.badge}</Text>
                                     </View>
                                 ) : null}
 
-                                <Ionicons name="chevron-forward" size={14} color="#D9A73A" />
+                                <View style={s.menuChevronBox}>
+                                    <Ionicons name="chevron-forward" size={12} color="#D4AF37" />
+                                </View>
                             </TouchableOpacity>
                             {idx < financeItems.length - 1 && <View style={s.menuDivider} />}
                         </View>
@@ -1045,7 +1162,11 @@ const ProfilePageInner = ({
                 </View>
 
                 {/* ── GROUP 3: PREFERENCES & SUPPORT ── */}
-                <Text style={s.sectionHeader}><Text style={s.sectionHeaderSpark}>✦ </Text>PREFERENCES & SUPPORT</Text>
+                <View style={s.sectionHeaderWrap}>
+                    <Ionicons name="shield-checkmark" size={13} color="#D4AF37" />
+                    <Text style={s.sectionHeader}>SECURITY & SYSTEM PREFERENCES</Text>
+                    <View style={s.sectionHeaderLine} />
+                </View>
                 <View style={s.menuGroup}>
                     {supportItems.map((item, idx) => (
                         <View key={item.label}>
@@ -1057,28 +1178,68 @@ const ProfilePageInner = ({
                                 <View style={[s.menuIconBox, { backgroundColor: item.iconBg }]}>
                                     <Ionicons name={item.icon} size={16} color={item.iconColor} />
                                 </View>
-                                <Text style={s.menuLabel}>{item.label}</Text>
-                                <Ionicons name="chevron-forward" size={14} color="#D9A73A" />
+                                <View style={{ flex: 1 }}>
+                                    <Text style={s.menuLabel}>{item.label}</Text>
+                                    {item.subtitle && (
+                                        <Text style={s.menuSubLabel}>{item.subtitle}</Text>
+                                    )}
+                                </View>
+
+                                {item.badge ? (
+                                    <View style={[s.menuBadge, { backgroundColor: item.badgeColor }]}>
+                                        <Text style={s.menuBadgeText}>{item.badge}</Text>
+                                    </View>
+                                ) : null}
+
+                                <View style={s.menuChevronBox}>
+                                    <Ionicons name="chevron-forward" size={12} color="#D4AF37" />
+                                </View>
                             </TouchableOpacity>
                             {idx < supportItems.length - 1 && <View style={s.menuDivider} />}
                         </View>
                     ))}
                 </View>
 
-                {/* ── SECURITY TRUST CARD ── */}
-                <View style={s.securityCard}>
-                    <View style={s.securityIconWrap}>
-                        <Ionicons name="shield-checkmark" size={15} color="#059669" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text style={s.securityTitle}>Account Protection: Active</Text>
-                            <View style={s.securityBadge}>
-                                <Text style={s.securityBadgeText}>256-BIT SSL</Text>
+                {/* ── LUXURY BANK-GRADE ESCROW GUARANTEE CARD ── */}
+                <View style={s.guaranteeCard}>
+                    <LinearGradient
+                        colors={['#071932', '#0A2540']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={s.guaranteeCardInner}
+                    >
+                        <View style={s.guaranteeTopRow}>
+                            <View style={s.guaranteeShieldIcon}>
+                                <Ionicons name="shield-checkmark" size={20} color="#D4AF37" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <Text style={s.guaranteeTitle}>Abu Mafhal Escrow Protection</Text>
+                                    <View style={s.guaranteeTag}>
+                                        <Text style={s.guaranteeTagText}>100% SAFE</Text>
+                                    </View>
+                                </View>
+                                <Text style={s.guaranteeSub}>
+                                    Buyer funds are held in secure escrow and released to sellers only upon verified delivery.
+                                </Text>
                             </View>
                         </View>
-                        <Text style={s.securitySub}>Biometric session verified • Zero-liability purchase protection</Text>
-                    </View>
+
+                        <View style={s.guaranteeFeaturesRow}>
+                            <View style={s.guaranteeFeatureItem}>
+                                <Ionicons name="lock-closed" size={10} color="#10B981" />
+                                <Text style={s.guaranteeFeatureText}>256-Bit SSL</Text>
+                            </View>
+                            <View style={s.guaranteeFeatureItem}>
+                                <Ionicons name="refresh-circle" size={11} color="#D4AF37" />
+                                <Text style={s.guaranteeFeatureText}>Instant Refund</Text>
+                            </View>
+                            <View style={s.guaranteeFeatureItem}>
+                                <Ionicons name="checkmark-done" size={11} color="#38BDF8" />
+                                <Text style={s.guaranteeFeatureText}>Zero Fraud Guarantee</Text>
+                            </View>
+                        </View>
+                    </LinearGradient>
                 </View>
 
                 {/* ── LOGOUT / AUTH BUTTON ── */}
@@ -1089,7 +1250,7 @@ const ProfilePageInner = ({
                             activeOpacity={0.8}
                             onPress={confirmLogout}
                         >
-                            <Ionicons name="log-out-outline" size={15} color="#DC2626" style={{ marginRight: 6 }} />
+                            <Ionicons name="log-out-outline" size={16} color="#DC2626" style={{ marginRight: 6 }} />
                             <Text style={s.logoutText}>Log Out</Text>
                         </TouchableOpacity>
                     ) : (
@@ -1098,12 +1259,15 @@ const ProfilePageInner = ({
                             activeOpacity={0.85}
                             onPress={() => onNavigate && onNavigate('Auth')}
                         >
-                            <Ionicons name="log-in-outline" size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
+                            <Ionicons name="log-in-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
                             <Text style={s.loginText}>Sign In / Create Account</Text>
                         </TouchableOpacity>
                     )}
 
-                    <Text style={s.versionText}>Abu Mafhal Marketplace • v1.0.0 (Secure)</Text>
+                    <View style={s.versionBadge}>
+                        <Ionicons name="shield-checkmark" size={10} color="#D4AF37" />
+                        <Text style={s.versionText}>Abu Mafhal Luxury Marketplace • Escrow Protected</Text>
+                    </View>
                 </View>
             </ScrollView>
 
@@ -1549,28 +1713,40 @@ const s = StyleSheet.create({
         flex: 1,
         backgroundColor: '#F8FAFC'
     },
+    topBarContainer: {
+        width: '100%',
+        backgroundColor: '#FFFFFF',
+        zIndex: 10
+    },
     topBar: {
-        height: 50,
+        height: 52,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 16,
-        backgroundColor: '#FFFFFF',
-        borderBottomWidth: 1,
-        borderBottomColor: '#E2E8F0'
+        backgroundColor: '#FFFFFF'
+    },
+    topBarGoldLine: {
+        height: 2.5,
+        width: '100%'
     },
     topBarBtn: {
-        width: 34,
-        height: 34,
-        borderRadius: 10,
-        backgroundColor: '#F8FAFC',
+        width: 36,
+        height: 36,
+        borderRadius: 12,
+        backgroundColor: '#FFFFFF',
         alignItems: 'center',
         justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: '#E2E8F0'
+        borderWidth: 1.5,
+        borderColor: '#E2E8F0',
+        shadowColor: 'rgba(10, 25, 47, 0.04)',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 1,
+        shadowRadius: 4,
+        elevation: 2
     },
     topBarTitle: {
-        fontSize: 15,
+        fontSize: 15.5,
         fontWeight: '900',
         color: '#0A192F',
         letterSpacing: -0.2
@@ -1578,8 +1754,9 @@ const s = StyleSheet.create({
     topBarSubtitle: {
         fontSize: 9.5,
         color: '#D4AF37',
-        fontWeight: '700',
-        marginTop: 0.5
+        fontWeight: '800',
+        marginTop: 0.5,
+        letterSpacing: 0.3
     },
     scroll: {
         flex: 1,
@@ -1587,22 +1764,29 @@ const s = StyleSheet.create({
     },
     scrollContent: {
         paddingHorizontal: 14,
-        paddingTop: 12,
+        paddingTop: 14,
         paddingBottom: 40
     },
 
-    /* Hero Card (Luxury Royal Navy & Gold Centerpiece) */
+    /* Hero Card (Ultra-Luxury Royal Navy & Gold VIP Emblem) */
     heroCard: {
-        borderRadius: 20,
+        borderRadius: 22,
         padding: 16,
         borderWidth: 1.5,
         borderColor: '#D4AF37',
-        marginBottom: 12,
-        shadowColor: '#0A192F',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.18,
-        shadowRadius: 16,
-        elevation: 6
+        marginBottom: 14,
+        shadowColor: '#071932',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.22,
+        shadowRadius: 18,
+        elevation: 6,
+        position: 'relative',
+        overflow: 'hidden'
+    },
+    heroWatermark: {
+        position: 'absolute',
+        right: -25,
+        bottom: -30
     },
     heroTopBarDecor: {
         flexDirection: 'row',
@@ -1619,7 +1803,7 @@ const s = StyleSheet.create({
         gap: 4,
         backgroundColor: 'rgba(217, 167, 58, 0.15)',
         paddingHorizontal: 8,
-        paddingVertical: 3,
+        paddingVertical: 3.5,
         borderRadius: 6,
         borderWidth: 1,
         borderColor: '#D4AF37'
@@ -1630,27 +1814,22 @@ const s = StyleSheet.create({
         color: '#FCD34D',
         letterSpacing: 0.8
     },
-    heroStatusPill: {
+    heroChipBox: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 5,
-        backgroundColor: 'rgba(16, 185, 129, 0.15)',
+        gap: 4,
+        backgroundColor: 'rgba(217, 167, 58, 0.15)',
         paddingHorizontal: 8,
         paddingVertical: 3,
-        borderRadius: 10,
+        borderRadius: 6,
         borderWidth: 1,
-        borderColor: 'rgba(16, 185, 129, 0.3)'
+        borderColor: '#D4AF37'
     },
-    activeDot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-        backgroundColor: '#10B981'
-    },
-    heroStatusText: {
-        fontSize: 9.5,
-        fontWeight: '800',
-        color: '#10B981'
+    heroChipText: {
+        fontSize: 8,
+        fontWeight: '900',
+        color: '#D4AF37',
+        letterSpacing: 0.6
     },
     heroMainRow: {
         flexDirection: 'row',
@@ -1661,24 +1840,24 @@ const s = StyleSheet.create({
         marginRight: 12
     },
     avatarRing: {
-        padding: 2,
-        borderRadius: 28,
+        padding: 2.5,
+        borderRadius: 30,
         borderWidth: 2,
         borderColor: '#D4AF37',
         backgroundColor: '#071932',
         shadowColor: '#D4AF37',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.35,
-        shadowRadius: 6,
-        elevation: 3
+        shadowOpacity: 0.45,
+        shadowRadius: 8,
+        elevation: 4
     },
     verifiedDot: {
         position: 'absolute',
         bottom: -1,
         right: -1,
-        width: 17,
-        height: 17,
-        borderRadius: 8.5,
+        width: 18,
+        height: 18,
+        borderRadius: 9,
         backgroundColor: '#0A192F',
         borderWidth: 1.5,
         borderColor: '#D4AF37',
@@ -1697,7 +1876,7 @@ const s = StyleSheet.create({
         marginBottom: 2
     },
     heroName: {
-        fontSize: 16,
+        fontSize: 16.5,
         fontWeight: '900',
         color: '#FFFFFF',
         letterSpacing: -0.2
@@ -1736,7 +1915,7 @@ const s = StyleSheet.create({
     heroSub: {
         fontSize: 10.5,
         color: '#CBD5E1',
-        marginBottom: 8
+        fontWeight: '500'
     },
     heroPillsRow: {
         flexDirection: 'row',
@@ -1789,6 +1968,60 @@ const s = StyleSheet.create({
         fontWeight: '800',
         color: '#10B981'
     },
+    heroPassportFooter: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginTop: 12,
+        paddingTop: 10,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(217, 167, 58, 0.2)'
+    },
+    heroIdBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4
+    },
+    heroIdText: {
+        fontSize: 8.5,
+        fontWeight: '800',
+        color: '#CBD5E1',
+        letterSpacing: 0.5
+    },
+    heroTierTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+        backgroundColor: 'rgba(217, 167, 58, 0.2)',
+        paddingHorizontal: 7,
+        paddingVertical: 2,
+        borderRadius: 4,
+        borderWidth: 0.5,
+        borderColor: '#D4AF37'
+    },
+    heroTierTagText: {
+        fontSize: 8,
+        fontWeight: '900',
+        color: '#FCD34D',
+        letterSpacing: 0.5
+    },
+    heroSecTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4
+    },
+    heroSecDot: {
+        width: 5,
+        height: 5,
+        borderRadius: 2.5,
+        backgroundColor: '#10B981'
+    },
+    heroSecText: {
+        fontSize: 7.5,
+        fontWeight: '800',
+        color: '#10B981',
+        letterSpacing: 0.6
+    },
 
     /* Guest Card */
     guestCard: {
@@ -1799,7 +2032,7 @@ const s = StyleSheet.create({
         backgroundColor: '#FFFFFF',
         borderWidth: 1.5,
         borderColor: '#D4AF37',
-        marginBottom: 12,
+        marginBottom: 14,
         gap: 12,
         shadowColor: 'rgba(10, 25, 47, 0.06)',
         shadowOffset: { width: 0, height: 3 },
@@ -1841,38 +2074,60 @@ const s = StyleSheet.create({
         color: '#D4AF37'
     },
 
-    /* Metrics Card (Clean White & Royal Navy Elevated Bar) */
+    /* Metrics Card (Luxury FinTech Elevated Bar) */
     metricsCard: {
         flexDirection: 'row',
-        borderRadius: 16,
-        paddingVertical: 14,
+        borderRadius: 18,
+        paddingTop: 15,
+        paddingBottom: 13,
         paddingHorizontal: 10,
         backgroundColor: '#FFFFFF',
         borderWidth: 1,
         borderColor: '#E2E8F0',
-        marginBottom: 12,
+        marginBottom: 14,
         alignItems: 'center',
         justifyContent: 'space-between',
-        shadowColor: 'rgba(10, 25, 47, 0.06)',
-        shadowOffset: { width: 0, height: 3 },
+        shadowColor: 'rgba(10, 25, 47, 0.05)',
+        shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 1,
         shadowRadius: 10,
-        elevation: 2
+        elevation: 2,
+        position: 'relative',
+        overflow: 'hidden'
+    },
+    metricsTopAccent: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 2.5
     },
     metricColumn: {
         flex: 1,
         alignItems: 'center',
         paddingHorizontal: 2
     },
+    metricHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        marginBottom: 3
+    },
+    metricIconCircle: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
     metricLabel: {
         fontSize: 8.5,
         fontWeight: '900',
         color: '#64748B',
-        letterSpacing: 0.8,
-        marginBottom: 3
+        letterSpacing: 0.8
     },
     metricValue: {
-        fontSize: 14.5,
+        fontSize: 14,
         fontWeight: '900',
         color: '#0A192F',
         marginBottom: 3
@@ -1895,13 +2150,13 @@ const s = StyleSheet.create({
     },
     metricDivider: {
         width: 1,
-        height: 32,
+        height: 34,
         backgroundColor: '#F1F5F9'
     },
 
-    /* Quick Hub 4-Tile Grid (New Organized Layout) */
+    /* Quick Hub 4-Tile Grid (Modular Luxury Tiles) */
     quickHubWrap: {
-        marginBottom: 12
+        marginBottom: 14
     },
     quickHubGrid: {
         flexDirection: 'row',
@@ -1912,29 +2167,42 @@ const s = StyleSheet.create({
     quickHubTile: {
         width: '48.5%',
         backgroundColor: '#FFFFFF',
-        borderRadius: 14,
-        padding: 12,
+        borderRadius: 16,
+        padding: 13,
         borderWidth: 1,
         borderColor: '#E2E8F0',
         shadowColor: 'rgba(10, 25, 47, 0.04)',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: 3 },
         shadowOpacity: 1,
-        shadowRadius: 6,
-        elevation: 2
+        shadowRadius: 8,
+        elevation: 2,
+        position: 'relative',
+        overflow: 'hidden'
+    },
+    tileWatermark: {
+        position: 'absolute',
+        right: 4,
+        bottom: 2
+    },
+    quickHubTileTopRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 8
     },
     quickHubIconBox: {
         width: 38,
         height: 38,
-        borderRadius: 10,
+        borderRadius: 12,
+        borderWidth: 1,
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 8,
         position: 'relative'
     },
     quickHubBadge: {
         position: 'absolute',
-        top: -3,
-        right: -4,
+        top: -4,
+        right: -5,
         backgroundColor: '#D97706',
         borderRadius: 6,
         paddingHorizontal: 4,
@@ -1956,14 +2224,14 @@ const s = StyleSheet.create({
         color: '#64748B'
     },
 
-    /* VIP Loyalty Progress Tracker (Clean White Card) */
+    /* VIP Loyalty Progress Tracker (Luxury Milestones & Perks) */
     loyaltyCard: {
         backgroundColor: '#FFFFFF',
         borderRadius: 16,
-        padding: 12,
+        padding: 13,
         borderWidth: 1,
         borderColor: 'rgba(217, 167, 58, 0.35)',
-        marginBottom: 12,
+        marginBottom: 14,
         shadowColor: 'rgba(10, 25, 47, 0.04)',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 1,
@@ -1974,7 +2242,7 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 8
+        marginBottom: 6
     },
     loyaltyTierBadge: {
         flexDirection: 'row',
@@ -2001,28 +2269,50 @@ const s = StyleSheet.create({
         fontWeight: '900',
         color: '#0A192F'
     },
+    loyaltyMilestoneLabels: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 4,
+        paddingHorizontal: 1
+    },
+    milestoneStepText: {
+        fontSize: 8,
+        color: '#64748B',
+        fontWeight: '600'
+    },
     loyaltyTrack: {
-        height: 6,
+        height: 7,
         backgroundColor: '#F1F5F9',
-        borderRadius: 3,
+        borderRadius: 3.5,
         overflow: 'hidden',
         marginBottom: 8
     },
     loyaltyBar: {
         height: '100%',
-        backgroundColor: '#D4AF37',
-        borderRadius: 3
+        borderRadius: 3.5
     },
-    loyaltyPerkRow: {
+    loyaltyPerksPillRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 5
+        gap: 6,
+        marginTop: 4,
+        flexWrap: 'wrap'
     },
-    loyaltyPerkText: {
-        fontSize: 9.5,
-        color: '#475569',
-        fontWeight: '600',
-        flex: 1
+    perkPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#F8FAFC',
+        paddingHorizontal: 7,
+        paddingVertical: 3,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    perkPillText: {
+        fontSize: 8.5,
+        fontWeight: '700',
+        color: '#0A192F'
     },
 
     /* Followed Stores Live Strip */
@@ -2271,18 +2561,25 @@ const s = StyleSheet.create({
     },
 
     /* Menu Groups (Clean White Cards with Soft Shadow) */
+    sectionHeaderWrap: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginTop: 14,
+        marginBottom: 8,
+        paddingHorizontal: 2
+    },
     sectionHeader: {
         fontSize: 10.5,
         fontWeight: '900',
         color: '#0A192F',
-        letterSpacing: 0.8,
-        marginTop: 12,
-        marginBottom: 6,
-        marginLeft: 2
+        letterSpacing: 0.8
     },
-    sectionHeaderSpark: {
-        color: '#D4AF37',
-        fontSize: 10
+    sectionHeaderLine: {
+        flex: 1,
+        height: 1,
+        backgroundColor: '#E2E8F0',
+        marginLeft: 4
     },
     menuGroup: {
         backgroundColor: '#FFFFFF',
@@ -2334,11 +2631,13 @@ const s = StyleSheet.create({
         fontWeight: '900',
         color: '#FFFFFF'
     },
-    menuExtra: {
-        fontSize: 12,
-        fontWeight: '800',
-        color: '#0A192F',
-        marginRight: 4
+    menuChevronBox: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        backgroundColor: 'rgba(217, 167, 58, 0.1)',
+        alignItems: 'center',
+        justifyContent: 'center'
     },
     menuDivider: {
         height: 1,
@@ -2346,62 +2645,109 @@ const s = StyleSheet.create({
         marginLeft: 56
     },
 
-    /* Security Trust Card */
-    securityCard: {
+    /* Luxury Bank-Grade Escrow Guarantee Card */
+    guaranteeCard: {
+        marginBottom: 14,
+        borderRadius: 16,
+        overflow: 'hidden',
+        borderWidth: 1.5,
+        borderColor: '#D4AF37',
+        shadowColor: '#071932',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.18,
+        shadowRadius: 12,
+        elevation: 3
+    },
+    guaranteeCardInner: {
+        padding: 14
+    },
+    guaranteeTopRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#FFFFFF',
-        borderRadius: 14,
-        padding: 12,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        marginBottom: 14,
         gap: 10,
-        shadowColor: 'rgba(10, 25, 47, 0.03)',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 1,
-        shadowRadius: 4,
-        elevation: 1
+        marginBottom: 10
     },
-    securityIconWrap: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: 'rgba(16, 185, 129, 0.12)',
-        borderWidth: 1,
-        borderColor: 'rgba(16, 185, 129, 0.25)',
+    guaranteeShieldIcon: {
+        width: 38,
+        height: 38,
+        borderRadius: 12,
+        backgroundColor: 'rgba(217, 167, 58, 0.18)',
+        borderWidth: 1.5,
+        borderColor: '#D4AF37',
         alignItems: 'center',
         justifyContent: 'center'
     },
-    securityTitle: {
-        fontSize: 11.5,
-        fontWeight: '800',
-        color: '#0A192F'
+    guaranteeTitle: {
+        fontSize: 13,
+        fontWeight: '900',
+        color: '#FFFFFF'
     },
-    securityBadge: {
-        backgroundColor: 'rgba(217, 167, 58, 0.12)',
-        paddingHorizontal: 5,
+    guaranteeTag: {
+        backgroundColor: 'rgba(16, 185, 129, 0.2)',
+        paddingHorizontal: 6,
         paddingVertical: 1.5,
         borderRadius: 4,
-        borderWidth: 1,
-        borderColor: '#D4AF37'
+        borderWidth: 0.5,
+        borderColor: '#10B981'
     },
-    securityBadgeText: {
+    guaranteeTagText: {
         fontSize: 7.5,
         fontWeight: '900',
-        color: '#92400E',
-        letterSpacing: 0.4
+        color: '#10B981',
+        letterSpacing: 0.5
     },
-    securitySub: {
+    guaranteeSub: {
+        fontSize: 10,
+        color: '#CBD5E1',
+        marginTop: 2,
+        lineHeight: 14
+    },
+    guaranteeFeaturesRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingTop: 10,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255, 255, 255, 0.1)'
+    },
+    guaranteeFeatureItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4
+    },
+    guaranteeFeatureText: {
         fontSize: 9.5,
+        fontWeight: '800',
+        color: '#E2E8F0'
+    },
+    versionBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        marginTop: 6,
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 12,
+        paddingVertical: 5,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        shadowColor: 'rgba(10, 25, 47, 0.03)',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 1,
+        shadowRadius: 3,
+        elevation: 1
+    },
+    versionText: {
+        fontSize: 9,
         color: '#64748B',
-        marginTop: 2
+        fontWeight: '700',
+        letterSpacing: 0.3
     },
 
     /* Footer */
     footerWrap: {
-        marginTop: 4,
-        marginBottom: 16,
+        marginTop: 6,
+        marginBottom: 20,
         alignItems: 'center',
         gap: 10
     },
@@ -2409,15 +2755,20 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#FEF2F2',
-        borderWidth: 1,
+        backgroundColor: '#FFFFFF',
+        borderWidth: 1.5,
         borderColor: '#FECACA',
-        borderRadius: 12,
-        paddingVertical: 11,
-        width: '100%'
+        borderRadius: 14,
+        paddingVertical: 12,
+        width: '100%',
+        shadowColor: '#DC2626',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 1
     },
     logoutText: {
-        fontSize: 12.5,
+        fontSize: 13,
         fontWeight: '800',
         color: '#DC2626'
     },
@@ -2426,21 +2777,22 @@ const s = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#0A192F',
-        borderWidth: 1,
+        borderWidth: 1.5,
         borderColor: '#D4AF37',
-        borderRadius: 12,
-        paddingVertical: 11,
-        width: '100%'
+        borderRadius: 14,
+        paddingVertical: 12,
+        width: '100%',
+        shadowColor: '#0A192F',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 3
     },
     loginText: {
-        fontSize: 12.5,
+        fontSize: 13,
         fontWeight: '900',
-        color: '#D4AF37'
-    },
-    versionText: {
-        fontSize: 9.5,
-        color: '#94A3B8',
-        fontWeight: '600'
+        color: '#D4AF37',
+        letterSpacing: 0.2
     },
 
     /* Followed Stores Modal (Crisp White with Royal Navy Header) */
