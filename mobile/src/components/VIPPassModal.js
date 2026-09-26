@@ -19,6 +19,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import QRCode from 'qrcode';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import { jsPDF } from 'jspdf';
 import { captureRef } from 'react-native-view-shot';
 import { UserAvatar } from './UserAvatar';
 
@@ -594,6 +595,191 @@ export const VIPPassModal = ({ visible, onClose, user, wallet, onNavigate }) => 
     const handleExportPdf = async () => {
         setExportingType('pdf');
         try {
+            const issueDate = new Date().toLocaleDateString('en-GB', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric'
+            });
+
+            if (Platform.OS === 'web') {
+                // 100% Reliable Client-Side Automatic PDF Download using jsPDF
+                const doc = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: 'a4'
+                });
+
+                // Ornate Gold Double Border (A4: 210 x 297 mm)
+                doc.setDrawColor(212, 175, 55);
+                doc.setLineWidth(1.2);
+                doc.roundedRect(12, 12, 186, 273, 4, 4, 'S');
+
+                doc.setLineWidth(0.4);
+                doc.roundedRect(14.5, 14.5, 181, 268, 3, 3, 'S');
+
+                // Header
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(22);
+                doc.setTextColor(10, 25, 47);
+                doc.text('ABU MAFHAL PASSPORT', 105, 27, { align: 'center' });
+
+                doc.setFontSize(8.5);
+                doc.setTextColor(180, 140, 40);
+                doc.text('OFFICIAL DIGITAL VIP CERTIFICATE & ESCROW ID', 105, 33, { align: 'center' });
+
+                doc.setDrawColor(241, 245, 249);
+                doc.setLineWidth(0.5);
+                doc.line(22, 38, 188, 38);
+
+                // Luxury VIP Card Panel on the certificate
+                doc.setFillColor(255, 253, 240);
+                doc.setDrawColor(212, 175, 55);
+                doc.setLineWidth(0.8);
+                doc.roundedRect(22, 43, 166, 68, 4, 4, 'FD');
+
+                // Inside Card Panel - Tier Badge Pill
+                doc.setFillColor(254, 243, 199);
+                doc.roundedRect(28, 49, 65, 8, 2, 2, 'F');
+                doc.setFontSize(8.5);
+                doc.setTextColor(180, 140, 40);
+                doc.setFont('helvetica', 'bold');
+                doc.text(currentTier.badge, 31, 54.5);
+
+                doc.setFontSize(8);
+                doc.setTextColor(100, 116, 139);
+                doc.setFont('helvetica', 'normal');
+                doc.text(`MEMBER SINCE ${memberSinceYear}`, 145, 54.5);
+
+                // Member Name
+                doc.setFontSize(18);
+                doc.setTextColor(10, 25, 47);
+                doc.setFont('helvetica', 'bold');
+                doc.text(displayName, 28, 68);
+
+                // Role
+                doc.setFontSize(9);
+                doc.setTextColor(71, 85, 105);
+                doc.setFont('helvetica', 'normal');
+                doc.text(`ROLE: ${userRole}`, 28, 75);
+
+                // Member ID Label & Value
+                doc.setFontSize(7.5);
+                doc.setTextColor(148, 163, 184);
+                doc.setFont('helvetica', 'bold');
+                doc.text('MEMBER PASSPORT ID', 28, 86);
+
+                doc.setFontSize(15);
+                doc.setTextColor(10, 25, 47);
+                doc.setFont('courier', 'bold');
+                doc.text(memberId, 28, 93);
+
+                // Verified Pill
+                doc.setFillColor(220, 252, 231);
+                doc.roundedRect(28, 97, 36, 6.5, 2, 2, 'F');
+                doc.setFontSize(7.5);
+                doc.setTextColor(22, 163, 74);
+                doc.setFont('helvetica', 'bold');
+                doc.text('● VERIFIED', 32, 101.5);
+
+                doc.setFontSize(7.5);
+                doc.setTextColor(148, 163, 184);
+                doc.setFont('helvetica', 'normal');
+                doc.text(`ESCROW 256: ${securityHash}`, 130, 101.5);
+
+                // QR & Barcode Section Box
+                doc.setFillColor(248, 250, 252);
+                doc.setDrawColor(226, 232, 240);
+                doc.setLineWidth(0.4);
+                doc.roundedRect(22, 117, 166, 60, 4, 4, 'FD');
+
+                // Dynamic QR Code Image
+                if (qrUri) {
+                    try {
+                        doc.addImage(qrUri, 'PNG', 30, 122, 45, 45);
+                    } catch (imgErr) {
+                        console.warn('Could not add QR image to PDF:', imgErr);
+                    }
+                }
+                doc.setFontSize(7.5);
+                doc.setTextColor(100, 116, 139);
+                doc.setFont('helvetica', 'bold');
+                doc.text('DYNAMIC HUB QR', 52.5, 171, { align: 'center' });
+
+                // Barcode Section
+                doc.setFontSize(8.5);
+                doc.setTextColor(10, 25, 47);
+                doc.text('AUTHENTIC CODE-39 BARCODE', 135, 128, { align: 'center' });
+
+                // Draw Barcode bars
+                let bx = 95;
+                const barW = 0.55;
+                const barH = 16;
+                doc.setFillColor(10, 25, 47);
+                for (let i = 0; i < barcodeBits.length; i++) {
+                    if (barcodeBits[i]) {
+                        doc.rect(bx, 133, barW, barH, 'F');
+                    }
+                    bx += barW + 0.18;
+                }
+
+                doc.setFontSize(9);
+                doc.setFont('courier', 'bold');
+                doc.text(`* ${memberId} *`, 135, 155, { align: 'center' });
+
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(8);
+                doc.setTextColor(5, 150, 105);
+                doc.text(`AUTHENTICITY TOKEN: ${securityHash}`, 135, 162, { align: 'center' });
+
+                // Privileges Section
+                doc.setFillColor(255, 255, 255);
+                doc.setDrawColor(226, 232, 240);
+                doc.roundedRect(22, 184, 166, 70, 4, 4, 'FD');
+
+                // Header for Privileges
+                doc.setFillColor(241, 245, 249);
+                doc.roundedRect(22, 184, 166, 10, 4, 4, 'F');
+                doc.rect(22, 190, 166, 4, 'F');
+                doc.setFontSize(8.5);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(10, 25, 47);
+                doc.text(`OFFICIAL TIER PRIVILEGES (${currentTier.name.toUpperCase()})`, 28, 190.5);
+
+                let py = 201;
+                doc.setFontSize(8.5);
+                currentTier.perks.forEach((perk) => {
+                    doc.setTextColor(16, 185, 129);
+                    doc.text('✔', 28, py);
+                    doc.setTextColor(51, 65, 85);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(perk, 34, py);
+                    py += 7.5;
+                });
+
+                // Summary line
+                doc.setFontSize(8);
+                doc.setTextColor(100, 116, 139);
+                doc.text(`Cashback: ${currentTier.cashback}  •  Shipping: ${currentTier.delivery}  •  Escrow: Priority Clearance`, 28, py + 2);
+
+                // Footer
+                doc.setFontSize(7.5);
+                doc.setTextColor(148, 163, 184);
+                doc.text(`ISSUED BY ABU MAFHAL MARKETPLACE ON ${issueDate}`, 105, 263, { align: 'center' });
+
+                doc.setFontSize(8);
+                doc.setTextColor(5, 150, 105);
+                doc.setFont('helvetica', 'bold');
+                doc.text('✔ 256-BIT ESCROW ENCRYPTION • 100% OFFICIALLY VERIFIED', 105, 268, { align: 'center' });
+
+                // AUTOMATIC DOWNLOAD TRIGGER
+                doc.save(`AbuMafhal_VIP_Passport_${memberId}.pdf`);
+
+                setExportingType(null);
+                setShowShareModal(false);
+                return;
+            }
+
+            // Native Mobile Fallback (iOS / Android)
             const barcodeHtml = barcodeBits.map(bit =>
                 `<div style="width: 2px; height: 34px; background: ${bit ? '#0A192F' : 'transparent'}; margin-right: 0.6px; display: inline-block;"></div>`
             ).join('');
@@ -601,12 +787,6 @@ export const VIPPassModal = ({ visible, onClose, user, wallet, onNavigate }) => 
             const perksHtml = currentTier.perks.map(p =>
                 `<tr><td style="padding: 9px 12px; border-bottom: 1px solid #F1F5F9; font-size: 13px; color: #1E293B;">✔ ${p}</td></tr>`
             ).join('');
-
-            const issueDate = new Date().toLocaleDateString('en-GB', {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric'
-            });
 
             const htmlContent = `
             <!DOCTYPE html>
@@ -756,22 +936,12 @@ export const VIPPassModal = ({ visible, onClose, user, wallet, onNavigate }) => 
             `;
 
             const { uri } = await Print.printToFileAsync({ html: htmlContent });
-            if (Platform.OS === 'web') {
-                const a = document.createElement('a');
-                a.href = uri;
-                a.download = `AbuMafhal_VIP_Passport_${memberId}.pdf`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                setExportingType(null);
-                setShowShareModal(false);
-            } else {
-                await Sharing.shareAsync(uri, {
-                    UTI: '.pdf',
-                    mimeType: 'application/pdf',
-                    dialogTitle: 'Share Abu Mafhal VIP Passport PDF'
-                });
-            }
+            await Sharing.shareAsync(uri, {
+                UTI: '.pdf',
+                mimeType: 'application/pdf',
+                dialogTitle: 'Share Abu Mafhal VIP Passport PDF'
+            });
+            setShowShareModal(false);
         } catch (err) {
             console.error('PDF Export error:', err);
             Alert.alert('Error', 'Could not export PDF certificate. Please try again.');
