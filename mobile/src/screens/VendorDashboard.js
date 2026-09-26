@@ -785,6 +785,132 @@ export const VendorDashboard = ({ user, onLogout, navigation }) => {
                     </View>
                 )}
             </View>
+
+            {/* FIRST-MOBILE BOTTOM NAVIGATION BAR */}
+            <View style={[styles.bottomBarContainer, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+                {/* 1. Home / Overview */}
+                <TouchableOpacity
+                    style={styles.bottomBarItem}
+                    onPress={() => {
+                        if (viewMode !== 'list') setViewMode('list');
+                        setActiveTab('overview');
+                    }}
+                    activeOpacity={0.7}
+                >
+                    <Ionicons
+                        name={activeTab === 'overview' && viewMode === 'list' ? 'home' : 'home-outline'}
+                        size={21}
+                        color={activeTab === 'overview' && viewMode === 'list' ? GOLD : '#94A3B8'}
+                    />
+                    <Text style={[styles.bottomBarLabel, activeTab === 'overview' && viewMode === 'list' && styles.bottomBarLabelActive]}>
+                        Home
+                    </Text>
+                </TouchableOpacity>
+
+                {/* 2. Products */}
+                <TouchableOpacity
+                    style={styles.bottomBarItem}
+                    onPress={() => {
+                        if (viewMode !== 'list') setViewMode('list');
+                        setActiveTab('products');
+                    }}
+                    activeOpacity={0.7}
+                >
+                    <View style={{ position: 'relative' }}>
+                        <Ionicons
+                            name={activeTab === 'products' && viewMode === 'list' ? 'cube' : 'cube-outline'}
+                            size={21}
+                            color={activeTab === 'products' && viewMode === 'list' ? GOLD : '#94A3B8'}
+                        />
+                        {products.length > 0 && (
+                            <View style={styles.bottomBadge}>
+                                <Text style={styles.bottomBadgeText}>{products.length > 99 ? '99+' : products.length}</Text>
+                            </View>
+                        )}
+                    </View>
+                    <Text style={[styles.bottomBarLabel, activeTab === 'products' && viewMode === 'list' && styles.bottomBarLabelActive]}>
+                        Products
+                    </Text>
+                </TouchableOpacity>
+
+                {/* 3. Center FAB: Add Product */}
+                <TouchableOpacity
+                    style={styles.centerFabBtn}
+                    onPress={() => {
+                        setSelectedProduct(null);
+                        setViewMode('add-product');
+                    }}
+                    activeOpacity={0.85}
+                >
+                    <LinearGradient
+                        colors={[GOLD, '#B38128']}
+                        style={styles.centerFabGradient}
+                    >
+                        <Ionicons name="add" size={28} color="#070D1B" />
+                    </LinearGradient>
+                </TouchableOpacity>
+
+                {/* 4. Orders */}
+                <TouchableOpacity
+                    style={styles.bottomBarItem}
+                    onPress={() => {
+                        if (viewMode !== 'list') setViewMode('list');
+                        setActiveTab('orders');
+                    }}
+                    activeOpacity={0.7}
+                >
+                    <View style={{ position: 'relative' }}>
+                        <Ionicons
+                            name={activeTab === 'orders' && viewMode === 'list' ? 'receipt' : 'receipt-outline'}
+                            size={21}
+                            color={activeTab === 'orders' && viewMode === 'list' ? GOLD : '#94A3B8'}
+                        />
+                        {pendingOrdersCount > 0 && (
+                            <View style={[styles.bottomBadge, { backgroundColor: '#EF4444' }]}>
+                                <Text style={styles.bottomBadgeText}>{pendingOrdersCount}</Text>
+                            </View>
+                        )}
+                    </View>
+                    <Text style={[styles.bottomBarLabel, activeTab === 'orders' && viewMode === 'list' && styles.bottomBarLabelActive]}>
+                        Orders
+                    </Text>
+                </TouchableOpacity>
+
+                {/* 5. Wallet */}
+                <TouchableOpacity
+                    style={styles.bottomBarItem}
+                    onPress={() => {
+                        if (viewMode !== 'list') setViewMode('list');
+                        setActiveTab('wallet');
+                    }}
+                    activeOpacity={0.7}
+                >
+                    <Ionicons
+                        name={activeTab === 'wallet' && viewMode === 'list' ? 'wallet' : 'wallet-outline'}
+                        size={21}
+                        color={activeTab === 'wallet' && viewMode === 'list' ? GOLD : '#94A3B8'}
+                    />
+                    <Text style={[styles.bottomBarLabel, activeTab === 'wallet' && viewMode === 'list' && styles.bottomBarLabelActive]}>
+                        Wallet
+                    </Text>
+                </TouchableOpacity>
+
+                {/* 6. More / Drawer Menu */}
+                <TouchableOpacity
+                    style={styles.bottomBarItem}
+                    onPress={() => setIsDrawerOpen(true)}
+                    activeOpacity={0.7}
+                >
+                    <Ionicons
+                        name="grid-outline"
+                        size={21}
+                        color="#94A3B8"
+                    />
+                    <Text style={styles.bottomBarLabel}>
+                        More
+                    </Text>
+                </TouchableOpacity>
+            </View>
         </View>
     );
 };
@@ -975,5 +1101,76 @@ const styles = StyleSheet.create({
         fontSize: 14.5,
         fontWeight: '900',
         color: '#070D1B'
+    },
+    // FIRST-MOBILE BOTTOM BAR STYLES
+    bottomBarContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-around',
+        backgroundColor: '#080E1C',
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(217, 167, 58, 0.22)',
+        paddingTop: 8,
+        elevation: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+        zIndex: 40
+    },
+    bottomBarItem: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        flex: 1,
+        paddingVertical: 4
+    },
+    bottomBarLabel: {
+        fontSize: 10,
+        fontWeight: '600',
+        color: '#94A3B8',
+        marginTop: 3
+    },
+    bottomBarLabelActive: {
+        color: GOLD,
+        fontWeight: '800'
+    },
+    bottomBadge: {
+        position: 'absolute',
+        top: -4,
+        right: -8,
+        backgroundColor: '#3B82F6',
+        borderRadius: 8,
+        minWidth: 16,
+        height: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 4
+    },
+    bottomBadgeText: {
+        color: '#FFFFFF',
+        fontSize: 9,
+        fontWeight: '900'
+    },
+    centerFabBtn: {
+        top: -12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        shadowColor: GOLD,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.4,
+        shadowRadius: 8,
+        elevation: 8
+    },
+    centerFabGradient: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 2,
+        borderColor: '#070D1B'
     }
 });

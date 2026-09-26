@@ -3,17 +3,24 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../config/supabase';
 import { useNavigate, Link } from 'react-router-dom';
 
+const STEPS = [
+  { id: 1, title: 'Personal Info', desc: 'Contact details' },
+  { id: 2, title: 'Business Profile', desc: 'Store identity' },
+  { id: 3, title: 'Documents & KYC', desc: 'Verification docs' }
+];
+
 const VendorApplication = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+  const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
-  
+
   const [formData, setFormData] = useState({
-    fullName: currentUser?.name || '',
+    fullName: currentUser?.name || currentUser?.user_metadata?.full_name || '',
     email: currentUser?.email || '',
-    phone: '',
+    phone: currentUser?.phone || currentUser?.user_metadata?.phone_number || '',
     bvnNumber: '',
     businessName: '',
     businessAddress: '',
@@ -47,59 +54,121 @@ const VendorApplication = () => {
   const handleFileChange = (e) => {
     const { name, files: selectedFiles } = e.target;
     const file = selectedFiles[0];
-    
-    setFiles({
-      ...files,
-      [name]: file
-    });
+    if (!file) return;
 
-    // Create preview
-    if (file) {
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setPreviews({...previews, [name]: reader.result});
-        };
-        reader.readAsDataURL(file);
-      } else {
-        setPreviews({...previews, [name]: file.name});
+    setFiles(prev => ({
+      ...prev,
+      [name]: file
+    }));
+
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreviews(prev => ({ ...prev, [name]: reader.result }));
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setPreviews(prev => ({ ...prev, [name]: file.name }));
+    }
+  };
+
+  const validateStep = (currentStep) => {
+    setError('');
+    if (currentStep === 1) {
+      if (!formData.fullName.trim() || !formData.email.trim() || !formData.phone.trim()) {
+        setError('Please provide your full name, email address, and phone number.');
+        return false;
+      }
+      if (!formData.ninNumber.trim() || formData.ninNumber.trim().length < 11) {
+        setError('A valid 11-digit NIN is required for vendor KYC verification.');
+        return false;
       }
     }
+    if (currentStep === 2) {
+      if (!formData.businessName.trim() || !formData.businessAddress.trim() || !formData.businessLocation.trim()) {
+        setError('Please provide your business name, address, and city/state location.');
+        return false;
+      }
+      if (!formData.cacNumber.trim()) {
+        setError('CAC Registration Number is required.');
+        return false;
+      }
+      if (!formData.businessDescription.trim()) {
+        setError('Please enter a brief description of the products you plan to sell.');
+        return false;
+      }
+    }
+    if (currentStep === 3) {
+      if (!files.businessImage) {
+        setError('Store/Business image is required.');
+        return false;
+      }
+      if (!files.ninDocument) {
+        setError('NIN document image or PDF is required.');
+        return false;
+      }
+      if (!files.cacDocument) {
+        setError('CAC registration document is required.');
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const nextStep = () => {
+    if (validateStep(step)) {
+      setStep(prev => Math.min(prev + 1, 3));
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const prevStep = () => {
+    setError('');
+    setStep(prev => Math.max(prev - 1, 1));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const uploadFile = async (file, path) => {
     if (!file) return null;
     const timestamp = Date.now();
-    const filePath = `${currentUser.id || currentUser.uid}/${path}/${timestamp}_${file.name}`;
-    const { error } = await supabase.storage.from('vendor-applications').upload(filePath, file);
-    if (error) throw error;
+    const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const filePath = `${currentUser?.id || currentUser?.uid || 'guest'}/${path}/${timestamp}_${cleanName}`;
+    const { error: uploadErr } = await supabase.storage.from('vendor-applications').upload(filePath, file);
+    if (uploadErr) throw uploadErr;
     const { data } = supabase.storage.from('vendor-applications').getPublicUrl(filePath);
     return data.publicUrl;
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
+    if (!validateStep(3)) return;
+
     setLoading(true);
     setError('');
 
     try {
+      const userId = currentUser?.id || currentUser?.uid;
+      if (!userId) {
+        throw new Error('Please sign in or create an account before applying.');
+      }
+
       // Check if user already has a pending application
       const { data: existingApp, error: checkError } = await supabase
         .from('vendor_applications')
         .select('status')
-        .eq('user_id', currentUser.id || currentUser.uid)
+        .eq('user_id', userId)
         .eq('status', 'pending')
         .maybeSingle();
 
       if (checkError) throw checkError;
 
       if (existingApp) {
-        setError('You already have a pending application');
+        setError('You already have an application under review. Our team will contact you shortly.');
         setLoading(false);
         return;
       }
 
-      // Upload files
+      // Upload files concurrently
       const [businessImageUrl, businessVideoUrl, ninDocUrl, cacDocUrl] = await Promise.all([
         uploadFile(files.businessImage, 'images'),
         uploadFile(files.businessVideo, 'videos'),
@@ -107,9 +176,9 @@ const VendorApplication = () => {
         uploadFile(files.cacDocument, 'documents')
       ]);
 
-      // Create vendor application
+      // Create or upsert vendor application
       const applicationData = {
-        user_id: currentUser.id || currentUser.uid,
+        user_id: userId,
         full_name: formData.fullName,
         email: formData.email,
         phone: formData.phone,
@@ -124,7 +193,7 @@ const VendorApplication = () => {
         business_video_url: businessVideoUrl,
         nin_document_url: ninDocUrl,
         cac_document_url: cacDocUrl,
-        status: 'pending', // pending, processing, approved, rejected
+        status: 'pending',
         submitted_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -138,11 +207,11 @@ const VendorApplication = () => {
       setSuccess(true);
       setTimeout(() => {
         navigate('/buyer');
-      }, 3000);
+      }, 3500);
 
     } catch (err) {
       console.error('Error submitting application:', err);
-      setError(err.message || 'Failed to submit application. Please try again.');
+      setError(err.message || 'Failed to submit application. Please check your network and try again.');
     } finally {
       setLoading(false);
     }
@@ -150,25 +219,32 @@ const VendorApplication = () => {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
-        <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 text-center">
-          <div className="text-6xl mb-4">✅</div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+      <div className="min-h-screen flex items-center justify-center bg-[#070D1B] px-4 py-12">
+        <div className="max-w-md w-full bg-[#0E1A2E] border border-[#D9A73A]/30 rounded-2xl shadow-2xl p-8 text-center animate-fade-in">
+          <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-emerald-500/10 border-2 border-emerald-500 flex items-center justify-center">
+            <svg className="w-10 h-10 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-black text-white mb-2 tracking-tight">
             Application Submitted!
           </h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-6">
-            Your vendor application is under review. You'll be notified via email once it's processed.
+          <p className="text-slate-300 text-sm mb-6 leading-relaxed">
+            Your vendor application has been securely received. Our compliance desk is reviewing your CAC and NIN records. You will receive an email once approved.
           </p>
-          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-4">
-            <p className="text-sm text-yellow-800 dark:text-yellow-400">
-              Status: <strong>Pending Review</strong>
-            </p>
+          <div className="bg-[#14233D] border border-amber-500/30 rounded-xl p-4 mb-6 text-left">
+            <div className="flex items-center justify-between text-xs font-semibold text-slate-400 mb-1">
+              <span>APPLICATION STATUS</span>
+              <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-[#D9A73A] font-bold">Pending Review</span>
+            </div>
+            <p className="text-white text-sm font-bold">{formData.businessName}</p>
+            <p className="text-slate-400 text-xs mt-0.5">{formData.email}</p>
           </div>
-          <Link 
-            to="/buyer" 
-            className="inline-block px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition"
+          <Link
+            to="/buyer"
+            className="w-full inline-flex items-center justify-center px-6 py-3.5 bg-gradient-to-r from-[#D9A73A] to-[#B38128] hover:from-[#E5B548] hover:to-[#C49033] text-[#070D1B] font-extrabold rounded-xl transition shadow-lg shadow-[#D9A73A]/20"
           >
-            Go to Dashboard
+            Go to Buyer Dashboard
           </Link>
         </div>
       </div>
@@ -176,34 +252,94 @@ const VendorApplication = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4">
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-              Become a Vendor
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              Fill out the form below to apply as a vendor on Abu Mafhal
-            </p>
+    <div className="min-h-screen bg-[#070D1B] py-8 sm:py-12 px-4 sm:px-6">
+      <div className="max-w-3xl mx-auto">
+        {/* Header Title */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#D9A73A]/10 border border-[#D9A73A]/30 text-[#D9A73A] text-xs font-extrabold tracking-wider uppercase mb-3">
+            <span>Official Merchant Accreditation</span>
           </div>
+          <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
+            Become a Verified Vendor
+          </h1>
+          <p className="text-slate-400 text-sm sm:text-base mt-2 max-w-lg mx-auto">
+            Sell authentic products nationwide on Abu Mafhal Marketplace with verified escrow payments.
+          </p>
+        </div>
 
-          {error && (
-            <div className="mb-6 p-4 bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-700 rounded-lg">
-              <p className="text-red-700 dark:text-red-400">{error}</p>
+        {/* Stepper Progress Bar */}
+        <div className="bg-[#0E1A2E] border border-white/10 rounded-2xl p-4 sm:p-6 mb-8 shadow-xl">
+          <div className="flex items-center justify-between relative">
+            {STEPS.map((s, idx) => {
+              const isCompleted = step > s.id;
+              const isCurrent = step === s.id;
+              return (
+                <div key={s.id} className="flex-1 flex flex-col items-center relative z-10">
+                  <button
+                    type="button"
+                    onClick={() => s.id < step && setStep(s.id)}
+                    disabled={s.id > step}
+                    className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-300 ${
+                      isCompleted
+                        ? 'bg-[#D9A73A] text-[#070D1B] ring-2 ring-[#D9A73A]/40'
+                        : isCurrent
+                        ? 'bg-[#14233D] text-[#D9A73A] border-2 border-[#D9A73A] ring-4 ring-[#D9A73A]/10'
+                        : 'bg-[#14233D] text-slate-500 border border-white/10'
+                    }`}
+                  >
+                    {isCompleted ? (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      s.id
+                    )}
+                  </button>
+                  <span className={`text-xs mt-2 font-bold tracking-tight text-center ${isCurrent ? 'text-[#D9A73A]' : isCompleted ? 'text-white' : 'text-slate-500'}`}>
+                    {s.title}
+                  </span>
+                </div>
+              );
+            })}
+            {/* Progress line */}
+            <div className="absolute top-5 left-8 right-8 h-0.5 bg-slate-800 -z-0">
+              <div
+                className="h-full bg-gradient-to-r from-[#D9A73A] to-[#F59E0B] transition-all duration-500"
+                style={{ width: `${((step - 1) / (STEPS.length - 1)) * 100}%` }}
+              />
             </div>
-          )}
+          </div>
+        </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Personal Information */}
-            <div className="border-b border-gray-200 dark:border-gray-700 pb-6">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                Personal Information
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Error Alert */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-950/40 border border-red-500/40 rounded-xl flex items-start gap-3">
+            <svg className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-red-300 text-sm font-medium">{error}</p>
+          </div>
+        )}
+
+        {/* Form Container */}
+        <div className="bg-[#0E1A2E] border border-white/10 rounded-2xl p-6 sm:p-8 shadow-2xl">
+          {/* STEP 1: PERSONAL INFORMATION */}
+          {step === 1 && (
+            <div className="space-y-5 animate-fade-in">
+              <div className="border-b border-white/10 pb-4 mb-6">
+                <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-[#D9A73A]" />
+                  Applicant Identity & Contact
+                </h2>
+                <p className="text-slate-400 text-xs sm:text-sm mt-1">
+                  Enter your official legal name as registered on government identity databases.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Full Name <span className="text-red-500">*</span>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    Full Legal Name <span className="text-red-400">*</span>
                   </label>
                   <input
                     type="text"
@@ -211,12 +347,14 @@ const VendorApplication = () => {
                     value={formData.fullName}
                     onChange={handleChange}
                     required
-                    className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    placeholder="e.g. Muhammad Sani"
+                    className="w-full px-4 py-3 bg-[#14233D] border border-white/10 rounded-xl text-white text-base focus:outline-none focus:border-[#D9A73A] transition"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Email Address <span className="text-red-500">*</span>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    Official Email Address <span className="text-red-400">*</span>
                   </label>
                   <input
                     type="email"
@@ -224,12 +362,14 @@ const VendorApplication = () => {
                     value={formData.email}
                     onChange={handleChange}
                     required
-                    className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    placeholder="vendor@example.com"
+                    className="w-full px-4 py-3 bg-[#14233D] border border-white/10 rounded-xl text-white text-base focus:outline-none focus:border-[#D9A73A] transition"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Phone Number <span className="text-red-500">*</span>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    Mobile Phone Number <span className="text-red-400">*</span>
                   </label>
                   <input
                     type="tel"
@@ -237,26 +377,14 @@ const VendorApplication = () => {
                     value={formData.phone}
                     onChange={handleChange}
                     required
-                    className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    placeholder="+234 800 000 0000"
+                    className="w-full px-4 py-3 bg-[#14233D] border border-white/10 rounded-xl text-white text-base focus:outline-none focus:border-[#D9A73A] transition"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    BVN Number <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="bvnNumber"
-                    value={formData.bvnNumber}
-                    onChange={handleChange}
-                    required
-                    maxLength="11"
-                    className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    NIN Number <span className="text-red-500">*</span>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    National Identity Number (NIN) <span className="text-red-400">*</span>
                   </label>
                   <input
                     type="text"
@@ -265,21 +393,46 @@ const VendorApplication = () => {
                     onChange={handleChange}
                     required
                     maxLength="11"
-                    className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    placeholder="11-digit NIN Number"
+                    className="w-full px-4 py-3 bg-[#14233D] border border-white/10 rounded-xl text-white text-base focus:outline-none focus:border-[#D9A73A] transition"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    Bank Verification Number (BVN) <span className="text-slate-400 text-xs font-normal">(Optional for payouts)</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="bvnNumber"
+                    value={formData.bvnNumber}
+                    onChange={handleChange}
+                    maxLength="11"
+                    placeholder="11-digit BVN Number"
+                    className="w-full px-4 py-3 bg-[#14233D] border border-white/10 rounded-xl text-white text-base focus:outline-none focus:border-[#D9A73A] transition"
                   />
                 </div>
               </div>
             </div>
+          )}
 
-            {/* Business Information */}
-            <div className="border-b border-gray-200 dark:border-gray-700 pb-6">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                Business Information
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* STEP 2: BUSINESS INFORMATION */}
+          {step === 2 && (
+            <div className="space-y-5 animate-fade-in">
+              <div className="border-b border-white/10 pb-4 mb-6">
+                <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-[#D9A73A]" />
+                  Business & Store Details
+                </h2>
+                <p className="text-slate-400 text-xs sm:text-sm mt-1">
+                  Information regarding your commercial enterprise and marketplace storefront.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Business Name <span className="text-red-500">*</span>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    Business / Store Name <span className="text-red-400">*</span>
                   </label>
                   <input
                     type="text"
@@ -287,12 +440,14 @@ const VendorApplication = () => {
                     value={formData.businessName}
                     onChange={handleChange}
                     required
-                    className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    placeholder="e.g. Sani Enterprise Ltd"
+                    className="w-full px-4 py-3 bg-[#14233D] border border-white/10 rounded-xl text-white text-base focus:outline-none focus:border-[#D9A73A] transition"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    CAC Number <span className="text-red-500">*</span>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    CAC Registration Number <span className="text-red-400">*</span>
                   </label>
                   <input
                     type="text"
@@ -300,12 +455,14 @@ const VendorApplication = () => {
                     value={formData.cacNumber}
                     onChange={handleChange}
                     required
-                    className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    placeholder="RC-123456 or BN-123456"
+                    className="w-full px-4 py-3 bg-[#14233D] border border-white/10 rounded-xl text-white text-base focus:outline-none focus:border-[#D9A73A] transition"
                   />
                 </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Business Address <span className="text-red-500">*</span>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    Physical Store Address <span className="text-red-400">*</span>
                   </label>
                   <input
                     type="text"
@@ -313,12 +470,14 @@ const VendorApplication = () => {
                     value={formData.businessAddress}
                     onChange={handleChange}
                     required
-                    className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    placeholder="Shop/Office number, street address"
+                    className="w-full px-4 py-3 bg-[#14233D] border border-white/10 rounded-xl text-white text-base focus:outline-none focus:border-[#D9A73A] transition"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Business Location (State/City) <span className="text-red-500">*</span>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    City and State <span className="text-red-400">*</span>
                   </label>
                   <input
                     type="text"
@@ -326,114 +485,177 @@ const VendorApplication = () => {
                     value={formData.businessLocation}
                     onChange={handleChange}
                     required
-                    className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    placeholder="e.g. Kano, Kano State"
+                    className="w-full px-4 py-3 bg-[#14233D] border border-white/10 rounded-xl text-white text-base focus:outline-none focus:border-[#D9A73A] transition"
                   />
                 </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Business Description <span className="text-red-500">*</span>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    Business / Inventory Description <span className="text-red-400">*</span>
                   </label>
                   <textarea
                     name="businessDescription"
                     value={formData.businessDescription}
                     onChange={handleChange}
                     required
-                    rows="4"
-                    className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    placeholder="Describe your business and what you plan to sell..."
+                    rows="3"
+                    placeholder="Describe your products, categories, and target customers..."
+                    className="w-full px-4 py-3 bg-[#14233D] border border-white/10 rounded-xl text-white text-base focus:outline-none focus:border-[#D9A73A] transition resize-none"
                   />
                 </div>
               </div>
             </div>
+          )}
 
-            {/* Document Uploads */}
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                Required Documents
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Business/Store Image <span className="text-red-500">*</span>
+          {/* STEP 3: DOCUMENTS & VERIFICATION */}
+          {step === 3 && (
+            <div className="space-y-5 animate-fade-in">
+              <div className="border-b border-white/10 pb-4 mb-6">
+                <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-[#D9A73A]" />
+                  Required Compliance Documents
+                </h2>
+                <p className="text-slate-400 text-xs sm:text-sm mt-1">
+                  Upload clear photos or PDF documents to verify merchant accreditation.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Storefront Image */}
+                <div className="p-4 bg-[#14233D] border border-white/10 rounded-xl">
+                  <label className="block text-xs font-bold text-white mb-2">
+                    Storefront / Product Showcase Image <span className="text-red-400">*</span>
                   </label>
                   <input
                     type="file"
                     name="businessImage"
                     onChange={handleFileChange}
                     accept="image/*"
-                    required
-                    className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="w-full text-xs text-slate-300 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#D9A73A] file:text-[#070D1B] hover:file:bg-[#F59E0B] cursor-pointer"
                   />
                   {previews.businessImage && (
-                    <img src={previews.businessImage} alt="Preview" className="mt-2 w-full h-32 object-cover rounded" />
+                    <div className="mt-3 relative rounded-lg overflow-hidden h-28 border border-white/10">
+                      <img src={previews.businessImage} alt="Preview" className="w-full h-full object-cover" />
+                    </div>
                   )}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Business/Store Video (Optional)
+
+                {/* Intro Video */}
+                <div className="p-4 bg-[#14233D] border border-white/10 rounded-xl">
+                  <label className="block text-xs font-bold text-white mb-2">
+                    Store Intro Video <span className="text-slate-400 text-xs font-normal">(Optional)</span>
                   </label>
                   <input
                     type="file"
                     name="businessVideo"
                     onChange={handleFileChange}
                     accept="video/*"
-                    className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="w-full text-xs text-slate-300 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#D9A73A] file:text-[#070D1B] hover:file:bg-[#F59E0B] cursor-pointer"
                   />
                   {previews.businessVideo && (
-                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">📹 {previews.businessVideo}</p>
+                    <p className="mt-3 text-xs text-emerald-400 font-semibold truncate">
+                      📹 Attached: {previews.businessVideo}
+                    </p>
                   )}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    NIN Document (Image/PDF) <span className="text-red-500">*</span>
+
+                {/* NIN Document */}
+                <div className="p-4 bg-[#14233D] border border-white/10 rounded-xl">
+                  <label className="block text-xs font-bold text-white mb-2">
+                    NIN Slip / Card (Image or PDF) <span className="text-red-400">*</span>
                   </label>
                   <input
                     type="file"
                     name="ninDocument"
                     onChange={handleFileChange}
                     accept="image/*,application/pdf"
-                    required
-                    className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="w-full text-xs text-slate-300 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#D9A73A] file:text-[#070D1B] hover:file:bg-[#F59E0B] cursor-pointer"
                   />
                   {previews.ninDocument && (
-                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">📄 {previews.ninDocument}</p>
+                    <p className="mt-3 text-xs text-emerald-400 font-semibold truncate">
+                      📄 Document Ready: {previews.ninDocument}
+                    </p>
                   )}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    CAC Document (Image/PDF) <span className="text-red-500">*</span>
+
+                {/* CAC Document */}
+                <div className="p-4 bg-[#14233D] border border-white/10 rounded-xl">
+                  <label className="block text-xs font-bold text-white mb-2">
+                    CAC Certificate (Image or PDF) <span className="text-red-400">*</span>
                   </label>
                   <input
                     type="file"
                     name="cacDocument"
                     onChange={handleFileChange}
                     accept="image/*,application/pdf"
-                    required
-                    className="w-full px-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    className="w-full text-xs text-slate-300 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#D9A73A] file:text-[#070D1B] hover:file:bg-[#F59E0B] cursor-pointer"
                   />
                   {previews.cacDocument && (
-                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">📄 {previews.cacDocument}</p>
+                    <p className="mt-3 text-xs text-emerald-400 font-semibold truncate">
+                      📄 Document Ready: {previews.cacDocument}
+                    </p>
                   )}
                 </div>
               </div>
-            </div>
 
-            <div className="flex gap-4">
+              {/* Agreement Notice */}
+              <div className="p-4 bg-emerald-950/20 border border-emerald-500/20 rounded-xl">
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  By submitting this application, you declare that all CAC, NIN, and store information provided are authentic and compliant with Abu Mafhal Marketplace Merchant Terms of Service.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Stepper Navigation Buttons */}
+          <div className="flex items-center gap-3 pt-6 mt-6 border-t border-white/10">
+            {step > 1 ? (
               <button
-                type="submit"
-                disabled={loading}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed transition"
+                type="button"
+                onClick={prevStep}
+                className="px-5 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 font-bold text-sm transition"
               >
-                {loading ? 'Submitting...' : 'Submit Application'}
+                Back
               </button>
+            ) : (
               <Link
                 to="/buyer"
-                className="px-6 py-3 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg font-medium transition"
+                className="px-5 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 font-bold text-sm transition"
               >
                 Cancel
               </Link>
-            </div>
-          </form>
+            )}
+
+            {step < 3 ? (
+              <button
+                type="button"
+                onClick={nextStep}
+                className="flex-1 py-3.5 px-6 rounded-xl bg-gradient-to-r from-[#D9A73A] to-[#B38128] hover:from-[#E5B548] hover:to-[#C49033] text-[#070D1B] font-black text-sm tracking-wide transition shadow-lg shadow-[#D9A73A]/20"
+              >
+                Next Step
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={loading}
+                className="flex-1 py-3.5 px-6 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white font-black text-sm tracking-wide transition shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span>Uploading & Submitting...</span>
+                  </>
+                ) : (
+                  <span>Submit Vendor Application</span>
+                )}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
