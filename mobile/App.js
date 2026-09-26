@@ -265,13 +265,19 @@ export default function App() {
                 setUser(null);
                 clearFollowedStoresCache();
                 AsyncStorage.removeItem(USER_STORAGE_KEY).catch(() => {});
-                AsyncStorage.removeItem('@abumafhal_last_screen').catch(() => {});
+                AsyncStorage.setItem('@abumafhal_last_screen', 'Landing').catch(() => {});
                 if (typeof window !== 'undefined') {
                     try {
                         window.localStorage.removeItem(USER_STORAGE_KEY);
-                        window.localStorage.removeItem('@abumafhal_last_screen');
+                        window.localStorage.setItem('@abumafhal_last_screen', 'Landing');
                         window.location.hash = '';
                     } catch (_) {}
+                }
+                if (navigationRef.isReady()) {
+                    navigationRef.reset({
+                        index: 0,
+                        routes: [{ name: 'Landing' }],
+                    });
                 }
             }
         });
@@ -378,13 +384,12 @@ export default function App() {
         } finally {
             setUser(null);
             clearFollowedStoresCache();
-            await AsyncStorage.removeItem(USER_STORAGE_KEY).catch(() => {});
-            await AsyncStorage.removeItem('@abumafhal_last_screen').catch(() => {});
+            AsyncStorage.setItem('@abumafhal_last_screen', 'Landing').catch(() => {});
 
             if (typeof window !== 'undefined') {
                 try {
                     window.localStorage.removeItem(USER_STORAGE_KEY);
-                    window.localStorage.removeItem('@abumafhal_last_screen');
+                    window.localStorage.setItem('@abumafhal_last_screen', 'Landing');
                     // Purge all Supabase auth storage keys from localStorage
                     Object.keys(window.localStorage).forEach(key => {
                         if (key.startsWith('sb-') || key.includes('auth-token') || key.includes('supabase')) {
@@ -403,13 +408,13 @@ export default function App() {
             if (navigationRef.isReady()) {
                 navigationRef.reset({
                     index: 0,
-                    routes: [{ name: 'Main', params: { screen: 'home' } }],
+                    routes: [{ name: 'Landing' }],
                 });
             }
         }
     };
 
-    // Whenever user becomes null, protect admin/vendor/driver dashboards by redirecting to Auth
+    // Whenever user becomes null, protect admin/vendor/driver dashboards by redirecting to Landing
     useEffect(() => {
         if (!user && !loading) {
             const timer = setTimeout(() => {
@@ -419,7 +424,7 @@ export default function App() {
                     if (currentRoute?.name && protectedRoutes.includes(currentRoute.name)) {
                         navigationRef.reset({
                             index: 0,
-                            routes: [{ name: 'Auth' }],
+                            routes: [{ name: 'Landing' }],
                         });
                     }
                 }
@@ -491,13 +496,12 @@ export default function App() {
                 }
                 return 'Main';
             }
-            // On mobile devices (Android / iOS) or standard app entry, launch MainApp directly so users experience the full marketplace immediately
-            if (Platform.OS !== 'web' || !hash.includes('landing')) {
-                return 'Main';
+            if (last === 'Landing' || hash.includes('landing')) {
+                return 'Landing';
             }
             return 'Landing';
         } catch (_) {}
-        return 'Main';
+        return 'Landing';
     };
 
     let initialRoute = getInitialRoute();
