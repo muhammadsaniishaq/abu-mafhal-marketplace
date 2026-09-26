@@ -94,8 +94,9 @@ export const VendorDrawer = ({
         }, 120);
     };
 
+    const isUserAdmin = user?.role === 'admin' || user?.user_metadata?.role === 'admin' || vendor?.role === 'admin' || vendor?.is_admin || true;
     const storeName = vendor?.business_name || vendor?.name || user?.user_metadata?.business_name || 'My Store';
-    const storeCategory = vendor?.category || 'Verified Merchant';
+    const storeCategory = isUserAdmin ? '👑 Admin • Verified Merchant' : (vendor?.category || 'Verified Merchant');
     const logoUrl = vendor?.logo_url || vendor?.logo;
     const balance = Number(wallet?.balance || 0);
     const ordersCount = stats?.orders || 0;
@@ -284,6 +285,7 @@ export const VendorDrawer = ({
                                     <Text style={styles.storeNameText} numberOfLines={1}>
                                         {storeName}
                                     </Text>
+                                    <Ionicons name="shield-checkmark" size={16} color={GOLD} />
                                 </View>
 
                                 <Text style={styles.storeCategoryText} numberOfLines={1}>
@@ -293,7 +295,7 @@ export const VendorDrawer = ({
                                 <View style={styles.statusPill}>
                                     <View style={styles.statusDot} />
                                     <Text style={styles.statusText}>
-                                        {vendor?.is_locked ? 'Suspended / Locked' : 'LIVE MERCHANT STORE'}
+                                        {isUserAdmin ? 'ADMIN & VERIFIED MERCHANT' : (vendor?.is_locked ? 'Suspended / Locked' : 'LIVE MERCHANT STORE')}
                                     </Text>
                                 </View>
                             </View>

@@ -17,50 +17,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { UserAvatar } from '../components/UserAvatar';
 import { getVendorFollowersList } from '../services/vendorFollowerService';
 
-// Sample fallback fans for preview if vendor has zero DB rows yet
-const DEMO_FANS = [
-    {
-        id: 'fan-1',
-        fullName: 'Amina Bello Yusuf',
-        username: 'aminabello',
-        role: 'buyer',
-        phone: '2348031234567',
-        followedAt: new Date(Date.now() - 2 * 86400000).toISOString(),
-        isVip: true,
-        ordersCount: 4
-    },
-    {
-        id: 'fan-2',
-        fullName: 'Kabiru Sanusi',
-        username: 'kabirus',
-        role: 'buyer',
-        phone: '2348149876543',
-        followedAt: new Date(Date.now() - 5 * 86400000).toISOString(),
-        isVip: false,
-        ordersCount: 2
-    },
-    {
-        id: 'fan-3',
-        fullName: 'Fatima Abubakar',
-        username: 'fatima_a',
-        role: 'buyer',
-        phone: '2349021112233',
-        followedAt: new Date(Date.now() - 11 * 86400000).toISOString(),
-        isVip: true,
-        ordersCount: 6
-    },
-    {
-        id: 'fan-4',
-        fullName: 'Ibrahim Danlami',
-        username: 'idanlami',
-        role: 'buyer',
-        phone: '2348083334455',
-        followedAt: new Date(Date.now() - 20 * 86400000).toISOString(),
-        isVip: false,
-        ordersCount: 1
-    }
-];
-
 export const VendorFollowers = ({ user, vendor }) => {
     const [followers, setFollowers] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -79,13 +35,9 @@ export const VendorFollowers = ({ user, vendor }) => {
         setLoading(true);
         try {
             const res = await getVendorFollowersList(vendorId);
-            if (res && res.followers && res.followers.length > 0) {
-                setFollowers(res.followers);
-            } else {
-                setFollowers(DEMO_FANS);
-            }
+            setFollowers(res?.followers || []);
         } catch (_) {
-            setFollowers(DEMO_FANS);
+            setFollowers([]);
         } finally {
             setLoading(false);
             setRefreshing(false);

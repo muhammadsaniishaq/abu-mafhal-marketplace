@@ -1,8 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, ScrollView, Image,
     ActivityIndicator, Alert, Switch, StatusBar, Platform,
-    Animated, Dimensions, StyleSheet, SafeAreaView
+    Animated, Dimensions, StyleSheet
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -37,6 +37,88 @@ const TABS = [
     { id: 'advanced', label: 'Advanced', icon: 'settings' },
     { id: 'seo',      label: 'SEO',      icon: 'search' },
 ];
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+const SS = StyleSheet.create({
+    header:          { flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1, borderColor: '#F1F5F9' },
+    iconBtn:         { width: 40, height: 40, borderRadius: 12, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
+    headerTitle:     { fontSize: 17, fontWeight: '900', color: '#0E1A2E', letterSpacing: -0.3 },
+    headerSub:       { fontSize: 11, color: '#94A3B8', marginTop: 1 },
+    saveBtn:         { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#0E1A2E', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: '#D9A73A' },
+    saveBtnTxt:      { color: 'white', fontWeight: '800', fontSize: 13 },
+    tabChip:         { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, backgroundColor: '#F1F5F9', borderWidth: 1.5, borderColor: 'transparent' },
+    tabChipActive:   { backgroundColor: '#0E1A2E', borderColor: '#D9A73A' },
+    tabTxt:          { fontSize: 12, fontWeight: '600', color: '#94A3B8' },
+    tabTxtActive:    { color: '#D9A73A', fontWeight: '800' },
+    tabContent:      { padding: 16 },
+    card:            { backgroundColor: 'white', borderRadius: 20, padding: 18, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 8, elevation: 1 },
+    cardTitle:       { fontSize: 14, fontWeight: '900', color: '#0E1A2E', marginBottom: 14, letterSpacing: -0.2 },
+    cardSub:         { fontSize: 12, color: '#64748B', marginTop: -10, marginBottom: 14 },
+    inpWrap:         { marginBottom: 14 },
+    inpLabel:        { fontSize: 11, fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: 7 },
+    inpBox:          { backgroundColor: '#F8FAFC', borderRadius: 12, padding: 13, fontSize: 14, fontWeight: '600', color: '#0E1A2E', borderWidth: 1, borderColor: '#E2E8F0' },
+    inpHint:         { fontSize: 11, color: '#94A3B8', marginTop: 5 },
+    toggleRow:       { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: '#F1F5F9', backgroundColor: '#F8FAFC', marginBottom: 10 },
+    toggleIcon:      { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    toggleLabel:     { fontSize: 14, fontWeight: '800', color: '#0E1A2E' },
+    toggleDesc:      { fontSize: 12, color: '#64748B', marginTop: 2 },
+    catChip:         { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F1F5F9', borderWidth: 1.5, borderColor: '#E2E8F0', marginRight: 4 },
+    catLabel:        { fontSize: 13, fontWeight: '700', color: '#475569' },
+    aiBtnRow:        { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center', backgroundColor: '#FFFBEB', padding: 12, borderRadius: 12, marginTop: 4, borderWidth: 1, borderColor: '#FDE68A' },
+    aiBtnFull:       { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center', backgroundColor: '#FFFBEB', padding: 14, borderRadius: 14, marginBottom: 14, borderWidth: 1, borderColor: '#FDE68A' },
+    aiBtnTxt:        { color: '#B45309', fontWeight: '800', fontSize: 13 },
+    quickBtn:        { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F1F5F9', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, alignSelf: 'flex-start', marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0' },
+    quickBtnTxt:     { fontSize: 12, fontWeight: '700', color: '#0E1A2E' },
+    imagePicker:     { height: 120, borderWidth: 2, borderColor: '#D9A73A', borderStyle: 'dashed', borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFBEB', gap: 6 },
+    imagePickerTxt:  { color: '#B45309', fontWeight: '700', fontSize: 14 },
+    imagePickerSub:  { color: '#94A3B8', fontSize: 12 },
+    removeImgBtn:    { position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 10, padding: 4 },
+    primaryBadge:    { position: 'absolute', bottom: 4, left: 4, backgroundColor: '#0E1A2E', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2, borderWidth: 1, borderColor: '#D9A73A' },
+    addRowBtn:       { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10 },
+    addRowTxt:       { color: '#0E1A2E', fontWeight: '700', fontSize: 14 },
+    deleteBtn:       { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FEF2F2', alignItems: 'center', justifyContent: 'center' },
+    variantRow:      { borderRadius: 14, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: '#E2E8F0' },
+    taxChip:         { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 12, borderWidth: 1.5, borderColor: '#E2E8F0', backgroundColor: '#F8FAFC' },
+    taxChipActive:   { backgroundColor: '#FFFBEB', borderColor: '#D9A73A' },
+    taxChipTxt:      { fontSize: 13, fontWeight: '700', color: '#64748B', textTransform: 'capitalize' },
+    taxChipTxtActive:{ color: '#B45309' },
+    loadingOverlay:  { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,0.90)', alignItems: 'center', justifyContent: 'center' },
+    loadingBox:      { alignItems: 'center', gap: 12 },
+    loadingTxt:      { fontSize: 15, fontWeight: '700', color: '#0E1A2E' },
+});
+
+// ─── STABLE SUB-COMPONENTS (Defined outside to prevent unmounting / focus loss) ───
+const Inp = React.memo(({ label, value, onChangeText, placeholder, numeric, multi, hint }) => (
+    <View style={SS.inpWrap}>
+        <Text style={SS.inpLabel}>{label}</Text>
+        <TextInput
+            style={[SS.inpBox, multi && { height: 96, textAlignVertical: 'top', paddingTop: 12 }]}
+            value={value}
+            onChangeText={onChangeText}
+            placeholder={placeholder}
+            placeholderTextColor="#94A3B8"
+            keyboardType={numeric ? 'numeric' : 'default'}
+            multiline={multi}
+        />
+        {hint && <Text style={SS.inpHint}>{hint}</Text>}
+    </View>
+));
+
+const ToggleRow = React.memo(({ label, desc, value, onChange, color = '#3B82F6', icon }) => (
+    <TouchableOpacity activeOpacity={0.8} onPress={() => onChange(!value)}
+        style={[SS.toggleRow, value && { backgroundColor: color + '12', borderColor: color + '44' }]}>
+        <View style={[SS.toggleIcon, { backgroundColor: value ? color + '20' : '#F1F5F9' }]}>
+            <Ionicons name={icon} size={18} color={value ? color : '#94A3B8'} />
+        </View>
+        <View style={{ flex: 1 }}>
+            <Text style={[SS.toggleLabel, value && { color }]}>{label}</Text>
+            {desc ? <Text style={SS.toggleDesc}>{desc}</Text> : null}
+        </View>
+        <Switch value={!!value} onValueChange={onChange}
+            trackColor={{ false: '#E2E8F0', true: color }}
+            thumbColor="white" />
+    </TouchableOpacity>
+));
 
 export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) => {
     const insets = useSafeAreaInsets();
@@ -83,7 +165,20 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
         freeShipping:      initialData?.free_shipping     || false,
     });
 
-    const set = (key, val) => setForm(p => ({ ...p, [key]: val }));
+    const set = useCallback((key, val) => {
+        setForm(p => ({ ...p, [key]: val }));
+    }, []);
+
+    // ── Quick Helpers ──────────────────────────────────────────
+    const handleAutoGenerateSkuBarcode = () => {
+        const catClean = (form.category || 'ITEM').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4) || 'PROD';
+        const randNum = Math.floor(1000 + Math.random() * 9000);
+        const autoSku = `AM-${catClean}-${randNum}`;
+        const autoBarcode = `200${Math.floor(1000000000 + Math.random() * 9000000000)}`;
+        set('sku', autoSku);
+        set('barcode', autoBarcode);
+        Alert.alert('Auto-Generated ⚡', `SKU: ${autoSku}\nBarcode: ${autoBarcode}`);
+    };
 
     // ── Image helpers ──────────────────────────────────────────
     const pickImage = async () => {
@@ -155,15 +250,27 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
         try {
             if (type === 'description') {
                 const d = await geminiService.generateDescription(form);
-                set('description', d);
-                Alert.alert('Gemini AI ✨', 'Description generated successfully!');
+                if (d) {
+                    set('description', d);
+                    Alert.alert('Gemini AI ✨', 'Compelling product description generated successfully!');
+                }
             } else {
                 const s = await geminiService.generateSEO(form);
-                setForm(p => ({ ...p, seoTitle: s.title, seoDesc: s.description, keywords: s.keywords }));
-                Alert.alert('Gemini AI ✨', 'SEO optimized!');
+                if (s) {
+                    setForm(p => ({
+                        ...p,
+                        seoTitle: s.title || p.seoTitle,
+                        seoDesc: s.description || p.seoDesc,
+                        keywords: s.keywords || p.keywords
+                    }));
+                    Alert.alert('Gemini AI ✨', 'SEO Title, Meta Description & Keywords optimized!');
+                }
             }
-        } catch (e) { Alert.alert('AI Error', e.message); }
-        finally { setAiLoading(false); }
+        } catch (e) {
+            Alert.alert('AI Notice', e.message || 'AI service temporarily unavailable. Default templates applied.');
+        } finally {
+            setAiLoading(false);
+        }
     };
 
     // ── Submit ─────────────────────────────────────────────────
@@ -252,50 +359,17 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
         }
     };
 
-    // ── Shared Sub-Components ──────────────────────────────────
-    const Inp = ({ label, field, placeholder, numeric, multi, hint }) => (
-        <View style={SS.inpWrap}>
-            <Text style={SS.inpLabel}>{label}</Text>
-            <TextInput
-                style={[SS.inpBox, multi && { height: 96, textAlignVertical: 'top', paddingTop: 12 }]}
-                value={form[field]}
-                onChangeText={v => set(field, v)}
-                placeholder={placeholder}
-                placeholderTextColor="#94A3B8"
-                keyboardType={numeric ? 'numeric' : 'default'}
-                multiline={multi}
-            />
-            {hint && <Text style={SS.inpHint}>{hint}</Text>}
-        </View>
-    );
-
-    const ToggleRow = ({ label, desc, value, onChange, color = '#3B82F6', icon }) => (
-        <TouchableOpacity activeOpacity={0.8} onPress={() => onChange(!value)}
-            style={[SS.toggleRow, value && { backgroundColor: color + '12', borderColor: color + '44' }]}>
-            <View style={[SS.toggleIcon, { backgroundColor: value ? color + '20' : '#F1F5F9' }]}>
-                <Ionicons name={icon} size={18} color={value ? color : '#94A3B8'} />
-            </View>
-            <View style={{ flex: 1 }}>
-                <Text style={[SS.toggleLabel, value && { color }]}>{label}</Text>
-                {desc ? <Text style={SS.toggleDesc}>{desc}</Text> : null}
-            </View>
-            <Switch value={!!value} onValueChange={onChange}
-                trackColor={{ false: '#E2E8F0', true: color }}
-                thumbColor="white" />
-        </TouchableOpacity>
-    );
-
     // ── Tab Renderers ──────────────────────────────────────────
     const renderVital = () => (
         <View style={SS.tabContent}>
             <View style={SS.card}>
-                <ToggleRow label="Digital Product" desc="No physical shipping needed (e.g. E-books, Codes)"
+                <ToggleRow label="Digital Product" desc="No physical shipping needed (e.g. E-books, Software)"
                     icon="cloud-download" value={form.isDigital} onChange={v => set('isDigital', v)} color="#8B5CF6" />
             </View>
 
             <View style={SS.card}>
-                <Inp label="Product Name *" field="name" placeholder="e.g. Premium Wireless Earbuds" />
-                <Inp label="Brand" field="brand" placeholder="e.g. Sony, Samsung, Apple" />
+                <Inp label="Product Name *" value={form.name} onChangeText={v => set('name', v)} placeholder="e.g. Premium Wireless Earbuds" />
+                <Inp label="Brand" value={form.brand} onChangeText={v => set('brand', v)} placeholder="e.g. Sony, Samsung, Apple" />
             </View>
 
             <View style={SS.card}>
@@ -312,12 +386,12 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
             </View>
 
             <View style={SS.card}>
-                <Inp label="Description *" field="description" placeholder="Describe the product in detail..." multi
+                <Inp label="Description *" value={form.description} onChangeText={v => set('description', v)} placeholder="Describe the product in detail..." multi
                     hint="A detailed description increases your conversion rate." />
                 <TouchableOpacity onPress={() => handleAI('description')} style={SS.aiBtnRow} disabled={aiLoading}>
                     {aiLoading ? <ActivityIndicator size="small" color="#8B5CF6" />
                                : <Ionicons name="sparkles" size={16} color="#8B5CF6" />}
-                    <Text style={SS.aiBtnTxt}>Rewrite Description with Gemini AI</Text>
+                    <Text style={SS.aiBtnTxt}>Rewrite Description with Gemini AI ✨</Text>
                 </TouchableOpacity>
             </View>
         </View>
@@ -326,17 +400,32 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
     const renderOffer = () => (
         <View style={SS.tabContent}>
             <View style={SS.card}>
-                <Text style={SS.cardTitle}>Pricing</Text>
+                <Text style={SS.cardTitle}>Pricing & Stock</Text>
                 <View style={{ flexDirection: 'row', gap: 12 }}>
-                    <View style={{ flex: 1 }}><Inp label="Selling Price (₦) *" field="price" placeholder="0.00" numeric /></View>
-                    <View style={{ flex: 1 }}><Inp label="Original Price (₦)" field="originalPrice" placeholder="0.00" numeric /></View>
+                    <View style={{ flex: 1 }}>
+                        <Inp label="Selling Price (₦) *" value={form.price} onChangeText={v => set('price', v)} placeholder="0.00" numeric />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Inp label="Original Price (₦)" value={form.originalPrice} onChangeText={v => set('originalPrice', v)} placeholder="0.00" numeric />
+                    </View>
                 </View>
                 <View style={{ flexDirection: 'row', gap: 12 }}>
-                    <View style={{ flex: 1 }}><Inp label="Cost Price (private)" field="cost" placeholder="0.00" numeric /></View>
-                    <View style={{ flex: 1 }}><Inp label="Stock Quantity" field="stock" placeholder="0" numeric /></View>
+                    <View style={{ flex: 1 }}>
+                        <Inp label="Cost Price (private)" value={form.cost} onChangeText={v => set('cost', v)} placeholder="0.00" numeric />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Inp label="Stock Quantity" value={form.stock} onChangeText={v => set('stock', v)} placeholder="0" numeric />
+                    </View>
                 </View>
-                <Inp label="SKU" field="sku" placeholder="PROD-001" hint="Unique product identifier for your store" />
-                <Inp label="Barcode / GTIN" field="barcode" placeholder="EAN-13 or UPC barcode" />
+
+                {/* Quick Auto-generate SKU & Barcode Feature */}
+                <TouchableOpacity onPress={handleAutoGenerateSkuBarcode} style={SS.quickBtn} activeOpacity={0.8}>
+                    <Ionicons name="flash" size={14} color="#D9A73A" />
+                    <Text style={SS.quickBtnTxt}>Auto-Generate SKU & Barcode ⚡</Text>
+                </TouchableOpacity>
+
+                <Inp label="SKU" value={form.sku} onChangeText={v => set('sku', v)} placeholder="PROD-001" hint="Unique product identifier for your store" />
+                <Inp label="Barcode / GTIN" value={form.barcode} onChangeText={v => set('barcode', v)} placeholder="EAN-13 or UPC barcode" />
             </View>
 
             <View style={SS.card}>
@@ -350,8 +439,12 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
             <View style={SS.card}>
                 <Text style={SS.cardTitle}>Sale Window (Optional)</Text>
                 <View style={{ flexDirection: 'row', gap: 12 }}>
-                    <View style={{ flex: 1 }}><Inp label="Start Date (YYYY-MM-DD)" field="saleStart" placeholder="2025-01-01" /></View>
-                    <View style={{ flex: 1 }}><Inp label="End Date (YYYY-MM-DD)" field="saleEnd" placeholder="2025-12-31" /></View>
+                    <View style={{ flex: 1 }}>
+                        <Inp label="Start Date (YYYY-MM-DD)" value={form.saleStart} onChangeText={v => set('saleStart', v)} placeholder="2025-01-01" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Inp label="End Date (YYYY-MM-DD)" value={form.saleEnd} onChangeText={v => set('saleEnd', v)} placeholder="2025-12-31" />
+                    </View>
                 </View>
             </View>
 
@@ -441,7 +534,7 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
                 <ToggleRow label="Affiliate Product" desc="Link to an external third-party product page"
                     icon="link" value={form.isAffiliate} onChange={v => set('isAffiliate', v)} color="#F59E0B" />
                 {form.isAffiliate && <View style={{ marginTop: 10 }}>
-                    <Inp label="Affiliate Link URL" field="affiliateLink" placeholder="https://..." />
+                    <Inp label="Affiliate Link URL" value={form.affiliateLink} onChangeText={v => set('affiliateLink', v)} placeholder="https://..." />
                 </View>}
             </View>
         </View>
@@ -486,9 +579,9 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
         <View style={SS.tabContent}>
             <View style={SS.card}>
                 <Text style={SS.cardTitle}>Inventory Controls</Text>
-                <Inp label="Low Stock Alert (units)" field="lowStockThreshold" placeholder="5" numeric
+                <Inp label="Low Stock Alert (units)" value={form.lowStockThreshold} onChangeText={v => set('lowStockThreshold', v)} placeholder="5" numeric
                     hint="Get notified when stock drops below this number" />
-                <Inp label="Max Quantity Per Order" field="maxQuantity" placeholder="e.g. 10" numeric
+                <Inp label="Max Quantity Per Order" value={form.maxQuantity} onChangeText={v => set('maxQuantity', v)} placeholder="e.g. 10" numeric
                     hint="Leave blank to allow unlimited quantities" />
                 <ToggleRow label="Allow Backorders"
                     desc="Continue selling even when stock hits zero"
@@ -514,16 +607,16 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
         <View style={SS.tabContent}>
             {!form.isDigital && (
                 <View style={SS.card}>
-                    <Inp label="Shipping Weight (kg)" field="weight" placeholder="0.5" numeric />
+                    <Inp label="Shipping Weight (kg)" value={form.weight} onChangeText={v => set('weight', v)} placeholder="0.5" numeric />
                 </View>
             )}
             <View style={SS.card}>
                 <Text style={SS.cardTitle}>SEO Optimization</Text>
-                <Inp label="SEO Title" field="seoTitle" placeholder="Optimized title for search engines..." />
-                <Inp label="SEO Description" field="seoDesc" placeholder="Meta description (150–160 characters ideal)..." multi
+                <Inp label="SEO Title" value={form.seoTitle} onChangeText={v => set('seoTitle', v)} placeholder="Optimized title for search engines..." />
+                <Inp label="SEO Description" value={form.seoDesc} onChangeText={v => set('seoDesc', v)} placeholder="Meta description (150–160 characters ideal)..." multi
                     hint="This shows up in Google search results" />
-                <Inp label="Keywords (comma separated)" field="keywords" placeholder="wireless, earbuds, bluetooth..." multi />
-                <Inp label="Product Tags" field="tags" placeholder="Electronics, New Arrival, Sale" />
+                <Inp label="Keywords (comma separated)" value={form.keywords} onChangeText={v => set('keywords', v)} placeholder="wireless, earbuds, bluetooth..." multi />
+                <Inp label="Product Tags" value={form.tags} onChangeText={v => set('tags', v)} placeholder="Electronics, New Arrival, Sale" />
                 <TouchableOpacity onPress={() => handleAI('seo')} style={SS.aiBtnFull} disabled={aiLoading}>
                     {aiLoading ? <ActivityIndicator size="small" color="#8B5CF6" />
                                : <Ionicons name="sparkles" size={16} color="#8B5CF6" />}
@@ -608,50 +701,3 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
         </View>
     );
 };
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
-const SS = StyleSheet.create({
-    header:          { flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1, borderColor: '#F1F5F9' },
-    iconBtn:         { width: 40, height: 40, borderRadius: 12, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
-    headerTitle:     { fontSize: 17, fontWeight: '900', color: '#0E1A2E', letterSpacing: -0.3 },
-    headerSub:       { fontSize: 11, color: '#94A3B8', marginTop: 1 },
-    saveBtn:         { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#0E1A2E', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: '#D9A73A' },
-    saveBtnTxt:      { color: 'white', fontWeight: '800', fontSize: 13 },
-    tabChip:         { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, backgroundColor: '#F1F5F9', borderWidth: 1.5, borderColor: 'transparent' },
-    tabChipActive:   { backgroundColor: '#0E1A2E', borderColor: '#D9A73A' },
-    tabTxt:          { fontSize: 12, fontWeight: '600', color: '#94A3B8' },
-    tabTxtActive:    { color: '#D9A73A', fontWeight: '800' },
-    tabContent:      { padding: 16 },
-    card:            { backgroundColor: 'white', borderRadius: 20, padding: 18, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 8, elevation: 1 },
-    cardTitle:       { fontSize: 14, fontWeight: '900', color: '#0E1A2E', marginBottom: 14, letterSpacing: -0.2 },
-    cardSub:         { fontSize: 12, color: '#64748B', marginTop: -10, marginBottom: 14 },
-    inpWrap:         { marginBottom: 14 },
-    inpLabel:        { fontSize: 11, fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: 7 },
-    inpBox:          { backgroundColor: '#F8FAFC', borderRadius: 12, padding: 13, fontSize: 14, fontWeight: '600', color: '#0E1A2E', borderWidth: 1, borderColor: '#E2E8F0' },
-    inpHint:         { fontSize: 11, color: '#94A3B8', marginTop: 5 },
-    toggleRow:       { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: '#F1F5F9', backgroundColor: '#F8FAFC', marginBottom: 10 },
-    toggleIcon:      { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-    toggleLabel:     { fontSize: 14, fontWeight: '800', color: '#0E1A2E' },
-    toggleDesc:      { fontSize: 12, color: '#64748B', marginTop: 2 },
-    catChip:         { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F1F5F9', borderWidth: 1.5, borderColor: '#E2E8F0', marginRight: 4 },
-    catLabel:        { fontSize: 13, fontWeight: '700', color: '#475569' },
-    aiBtnRow:        { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center', backgroundColor: '#FFFBEB', padding: 12, borderRadius: 12, marginTop: 4, borderWidth: 1, borderColor: '#FDE68A' },
-    aiBtnFull:       { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center', backgroundColor: '#FFFBEB', padding: 14, borderRadius: 14, marginBottom: 14, borderWidth: 1, borderColor: '#FDE68A' },
-    aiBtnTxt:        { color: '#B45309', fontWeight: '800', fontSize: 13 },
-    imagePicker:     { height: 120, borderWidth: 2, borderColor: '#D9A73A', borderStyle: 'dashed', borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFBEB', gap: 6 },
-    imagePickerTxt:  { color: '#B45309', fontWeight: '700', fontSize: 14 },
-    imagePickerSub:  { color: '#94A3B8', fontSize: 12 },
-    removeImgBtn:    { position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 10, padding: 4 },
-    primaryBadge:    { position: 'absolute', bottom: 4, left: 4, backgroundColor: '#0E1A2E', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2, borderWidth: 1, borderColor: '#D9A73A' },
-    addRowBtn:       { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10 },
-    addRowTxt:       { color: '#0E1A2E', fontWeight: '700', fontSize: 14 },
-    deleteBtn:       { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FEF2F2', alignItems: 'center', justifyContent: 'center' },
-    variantRow:      { borderRadius: 14, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: '#E2E8F0' },
-    taxChip:         { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 12, borderWidth: 1.5, borderColor: '#E2E8F0', backgroundColor: '#F8FAFC' },
-    taxChipActive:   { backgroundColor: '#FFFBEB', borderColor: '#D9A73A' },
-    taxChipTxt:      { fontSize: 13, fontWeight: '700', color: '#64748B', textTransform: 'capitalize' },
-    taxChipTxtActive:{ color: '#B45309' },
-    loadingOverlay:  { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,0.90)', alignItems: 'center', justifyContent: 'center' },
-    loadingBox:      { alignItems: 'center', gap: 12 },
-    loadingTxt:      { fontSize: 15, fontWeight: '700', color: '#0E1A2E' },
-});

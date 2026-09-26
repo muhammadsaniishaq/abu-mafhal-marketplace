@@ -1,19 +1,39 @@
 import { supabase } from '../lib/supabase';
 
-// REPLACE WITH YOUR GEMINI API KEY
-// Get one here: https://aistudio.google.com/app/apikey
-const GEMINI_API_KEY = 'AIzaSyD9K1UENZsJf5KVuoxCf_0lUsK2q--f9nA';
+// Cached dynamic API key from Supabase app_settings
+let cachedApiKey = null;
+let lastKeyFetchTime = 0;
 
-const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+const getActiveApiKey = async () => {
+    const now = Date.now();
+    if (cachedApiKey && (now - lastKeyFetchTime < 60000)) {
+        return cachedApiKey;
+    }
+
+    try {
+        const { data } = await supabase
+            .from('app_settings')
+            .select('value')
+            .eq('key', 'gemini_api_key')
+            .maybeSingle();
+
+        const keyVal = data?.value?.value || data?.value;
+        if (keyVal && typeof keyVal === 'string' && keyVal.trim().length > 10) {
+            cachedApiKey = keyVal.trim();
+            lastKeyFetchTime = now;
+            return cachedApiKey;
+        }
+    } catch (_) {}
+
+    return null;
+};
 
 const cleanAIJsonResponse = (text) => {
     if (!text || typeof text !== 'string') return null;
     try {
-        // Remove markdown code blocks
         const cleaned = text.replace(/```json/g, '').replace(/```/g, '').trim();
         return JSON.parse(cleaned);
     } catch (e) {
-        console.error("AI JSON Parse Error:", e, "Raw Text:", text);
         return null;
     }
 };
@@ -134,14 +154,19 @@ export const geminiService = {
      * @returns {Promise<string>} - Generated description
      */
     generateDescription: async (product) => {
-        const fallback = () => {
-            const name = product.name || 'Product';
-            const brand = product.brand ? `${product.brand} ` : '';
-            const cat = product.category || 'Collection';
-            return `Experience the premium quality and exceptional design of the ${brand}${name}. Specifically curated for discerning shoppers looking for top-tier ${cat}, this product combines superior craftsmanship, outstanding durability, and modern aesthetics.\n\nKey Highlights:\n• Authentic and genuine product guaranteed\n• Premium materials engineered for longevity\n• Optimized for high performance and daily convenience\n• Fast, reliable delivery across Nigeria\n\nUpgrade today with the ${brand}${name} and enjoy the best quality at an unbeatable price on Abu Mafhal Marketplace.`;
+        const buildSmartCopy = () => {
+            const name = (product.name || 'Premium Product').trim();
+            const brand = product.brand ? `${product.brand.trim()} ` : '';
+            const cat = (product.category || 'Quality Essentials').trim();
+            const price = product.price ? `₦${Number(product.price).toLocaleString()}` : 'competitive market price';
+
+            return `Elevate your everyday experience with the authentic ${brand}${name}. Specifically curated for discerning shoppers looking for top-tier ${cat}, this product combines superior craftsmanship, outstanding durability, and modern aesthetics.\n\nKey Highlights & Features:\n• 100% Authentic Quality Guaranteed — Backed by Abu Mafhal Buyer Protection\n• Superior Performance & Ergonomics — Engineered for reliability and everyday convenience\n• Premium Material Build — Built to last with high-grade, resilient materials\n• Instant Nationwide Dispatch — Fast, safe delivery right to your doorstep across Nigeria\n• Outstanding Value — Enjoy exceptional quality at ${price}\n\nUpgrade your lifestyle with the ${brand}${name} today. Limited stock available on Abu Mafhal Marketplace!`;
         };
 
         try {
+            const key = await getActiveApiKey();
+            if (!key) return buildSmartCopy();
+
             const prompt = `Write a compelling, professional e-commerce product description for:
             Name: ${product.name}
             Brand: ${product.brand || 'Top Quality'}
@@ -153,20 +178,25 @@ export const geminiService = {
                 contents: [{ parts: [{ text: prompt }] }]
             };
 
-            const response = await fetch(API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            });
+            const models = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'];
+            for (const m of models) {
+                try {
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${key}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    });
+                    const result = await response.json();
+                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (text && text.trim().length > 20) {
+                        return text.trim();
+                    }
+                } catch (_) {}
+            }
 
-            const result = await response.json();
-            const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (!text) return fallback();
-            return text.trim();
-
-        } catch (error) {
-            console.warn("Gemini Description fallback activated:", error?.message);
-            return fallback();
+            return buildSmartCopy();
+        } catch (_) {
+            return buildSmartCopy();
         }
     },
 
@@ -176,10 +206,10 @@ export const geminiService = {
      * @returns {Promise<object>} - { title, description, keywords }
      */
     generateSEO: async (product) => {
-        const fallback = () => {
-            const name = product.name || 'Product';
-            const cat = product.category || 'Electronics';
-            const brand = product.brand ? ` - ${product.brand}` : '';
+        const buildSmartSEO = () => {
+            const name = (product.name || 'Product').trim();
+            const cat = (product.category || 'Electronics').trim();
+            const brand = product.brand ? ` - ${product.brand.trim()}` : '';
             return {
                 title: `Buy ${name} Online | Best Price in Nigeria${brand}`,
                 description: `Shop authentic ${name} at Abu Mafhal. Discover high quality ${cat} with fast delivery across Nigeria and secure payment guaranteed.`,
@@ -188,6 +218,9 @@ export const geminiService = {
         };
 
         try {
+            const key = await getActiveApiKey();
+            if (!key) return buildSmartSEO();
+
             const prompt = `Generate SEO metadata for this product in JSON format:
             Name: ${product.name}
             Category: ${product.category || 'Products'}
@@ -204,21 +237,24 @@ export const geminiService = {
                 contents: [{ parts: [{ text: prompt }] }]
             };
 
-            const response = await fetch(API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            });
+            const models = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'];
+            for (const m of models) {
+                try {
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${key}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    });
+                    const result = await response.json();
+                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                    const parsed = cleanAIJsonResponse(text);
+                    if (parsed && parsed.title) return parsed;
+                } catch (_) {}
+            }
 
-            const result = await response.json();
-            const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-            const parsed = cleanAIJsonResponse(text);
-            if (parsed && parsed.title) return parsed;
-            return fallback();
-
-        } catch (error) {
-            console.warn("Gemini SEO fallback activated:", error?.message);
-            return fallback();
+            return buildSmartSEO();
+        } catch (_) {
+            return buildSmartSEO();
         }
     },
 

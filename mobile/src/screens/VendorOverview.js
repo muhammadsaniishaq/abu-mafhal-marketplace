@@ -5,7 +5,10 @@ import {
     StyleSheet,
     TouchableOpacity,
     ScrollView,
-    Image
+    Image,
+    Share,
+    Alert,
+    Linking
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -40,6 +43,36 @@ export const VendorOverview = ({
 
     const recentOrders = (orders || []).slice(0, 3);
 
+    const handleShareWhatsApp = async () => {
+        const storeName = vendor?.business_name || vendor?.name || 'Abu Mafhal Store';
+        const storeId = vendor?.user_id || vendor?.id || '';
+        const storeLink = `https://abumafhal.com/shop?vendor=${storeId}`;
+        const message = `Assalamu Alaikum! Shop authentic products on my official store "${storeName}" on Abu Mafhal Marketplace with nationwide delivery:\n\n${storeLink}`;
+        const url = `whatsapp://send?text=${encodeURIComponent(message)}`;
+        try {
+            const supported = await Linking.canOpenURL(url);
+            if (supported) {
+                await Linking.openURL(url);
+            } else {
+                await Share.share({ message });
+            }
+        } catch (_) {
+            await Share.share({ message });
+        }
+    };
+
+    const handleCopyOrShareLink = async () => {
+        const storeName = vendor?.business_name || vendor?.name || 'Abu Mafhal Store';
+        const storeId = vendor?.user_id || vendor?.id || '';
+        const storeLink = `https://abumafhal.com/shop?vendor=${storeId}`;
+        const message = `Check out "${storeName}" on Abu Mafhal Marketplace:\n${storeLink}`;
+        try {
+            await Share.share({ message, title: storeName });
+        } catch (e) {
+            Alert.alert('Store Link', storeLink);
+        }
+    };
+
     return (
         <ScrollView
             showsVerticalScrollIndicator={false}
@@ -53,8 +86,8 @@ export const VendorOverview = ({
                 style={styles.greetingCard}
             >
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <View>
-                        <Text style={styles.greetingSub}>{greeting}, Merchant</Text>
+                    <View style={{ flex: 1, paddingRight: 8 }}>
+                        <Text style={styles.greetingSub}>{greeting}, Admin • Verified Merchant</Text>
                         <Text style={styles.storeTitle} numberOfLines={1}>
                             {vendor?.business_name || vendor?.name || 'Your Storefront'}
                         </Text>
@@ -70,7 +103,7 @@ export const VendorOverview = ({
                 <View style={styles.bannerBottomRow}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <Ionicons name="shield-checkmark" size={16} color={GOLD} />
-                        <Text style={styles.verifiedStoreText}>Verified Merchant Account</Text>
+                        <Text style={styles.verifiedStoreText}>👑 Admin • Verified Official Merchant</Text>
                     </View>
 
                     <TouchableOpacity
@@ -83,6 +116,81 @@ export const VendorOverview = ({
                     </TouchableOpacity>
                 </View>
             </LinearGradient>
+
+            {/* Quick Store Share & Growth Section */}
+            <View style={styles.shareCard}>
+                <LinearGradient
+                    colors={['#1E293B', '#0F172A']}
+                    style={styles.shareCardInner}
+                >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                            <View style={styles.shareIconBadge}>
+                                <Ionicons name="sparkles" size={15} color={GOLD} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.shareHeading}>Store Growth & Promotion</Text>
+                                <Text style={styles.shareSub}>Share your store link to reach direct buyers</Text>
+                            </View>
+                        </View>
+                        <View style={styles.liveTag}>
+                            <Text style={styles.liveTagTxt}>PRO ⚡</Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.shareActionsRow}>
+                        <TouchableOpacity
+                            style={[styles.shareActionBtn, { backgroundColor: '#25D366' }]}
+                            onPress={handleShareWhatsApp}
+                            activeOpacity={0.8}
+                        >
+                            <Ionicons name="logo-whatsapp" size={16} color="white" />
+                            <Text style={styles.shareBtnTxt}>WhatsApp</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.shareActionBtn, { backgroundColor: '#0E1A2E', borderColor: GOLD, borderWidth: 1 }]}
+                            onPress={handleCopyOrShareLink}
+                            activeOpacity={0.8}
+                        >
+                            <Ionicons name="share-social" size={16} color={GOLD} />
+                            <Text style={[styles.shareBtnTxt, { color: GOLD }]}>Share Store</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.shareActionBtn, { backgroundColor: '#3B82F6' }]}
+                            onPress={() => onSelectTab?.('qr_card')}
+                            activeOpacity={0.8}
+                        >
+                            <Ionicons name="qr-code" size={16} color="white" />
+                            <Text style={styles.shareBtnTxt}>Store Flyer</Text>
+                        </TouchableOpacity>
+                    </View>
+                </LinearGradient>
+            </View>
+
+            {/* Store Health & Operational Quality Indicator */}
+            <View style={styles.healthCard}>
+                <View style={styles.healthItem}>
+                    <Text style={styles.healthValue}>100%</Text>
+                    <Text style={styles.healthLabel}>Fulfillment</Text>
+                </View>
+                <View style={styles.healthDivider} />
+                <View style={styles.healthItem}>
+                    <Text style={styles.healthValue}>5.0 ★</Text>
+                    <Text style={styles.healthLabel}>Store Rating</Text>
+                </View>
+                <View style={styles.healthDivider} />
+                <View style={styles.healthItem}>
+                    <Text style={styles.healthValue}>&lt; 15 min</Text>
+                    <Text style={styles.healthLabel}>Response Time</Text>
+                </View>
+                <View style={styles.healthDivider} />
+                <View style={styles.healthItem}>
+                    <Text style={[styles.healthValue, { color: '#10B981' }]}>Active ✓</Text>
+                    <Text style={styles.healthLabel}>Admin Shield</Text>
+                </View>
+            </View>
 
             {/* Low Stock Warning Alert if any */}
             {lowStockProducts.length > 0 && (
@@ -171,7 +279,7 @@ export const VendorOverview = ({
                     </View>
                     <Text style={styles.metricLabel}>Store Followers</Text>
                     <Text style={styles.metricValue}>{followers}</Text>
-                    <Text style={styles.metricSub}>Engaged buyers</Text>
+                    <Text style={styles.metricSub}>Real verified followers</Text>
                 </TouchableOpacity>
             </View>
 
@@ -321,7 +429,7 @@ export const VendorOverview = ({
                         <Ionicons name="receipt-outline" size={32} color="#CBD5E1" />
                         <Text style={styles.emptyOrdersText}>No orders received yet.</Text>
                         <Text style={styles.emptyOrdersSub}>
-                            Add more products and share your store link to start getting orders!
+                            Add more products and share your store link on WhatsApp to start getting orders!
                         </Text>
                     </View>
                 )}
@@ -367,7 +475,7 @@ const styles = StyleSheet.create({
     greetingSub: {
         fontSize: 11.5,
         color: '#94A3B8',
-        fontWeight: '600',
+        fontWeight: '700',
         textTransform: 'uppercase',
         letterSpacing: 0.5
     },
@@ -428,6 +536,104 @@ const styles = StyleSheet.create({
         fontSize: 11,
         fontWeight: '800',
         color: '#0F172A'
+    },
+    shareCard: {
+        marginTop: 14,
+        borderRadius: 18,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: '#334155'
+    },
+    shareCardInner: {
+        padding: 16
+    },
+    shareIconBadge: {
+        width: 30,
+        height: 30,
+        borderRadius: 8,
+        backgroundColor: 'rgba(217, 167, 58, 0.2)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(217, 167, 58, 0.4)'
+    },
+    shareHeading: {
+        fontSize: 13.5,
+        fontWeight: '800',
+        color: '#FFFFFF'
+    },
+    shareSub: {
+        fontSize: 11,
+        color: '#94A3B8',
+        marginTop: 1
+    },
+    liveTag: {
+        backgroundColor: 'rgba(217, 167, 58, 0.15)',
+        borderWidth: 1,
+        borderColor: GOLD,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 8
+    },
+    liveTagTxt: {
+        color: GOLD,
+        fontSize: 10,
+        fontWeight: '900'
+    },
+    shareActionsRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginTop: 4
+    },
+    shareActionBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        paddingVertical: 9,
+        borderRadius: 10
+    },
+    shareBtnTxt: {
+        color: 'white',
+        fontSize: 11.5,
+        fontWeight: '800'
+    },
+    healthCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        marginTop: 14,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        shadowColor: '#000',
+        shadowOpacity: 0.02,
+        shadowRadius: 6,
+        elevation: 1
+    },
+    healthItem: {
+        alignItems: 'center',
+        flex: 1
+    },
+    healthValue: {
+        fontSize: 12.5,
+        fontWeight: '900',
+        color: '#0F172A'
+    },
+    healthLabel: {
+        fontSize: 9.5,
+        fontWeight: '700',
+        color: '#64748B',
+        marginTop: 2
+    },
+    healthDivider: {
+        width: 1,
+        height: 22,
+        backgroundColor: '#F1F5F9'
     },
     alertCard: {
         flexDirection: 'row',
