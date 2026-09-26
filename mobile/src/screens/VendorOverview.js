@@ -1,180 +1,660 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import {
+    View,
+    Text,
+    StyleSheet,
+    TouchableOpacity,
+    ScrollView,
+    Image
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
-const StatCard = ({ label, value, icon, color, onPress }) => {
-    const CardWrap = onPress ? TouchableOpacity : View;
+const GOLD = '#D9A73A';
+const GOLD_LIGHT = '#FDE68A';
+const NAVY = '#0B132B';
+
+export const VendorOverview = ({
+    stats = {},
+    orders = [],
+    products = [],
+    vendor = {},
+    onSelectTab,
+    onOpenAddProduct,
+    onOpenCertificate,
+    onViewPublicStore
+}) => {
+    const hours = new Date().getHours();
+    const greeting = hours < 12 ? 'Good Morning' : hours < 18 ? 'Good Afternoon' : 'Good Evening';
+
+    const earnings = Number(stats.earnings || 0);
+    const totalOrders = stats.orders || orders.length || 0;
+    const totalProducts = stats.products || products.length || 0;
+    const followers = stats.followers || 0;
+
+    // Detect low stock or out of stock items
+    const lowStockProducts = (products || []).filter(p => {
+        const s = p.stock_quantity ?? p.stock ?? 0;
+        return s <= 5;
+    });
+
+    const recentOrders = (orders || []).slice(0, 3);
+
     return (
-        <CardWrap
-            style={localStyles.statCard}
-            activeOpacity={onPress ? 0.75 : 1}
-            onPress={onPress}
+        <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.container}
         >
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: color + '15', alignItems: 'center', justifyContent: 'center' }}>
-                    <Ionicons name={icon} size={17} color={color} />
+            {/* Top Greeting & Live Store Banner */}
+            <LinearGradient
+                colors={['#0F172A', '#1E293B']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.greetingCard}
+            >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View>
+                        <Text style={styles.greetingSub}>{greeting}, Merchant</Text>
+                        <Text style={styles.storeTitle} numberOfLines={1}>
+                            {vendor?.business_name || vendor?.name || 'Your Storefront'}
+                        </Text>
+                    </View>
+                    <View style={styles.activePill}>
+                        <View style={styles.activeDot} />
+                        <Text style={styles.activeText}>ONLINE</Text>
+                    </View>
                 </View>
-                {onPress && (
-                    <Ionicons name="arrow-forward" size={14} color="#94A3B8" />
+
+                <View style={styles.bannerDivider} />
+
+                <View style={styles.bannerBottomRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Ionicons name="shield-checkmark" size={16} color={GOLD} />
+                        <Text style={styles.verifiedStoreText}>Verified Merchant Account</Text>
+                    </View>
+
+                    <TouchableOpacity
+                        onPress={() => onViewPublicStore ? onViewPublicStore() : onSelectTab?.('store_profile')}
+                        style={styles.viewStoreBtn}
+                        activeOpacity={0.8}
+                    >
+                        <Text style={styles.viewStoreBtnText}>View Store</Text>
+                        <Ionicons name="arrow-forward" size={12} color="#0F172A" />
+                    </TouchableOpacity>
+                </View>
+            </LinearGradient>
+
+            {/* Low Stock Warning Alert if any */}
+            {lowStockProducts.length > 0 && (
+                <TouchableOpacity
+                    style={styles.alertCard}
+                    activeOpacity={0.8}
+                    onPress={() => onSelectTab?.('products')}
+                >
+                    <View style={styles.alertIconBox}>
+                        <Ionicons name="warning" size={18} color="#D97706" />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 10 }}>
+                        <Text style={styles.alertTitle}>Inventory Alert</Text>
+                        <Text style={styles.alertDesc}>
+                            {lowStockProducts.length} {lowStockProducts.length === 1 ? 'item is' : 'items are'} low or out of stock. Tap to restock.
+                        </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color="#B45309" />
+                </TouchableOpacity>
+            )}
+
+            {/* Core KPI Metrics Grid */}
+            <View style={styles.metricsGrid}>
+                {/* Total Earnings */}
+                <TouchableOpacity
+                    style={[styles.metricCard, { borderLeftColor: '#10B981' }]}
+                    activeOpacity={0.8}
+                    onPress={() => onSelectTab?.('wallet')}
+                >
+                    <View style={styles.metricHeader}>
+                        <View style={[styles.metricIconBox, { backgroundColor: '#ECFDF5' }]}>
+                            <Ionicons name="cash-outline" size={18} color="#10B981" />
+                        </View>
+                        <Ionicons name="arrow-forward" size={14} color="#CBD5E1" />
+                    </View>
+                    <Text style={styles.metricLabel}>Total Earnings</Text>
+                    <Text style={styles.metricValue}>₦{earnings.toLocaleString()}</Text>
+                    <Text style={styles.metricSub}>From delivered orders</Text>
+                </TouchableOpacity>
+
+                {/* Total Orders */}
+                <TouchableOpacity
+                    style={[styles.metricCard, { borderLeftColor: '#3B82F6' }]}
+                    activeOpacity={0.8}
+                    onPress={() => onSelectTab?.('orders')}
+                >
+                    <View style={styles.metricHeader}>
+                        <View style={[styles.metricIconBox, { backgroundColor: '#EFF6FF' }]}>
+                            <Ionicons name="cart-outline" size={18} color="#3B82F6" />
+                        </View>
+                        <Ionicons name="arrow-forward" size={14} color="#CBD5E1" />
+                    </View>
+                    <Text style={styles.metricLabel}>Total Orders</Text>
+                    <Text style={styles.metricValue}>{totalOrders}</Text>
+                    <Text style={styles.metricSub}>Live marketplace orders</Text>
+                </TouchableOpacity>
+
+                {/* Active Products */}
+                <TouchableOpacity
+                    style={[styles.metricCard, { borderLeftColor: '#8B5CF6' }]}
+                    activeOpacity={0.8}
+                    onPress={() => onSelectTab?.('products')}
+                >
+                    <View style={styles.metricHeader}>
+                        <View style={[styles.metricIconBox, { backgroundColor: '#F5F3FF' }]}>
+                            <Ionicons name="cube-outline" size={18} color="#8B5CF6" />
+                        </View>
+                        <Ionicons name="arrow-forward" size={14} color="#CBD5E1" />
+                    </View>
+                    <Text style={styles.metricLabel}>Products Catalog</Text>
+                    <Text style={styles.metricValue}>{totalProducts}</Text>
+                    <Text style={styles.metricSub}>Active items listed</Text>
+                </TouchableOpacity>
+
+                {/* Followers */}
+                <TouchableOpacity
+                    style={[styles.metricCard, { borderLeftColor: '#6366F1' }]}
+                    activeOpacity={0.8}
+                    onPress={() => onSelectTab?.('followers')}
+                >
+                    <View style={styles.metricHeader}>
+                        <View style={[styles.metricIconBox, { backgroundColor: '#EEF2FF' }]}>
+                            <Ionicons name="people-outline" size={18} color="#6366F1" />
+                        </View>
+                        <Ionicons name="arrow-forward" size={14} color="#CBD5E1" />
+                    </View>
+                    <Text style={styles.metricLabel}>Store Followers</Text>
+                    <Text style={styles.metricValue}>{followers}</Text>
+                    <Text style={styles.metricSub}>Engaged buyers</Text>
+                </TouchableOpacity>
+            </View>
+
+            {/* Quick Actions Bar */}
+            <View style={styles.quickActionsSection}>
+                <Text style={styles.sectionHeader}>Quick Actions</Text>
+                <View style={styles.quickActionsRow}>
+                    <TouchableOpacity
+                        style={styles.quickActionBtn}
+                        activeOpacity={0.75}
+                        onPress={() => onOpenAddProduct ? onOpenAddProduct() : onSelectTab?.('products')}
+                    >
+                        <View style={[styles.quickActionIconBox, { backgroundColor: '#ECFDF5' }]}>
+                            <Ionicons name="add-circle" size={24} color="#059669" />
+                        </View>
+                        <Text style={styles.quickActionLabel}>Add Product</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.quickActionBtn}
+                        activeOpacity={0.75}
+                        onPress={() => onSelectTab?.('orders')}
+                    >
+                        <View style={[styles.quickActionIconBox, { backgroundColor: '#EFF6FF' }]}>
+                            <Ionicons name="receipt" size={24} color="#2563EB" />
+                        </View>
+                        <Text style={styles.quickActionLabel}>Fulfill Orders</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.quickActionBtn}
+                        activeOpacity={0.75}
+                        onPress={() => onSelectTab?.('wallet')}
+                    >
+                        <View style={[styles.quickActionIconBox, { backgroundColor: '#FEF3C7' }]}>
+                            <Ionicons name="wallet" size={24} color="#D97706" />
+                        </View>
+                        <Text style={styles.quickActionLabel}>Withdraw</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.quickActionBtn}
+                        activeOpacity={0.75}
+                        onPress={() => onSelectTab?.('store_profile')}
+                    >
+                        <View style={[styles.quickActionIconBox, { backgroundColor: '#F3E8FF' }]}>
+                            <Ionicons name="storefront" size={24} color="#9333EA" />
+                        </View>
+                        <Text style={styles.quickActionLabel}>Store Branding</Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Secondary Quick Action Row: Business Growth & Tools */}
+                <View style={[styles.quickActionsRow, { marginTop: 12 }]}>
+                    <TouchableOpacity
+                        style={styles.quickActionBtn}
+                        activeOpacity={0.75}
+                        onPress={() => onSelectTab?.('analytics')}
+                    >
+                        <View style={[styles.quickActionIconBox, { backgroundColor: '#FCE7F3' }]}>
+                            <Ionicons name="bar-chart" size={24} color="#EC4899" />
+                        </View>
+                        <Text style={styles.quickActionLabel}>Analytics</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.quickActionBtn}
+                        activeOpacity={0.75}
+                        onPress={() => onSelectTab?.('shipping')}
+                    >
+                        <View style={[styles.quickActionIconBox, { backgroundColor: '#FFEDD5' }]}>
+                            <Ionicons name="bicycle" size={24} color="#EA580C" />
+                        </View>
+                        <Text style={styles.quickActionLabel}>Shipping</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.quickActionBtn}
+                        activeOpacity={0.75}
+                        onPress={() => onSelectTab?.('qr_card')}
+                    >
+                        <View style={[styles.quickActionIconBox, { backgroundColor: '#EDE9FE' }]}>
+                            <Ionicons name="qr-code" size={24} color="#7C3AED" />
+                        </View>
+                        <Text style={styles.quickActionLabel}>QR Flyer</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.quickActionBtn}
+                        activeOpacity={0.75}
+                        onPress={() => onSelectTab?.('messages')}
+                    >
+                        <View style={[styles.quickActionIconBox, { backgroundColor: '#E0F2FE' }]}>
+                            <Ionicons name="chatbubbles" size={24} color="#0284C7" />
+                        </View>
+                        <Text style={styles.quickActionLabel}>Inquiries</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+
+            {/* Recent Orders Preview */}
+            <View style={styles.recentOrdersSection}>
+                <View style={styles.recentOrdersHeader}>
+                    <Text style={styles.sectionHeader}>Recent Store Orders</Text>
+                    <TouchableOpacity onPress={() => onSelectTab?.('orders')}>
+                        <Text style={styles.viewAllText}>View All ({totalOrders}) →</Text>
+                    </TouchableOpacity>
+                </View>
+
+                {recentOrders.length > 0 ? (
+                    recentOrders.map((ord, idx) => (
+                        <TouchableOpacity
+                            key={ord.id || idx}
+                            style={styles.recentOrderCard}
+                            activeOpacity={0.8}
+                            onPress={() => onSelectTab?.('orders')}
+                        >
+                            <View style={styles.recentOrderIcon}>
+                                <Ionicons name="bag-check" size={18} color="#0F172A" />
+                            </View>
+                            <View style={{ flex: 1, marginLeft: 12 }}>
+                                <Text style={styles.recentOrderTitle} numberOfLines={1}>
+                                    {ord.item || `Order #${(ord.id || '').slice(0, 8)}`}
+                                </Text>
+                                <Text style={styles.recentOrderSub}>
+                                    {ord.customerName || 'Customer'} • {ord.date || 'Recent'}
+                                </Text>
+                            </View>
+                            <View style={{ alignItems: 'flex-end' }}>
+                                <Text style={styles.recentOrderAmount}>
+                                    ₦{(ord.amount || 0).toLocaleString()}
+                                </Text>
+                                <View style={[styles.recentOrderStatusPill, {
+                                    backgroundColor: ord.status?.toLowerCase() === 'delivered' ? '#DCFCE7' : '#FEF3C7'
+                                }]}>
+                                    <Text style={[styles.recentOrderStatusText, {
+                                        color: ord.status?.toLowerCase() === 'delivered' ? '#16A34A' : '#D97706'
+                                    }]}>
+                                        {ord.status || 'Pending'}
+                                    </Text>
+                                </View>
+                            </View>
+                        </TouchableOpacity>
+                    ))
+                ) : (
+                    <View style={styles.emptyOrdersCard}>
+                        <Ionicons name="receipt-outline" size={32} color="#CBD5E1" />
+                        <Text style={styles.emptyOrdersText}>No orders received yet.</Text>
+                        <Text style={styles.emptyOrdersSub}>
+                            Add more products and share your store link to start getting orders!
+                        </Text>
+                    </View>
                 )}
             </View>
-            <Text style={{ color: '#64748B', fontSize: 11, fontWeight: '700' }}>{label}</Text>
-            <Text style={{ color: '#0F172A', fontSize: 17, fontWeight: '900', marginTop: 3 }}>{value}</Text>
-        </CardWrap>
-    );
-};
 
-export const VendorOverview = ({ stats, onSelectTab }) => {
-    return (
-        <View style={{ padding: 20 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>Store Performance</Text>
-                <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600' }}>Live Metrics</Text>
-            </View>
-
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-                <StatCard
-                    label="Earnings"
-                    value={`₦${Number(stats.earnings || 0).toLocaleString()}`}
-                    icon="cash-outline"
-                    color="#10B981"
-                    onPress={() => onSelectTab && onSelectTab('wallet')}
-                />
-                <StatCard
-                    label="Orders"
-                    value={stats.orders || 0}
-                    icon="cart-outline"
-                    color="#3B82F6"
-                    onPress={() => onSelectTab && onSelectTab('orders')}
-                />
-                <StatCard
-                    label="Products"
-                    value={stats.products || 0}
-                    icon="cube-outline"
-                    color="#8B5CF6"
-                    onPress={() => onSelectTab && onSelectTab('products')}
-                />
-                <StatCard
-                    label="Followers"
-                    value={stats.followers || 0}
-                    icon="people-outline"
-                    color="#6366F1"
-                    onPress={() => onSelectTab && onSelectTab('followers')}
-                />
-            </View>
-
-            {/* Store Profile Branding Quick Card */}
+            {/* Official Certificate & Compliance Banner */}
             <TouchableOpacity
-                style={{
-                    backgroundColor: '#0A192F',
-                    borderRadius: 20,
-                    padding: 16,
-                    marginTop: 14,
-                    marginBottom: 8,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    borderWidth: 1,
-                    borderColor: '#D4AF37',
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.15,
-                    shadowRadius: 8,
-                    elevation: 3
-                }}
+                style={styles.certificateBanner}
                 activeOpacity={0.85}
-                onPress={() => onSelectTab && onSelectTab('store_profile')}
+                onPress={() => onOpenCertificate ? onOpenCertificate() : onSelectTab?.('store_profile')}
             >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 }}>
-                    <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(212, 175, 55, 0.2)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#D4AF37' }}>
-                        <Ionicons name="storefront" size={22} color="#FDE68A" />
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                    <View style={styles.ribbonCircle}>
+                        <Ionicons name="ribbon" size={24} color="#0F172A" />
                     </View>
                     <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text style={{ fontSize: 14, fontWeight: '900', color: '#FFFFFF' }}>Store Profile & Cover</Text>
-                            <View style={{ backgroundColor: '#D4AF37', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                                <Text style={{ fontSize: 9, fontWeight: '900', color: '#0A192F' }}>EDIT</Text>
-                            </View>
-                        </View>
-                        <Text style={{ fontSize: 11, color: '#94A3B8', fontWeight: '500', marginTop: 2 }}>
-                            Set your Cover Banner, Logo, Store Name & Bio to look professional.
+                        <Text style={styles.certBannerTitle}>Official Vendor Certificate</Text>
+                        <Text style={styles.certBannerSub}>
+                            Download or print your verified merchant accreditation certificate.
                         </Text>
                     </View>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color="#D4AF37" />
+                <Ionicons name="chevron-forward" size={18} color="#D9A73A" />
             </TouchableOpacity>
-
-            {/* Quick Actions / Tips */}
-            <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', marginTop: 10, marginBottom: 12 }}>
-                Grow Your Business
-            </Text>
-
-            <TouchableOpacity
-                style={localStyles.actionCard}
-                activeOpacity={0.8}
-                onPress={() => onSelectTab && onSelectTab('followers')}
-            >
-                <View style={[localStyles.actionIconBox, { backgroundColor: '#EEF2FF' }]}>
-                    <Ionicons name="people" size={22} color="#6366F1" />
-                </View>
-                <View style={{ flex: 1 }}>
-                    <Text style={localStyles.actionTitle}>Store Followers</Text>
-                    <Text style={localStyles.actionSub}>Engage your audience, send product updates, and reward loyal buyers.</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-            </TouchableOpacity>
-
-            <View style={localStyles.actionCard}>
-                <View style={[localStyles.actionIconBox, { backgroundColor: '#FEE2E2' }]}>
-                    <Ionicons name="megaphone-outline" size={22} color="#EF4444" />
-                </View>
-                <View style={{ flex: 1 }}>
-                    <Text style={localStyles.actionTitle}>Boost Your Store</Text>
-                    <Text style={localStyles.actionSub}>Get premium placement on the homepage to reach more active buyers across Nigeria.</Text>
-                </View>
-            </View>
-        </View>
+        </ScrollView>
     );
 };
 
-const localStyles = StyleSheet.create({
-    statCard: {
-        width: '48%',
-        backgroundColor: '#FFFFFF',
-        padding: 14,
-        borderRadius: 14,
-        marginBottom: 12,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        boxShadow: '0px 2px 6px rgba(15, 23, 42, 0.03)',
-        elevation: 1
+const styles = StyleSheet.create({
+    container: {
+        padding: 16,
+        paddingBottom: 110
     },
-    actionCard: {
-        backgroundColor: '#FFFFFF',
-        padding: 14,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
+    greetingCard: {
+        borderRadius: 20,
+        padding: 18,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.12,
+        shadowRadius: 10,
+        elevation: 3
+    },
+    greetingSub: {
+        fontSize: 11.5,
+        color: '#94A3B8',
+        fontWeight: '600',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5
+    },
+    storeTitle: {
+        fontSize: 18,
+        fontWeight: '900',
+        color: '#FFFFFF',
+        marginTop: 2
+    },
+    activePill: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 10,
-        gap: 12
+        backgroundColor: 'rgba(16, 185, 129, 0.2)',
+        borderWidth: 1,
+        borderColor: 'rgba(16, 185, 129, 0.4)',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 10,
+        gap: 5
     },
-    actionIconBox: {
-        width: 44,
-        height: 44,
-        borderRadius: 12,
+    activeDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: '#10B981'
+    },
+    activeText: {
+        fontSize: 9.5,
+        fontWeight: '900',
+        color: '#34D399',
+        letterSpacing: 0.5
+    },
+    bannerDivider: {
+        height: 1,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        marginVertical: 14
+    },
+    bannerBottomRow: {
+        flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center'
+        justifyContent: 'space-between'
     },
-    actionTitle: {
-        fontSize: 13.5,
+    verifiedStoreText: {
+        fontSize: 12,
+        color: GOLD_LIGHT,
+        fontWeight: '700'
+    },
+    viewStoreBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: GOLD,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 8
+    },
+    viewStoreBtnText: {
+        fontSize: 11,
         fontWeight: '800',
         color: '#0F172A'
     },
-    actionSub: {
+    alertCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFBEB',
+        borderRadius: 14,
+        padding: 12,
+        marginTop: 12,
+        borderWidth: 1,
+        borderColor: '#FDE68A'
+    },
+    alertIconBox: {
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        backgroundColor: '#FEF3C7',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    alertTitle: {
+        fontSize: 12.5,
+        fontWeight: '800',
+        color: '#92400E'
+    },
+    alertDesc: {
+        fontSize: 11,
+        color: '#B45309',
+        fontWeight: '500',
+        marginTop: 1
+    },
+    metricsGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        marginTop: 14,
+        gap: 10
+    },
+    metricCard: {
+        width: '48%',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 14,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        borderLeftWidth: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.03,
+        shadowRadius: 6,
+        elevation: 1
+    },
+    metricHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 8
+    },
+    metricIconBox: {
+        width: 34,
+        height: 34,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    metricLabel: {
         fontSize: 11,
         color: '#64748B',
+        fontWeight: '700'
+    },
+    metricValue: {
+        fontSize: 17,
+        fontWeight: '900',
+        color: '#0F172A',
+        marginTop: 2
+    },
+    metricSub: {
+        fontSize: 10,
+        color: '#94A3B8',
+        fontWeight: '500',
+        marginTop: 3
+    },
+    quickActionsSection: {
+        marginTop: 20
+    },
+    sectionHeader: {
+        fontSize: 14.5,
+        fontWeight: '800',
+        color: '#0F172A',
+        letterSpacing: -0.2
+    },
+    quickActionsRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 12,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        paddingVertical: 14,
+        paddingHorizontal: 10,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        shadowColor: '#000',
+        shadowOpacity: 0.02,
+        shadowRadius: 6,
+        elevation: 1
+    },
+    quickActionBtn: {
+        alignItems: 'center',
+        flex: 1
+    },
+    quickActionIconBox: {
+        width: 44,
+        height: 44,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 6
+    },
+    quickActionLabel: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#334155',
+        textAlign: 'center'
+    },
+    recentOrdersSection: {
+        marginTop: 20
+    },
+    recentOrdersHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 12
+    },
+    viewAllText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#2563EB'
+    },
+    recentOrderCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 14,
+        padding: 12,
+        marginBottom: 8,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    recentOrderIcon: {
+        width: 38,
+        height: 38,
+        borderRadius: 10,
+        backgroundColor: '#F1F5F9',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    recentOrderTitle: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#0F172A'
+    },
+    recentOrderSub: {
+        fontSize: 11,
+        color: '#64748B',
+        marginTop: 2
+    },
+    recentOrderAmount: {
+        fontSize: 13.5,
+        fontWeight: '800',
+        color: '#10B981'
+    },
+    recentOrderStatusPill: {
+        paddingHorizontal: 6,
+        paddingVertical: 1.5,
+        borderRadius: 6,
+        marginTop: 3
+    },
+    recentOrderStatusText: {
+        fontSize: 9.5,
+        fontWeight: '800'
+    },
+    emptyOrdersCard: {
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 14,
+        padding: 24,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    emptyOrdersText: {
+        fontSize: 13.5,
+        fontWeight: '800',
+        color: '#475569',
+        marginTop: 8
+    },
+    emptyOrdersSub: {
+        fontSize: 11,
+        color: '#94A3B8',
+        textAlign: 'center',
+        marginTop: 4,
+        lineHeight: 16
+    },
+    certificateBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#0F172A',
+        borderRadius: 16,
+        padding: 14,
+        marginTop: 18,
+        borderWidth: 1,
+        borderColor: GOLD
+    },
+    ribbonCircle: {
+        width: 42,
+        height: 42,
+        borderRadius: 21,
+        backgroundColor: GOLD,
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    certBannerTitle: {
+        fontSize: 13.5,
+        fontWeight: '800',
+        color: '#FFFFFF'
+    },
+    certBannerSub: {
+        fontSize: 11,
+        color: '#94A3B8',
         marginTop: 2,
         lineHeight: 15
     }

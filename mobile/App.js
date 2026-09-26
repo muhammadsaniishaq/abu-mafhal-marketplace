@@ -400,21 +400,26 @@ export default function App() {
                     window.location.hash = '';
                 } catch (_) {}
             }
-            // Navigation to Landing is handled by the useEffect below that watches user state
+            if (navigationRef.isReady()) {
+                navigationRef.reset({
+                    index: 0,
+                    routes: [{ name: 'Main', params: { screen: 'home' } }],
+                });
+            }
         }
     };
 
-    // Whenever user becomes null (logout or session expiry), navigate to Landing page
+    // Whenever user becomes null, protect admin/vendor/driver dashboards by redirecting to Auth
     useEffect(() => {
         if (!user && !loading) {
             const timer = setTimeout(() => {
                 if (navigationRef.isReady()) {
                     const currentRoute = navigationRef.getCurrentRoute();
-                    // Only reset to Landing if we're not already there or on Auth
-                    if (currentRoute?.name && currentRoute.name !== 'Landing' && currentRoute.name !== 'Auth') {
+                    const protectedRoutes = ['AdminDashboard', 'VendorDashboard', 'DriverDashboard'];
+                    if (currentRoute?.name && protectedRoutes.includes(currentRoute.name)) {
                         navigationRef.reset({
                             index: 0,
-                            routes: [{ name: 'Landing' }],
+                            routes: [{ name: 'Auth' }],
                         });
                     }
                 }
@@ -486,10 +491,13 @@ export default function App() {
                 }
                 return 'Main';
             }
-            // No stored user = always go to Landing (never to Main)
+            // On mobile devices (Android / iOS) or standard app entry, launch MainApp directly so users experience the full marketplace immediately
+            if (Platform.OS !== 'web' || !hash.includes('landing')) {
+                return 'Main';
+            }
             return 'Landing';
         } catch (_) {}
-        return user ? 'Main' : 'Landing';
+        return 'Main';
     };
 
     let initialRoute = getInitialRoute();

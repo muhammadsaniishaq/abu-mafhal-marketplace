@@ -23,16 +23,30 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
             ]);
             const pBal = Number(pRes.status === 'fulfilled' ? pRes.value?.data?.balance : 0) || 0;
 
-            // 2. Get vendor orders to calculate pending amount (non‑delivered, non‑cancelled)
-            const { data: ordersData, error: ordersErr } = await supabase.rpc('get_vendor_dashboard_orders', { p_vendor_id: user.id });
+            // 2. Fetch vendor product IDs to query related order items directly
             let pendingSum = 0;
-            if (ordersData) {
-                ordersData.forEach(o => {
-                    const status = (o.status || '').toLowerCase();
-                    if (!['delivered', 'cancelled', 'refunded'].includes(status)) {
-                        pendingSum += Number(o.amount) || 0;
-                    }
-                });
+            try {
+                const { data: vProds } = await supabase.from('products').select('id').eq('vendor_id', user.id);
+                const pIds = (vProds || []).map(p => p.id);
+
+                let oiQuery = supabase.from('order_items').select('price, quantity, order:orders(status)');
+                if (pIds.length > 0) {
+                    oiQuery = oiQuery.or(`vendor_id.eq.${user.id},product_id.in.(${pIds.join(',')})`);
+                } else {
+                    oiQuery = oiQuery.eq('vendor_id', user.id);
+                }
+
+                const { data: oiItems } = await oiQuery;
+                if (Array.isArray(oiItems)) {
+                    oiItems.forEach(item => {
+                        const status = (item.order?.status || 'pending').toLowerCase();
+                        if (!['delivered', 'cancelled', 'refunded'].includes(status)) {
+                            pendingSum += (Number(item.price) || 0) * (Number(item.quantity) || 1);
+                        }
+                    });
+                }
+            } catch (err) {
+                console.log('Error calculating pending sum directly:', err);
             }
 
             let ledgerBal = 0;
@@ -47,7 +61,6 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
             }
             const effectiveBalance = Math.max(pBal, ledgerBal);
 
-            if (ordersErr) console.log('Orders fetch error for pending:', ordersErr.message);
             const merged = {
                 balance: effectiveBalance,
                 pending_balance: pendingSum,
@@ -216,12 +229,40 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
     const fetchWithdrawalHistory = async () => {
         setLoadingHistory(true);
         try {
-            const { data, error } = await supabase
-                .from('vendor_payouts')
+            // Query transactions for withdrawals
+            const { data: txData, error: txError } = await supabase
+                .from('transactions')
                 .select('*')
-                .eq('vendor_id', user.id)
+                .eq('user_id', user.id)
+                .in('type', ['withdrawal', 'debit', 'payout'])
                 .order('created_at', { ascending: false });
-            if (data) setWithdrawals(data);
+
+            let mappedList = [];
+            if (Array.isArray(txData)) {
+                mappedList = txData.map(t => ({
+                    id: t.id,
+                    amount: Number(t.amount) || 0,
+                    status: (t.status || 'pending').toLowerCase(),
+                    bank_name: t.description?.includes('to ') ? t.description.split('to ')[1]?.split('(')[0]?.trim() : 'Bank Transfer',
+                    account_number: t.reference || 'N/A',
+                    created_at: t.created_at,
+                    description: t.description
+                }));
+            }
+
+            // Fallback check on vendor_payouts if available
+            try {
+                const { data: vData } = await supabase
+                    .from('vendor_payouts')
+                    .select('*')
+                    .eq('vendor_id', user.id)
+                    .order('created_at', { ascending: false });
+                if (Array.isArray(vData) && vData.length > 0) {
+                    mappedList = [...vData, ...mappedList];
+                }
+            } catch (_) {}
+
+            setWithdrawals(mappedList);
         } catch (err) {
             console.log('Error fetching withdrawals:', err);
         } finally {
@@ -241,21 +282,21 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                             table { width: 100%; border-collapse: collapse; margin-top: 20px; }
                             th, td { border: 1px solid #E2E8F0; padding: 12px; text-align: left; }
                             th { background-color: #F8FAFC; color: #475569; }
-                            .paid { color: #16A34A; } .pending { color: #D97706; } .rejected { color: #EF4444; }
+                            .paid, .completed, .successful { color: #16A34A; } .pending { color: #D97706; } .rejected, .failed { color: #EF4444; }
                         </style>
                     </head>
                     <body>
-                        <h2>Withdrawal History Report</h2>
+                        <h2>Vendor Withdrawal History Report</h2>
                         <p>Generated on: ${new Date().toLocaleString()}</p>
                         <table>
-                            <tr><th>Date</th><th>Amount (N)</th><th>Bank</th><th>Account No</th><th>Status</th></tr>
+                            <tr><th>Date</th><th>Amount (₦)</th><th>Destination</th><th>Reference</th><th>Status</th></tr>
                             ${withdrawals.map(w => `
                                 <tr>
                                     <td>${new Date(w.created_at).toLocaleDateString()}</td>
-                                    <td>${w.amount}</td>
-                                    <td>${w.bank_name || 'N/A'}</td>
-                                    <td>${w.account_number || 'N/A'}</td>
-                                    <td class="${w.status}">${w.status.toUpperCase()}</td>
+                                    <td>₦${Number(w.amount).toLocaleString()}</td>
+                                    <td>${w.bank_name || 'Bank Transfer'}</td>
+                                    <td>${w.account_number || w.reference || 'N/A'}</td>
+                                    <td class="${w.status}">${(w.status || 'PENDING').toUpperCase()}</td>
                                 </tr>
                             `).join('')}
                         </table>
@@ -282,38 +323,59 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
             return Alert.alert('Incomplete Details', 'Please enter your full bank details.');
         }
 
-        Alert.alert('Confirm Withdrawal', `Are you sure you want to withdraw ₦${reqAmount.toLocaleString()}?`, [
+        Alert.alert('Confirm Withdrawal', `Are you sure you want to withdraw ₦${reqAmount.toLocaleString()} to ${bankName} (${accountNo})?`, [
             { text: 'Cancel', style: 'cancel' },
             {
                 text: 'Confirm',
                 onPress: async () => {
                     setLoading(true);
                     try {
-                        const { error: withdrawErr } = await supabase.from('vendor_payouts').insert([
+                        const refCode = `WTH-${Date.now()}`;
+                        const desc = `Vendor withdrawal of ₦${reqAmount.toLocaleString()} to ${bankName} (${accountNo} - ${accountName})`;
+
+                        // 1. Record withdrawal in transactions table
+                        const { error: txErr } = await supabase.from('transactions').insert([
                             {
-                                vendor_id: user.id,
+                                user_id: user.id,
+                                type: 'withdrawal',
                                 amount: reqAmount,
-                                bank_name: bankName,
-                                account_number: accountNo,
-                                account_name: accountName,
-                                status: 'pending'
+                                status: 'pending',
+                                reference: refCode,
+                                description: desc
                             }
                         ]);
-                        if (withdrawErr) throw withdrawErr;
+                        if (txErr) console.log('Transaction insert error:', txErr);
 
-                        const newBalance = (localWallet?.balance || 0) - reqAmount;
-                        const { error: walletErr } = await supabase
-                            .from('wallets')
+                        // 2. Safely mirror to vendor_payouts if exists
+                        try {
+                            await supabase.from('vendor_payouts').insert([
+                                {
+                                    vendor_id: user.id,
+                                    amount: reqAmount,
+                                    bank_name: bankName,
+                                    account_number: accountNo,
+                                    account_name: accountName,
+                                    status: 'pending'
+                                }
+                            ]);
+                        } catch (_) {}
+
+                        // 3. Deduct from profiles.balance
+                        const newBalance = Math.max(0, (localWallet?.balance || 0) - reqAmount);
+                        const { error: profErr } = await supabase
+                            .from('profiles')
                             .update({ balance: newBalance })
-                            .eq('user_id', user.id);
-                        if (walletErr) throw walletErr;
+                            .eq('id', user.id);
+                        if (profErr) console.log('Profile balance update err:', profErr);
+
+                        // 4. Update local state
                         setLocalWallet(prev => ({ ...prev, balance: newBalance }));
 
-                        Alert.alert('Success', 'Withdrawal request submitted successfully.');
+                        Alert.alert('Success', `Withdrawal request of ₦${reqAmount.toLocaleString()} submitted successfully. Our finance team will review and credit your bank account.`);
                         setShowWithdrawModal(false);
                         setAmount('');
-                        if (fetchDashboardData) fetchDashboardData();
-                        fetchWithdrawalHistory();
+                        if (fetchDashboardData) await fetchDashboardData();
+                        await fetchWithdrawalHistory();
                     } catch (err) {
                         console.error('Withdrawal error:', err);
                         Alert.alert('Error', err.message || 'Failed to process withdrawal.');

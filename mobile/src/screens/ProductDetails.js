@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useComparison } from '../context/ComparisonContext';
+import { useAppSettings } from '../context/AppSettingsContext';
 import { Video, ResizeMode } from 'expo-av';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -49,6 +50,8 @@ export const ProductDetails = ({ route, navigation, addToCart, user }) => {
 
     const insets = useSafeAreaInsets();
     const { addToComparison } = useComparison();
+    const { settings } = useAppSettings();
+    const allowGuest = settings?.allow_guest_browse !== false;
 
     const [currentUser, setCurrentUser] = useState(() => {
         if (user) return user;
@@ -71,8 +74,8 @@ export const ProductDetails = ({ route, navigation, addToCart, user }) => {
         }
     }, [user]);
 
-    // Gating check: User MUST be logged in to view product details
-    if (!user && !currentUser) {
+    // Gating check: User MUST be logged in only if guest browsing is explicitly disabled
+    if (!user && !currentUser && !allowGuest) {
         return (
             <SafeAreaView style={{ flex: 1, backgroundColor: '#070F1E', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
                 <StatusBar barStyle="light-content" backgroundColor="#070F1E" />
@@ -528,13 +531,13 @@ export const ProductDetails = ({ route, navigation, addToCart, user }) => {
                 1. TOP LUXURY HEADER (Exact to Mockup)
             ══════════════════════════════════════════════════ */}
             <View style={[s.topBar, { paddingTop: safePaddingTop }]}>
-                {/* Left: Menu / Hamburger */}
+                {/* Left: Back Arrow */}
                 <TouchableOpacity
                     style={s.topNavBtn}
                     onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Main', { screen: 'home' })}
                     activeOpacity={0.7}
                 >
-                    <Ionicons name="menu-outline" size={26} color={BRAND.slateDark} />
+                    <Ionicons name="arrow-back" size={24} color={BRAND.slateDark} />
                 </TouchableOpacity>
 
                 {/* Center: ABU MAFHAL Logo with Tagline */}

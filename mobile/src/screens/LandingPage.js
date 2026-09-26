@@ -238,9 +238,10 @@ export const LandingPage = ({
         ]).start(() => setToast({ visible: false, message: '' }));
     };
 
-    // 🔒 STRICT SECURITY GATE: User MUST be authenticated to view Product Details!
+    // 🔒 SECURITY GATE: Allow guests to view products if allow_guest_browse is true (default)
+    const allowGuest = settings?.allow_guest_browse !== false;
     const handleProductPress = (product) => {
-        if (!user) {
+        if (!user && !allowGuest) {
             showToast('🔒 Please sign in or create an account to view full specifications and pricing.');
             setTimeout(() => {
                 if (onNavigate) {
@@ -260,7 +261,7 @@ export const LandingPage = ({
             return;
         }
 
-        // Authenticated access granted
+        // Authenticated or guest access granted
         if (onNavigate) {
             onNavigate('ProductDetails', { product, id: product?.id });
         } else if (navigation) {
@@ -599,7 +600,7 @@ export const LandingPage = ({
                             {/* Dual Call To Actions */}
                             <View style={styles.heroButtonsStack}>
                                 <TouchableOpacity
-                                    onPress={() => scrollViewRef.current?.scrollTo({ y: 430, animated: true })}
+                                    onPress={() => onEnterShop ? onEnterShop('home') : (navigation ? navigation.navigate('Main', { screen: 'home' }) : scrollViewRef.current?.scrollTo({ y: 430, animated: true }))}
                                     style={styles.btnStartShopping}
                                     activeOpacity={0.9}
                                 >
@@ -886,16 +887,16 @@ export const LandingPage = ({
                                             </View>
                                             <Text style={styles.flashStockText}>⚡ {progressPct}% Claimed</Text>
 
-                                            {/* Security Gate Pill: Login to View */}
+                                            {/* Security Gate Pill: View / Login to View */}
                                             <View style={styles.viewLockPill}>
                                                 <Ionicons
-                                                    name={user ? 'eye-outline' : 'lock-closed'}
+                                                    name={(user || allowGuest) ? 'eye-outline' : 'lock-closed'}
                                                     size={11}
-                                                    color={user ? '#10B981' : '#D9A73A'}
+                                                    color={(user || allowGuest) ? '#10B981' : '#D9A73A'}
                                                     style={{ marginRight: 4 }}
                                                 />
-                                                <Text style={[styles.viewLockPillText, user && { color: '#10B981' }]}>
-                                                    {user ? 'View Deal' : 'Sign In to View'}
+                                                <Text style={[styles.viewLockPillText, (user || allowGuest) && { color: '#10B981' }]}>
+                                                    {(user || allowGuest) ? 'View Deal' : 'Sign In to View'}
                                                 </Text>
                                             </View>
                                         </View>
@@ -948,8 +949,8 @@ export const LandingPage = ({
                                         <Text style={styles.productEscrowPillText}>Escrow Safe</Text>
                                     </View>
 
-                                    {/* Auth Lock Hint Overlay for guests */}
-                                    {!user && (
+                                    {/* Auth Lock Hint Overlay for guests only if guest browsing is disabled */}
+                                    {!user && !allowGuest && (
                                         <View style={styles.productAuthLockBadge}>
                                             <Ionicons name="lock-closed" size={11} color="#FFFFFF" />
                                         </View>
@@ -994,15 +995,15 @@ export const LandingPage = ({
                                         </View>
 
                                         {/* Security Gated Action Button */}
-                                        <View style={[styles.productViewActionBtn, user && styles.productViewActionBtnUser]}>
+                                        <View style={[styles.productViewActionBtn, (user || allowGuest) && styles.productViewActionBtnUser]}>
                                             <Ionicons
-                                                name={user ? 'eye-outline' : 'lock-closed'}
+                                                name={(user || allowGuest) ? 'eye-outline' : 'lock-closed'}
                                                 size={11}
-                                                color={user ? '#10B981' : '#D9A73A'}
+                                                color={(user || allowGuest) ? '#10B981' : '#D9A73A'}
                                                 style={{ marginRight: 3 }}
                                             />
-                                            <Text style={[styles.productViewActionBtnText, user && { color: '#10B981' }]}>
-                                                {user ? 'View' : 'Unlock'}
+                                            <Text style={[styles.productViewActionBtnText, (user || allowGuest) && { color: '#10B981' }]}>
+                                                {(user || allowGuest) ? 'View' : 'Unlock'}
                                             </Text>
                                         </View>
                                     </View>

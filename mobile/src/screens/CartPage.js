@@ -470,16 +470,18 @@ export const CartPage = ({
             return;
         }
 
+        const isGuestCheckoutAllowed = Boolean(settings?.enable_guest_checkout);
+
         try {
             const { data: { user: authUser } } = await supabase.auth.getUser();
-            if (!authUser && !user) {
+            if (!authUser && !user && !isGuestCheckoutAllowed) {
                 Alert.alert(
-                    'Authentication Required',
-                    'Please sign in to proceed with checkout and receive live order updates.',
+                    'Sign In to Checkout',
+                    'Please sign in or create an account to proceed with checkout and receive live order updates.',
                     [
                         { text: 'Cancel', style: 'cancel' },
                         {
-                            text: 'Sign In',
+                            text: 'Sign In / Register',
                             onPress: () => navigation.navigate('Auth', { redirectTo: 'CheckoutPage' })
                         }
                     ]

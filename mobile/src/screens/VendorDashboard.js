@@ -1,180 +1,324 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, SafeAreaView, Image, ActivityIndicator, FlatList, StyleSheet, BackHandler, Modal, TextInput, Alert, RefreshControl, Platform } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+    View,
+    Text,
+    TouchableOpacity,
+    ScrollView,
+    SafeAreaView,
+    ActivityIndicator,
+    StyleSheet,
+    BackHandler,
+    Alert,
+    RefreshControl,
+    Platform,
+    StatusBar
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { styles } from '../styles/theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
-import { VendorRegister } from './VendorRegister';
-import { VendorCertificate } from './VendorCertificate';
-import { VendorAddProduct } from './VendorAddProduct'; // Dedicated Vendor Editor
+import { resolveVendorOrStore } from '../services/vendorResolver';
+import { getVendorFollowersList } from '../services/vendorFollowerService';
+import { UserAvatar } from '../components/UserAvatar';
+import { VendorDrawer } from '../components/VendorDrawer';
 
-// New Sub-Components
+// Sub-Screens
 import { VendorOverview } from './VendorOverview';
 import { VendorProducts } from './VendorProducts';
 import { VendorOrders } from './VendorOrders';
 import { VendorWallet } from './VendorWallet';
 import { VendorFollowers } from './VendorFollowers';
 import { VendorStoreProfile } from './VendorStoreProfile';
-import { UserAvatar } from '../components/UserAvatar';
-import { getVendorFollowersList } from '../services/vendorFollowerService';
+import { VendorAddProduct } from './VendorAddProduct';
+import { VendorCertificate } from './VendorCertificate';
+import { VendorRegister } from './VendorRegister';
+import { VendorAnalytics } from './VendorAnalytics';
+import { VendorShippingSettings } from './VendorShippingSettings';
+import { VendorQRCodeCard } from './VendorQRCodeCard';
+import { ConversationsScreen } from './ConversationsScreen';
 
-export const VendorDashboard = ({ user, onLogout }) => {
-    // Tab State
-    const [activeTab, setActiveTab] = useState('overview'); // overview, products, orders, wallet
+const NAVY = '#070D1B';
+const DARK_SURFACE = '#0E1A2E';
+const GOLD = '#D9A73A';
+const GOLD_LIGHT = '#FDE68A';
+
+export const VendorDashboard = ({ user, onLogout, navigation }) => {
+    const insets = useSafeAreaInsets();
+
+    // Tab & View State
+    const [activeTab, setActiveTab] = useState('overview'); // overview, products, orders, wallet, followers, store_profile
     const [viewMode, setViewMode] = useState('list'); // list, add-product
+    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
     // Data State
     const [vendor, setVendor] = useState(null);
     const [products, setProducts] = useState([]);
     const [orders, setOrders] = useState([]);
-    const [wallet, setWallet] = useState({ balance: 0, total_sales: 0 });
-    const [stats, setStats] = useState({ earnings: 0, orders: 0, products: 0, views: 0 });
+    const [wallet, setWallet] = useState({ balance: 0, pending_balance: 0, total_sales: 0 });
+    const [stats, setStats] = useState({ earnings: 0, orders: 0, products: 0, followers: 0 });
 
-    // UI State
+    // UI & Modal State
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [showRenewal, setShowRenewal] = useState(false);
     const [showCertificate, setShowCertificate] = useState(false);
     const [orderFilter, setOrderFilter] = useState('All');
 
-    // Products Filter State (Admin Style)
+    // Products Filter State
     const [search, setSearch] = useState('');
-    const [stockFilter, setStockFilter] = useState('all'); // 'all', 'low', 'out'
+    const [stockFilter, setStockFilter] = useState('all');
     const [selectedProduct, setSelectedProduct] = useState(null);
 
-    // Handle Hardware Back Button
+    // Hardware Back Button Handler
     useEffect(() => {
         const backAction = () => {
+            if (isDrawerOpen) {
+                setIsDrawerOpen(false);
+                return true;
+            }
             if (viewMode === 'add-product') {
                 setViewMode('list');
                 setSelectedProduct(null);
                 return true;
             }
-            onLogout();
-            return true;
+            if (showCertificate) {
+                setShowCertificate(false);
+                return true;
+            }
+            if (showRenewal) {
+                setShowRenewal(false);
+                return true;
+            }
+            if (activeTab !== 'overview') {
+                setActiveTab('overview');
+                return true;
+            }
+
+            // At root of overview: prompt to switch to marketplace or logout
+            if (navigation) {
+                handleSwitchToBuyer();
+                return true;
+            }
+            if (onLogout) {
+                onLogout();
+                return true;
+            }
+            return false;
         };
+
         const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
         return () => backHandler.remove();
-    }, [viewMode]);
+    }, [isDrawerOpen, viewMode, showCertificate, showRenewal, activeTab, navigation]);
 
+    // Initial Fetch
     useEffect(() => {
         fetchDashboardData();
     }, []);
 
+    // ─────────────────────────────────────────────────────────────
+    // COMPREHENSIVE DATA RESOLUTION (100% RELIABLE)
+    // ─────────────────────────────────────────────────────────────
     const fetchDashboardData = async () => {
-        setLoading(true);
         try {
-            // 1. Fetch Vendor Profile
-            const { data: vendorData } = await supabase.from('vendors').select('*').eq('user_id', user.id).single();
+            setLoading(true);
+            const activeId = user?.id;
+            if (!activeId) return;
 
-            let deliveryType = vendorData?.delivery_type || 'marketplace';
-            if (!vendorData?.delivery_type) {
-                const { data: appData } = await supabase.from('vendor_applications').select('delivery_type').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
-                if (appData?.delivery_type) deliveryType = appData.delivery_type;
+            // 1. Resolve unified store profile (stores + profiles + vendors)
+            const resolved = await resolveVendorOrStore(activeId, true);
+
+            // Fetch extra store columns if exists in stores table
+            const { data: storeRow } = await supabase
+                .from('stores')
+                .select('*')
+                .eq('user_id', activeId)
+                .maybeSingle();
+
+            const mergedVendor = {
+                ...resolved,
+                ...(storeRow || {}),
+                business_name: storeRow?.name || resolved?.name || resolved?.business_name || 'My Store',
+                logo_url: storeRow?.logo || resolved?.logo || resolved?.avatar,
+                delivery_type: storeRow?.custom_shipping_enabled ? 'self' : 'marketplace',
+                is_locked: storeRow?.is_locked || false
+            };
+            setVendor(mergedVendor);
+
+            // 2. Fetch Wallet Balance from profile & transaction ledger
+            const [pRes, txRes] = await Promise.allSettled([
+                supabase.from('profiles').select('balance').eq('id', activeId).maybeSingle(),
+                supabase.from('transactions').select('*').eq('user_id', activeId).order('created_at', { ascending: false }).limit(50)
+            ]);
+            const profileBal = Number(pRes.status === 'fulfilled' ? pRes.value?.data?.balance : 0) || 0;
+
+            let ledgerBal = 0;
+            if (txRes.status === 'fulfilled' && Array.isArray(txRes.value?.data)) {
+                const totalCredits = txRes.value.data
+                    .filter(t => (t.type === 'topup' || t.type === 'credit' || t.type === 'deposit') && (t.status === 'completed' || t.status === 'successful'))
+                    .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+                const totalDebits = txRes.value.data
+                    .filter(t => (t.type === 'withdrawal' || t.type === 'debit' || t.type === 'wallet_payment' || t.type === 'wallet_purchase') && (t.status === 'completed' || t.status === 'successful'))
+                    .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+                ledgerBal = Math.max(0, totalCredits - totalDebits);
             }
-            if (vendorData) setVendor({ ...vendorData, delivery_type: deliveryType });
+            const verifiedBalance = Math.max(profileBal, ledgerBal);
 
-            // 2. Fetch Wallet
-            const { data: profileData } = await supabase.from('profiles').select('balance').eq('id', user.id).maybeSingle();
-            setWallet({ balance: Number(profileData?.balance || 0), total_sales: 0 });
-
-            // 3. Fetch Products
+            // 3. Fetch Vendor's Products
             const { data: productsData } = await supabase
                 .from('products')
                 .select('*')
-                .eq('vendor_id', user.id)
+                .eq('vendor_id', activeId)
                 .neq('status', 'archived')
                 .order('created_at', { ascending: false });
 
-            setProducts(productsData || []);
+            const prodList = productsData || [];
+            setProducts(prodList);
 
-            // 4. Fetch Orders Securely
-            let totalEarnings = 0;
+            // 4. Fetch Real Orders directly joining order_items with orders and products
+            let totalDeliveredEarnings = 0;
+            let pendingEscrow = 0;
             let formattedOrders = [];
-            if (productsData?.length > 0) {
-                const { data: fetchedOrders } = await supabase.rpc('get_vendor_dashboard_orders', {
-                    p_vendor_id: user.id
-                });
 
-                let pendingBal = 0;
-                formattedOrders = (fetchedOrders || []).map(item => {
-                    const status = item.status || 'pending';
-                    const amount = item.amount || 0;
+            const productIds = prodList.map(p => p.id);
+            let oiQuery = supabase.from('order_items').select(`
+                id, quantity, price, created_at,
+                order:orders (
+                    id, status, payment_status, total_amount, shipping_address, contact_phone, created_at, tracking_number,
+                    customer:profiles ( full_name, phone )
+                ),
+                product:products ( id, name, images, vendor_id )
+            `);
 
-                    if (status.toLowerCase() === 'delivered') {
-                        totalEarnings += amount;
-                    } else if (!['cancelled', 'refunded'].includes(status.toLowerCase())) {
-                        pendingBal += amount;
+            if (productIds.length > 0) {
+                oiQuery = oiQuery.or(`vendor_id.eq.${activeId},product_id.in.(${productIds.join(',')})`);
+            } else {
+                oiQuery = oiQuery.eq('vendor_id', activeId);
+            }
+
+            const { data: itemsData, error: itemsError } = await oiQuery;
+
+            if (!itemsError && Array.isArray(itemsData) && itemsData.length > 0) {
+                // Group or format order items
+                formattedOrders = itemsData.map(item => {
+                    const ord = item.order || {};
+                    const prod = item.product || {};
+                    const cust = ord.customer || {};
+
+                    const status = (ord.status || 'pending').toLowerCase();
+                    const qty = Number(item.quantity) || 1;
+                    const unitPrice = Number(item.price) || 0;
+                    const itemEarnings = unitPrice * qty;
+
+                    if (status === 'delivered') {
+                        totalDeliveredEarnings += itemEarnings;
+                    } else if (!['cancelled', 'refunded'].includes(status)) {
+                        pendingEscrow += itemEarnings;
                     }
 
+                    const rawDate = ord.created_at || item.created_at;
+                    const dateFormatted = rawDate ? new Date(rawDate).toLocaleDateString() : 'Recent';
+
+                    const prodImage = Array.isArray(prod.images) && prod.images[0]
+                        ? prod.images[0]
+                        : (typeof prod.images === 'string' ? prod.images : 'https://placehold.co/80');
+
                     return {
-                        id: item.id,
-                        customerName: item.customerName,
-                        item: item.item,
-                        quantity: item.quantity,
-                        amount: amount,
+                        id: ord.id || item.id,
+                        orderItemId: item.id,
+                        customerName: cust.full_name || 'Marketplace Buyer',
+                        phone: ord.contact_phone || cust.phone || '',
+                        address: ord.shipping_address || 'Shipping address on file',
+                        trackingNumber: ord.tracking_number || `ORD-${(ord.id || '').slice(0, 8).toUpperCase()}`,
+                        item: prod.name || 'Store Product',
+                        image: prodImage,
+                        quantity: qty,
+                        price: unitPrice,
+                        amount: itemEarnings,
                         status: status,
-                        date: new Date(item.raw_date).toLocaleDateString(),
-                        raw_date: item.raw_date
+                        date: dateFormatted,
+                        raw_date: rawDate
                     };
                 });
 
-                setOrders(formattedOrders);
-                setWallet(prev => ({
-                    ...prev,
-                    pending_balance: pendingBal
-                }));
+                // Sort newest first
+                formattedOrders.sort((a, b) => new Date(b.raw_date || 0) - new Date(a.raw_date || 0));
             }
 
-            // 5. Fetch Followers Count
-            let followersCount = 0;
+            setOrders(formattedOrders);
+
+            setWallet({
+                balance: verifiedBalance,
+                pending_balance: pendingEscrow,
+                total_sales: totalDeliveredEarnings
+            });
+
+            // 5. Fetch Real Followers
+            let followerCount = 0;
             try {
-                const fRes = await getVendorFollowersList(user.id);
-                followersCount = fRes?.totalCount || 0;
+                const fRes = await getVendorFollowersList(activeId);
+                followerCount = fRes?.totalCount || 0;
             } catch (_) {}
 
             setStats({
-                earnings: totalEarnings,
+                earnings: totalDeliveredEarnings,
                 orders: formattedOrders.length,
-                products: productsData ? productsData.length : 0,
-                views: 0,
-                followers: followersCount > 0 ? followersCount : 142
+                products: prodList.length,
+                followers: followerCount
             });
 
         } catch (err) {
-            console.log('Error fetching dashboard:', err);
+            console.error('Error fetching dashboard data:', err);
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
     };
 
+    const handleRefresh = async () => {
+        setRefreshing(true);
+        await fetchDashboardData();
+    };
+
+    // ─────────────────────────────────────────────────────────────
+    // ORDER STATUS UPDATER (100% DIRECT & FAST)
+    // ─────────────────────────────────────────────────────────────
     const handleUpdateOrderStatus = async (orderId, newStatus) => {
-        Alert.alert('Update Order', `Mark this order as ${newStatus}?`, [
-            { text: 'Cancel', style: 'cancel' },
-            {
-                text: 'Yes', onPress: async () => {
-                    setLoading(true);
-                    const { error } = await supabase.rpc('update_vendor_order_status', {
-                        p_order_id: orderId,
-                        p_vendor_id: user.id,
-                        p_new_status: newStatus
-                    });
-                    if (!error) {
-                        fetchDashboardData();
-                    } else {
-                        Alert.alert('Error', error.message);
-                        setLoading(false);
-                    }
-                }
-            }
-        ]);
+        try {
+            const statusLower = newStatus.toLowerCase();
+            const { error } = await supabase
+                .from('orders')
+                .update({
+                    status: statusLower,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', orderId);
+
+            if (error) throw error;
+            await fetchDashboardData();
+        } catch (err) {
+            console.error('Failed to update order status:', err);
+            throw err;
+        }
+    };
+
+    // ─────────────────────────────────────────────────────────────
+    // PRODUCT ACTIONS
+    // ─────────────────────────────────────────────────────────────
+    const handleEditProduct = (product) => {
+        setSelectedProduct(product);
+        setViewMode('add-product');
     };
 
     const handleDeleteProduct = async (id) => {
         const executeArchive = async () => {
             try {
-                // First try hard delete
-                const { data: delData, error: delErr } = await supabase.from('products').delete().eq('id', id).select('id');
+                // Try hard delete first
+                const { data: delData, error: delErr } = await supabase
+                    .from('products')
+                    .delete()
+                    .eq('id', id)
+                    .select('id');
+
                 if (!delErr && delData && delData.length > 0) {
                     setProducts(prev => prev.filter(p => p.id !== id));
                     if (Platform.OS === 'web') alert('Product removed successfully');
@@ -183,14 +327,17 @@ export const VendorDashboard = ({ user, onLogout }) => {
                 }
 
                 // Fallback: archive
-                const { error } = await supabase.from('products').update({ status: 'archived', is_active: false, stock: 0 }).eq('id', id);
-                if (!error) {
+                const { error: archErr } = await supabase
+                    .from('products')
+                    .update({ status: 'archived', is_active: false, stock: 0 })
+                    .eq('id', id);
+
+                if (!archErr) {
                     setProducts(prev => prev.filter(p => p.id !== id));
                     if (Platform.OS === 'web') alert('Product archived & removed from store');
                     else Alert.alert('Success', 'Product archived');
                 } else {
-                    if (Platform.OS === 'web') alert('Error: ' + error.message);
-                    else Alert.alert('Error', error.message);
+                    throw archErr;
                 }
             } catch (err) {
                 if (Platform.OS === 'web') alert('Delete Failed: ' + err.message);
@@ -199,11 +346,9 @@ export const VendorDashboard = ({ user, onLogout }) => {
         };
 
         if (Platform.OS === 'web') {
-            if (typeof window !== 'undefined' && window.confirm) {
-                if (window.confirm('Are you sure you want to delete/archive this product?')) {
-                    executeArchive();
-                }
-            } else {
+            if (window.confirm && window.confirm('Are you sure you want to delete/archive this product?')) {
+                executeArchive();
+            } else if (!window.confirm) {
                 executeArchive();
             }
         } else {
@@ -214,13 +359,46 @@ export const VendorDashboard = ({ user, onLogout }) => {
         }
     };
 
-    const handleEditProduct = (product) => {
-        setSelectedProduct(product);
-        setViewMode('add-product');
+    // ─────────────────────────────────────────────────────────────
+    // NAVIGATION SHORTCUTS
+    // ─────────────────────────────────────────────────────────────
+    const handleSwitchToBuyer = () => {
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.setItem('@abumafhal_last_screen', 'Main');
+                if (window.location.hash === '#vendor' || window.location.hash === 'vendor') {
+                    window.location.hash = '';
+                }
+            }
+        } catch (_) {}
+
+        if (navigation) {
+            if (typeof navigation.reset === 'function') {
+                navigation.reset({
+                    index: 0,
+                    routes: [{ name: 'Main', params: { screen: 'home' } }]
+                });
+                return;
+            }
+            if (typeof navigation.navigate === 'function') {
+                navigation.navigate('Main', { screen: 'home' });
+                return;
+            }
+        }
+        if (onLogout) onLogout();
     };
 
-    // --- RENDERERS ---
+    const handleViewPublicStore = () => {
+        if (navigation && typeof navigation.navigate === 'function') {
+            navigation.navigate('Main', { screen: 'shop', vendorId: user.id });
+        } else {
+            setActiveTab('store_profile');
+        }
+    };
 
+    // ─────────────────────────────────────────────────────────────
+    // FULL-SCREEN MODES (Add Product, Certificate, Renewal)
+    // ─────────────────────────────────────────────────────────────
     if (viewMode === 'add-product') {
         return (
             <VendorAddProduct
@@ -239,119 +417,255 @@ export const VendorDashboard = ({ user, onLogout }) => {
     }
 
     if (showCertificate) {
-        return <VendorCertificate user={user} vendorData={vendor} onBack={() => setShowCertificate(false)} />;
+        return (
+            <VendorCertificate
+                user={user}
+                vendorData={vendor}
+                onBack={() => setShowCertificate(false)}
+            />
+        );
     }
 
     if (showRenewal) {
-        return <VendorRegister user={user} mode="renew" onBack={() => setShowRenewal(false)} onSubmit={() => { setShowRenewal(false); fetchDashboardData(); }} />;
+        return (
+            <VendorRegister
+                user={user}
+                mode="renew"
+                onBack={() => setShowRenewal(false)}
+                onSubmit={() => {
+                    setShowRenewal(false);
+                    fetchDashboardData();
+                }}
+            />
+        );
     }
 
-    const renderHeader = () => (
-        <View style={styles.profileHeader}>
-            <SafeAreaView style={{ backgroundColor: 'transparent' }}>
-                <View style={[styles.profileNav, { paddingBottom: 0 }]}>
-                    <Text style={styles.profileNavTitle}>Vendor Dashboard</Text>
-                    <TouchableOpacity onPress={onLogout} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}>
-                        <Text style={{ color: 'white', fontWeight: '600', marginRight: 6, fontSize: 12 }}>Exit</Text>
-                        <Ionicons name="close-circle-outline" size={20} color="white" />
-                    </TouchableOpacity>
-                </View>
-            </SafeAreaView>
+    const pendingOrdersCount = orders.filter(o => o.status === 'pending').length;
 
-            <View style={{ paddingHorizontal: 20, marginTop: 20 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <UserAvatar
-                            user={user}
-                            sourceUrl={vendor?.logo_url}
-                            size={60}
-                            border="white"
-                        />
-                        <View style={{ marginLeft: 16 }}>
-                            <Text style={{ color: 'white', fontSize: 18, fontWeight: '800' }}>{vendor?.business_name || 'My Business'}</Text>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: vendor?.is_locked ? '#EF4444' : '#4ADE80', marginRight: 6 }} />
-                                <Text style={{ color: '#E2E8F0', fontSize: 12 }}>
-                                    {vendor?.is_locked ? 'Locked (Renew Now)' : 'Active • Business Account'}
-                                </Text>
-                            </View>
+    // ─────────────────────────────────────────────────────────────
+    // RENDER HEADER
+    // ─────────────────────────────────────────────────────────────
+    const renderModernHeader = () => (
+        <LinearGradient
+            colors={['#070D1B', '#0E1A2E', '#16233B']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.headerContainer, { paddingTop: Math.max(insets.top, 14) }]}
+        >
+            <StatusBar barStyle="light-content" backgroundColor="#070D1B" />
+
+            {/* Top Bar: Hamburger, Store Brand, Quick Actions */}
+            <View style={styles.topBar}>
+                {/* Left: Hamburger menu with badge */}
+                <TouchableOpacity
+                    onPress={() => setIsDrawerOpen(true)}
+                    style={styles.hamburgerBtn}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                    <Ionicons name="menu" size={24} color="#FFFFFF" />
+                    {pendingOrdersCount > 0 && (
+                        <View style={styles.hamburgerBadgeDot} />
+                    )}
+                </TouchableOpacity>
+
+                {/* Center: Store Brand Identity */}
+                <TouchableOpacity
+                    style={styles.storeBrandCenter}
+                    activeOpacity={0.8}
+                    onPress={() => setActiveTab('store_profile')}
+                >
+                    <UserAvatar
+                        user={user}
+                        sourceUrl={vendor?.logo_url}
+                        size={36}
+                        border={GOLD}
+                    />
+                    <View style={{ marginLeft: 10, flexShrink: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Text style={styles.storeBrandTitle} numberOfLines={1}>
+                                {vendor?.business_name || 'My Store'}
+                            </Text>
+                            <Ionicons name="checkmark-circle" size={14} color={GOLD} />
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 }}>
+                            <View style={styles.onlineDot} />
+                            <Text style={styles.storeStatusSub}>Live Merchant</Text>
                         </View>
                     </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <TouchableOpacity
-                            onPress={() => setActiveTab('store_profile')}
-                            style={{
-                                backgroundColor: 'rgba(212, 175, 55, 0.25)',
-                                borderWidth: 1,
-                                borderColor: '#D4AF37',
-                                paddingHorizontal: 10,
-                                paddingVertical: 6,
-                                borderRadius: 10,
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                gap: 4
-                            }}
-                        >
-                            <Ionicons name="storefront-outline" size={15} color="#FDE68A" />
-                            <Text style={{ color: '#FDE68A', fontSize: 11, fontWeight: '800' }}>Store Profile</Text>
-                        </TouchableOpacity>
+                </TouchableOpacity>
 
-                        <TouchableOpacity
-                            onPress={() => setShowCertificate(true)}
-                            style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 10 }}
-                        >
-                            <Ionicons name="ribbon" size={22} color="#F59E0B" />
-                        </TouchableOpacity>
-                    </View>
+                {/* Right: Quick Actions */}
+                <View style={styles.topRightActions}>
+                    {/* Add Product Shortcut */}
+                    <TouchableOpacity
+                        onPress={() => {
+                            setSelectedProduct(null);
+                            setViewMode('add-product');
+                        }}
+                        style={styles.actionIconBtn}
+                        activeOpacity={0.75}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                        <Ionicons name="add" size={20} color={GOLD} />
+                    </TouchableOpacity>
+
+                    {/* View Live Store */}
+                    <TouchableOpacity
+                        onPress={handleViewPublicStore}
+                        style={styles.actionIconBtn}
+                        activeOpacity={0.75}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                        <Ionicons name="eye-outline" size={18} color="#CBD5E1" />
+                    </TouchableOpacity>
+
+                    {/* Official Certificate */}
+                    <TouchableOpacity
+                        onPress={() => setShowCertificate(true)}
+                        style={styles.actionIconBtn}
+                        activeOpacity={0.75}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                        <Ionicons name="ribbon-outline" size={18} color="#F59E0B" />
+                    </TouchableOpacity>
+
+                    {/* Refresh */}
+                    <TouchableOpacity
+                        onPress={handleRefresh}
+                        style={styles.actionIconBtn}
+                        activeOpacity={0.75}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                        <Ionicons name="refresh-outline" size={17} color="#CBD5E1" />
+                    </TouchableOpacity>
                 </View>
             </View>
 
-            {/* TABS */}
+            {/* Quick Pill Navigation Bar */}
             <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ flexDirection: 'row', marginTop: 20, paddingHorizontal: 20, gap: 8, paddingBottom: 6 }}
+                contentContainerStyle={styles.tabScrollContainer}
             >
-                {['Overview', 'Store Profile', 'Products', 'Orders', 'Wallet', 'Followers'].map(tab => {
-                    const tabKey = tab.toLowerCase().replace(/\s+/g, '_');
-                    const isActive = activeTab === tabKey || activeTab === tab.toLowerCase();
+                {[
+                    { id: 'overview', label: 'Overview', icon: 'speedometer-outline' },
+                    { id: 'analytics', label: 'Analytics', icon: 'bar-chart-outline' },
+                    { id: 'products', label: 'Products', icon: 'cube-outline', count: products.length },
+                    { id: 'orders', label: 'Orders', icon: 'receipt-outline', count: orders.length },
+                    { id: 'wallet', label: 'Wallet', icon: 'wallet-outline' },
+                    { id: 'shipping', label: 'Shipping', icon: 'bicycle-outline' },
+                    { id: 'qr_card', label: 'Store QR', icon: 'qr-code-outline' },
+                    { id: 'messages', label: 'Inquiries', icon: 'chatbubbles-outline' },
+                    { id: 'store_profile', label: 'Store Profile', icon: 'storefront-outline' },
+                    { id: 'followers', label: 'Followers', icon: 'people-outline', count: stats.followers }
+                ].map(tab => {
+                    const isActive =
+                        activeTab === tab.id ||
+                        (tab.id === 'store_profile' && (activeTab === 'store_profile' || activeTab === 'store profile'));
+
                     return (
                         <TouchableOpacity
-                            key={tab}
-                            onPress={() => setActiveTab(tabKey)}
-                            style={{
-                                paddingVertical: 7, paddingHorizontal: 14, borderRadius: 20,
-                                backgroundColor: isActive ? 'white' : 'rgba(255,255,255,0.1)'
-                            }}
+                            key={tab.id}
+                            onPress={() => setActiveTab(tab.id)}
+                            style={[styles.pillTab, isActive && styles.pillTabActive]}
+                            activeOpacity={0.8}
                         >
-                            <Text style={{ color: isActive ? '#0F172A' : 'white', fontWeight: '700', fontSize: 12 }}>{tab}</Text>
+                            <Ionicons
+                                name={tab.icon}
+                                size={14}
+                                color={isActive ? '#0F172A' : '#CBD5E1'}
+                                style={{ marginRight: 5 }}
+                            />
+                            <Text style={[styles.pillTabText, isActive && styles.pillTabTextActive]}>
+                                {tab.label}
+                            </Text>
+                            {tab.count !== undefined && tab.count > 0 && (
+                                <View style={[styles.tabBadge, isActive && styles.tabBadgeActive]}>
+                                    <Text style={[styles.tabBadgeText, isActive && styles.tabBadgeTextActive]}>
+                                        {tab.count}
+                                    </Text>
+                                </View>
+                            )}
                         </TouchableOpacity>
                     );
                 })}
             </ScrollView>
-        </View>
+        </LinearGradient>
     );
 
     return (
-        <View style={styles.container}>
-            {renderHeader()}
-            <View style={{ flex: 1, marginTop: -20, backgroundColor: '#F8FAFC', borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' }}>
+        <View style={styles.mainContainer}>
+            {/* Top Navigation */}
+            {renderModernHeader()}
+
+            {/* Sidebar Drawer Component */}
+            <VendorDrawer
+                visible={isDrawerOpen}
+                onClose={() => setIsDrawerOpen(false)}
+                activeTab={activeTab}
+                onSelectTab={(tabKey) => {
+                    setActiveTab(tabKey);
+                    setIsDrawerOpen(false);
+                }}
+                vendor={vendor}
+                user={user}
+                stats={stats}
+                wallet={wallet}
+                onOpenAddProduct={() => {
+                    setIsDrawerOpen(false);
+                    setSelectedProduct(null);
+                    setViewMode('add-product');
+                }}
+                onOpenCertificate={() => {
+                    setIsDrawerOpen(false);
+                    setShowCertificate(true);
+                }}
+                onViewPublicStore={() => {
+                    setIsDrawerOpen(false);
+                    handleViewPublicStore();
+                }}
+                onOpenMessages={() => {
+                    setIsDrawerOpen(false);
+                    setActiveTab('messages');
+                }}
+                onSwitchToBuyer={handleSwitchToBuyer}
+                onLogout={onLogout}
+            />
+
+            {/* Body Content Area */}
+            <View style={styles.contentBody}>
                 {loading ? (
-                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                        <ActivityIndicator size="large" color="#0F172A" />
+                    <View style={styles.loadingContainer}>
+                        <ActivityIndicator size="large" color={GOLD} />
+                        <Text style={styles.loadingText}>Syncing store data...</Text>
                     </View>
                 ) : (
                     <>
-                        {activeTab === 'overview' && <VendorOverview stats={stats} onSelectTab={setActiveTab} />}
+                        {activeTab === 'overview' && (
+                            <VendorOverview
+                                stats={stats}
+                                orders={orders}
+                                products={products}
+                                vendor={vendor}
+                                onSelectTab={setActiveTab}
+                                onOpenAddProduct={() => {
+                                    setSelectedProduct(null);
+                                    setViewMode('add-product');
+                                }}
+                                onOpenCertificate={() => setShowCertificate(true)}
+                                onViewPublicStore={handleViewPublicStore}
+                            />
+                        )}
 
-                        {(activeTab === 'store_profile' || activeTab === 'store profile') && (
-                            <VendorStoreProfile
-                                user={user}
+                        {activeTab === 'analytics' && (
+                            <VendorAnalytics
+                                orders={orders}
+                                products={products}
+                                stats={stats}
                                 vendor={vendor}
                                 onBack={() => setActiveTab('overview')}
-                                onSaved={() => {
-                                    fetchDashboardData();
-                                }}
+                                onSelectTab={setActiveTab}
                             />
                         )}
 
@@ -384,11 +698,53 @@ export const VendorDashboard = ({ user, onLogout }) => {
                             />
                         )}
 
+                        {activeTab === 'shipping' && (
+                            <VendorShippingSettings
+                                user={user}
+                                vendor={vendor}
+                                onBack={() => setActiveTab('overview')}
+                                onSaved={() => {
+                                    fetchDashboardData();
+                                }}
+                            />
+                        )}
+
                         {activeTab === 'wallet' && (
                             <VendorWallet
                                 user={user}
                                 wallet={wallet}
                                 fetchDashboardData={fetchDashboardData}
+                            />
+                        )}
+
+                        {activeTab === 'qr_card' && (
+                            <VendorQRCodeCard
+                                user={user}
+                                vendor={vendor}
+                                onBack={() => setActiveTab('overview')}
+                            />
+                        )}
+
+                        {activeTab === 'messages' && (
+                            <ConversationsScreen
+                                navigation={{
+                                    ...navigation,
+                                    goBack: () => setActiveTab('overview'),
+                                    navigate: (screen, params) => {
+                                        if (navigation?.navigate) navigation.navigate(screen, params);
+                                    }
+                                }}
+                            />
+                        )}
+
+                        {(activeTab === 'store_profile' || activeTab === 'store profile') && (
+                            <VendorStoreProfile
+                                user={user}
+                                vendor={vendor}
+                                onBack={() => setActiveTab('overview')}
+                                onSaved={() => {
+                                    fetchDashboardData();
+                                }}
                             />
                         )}
 
@@ -403,13 +759,22 @@ export const VendorDashboard = ({ user, onLogout }) => {
                     </>
                 )}
 
-                {/* LOCKED OMITTED FOR BREVITY, KEEPING IF NEEDED */}
+                {/* Locked Dashboard Gate if subscription expired */}
                 {vendor?.is_locked && (
-                    <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(255,255,255,0.95)', alignItems: 'center', justifyContent: 'center', padding: 32 }]}>
-                        <Ionicons name="lock-closed" size={48} color="#EF4444" />
-                        <Text style={{ fontSize: 20, fontWeight: '800', marginTop: 16 }}>Dashboard Locked</Text>
-                        <TouchableOpacity style={[styles.modernBtn, { marginTop: 24, width: '100%' }]} onPress={() => setShowRenewal(true)}>
-                            <Text style={styles.modernBtnText}>Renew Subscription</Text>
+                    <View style={styles.lockedOverlay}>
+                        <View style={styles.lockedIconBox}>
+                            <Ionicons name="lock-closed" size={40} color="#EF4444" />
+                        </View>
+                        <Text style={styles.lockedTitle}>Storefront Suspended</Text>
+                        <Text style={styles.lockedDesc}>
+                            Your vendor plan has expired. Renew your subscription to restore product visibility across Abu Mafhal Marketplace.
+                        </Text>
+                        <TouchableOpacity
+                            style={styles.renewBtn}
+                            onPress={() => setShowRenewal(true)}
+                            activeOpacity={0.85}
+                        >
+                            <Text style={styles.renewBtnText}>Renew Subscription Now</Text>
                         </TouchableOpacity>
                     </View>
                 )}
@@ -417,3 +782,192 @@ export const VendorDashboard = ({ user, onLogout }) => {
         </View>
     );
 };
+
+const styles = StyleSheet.create({
+    mainContainer: {
+        flex: 1,
+        backgroundColor: '#070D1B'
+    },
+    headerContainer: {
+        paddingHorizontal: 16,
+        paddingBottom: 10,
+        borderBottomWidth: 1,
+        borderColor: 'rgba(217, 167, 58, 0.2)'
+    },
+    topBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 8
+    },
+    hamburgerBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.12)'
+    },
+    hamburgerBadgeDot: {
+        position: 'absolute',
+        top: 7,
+        right: 7,
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#EF4444',
+        borderWidth: 1.5,
+        borderColor: '#070D1B'
+    },
+    storeBrandCenter: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+        marginHorizontal: 10
+    },
+    storeBrandTitle: {
+        fontSize: 15,
+        fontWeight: '900',
+        color: '#FFFFFF',
+        letterSpacing: -0.2
+    },
+    onlineDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: '#10B981'
+    },
+    storeStatusSub: {
+        fontSize: 10,
+        color: '#94A3B8',
+        fontWeight: '600'
+    },
+    topRightActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6
+    },
+    actionIconBtn: {
+        width: 34,
+        height: 34,
+        borderRadius: 10,
+        backgroundColor: 'rgba(255, 255, 255, 0.08)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)'
+    },
+    tabScrollContainer: {
+        flexDirection: 'row',
+        paddingVertical: 8,
+        gap: 8,
+        paddingRight: 10
+    },
+    pillTab: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 7,
+        paddingHorizontal: 13,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.08)'
+    },
+    pillTabActive: {
+        backgroundColor: '#FFFFFF',
+        borderColor: '#FFFFFF'
+    },
+    pillTabText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#CBD5E1'
+    },
+    pillTabTextActive: {
+        color: '#0F172A',
+        fontWeight: '900'
+    },
+    tabBadge: {
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        paddingHorizontal: 6,
+        paddingVertical: 1,
+        borderRadius: 8,
+        marginLeft: 5
+    },
+    tabBadgeActive: {
+        backgroundColor: '#0F172A'
+    },
+    tabBadgeText: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: '#CBD5E1'
+    },
+    tabBadgeTextActive: {
+        color: '#FFFFFF'
+    },
+    contentBody: {
+        flex: 1,
+        backgroundColor: '#F8FAFC'
+    },
+    loadingContainer: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 30
+    },
+    loadingText: {
+        marginTop: 14,
+        fontSize: 13.5,
+        fontWeight: '700',
+        color: '#64748B'
+    },
+    lockedOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(15, 23, 42, 0.95)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 32,
+        zIndex: 50
+    },
+    lockedIconBox: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: 'rgba(239, 68, 68, 0.15)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 2,
+        borderColor: '#EF4444',
+        marginBottom: 16
+    },
+    lockedTitle: {
+        fontSize: 22,
+        fontWeight: '900',
+        color: '#FFFFFF',
+        letterSpacing: -0.3
+    },
+    lockedDesc: {
+        fontSize: 13,
+        color: '#94A3B8',
+        textAlign: 'center',
+        marginTop: 8,
+        lineHeight: 19,
+        maxWidth: 290
+    },
+    renewBtn: {
+        marginTop: 24,
+        backgroundColor: GOLD,
+        paddingHorizontal: 28,
+        paddingVertical: 14,
+        borderRadius: 14,
+        width: '100%',
+        alignItems: 'center'
+    },
+    renewBtnText: {
+        fontSize: 14.5,
+        fontWeight: '900',
+        color: '#070D1B'
+    }
+});
