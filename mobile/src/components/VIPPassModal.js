@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
     View,
     Text,
@@ -17,6 +17,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import QRCode from 'qrcode';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import { captureRef } from 'react-native-view-shot';
 import { UserAvatar } from './UserAvatar';
 
 const { width } = Dimensions.get('window');
@@ -280,13 +283,17 @@ const CARD_FINISHES = {
 };
 
 export const VIPPassModal = ({ visible, onClose, user, wallet, onNavigate }) => {
+    const cardRef = useRef(null);
+
     const [activeTab, setActiveTab] = useState('card'); // 'card' | 'qr' | 'perks'
-    const [cardFinish, setCardFinish] = useState('champagne'); // 'champagne' | 'pearl' | 'emerald' | 'sapphire'
-    const [selectedPerkTier, setSelectedPerkTier] = useState(null); // for exploring other tiers
+    const [cardFinish, setCardFinish] = useState('champagne');
+    const [selectedPerkTier, setSelectedPerkTier] = useState(null);
     const [qrUri, setQrUri] = useState(null);
     const [qrLoading, setQrLoading] = useState(true);
     const [copiedLabel, setCopiedLabel] = useState(null);
     const [showZoomQR, setShowZoomQR] = useState(false);
+    const [showShareModal, setShowShareModal] = useState(false);
+    const [exportingType, setExportingType] = useState(null); // 'png' | 'pdf' | null
 
     // Dynamic Member Properties
     const rawUid = user?.id || '';
@@ -309,7 +316,6 @@ export const VIPPassModal = ({ visible, onClose, user, wallet, onNavigate }) => 
     const points = wallet?.points || user?.mafhal_coins || 0;
     const currentTier = useMemo(() => resolveTier(points, user?.role), [points, user?.role]);
 
-    // Active tier in perks tab (defaults to currentTier, but allows user to tap any tier to preview perks)
     const activePerkViewTier = useMemo(() => {
         if (selectedPerkTier) {
             const found = ALL_TIERS.find(t => t.key === selectedPerkTier);
@@ -347,7 +353,7 @@ export const VIPPassModal = ({ visible, onClose, user, wallet, onNavigate }) => 
             try {
                 if (QRCode && typeof QRCode.toDataURL === 'function') {
                     const dataUrl = await QRCode.toDataURL(verifyUrl, {
-                        width: 380,
+                        width: 400,
                         margin: 1,
                         color: {
                             dark: '#0A192F',
@@ -365,8 +371,7 @@ export const VIPPassModal = ({ visible, onClose, user, wallet, onNavigate }) => 
                 console.warn('QRCode library error, using fallback:', err);
             }
 
-            // High-reliability crisp CDN fallback if canvas/lib unavailable
-            const fallbackUrl = `https://api.qrserver.com/v1/create-qr-code/?size=380x380&margin=4&color=0a192f&bgcolor=ffffff&data=${encodeURIComponent(verifyUrl)}`;
+            const fallbackUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=4&color=0a192f&bgcolor=ffffff&data=${encodeURIComponent(verifyUrl)}`;
             if (isMounted) {
                 setQrUri(fallbackUrl);
                 setQrLoading(false);
@@ -387,15 +392,396 @@ export const VIPPassModal = ({ visible, onClose, user, wallet, onNavigate }) => 
             }
         } catch (_) {}
         setCopiedLabel(label);
-        if (Platform.OS === 'web') {
-            // Web alert / subtle confirmation
-        } else {
+        if (Platform.OS !== 'web') {
             Alert.alert('Copied! 📋', `${label} (${text}) copied to clipboard.`);
         }
         setTimeout(() => setCopiedLabel(null), 3000);
     };
 
-    const handleShare = async () => {
+    // ─── 1. Export as PNG (Digital Pass Card Image) ──────────────────────────
+    const handleExportPng = async () => {
+        setExportingType('png');
+        try {
+            if (Platform.OS === 'web') {
+                // Generate high-resolution HTML5 Canvas
+                const canvas = document.createElement('canvas');
+                canvas.width = 960;
+                canvas.height = 580;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) throw new Error('Canvas not supported');
+
+                // Draw rounded card
+                const radius = 28;
+                ctx.save();
+                ctx.beginPath();
+                ctx.roundRect(10, 10, 940, 560, radius);
+                ctx.clip();
+
+                // Gradient background
+                const grad = ctx.createLinearGradient(10, 10, 940, 560);
+                grad.addColorStop(0, '#FFFFFF');
+                grad.addColorStop(0.5, finishTheme.gradient[1] || '#FFFDF0');
+                grad.addColorStop(1, finishTheme.gradient[2] || '#FEF9C3');
+                ctx.fillStyle = grad;
+                ctx.fillRect(10, 10, 940, 560);
+
+                // Gold Outer Border
+                ctx.lineWidth = 6;
+                ctx.strokeStyle = finishTheme.borderColor || '#D4AF37';
+                ctx.stroke();
+
+                // Inner hairline border
+                ctx.lineWidth = 1.5;
+                ctx.strokeStyle = 'rgba(212, 175, 55, 0.4)';
+                ctx.strokeRect(22, 22, 916, 536);
+
+                // Header Emblem & Brand
+                ctx.fillStyle = finishTheme.accentColor || '#B48C28';
+                ctx.font = 'bold 22px sans-serif';
+                ctx.fillText('👑 ABU MAFHAL ROYAL PASSPORT', 44, 58);
+
+                ctx.font = 'bold 12px sans-serif';
+                ctx.fillStyle = '#64748B';
+                ctx.fillText('OFFICIAL DIGITAL ESCROW & VIP VERIFICATION', 44, 82);
+
+                // Tier Badge Pill
+                ctx.fillStyle = finishTheme.tagBg || 'rgba(212, 175, 55, 0.2)';
+                ctx.beginPath();
+                ctx.roundRect(44, 104, 230, 32, 8);
+                ctx.fill();
+                ctx.lineWidth = 1;
+                ctx.strokeStyle = finishTheme.borderColor || '#D4AF37';
+                ctx.stroke();
+
+                ctx.fillStyle = finishTheme.accentColor || '#B48C28';
+                ctx.font = 'bold 13px sans-serif';
+                ctx.fillText(currentTier.badge, 58, 125);
+
+                // EMV Microchip Box
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                ctx.beginPath();
+                ctx.roundRect(44, 154, 54, 40, 6);
+                ctx.fill();
+                ctx.lineWidth = 1.5;
+                ctx.strokeStyle = finishTheme.borderColor || '#D4AF37';
+                ctx.stroke();
+                ctx.strokeStyle = finishTheme.accentColor || '#B48C28';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(52, 162, 38, 24);
+
+                // Member Name
+                ctx.fillStyle = finishTheme.textColor || '#0A192F';
+                ctx.font = '900 32px sans-serif';
+                ctx.fillText(displayName, 44, 234);
+
+                // Role Tag
+                ctx.fillStyle = '#0A192F';
+                ctx.font = 'bold 13px sans-serif';
+                ctx.fillText(`ROLE: ${userRole}   •   MEMBER SINCE: ${memberSinceYear}`, 44, 264);
+
+                // Member ID
+                ctx.fillStyle = '#64748B';
+                ctx.font = 'bold 12px sans-serif';
+                ctx.fillText('MEMBER PASSPORT ID', 44, 308);
+
+                ctx.fillStyle = finishTheme.textColor || '#0A192F';
+                ctx.font = '900 30px monospace';
+                ctx.fillText(memberId, 44, 344);
+
+                // Verified Escrow Status Pill
+                ctx.fillStyle = '#DCFCE7';
+                ctx.beginPath();
+                ctx.roundRect(44, 368, 130, 28, 6);
+                ctx.fill();
+                ctx.fillStyle = '#16A34A';
+                ctx.font = '900 12px sans-serif';
+                ctx.fillText('● 100% VERIFIED', 56, 386);
+
+                // Code-39 Barcode lines at the bottom left
+                ctx.fillStyle = '#0A192F';
+                let bx = 44;
+                const barW = 2.2;
+                const barH = 34;
+                for (let i = 0; i < barcodeBits.length; i++) {
+                    if (barcodeBits[i]) {
+                        ctx.fillRect(bx, 420, barW, barH);
+                    }
+                    bx += barW + 0.6;
+                }
+                ctx.font = 'bold 12px monospace';
+                ctx.fillText(`* ${memberId} *`, 44, 470);
+
+                // Security hash
+                ctx.fillStyle = '#64748B';
+                ctx.font = 'bold 11px sans-serif';
+                ctx.fillText(`AUTHENTICITY TOKEN: ${securityHash}`, 44, 520);
+
+                // Right side: QR Code Box
+                const qrBoxX = 660;
+                const qrBoxY = 104;
+                const qrBoxSize = 250;
+                ctx.fillStyle = '#FFFFFF';
+                ctx.beginPath();
+                ctx.roundRect(qrBoxX, qrBoxY, qrBoxSize, qrBoxSize + 48, 16);
+                ctx.fill();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#0A192F';
+                ctx.stroke();
+
+                ctx.fillStyle = '#0A192F';
+                ctx.font = '900 12px sans-serif';
+                ctx.fillText('OFFICIAL SCAN QR', qrBoxX + 65, qrBoxY + 30);
+
+                const img = new window.Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => {
+                    ctx.drawImage(img, qrBoxX + 25, qrBoxY + 44, 200, 200);
+
+                    ctx.fillStyle = '#64748B';
+                    ctx.font = 'bold 10px sans-serif';
+                    ctx.fillText('Scan for Hub & Escrow Verification', qrBoxX + 32, qrBoxY + 276);
+
+                    ctx.restore();
+                    const dataUrl = canvas.toDataURL('image/png');
+                    const a = document.createElement('a');
+                    a.href = dataUrl;
+                    a.download = `AbuMafhal_VIP_Passport_${memberId}.png`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    setExportingType(null);
+                    setShowShareModal(false);
+                };
+                img.onerror = () => {
+                    ctx.restore();
+                    const dataUrl = canvas.toDataURL('image/png');
+                    const a = document.createElement('a');
+                    a.href = dataUrl;
+                    a.download = `AbuMafhal_VIP_Passport_${memberId}.png`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    setExportingType(null);
+                    setShowShareModal(false);
+                };
+                img.src = qrUri || '';
+                return;
+            }
+
+            // Native Mobile Export
+            if (cardRef.current) {
+                const uri = await captureRef(cardRef, {
+                    format: 'png',
+                    quality: 1.0,
+                    result: 'tmpfile'
+                });
+                await Sharing.shareAsync(uri, {
+                    mimeType: 'image/png',
+                    dialogTitle: 'Share Abu Mafhal VIP Pass PNG'
+                });
+            } else {
+                Alert.alert('Export', 'Card view not ready yet.');
+            }
+        } catch (err) {
+            console.error('PNG Export error:', err);
+            Alert.alert('Error', 'Could not export PNG card. Please try again.');
+        } finally {
+            setExportingType(null);
+        }
+    };
+
+    // ─── 2. Export as PDF (Official Digital Passport Certificate) ─────────────
+    const handleExportPdf = async () => {
+        setExportingType('pdf');
+        try {
+            const barcodeHtml = barcodeBits.map(bit =>
+                `<div style="width: 2px; height: 34px; background: ${bit ? '#0A192F' : 'transparent'}; margin-right: 0.6px; display: inline-block;"></div>`
+            ).join('');
+
+            const perksHtml = currentTier.perks.map(p =>
+                `<tr><td style="padding: 9px 12px; border-bottom: 1px solid #F1F5F9; font-size: 13px; color: #1E293B;">✔ ${p}</td></tr>`
+            ).join('');
+
+            const issueDate = new Date().toLocaleDateString('en-GB', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric'
+            });
+
+            const htmlContent = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <style>
+                    *, *::before, *::after { box-sizing: border-box; }
+                    body {
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                        margin: 0;
+                        padding: 30px 20px;
+                        background-color: #F8FAFC;
+                        color: #0A192F;
+                    }
+                    .certificate-wrap {
+                        max-width: 680px;
+                        margin: 0 auto;
+                        background: #FFFFFF;
+                        border: 4px solid #D4AF37;
+                        border-radius: 20px;
+                        padding: 36px 32px;
+                        box-shadow: 0 10px 30px rgba(10, 25, 47, 0.08);
+                        position: relative;
+                    }
+                    .header-box {
+                        text-align: center;
+                        border-bottom: 2px solid #F1F5F9;
+                        padding-bottom: 20px;
+                        margin-bottom: 24px;
+                    }
+                    .crown-symbol { font-size: 38px; margin-bottom: 4px; }
+                    .main-title {
+                        font-size: 24px;
+                        font-weight: 900;
+                        color: #0A192F;
+                        letter-spacing: 2px;
+                        margin: 0;
+                    }
+                    .sub-title {
+                        font-size: 11px;
+                        font-weight: 800;
+                        color: #D4AF37;
+                        letter-spacing: 1.5px;
+                        margin-top: 4px;
+                    }
+                    .card-preview {
+                        background: linear-gradient(135deg, #FFFDF5 0%, #FEF9C3 50%, #FDE68A 100%);
+                        border: 2px solid #D4AF37;
+                        border-radius: 16px;
+                        padding: 24px;
+                        margin-bottom: 24px;
+                    }
+                    .user-name { font-size: 24px; font-weight: 900; color: #0A192F; margin-bottom: 4px; }
+                    .member-id { font-size: 18px; font-weight: 800; color: #0A192F; font-family: monospace; letter-spacing: 2px; }
+                    .qr-section {
+                        display: flex;
+                        align-items: center;
+                        justify-content: space-around;
+                        background: #F8FAFC;
+                        border-radius: 14px;
+                        padding: 20px;
+                        margin-bottom: 24px;
+                        border: 1px solid #E2E8F0;
+                    }
+                    .qr-img { width: 140px; height: 140px; border-radius: 10px; border: 2px solid #0A192F; }
+                    .barcode-wrap { text-align: center; margin-top: 8px; }
+                    .barcode-text { font-family: monospace; font-size: 13px; font-weight: bold; letter-spacing: 2px; margin-top: 6px; }
+                    .perks-table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+                    .perks-table th {
+                        text-align: left;
+                        font-size: 11px;
+                        color: #64748B;
+                        text-transform: uppercase;
+                        padding: 10px 12px;
+                        background: #F1F5F9;
+                        border-radius: 6px;
+                        letter-spacing: 0.5px;
+                    }
+                    .footer-stamp {
+                        text-align: center;
+                        margin-top: 28px;
+                        padding-top: 18px;
+                        border-top: 1px dashed #CBD5E1;
+                        font-size: 11px;
+                        color: #64748B;
+                    }
+                    .seal-verified {
+                        color: #059669;
+                        font-weight: 900;
+                        letter-spacing: 1px;
+                        font-size: 12px;
+                        margin-top: 6px;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="certificate-wrap">
+                    <div class="header-box">
+                        <div class="crown-symbol">👑</div>
+                        <h1 class="main-title">ABU MAFHAL PASSPORT</h1>
+                        <div class="sub-title">OFFICIAL DIGITAL VIP CERTIFICATE & ESCROW ID</div>
+                    </div>
+
+                    <div class="card-preview">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                            <span style="font-weight: 900; font-size: 12px; color: #B48C28; letter-spacing: 1px;">${currentTier.badge}</span>
+                            <span style="font-size: 11px; font-weight: 700; color: #785A14;">MEMBER SINCE ${memberSinceYear}</span>
+                        </div>
+                        <div class="user-name">${displayName}</div>
+                        <div style="font-size: 12px; font-weight: 700; color: #785A14; margin-bottom: 12px;">ACCOUNT ROLE: ${userRole}</div>
+                        <div style="font-size: 10px; font-weight: 800; color: #64748B; letter-spacing: 1px;">MEMBER IDENTIFIER</div>
+                        <div class="member-id">${memberId}</div>
+                    </div>
+
+                    <div class="qr-section">
+                        <div style="text-align: center;">
+                            <img src="${qrUri || ''}" class="qr-img" />
+                            <div style="font-size: 10px; font-weight: 700; color: #64748B; margin-top: 6px;">DYNAMIC VERIFICATION QR</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 11px; font-weight: 800; color: #64748B; margin-bottom: 8px;">AUTHENTIC CODE-39 BARCODE</div>
+                            <div class="barcode-wrap">${barcodeHtml}</div>
+                            <div class="barcode-text">* ${memberId} *</div>
+                            <div style="font-size: 10px; font-weight: 800; color: #059669; margin-top: 10px;">TOKEN: ${securityHash}</div>
+                        </div>
+                    </div>
+
+                    <table class="perks-table">
+                        <thead>
+                            <tr>
+                                <th>OFFICIAL TIER PRIVILEGES (${currentTier.name})</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${perksHtml}
+                        </tbody>
+                    </table>
+
+                    <div class="footer-stamp">
+                        <div>ISSUED BY ABU MAFHAL MARKETPLACE ON ${issueDate}</div>
+                        <div class="seal-verified">✔ 256-BIT ESCROW ENCRYPTION • 100% OFFICIALLY VERIFIED</div>
+                    </div>
+                </div>
+            </body>
+            </html>
+            `;
+
+            const { uri } = await Print.printToFileAsync({ html: htmlContent });
+            if (Platform.OS === 'web') {
+                const a = document.createElement('a');
+                a.href = uri;
+                a.download = `AbuMafhal_VIP_Passport_${memberId}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setExportingType(null);
+                setShowShareModal(false);
+            } else {
+                await Sharing.shareAsync(uri, {
+                    UTI: '.pdf',
+                    mimeType: 'application/pdf',
+                    dialogTitle: 'Share Abu Mafhal VIP Passport PDF'
+                });
+            }
+        } catch (err) {
+            console.error('PDF Export error:', err);
+            Alert.alert('Error', 'Could not export PDF certificate. Please try again.');
+        } finally {
+            setExportingType(null);
+        }
+    };
+
+    // ─── 3. Share as Text / Link ─────────────────────────────────────────────
+    const handleShareText = async () => {
         try {
             const message = `👑 Abu Mafhal Marketplace - Royal VIP Passport\n\n` +
                 `👤 Member: ${displayName}\n` +
@@ -409,6 +795,7 @@ export const VIPPassModal = ({ visible, onClose, user, wallet, onNavigate }) => 
                 title: 'Abu Mafhal Royal VIP Passport',
                 message
             });
+            setShowShareModal(false);
         } catch (_) {}
     };
 
@@ -465,7 +852,7 @@ export const VIPPassModal = ({ visible, onClose, user, wallet, onNavigate }) => 
                         style={s.headerGoldLine}
                     />
 
-                    {/* ── 2. Segmented Mode Tabs (Modern Clean Light Pills) ── */}
+                    {/* ── 2. Segmented Mode Tabs ─────────────────────────── */}
                     <View style={s.tabsWrap}>
                         {[
                             { key: 'card', label: 'VIP Card', icon: 'card-outline' },
@@ -498,10 +885,10 @@ export const VIPPassModal = ({ visible, onClose, user, wallet, onNavigate }) => 
                         showsVerticalScrollIndicator={false}
                         contentContainerStyle={s.scrollContent}
                     >
-                        {/* ═════════ TAB 1: VIP DIGITAL CARD VIEW (BRIGHT LUXURY) ═════════ */}
+                        {/* ═════════ TAB 1: VIP DIGITAL CARD VIEW ═════════ */}
                         {activeTab === 'card' && (
                             <View style={{ gap: 14 }}>
-                                {/* Card Finish Selector (Modern Bright Customizer) */}
+                                {/* Card Finish Selector */}
                                 <View style={s.finishBar}>
                                     <Text style={s.finishBarLabel}>CARD FINISH:</Text>
                                     <View style={s.finishPillsRow}>
@@ -535,99 +922,99 @@ export const VIPPassModal = ({ visible, onClose, user, wallet, onNavigate }) => 
                                 </View>
 
                                 {/* Luxury Bright Physical-Style Digital Passport Card */}
-                                <LinearGradient
-                                    colors={finishTheme.gradient}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 1 }}
-                                    style={[s.vipCardHero, { borderColor: finishTheme.borderColor }]}
-                                >
-                                    {/* Background Shield Watermark */}
-                                    <Ionicons
-                                        name="shield-checkmark"
-                                        size={210}
-                                        color="rgba(212, 175, 55, 0.07)"
-                                        style={s.cardWatermark}
-                                    />
+                                <View ref={cardRef} collapsable={false}>
+                                    <LinearGradient
+                                        colors={finishTheme.gradient}
+                                        start={{ x: 0, y: 0 }}
+                                        end={{ x: 1, y: 1 }}
+                                        style={[s.vipCardHero, { borderColor: finishTheme.borderColor }]}
+                                    >
+                                        <Ionicons
+                                            name="shield-checkmark"
+                                            size={210}
+                                            color="rgba(212, 175, 55, 0.07)"
+                                            style={s.cardWatermark}
+                                        />
 
-                                    {/* Top Row: Emblems, Chip & Contactless Wave */}
-                                    <View style={s.cardHeroTop}>
-                                        <View style={[s.cardHeroEmblemRow, { borderColor: finishTheme.borderColor, backgroundColor: finishTheme.tagBg }]}>
-                                            <Ionicons name="sparkles" size={13} color={finishTheme.accentColor} />
-                                            <Text style={[s.cardHeroEmblemTxt, { color: finishTheme.accentColor }]}>
-                                                {currentTier.badge}
-                                            </Text>
-                                        </View>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-                                            <Ionicons name="wifi" size={15} color={finishTheme.accentColor} style={{ transform: [{ rotate: '90deg' }] }} />
-                                            {/* EMV Microchip */}
-                                            <View style={[s.chipBox, { borderColor: finishTheme.borderColor }]}>
-                                                <Ionicons name="hardware-chip-sharp" size={20} color={finishTheme.chipColor} />
-                                            </View>
-                                        </View>
-                                    </View>
-
-                                    {/* Middle Row: User Details */}
-                                    <View style={s.cardHeroUserRow}>
-                                        <View style={s.cardHeroAvatarRing}>
-                                            <UserAvatar user={user} size={54} border={finishTheme.borderColor} />
-                                            <View style={[s.cardVerifiedPill, { backgroundColor: finishTheme.accentColor }]}>
-                                                <Ionicons name="checkmark" size={10} color="#FFFFFF" />
-                                            </View>
-                                        </View>
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={[s.cardHeroName, { color: finishTheme.textColor }]} numberOfLines={1}>
-                                                {displayName}
-                                            </Text>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
-                                                <View style={[s.cardRoleTag, { backgroundColor: finishTheme.tagBg, borderColor: finishTheme.borderColor }]}>
-                                                    <Text style={[s.cardRoleTagTxt, { color: finishTheme.accentColor }]}>
-                                                        {userRole}
-                                                    </Text>
-                                                </View>
-                                                <Text style={[s.cardSinceTxt, { color: finishTheme.subTextColor }]}>
-                                                    MEMBER SINCE {memberSinceYear}
+                                        {/* Top Row: Emblems, Chip & Contactless Wave */}
+                                        <View style={s.cardHeroTop}>
+                                            <View style={[s.cardHeroEmblemRow, { borderColor: finishTheme.borderColor, backgroundColor: finishTheme.tagBg }]}>
+                                                <Ionicons name="sparkles" size={13} color={finishTheme.accentColor} />
+                                                <Text style={[s.cardHeroEmblemTxt, { color: finishTheme.accentColor }]}>
+                                                    {currentTier.badge}
                                                 </Text>
                                             </View>
-                                        </View>
-                                    </View>
-
-                                    {/* Bottom Row: Member ID & Status */}
-                                    <View style={[s.cardHeroFooter, { borderTopColor: 'rgba(212, 175, 55, 0.25)' }]}>
-                                        <TouchableOpacity
-                                            onPress={() => handleCopy(memberId, 'Member ID')}
-                                            style={s.cardIdBox}
-                                            activeOpacity={0.8}
-                                        >
-                                            <Text style={[s.cardIdLabel, { color: finishTheme.subTextColor }]}>MEMBER PASSPORT ID</Text>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1 }}>
-                                                <Text style={[s.cardIdVal, { color: finishTheme.textColor }]}>{memberId}</Text>
-                                                <Ionicons
-                                                    name={copiedLabel === 'Member ID' ? 'checkmark-circle' : 'copy-outline'}
-                                                    size={13}
-                                                    color={finishTheme.accentColor}
-                                                />
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                                                <Ionicons name="wifi" size={15} color={finishTheme.accentColor} style={{ transform: [{ rotate: '90deg' }] }} />
+                                                <View style={[s.chipBox, { borderColor: finishTheme.borderColor }]}>
+                                                    <Ionicons name="hardware-chip-sharp" size={20} color={finishTheme.chipColor} />
+                                                </View>
                                             </View>
-                                        </TouchableOpacity>
-
-                                        <View style={s.cardActiveStatusPill}>
-                                            <View style={s.liveGreenDot} />
-                                            <Text style={s.cardActiveStatusTxt}>VERIFIED</Text>
                                         </View>
-                                    </View>
 
-                                    {/* Security Ribbon */}
-                                    <View style={s.cardSecRibbon}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                            <Ionicons name="lock-closed" size={10} color={finishTheme.accentColor} />
-                                            <Text style={[s.cardSecRibbonTxt, { color: finishTheme.subTextColor }]}>
-                                                ESCROW 256-BIT ENCRYPTION
-                                            </Text>
+                                        {/* Middle Row: User Details */}
+                                        <View style={s.cardHeroUserRow}>
+                                            <View style={s.cardHeroAvatarRing}>
+                                                <UserAvatar user={user} size={54} border={finishTheme.borderColor} />
+                                                <View style={[s.cardVerifiedPill, { backgroundColor: finishTheme.accentColor }]}>
+                                                    <Ionicons name="checkmark" size={10} color="#FFFFFF" />
+                                                </View>
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={[s.cardHeroName, { color: finishTheme.textColor }]} numberOfLines={1}>
+                                                    {displayName}
+                                                </Text>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                                                    <View style={[s.cardRoleTag, { backgroundColor: finishTheme.tagBg, borderColor: finishTheme.borderColor }]}>
+                                                        <Text style={[s.cardRoleTagTxt, { color: finishTheme.accentColor }]}>
+                                                            {userRole}
+                                                        </Text>
+                                                    </View>
+                                                    <Text style={[s.cardSinceTxt, { color: finishTheme.subTextColor }]}>
+                                                        MEMBER SINCE {memberSinceYear}
+                                                    </Text>
+                                                </View>
+                                            </View>
                                         </View>
-                                        <Text style={[s.cardSecCodeTxt, { color: finishTheme.subTextColor }]}>{securityHash}</Text>
-                                    </View>
-                                </LinearGradient>
 
-                                {/* Quick Passport Stats Bar (Crisp Light Porcelain) */}
+                                        {/* Bottom Row: Member ID & Status */}
+                                        <View style={[s.cardHeroFooter, { borderTopColor: 'rgba(212, 175, 55, 0.25)' }]}>
+                                            <TouchableOpacity
+                                                onPress={() => handleCopy(memberId, 'Member ID')}
+                                                style={s.cardIdBox}
+                                                activeOpacity={0.8}
+                                            >
+                                                <Text style={[s.cardIdLabel, { color: finishTheme.subTextColor }]}>MEMBER PASSPORT ID</Text>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1 }}>
+                                                    <Text style={[s.cardIdVal, { color: finishTheme.textColor }]}>{memberId}</Text>
+                                                    <Ionicons
+                                                        name={copiedLabel === 'Member ID' ? 'checkmark-circle' : 'copy-outline'}
+                                                        size={13}
+                                                        color={finishTheme.accentColor}
+                                                    />
+                                                </View>
+                                            </TouchableOpacity>
+
+                                            <View style={s.cardActiveStatusPill}>
+                                                <View style={s.liveGreenDot} />
+                                                <Text style={s.cardActiveStatusTxt}>VERIFIED</Text>
+                                            </View>
+                                        </View>
+
+                                        {/* Security Ribbon */}
+                                        <View style={s.cardSecRibbon}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                <Ionicons name="lock-closed" size={10} color={finishTheme.accentColor} />
+                                                <Text style={[s.cardSecRibbonTxt, { color: finishTheme.subTextColor }]}>
+                                                    ESCROW 256-BIT ENCRYPTION
+                                                </Text>
+                                            </View>
+                                            <Text style={[s.cardSecCodeTxt, { color: finishTheme.subTextColor }]}>{securityHash}</Text>
+                                        </View>
+                                    </LinearGradient>
+                                </View>
+
+                                {/* Quick Passport Stats Bar */}
                                 <View style={s.quickStatsRow}>
                                     <View style={s.statBox}>
                                         <Text style={s.statBoxLbl}>LOYALTY POINTS</Text>
@@ -650,23 +1037,41 @@ export const VIPPassModal = ({ visible, onClose, user, wallet, onNavigate }) => 
                                     </View>
                                 </View>
 
-                                {/* Action Buttons */}
-                                <View style={{ flexDirection: 'row', gap: 10 }}>
+                                {/* ── Fast Share/Export Action Hub ── */}
+                                <View style={s.exportHubWrap}>
                                     <TouchableOpacity
-                                        onPress={() => setActiveTab('qr')}
-                                        style={[s.primaryActionBtn, { flex: 1.2 }]}
-                                        activeOpacity={0.85}
+                                        onPress={handleExportPng}
+                                        style={s.exportPillBtn}
+                                        activeOpacity={0.8}
+                                        disabled={exportingType !== null}
                                     >
-                                        <Ionicons name="qr-code" size={16} color="#0A192F" />
-                                        <Text style={s.primaryActionTxt}>Show Scan QR</Text>
+                                        <Ionicons name="image-outline" size={15} color="#D4AF37" />
+                                        <Text style={s.exportPillTxt}>
+                                            {exportingType === 'png' ? 'Saving PNG...' : 'PNG Card'}
+                                        </Text>
                                     </TouchableOpacity>
+
                                     <TouchableOpacity
-                                        onPress={handleShare}
-                                        style={[s.secondaryActionBtn, { flex: 0.9 }]}
-                                        activeOpacity={0.85}
+                                        onPress={handleExportPdf}
+                                        style={s.exportPillBtn}
+                                        activeOpacity={0.8}
+                                        disabled={exportingType !== null}
                                     >
-                                        <Ionicons name="share-social-outline" size={16} color="#0A192F" />
-                                        <Text style={s.secondaryActionTxt}>Share Pass</Text>
+                                        <Ionicons name="document-text-outline" size={15} color="#2563EB" />
+                                        <Text style={s.exportPillTxt}>
+                                            {exportingType === 'pdf' ? 'Creating PDF...' : 'PDF Pass'}
+                                        </Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        onPress={() => setShowShareModal(true)}
+                                        style={[s.exportPillBtn, { backgroundColor: '#D4AF37', borderColor: '#D4AF37' }]}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Ionicons name="share-social" size={15} color="#0A192F" />
+                                        <Text style={[s.exportPillTxt, { color: '#0A192F', fontWeight: '900' }]}>
+                                            Share Pass
+                                        </Text>
                                     </TouchableOpacity>
                                 </View>
 
@@ -710,10 +1115,9 @@ export const VIPPassModal = ({ visible, onClose, user, wallet, onNavigate }) => 
                             </View>
                         )}
 
-                        {/* ═════════ TAB 2: LIVE DYNAMIC QR & BARCODE VIEW (BRIGHT HIGH CONTRAST) ═════════ */}
+                        {/* ═════════ TAB 2: LIVE DYNAMIC QR & BARCODE VIEW ═════════ */}
                         {activeTab === 'qr' && (
                             <View style={{ alignItems: 'center', gap: 14 }}>
-                                {/* Main QR Card */}
                                 <View style={s.qrMainCard}>
                                     <View style={s.qrCardTopTitle}>
                                         <Ionicons name="shield-checkmark" size={14} color="#D4AF37" />
@@ -779,29 +1183,28 @@ export const VIPPassModal = ({ visible, onClose, user, wallet, onNavigate }) => 
                                 {/* Action Buttons */}
                                 <View style={{ width: '100%', flexDirection: 'row', gap: 8 }}>
                                     <TouchableOpacity
-                                        onPress={() => handleCopy(memberId, 'Member ID')}
+                                        onPress={handleExportPng}
                                         style={[s.primaryActionBtn, { flex: 1 }]}
                                         activeOpacity={0.85}
                                     >
-                                        <Ionicons name="copy-outline" size={15} color="#0A192F" />
-                                        <Text style={s.primaryActionTxt}>Copy Member ID</Text>
+                                        <Ionicons name="image-outline" size={15} color="#0A192F" />
+                                        <Text style={s.primaryActionTxt}>Save PNG</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity
-                                        onPress={() => handleCopy(`https://abumafhal.com/verify-pass?id=${rawUid}&code=${memberId}`, 'Verification Link')}
+                                        onPress={handleExportPdf}
                                         style={[s.secondaryActionBtn, { flex: 1 }]}
                                         activeOpacity={0.85}
                                     >
-                                        <Ionicons name="link-outline" size={15} color="#0A192F" />
-                                        <Text style={s.secondaryActionTxt}>Copy Link</Text>
+                                        <Ionicons name="document-text-outline" size={15} color="#0A192F" />
+                                        <Text style={s.secondaryActionTxt}>Save PDF</Text>
                                     </TouchableOpacity>
                                 </View>
                             </View>
                         )}
 
-                        {/* ═════════ TAB 3: PRIVILEGES & TIER EXPLORER (BRIGHT PORCELAIN) ═════════ */}
+                        {/* ═════════ TAB 3: PRIVILEGES & TIER EXPLORER ═════════ */}
                         {activeTab === 'perks' && (
                             <View style={{ gap: 14 }}>
-                                {/* Tier Status Banner */}
                                 <View style={[s.tierStatusBanner, { borderColor: activePerkViewTier.lightBorder, backgroundColor: activePerkViewTier.lightBg }]}>
                                     <View style={[s.tierIconCircle, { borderColor: activePerkViewTier.color, backgroundColor: '#FFFFFF' }]}>
                                         <Ionicons name={activePerkViewTier.icon} size={22} color={activePerkViewTier.color} />
@@ -911,7 +1314,7 @@ export const VIPPassModal = ({ visible, onClose, user, wallet, onNavigate }) => 
                 </View>
             </View>
 
-            {/* ── 4. Fullscreen Zoom QR Modal (Store / Merchant Scan Mode) ── */}
+            {/* ── 4. Fullscreen Zoom QR Modal (Store / Counter Scan) ── */}
             <Modal
                 visible={showZoomQR}
                 animationType="fade"
@@ -945,6 +1348,115 @@ export const VIPPassModal = ({ visible, onClose, user, wallet, onNavigate }) => 
                     </View>
                 </View>
             </Modal>
+
+            {/* ── 5. Modern Share & Export Options Modal (PNG / PDF / Text) ── */}
+            <Modal
+                visible={showShareModal}
+                animationType="fade"
+                transparent={true}
+                onRequestClose={() => setShowShareModal(false)}
+            >
+                <View style={s.zoomOverlay}>
+                    <View style={s.shareSheetContainer}>
+                        <View style={s.zoomHeader}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Ionicons name="share-social" size={18} color="#0A192F" />
+                                <Text style={s.zoomHeaderTitle}>Export & Share VIP Pass</Text>
+                            </View>
+                            <TouchableOpacity
+                                onPress={() => setShowShareModal(false)}
+                                style={s.zoomCloseBtn}
+                                activeOpacity={0.7}
+                            >
+                                <Ionicons name="close" size={18} color="#0A192F" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <Text style={s.shareSheetSub}>
+                            Choose how you would like to share or download your verified member passport:
+                        </Text>
+
+                        {/* Format 1: PNG Image Card */}
+                        <TouchableOpacity
+                            onPress={handleExportPng}
+                            style={s.shareOptionCard}
+                            activeOpacity={0.8}
+                            disabled={exportingType !== null}
+                        >
+                            <View style={[s.shareOptionIconBox, { backgroundColor: '#FEF9C3' }]}>
+                                <Ionicons name="image" size={22} color="#D97706" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <Text style={s.shareOptionTitle}>Export as PNG Image</Text>
+                                    <View style={[s.formatBadge, { backgroundColor: '#FEF9C3' }]}>
+                                        <Text style={[s.formatBadgeTxt, { color: '#B48C28' }]}>PNG</Text>
+                                    </View>
+                                </View>
+                                <Text style={s.shareOptionDesc}>
+                                    High-definition digital pass card with QR code, barcode, and gold frame
+                                </Text>
+                            </View>
+                            {exportingType === 'png' ? (
+                                <ActivityIndicator size="small" color="#D4AF37" />
+                            ) : (
+                                <Ionicons name="download-outline" size={18} color="#64748B" />
+                            )}
+                        </TouchableOpacity>
+
+                        {/* Format 2: PDF Document Certificate */}
+                        <TouchableOpacity
+                            onPress={handleExportPdf}
+                            style={s.shareOptionCard}
+                            activeOpacity={0.8}
+                            disabled={exportingType !== null}
+                        >
+                            <View style={[s.shareOptionIconBox, { backgroundColor: '#EFF6FF' }]}>
+                                <Ionicons name="document-text" size={22} color="#2563EB" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <Text style={s.shareOptionTitle}>Export as PDF Document</Text>
+                                    <View style={[s.formatBadge, { backgroundColor: '#EFF6FF' }]}>
+                                        <Text style={[s.formatBadgeTxt, { color: '#2563EB' }]}>PDF</Text>
+                                    </View>
+                                </View>
+                                <Text style={s.shareOptionDesc}>
+                                    Official printable certificate with escrow authentication seal & tier perks
+                                </Text>
+                            </View>
+                            {exportingType === 'pdf' ? (
+                                <ActivityIndicator size="small" color="#2563EB" />
+                            ) : (
+                                <Ionicons name="download-outline" size={18} color="#64748B" />
+                            )}
+                        </TouchableOpacity>
+
+                        {/* Format 3: Quick Text & Link */}
+                        <TouchableOpacity
+                            onPress={handleShareText}
+                            style={s.shareOptionCard}
+                            activeOpacity={0.8}
+                        >
+                            <View style={[s.shareOptionIconBox, { backgroundColor: '#DCFCE7' }]}>
+                                <Ionicons name="chatbubbles" size={22} color="#16A34A" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <Text style={s.shareOptionTitle}>Share Verification Link</Text>
+                                    <View style={[s.formatBadge, { backgroundColor: '#DCFCE7' }]}>
+                                        <Text style={[s.formatBadgeTxt, { color: '#16A34A' }]}>LINK</Text>
+                                    </View>
+                                </View>
+                                <Text style={s.shareOptionDesc}>
+                                    Send Member ID, credentials, and verification web link via WhatsApp or SMS
+                                </Text>
+                            </View>
+                            <Ionicons name="share-outline" size={18} color="#64748B" />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </Modal>
     );
 };
@@ -955,13 +1467,13 @@ export default VIPPassModal;
 const s = StyleSheet.create({
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(15, 23, 42, 0.55)', // modern frosted backdrop blur feel
+        backgroundColor: 'rgba(15, 23, 42, 0.55)',
         justifyContent: 'center',
         alignItems: 'center',
         padding: 16
     },
     passContainer: {
-        backgroundColor: '#FFFFFF', // pristine porcelain bright white
+        backgroundColor: '#FFFFFF',
         borderRadius: 26,
         width: Math.min(width - 24, 395),
         maxWidth: 395,
@@ -1033,7 +1545,7 @@ const s = StyleSheet.create({
         height: 2.5
     },
 
-    // Tabs (Clean Light Pills)
+    // Tabs
     tabsWrap: {
         flexDirection: 'row',
         backgroundColor: '#F1F5F9',
@@ -1110,7 +1622,7 @@ const s = StyleSheet.create({
         fontWeight: '700'
     },
 
-    // Card Hero View (Bright Luxury Physical Card)
+    // Card Hero View
     vipCardHero: {
         borderRadius: 22,
         padding: 16,
@@ -1261,7 +1773,7 @@ const s = StyleSheet.create({
         letterSpacing: 0.5
     },
 
-    // Quick Stats Bar (Clean White Porcelain)
+    // Quick Stats Bar
     quickStatsRow: {
         flexDirection: 'row',
         backgroundColor: '#F8FAFC',
@@ -1292,7 +1804,31 @@ const s = StyleSheet.create({
         marginTop: 2
     },
 
-    // Action Buttons
+    // Fast Export Hub
+    exportHubWrap: {
+        flexDirection: 'row',
+        gap: 8,
+        alignItems: 'center'
+    },
+    exportPillBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        backgroundColor: '#F8FAFC',
+        paddingVertical: 10,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    exportPillTxt: {
+        fontSize: 11.5,
+        fontWeight: '800',
+        color: '#0A192F'
+    },
+
+    // Primary Action Buttons
     primaryActionBtn: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1724,5 +2260,65 @@ const s = StyleSheet.create({
         color: '#64748B',
         textAlign: 'center',
         marginTop: 4
+    },
+
+    // Share Sheet Modal
+    shareSheetContainer: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 24,
+        padding: 20,
+        width: Math.min(width - 32, 380),
+        borderWidth: 1.5,
+        borderColor: '#E2E8F0',
+        shadowColor: '#0A192F',
+        shadowOffset: { width: 0, height: 16 },
+        shadowOpacity: 0.2,
+        shadowRadius: 28,
+        elevation: 25
+    },
+    shareSheetSub: {
+        fontSize: 11,
+        color: '#64748B',
+        marginBottom: 16,
+        lineHeight: 16
+    },
+    shareOptionCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        padding: 12,
+        backgroundColor: '#F8FAFC',
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        marginBottom: 10
+    },
+    shareOptionIconBox: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    shareOptionTitle: {
+        fontSize: 12.5,
+        fontWeight: '900',
+        color: '#0A192F'
+    },
+    shareOptionDesc: {
+        fontSize: 9.5,
+        color: '#64748B',
+        marginTop: 2,
+        lineHeight: 13
+    },
+    formatBadge: {
+        paddingHorizontal: 5,
+        paddingVertical: 1,
+        borderRadius: 4
+    },
+    formatBadgeTxt: {
+        fontSize: 8,
+        fontWeight: '900',
+        letterSpacing: 0.5
     }
 });
