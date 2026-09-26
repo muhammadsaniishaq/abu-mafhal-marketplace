@@ -36,6 +36,7 @@ import { ComparisonProvider } from './src/context/ComparisonContext';
 import { clearFollowedStoresCache } from './src/services/vendorFollowerService';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { ModernSplashScreen } from './src/components/ModernSplashScreen';
+import { ForceUpdateModal } from './src/components/ForceUpdateModal';
 
 // Screens
 import { ProductComparison } from './src/screens/ProductComparison';
@@ -631,6 +632,8 @@ export default function App() {
                     {showSplash && (
                         <ModernSplashScreen onFinish={() => setShowSplash(false)} />
                     )}
+
+                    <ForceUpdateModal />
 
                     </ComparisonProvider>
                 </AppSettingsProvider>

@@ -44,6 +44,13 @@ export const AppSettingsProvider = ({ children }) => {
         prembly_app_id: '',
         prembly_secret_key: '',
         vendor_plans: DEFAULT_VENDOR_PLANS,
+        latest_app_version: '1.0.0',
+        min_required_version: '1.0.0',
+        force_update_enabled: false,
+        play_store_url: 'https://play.google.com/store/apps/details?id=com.abumafhal.app',
+        update_title: 'Sabon Version Ya Fito A Play Store!',
+        update_message: 'Muna bukatar kayi update na manhajar Abu Mafhal zuwa sabon version domin samun sabbin fasaloli da ingantaccen tsaro kafin ka shiga.',
+        update_release_notes: '• Karin sabbin fasaloli da inganta saurin manhaja\n• Sabon tsarin VIP Pass da katin shaida mai lambar QR\n• Karin tsaro ga asusunka da tsarin biyan kudi\n• Gyaran kurakurai da saukaka siyayya',
         loading: false
     });
 

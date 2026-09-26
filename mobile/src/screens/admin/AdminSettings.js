@@ -12,6 +12,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { UploadService } from '../../services/uploadService';
 import { supabase } from '../../lib/supabase';
 import { invalidateResendKeyCache } from '../../lib/notifications';
+import { ForceUpdateModal } from '../../components/ForceUpdateModal';
 
 const { width: W } = Dimensions.get('window');
 const TAB_W = W / 7;
@@ -394,7 +395,14 @@ export const AdminSettings = ({ navigation }) => {
     const [enableLiveChat,   setEnableLiveChat]   = useState(settings?.enable_live_chat || false);
     const [enableWaitlist,   setEnableWaitlist]   = useState(settings?.enable_waitlist || false);
     const [appStoreUrl,      setAppStoreUrl]      = useState(settings?.app_store_url || '');
-    const [playStoreUrl,     setPlayStoreUrl]     = useState(settings?.play_store_url || '');
+    const [playStoreUrl,     setPlayStoreUrl]     = useState(settings?.play_store_url || 'https://play.google.com/store/apps/details?id=com.abumafhal.app');
+    const [latestAppVersion,       setLatestAppVersion]       = useState(settings?.latest_app_version || '1.0.0');
+    const [minRequiredVersion,     setMinRequiredVersion]     = useState(settings?.min_required_version || '1.0.0');
+    const [forceUpdateEnabled,     setForceUpdateEnabled]     = useState(settings?.force_update_enabled || false);
+    const [updateTitle,            setUpdateTitle]            = useState(settings?.update_title || 'Sabon Version Ya Fito A Play Store!');
+    const [updateMessage,          setUpdateMessage]          = useState(settings?.update_message || 'Muna bukatar kayi update na manhajar Abu Mafhal zuwa sabon version domin samun sabbin fasaloli da ingantaccen tsaro kafin ka shiga.');
+    const [updateReleaseNotes,     setUpdateReleaseNotes]     = useState(settings?.update_release_notes || '• Karin sabbin fasaloli da inganta sauri\n• Sabon tsarin VIP Pass da katin shaida mai lambar QR\n• Karin tsaro ga asusunka da biyan kudi\n• Gyaran kurakurai da saukaka siyayya');
+    const [showUpdatePreviewModal, setShowUpdatePreviewModal] = useState(false);
     const [privacyPolicyUrl, setPrivacyPolicyUrl] = useState(settings?.privacy_policy_url || '');
     const [termsUrl,         setTermsUrl]         = useState(settings?.terms_url || '');
 
@@ -521,6 +529,13 @@ export const AdminSettings = ({ navigation }) => {
             if (settings.enable_product_qa !== undefined) setEnableProductQa(settings.enable_product_qa !== false);
             if (settings.enable_guest_checkout !== undefined) setEnableGuestCheckout(!!settings.enable_guest_checkout);
             if (settings.resend_api_key !== undefined) setResendApiKey(settings.resend_api_key || '');
+            if (settings.play_store_url !== undefined) setPlayStoreUrl(settings.play_store_url || 'https://play.google.com/store/apps/details?id=com.abumafhal.app');
+            if (settings.latest_app_version !== undefined) setLatestAppVersion(settings.latest_app_version || '1.0.0');
+            if (settings.min_required_version !== undefined) setMinRequiredVersion(settings.min_required_version || '1.0.0');
+            if (settings.force_update_enabled !== undefined) setForceUpdateEnabled(!!settings.force_update_enabled);
+            if (settings.update_title !== undefined) setUpdateTitle(settings.update_title || '');
+            if (settings.update_message !== undefined) setUpdateMessage(settings.update_message || '');
+            if (settings.update_release_notes !== undefined) setUpdateReleaseNotes(settings.update_release_notes || '');
         }
     }, [settings]);
 
@@ -729,6 +744,12 @@ export const AdminSettings = ({ navigation }) => {
             enable_product_qa: enableProductQa,
             enable_guest_checkout: enableGuestCheckout,
             app_store_url: appStoreUrl, play_store_url: playStoreUrl,
+            latest_app_version: latestAppVersion,
+            min_required_version: minRequiredVersion,
+            force_update_enabled: forceUpdateEnabled,
+            update_title: updateTitle,
+            update_message: updateMessage,
+            update_release_notes: updateReleaseNotes,
             privacy_policy_url: privacyPolicyUrl, terms_url: termsUrl,
             // Phase-4
             admin_name: adminName, admin_title: adminTitle,
@@ -1585,6 +1606,99 @@ export const AdminSettings = ({ navigation }) => {
                 </Card>
             </Sect>
 
+            {/* Google Play Store & Force Update Management */}
+            <Sect title="Play Store & App Force Update Hub" icon="logo-google-playstore" subtitle="Saita sabon version na Play Store da tilasta yin update kafin a shiga manhaja">
+                <Card>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, backgroundColor: darkMode ? '#112217' : '#ECFDF5', padding: 12, borderRadius: 14, borderWidth: 1, borderColor: '#10B981' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                            <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#10B981' + '20', alignItems: 'center', justifyContent: 'center' }}>
+                                <Ionicons name="logo-google-playstore" size={24} color="#10B981" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 13, fontWeight: '800', color: darkMode ? '#A7F3D0' : '#065F46' }}>Google Play Store Protection</Text>
+                                <Text style={{ fontSize: 11, color: darkMode ? '#6EE7B7' : '#047857' }}>Package: com.abumafhal.app</Text>
+                            </View>
+                        </View>
+                        <TouchableOpacity
+                            onPress={() => setShowUpdatePreviewModal(true)}
+                            style={{ backgroundColor: '#10B981', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 5 }}
+                        >
+                            <Ionicons name="eye" size={14} color="#FFFFFF" />
+                            <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>Preview Screen</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <Tog
+                        label="Dole Sai Anyi Update (Force Update)"
+                        desc="Idan an kunna, duk wanda yake da tsohon version ba zai iya shiga app din ba sai yayi update a Play Store"
+                        icon="shield-alert"
+                        value={forceUpdateEnabled}
+                        onToggle={() => { setForceUpdateEnabled(p => !p); setUnsaved(true); }}
+                        color="#EF4444"
+                    />
+
+                    <View style={{ flexDirection: 'row', gap: 12, marginTop: 14 }}>
+                        <View style={{ flex: 1 }}>
+                            <Inp
+                                label="LATEST PLAY STORE VERSION"
+                                value={latestAppVersion}
+                                onChange={v => { setLatestAppVersion(v); setUnsaved(true); }}
+                                icon="cloud-upload"
+                                placeholder="1.0.1"
+                                hint="Sabuwar sigar da ke kan Play Store"
+                            />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Inp
+                                label="MINIMUM REQUIRED VERSION"
+                                value={minRequiredVersion}
+                                onChange={v => { setMinRequiredVersion(v); setUnsaved(true); }}
+                                icon="lock-closed"
+                                placeholder="1.0.0"
+                                hint="Kasa da wannan ba zai shiga ba ko da force a kashe yake"
+                            />
+                        </View>
+                    </View>
+
+                    <Inp
+                        label="Play Store Direct URL"
+                        value={playStoreUrl}
+                        onChange={v => { setPlayStoreUrl(v); setUnsaved(true); }}
+                        icon="link"
+                        placeholder="https://play.google.com/store/apps/details?id=com.abumafhal.app"
+                        keyboard="url"
+                        hint="Adireshin da ake turawa domin bude Google Play Store a waya"
+                    />
+
+                    <Inp
+                        label="Update Modal Title (Taken Sanarwa)"
+                        value={updateTitle}
+                        onChange={v => { setUpdateTitle(v); setUnsaved(true); }}
+                        icon="megaphone"
+                        placeholder="Sabon Version Ya Fito A Play Store!"
+                    />
+
+                    <Inp
+                        label="Update Message (Bayanin Bukatar Update)"
+                        value={updateMessage}
+                        onChange={v => { setUpdateMessage(v); setUnsaved(true); }}
+                        icon="chatbubble-ellipses"
+                        placeholder="Muna bukatar kayi update na manhajar Abu Mafhal..."
+                        multi
+                    />
+
+                    <Inp
+                        label="Release Notes (Abubuwan Da Aka Inganta / What's New)"
+                        value={updateReleaseNotes}
+                        onChange={v => { setUpdateReleaseNotes(v); setUnsaved(true); }}
+                        icon="list"
+                        placeholder="• Karin sabbin fasaloli\n• Sabon VIP Pass\n• Inganta sauri"
+                        multi
+                        hint="Rubuta kowace fasaha a layi daban (Bullet points)"
+                    />
+                </Card>
+            </Sect>
+
             <Sect title="Vendor Compliance & Security Shield" icon="shield-half">
                 <Card>
                     <Tog label="Require NIN / CAC Before Listing" desc="Vendors cannot publish live products until verified by Prembly" icon="ribbon"
@@ -2183,6 +2297,22 @@ export const AdminSettings = ({ navigation }) => {
                         </View>
                     </View>
                 </Modal>
+
+                {showUpdatePreviewModal && (
+                    <ForceUpdateModal
+                        testMode={true}
+                        testSettings={{
+                            latest_app_version: latestAppVersion,
+                            min_required_version: minRequiredVersion,
+                            force_update_enabled: forceUpdateEnabled,
+                            play_store_url: playStoreUrl,
+                            update_title: updateTitle,
+                            update_message: updateMessage,
+                            update_release_notes: updateReleaseNotes
+                        }}
+                        onClosePreview={() => setShowUpdatePreviewModal(false)}
+                    />
+                )}
             </View>
         </SettingsThemeContext.Provider>
     );
