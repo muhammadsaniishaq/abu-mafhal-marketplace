@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback, useContext } 
 import {
     View, Text, Switch, TouchableOpacity, ScrollView, TextInput,
     Alert, ActivityIndicator, Image, Animated, Dimensions,
-    StatusBar, Modal, FlatList, Clipboard, Platform
+    StatusBar, Modal, FlatList, Clipboard, Platform, Linking
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -657,6 +657,96 @@ export const AdminSettings = ({ navigation }) => {
                 }
             ]
         );
+    };
+
+    // ── Play Store Version & Release Helpers ─────────────────────
+    const bumpVersion = (type) => {
+        const clean = String(latestAppVersion || '1.0.0').replace(/^v/i, '').trim();
+        const parts = clean.split('.').map(n => parseInt(n, 10) || 0);
+        while (parts.length < 3) parts.push(0);
+
+        if (type === 'patch') {
+            parts[2] = parts[2] + 1;
+        } else if (type === 'minor') {
+            parts[1] = parts[1] + 1;
+            parts[2] = 0;
+        } else if (type === 'major') {
+            parts[0] = parts[0] + 1;
+            parts[1] = 0;
+            parts[2] = 0;
+        }
+
+        const newVer = parts.join('.');
+        setLatestAppVersion(newVer);
+        setUnsaved(true);
+        Alert.alert('Version Updated', `Latest Play Store version set to v${newVer}. Tap Deploy to publish live.`);
+    };
+
+    const syncMinWithLatest = () => {
+        setMinRequiredVersion(latestAppVersion);
+        setForceUpdateEnabled(true);
+        setUnsaved(true);
+        Alert.alert('Mandatory Update Armed ⚠️', `Minimum required version set to v${latestAppVersion} with Force Update enabled. All users on older versions will be prompted immediately.`);
+    };
+
+    const resetMinToDefault = () => {
+        setMinRequiredVersion('1.0.0');
+        setUnsaved(true);
+        Alert.alert('Flexible Mode Active', 'Minimum required version reset to v1.0.0. Update will be optional for existing users.');
+    };
+
+    const testOpenPlayStore = async () => {
+        const targetUrl = playStoreUrl || 'https://play.google.com/store/apps/details?id=com.abumafhal.app';
+        try {
+            await Linking.openURL(targetUrl);
+        } catch (err) {
+            Alert.alert('Play Store Test', `Could not open link: ${targetUrl}`);
+        }
+    };
+
+    const copyPlayStoreUrl = () => {
+        const targetUrl = playStoreUrl || 'https://play.google.com/store/apps/details?id=com.abumafhal.app';
+        Clipboard.setString(targetUrl);
+        Alert.alert('Link Copied! 📋', 'Google Play Store URL copied to clipboard.');
+    };
+
+    const restoreDefaultPlayStoreUrl = () => {
+        const defaultUrl = 'https://play.google.com/store/apps/details?id=com.abumafhal.app';
+        setPlayStoreUrl(defaultUrl);
+        setUnsaved(true);
+    };
+
+    const applyReleaseNotesTemplate = (templateKey) => {
+        if (templateKey === 'general') {
+            setUpdateTitle('Sabon Version Ya Fito A Play Store!');
+            setUpdateMessage('Muna bukatar kayi update na manhajar Abu Mafhal zuwa sabon version domin samun sabbin fasaloli da ingantaccen tsaro kafin ka shiga.');
+            setUpdateReleaseNotes(
+                '• Karin sabbin fasaloli da inganta saurin manhaja\n' +
+                '• Sabon tsarin VIP Pass da katin shaida mai lambar QR\n' +
+                '• Karin tsaro ga asusunka da tsarin biyan kudi\n' +
+                '• Gyaran kurakurai da saukaka saye da sayarwa'
+            );
+        } else if (templateKey === 'security') {
+            setUpdateTitle('Sabuntawar Tsaron Biyan Kudi & Walat!');
+            setUpdateMessage('An sabunta tsarin biyan kudi da kariya ga asusun yan kasuwa da masu siyayya. Yi update yanzu domin ci gaba da cinikayya lafiya.');
+            setUpdateReleaseNotes(
+                '• Sabon tsarin saukar kudi na gaggawa (Instant Withdrawal)\n' +
+                '• Kariya ta musamman akan katunan banki da Escrow\n' +
+                '• Tabbatar da asusun banki ta hanyar NIBSS cikin sakanni\n' +
+                '• Karin hanyoyin biyan kudi da walat mai aminci'
+            );
+        } else if (templateKey === 'market') {
+            setUpdateTitle('Babban Sabuntawar Kasuwa & Kaya!');
+            setUpdateMessage('An kara sabbin yan kasuwa na sari da kaya masu inganci. Yi update domin ganin sabbin rangwamen farashi a Play Store.');
+            setUpdateReleaseNotes(
+                '• Sabon tsarin sayar da sari (Wholesale & Bulk Orders)\n' +
+                '• Hada kai da dillalan Kantin Kwari da Alaba Market\n' +
+                '• Saukin bin sawun kaya (Real-time Live Order Tracking)\n' +
+                '• Inganta hotuna da bidiyon kayayyaki'
+            );
+        }
+        setUnsaved(true);
+        Alert.alert('Template Applied ✨', 'Release notes and messages have been loaded. You can customize them further before saving.');
     };
 
     const handleImportJson = () => {
@@ -1607,27 +1697,132 @@ export const AdminSettings = ({ navigation }) => {
             </Sect>
 
             {/* Google Play Store & Force Update Management */}
+            {/* Google Play Store & Force Update Management */}
             <Sect title="Play Store & App Force Update Hub" icon="logo-google-playstore" subtitle="Saita sabon version na Play Store da tilasta yin update kafin a shiga manhaja">
                 <Card>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, backgroundColor: darkMode ? '#112217' : '#ECFDF5', padding: 12, borderRadius: 14, borderWidth: 1, borderColor: '#10B981' }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                            <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#10B981' + '20', alignItems: 'center', justifyContent: 'center' }}>
-                                <Ionicons name="logo-google-playstore" size={24} color="#10B981" />
+                    {/* Google Play Status Header */}
+                    <View style={{ marginBottom: 14, backgroundColor: darkMode ? '#112217' : '#ECFDF5', padding: 14, borderRadius: 16, borderWidth: 1, borderColor: '#10B981' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                                <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: '#10B98120', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Ionicons name="logo-google-playstore" size={26} color="#10B981" />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Text style={{ fontSize: 13.5, fontWeight: '900', color: darkMode ? '#A7F3D0' : '#065F46' }}>Google Play Protection</Text>
+                                        <View style={{ backgroundColor: '#10B981', paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 4 }}>
+                                            <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '900' }}>LIVE HUB</Text>
+                                        </View>
+                                    </View>
+                                    <Text style={{ fontSize: 11, color: darkMode ? '#6EE7B7' : '#047857', marginTop: 1 }}>
+                                        Package: com.abumafhal.app
+                                    </Text>
+                                </View>
                             </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={{ fontSize: 13, fontWeight: '800', color: darkMode ? '#A7F3D0' : '#065F46' }}>Google Play Store Protection</Text>
-                                <Text style={{ fontSize: 11, color: darkMode ? '#6EE7B7' : '#047857' }}>Package: com.abumafhal.app</Text>
+                            <TouchableOpacity
+                                onPress={() => setShowUpdatePreviewModal(true)}
+                                style={{ backgroundColor: '#10B981', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 5 }}
+                                activeOpacity={0.8}
+                            >
+                                <Ionicons name="eye" size={14} color="#FFFFFF" />
+                                <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '900' }}>Preview Screen</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Version Chips Overview */}
+                        <View style={{ flexDirection: 'row', gap: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: darkMode ? '#1E3A2B' : '#A7F3D0' }}>
+                            <View style={{ flex: 1, backgroundColor: darkMode ? '#0D1A13' : '#FFFFFF', padding: 8, borderRadius: 8, alignItems: 'center' }}>
+                                <Text style={{ fontSize: 9.5, color: '#64748B', fontWeight: '700' }}>INSTALLED</Text>
+                                <Text style={{ fontSize: 12, fontWeight: '900', color: darkMode ? '#E2E8F0' : '#0F172A' }}>v1.0.0</Text>
+                            </View>
+                            <View style={{ flex: 1, backgroundColor: darkMode ? '#0D1A13' : '#FFFFFF', padding: 8, borderRadius: 8, alignItems: 'center' }}>
+                                <Text style={{ fontSize: 9.5, color: '#10B981', fontWeight: '700' }}>PLAY STORE</Text>
+                                <Text style={{ fontSize: 12, fontWeight: '900', color: '#10B981' }}>v{latestAppVersion || '1.0.0'}</Text>
+                            </View>
+                            <View style={{ flex: 1, backgroundColor: darkMode ? '#0D1A13' : '#FFFFFF', padding: 8, borderRadius: 8, alignItems: 'center' }}>
+                                <Text style={{ fontSize: 9.5, color: forceUpdateEnabled ? '#EF4444' : '#D9A73A', fontWeight: '700' }}>MIN REQUIRED</Text>
+                                <Text style={{ fontSize: 12, fontWeight: '900', color: forceUpdateEnabled ? '#EF4444' : '#D9A73A' }}>v{minRequiredVersion || '1.0.0'}</Text>
                             </View>
                         </View>
-                        <TouchableOpacity
-                            onPress={() => setShowUpdatePreviewModal(true)}
-                            style={{ backgroundColor: '#10B981', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 5 }}
-                        >
-                            <Ionicons name="eye" size={14} color="#FFFFFF" />
-                            <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>Preview Screen</Text>
-                        </TouchableOpacity>
+
+                        {/* Test and Copy Action Row */}
+                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                            <TouchableOpacity
+                                onPress={testOpenPlayStore}
+                                style={{ flex: 1, backgroundColor: darkMode ? '#1E293B' : '#FFFFFF', borderWidth: 1, borderColor: '#CBD5E1', paddingVertical: 7, borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 }}
+                                activeOpacity={0.8}
+                            >
+                                <Ionicons name="open-outline" size={13} color="#10B981" />
+                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#10B981' }}>Test Play Store URL</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={copyPlayStoreUrl}
+                                style={{ flex: 1, backgroundColor: darkMode ? '#1E293B' : '#FFFFFF', borderWidth: 1, borderColor: '#CBD5E1', paddingVertical: 7, borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 }}
+                                activeOpacity={0.8}
+                            >
+                                <Ionicons name="copy-outline" size={13} color="#64748B" />
+                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B' }}>Copy Link</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
 
+                    {/* Quick Version Bumper Bar */}
+                    <View style={{ marginBottom: 16, backgroundColor: darkMode ? '#1E293B' : '#F8FAFC', padding: 12, borderRadius: 14, borderWidth: 1, borderColor: darkMode ? '#334155' : '#E2E8F0' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                            <Ionicons name="flash" size={14} color="#D9A73A" />
+                            <Text style={{ fontSize: 11.5, fontWeight: '900', color: darkMode ? '#F8FAFC' : '#0F172A', letterSpacing: 0.3 }}>
+                                QUICK VERSION BUMP (SAURI WAJEN SAITA VERSION)
+                            </Text>
+                        </View>
+                        <Text style={{ fontSize: 11, color: '#64748B', marginBottom: 10 }}>
+                            Danna kowane madanni don kara lambar version cikin sauki ba tare da kuskure ba:
+                        </Text>
+                        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+                            <TouchableOpacity
+                                onPress={() => bumpVersion('patch')}
+                                style={{ flex: 1, backgroundColor: '#3B82F6', paddingVertical: 8, borderRadius: 8, alignItems: 'center' }}
+                                activeOpacity={0.8}
+                            >
+                                <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '900' }}>+0.0.1 Patch</Text>
+                                <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 9 }}>Gyaran Kurakurai</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => bumpVersion('minor')}
+                                style={{ flex: 1, backgroundColor: '#10B981', paddingVertical: 8, borderRadius: 8, alignItems: 'center' }}
+                                activeOpacity={0.8}
+                            >
+                                <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '900' }}>+0.1.0 Feature</Text>
+                                <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 9 }}>Sabbin Fasaloli</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => bumpVersion('major')}
+                                style={{ flex: 1, backgroundColor: '#8B5CF6', paddingVertical: 8, borderRadius: 8, alignItems: 'center' }}
+                                activeOpacity={0.8}
+                            >
+                                <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '900' }}>+1.0.0 Major</Text>
+                                <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 9 }}>Babban Sauyi</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <TouchableOpacity
+                                onPress={syncMinWithLatest}
+                                style={{ flex: 1, backgroundColor: 'rgba(239, 68, 68, 0.1)', borderWidth: 1, borderColor: '#EF4444', paddingVertical: 6, borderRadius: 8, alignItems: 'center' }}
+                                activeOpacity={0.8}
+                            >
+                                <Text style={{ color: '#EF4444', fontSize: 10.5, fontWeight: '800' }}>Set Min = Latest (Tilasta Kowa)</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={resetMinToDefault}
+                                style={{ flex: 1, backgroundColor: 'rgba(16, 185, 129, 0.1)', borderWidth: 1, borderColor: '#10B981', paddingVertical: 6, borderRadius: 8, alignItems: 'center' }}
+                                activeOpacity={0.8}
+                            >
+                                <Text style={{ color: '#10B981', fontSize: 10.5, fontWeight: '800' }}>Set Min = 1.0.0 (Mai Sauki)</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    {/* Force Update Toggle */}
                     <Tog
                         label="Dole Sai Anyi Update (Force Update)"
                         desc="Idan an kunna, duk wanda yake da tsohon version ba zai iya shiga app din ba sai yayi update a Play Store"
@@ -1637,6 +1832,7 @@ export const AdminSettings = ({ navigation }) => {
                         color="#EF4444"
                     />
 
+                    {/* Version Inputs */}
                     <View style={{ flexDirection: 'row', gap: 12, marginTop: 14 }}>
                         <View style={{ flex: 1 }}>
                             <Inp
@@ -1655,20 +1851,68 @@ export const AdminSettings = ({ navigation }) => {
                                 onChange={v => { setMinRequiredVersion(v); setUnsaved(true); }}
                                 icon="lock-closed"
                                 placeholder="1.0.0"
-                                hint="Kasa da wannan ba zai shiga ba ko da force a kashe yake"
+                                hint="Kasa da wannan dole a yi update"
                             />
                         </View>
                     </View>
 
-                    <Inp
-                        label="Play Store Direct URL"
-                        value={playStoreUrl}
-                        onChange={v => { setPlayStoreUrl(v); setUnsaved(true); }}
-                        icon="link"
-                        placeholder="https://play.google.com/store/apps/details?id=com.abumafhal.app"
-                        keyboard="url"
-                        hint="Adireshin da ake turawa domin bude Google Play Store a waya"
-                    />
+                    {/* Version Warning if Min > Latest */}
+                    {minRequiredVersion > latestAppVersion && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(239, 68, 68, 0.1)', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#EF4444', marginBottom: 12 }}>
+                            <Ionicons name="warning" size={16} color="#EF4444" />
+                            <Text style={{ fontSize: 11, color: '#EF4444', flex: 1, fontWeight: '700' }}>
+                                Lura: Minimum Required Version ya fi Latest Version girma. Ka daidaita su don gujewa toshe kowa a app din.
+                            </Text>
+                        </View>
+                    )}
+
+                    <View style={{ position: 'relative' }}>
+                        <Inp
+                            label="Play Store Direct URL"
+                            value={playStoreUrl}
+                            onChange={v => { setPlayStoreUrl(v); setUnsaved(true); }}
+                            icon="link"
+                            placeholder="https://play.google.com/store/apps/details?id=com.abumafhal.app"
+                            keyboard="url"
+                            hint="Adireshin da ake turawa domin bude Google Play Store a waya"
+                        />
+                        <TouchableOpacity
+                            onPress={restoreDefaultPlayStoreUrl}
+                            style={{ position: 'absolute', right: 8, top: 4 }}
+                        >
+                            <Text style={{ fontSize: 10, color: '#3B82F6', fontWeight: '800' }}>Restore Default</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Release Notes Quick Templates */}
+                    <View style={{ marginTop: 14, marginBottom: 12 }}>
+                        <Text style={{ fontSize: 11.5, fontWeight: '800', color: darkMode ? '#CBD5E1' : '#475569', marginBottom: 6 }}>
+                            ZABI TSARIN BAYANI (RELEASE NOTES TEMPLATES):
+                        </Text>
+                        <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+                            <TouchableOpacity
+                                onPress={() => applyReleaseNotesTemplate('general')}
+                                style={{ backgroundColor: darkMode ? '#1E293B' : '#F1F5F9', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#CBD5E1' }}
+                                activeOpacity={0.8}
+                            >
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: darkMode ? '#F8FAFC' : '#0F172A' }}>✨ General & Speed</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => applyReleaseNotesTemplate('security')}
+                                style={{ backgroundColor: darkMode ? '#1E293B' : '#F1F5F9', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#CBD5E1' }}
+                                activeOpacity={0.8}
+                            >
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: darkMode ? '#F8FAFC' : '#0F172A' }}>🔒 Security & Wallet</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => applyReleaseNotesTemplate('market')}
+                                style={{ backgroundColor: darkMode ? '#1E293B' : '#F1F5F9', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#CBD5E1' }}
+                                activeOpacity={0.8}
+                            >
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: darkMode ? '#F8FAFC' : '#0F172A' }}>🛍️ Market & Wholesale</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
 
                     <Inp
                         label="Update Modal Title (Taken Sanarwa)"
