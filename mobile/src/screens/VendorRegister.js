@@ -280,6 +280,8 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
         logo: avatarUrl ? { uri: avatarUrl, name: 'Profile Avatar', isAvatar: true } : null,
         video: null,
         cac: null,
+        cacStatus: null,
+        memorandum: null,
         nin: null
     });
 
@@ -484,9 +486,42 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
             return true;
         }
         if (step === 3) {
-            // ONLY require CAC document if NOT individual
-            if (formData.businessType !== 'sole_proprietor' && activeBusinessType.cacRequired && !files.cac) {
-                Alert.alert('CAC Document Required', 'Please attach your CAC Certificate or incorporation document.');
+            // Limited Liability Company: CAC Certificate, CAC Status Report, and Memorandum (MEMART)
+            if (formData.businessType === 'limited_company') {
+                if (!files.cac) {
+                    Alert.alert('CAC Certificate Required', 'Please attach your CAC Certificate of Incorporation.');
+                    return false;
+                }
+                if (!files.cacStatus) {
+                    Alert.alert('CAC Status Report Required', 'Please attach your official CAC Status Report (Particulars of Directors & Shares).');
+                    return false;
+                }
+                if (!files.memorandum) {
+                    Alert.alert('Memorandum Required', 'Please attach your Memorandum & Articles of Association (MEMART).');
+                    return false;
+                }
+            } else if (formData.businessType === 'business_name') {
+                // Registered Business Name: CAC Certificate and CAC Status Report
+                if (!files.cac) {
+                    Alert.alert('CAC Certificate Required', 'Please attach your CAC Business Name Registration Certificate.');
+                    return false;
+                }
+                if (!files.cacStatus) {
+                    Alert.alert('CAC Status Report Required', 'Please attach your official CAC Status Report (Particulars of Proprietor).');
+                    return false;
+                }
+            } else if (formData.businessType === 'partnership') {
+                if (!files.cac) {
+                    Alert.alert('Certificate Required', 'Please attach your Cooperative / Partnership Certificate.');
+                    return false;
+                }
+                if (!files.cacStatus) {
+                    Alert.alert('Status Report Required', 'Please attach your Cooperative Status Report or Bylaws.');
+                    return false;
+                }
+            }
+            if (!files.nin) {
+                Alert.alert('NIN Document Required', 'Please attach your NIN Slip / Identity Document.');
                 return false;
             }
             return true;
@@ -544,6 +579,12 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
             if (files.video) urls.video_url = await UploadService.uploadFile(files.video, 'vendor-docs', 'videos');
             if (files.cac && formData.businessType !== 'sole_proprietor') {
                 urls.cac_url = await UploadService.uploadFile(files.cac, 'vendor-docs', 'docs');
+            }
+            if (files.cacStatus && formData.businessType !== 'sole_proprietor') {
+                urls.cac_status_url = await UploadService.uploadFile(files.cacStatus, 'vendor-docs', 'docs');
+            }
+            if (files.memorandum && formData.businessType === 'limited_company') {
+                urls.memorandum_url = await UploadService.uploadFile(files.memorandum, 'vendor-docs', 'docs');
             }
             if (files.nin) urls.nin_url = await UploadService.uploadFile(files.nin, 'vendor-docs', 'docs');
             return urls;
@@ -618,7 +659,15 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                     years_in_business: formData.yearsInBusiness,
                     whatsapp: formData.whatsapp,
                     instagram: formData.instagram,
-                    website: formData.website
+                    website: formData.website,
+                    cac_status_url: fileUrls.cac_status_url || null,
+                    memorandum_url: fileUrls.memorandum_url || null,
+                    compliance_documents: {
+                        cac_certificate: fileUrls.cac_url || null,
+                        cac_status_report: fileUrls.cac_status_url || null,
+                        memorandum_art: fileUrls.memorandum_url || null,
+                        nin_slip: fileUrls.nin_url || null
+                    }
                 },
                 subscription_plan: plan.label,
                 subscription_fee: plan.price,
@@ -1642,15 +1691,95 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                             </View>
                         </View>
 
-                        {/* CAC Document: COMPLETELY REMOVED IF INDIVIDUAL */}
-                        {formData.businessType !== 'sole_proprietor' && (
-                            <UploadBtn
-                                label={`${activeBusinessType.label} Certificate`}
-                                file={files.cac}
-                                onPress={() => pickDocument('cac')}
-                                icon="document-text-outline"
-                                required={activeBusinessType.cacRequired}
-                            />
+                        {/* CAC & CORPORATE DOCUMENTS: CONDITIONAL BY BUSINESS TYPE */}
+                        {formData.businessType === 'limited_company' && (
+                            <View style={{ gap: 4, marginBottom: 4 }}>
+                                <View style={localStyles.docGroupHeader}>
+                                    <Ionicons name="business" size={15} color={NAVY_DARK} />
+                                    <Text style={localStyles.docGroupTitle}>Limited Company Documents (3 Required)</Text>
+                                </View>
+                                <UploadBtn
+                                    label="1. CAC Certificate of Incorporation"
+                                    file={files.cac}
+                                    onPress={() => pickDocument('cac')}
+                                    icon="ribbon-outline"
+                                    required
+                                />
+                                <UploadBtn
+                                    label="2. CAC Status Report (Directors & Shares)"
+                                    file={files.cacStatus}
+                                    onPress={() => pickDocument('cacStatus')}
+                                    icon="document-text-outline"
+                                    required
+                                />
+                                <UploadBtn
+                                    label="3. Memorandum & Articles (MEMART)"
+                                    file={files.memorandum}
+                                    onPress={() => pickDocument('memorandum')}
+                                    icon="book-outline"
+                                    required
+                                />
+                            </View>
+                        )}
+
+                        {formData.businessType === 'business_name' && (
+                            <View style={{ gap: 4, marginBottom: 4 }}>
+                                <View style={localStyles.docGroupHeader}>
+                                    <Ionicons name="storefront" size={15} color={NAVY_DARK} />
+                                    <Text style={localStyles.docGroupTitle}>Business Name Documents (2 Required)</Text>
+                                </View>
+                                <UploadBtn
+                                    label="1. CAC Business Name Certificate"
+                                    file={files.cac}
+                                    onPress={() => pickDocument('cac')}
+                                    icon="ribbon-outline"
+                                    required
+                                />
+                                <UploadBtn
+                                    label="2. CAC Status Report (Proprietor Particulars)"
+                                    file={files.cacStatus}
+                                    onPress={() => pickDocument('cacStatus')}
+                                    icon="document-text-outline"
+                                    required
+                                />
+                            </View>
+                        )}
+
+                        {formData.businessType === 'partnership' && (
+                            <View style={{ gap: 4, marginBottom: 4 }}>
+                                <View style={localStyles.docGroupHeader}>
+                                    <Ionicons name="people" size={15} color={NAVY_DARK} />
+                                    <Text style={localStyles.docGroupTitle}>Cooperative / Partnership Documents (2 Required)</Text>
+                                </View>
+                                <UploadBtn
+                                    label="1. Cooperative / Partnership Certificate"
+                                    file={files.cac}
+                                    onPress={() => pickDocument('cac')}
+                                    icon="ribbon-outline"
+                                    required
+                                />
+                                <UploadBtn
+                                    label="2. Cooperative Status Report / Bylaws"
+                                    file={files.cacStatus}
+                                    onPress={() => pickDocument('cacStatus')}
+                                    icon="document-text-outline"
+                                    required
+                                />
+                            </View>
+                        )}
+
+                        {formData.businessType === 'sole_proprietor' && (
+                            <View style={[localStyles.individualPerkCard, { marginVertical: 8 }]}>
+                                <View style={localStyles.individualPerkIconBox}>
+                                    <Ionicons name="checkmark-done-circle" size={24} color={EMERALD} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={localStyles.individualPerkTitle}>No CAC Documents Required</Text>
+                                    <Text style={localStyles.individualPerkSub}>
+                                        As an Individual Trader / Artisan, you do not need CAC certificates, status reports, or memorandum. Only your NIN identity document below is required.
+                                    </Text>
+                                </View>
+                            </View>
                         )}
 
                         {/* NIN Slip */}
@@ -2847,6 +2976,23 @@ const localStyles = StyleSheet.create({
         fontSize: 12,
         fontWeight: '800',
         color: GOLD_DARK
+    },
+    docGroupHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: '#F1F5F9',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 8,
+        marginBottom: 8,
+        borderLeftWidth: 3,
+        borderLeftColor: GOLD
+    },
+    docGroupTitle: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: NAVY_DARK
     },
     uploadBtn: {
         flexDirection: 'row',

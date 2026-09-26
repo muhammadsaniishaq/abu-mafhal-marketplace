@@ -112,14 +112,18 @@ const VendorApplication = () => {
     businessImage: null,
     businessVideo: null,
     ninDocument: null,
-    cacDocument: null
+    cacDocument: null,
+    cacStatusDocument: null,
+    memorandumDocument: null
   });
 
   const [previews, setPreviews] = useState({
     businessImage: null,
     businessVideo: null,
     ninDocument: null,
-    cacDocument: null
+    cacDocument: null,
+    cacStatusDocument: null,
+    memorandumDocument: null
   });
 
   const activeBusinessType = BUSINESS_TYPES.find(b => b.id === formData.businessType) || BUSINESS_TYPES[0];
@@ -196,10 +200,37 @@ const VendorApplication = () => {
         setError('Storefront or product showcase image is required.');
         return false;
       }
-      // ONLY require CAC document if NOT individual
-      if (formData.businessType !== 'sole_proprietor' && activeBusinessType.cacRequired && !files.cacDocument) {
-        setError('CAC registration certificate or document is required.');
-        return false;
+      if (formData.businessType === 'limited_company') {
+        if (!files.cacDocument) {
+          setError('CAC Certificate of Incorporation is required for Limited Liability Companies.');
+          return false;
+        }
+        if (!files.cacStatusDocument) {
+          setError('CAC Status Report (Particulars of Directors & Shares) is required for Limited Companies.');
+          return false;
+        }
+        if (!files.memorandumDocument) {
+          setError('Memorandum & Articles of Association (MEMART) is required for Limited Companies.');
+          return false;
+        }
+      } else if (formData.businessType === 'business_name') {
+        if (!files.cacDocument) {
+          setError('CAC Business Name Registration Certificate is required.');
+          return false;
+        }
+        if (!files.cacStatusDocument) {
+          setError('CAC Status Report (Particulars of Proprietor) is required.');
+          return false;
+        }
+      } else if (formData.businessType === 'partnership') {
+        if (!files.cacDocument) {
+          setError('Cooperative / Partnership Certificate is required.');
+          return false;
+        }
+        if (!files.cacStatusDocument) {
+          setError('Cooperative Status Report or Bylaws is required.');
+          return false;
+        }
       }
       if (!files.ninDocument) {
         setError('NIN slip or identity document is required.');
@@ -261,20 +292,35 @@ const VendorApplication = () => {
         return;
       }
 
-      // Upload files concurrently (skip CAC if individual)
+      // Upload files concurrently
       const uploadPromises = [
         uploadFile(files.businessImage, 'images'),
         uploadFile(files.businessVideo, 'videos'),
         uploadFile(files.ninDocument, 'documents')
       ];
 
+      // 1. CAC Certificate
       if (formData.businessType !== 'sole_proprietor' && files.cacDocument) {
         uploadPromises.push(uploadFile(files.cacDocument, 'documents'));
       } else {
         uploadPromises.push(Promise.resolve(null));
       }
 
-      const [businessImageUrl, businessVideoUrl, ninDocUrl, cacDocUrl] = await Promise.all(uploadPromises);
+      // 2. CAC Status Report
+      if (formData.businessType !== 'sole_proprietor' && files.cacStatusDocument) {
+        uploadPromises.push(uploadFile(files.cacStatusDocument, 'documents'));
+      } else {
+        uploadPromises.push(Promise.resolve(null));
+      }
+
+      // 3. Memorandum (Company only)
+      if (formData.businessType === 'limited_company' && files.memorandumDocument) {
+        uploadPromises.push(uploadFile(files.memorandumDocument, 'documents'));
+      } else {
+        uploadPromises.push(Promise.resolve(null));
+      }
+
+      const [businessImageUrl, businessVideoUrl, ninDocUrl, cacDocUrl, cacStatusDocUrl, memorandumDocUrl] = await Promise.all(uploadPromises);
 
       const applicationData = {
         user_id: userId,
@@ -301,7 +347,15 @@ const VendorApplication = () => {
           operating_hub: formData.businessLocation,
           whatsapp: formData.whatsapp,
           instagram: formData.instagram,
-          website: formData.website
+          website: formData.website,
+          cac_status_url: cacStatusDocUrl,
+          memorandum_url: memorandumDocUrl,
+          compliance_documents: {
+            cac_certificate: cacDocUrl,
+            cac_status_report: cacStatusDocUrl,
+            memorandum_art: memorandumDocUrl,
+            nin_slip: ninDocUrl
+          }
         },
         submitted_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -789,24 +843,194 @@ const VendorApplication = () => {
                   )}
                 </div>
 
-                {/* CAC Document: COMPLETELY REMOVED IF INDIVIDUAL */}
-                {formData.businessType !== 'sole_proprietor' && (
-                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                    <label className="block text-xs font-bold text-[#0A192F] mb-2">
-                      CAC Certificate (Image or PDF) {activeBusinessType.cacRequired && <span className="text-red-500">*</span>}
-                    </label>
-                    <input
-                      type="file"
-                      name="cacDocument"
-                      onChange={handleFileChange}
-                      accept="image/*,application/pdf"
-                      className="w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#0A192F] file:text-[#D9A73A] hover:file:bg-[#1E3A5F] cursor-pointer"
-                    />
-                    {previews.cacDocument && (
-                      <p className="mt-3 text-xs text-emerald-600 font-semibold truncate">
-                        📄 Document Attached: {previews.cacDocument}
+                {/* CONDITIONAL COMPLIANCE DOCUMENTS BY BUSINESS TYPE */}
+                {formData.businessType === 'limited_company' && (
+                  <div className="sm:col-span-2 space-y-3">
+                    <div className="bg-[#0A192F]/5 border-l-4 border-[#D9A73A] p-3 rounded-r-xl">
+                      <p className="text-xs font-bold text-[#0A192F]">
+                        🏢 Limited Liability Company Accreditation (3 Documents Required)
                       </p>
-                    )}
+                      <p className="text-[11px] text-slate-500">
+                        Please upload your Certificate of Incorporation, CAC Status Report, and Memorandum & Articles (MEMART).
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {/* 1. CAC Certificate */}
+                      <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+                        <label className="block text-xs font-bold text-[#0A192F] mb-1">
+                          1. CAC Certificate <span className="text-red-500">*</span>
+                        </label>
+                        <p className="text-[10px] text-slate-400 mb-2">Certificate of Incorporation (RC)</p>
+                        <input
+                          type="file"
+                          name="cacDocument"
+                          onChange={handleFileChange}
+                          accept="image/*,application/pdf"
+                          className="w-full text-xs text-slate-600 file:mr-2 file:py-1.5 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#0A192F] file:text-[#D9A73A] hover:file:bg-[#1E3A5F] cursor-pointer"
+                        />
+                        {previews.cacDocument && (
+                          <p className="mt-2 text-[11px] text-emerald-600 font-semibold truncate">
+                            ✓ Attached: {previews.cacDocument}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* 2. CAC Status Report */}
+                      <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+                        <label className="block text-xs font-bold text-[#0A192F] mb-1">
+                          2. CAC Status Report <span className="text-red-500">*</span>
+                        </label>
+                        <p className="text-[10px] text-slate-400 mb-2">Particulars of Directors & Shares</p>
+                        <input
+                          type="file"
+                          name="cacStatusDocument"
+                          onChange={handleFileChange}
+                          accept="image/*,application/pdf"
+                          className="w-full text-xs text-slate-600 file:mr-2 file:py-1.5 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#0A192F] file:text-[#D9A73A] hover:file:bg-[#1E3A5F] cursor-pointer"
+                        />
+                        {previews.cacStatusDocument && (
+                          <p className="mt-2 text-[11px] text-emerald-600 font-semibold truncate">
+                            ✓ Attached: {previews.cacStatusDocument}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* 3. Memorandum (MEMART) */}
+                      <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+                        <label className="block text-xs font-bold text-[#0A192F] mb-1">
+                          3. Memorandum (MEMART) <span className="text-red-500">*</span>
+                        </label>
+                        <p className="text-[10px] text-slate-400 mb-2">Articles of Association Document</p>
+                        <input
+                          type="file"
+                          name="memorandumDocument"
+                          onChange={handleFileChange}
+                          accept="image/*,application/pdf"
+                          className="w-full text-xs text-slate-600 file:mr-2 file:py-1.5 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#0A192F] file:text-[#D9A73A] hover:file:bg-[#1E3A5F] cursor-pointer"
+                        />
+                        {previews.memorandumDocument && (
+                          <p className="mt-2 text-[11px] text-emerald-600 font-semibold truncate">
+                            ✓ Attached: {previews.memorandumDocument}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {formData.businessType === 'business_name' && (
+                  <div className="sm:col-span-2 space-y-3">
+                    <div className="bg-[#0A192F]/5 border-l-4 border-[#D9A73A] p-3 rounded-r-xl">
+                      <p className="text-xs font-bold text-[#0A192F]">
+                        🏪 Registered Business Name Accreditation (2 Documents Required)
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        Please upload your CAC Business Name Registration Certificate and CAC Status Report.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* 1. CAC BN Certificate */}
+                      <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+                        <label className="block text-xs font-bold text-[#0A192F] mb-1">
+                          1. CAC BN Certificate <span className="text-red-500">*</span>
+                        </label>
+                        <p className="text-[10px] text-slate-400 mb-2">Business Name Registration Certificate</p>
+                        <input
+                          type="file"
+                          name="cacDocument"
+                          onChange={handleFileChange}
+                          accept="image/*,application/pdf"
+                          className="w-full text-xs text-slate-600 file:mr-2 file:py-1.5 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#0A192F] file:text-[#D9A73A] hover:file:bg-[#1E3A5F] cursor-pointer"
+                        />
+                        {previews.cacDocument && (
+                          <p className="mt-2 text-[11px] text-emerald-600 font-semibold truncate">
+                            ✓ Attached: {previews.cacDocument}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* 2. CAC Status Report */}
+                      <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+                        <label className="block text-xs font-bold text-[#0A192F] mb-1">
+                          2. CAC Status Report <span className="text-red-500">*</span>
+                        </label>
+                        <p className="text-[10px] text-slate-400 mb-2">Particulars of Proprietor</p>
+                        <input
+                          type="file"
+                          name="cacStatusDocument"
+                          onChange={handleFileChange}
+                          accept="image/*,application/pdf"
+                          className="w-full text-xs text-slate-600 file:mr-2 file:py-1.5 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#0A192F] file:text-[#D9A73A] hover:file:bg-[#1E3A5F] cursor-pointer"
+                        />
+                        {previews.cacStatusDocument && (
+                          <p className="mt-2 text-[11px] text-emerald-600 font-semibold truncate">
+                            ✓ Attached: {previews.cacStatusDocument}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {formData.businessType === 'partnership' && (
+                  <div className="sm:col-span-2 space-y-3">
+                    <div className="bg-[#0A192F]/5 border-l-4 border-[#D9A73A] p-3 rounded-r-xl">
+                      <p className="text-xs font-bold text-[#0A192F]">
+                        👥 Cooperative / Partnership Accreditation (2 Documents Required)
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+                        <label className="block text-xs font-bold text-[#0A192F] mb-1">
+                          1. Registration Certificate <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="file"
+                          name="cacDocument"
+                          onChange={handleFileChange}
+                          accept="image/*,application/pdf"
+                          className="w-full text-xs text-slate-600 file:mr-2 file:py-1.5 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#0A192F] file:text-[#D9A73A] hover:file:bg-[#1E3A5F] cursor-pointer"
+                        />
+                        {previews.cacDocument && (
+                          <p className="mt-2 text-[11px] text-emerald-600 font-semibold truncate">
+                            ✓ Attached: {previews.cacDocument}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+                        <label className="block text-xs font-bold text-[#0A192F] mb-1">
+                          2. Status Report / Bylaws <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="file"
+                          name="cacStatusDocument"
+                          onChange={handleFileChange}
+                          accept="image/*,application/pdf"
+                          className="w-full text-xs text-slate-600 file:mr-2 file:py-1.5 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#0A192F] file:text-[#D9A73A] hover:file:bg-[#1E3A5F] cursor-pointer"
+                        />
+                        {previews.cacStatusDocument && (
+                          <p className="mt-2 text-[11px] text-emerald-600 font-semibold truncate">
+                            ✓ Attached: {previews.cacStatusDocument}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {formData.businessType === 'sole_proprietor' && (
+                  <div className="sm:col-span-2 p-4 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center gap-3">
+                    <span className="text-2xl text-emerald-600 font-bold">✓</span>
+                    <div>
+                      <p className="text-xs font-bold text-emerald-900">Individual Merchant Pass Active</p>
+                      <p className="text-[11px] text-emerald-700">
+                        CAC Certificate, Status Report, and Memorandum are not required for individual artisans and retailers. Simply upload your NIN identity document below.
+                      </p>
+                    </div>
                   </div>
                 )}
 
