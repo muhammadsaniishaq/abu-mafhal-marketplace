@@ -14,7 +14,8 @@ import {
     UIManager,
     Modal,
     Image,
-    StatusBar
+    StatusBar,
+    Linking
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -33,12 +34,15 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 // ─────────────────────────────────────────────────────────────
-// LUXURY LIGHT DESIGN PALETTE (NO DARK BACKGROUND)
+// LUXURY NAVY & GOLD DESIGN SYSTEM (LIGHT CANVAS + ROYAL ACCENTS)
 // ─────────────────────────────────────────────────────────────
+const NAVY_DARK = '#0A192F';
+const NAVY_CARD = '#0F2342';
+const NAVY_LIGHT = '#1E3A5F';
 const GOLD = '#D9A73A';
-const GOLD_DARK = '#B45309';
+const GOLD_LIGHT = '#F59E0B';
 const GOLD_SURFACE = '#FEF9C3';
-const GOLD_BORDER = 'rgba(217, 167, 58, 0.35)';
+const GOLD_DARK = '#B45309';
 const CANVAS_BG = '#F8FAFC';
 const CARD_BG = '#FFFFFF';
 const INPUT_BG = '#F8FAFC';
@@ -56,7 +60,7 @@ const BUSINESS_TYPES = [
         label: 'Limited Liability (RC / Ltd)',
         badge: 'RC Reg',
         desc: 'Incorporated company with CAC RC number',
-        icon: 'business-outline',
+        icon: 'business',
         cacPlaceholder: 'e.g. RC-1849202',
         cacLabel: 'CAC RC Number',
         cacRequired: true
@@ -65,8 +69,8 @@ const BUSINESS_TYPES = [
         id: 'business_name',
         label: 'Registered Business Name (BN)',
         badge: 'BN Reg',
-        desc: 'Enterprise / Sole store with CAC BN number',
-        icon: 'storefront-outline',
+        desc: 'Sole enterprise with CAC BN number',
+        icon: 'storefront',
         cacPlaceholder: 'e.g. BN-3849202',
         cacLabel: 'CAC BN Number',
         cacRequired: true
@@ -74,26 +78,40 @@ const BUSINESS_TYPES = [
     {
         id: 'sole_proprietor',
         label: 'Individual Trader / Artisan',
-        badge: 'Individual',
-        desc: 'Informal trader, artisan, or small merchant',
-        icon: 'person-outline',
-        cacPlaceholder: 'Optional (e.g. Tax ID or RC)',
-        cacLabel: 'CAC / Business ID (Optional)',
+        badge: 'No CAC Needed',
+        desc: 'Artisan, local merchant or informal retailer',
+        icon: 'person',
+        cacPlaceholder: '',
+        cacLabel: '',
         cacRequired: false
     },
     {
         id: 'partnership',
         label: 'Partnership / Cooperative',
-        badge: 'Co-op',
+        badge: 'Cooperative',
         desc: 'Trade cooperative or multi-partner business',
-        icon: 'people-outline',
-        cacPlaceholder: 'Coop Reg / CAC Number',
+        icon: 'people',
+        cacPlaceholder: 'e.g. COOP-48291',
         cacLabel: 'Cooperative Reg Number',
         cacRequired: true
     }
 ];
 
-// Major Commercial Hubs / Operating States
+// Sales & Distribution Models
+const SALES_MODELS = [
+    { id: 'both', label: 'Retail & Bulk Wholesale', badge: 'Recommended 🌟', desc: 'Accept both single unit and wholesale carton orders', icon: 'repeat' },
+    { id: 'retail', label: 'Retail Only', badge: 'Single Items', desc: 'Direct to individual end-consumer buyers', icon: 'cart' },
+    { id: 'wholesale', label: 'Bulk Wholesale Only', badge: 'B2B Suppliers', desc: 'Minimum order quantities for other retail merchants', icon: 'cube' }
+];
+
+// Storage / Location Types
+const LOCATION_TYPES = [
+    { id: 'shop', label: 'Physical Walk-in Store / Showroom', icon: 'storefront-outline' },
+    { id: 'warehouse', label: 'Warehouse / Central Depot', icon: 'business-outline' },
+    { id: 'home_online', label: 'Home-Based / Online Inventory', icon: 'home-outline' }
+];
+
+// Commercial Hubs
 const OPERATING_HUBS = [
     { id: 'Kano', label: 'Kano (Kantin Kwari / Singa / Sabon Gari)' },
     { id: 'Lagos', label: 'Lagos (Alaba / Trade Fair / Balogun / Ikeja)' },
@@ -104,7 +122,7 @@ const OPERATING_HUBS = [
     { id: 'Other', label: 'Other State / Location' }
 ];
 
-// Store Categories with rich sub-details
+// Categories with Subtitles
 const BUSINESS_CATEGORIES = [
     { id: 'Electronics', label: 'Tech & Gadgets', sub: 'Phones, Computers, Audio & Accessories', icon: 'phone-portrait-outline', emoji: '📱' },
     { id: 'Fashion', label: 'Fashion & Wear', sub: 'Men & Women Wear, Abayas, Shoes, Bags', icon: 'shirt-outline', emoji: '👗' },
@@ -115,24 +133,24 @@ const BUSINESS_CATEGORIES = [
     { id: 'General', label: 'General Wholesale', sub: 'Bulk Supplies, Hardware & Sundry Goods', icon: 'cube-outline', emoji: '📦' }
 ];
 
-// Return & Customer Guarantee Policies
+// Return Policies
 const RETURN_POLICIES = [
-    { id: '7_days', label: '7-Day Return / Defect Exchange', badge: 'High Trust ⭐', desc: 'Buyers can request return within 7 days if goods are defective' },
+    { id: '7_days', label: '7-Day Return / Defect Exchange', badge: 'High Trust ⭐', desc: 'Buyers can request return within 7 days if defective' },
     { id: '3_days', label: '3-Day Return Window', badge: 'Standard', desc: '3-day inspection window after doorstep delivery' },
-    { id: 'final_sale', label: 'Inspect on Delivery (Sales Final)', badge: 'Final Sale', desc: 'Buyer inspects upon delivery before releasing payment' }
+    { id: 'final_sale', label: 'Inspect on Delivery (Sales Final)', badge: 'Final Sale', desc: 'Buyer inspects at delivery point before funds release' }
 ];
 
-// Dispatch SLA options
+// Dispatch SLA
 const DISPATCH_SLAS = [
     { id: 'same_day', label: 'Same-Day Dispatch', time: 'Dispatched within 6 hours of order', icon: 'flash', badge: 'Fastest ⚡' },
     { id: '24_48_hrs', label: 'Express Dispatch', time: 'Dispatched within 24 - 48 hours', icon: 'cube-outline', badge: 'Standard' },
     { id: 'standard', label: 'Standard Dispatch', time: 'Dispatched within 3 - 5 business days', icon: 'trail-sign-outline', badge: 'Flexible' }
 ];
 
-// Experience in Business options
+// Experience Options
 const EXPERIENCE_OPTIONS = ['Under 1 Year', '1 - 3 Years', '3 - 5 Years', '5+ Years'];
 
-// Sleek Upload Button Component
+// Sleek Upload Button Component with Navy & Gold Styling
 const UploadBtn = ({ label, file, onPress, icon, required = false }) => (
     <TouchableOpacity onPress={onPress} style={localStyles.uploadBtn} activeOpacity={0.8}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
@@ -143,7 +161,7 @@ const UploadBtn = ({ label, file, onPress, icon, required = false }) => (
                 <Ionicons
                     name={file ? "checkmark-circle" : icon}
                     size={22}
-                    color={file ? EMERALD : GOLD_DARK}
+                    color={file ? EMERALD : GOLD}
                 />
             </View>
             <View style={{ flex: 1 }}>
@@ -163,7 +181,7 @@ const UploadBtn = ({ label, file, onPress, icon, required = false }) => (
             <Ionicons
                 name={file ? "pencil" : "cloud-upload-outline"}
                 size={14}
-                color={file ? EMERALD : GOLD_DARK}
+                color={file ? EMERALD : NAVY_DARK}
             />
             <Text style={[localStyles.uploadActionText, file ? { color: EMERALD } : null]}>
                 {file ? 'Change' : 'Upload'}
@@ -174,7 +192,7 @@ const UploadBtn = ({ label, file, onPress, icon, required = false }) => (
 
 const STEP_LABELS = [
     'Profile',
-    'Categories',
+    'Catalog',
     'Documents',
     'Logistics',
     'Banking',
@@ -185,13 +203,10 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
     const insets = useSafeAreaInsets();
     const { settings } = useAppSettings();
 
-    // Check if registration is disabled (and we are not renewing)
     const isRegistrationDisabled = settings?.features?.enable_vendor_registration === false;
-
-    // Default to the first plan in settings or '1_year' if fallback
     const defaultPlanId = activeVendorPlans.length > 0 ? activeVendorPlans[0].id : '1_year';
 
-    // 1: Profile & KYC, 2: Category & Socials, 3: Documents, 4: Logistics & Policy, 5: Banking, 6: Plan & Pay
+    // 1: Profile & KYC, 2: Catalog & Socials, 3: Documents, 4: Logistics & Policy, 5: Banking, 6: Plan & Pay
     const [step, setStep] = useState(mode === 'renew' ? 6 : 1);
 
     const [loading, setLoading] = useState(false);
@@ -226,6 +241,8 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
         businessName: '',
         businessDescription: '',
         businessCategory: 'Electronics',
+        salesModel: 'both',
+        locationType: 'shop',
         operatingHub: 'Kano',
         yearsInBusiness: '1 - 3 Years',
         businessAddress: '',
@@ -247,7 +264,6 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
         selectedPlan: defaultPlanId
     });
 
-    // Current selected business type definition
     const activeBusinessType = BUSINESS_TYPES.find(b => b.id === formData.businessType) || BUSINESS_TYPES[0];
 
     // VERIFICATION STATE
@@ -311,8 +327,6 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
     useEffect(() => {
         if (formData.accountNumber.length === 10 && bankCode) {
             resolveAccount();
-        } else {
-            // Keep existing name if user typed it
         }
     }, [formData.accountNumber, bankCode]);
 
@@ -334,8 +348,6 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
 
             if (json.status) {
                 updateForm('accountName', json.data.account_name);
-            } else {
-                // Don't wipe if user manually entered
             }
         } catch (error) {
             console.log('Error resolving account:', error);
@@ -379,7 +391,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
 
             if (json.success) {
                 setVerificationStatus(prev => ({ ...prev, [field]: 'verified' }));
-                Alert.alert('Verification Successful', `${type.toUpperCase()} validated against official database.`);
+                Alert.alert('Verification Successful', `${type.toUpperCase()} validated against official records.`);
             } else {
                 setVerificationStatus(prev => ({ ...prev, [field]: 'verified' }));
                 Alert.alert('Recorded for Review', `${type.toUpperCase()} recorded. Our compliance desk will verify it alongside your certificate.`);
@@ -433,7 +445,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
     };
 
     // ─────────────────────────────────────────────────────────────
-    // SMOOTH & ERROR-PROOF STEP VALIDATION (NEVER TRAPS USER)
+    // SMOOTH & ERROR-PROOF STEP VALIDATION
     // ─────────────────────────────────────────────────────────────
     const validateStep = () => {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -450,7 +462,8 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                 Alert.alert('Address Required', 'Please enter your Physical Business Address.');
                 return false;
             }
-            if (activeBusinessType.cacRequired && !formData.cacNumber?.trim()) {
+            // ONLY require CAC if NOT individual
+            if (formData.businessType !== 'sole_proprietor' && activeBusinessType.cacRequired && !formData.cacNumber?.trim()) {
                 Alert.alert('CAC Number Required', `Please enter your ${activeBusinessType.cacLabel}.`);
                 return false;
             }
@@ -462,10 +475,6 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                 Alert.alert('Invalid NIN', 'National Identity Number (NIN) must be at least 11 digits.');
                 return false;
             }
-            if (formData.bvn?.trim() && formData.bvn.trim().length < 11) {
-                Alert.alert('Invalid BVN', 'Bank Verification Number (BVN) must be 11 digits if provided.');
-                return false;
-            }
             return true;
         }
         if (step === 2) {
@@ -475,7 +484,8 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
             return true;
         }
         if (step === 3) {
-            if (activeBusinessType.cacRequired && !files.cac) {
+            // ONLY require CAC document if NOT individual
+            if (formData.businessType !== 'sole_proprietor' && activeBusinessType.cacRequired && !files.cac) {
                 Alert.alert('CAC Document Required', 'Please attach your CAC Certificate or incorporation document.');
                 return false;
             }
@@ -532,7 +542,9 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                 }
             }
             if (files.video) urls.video_url = await UploadService.uploadFile(files.video, 'vendor-docs', 'videos');
-            if (files.cac) urls.cac_url = await UploadService.uploadFile(files.cac, 'vendor-docs', 'docs');
+            if (files.cac && formData.businessType !== 'sole_proprietor') {
+                urls.cac_url = await UploadService.uploadFile(files.cac, 'vendor-docs', 'docs');
+            }
             if (files.nin) urls.nin_url = await UploadService.uploadFile(files.nin, 'vendor-docs', 'docs');
             return urls;
         } catch (error) {
@@ -585,7 +597,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                 business_category: formData.businessCategory || 'Electronics',
                 bvn: formData.bvn,
                 nin: formData.nin,
-                cac_number: formData.cacNumber,
+                cac_number: formData.businessType === 'sole_proprietor' ? 'INDIVIDUAL_PASS' : (formData.cacNumber || null),
                 tin_number: formData.tinNumber,
                 ...fileUrls,
                 delivery_type: formData.deliveryType,
@@ -598,6 +610,8 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                 account_name: formData.accountName,
                 socials: {
                     business_type: formData.businessType,
+                    sales_model: formData.salesModel,
+                    location_type: formData.locationType,
                     operating_hub: formData.operatingHub,
                     return_policy: formData.returnPolicy,
                     dispatch_sla: formData.dispatchSla,
@@ -618,14 +632,12 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
             const targetId = editingAppId || existingApp?.id;
 
             if (targetId) {
-                console.log('Updating existing application:', targetId);
                 const result = await supabase
                     .from('vendor_applications')
                     .update(dbPayload)
                     .eq('id', targetId);
                 error = result.error;
             } else {
-                console.log('Creating new application');
                 const result = await supabase
                     .from('vendor_applications')
                     .insert([dbPayload]);
@@ -689,6 +701,8 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                 businessName: app.business_name || '',
                 businessDescription: app.business_description || '',
                 businessCategory: app.business_category || 'Electronics',
+                salesModel: app.socials?.sales_model || 'both',
+                locationType: app.socials?.location_type || 'shop',
                 operatingHub: app.socials?.operating_hub || 'Kano',
                 businessAddress: app.business_address || '',
                 cacNumber: app.cac_number || '',
@@ -787,6 +801,10 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
         }
     };
 
+    const openWhatsAppHelp = () => {
+        Linking.openURL('https://wa.me/2348000000000?text=Hello%20Abu%20Mafhal%20Merchant%20Support,%20I%20need%20help%20with%20my%20vendor%20application.');
+    };
+
     // Helper for rendering verification input fields
     const renderVerifiedField = (label, fieldKey, verifyType, placeholder, keyboardType = 'default', maxLength = undefined, isRequired = true) => {
         const isVerified = verificationStatus[fieldKey] === 'verified';
@@ -832,15 +850,18 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                         activeOpacity={0.8}
                     >
                         {isLoading ? (
-                            <ActivityIndicator size="small" color="#FFFFFF" />
+                            <ActivityIndicator size="small" color={GOLD} />
                         ) : (
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                                 <Ionicons
                                     name={isVerified ? "checkmark" : (isFailed ? "refresh" : "shield-outline")}
                                     size={13}
-                                    color="#FFFFFF"
+                                    color={isVerified ? "#FFFFFF" : GOLD}
                                 />
-                                <Text style={localStyles.verifyBtnText}>
+                                <Text style={[
+                                    localStyles.verifyBtnText,
+                                    isVerified && { color: '#FFFFFF' }
+                                ]}>
                                     {isVerified ? 'Done' : (isFailed ? 'Retry' : 'Verify')}
                                 </Text>
                             </View>
@@ -872,7 +893,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
 
             <View style={localStyles.progressTrack}>
                 <LinearGradient
-                    colors={[GOLD, '#F59E0B']}
+                    colors={[GOLD, GOLD_LIGHT]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={[localStyles.progressFill, { width: `${(step / 6) * 100}%` }]}
@@ -923,19 +944,17 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
         </View>
     );
 
-    // ─────────────────────────────────────────────────────────────
-    // EARLY RETURNS (Registration Closed, Success, Certificate, Status)
-    // ─────────────────────────────────────────────────────────────
+    // Early Returns
     if (isRegistrationDisabled && mode !== 'renew') {
         return (
             <SafeAreaView style={[localStyles.screenContainer, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
-                <StatusBar barStyle="dark-content" backgroundColor={CANVAS_BG} />
+                <StatusBar barStyle="light-content" backgroundColor={NAVY_DARK} />
                 <View style={localStyles.statusIconCircle}>
-                    <Ionicons name="lock-closed" size={44} color={TEXT_MUTED} />
+                    <Ionicons name="lock-closed" size={44} color={GOLD} />
                 </View>
                 <Text style={localStyles.statusTitle}>Registration Paused</Text>
                 <Text style={localStyles.statusSub}>
-                    Vendor applications are currently paused for system onboarding. Please check back later or contact customer support.
+                    Vendor applications are currently paused for onboarding. Please check back later.
                 </Text>
                 <TouchableOpacity onPress={onBack} style={localStyles.secondaryActionBtn}>
                     <Text style={localStyles.secondaryActionBtnText}>Go Back</Text>
@@ -951,7 +970,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
     if (isSuccess) {
         return (
             <SafeAreaView style={[localStyles.screenContainer, { justifyContent: 'center', alignItems: 'center', padding: 28 }]}>
-                <StatusBar barStyle="dark-content" backgroundColor={CANVAS_BG} />
+                <StatusBar barStyle="light-content" backgroundColor={NAVY_DARK} />
                 <View style={[localStyles.statusIconCircle, { backgroundColor: EMERALD_SURFACE, borderColor: EMERALD }]}>
                     <Ionicons name="checkmark-circle" size={54} color={EMERALD} />
                 </View>
@@ -961,7 +980,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                 <Text style={localStyles.statusSub}>
                     {mode === 'renew' ?
                         'Your storefront subscription has been renewed. Your products are active across the marketplace.' :
-                        'Your documents and payment have been securely submitted. Our compliance team will review your application within 24 hours.'}
+                        'Your application has been received with priority status. Our compliance team will review your account within 24 hours.'}
                 </Text>
                 <TouchableOpacity
                     style={localStyles.primaryActionBtn}
@@ -969,7 +988,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                     activeOpacity={0.85}
                 >
                     <Text style={localStyles.primaryActionBtnText}>Continue to Dashboard</Text>
-                    <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+                    <Ionicons name="arrow-forward" size={18} color={NAVY_DARK} />
                 </TouchableOpacity>
             </SafeAreaView>
         );
@@ -978,9 +997,9 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
     if (checkingStatus) {
         return (
             <View style={[localStyles.screenContainer, { justifyContent: 'center', alignItems: 'center' }]}>
-                <StatusBar barStyle="dark-content" backgroundColor={CANVAS_BG} />
-                <ActivityIndicator size="large" color={GOLD_DARK} />
-                <Text style={{ marginTop: 16, color: TEXT_SECONDARY, fontWeight: '700' }}>Checking vendor status...</Text>
+                <StatusBar barStyle="light-content" backgroundColor={NAVY_DARK} />
+                <ActivityIndicator size="large" color={GOLD} />
+                <Text style={{ marginTop: 16, color: NAVY_DARK, fontWeight: '800' }}>Initializing Merchant Suite...</Text>
             </View>
         );
     }
@@ -988,7 +1007,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
     if (existingApp && existingApp.status === 'approved') {
         return (
             <SafeAreaView style={[localStyles.screenContainer, { justifyContent: 'center', alignItems: 'center', padding: 28 }]}>
-                <StatusBar barStyle="dark-content" backgroundColor={CANVAS_BG} />
+                <StatusBar barStyle="light-content" backgroundColor={NAVY_DARK} />
                 <View style={[localStyles.statusIconCircle, { backgroundColor: EMERALD_SURFACE, borderColor: EMERALD }]}>
                     <Ionicons name="shield-checkmark" size={54} color={EMERALD} />
                 </View>
@@ -1013,13 +1032,13 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
     if (existingApp && existingApp.status === 'pending') {
         return (
             <SafeAreaView style={[localStyles.screenContainer, { justifyContent: 'center', alignItems: 'center', padding: 28 }]}>
-                <StatusBar barStyle="dark-content" backgroundColor={CANVAS_BG} />
+                <StatusBar barStyle="light-content" backgroundColor={NAVY_DARK} />
                 <View style={[localStyles.statusIconCircle, { backgroundColor: GOLD_SURFACE, borderColor: GOLD }]}>
                     <Ionicons name="time" size={54} color={GOLD_DARK} />
                 </View>
                 <Text style={localStyles.statusTitle}>Application Under Review</Text>
                 <Text style={localStyles.statusSub}>
-                    We are currently verifying your business credentials and NUBAN settlement account. This process usually completes within 24 hours.
+                    We are currently verifying your credentials and NUBAN settlement account. This process usually completes within 24 hours.
                 </Text>
 
                 <View style={localStyles.statusInfoBox}>
@@ -1049,7 +1068,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
     if (existingApp && existingApp.status === 'rejected') {
         return (
             <SafeAreaView style={[localStyles.screenContainer, { justifyContent: 'center', alignItems: 'center', padding: 28 }]}>
-                <StatusBar barStyle="dark-content" backgroundColor={CANVAS_BG} />
+                <StatusBar barStyle="light-content" backgroundColor={NAVY_DARK} />
                 <View style={[localStyles.statusIconCircle, { backgroundColor: '#FEE2E2', borderColor: '#EF4444' }]}>
                     <Ionicons name="close-circle" size={54} color="#EF4444" />
                 </View>
@@ -1063,7 +1082,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                         Reason for Feedback
                     </Text>
                     <Text style={{ color: TEXT_PRIMARY, fontSize: 13, lineHeight: 18 }}>
-                        {existingApp.rejection_reason || 'Please verify that your CAC number, NIN, and bank account name match your company records.'}
+                        {existingApp.rejection_reason || 'Please verify that your NIN and bank account details match your corporate records.'}
                     </Text>
                 </View>
 
@@ -1073,30 +1092,34 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                     activeOpacity={0.85}
                 >
                     <Text style={localStyles.primaryActionBtnText}>Correct & Resubmit</Text>
-                    <Ionicons name="refresh" size={18} color="#FFFFFF" />
+                    <Ionicons name="refresh" size={18} color={NAVY_DARK} />
                 </TouchableOpacity>
             </SafeAreaView>
         );
     }
 
     // ─────────────────────────────────────────────────────────────
-    // MAIN WIZARD FORM (MOBILE-FIRST LUXURY LIGHT THEME)
+    // MAIN WIZARD FORM (LUXURY NAVY & GOLD THEME)
     // ─────────────────────────────────────────────────────────────
     return (
         <SafeAreaView style={localStyles.screenContainer}>
-            <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+            <StatusBar barStyle="light-content" backgroundColor={NAVY_DARK} />
 
-            {/* Top Navigation Header */}
+            {/* TOP NAVIGATION HEADER (ROYAL NAVY & GOLD) */}
             <View style={localStyles.topNavHeader}>
                 <TouchableOpacity onPress={prevStep} style={localStyles.backIconBtn} activeOpacity={0.7}>
-                    <Ionicons name="arrow-back" size={20} color={TEXT_PRIMARY} />
+                    <Ionicons name="arrow-back" size={20} color={GOLD} />
                 </TouchableOpacity>
                 <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={localStyles.topNavTitle}>Vendor Application</Text>
                     <Text style={localStyles.topNavSub}>Abu Mafhal Verified Merchant Suite</Text>
                 </View>
+                <TouchableOpacity onPress={openWhatsAppHelp} style={localStyles.helpPill} activeOpacity={0.7}>
+                    <Ionicons name="logo-whatsapp" size={14} color="#10B981" />
+                    <Text style={localStyles.helpPillText}>Help Desk</Text>
+                </TouchableOpacity>
                 <TouchableOpacity onPress={onBack} style={localStyles.closeIconBtn} activeOpacity={0.7}>
-                    <Ionicons name="close" size={20} color={TEXT_MUTED} />
+                    <Ionicons name="close" size={20} color="#94A3B8" />
                 </TouchableOpacity>
             </View>
 
@@ -1113,63 +1136,68 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                 {(step === 1 || step === 6) && (
                     <View style={localStyles.perksBanner}>
                         <LinearGradient
-                            colors={['#FFFBEB', '#FEF3C7']}
+                            colors={[NAVY_DARK, NAVY_LIGHT]}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 1 }}
                             style={localStyles.perksBannerGradient}
                         >
                             <View style={localStyles.perksBannerHeader}>
                                 <View style={localStyles.crownCircle}>
-                                    <Ionicons name="ribbon" size={20} color={GOLD_DARK} />
+                                    <Ionicons name="shield-checkmark" size={20} color={GOLD} />
                                 </View>
                                 <View style={{ flex: 1, marginLeft: 10 }}>
-                                    <Text style={localStyles.perksBannerTitle}>Abu Mafhal Merchant Privileges</Text>
-                                    <Text style={localStyles.perksBannerSub}>Accelerate your brand with verified escrow commerce</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Text style={localStyles.perksBannerTitle}>Abu Mafhal Merchant Suite</Text>
+                                        <View style={localStyles.goldPillTag}>
+                                            <Text style={localStyles.goldPillTagText}>PRO ACCREDITED</Text>
+                                        </View>
+                                    </View>
+                                    <Text style={localStyles.perksBannerSub}>0% Commission Trial • Same-Day Payouts • Escrow Protection</Text>
                                 </View>
                             </View>
                             <View style={localStyles.perksGrid}>
                                 <View style={localStyles.perkItem}>
-                                    <Ionicons name="shield-checkmark" size={15} color={EMERALD} />
-                                    <Text style={localStyles.perkItemText}>100% Escrow Protection</Text>
+                                    <Ionicons name="lock-closed" size={13} color={GOLD} />
+                                    <Text style={localStyles.perkItemText}>100% Escrow</Text>
                                 </View>
                                 <View style={localStyles.perkItem}>
-                                    <Ionicons name="flash" size={15} color={GOLD_DARK} />
-                                    <Text style={localStyles.perkItemText}>Same-Day Settlements</Text>
+                                    <Ionicons name="flash" size={13} color={GOLD} />
+                                    <Text style={localStyles.perkItemText}>Instant Settlement</Text>
                                 </View>
                                 <View style={localStyles.perkItem}>
-                                    <Ionicons name="car-outline" size={15} color="#0284C7" />
-                                    <Text style={localStyles.perkItemText}>Integrated Logistics</Text>
+                                    <Ionicons name="car" size={13} color={GOLD} />
+                                    <Text style={localStyles.perkItemText}>Nationwide Logistics</Text>
                                 </View>
                                 <View style={localStyles.perkItem}>
-                                    <Ionicons name="checkmark-done-circle" size={15} color={GOLD_DARK} />
-                                    <Text style={localStyles.perkItemText}>Verified Badge Accreditation</Text>
+                                    <Ionicons name="ribbon" size={13} color={GOLD} />
+                                    <Text style={localStyles.perkItemText}>Verified Badge</Text>
                                 </View>
                             </View>
                         </LinearGradient>
                     </View>
                 )}
 
-                {/* STEP 1: BUSINESS REGISTRATION & KYC */}
+                {/* STEP 1: BUSINESS REGISTRATION STRUCTURE & PROFILE */}
                 {step === 1 && (
                     <View style={localStyles.stepCard}>
                         <View style={localStyles.cardHeaderRow}>
                             <View style={localStyles.cardIconBox}>
-                                <Ionicons name="business-outline" size={20} color={GOLD_DARK} />
+                                <Ionicons name="business" size={20} color={GOLD} />
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={localStyles.cardHeading}>Business Structure & Profile</Text>
-                                <Text style={localStyles.cardSub}>Choose your legal structure and corporate details</Text>
+                                <Text style={localStyles.cardSub}>Choose your legal structure and store identity</Text>
                             </View>
                         </View>
 
-                        {/* NEW FEATURE: BUSINESS REGISTRATION TYPE SELECTOR */}
+                        {/* BUSINESS REGISTRATION TYPE SELECTOR */}
                         <View style={localStyles.fieldGroup}>
                             <View style={localStyles.labelRow}>
                                 <Text style={localStyles.inputLabel}>Business Registration Structure</Text>
                                 <Text style={localStyles.reqStar}>*</Text>
                             </View>
                             <Text style={{ fontSize: 11.5, color: TEXT_MUTED, marginBottom: 8 }}>
-                                Select how your commercial entity is legally registered:
+                                Select your official commercial entity status:
                             </Text>
 
                             <View style={{ gap: 8 }}>
@@ -1187,25 +1215,25 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                                         >
                                             <View style={[
                                                 localStyles.btIconBox,
-                                                isSelected && { backgroundColor: GOLD_SURFACE }
+                                                isSelected && { backgroundColor: NAVY_DARK }
                                             ]}>
                                                 <Ionicons
                                                     name={bt.icon}
-                                                    size={20}
-                                                    color={isSelected ? GOLD_DARK : TEXT_SECONDARY}
+                                                    size={18}
+                                                    color={isSelected ? GOLD : NAVY_DARK}
                                                 />
                                             </View>
                                             <View style={{ flex: 1 }}>
                                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                                     <Text style={[
                                                         localStyles.btTitle,
-                                                        isSelected && { color: GOLD_DARK, fontWeight: '900' }
+                                                        isSelected && { color: NAVY_DARK, fontWeight: '900' }
                                                     ]}>
                                                         {bt.label}
                                                     </Text>
                                                     <View style={[
                                                         localStyles.btBadge,
-                                                        isSelected && { backgroundColor: GOLD_SURFACE }
+                                                        isSelected && { backgroundColor: GOLD_SURFACE, borderColor: GOLD }
                                                     ]}>
                                                         <Text style={[
                                                             localStyles.btBadgeText,
@@ -1229,41 +1257,41 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
 
                         <View style={localStyles.divider} />
 
-                        {/* Business Name */}
+                        {/* Store Name */}
                         <View style={localStyles.fieldGroup}>
                             <View style={localStyles.labelRow}>
-                                <Text style={localStyles.inputLabel}>Registered Store / Business Name</Text>
+                                <Text style={localStyles.inputLabel}>Store / Enterprise Trading Name</Text>
                                 <Text style={localStyles.reqStar}>*</Text>
                             </View>
                             <TextInput
                                 style={localStyles.textInput}
                                 value={formData.businessName}
                                 onChangeText={t => updateForm('businessName', t)}
-                                placeholder="e.g. Sani Ventures Ltd / Sani Gadgets"
+                                placeholder="e.g. Sani Ventures & Electronics"
                                 placeholderTextColor={TEXT_MUTED}
                             />
                         </View>
 
-                        {/* Business Description */}
+                        {/* Store Description */}
                         <View style={localStyles.fieldGroup}>
                             <View style={localStyles.labelRow}>
-                                <Text style={localStyles.inputLabel}>Store Bio & Overview</Text>
+                                <Text style={localStyles.inputLabel}>Store Overview / Bio</Text>
                             </View>
                             <TextInput
                                 style={[localStyles.textInput, { height: 74, textAlignVertical: 'top', paddingTop: 10 }]}
                                 value={formData.businessDescription}
                                 onChangeText={t => updateForm('businessDescription', t)}
-                                placeholder="Briefly describe what products your store specializes in..."
+                                placeholder="Briefly describe the goods and services your store offers..."
                                 placeholderTextColor={TEXT_MUTED}
                                 multiline
                                 numberOfLines={3}
                             />
                         </View>
 
-                        {/* Phone Number */}
+                        {/* Phone */}
                         <View style={localStyles.fieldGroup}>
                             <View style={localStyles.labelRow}>
-                                <Text style={localStyles.inputLabel}>Official Business Phone</Text>
+                                <Text style={localStyles.inputLabel}>Official Business Phone Number</Text>
                                 <Text style={localStyles.reqStar}>*</Text>
                             </View>
                             <TextInput
@@ -1276,6 +1304,38 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                             />
                         </View>
 
+                        {/* Store / Location Type */}
+                        <View style={localStyles.fieldGroup}>
+                            <View style={localStyles.labelRow}>
+                                <Text style={localStyles.inputLabel}>Inventory & Premise Type</Text>
+                            </View>
+                            <View style={{ gap: 6 }}>
+                                {LOCATION_TYPES.map(loc => {
+                                    const isSelected = formData.locationType === loc.id;
+                                    return (
+                                        <TouchableOpacity
+                                            key={loc.id}
+                                            style={[
+                                                localStyles.locationCard,
+                                                isSelected && localStyles.locationCardActive
+                                            ]}
+                                            onPress={() => updateForm('locationType', loc.id)}
+                                            activeOpacity={0.8}
+                                        >
+                                            <Ionicons name={loc.icon} size={16} color={isSelected ? GOLD_DARK : NAVY_DARK} />
+                                            <Text style={[
+                                                localStyles.locationCardText,
+                                                isSelected && { color: NAVY_DARK, fontWeight: '800' }
+                                            ]}>{loc.label}</Text>
+                                            {isSelected && (
+                                                <Ionicons name="checkmark-circle" size={16} color={GOLD_DARK} style={{ marginLeft: 'auto' }} />
+                                            )}
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        </View>
+
                         {/* Physical Address */}
                         <View style={localStyles.fieldGroup}>
                             <View style={localStyles.labelRow}>
@@ -1286,16 +1346,16 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                                 style={localStyles.textInput}
                                 value={formData.businessAddress}
                                 onChangeText={t => updateForm('businessAddress', t)}
-                                placeholder="Shop / Suite number, Street, Commercial Complex"
+                                placeholder="Shop / Suite number, Street, Commercial Plaza"
                                 placeholderTextColor={TEXT_MUTED}
                             />
                         </View>
 
-                        {/* Operating Commercial Hub */}
+                        {/* Commercial Hub */}
                         <View style={localStyles.fieldGroup}>
                             <View style={localStyles.labelRow}>
-                                <Ionicons name="location-outline" size={14} color={GOLD_DARK} />
-                                <Text style={localStyles.inputLabel}>Primary Commercial Hub / State</Text>
+                                <Ionicons name="location" size={14} color={GOLD_DARK} />
+                                <Text style={localStyles.inputLabel}>Primary Commercial Trading Hub</Text>
                             </View>
                             <View style={localStyles.hubPillsRow}>
                                 {OPERATING_HUBS.map(hub => {
@@ -1324,19 +1384,33 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
 
                         <View style={localStyles.divider} />
                         <View style={localStyles.sectionHeaderBox}>
-                            <Ionicons name="shield-checkmark-outline" size={16} color={GOLD_DARK} />
+                            <Ionicons name="shield-checkmark" size={16} color={NAVY_DARK} />
                             <Text style={localStyles.sectionSubHeader}>GOVERNMENT COMPLIANCE & KYC</Text>
                         </View>
 
-                        {/* Dynamic CAC Number depending on Business Type */}
-                        {renderVerifiedField(
-                            activeBusinessType.cacLabel,
-                            "cacNumber",
-                            "cac",
-                            activeBusinessType.cacPlaceholder,
-                            "default",
-                            undefined,
-                            activeBusinessType.cacRequired
+                        {/* Dynamic CAC: REMOVED COMPLETELY FOR INDIVIDUAL TRADERS */}
+                        {formData.businessType !== 'sole_proprietor' ? (
+                            renderVerifiedField(
+                                activeBusinessType.cacLabel,
+                                "cacNumber",
+                                "cac",
+                                activeBusinessType.cacPlaceholder,
+                                "default",
+                                undefined,
+                                activeBusinessType.cacRequired
+                            )
+                        ) : (
+                            <View style={localStyles.individualPerkCard}>
+                                <View style={localStyles.individualPerkIconBox}>
+                                    <Ionicons name="checkmark-done-circle" size={24} color={EMERALD} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={localStyles.individualPerkTitle}>Individual Merchant Pass Active</Text>
+                                    <Text style={localStyles.individualPerkSub}>
+                                        CAC certificate is not required for individual traders and artisans. You are verified directly with your National NIN.
+                                    </Text>
+                                </View>
+                            </View>
                         )}
 
                         {/* Tax ID (TIN) */}
@@ -1350,27 +1424,27 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                     </View>
                 )}
 
-                {/* STEP 2: CATEGORY & DIGITAL SOCIALS */}
+                {/* STEP 2: CATALOG, SALES MODEL & SOCIALS */}
                 {step === 2 && (
                     <View style={localStyles.stepCard}>
                         <View style={localStyles.cardHeaderRow}>
                             <View style={localStyles.cardIconBox}>
-                                <Ionicons name="pricetags-outline" size={20} color={GOLD_DARK} />
+                                <Ionicons name="pricetags" size={20} color={GOLD} />
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Text style={localStyles.cardHeading}>Store Category & Socials</Text>
-                                <Text style={localStyles.cardSub}>Help customers discover your merchandise catalog</Text>
+                                <Text style={localStyles.cardHeading}>Store Catalog & Distribution</Text>
+                                <Text style={localStyles.cardSub}>Set your primary industry and wholesale distribution model</Text>
                             </View>
                         </View>
 
-                        {/* Store Category Selection */}
+                        {/* Primary Category */}
                         <View style={localStyles.fieldGroup}>
                             <View style={localStyles.labelRow}>
-                                <Text style={localStyles.inputLabel}>Primary Store Category</Text>
+                                <Text style={localStyles.inputLabel}>Primary Storefront Category</Text>
                                 <Text style={localStyles.reqStar}>*</Text>
                             </View>
                             <Text style={{ fontSize: 12, color: TEXT_MUTED, marginBottom: 10 }}>
-                                Choose the industry that best represents your storefront inventory:
+                                Choose the industry category that fits your products:
                             </Text>
 
                             <View style={localStyles.categoryGrid}>
@@ -1397,7 +1471,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                                                 <Text style={localStyles.categorySubText}>{cat.sub}</Text>
                                             </View>
                                             {isSelected && (
-                                                <Ionicons name="checkmark-circle" size={18} color={GOLD_DARK} />
+                                                <Ionicons name="checkmark-circle" size={18} color={NAVY_DARK} />
                                             )}
                                         </TouchableOpacity>
                                     );
@@ -1405,10 +1479,49 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                             </View>
                         </View>
 
-                        {/* Years in Business */}
+                        {/* Distribution Model: Wholesale vs Retail */}
+                        <View style={[localStyles.fieldGroup, { marginTop: 12 }]}>
+                            <View style={localStyles.labelRow}>
+                                <Text style={localStyles.inputLabel}>Sales & Distribution Focus</Text>
+                                <Text style={localStyles.reqStar}>*</Text>
+                            </View>
+                            <View style={{ gap: 8 }}>
+                                {SALES_MODELS.map(model => {
+                                    const isSelected = formData.salesModel === model.id;
+                                    return (
+                                        <TouchableOpacity
+                                            key={model.id}
+                                            style={[
+                                                localStyles.slaCard,
+                                                isSelected && localStyles.slaCardActive
+                                            ]}
+                                            onPress={() => updateForm('salesModel', model.id)}
+                                            activeOpacity={0.8}
+                                        >
+                                            <View style={{ flex: 1 }}>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                    <Text style={[localStyles.slaTitle, isSelected && { color: NAVY_DARK }]}>
+                                                        {model.label}
+                                                    </Text>
+                                                    <View style={[localStyles.slaBadge, isSelected && { backgroundColor: GOLD_SURFACE }]}>
+                                                        <Text style={[localStyles.slaBadgeText, isSelected && { color: GOLD_DARK }]}>{model.badge}</Text>
+                                                    </View>
+                                                </View>
+                                                <Text style={localStyles.slaDesc}>{model.desc}</Text>
+                                            </View>
+                                            <View style={[localStyles.radioCircle, isSelected && localStyles.radioCircleActive]}>
+                                                {isSelected && <View style={localStyles.radioDot} />}
+                                            </View>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        </View>
+
+                        {/* Experience in Business */}
                         <View style={[localStyles.fieldGroup, { marginTop: 8 }]}>
                             <View style={localStyles.labelRow}>
-                                <Text style={localStyles.inputLabel}>Years in Operation</Text>
+                                <Text style={localStyles.inputLabel}>Years Operating</Text>
                             </View>
                             <View style={localStyles.experienceRow}>
                                 {EXPERIENCE_OPTIONS.map(exp => {
@@ -1435,11 +1548,11 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
 
                         <View style={localStyles.divider} />
                         <View style={localStyles.sectionHeaderBox}>
-                            <Ionicons name="globe-outline" size={16} color={GOLD_DARK} />
+                            <Ionicons name="globe" size={16} color={NAVY_DARK} />
                             <Text style={localStyles.sectionSubHeader}>DIGITAL STOREFRONT & SOCIAL CHANNELS</Text>
                         </View>
 
-                        {/* WhatsApp Business */}
+                        {/* WhatsApp */}
                         <View style={localStyles.fieldGroup}>
                             <View style={localStyles.labelRow}>
                                 <Ionicons name="logo-whatsapp" size={14} color="#16A34A" />
@@ -1474,8 +1587,8 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                         {/* Website */}
                         <View style={localStyles.fieldGroup}>
                             <View style={localStyles.labelRow}>
-                                <Ionicons name="link-outline" size={14} color="#3B82F6" />
-                                <Text style={localStyles.inputLabel}>Official Website / Portfolio Link</Text>
+                                <Ionicons name="link" size={14} color="#3B82F6" />
+                                <Text style={localStyles.inputLabel}>Website / Catalog Link (Optional)</Text>
                             </View>
                             <TextInput
                                 style={localStyles.textInput}
@@ -1489,20 +1602,20 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                     </View>
                 )}
 
-                {/* STEP 3: DOCUMENTS & MEDIA */}
+                {/* STEP 3: DOCUMENTS & VERIFICATION */}
                 {step === 3 && (
                     <View style={localStyles.stepCard}>
                         <View style={localStyles.cardHeaderRow}>
                             <View style={localStyles.cardIconBox}>
-                                <Ionicons name="document-attach-outline" size={20} color={GOLD_DARK} />
+                                <Ionicons name="document-attach" size={20} color={GOLD} />
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={localStyles.cardHeading}>Compliance Documents & Logo</Text>
-                                <Text style={localStyles.cardSub}>Upload high-clarity photos or PDF certificates</Text>
+                                <Text style={localStyles.cardSub}>Upload photos or PDF documents for your storefront</Text>
                             </View>
                         </View>
 
-                        {/* Business Logo */}
+                        {/* Storefront Logo */}
                         <Text style={localStyles.inputLabel}>Storefront Brand Logo</Text>
                         <View style={localStyles.logoPreviewCard}>
                             <View style={localStyles.logoBox}>
@@ -1529,14 +1642,16 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                             </View>
                         </View>
 
-                        {/* CAC Document */}
-                        <UploadBtn
-                            label={activeBusinessType.cacRequired ? `${activeBusinessType.label} Certificate` : 'Business Certificate / ID (Optional)'}
-                            file={files.cac}
-                            onPress={() => pickDocument('cac')}
-                            icon="document-text-outline"
-                            required={activeBusinessType.cacRequired}
-                        />
+                        {/* CAC Document: COMPLETELY REMOVED IF INDIVIDUAL */}
+                        {formData.businessType !== 'sole_proprietor' && (
+                            <UploadBtn
+                                label={`${activeBusinessType.label} Certificate`}
+                                file={files.cac}
+                                onPress={() => pickDocument('cac')}
+                                icon="document-text-outline"
+                                required={activeBusinessType.cacRequired}
+                            />
+                        )}
 
                         {/* NIN Slip */}
                         <UploadBtn
@@ -1544,6 +1659,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                             file={files.nin}
                             onPress={() => pickDocument('nin')}
                             icon="card-outline"
+                            required
                         />
 
                         {/* Intro Video */}
@@ -1562,7 +1678,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                     <View style={localStyles.stepCard}>
                         <View style={localStyles.cardHeaderRow}>
                             <View style={localStyles.cardIconBox}>
-                                <Ionicons name="cube-outline" size={20} color={GOLD_DARK} />
+                                <Ionicons name="cube" size={20} color={GOLD} />
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={localStyles.cardHeading}>Logistics & Customer Policy</Text>
@@ -1581,15 +1697,15 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                                 onPress={() => updateForm('deliveryType', 'marketplace')}
                                 activeOpacity={0.8}
                             >
-                                <View style={[localStyles.deliveryIconBox, formData.deliveryType === 'marketplace' && { backgroundColor: GOLD_SURFACE }]}>
+                                <View style={[localStyles.deliveryIconBox, formData.deliveryType === 'marketplace' && { backgroundColor: NAVY_DARK }]}>
                                     <Ionicons
                                         name="shield-checkmark"
                                         size={22}
-                                        color={formData.deliveryType === 'marketplace' ? GOLD_DARK : TEXT_MUTED}
+                                        color={formData.deliveryType === 'marketplace' ? GOLD : TEXT_MUTED}
                                     />
                                 </View>
                                 <View style={{ flex: 1 }}>
-                                    <Text style={[localStyles.deliveryTitle, formData.deliveryType === 'marketplace' && { color: GOLD_DARK }]}>
+                                    <Text style={[localStyles.deliveryTitle, formData.deliveryType === 'marketplace' && { color: NAVY_DARK }]}>
                                         Fulfilled by Abu Mafhal
                                     </Text>
                                     <Text style={localStyles.deliveryDesc}>
@@ -1609,15 +1725,15 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                                 onPress={() => updateForm('deliveryType', 'self')}
                                 activeOpacity={0.8}
                             >
-                                <View style={[localStyles.deliveryIconBox, formData.deliveryType === 'self' && { backgroundColor: GOLD_SURFACE }]}>
+                                <View style={[localStyles.deliveryIconBox, formData.deliveryType === 'self' && { backgroundColor: NAVY_DARK }]}>
                                     <Ionicons
-                                        name="bicycle-outline"
+                                        name="bicycle"
                                         size={22}
-                                        color={formData.deliveryType === 'self' ? GOLD_DARK : TEXT_MUTED}
+                                        color={formData.deliveryType === 'self' ? GOLD : TEXT_MUTED}
                                     />
                                 </View>
                                 <View style={{ flex: 1 }}>
-                                    <Text style={[localStyles.deliveryTitle, formData.deliveryType === 'self' && { color: GOLD_DARK }]}>
+                                    <Text style={[localStyles.deliveryTitle, formData.deliveryType === 'self' && { color: NAVY_DARK }]}>
                                         Self Dispatch & Merchant Logistics
                                     </Text>
                                     <Text style={localStyles.deliveryDesc}>
@@ -1647,7 +1763,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                                     >
                                         <View style={{ flex: 1 }}>
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                                <Text style={[localStyles.slaTitle, isSelected && { color: GOLD_DARK }]}>
+                                                <Text style={[localStyles.slaTitle, isSelected && { color: NAVY_DARK }]}>
                                                     {sla.label}
                                                 </Text>
                                                 <View style={[localStyles.slaBadge, isSelected && { backgroundColor: GOLD_SURFACE }]}>
@@ -1681,7 +1797,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                                     >
                                         <View style={{ flex: 1 }}>
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                                <Text style={[localStyles.slaTitle, isSelected && { color: GOLD_DARK }]}>
+                                                <Text style={[localStyles.slaTitle, isSelected && { color: NAVY_DARK }]}>
                                                     {policy.label}
                                                 </Text>
                                                 <View style={[localStyles.slaBadge, isSelected && { backgroundColor: GOLD_SURFACE }]}>
@@ -1700,7 +1816,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
 
                         <View style={localStyles.divider} />
                         <View style={localStyles.sectionHeaderBox}>
-                            <Ionicons name="people-outline" size={16} color={GOLD_DARK} />
+                            <Ionicons name="people" size={16} color={NAVY_DARK} />
                             <Text style={localStyles.sectionSubHeader}>BUSINESS GUARANTOR</Text>
                         </View>
 
@@ -1742,11 +1858,11 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                     <View style={localStyles.stepCard}>
                         <View style={localStyles.cardHeaderRow}>
                             <View style={localStyles.cardIconBox}>
-                                <Ionicons name="card-outline" size={20} color={GOLD_DARK} />
+                                <Ionicons name="card" size={20} color={GOLD} />
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={localStyles.cardHeading}>Payout & Settlement Account</Text>
-                                <Text style={localStyles.cardSub}>Where your product sale revenue is automatically remitted</Text>
+                                <Text style={localStyles.cardSub}>Where your product sales are automatically remitted</Text>
                             </View>
                         </View>
 
@@ -1764,7 +1880,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                                 <Text style={[localStyles.selectBankText, formData.bankName ? { color: TEXT_PRIMARY, fontWeight: '700' } : null]}>
                                     {formData.bankName || 'Tap to select your bank name'}
                                 </Text>
-                                <Ionicons name="chevron-down" size={18} color={GOLD_DARK} />
+                                <Ionicons name="chevron-down" size={18} color={NAVY_DARK} />
                             </TouchableOpacity>
                         </View>
 
@@ -1785,7 +1901,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                             />
                         </View>
 
-                        {/* Account Name (Auto-resolved + Editable fallback) */}
+                        {/* Account Name */}
                         <View style={localStyles.fieldGroup}>
                             <View style={localStyles.labelRow}>
                                 <Text style={localStyles.inputLabel}>Account Beneficiary Name</Text>
@@ -1823,7 +1939,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                     <View style={localStyles.stepCard}>
                         <View style={localStyles.cardHeaderRow}>
                             <View style={localStyles.cardIconBox}>
-                                <Ionicons name="trophy-outline" size={20} color={GOLD_DARK} />
+                                <Ionicons name="trophy" size={20} color={GOLD} />
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={localStyles.cardHeading}>Select Storefront Subscription</Text>
@@ -1846,7 +1962,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                                     >
                                         <View style={{ flex: 1, paddingRight: 8 }}>
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                                <Text style={[localStyles.planLabel, isSelected && { color: GOLD_DARK }]}>
+                                                <Text style={[localStyles.planLabel, isSelected && { color: NAVY_DARK }]}>
                                                     {planItem.label}
                                                 </Text>
                                                 {planItem.badge && (
@@ -1896,7 +2012,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                                 <Text style={localStyles.summaryVal} numberOfLines={1}>{formData.accountName || '—'}</Text>
                             </View>
                             <View style={[localStyles.summaryRow, { borderBottomWidth: 0, paddingTop: 10 }]}>
-                                <Text style={[localStyles.summaryLabel, { color: TEXT_PRIMARY, fontWeight: '800' }]}>Total Subscription Fee</Text>
+                                <Text style={[localStyles.summaryLabel, { color: NAVY_DARK, fontWeight: '900' }]}>Total Subscription Fee</Text>
                                 <Text style={localStyles.summaryFee}>₦{plan.price.toLocaleString()}</Text>
                             </View>
                         </View>
@@ -1904,7 +2020,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                 )}
             </ScrollView>
 
-            {/* STICKY FIRST-MOBILE BOTTOM ACTION FOOTER */}
+            {/* STICKY BOTTOM ACTION FOOTER (ROYAL NAVY & GOLD) */}
             <View style={[localStyles.bottomBarContainer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
                 {step > 1 ? (
                     <TouchableOpacity
@@ -1912,7 +2028,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                         onPress={prevStep}
                         activeOpacity={0.8}
                     >
-                        <Ionicons name="arrow-back" size={18} color={TEXT_PRIMARY} />
+                        <Ionicons name="arrow-back" size={18} color={NAVY_DARK} />
                         <Text style={localStyles.backStepBtnText}>Back</Text>
                     </TouchableOpacity>
                 ) : (
@@ -1933,7 +2049,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                         activeOpacity={0.85}
                     >
                         <Text style={localStyles.nextStepBtnText}>Next Step</Text>
-                        <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+                        <Ionicons name="arrow-forward" size={18} color={NAVY_DARK} />
                     </TouchableOpacity>
                 ) : (
                     <TouchableOpacity
@@ -1947,7 +2063,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                     >
                         {loading ? (
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                <ActivityIndicator color="#FFFFFF" size="small" />
+                                <ActivityIndicator color={NAVY_DARK} size="small" />
                                 <Text style={localStyles.nextStepBtnText}>
                                     {uploading ? 'Processing Documents...' : 'Submitting...'}
                                 </Text>
@@ -1955,9 +2071,9 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                         ) : (
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                 <Ionicons
-                                    name={needsPayment ? "card-outline" : "checkmark-circle"}
+                                    name={needsPayment ? "card" : "checkmark-circle"}
                                     size={18}
-                                    color="#FFFFFF"
+                                    color={NAVY_DARK}
                                 />
                                 <Text style={localStyles.nextStepBtnText}>
                                     {needsPayment ? `Pay ₦${plan.price.toLocaleString()} & Activate` : 'Submit Application'}
@@ -1975,12 +2091,12 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                         <View style={localStyles.modalHeader}>
                             <Text style={localStyles.modalTitle}>Select Settlement Bank</Text>
                             <TouchableOpacity onPress={() => setShowBankDropdown(false)} style={{ padding: 4 }}>
-                                <Ionicons name="close" size={24} color={TEXT_PRIMARY} />
+                                <Ionicons name="close" size={24} color={NAVY_DARK} />
                             </TouchableOpacity>
                         </View>
 
                         <View style={localStyles.modalSearchRow}>
-                            <Ionicons name="search" size={18} color={TEXT_MUTED} />
+                            <Ionicons name="search" size={18} color={GOLD_DARK} />
                             <TextInput
                                 style={localStyles.modalSearchInput}
                                 placeholder="Search commercial bank..."
@@ -2003,7 +2119,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                                     activeOpacity={0.7}
                                 >
                                     <Text style={localStyles.bankRowText}>{bank.name}</Text>
-                                    <Ionicons name="chevron-forward" size={16} color={TEXT_MUTED} />
+                                    <Ionicons name="chevron-forward" size={16} color={GOLD_DARK} />
                                 </TouchableOpacity>
                             ))}
                         </ScrollView>
@@ -2016,12 +2132,12 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                 <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
                     <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
                     <View style={localStyles.paystackNavHeader}>
-                        <Text style={{ fontSize: 16, fontWeight: '800', color: TEXT_PRIMARY }}>Paystack Secured Checkout</Text>
+                        <Text style={{ fontSize: 16, fontWeight: '800', color: NAVY_DARK }}>Paystack Secured Checkout</Text>
                         <TouchableOpacity onPress={() => {
                             setShowPaystackWebView(false);
-                            Alert.alert('Payment Cancelled', 'Payment was closed before completion. Complete payment to activate your vendor account.');
+                            Alert.alert('Payment Cancelled', 'Payment was closed before completion.');
                         }}>
-                            <Ionicons name="close" size={24} color={TEXT_PRIMARY} />
+                            <Ionicons name="close" size={24} color={NAVY_DARK} />
                         </TouchableOpacity>
                     </View>
                     <WebView
@@ -2053,7 +2169,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
 
                                 } catch (err) {
                                     console.error('Verification Error:', err);
-                                    Alert.alert('Payment Window Closed', 'If your transaction succeeded, our compliance team will update your account.');
+                                    Alert.alert('Payment Notice', 'If payment completed, our team will review and approve your store.');
                                     setLoading(false);
                                 }
                             }
@@ -2079,7 +2195,7 @@ export const VendorRegister = (props) => {
         return (
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: CANVAS_BG }}>
                 <ActivityIndicator size="large" color={GOLD_DARK} />
-                <Text style={{ marginTop: 14, color: TEXT_SECONDARY, fontWeight: '700' }}>Initializing Merchant Suite...</Text>
+                <Text style={{ marginTop: 14, color: NAVY_DARK, fontWeight: '800' }}>Initializing Merchant Suite...</Text>
             </View>
         );
     }
@@ -2093,7 +2209,7 @@ export const VendorRegister = (props) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// LUXURY LIGHT DESIGN STYLES
+// LUXURY NAVY & GOLD STYLES
 // ─────────────────────────────────────────────────────────────
 const localStyles = StyleSheet.create({
     screenContainer: {
@@ -2105,17 +2221,19 @@ const localStyles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 16,
         paddingVertical: 12,
+        backgroundColor: NAVY_DARK,
         borderBottomWidth: 1,
-        borderBottomColor: BORDER_COLOR,
-        backgroundColor: '#FFFFFF'
+        borderBottomColor: 'rgba(217, 167, 58, 0.35)'
     },
     backIconBtn: {
-        width: 38,
-        height: 38,
+        width: 36,
+        height: 36,
         borderRadius: 10,
-        backgroundColor: '#F1F5F9',
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
         alignItems: 'center',
-        justifyContent: 'center'
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(217, 167, 58, 0.3)'
     },
     closeIconBtn: {
         width: 36,
@@ -2126,13 +2244,30 @@ const localStyles = StyleSheet.create({
     topNavTitle: {
         fontSize: 16,
         fontWeight: '900',
-        color: TEXT_PRIMARY
+        color: '#FFFFFF'
     },
     topNavSub: {
         fontSize: 11,
-        color: GOLD_DARK,
+        color: GOLD,
         fontWeight: '700',
         marginTop: 1
+    },
+    helpPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: 'rgba(16, 185, 129, 0.15)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(16, 185, 129, 0.4)',
+        marginRight: 6
+    },
+    helpPillText: {
+        fontSize: 10.5,
+        fontWeight: '800',
+        color: '#10B981'
     },
 
     // Progress Bar
@@ -2151,35 +2286,39 @@ const localStyles = StyleSheet.create({
         marginBottom: 8
     },
     stepBadge: {
-        backgroundColor: GOLD_SURFACE,
+        backgroundColor: NAVY_DARK,
         paddingHorizontal: 8,
         paddingVertical: 2.5,
-        borderRadius: 6
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: GOLD
     },
     stepBadgeText: {
-        fontSize: 10.5,
+        fontSize: 10,
         fontWeight: '900',
-        color: GOLD_DARK,
+        color: GOLD,
         letterSpacing: 0.5
     },
     stepActiveTitle: {
         fontSize: 13,
-        fontWeight: '800',
-        color: TEXT_PRIMARY
+        fontWeight: '900',
+        color: NAVY_DARK
     },
     stepPercentPill: {
-        backgroundColor: '#F1F5F9',
+        backgroundColor: GOLD_SURFACE,
         paddingHorizontal: 8,
         paddingVertical: 2,
-        borderRadius: 12
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: GOLD
     },
     stepPercentText: {
         fontSize: 11.5,
         fontWeight: '900',
-        color: GOLD_DARK
+        color: NAVY_DARK
     },
     progressTrack: {
-        height: 5,
+        height: 6,
         backgroundColor: '#E2E8F0',
         borderRadius: 3,
         overflow: 'hidden',
@@ -2209,11 +2348,12 @@ const localStyles = StyleSheet.create({
         marginBottom: 3
     },
     stepCircleCompleted: {
-        backgroundColor: GOLD,
-        borderColor: GOLD
+        backgroundColor: NAVY_DARK,
+        borderColor: GOLD,
+        borderWidth: 1.5
     },
     stepCircleCurrent: {
-        backgroundColor: '#FFFFFF',
+        backgroundColor: GOLD_SURFACE,
         borderWidth: 2,
         borderColor: GOLD
     },
@@ -2223,7 +2363,7 @@ const localStyles = StyleSheet.create({
         color: TEXT_MUTED
     },
     stepNumberCurrent: {
-        color: GOLD_DARK,
+        color: NAVY_DARK,
         fontWeight: '900'
     },
     stepItemLabel: {
@@ -2232,26 +2372,26 @@ const localStyles = StyleSheet.create({
         color: TEXT_MUTED
     },
     stepItemLabelCurrent: {
-        color: GOLD_DARK,
-        fontWeight: '800'
+        color: NAVY_DARK,
+        fontWeight: '900'
     },
     stepItemLabelCompleted: {
-        color: TEXT_PRIMARY,
+        color: GOLD_DARK,
         fontWeight: '700'
     },
 
-    // Perks Showcase Banner
+    // Perks Showcase Banner (Navy & Gold Gradient)
     perksBanner: {
         borderRadius: 16,
         overflow: 'hidden',
         marginBottom: 16,
         borderWidth: 1,
-        borderColor: GOLD_BORDER,
-        shadowColor: '#0F172A',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 6,
-        elevation: 2
+        borderColor: GOLD,
+        shadowColor: NAVY_DARK,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.12,
+        shadowRadius: 8,
+        elevation: 3
     },
     perksBannerGradient: {
         padding: 14
@@ -2262,49 +2402,57 @@ const localStyles = StyleSheet.create({
         marginBottom: 10
     },
     crownCircle: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: '#FFFFFF',
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        backgroundColor: 'rgba(217, 167, 58, 0.2)',
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.08,
-        shadowRadius: 2,
-        elevation: 1
+        borderWidth: 1,
+        borderColor: GOLD
     },
     perksBannerTitle: {
         fontSize: 13.5,
         fontWeight: '900',
-        color: TEXT_PRIMARY
+        color: '#FFFFFF'
+    },
+    goldPillTag: {
+        backgroundColor: GOLD,
+        paddingHorizontal: 5,
+        paddingVertical: 1,
+        borderRadius: 4
+    },
+    goldPillTagText: {
+        fontSize: 8.5,
+        fontWeight: '900',
+        color: NAVY_DARK
     },
     perksBannerSub: {
         fontSize: 11,
-        color: TEXT_SECONDARY,
-        marginTop: 1
+        color: '#CBD5E1',
+        marginTop: 2
     },
     perksGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 8,
+        gap: 6,
         paddingTop: 4
     },
     perkItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 5,
-        backgroundColor: '#FFFFFF',
+        gap: 4.5,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
         paddingHorizontal: 8,
         paddingVertical: 4.5,
         borderRadius: 8,
         borderWidth: 1,
-        borderColor: 'rgba(217, 167, 58, 0.25)'
+        borderColor: 'rgba(217, 167, 58, 0.4)'
     },
     perkItemText: {
         fontSize: 10.5,
-        fontWeight: '700',
-        color: TEXT_PRIMARY
+        fontWeight: '800',
+        color: '#FFFFFF'
     },
 
     // Scroll Body & Step Card
@@ -2317,10 +2465,10 @@ const localStyles = StyleSheet.create({
         borderRadius: 18,
         padding: 18,
         borderWidth: 1,
-        borderColor: BORDER_COLOR,
-        shadowColor: '#0F172A',
+        borderColor: 'rgba(217, 167, 58, 0.25)',
+        shadowColor: NAVY_DARK,
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.06,
+        shadowOpacity: 0.08,
         shadowRadius: 10,
         elevation: 3
     },
@@ -2334,14 +2482,16 @@ const localStyles = StyleSheet.create({
         width: 40,
         height: 40,
         borderRadius: 12,
-        backgroundColor: GOLD_SURFACE,
+        backgroundColor: NAVY_DARK,
         alignItems: 'center',
-        justifyContent: 'center'
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: GOLD
     },
     cardHeading: {
         fontSize: 16,
         fontWeight: '900',
-        color: TEXT_PRIMARY
+        color: NAVY_DARK
     },
     cardSub: {
         fontSize: 12,
@@ -2362,26 +2512,30 @@ const localStyles = StyleSheet.create({
     },
     businessTypeCardActive: {
         borderColor: GOLD,
-        backgroundColor: '#FEF9C3'
+        backgroundColor: GOLD_SURFACE
     },
     btIconBox: {
         width: 38,
         height: 38,
         borderRadius: 10,
-        backgroundColor: '#F1F5F9',
+        backgroundColor: '#FFFFFF',
         alignItems: 'center',
-        justifyContent: 'center'
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: BORDER_COLOR
     },
     btTitle: {
         fontSize: 13,
         fontWeight: '800',
-        color: TEXT_PRIMARY
+        color: NAVY_DARK
     },
     btBadge: {
         backgroundColor: '#F1F5F9',
         paddingHorizontal: 6,
         paddingVertical: 1.5,
-        borderRadius: 4
+        borderRadius: 4,
+        borderWidth: 0.5,
+        borderColor: '#CBD5E1'
     },
     btBadgeText: {
         fontSize: 9.5,
@@ -2392,6 +2546,60 @@ const localStyles = StyleSheet.create({
         fontSize: 11,
         color: TEXT_MUTED,
         marginTop: 2
+    },
+
+    // Individual Merchant Pass Banner
+    individualPerkCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        backgroundColor: EMERALD_SURFACE,
+        borderRadius: 14,
+        padding: 14,
+        borderWidth: 1,
+        borderColor: 'rgba(16, 185, 129, 0.4)',
+        marginBottom: 14
+    },
+    individualPerkIconBox: {
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        backgroundColor: '#FFFFFF',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    individualPerkTitle: {
+        fontSize: 13,
+        fontWeight: '900',
+        color: '#065F46'
+    },
+    individualPerkSub: {
+        fontSize: 11,
+        color: '#047857',
+        marginTop: 2,
+        lineHeight: 15
+    },
+
+    // Location Type Card
+    locationCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 9,
+        borderRadius: 10,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: BORDER_COLOR
+    },
+    locationCardActive: {
+        backgroundColor: GOLD_SURFACE,
+        borderColor: GOLD
+    },
+    locationCardText: {
+        fontSize: 12.5,
+        fontWeight: '700',
+        color: TEXT_SECONDARY
     },
 
     // Commercial Hub Pills
@@ -2409,7 +2617,7 @@ const localStyles = StyleSheet.create({
         borderColor: BORDER_COLOR
     },
     hubPillActive: {
-        backgroundColor: GOLD_SURFACE,
+        backgroundColor: NAVY_DARK,
         borderColor: GOLD
     },
     hubPillText: {
@@ -2418,7 +2626,7 @@ const localStyles = StyleSheet.create({
         color: TEXT_SECONDARY
     },
     hubPillTextActive: {
-        color: GOLD_DARK,
+        color: GOLD,
         fontWeight: '900'
     },
 
@@ -2434,8 +2642,8 @@ const localStyles = StyleSheet.create({
     },
     inputLabel: {
         fontSize: 12.5,
-        fontWeight: '700',
-        color: TEXT_PRIMARY
+        fontWeight: '800',
+        color: NAVY_DARK
     },
     reqStar: {
         color: '#EF4444',
@@ -2463,7 +2671,7 @@ const localStyles = StyleSheet.create({
         paddingHorizontal: 14,
         height: 48,
         fontSize: 14.5,
-        color: TEXT_PRIMARY,
+        color: NAVY_DARK,
         fontWeight: '600',
         borderWidth: 1,
         borderColor: BORDER_COLOR
@@ -2481,8 +2689,8 @@ const localStyles = StyleSheet.create({
     },
     sectionSubHeader: {
         fontSize: 11,
-        fontWeight: '800',
-        color: GOLD_DARK,
+        fontWeight: '900',
+        color: NAVY_DARK,
         letterSpacing: 0.5
     },
 
@@ -2502,16 +2710,16 @@ const localStyles = StyleSheet.create({
         paddingVertical: 11
     },
     categoryChipSelected: {
-        backgroundColor: '#FEF9C3',
+        backgroundColor: GOLD_SURFACE,
         borderColor: GOLD
     },
     categoryChipText: {
         fontSize: 13.5,
         fontWeight: '800',
-        color: TEXT_PRIMARY
+        color: NAVY_DARK
     },
     categoryChipTextSelected: {
-        color: GOLD_DARK,
+        color: NAVY_DARK,
         fontWeight: '900'
     },
     categorySubText: {
@@ -2535,7 +2743,7 @@ const localStyles = StyleSheet.create({
         borderColor: BORDER_COLOR
     },
     expPillSelected: {
-        backgroundColor: GOLD_SURFACE,
+        backgroundColor: NAVY_DARK,
         borderColor: GOLD
     },
     expPillText: {
@@ -2544,7 +2752,7 @@ const localStyles = StyleSheet.create({
         color: TEXT_SECONDARY
     },
     expPillTextSelected: {
-        color: GOLD_DARK,
+        color: GOLD,
         fontWeight: '900'
     },
 
@@ -2561,7 +2769,7 @@ const localStyles = StyleSheet.create({
         paddingHorizontal: 14,
         height: 48,
         fontSize: 14.5,
-        color: TEXT_PRIMARY,
+        color: NAVY_DARK,
         fontWeight: '600',
         borderWidth: 1,
         borderColor: BORDER_COLOR
@@ -2571,23 +2779,27 @@ const localStyles = StyleSheet.create({
         backgroundColor: EMERALD_SURFACE
     },
     verifyBtn: {
-        backgroundColor: GOLD_DARK,
+        backgroundColor: NAVY_DARK,
         paddingHorizontal: 14,
         height: 48,
         borderRadius: 12,
         alignItems: 'center',
-        justifyContent: 'center'
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: GOLD
     },
     verifyBtnSuccess: {
-        backgroundColor: EMERALD
+        backgroundColor: EMERALD,
+        borderColor: EMERALD
     },
     verifyBtnFailed: {
-        backgroundColor: '#EF4444'
+        backgroundColor: '#EF4444',
+        borderColor: '#EF4444'
     },
     verifyBtnText: {
         fontSize: 12,
         fontWeight: '900',
-        color: '#FFFFFF'
+        color: GOLD
     },
 
     // Logo & Uploads
@@ -2629,7 +2841,7 @@ const localStyles = StyleSheet.create({
     logoStatusText: {
         fontSize: 13,
         fontWeight: '800',
-        color: TEXT_PRIMARY
+        color: NAVY_DARK
     },
     logoActionText: {
         fontSize: 12,
@@ -2651,17 +2863,20 @@ const localStyles = StyleSheet.create({
         width: 38,
         height: 38,
         borderRadius: 10,
-        backgroundColor: GOLD_SURFACE,
+        backgroundColor: NAVY_DARK,
         alignItems: 'center',
-        justifyContent: 'center'
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: GOLD
     },
     uploadIconBoxSuccess: {
-        backgroundColor: EMERALD_SURFACE
+        backgroundColor: EMERALD_SURFACE,
+        borderColor: EMERALD
     },
     uploadLabel: {
         fontSize: 13,
         fontWeight: '700',
-        color: TEXT_PRIMARY
+        color: NAVY_DARK
     },
     uploadSub: {
         fontSize: 11,
@@ -2675,12 +2890,14 @@ const localStyles = StyleSheet.create({
         backgroundColor: GOLD_SURFACE,
         paddingHorizontal: 10,
         paddingVertical: 5,
-        borderRadius: 8
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: GOLD
     },
     uploadActionText: {
         fontSize: 11,
-        fontWeight: '800',
-        color: GOLD_DARK
+        fontWeight: '900',
+        color: NAVY_DARK
     },
 
     // Logistics Delivery Options
@@ -2696,7 +2913,7 @@ const localStyles = StyleSheet.create({
     },
     deliveryOptionCardActive: {
         borderColor: GOLD,
-        backgroundColor: '#FEF9C3'
+        backgroundColor: GOLD_SURFACE
     },
     deliveryIconBox: {
         width: 42,
@@ -2709,7 +2926,7 @@ const localStyles = StyleSheet.create({
     deliveryTitle: {
         fontSize: 13.5,
         fontWeight: '800',
-        color: TEXT_PRIMARY
+        color: NAVY_DARK
     },
     deliveryDesc: {
         fontSize: 11,
@@ -2727,13 +2944,13 @@ const localStyles = StyleSheet.create({
         justifyContent: 'center'
     },
     radioCircleActive: {
-        borderColor: GOLD_DARK
+        borderColor: NAVY_DARK
     },
     radioDot: {
         width: 10,
         height: 10,
         borderRadius: 5,
-        backgroundColor: GOLD_DARK
+        backgroundColor: NAVY_DARK
     },
 
     // SLA Option Card
@@ -2748,12 +2965,12 @@ const localStyles = StyleSheet.create({
     },
     slaCardActive: {
         borderColor: GOLD,
-        backgroundColor: '#FEF9C3'
+        backgroundColor: GOLD_SURFACE
     },
     slaTitle: {
         fontSize: 12.5,
         fontWeight: '800',
-        color: TEXT_PRIMARY
+        color: NAVY_DARK
     },
     slaBadge: {
         backgroundColor: '#F1F5F9',
@@ -2803,23 +3020,25 @@ const localStyles = StyleSheet.create({
     },
     planCardSelected: {
         borderColor: GOLD,
-        backgroundColor: '#FEF9C3'
+        backgroundColor: GOLD_SURFACE
     },
     planLabel: {
         fontSize: 15,
-        fontWeight: '800',
-        color: TEXT_PRIMARY
+        fontWeight: '900',
+        color: NAVY_DARK
     },
     planBadge: {
-        backgroundColor: GOLD_DARK,
+        backgroundColor: NAVY_DARK,
         paddingHorizontal: 6,
         paddingVertical: 1.5,
-        borderRadius: 4
+        borderRadius: 4,
+        borderWidth: 1,
+        borderColor: GOLD
     },
     planBadgeText: {
         fontSize: 9.5,
         fontWeight: '900',
-        color: '#FFFFFF'
+        color: GOLD
     },
     planPrice: {
         fontSize: 16,
@@ -2839,7 +3058,7 @@ const localStyles = StyleSheet.create({
     summaryTitle: {
         fontSize: 11,
         fontWeight: '900',
-        color: GOLD_DARK,
+        color: NAVY_DARK,
         letterSpacing: 0.5,
         marginBottom: 8
     },
@@ -2859,7 +3078,7 @@ const localStyles = StyleSheet.create({
     summaryVal: {
         fontSize: 13,
         fontWeight: '700',
-        color: TEXT_PRIMARY,
+        color: NAVY_DARK,
         maxWidth: '55%',
         textAlign: 'right'
     },
@@ -2869,7 +3088,7 @@ const localStyles = StyleSheet.create({
         color: GOLD_DARK
     },
 
-    // Sticky Bottom Bar
+    // Sticky Bottom Bar (Navy & Gold Accent)
     bottomBarContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -2878,11 +3097,11 @@ const localStyles = StyleSheet.create({
         paddingTop: 10,
         backgroundColor: '#FFFFFF',
         borderTopWidth: 1,
-        borderTopColor: BORDER_COLOR,
+        borderTopColor: 'rgba(217, 167, 58, 0.3)',
         elevation: 8,
-        shadowColor: '#0F172A',
+        shadowColor: NAVY_DARK,
         shadowOffset: { width: 0, height: -3 },
-        shadowOpacity: 0.06,
+        shadowOpacity: 0.08,
         shadowRadius: 6
     },
     backStepBtn: {
@@ -2900,7 +3119,7 @@ const localStyles = StyleSheet.create({
     backStepBtnText: {
         fontSize: 13.5,
         fontWeight: '800',
-        color: TEXT_PRIMARY
+        color: NAVY_DARK
     },
     nextStepBtn: {
         flex: 1,
@@ -2910,12 +3129,17 @@ const localStyles = StyleSheet.create({
         gap: 8,
         height: 48,
         borderRadius: 12,
-        backgroundColor: GOLD
+        backgroundColor: GOLD,
+        shadowColor: GOLD,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: 2
     },
     nextStepBtnText: {
         fontSize: 14,
         fontWeight: '900',
-        color: '#FFFFFF'
+        color: NAVY_DARK
     },
 
     // Status Screens Elements
@@ -2923,17 +3147,17 @@ const localStyles = StyleSheet.create({
         width: 88,
         height: 88,
         borderRadius: 44,
-        backgroundColor: '#F1F5F9',
+        backgroundColor: NAVY_DARK,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 2,
-        borderColor: BORDER_COLOR,
+        borderColor: GOLD,
         marginBottom: 20
     },
     statusTitle: {
         fontSize: 22,
         fontWeight: '900',
-        color: TEXT_PRIMARY,
+        color: NAVY_DARK,
         textAlign: 'center',
         marginBottom: 8
     },
@@ -2951,14 +3175,14 @@ const localStyles = StyleSheet.create({
         justifyContent: 'center',
         gap: 8,
         height: 50,
-        backgroundColor: GOLD_DARK,
+        backgroundColor: GOLD,
         borderRadius: 14,
         paddingHorizontal: 24
     },
     primaryActionBtnText: {
         fontSize: 14.5,
         fontWeight: '900',
-        color: '#FFFFFF'
+        color: NAVY_DARK
     },
     secondaryActionBtn: {
         paddingHorizontal: 20,
@@ -2969,7 +3193,7 @@ const localStyles = StyleSheet.create({
     secondaryActionBtnText: {
         fontSize: 13,
         fontWeight: '700',
-        color: TEXT_PRIMARY
+        color: NAVY_DARK
     },
     statusInfoBox: {
         width: '100%',
@@ -2994,13 +3218,15 @@ const localStyles = StyleSheet.create({
     statusInfoVal: {
         fontSize: 13,
         fontWeight: '800',
-        color: TEXT_PRIMARY
+        color: NAVY_DARK
     },
     pendingPill: {
         backgroundColor: GOLD_SURFACE,
         paddingHorizontal: 8,
         paddingVertical: 2,
-        borderRadius: 6
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: GOLD
     },
     pendingPillText: {
         fontSize: 10,
@@ -3011,7 +3237,7 @@ const localStyles = StyleSheet.create({
     // Modal
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(15, 23, 42, 0.4)',
+        backgroundColor: 'rgba(10, 25, 47, 0.5)',
         justifyContent: 'flex-end'
     },
     modalContent: {
@@ -3019,11 +3245,11 @@ const localStyles = StyleSheet.create({
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         padding: 20,
-        borderTopWidth: 1,
-        borderColor: BORDER_COLOR,
-        shadowColor: '#000',
+        borderTopWidth: 2,
+        borderColor: GOLD,
+        shadowColor: NAVY_DARK,
         shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.1,
+        shadowOpacity: 0.15,
         shadowRadius: 10,
         elevation: 10
     },
@@ -3036,7 +3262,7 @@ const localStyles = StyleSheet.create({
     modalTitle: {
         fontSize: 17,
         fontWeight: '900',
-        color: TEXT_PRIMARY
+        color: NAVY_DARK
     },
     modalSearchRow: {
         flexDirection: 'row',
@@ -3052,7 +3278,7 @@ const localStyles = StyleSheet.create({
     modalSearchInput: {
         flex: 1,
         marginLeft: 8,
-        color: TEXT_PRIMARY,
+        color: NAVY_DARK,
         fontSize: 14,
         fontWeight: '600'
     },
@@ -3067,7 +3293,7 @@ const localStyles = StyleSheet.create({
     bankRowText: {
         fontSize: 14.5,
         fontWeight: '700',
-        color: TEXT_PRIMARY
+        color: NAVY_DARK
     },
     paystackNavHeader: {
         padding: 16,
