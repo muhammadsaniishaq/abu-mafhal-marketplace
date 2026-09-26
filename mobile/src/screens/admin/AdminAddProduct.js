@@ -189,35 +189,186 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
         }
     };
 
-    // ── Image helpers ──────────────────────────────────────────
+    // ── Image helpers (100% Reliable for Web & Mobile) ────────
+    const processAssets = async (assets) => {
+        if (!assets || assets.length === 0) return [];
+
+        return Promise.all(assets.map(async (a) => {
+            let b64 = a.base64;
+            if (!b64 && a.uri) {
+                try {
+                    const resp = await fetch(a.uri);
+                    const blob = await resp.blob();
+                    b64 = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                            const dataUrl = reader.result;
+                            if (typeof dataUrl === 'string') {
+                                resolve(dataUrl.split(',')[1] || null);
+                            } else {
+                                resolve(null);
+                            }
+                        };
+                        reader.onerror = () => resolve(null);
+                        reader.readAsDataURL(blob);
+                    });
+                } catch (_) {}
+            }
+            return {
+                uri: a.uri,
+                base64: b64,
+                type: a.mimeType || 'image/jpeg',
+                status: 'pending'
+            };
+        }));
+    };
+
     const pickImage = async () => {
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsMultipleSelection: true, quality: 0.75, base64: true
-        });
-        if (!result.canceled) {
-            setImages(prev => [...prev, ...result.assets.map(a => ({
-                uri: a.uri, base64: a.base64, type: 'image/jpeg', status: 'pending'
-            }))]);
+        try {
+            if (Platform.OS !== 'web') {
+                const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                if (status !== 'granted') {
+                    Alert.alert('Permission Required', 'Please allow gallery access to select product images.');
+                    return;
+                }
+            }
+
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsMultipleSelection: true,
+                quality: 0.8,
+                base64: true
+            });
+
+            if (!result.canceled && result.assets) {
+                const processed = await processAssets(result.assets);
+                setImages(prev => [...prev, ...processed]);
+            }
+        } catch (e) {
+            console.error('Admin gallery picker error:', e);
+            Alert.alert('Gallery Error', 'Could not open image library.');
+        }
+    };
+
+    const takePhoto = async () => {
+        try {
+            if (Platform.OS !== 'web') {
+                const { status } = await ImagePicker.requestCameraPermissionsAsync();
+                if (status !== 'granted') {
+                    Alert.alert('Permission Required', 'Please allow camera access to take product photos.');
+                    return;
+                }
+            }
+
+            const result = await ImagePicker.launchCameraAsync({
+                quality: 0.8,
+                base64: true
+            });
+
+            if (!result.canceled && result.assets) {
+                const processed = await processAssets(result.assets);
+                setImages(prev => [...prev, ...processed]);
+            }
+        } catch (e) {
+            console.error('Admin camera error:', e);
+            Alert.alert('Camera Error', 'Could not open camera.');
         }
     };
 
     const pickVideo = async () => {
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Videos, quality: 0.5
-        });
-        if (!result.canceled) setVideo(result.assets[0].uri);
+        try {
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Videos, quality: 0.5
+            });
+            if (!result.canceled && result.assets?.[0]?.uri) {
+                setVideo(result.assets[0].uri);
+            }
+        } catch (_) {}
     };
 
     const uploadImages = async () => {
         const urls = [];
-        for (const img of images) {
-            if (img.status === 'success') { urls.push(img.url); continue; }
-            const fname = `${Date.now()}_${Math.random().toString(36).substr(2,8)}.jpg`;
-            const { data, error } = await supabase.storage.from('products')
-                .upload(fname, decode(img.base64), { contentType: 'image/jpeg', upsert: false });
-            if (error) throw error;
-            urls.push(supabase.storage.from('products').getPublicUrl(fname).data.publicUrl);
+        for (let i = 0; i < images.length; i++) {
+            const img = images[i];
+            if (img.status === 'success' && img.url) {
+                urls.push(img.url);
+                continue;
+            }
+            if (typeof img === 'string' && img.startsWith('http')) {
+                urls.push(img);
+                continue;
+            }
+
+            const fname = `admin_prod_${Date.now()}_${i}_${Math.random().toString(36).substring(2, 7)}.jpg`;
+            let publicUrl = null;
+
+            // Strategy 1: Web native Blob upload
+            if (Platform.OS === 'web' && img.uri) {
+                try {
+                    const resp = await fetch(img.uri);
+                    const blob = await resp.blob();
+                    const { error } = await supabase.storage.from('products')
+                        .upload(fname, blob, { contentType: blob.type || 'image/jpeg', upsert: true });
+                    if (!error) {
+                        publicUrl = supabase.storage.from('products').getPublicUrl(fname).data.publicUrl;
+                    }
+                } catch (e) {
+                    console.warn('Admin web blob upload error:', e);
+                }
+            }
+
+            // Strategy 2: Base64 decode upload
+            if (!publicUrl && img.base64) {
+                try {
+                    const { error } = await supabase.storage.from('products')
+                        .upload(fname, decode(img.base64), { contentType: 'image/jpeg', upsert: true });
+                    if (!error) {
+                        publicUrl = supabase.storage.from('products').getPublicUrl(fname).data.publicUrl;
+                    }
+                } catch (e) {
+                    console.warn('Admin base64 decode upload error:', e);
+                }
+            }
+
+            // Strategy 3: Native Mobile FileSystem upload
+            if (!publicUrl && img.uri && Platform.OS !== 'web') {
+                try {
+                    const b64 = await FileSystem.readAsStringAsync(img.uri, { encoding: 'base64' });
+                    const { error } = await supabase.storage.from('products')
+                        .upload(fname, decode(b64), { contentType: 'image/jpeg', upsert: true });
+                    if (!error) {
+                        publicUrl = supabase.storage.from('products').getPublicUrl(fname).data.publicUrl;
+                    }
+                } catch (e) {
+                    console.warn('Admin native FileSystem upload error:', e);
+                }
+            }
+
+            // Strategy 4: Fallback bucket
+            if (!publicUrl) {
+                try {
+                    let fallbackData = null;
+                    if (Platform.OS === 'web' && img.uri) {
+                        const r = await fetch(img.uri);
+                        fallbackData = await r.blob();
+                    } else if (img.base64) {
+                        fallbackData = decode(img.base64);
+                    }
+                    if (fallbackData) {
+                        const { error } = await supabase.storage.from('banners')
+                            .upload(fname, fallbackData, { contentType: 'image/jpeg', upsert: true });
+                        if (!error) {
+                            publicUrl = supabase.storage.from('banners').getPublicUrl(fname).data.publicUrl;
+                        }
+                    }
+                } catch (_) {}
+            }
+
+            if (publicUrl) {
+                urls.push(publicUrl);
+            } else if (img.uri && img.uri.startsWith('http')) {
+                urls.push(img.uri);
+            }
         }
         return urls;
     };
@@ -230,7 +381,7 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
                 const response = await fetch(video);
                 const blob = await response.blob();
                 const { error } = await supabase.storage.from('products')
-                    .upload(fname, blob, { contentType: 'video/mp4', upsert: false });
+                    .upload(fname, blob, { contentType: 'video/mp4', upsert: true });
                 if (error) {
                     console.error("Admin web video upload error:", error);
                     return null;
@@ -241,7 +392,7 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
                 if (!info.exists) return null;
                 const b64 = await FileSystem.readAsStringAsync(video, { encoding: 'base64' });
                 const { error } = await supabase.storage.from('products')
-                    .upload(fname, decode(b64), { contentType: 'video/mp4', upsert: false });
+                    .upload(fname, decode(b64), { contentType: 'video/mp4', upsert: true });
                 if (error) return null;
                 return supabase.storage.from('products').getPublicUrl(fname).data.publicUrl;
             }

@@ -64,16 +64,18 @@ const SS = StyleSheet.create({
     toggleDesc:      { fontSize: 12, color: '#64748B', marginTop: 2 },
     catChip:         { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F1F5F9', borderWidth: 1.5, borderColor: '#E2E8F0', marginRight: 4 },
     catLabel:        { fontSize: 13, fontWeight: '700', color: '#475569' },
-    aiBtnRow:        { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center', backgroundColor: '#FFFBEB', padding: 12, borderRadius: 12, marginTop: 4, borderWidth: 1, borderColor: '#FDE68A' },
+    aiAutoFillBtn:   { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center', backgroundColor: '#0E1A2E', padding: 14, borderRadius: 14, marginBottom: 14, borderWidth: 1, borderColor: '#D9A73A' },
+    aiAutoFillTxt:   { color: '#D9A73A', fontWeight: '900', fontSize: 13.5 },
+    aiBtnRow:        { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center', backgroundColor: '#FFFBEB', padding: 12, borderRadius: 12, marginTop: 6, borderWidth: 1, borderColor: '#FDE68A' },
     aiBtnFull:       { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center', backgroundColor: '#FFFBEB', padding: 14, borderRadius: 14, marginBottom: 14, borderWidth: 1, borderColor: '#FDE68A' },
     aiBtnTxt:        { color: '#B45309', fontWeight: '800', fontSize: 13 },
     quickBtn:        { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F1F5F9', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, alignSelf: 'flex-start', marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0' },
     quickBtnTxt:     { fontSize: 12, fontWeight: '700', color: '#0E1A2E' },
-    imagePicker:     { height: 120, borderWidth: 2, borderColor: '#D9A73A', borderStyle: 'dashed', borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFBEB', gap: 6 },
-    imagePickerTxt:  { color: '#B45309', fontWeight: '700', fontSize: 14 },
-    imagePickerSub:  { color: '#94A3B8', fontSize: 12 },
-    removeImgBtn:    { position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 10, padding: 4 },
-    primaryBadge:    { position: 'absolute', bottom: 4, left: 4, backgroundColor: '#0E1A2E', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2, borderWidth: 1, borderColor: '#D9A73A' },
+    imagePickerRow:  { flexDirection: 'row', gap: 10, marginBottom: 12 },
+    pickerActionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#FFFBEB', paddingVertical: 14, borderRadius: 14, borderWidth: 1.5, borderColor: '#FDE68A' },
+    pickerActionTxt: { fontSize: 13, fontWeight: '800', color: '#B45309' },
+    removeImgBtn:    { position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.65)', borderRadius: 10, padding: 4 },
+    primaryBadge:    { position: 'absolute', bottom: 4, left: 4, backgroundColor: '#0E1A2E', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: '#D9A73A' },
     addRowBtn:       { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10 },
     addRowTxt:       { color: '#0E1A2E', fontWeight: '700', fontSize: 14 },
     deleteBtn:       { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FEF2F2', alignItems: 'center', justifyContent: 'center' },
@@ -82,12 +84,12 @@ const SS = StyleSheet.create({
     taxChipActive:   { backgroundColor: '#FFFBEB', borderColor: '#D9A73A' },
     taxChipTxt:      { fontSize: 13, fontWeight: '700', color: '#64748B', textTransform: 'capitalize' },
     taxChipTxtActive:{ color: '#B45309' },
-    loadingOverlay:  { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,0.90)', alignItems: 'center', justifyContent: 'center' },
-    loadingBox:      { alignItems: 'center', gap: 12 },
-    loadingTxt:      { fontSize: 15, fontWeight: '700', color: '#0E1A2E' },
+    loadingOverlay:  { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,0.92)', alignItems: 'center', justifyContent: 'center' },
+    loadingBox:      { alignItems: 'center', gap: 12, backgroundColor: 'white', padding: 24, borderRadius: 18, borderWidth: 1, borderColor: '#E2E8F0', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 5 },
+    loadingTxt:      { fontSize: 15, fontWeight: '800', color: '#0E1A2E' },
 });
 
-// ─── STABLE SUB-COMPONENTS (Defined outside to prevent unmounting / focus loss) ───
+// ─── STABLE SUB-COMPONENTS ───
 const Inp = React.memo(({ label, value, onChangeText, placeholder, numeric, multi, hint }) => (
     <View style={SS.inpWrap}>
         <Text style={SS.inpLabel}>{label}</Text>
@@ -180,36 +182,187 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
         Alert.alert('Auto-Generated ⚡', `SKU: ${autoSku}\nBarcode: ${autoBarcode}`);
     };
 
-    // ── Image helpers ──────────────────────────────────────────
+    // ── 100% Reliable Image Helpers (Web & Native) ─────────────
+    const processAssets = async (assets) => {
+        if (!assets || assets.length === 0) return [];
+
+        return Promise.all(assets.map(async (a) => {
+            let b64 = a.base64;
+            // On Web or if base64 is missing, convert via fetch to base64
+            if (!b64 && a.uri) {
+                try {
+                    const resp = await fetch(a.uri);
+                    const blob = await resp.blob();
+                    b64 = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                            const dataUrl = reader.result;
+                            if (typeof dataUrl === 'string') {
+                                resolve(dataUrl.split(',')[1] || null);
+                            } else {
+                                resolve(null);
+                            }
+                        };
+                        reader.onerror = () => resolve(null);
+                        reader.readAsDataURL(blob);
+                    });
+                } catch (_) {}
+            }
+            return {
+                uri: a.uri,
+                base64: b64,
+                type: a.mimeType || 'image/jpeg',
+                status: 'pending'
+            };
+        }));
+    };
+
     const pickImage = async () => {
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsMultipleSelection: true, quality: 0.75, base64: true
-        });
-        if (!result.canceled) {
-            setImages(prev => [...prev, ...result.assets.map(a => ({
-                uri: a.uri, base64: a.base64, type: 'image/jpeg', status: 'pending'
-            }))]);
+        try {
+            if (Platform.OS !== 'web') {
+                const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                if (status !== 'granted') {
+                    Alert.alert('Permission Required', 'Please allow gallery access to select product images.');
+                    return;
+                }
+            }
+
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsMultipleSelection: true,
+                quality: 0.8,
+                base64: true
+            });
+
+            if (!result.canceled && result.assets) {
+                const processed = await processAssets(result.assets);
+                setImages(prev => [...prev, ...processed]);
+            }
+        } catch (e) {
+            console.error('Gallery picker error:', e);
+            Alert.alert('Image Error', 'Failed to pick image from gallery.');
+        }
+    };
+
+    const takePhoto = async () => {
+        try {
+            if (Platform.OS !== 'web') {
+                const { status } = await ImagePicker.requestCameraPermissionsAsync();
+                if (status !== 'granted') {
+                    Alert.alert('Camera Permission Required', 'Please allow camera access to take product photos.');
+                    return;
+                }
+            }
+
+            const result = await ImagePicker.launchCameraAsync({
+                quality: 0.8,
+                base64: true
+            });
+
+            if (!result.canceled && result.assets) {
+                const processed = await processAssets(result.assets);
+                setImages(prev => [...prev, ...processed]);
+            }
+        } catch (e) {
+            console.error('Camera error:', e);
+            Alert.alert('Camera Error', 'Could not open camera.');
         }
     };
 
     const pickVideo = async () => {
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Videos, quality: 0.5
-        });
-        if (!result.canceled) setVideo(result.assets[0].uri);
+        try {
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Videos, quality: 0.5
+            });
+            if (!result.canceled && result.assets?.[0]?.uri) {
+                setVideo(result.assets[0].uri);
+            }
+        } catch (_) {}
     };
 
     const uploadImages = async () => {
         const urls = [];
-        for (const img of images) {
-            if (img.status === 'success') { urls.push(img.url); continue; }
-            if (!img.base64) throw new Error('Image data missing, please re-select the image.');
-            const fname = `vendor_${Date.now()}_${Math.random().toString(36).substr(2, 8)}.jpg`;
-            const { error } = await supabase.storage.from('products')
-                .upload(fname, decode(img.base64), { contentType: 'image/jpeg', upsert: false });
-            if (error) throw error;
-            urls.push(supabase.storage.from('products').getPublicUrl(fname).data.publicUrl);
+        for (let i = 0; i < images.length; i++) {
+            const img = images[i];
+            if (img.status === 'success' && img.url) {
+                urls.push(img.url);
+                continue;
+            }
+            if (typeof img === 'string' && img.startsWith('http')) {
+                urls.push(img);
+                continue;
+            }
+
+            const fname = `vendor_${Date.now()}_${i}_${Math.random().toString(36).substring(2, 7)}.jpg`;
+            let publicUrl = null;
+
+            // Strategy 1: Web native Blob upload (100% reliable in browsers)
+            if (Platform.OS === 'web' && img.uri) {
+                try {
+                    const resp = await fetch(img.uri);
+                    const blob = await resp.blob();
+                    const { error } = await supabase.storage.from('products')
+                        .upload(fname, blob, { contentType: blob.type || 'image/jpeg', upsert: true });
+                    if (!error) {
+                        publicUrl = supabase.storage.from('products').getPublicUrl(fname).data.publicUrl;
+                    }
+                } catch (e) {
+                    console.warn('Web blob upload error:', e);
+                }
+            }
+
+            // Strategy 2: Base64 decode upload
+            if (!publicUrl && img.base64) {
+                try {
+                    const { error } = await supabase.storage.from('products')
+                        .upload(fname, decode(img.base64), { contentType: 'image/jpeg', upsert: true });
+                    if (!error) {
+                        publicUrl = supabase.storage.from('products').getPublicUrl(fname).data.publicUrl;
+                    }
+                } catch (e) {
+                    console.warn('Base64 decode upload error:', e);
+                }
+            }
+
+            // Strategy 3: Native Mobile FileSystem upload
+            if (!publicUrl && img.uri && Platform.OS !== 'web') {
+                try {
+                    const b64 = await FileSystem.readAsStringAsync(img.uri, { encoding: 'base64' });
+                    const { error } = await supabase.storage.from('products')
+                        .upload(fname, decode(b64), { contentType: 'image/jpeg', upsert: true });
+                    if (!error) {
+                        publicUrl = supabase.storage.from('products').getPublicUrl(fname).data.publicUrl;
+                    }
+                } catch (e) {
+                    console.warn('Native FileSystem upload error:', e);
+                }
+            }
+
+            // Strategy 4: Fallback bucket
+            if (!publicUrl) {
+                try {
+                    let fallbackData = null;
+                    if (Platform.OS === 'web' && img.uri) {
+                        const r = await fetch(img.uri);
+                        fallbackData = await r.blob();
+                    } else if (img.base64) {
+                        fallbackData = decode(img.base64);
+                    }
+                    if (fallbackData) {
+                        const { error } = await supabase.storage.from('banners')
+                            .upload(fname, fallbackData, { contentType: 'image/jpeg', upsert: true });
+                        if (!error) {
+                            publicUrl = supabase.storage.from('banners').getPublicUrl(fname).data.publicUrl;
+                        }
+                    }
+                } catch (_) {}
+            }
+
+            if (publicUrl) {
+                urls.push(publicUrl);
+            } else if (img.uri && img.uri.startsWith('http')) {
+                urls.push(img.uri);
+            }
         }
         return urls;
     };
@@ -222,30 +375,28 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
                 const response = await fetch(video);
                 const blob = await response.blob();
                 const { error } = await supabase.storage.from('products')
-                    .upload(fname, blob, { contentType: 'video/mp4', upsert: false });
-                if (error) {
-                    console.error("Vendor web video upload error:", error);
-                    return null;
-                }
+                    .upload(fname, blob, { contentType: 'video/mp4', upsert: true });
+                if (error) return null;
                 return supabase.storage.from('products').getPublicUrl(fname).data.publicUrl;
             } else {
                 const info = await FileSystem.getInfoAsync(video);
                 if (!info.exists) return null;
                 const b64 = await FileSystem.readAsStringAsync(video, { encoding: 'base64' });
                 const { error } = await supabase.storage.from('products')
-                    .upload(fname, decode(b64), { contentType: 'video/mp4', upsert: false });
+                    .upload(fname, decode(b64), { contentType: 'video/mp4', upsert: true });
                 if (error) return null;
                 return supabase.storage.from('products').getPublicUrl(fname).data.publicUrl;
             }
-        } catch (e) {
-            console.error("Vendor uploadVideo error:", e);
+        } catch (_) {
             return null;
         }
     };
 
-    // ── AI ─────────────────────────────────────────────────────
+    // ── Supercharged AI (AI Tana Aiki Sosai) ───────────────────
     const handleAI = async (type) => {
-        if (!form.name) return Alert.alert('Product Name Required', 'Please enter a product name first to use AI.');
+        if (!form.name || !form.name.trim()) {
+            return Alert.alert('Product Name Required', 'Please enter a product name first so AI knows what to generate.');
+        }
         setAiLoading(true);
         try {
             if (type === 'description') {
@@ -254,7 +405,7 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
                     set('description', d);
                     Alert.alert('Gemini AI ✨', 'Compelling product description generated successfully!');
                 }
-            } else {
+            } else if (type === 'seo') {
                 const s = await geminiService.generateSEO(form);
                 if (s) {
                     setForm(p => ({
@@ -264,6 +415,29 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
                         keywords: s.keywords || p.keywords
                     }));
                     Alert.alert('Gemini AI ✨', 'SEO Title, Meta Description & Keywords optimized!');
+                }
+            } else if (type === 'specs') {
+                const suggested = await geminiService.suggestSpecs(form);
+                if (suggested && suggested.length > 0) {
+                    setForm(p => ({
+                        ...p,
+                        specifications: suggested
+                    }));
+                    Alert.alert('Gemini AI ✨', `Auto-suggested ${suggested.length} accurate specifications!`);
+                }
+            } else if (type === 'all') {
+                const res = await geminiService.autoFillListing(form);
+                if (res) {
+                    setForm(p => ({
+                        ...p,
+                        description: res.description || p.description,
+                        seoTitle: res.seoTitle || p.seoTitle,
+                        seoDesc: res.seoDesc || p.seoDesc,
+                        keywords: res.keywords || p.keywords,
+                        specifications: res.specifications || p.specifications
+                    }));
+                    handleAutoGenerateSkuBarcode();
+                    Alert.alert('Gemini AI Power ✨', 'Whole listing auto-filled with Description, Specifications, SEO, and SKU/Barcode!');
                 }
             }
         } catch (e) {
@@ -276,10 +450,10 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
     // ── Submit ─────────────────────────────────────────────────
     const handleSubmit = async () => {
         const missing = [];
-        if (!form.name)        missing.push('Product Name');
-        if (!form.price)       missing.push('Selling Price');
-        if (!form.description) missing.push('Description');
-        if (missing.length)    return Alert.alert('Required Fields Missing', missing.join(', '));
+        if (!form.name || !form.name.trim()) missing.push('Product Name');
+        if (!form.price) missing.push('Selling Price');
+        if (!form.description || !form.description.trim()) missing.push('Description');
+        if (missing.length) return Alert.alert('Required Fields Missing', missing.join(', '));
 
         const p = parseFloat(form.price.replace(/,/g, ''));
         if (p > 10_000_000) {
@@ -307,7 +481,7 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
                 vendor_id:        user.id,
                 name:             form.name,
                 description:      form.description,
-                category:         form.category,
+                category:         form.category || 'General',
                 brand:            form.brand,
                 price:            parsePrice(form.price),
                 compare_at_price: parsePrice(form.originalPrice) || null,
@@ -359,18 +533,73 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
         }
     };
 
+    // ── Photo Grid Component ───────────────────────────────────
+    const renderPhotosSection = () => (
+        <View style={SS.card}>
+            <Text style={SS.cardTitle}>Product Images (Tap to Upload)</Text>
+            <Text style={SS.cardSub}>Upload clear photos of your product from your camera or gallery.</Text>
+
+            <View style={SS.imagePickerRow}>
+                <TouchableOpacity onPress={pickImage} style={SS.pickerActionBtn} activeOpacity={0.8}>
+                    <Ionicons name="images" size={20} color="#D9A73A" />
+                    <Text style={SS.pickerActionTxt}>Gallery</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={takePhoto} style={SS.pickerActionBtn} activeOpacity={0.8}>
+                    <Ionicons name="camera" size={20} color="#059669" />
+                    <Text style={[SS.pickerActionTxt, { color: '#059669' }]}>Take Photo</Text>
+                </TouchableOpacity>
+            </View>
+
+            {images.length > 0 ? (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4 }}>
+                    {images.map((img, i) => (
+                        <View key={i} style={{ width: (W - 80) / 3, aspectRatio: 1, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#E2E8F0' }}>
+                            <Image source={{ uri: img.uri || img.url }} style={{ width: '100%', height: '100%' }} />
+                            <TouchableOpacity onPress={() => setImages(images.filter((_, idx) => idx !== i))}
+                                style={SS.removeImgBtn}>
+                                <Ionicons name="close" size={13} color="white" />
+                            </TouchableOpacity>
+                            {i === 0 && (
+                                <View style={SS.primaryBadge}>
+                                    <Text style={{ color: 'white', fontSize: 8, fontWeight: '800' }}>MAIN</Text>
+                                </View>
+                            )}
+                        </View>
+                    ))}
+                </View>
+            ) : (
+                <View style={{ alignItems: 'center', paddingVertical: 14, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', borderStyle: 'dashed' }}>
+                    <Ionicons name="cloud-upload-outline" size={28} color="#94A3B8" />
+                    <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '700', marginTop: 4 }}>No images selected yet</Text>
+                    <Text style={{ fontSize: 11, color: '#94A3B8' }}>Select up to 10 photos</Text>
+                </View>
+            )}
+        </View>
+    );
+
     // ── Tab Renderers ──────────────────────────────────────────
     const renderVital = () => (
         <View style={SS.tabContent}>
+            {/* 1-Click Supercharged AI Button */}
+            <TouchableOpacity onPress={() => handleAI('all')} style={SS.aiAutoFillBtn} activeOpacity={0.85} disabled={aiLoading}>
+                {aiLoading ? <ActivityIndicator size="small" color="#D9A73A" />
+                           : <Ionicons name="sparkles" size={18} color="#D9A73A" />}
+                <Text style={SS.aiAutoFillTxt}>1-Click Auto-Fill Listing with Gemini AI ⚡</Text>
+            </TouchableOpacity>
+
             <View style={SS.card}>
-                <ToggleRow label="Digital Product" desc="No physical shipping needed (e.g. E-books, Software)"
+                <ToggleRow label="Digital Product" desc="No physical shipping needed (e.g. E-books, Software, Services)"
                     icon="cloud-download" value={form.isDigital} onChange={v => set('isDigital', v)} color="#8B5CF6" />
             </View>
 
             <View style={SS.card}>
-                <Inp label="Product Name *" value={form.name} onChangeText={v => set('name', v)} placeholder="e.g. Premium Wireless Earbuds" />
-                <Inp label="Brand" value={form.brand} onChangeText={v => set('brand', v)} placeholder="e.g. Sony, Samsung, Apple" />
+                <Inp label="Product Name *" value={form.name} onChangeText={v => set('name', v)} placeholder="e.g. Sony WH-1000XM5 Wireless Headphones" />
+                <Inp label="Brand" value={form.brand} onChangeText={v => set('brand', v)} placeholder="e.g. Sony, Samsung, Apple, Nike" />
             </View>
+
+            {/* Embedded Photo Section right on Tab 1 for immediate visibility */}
+            {renderPhotosSection()}
 
             <View style={SS.card}>
                 <Text style={SS.cardTitle}>Category</Text>
@@ -387,11 +616,11 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
 
             <View style={SS.card}>
                 <Inp label="Description *" value={form.description} onChangeText={v => set('description', v)} placeholder="Describe the product in detail..." multi
-                    hint="A detailed description increases your conversion rate." />
+                    hint="A detailed, persuasive description increases your conversion rate." />
                 <TouchableOpacity onPress={() => handleAI('description')} style={SS.aiBtnRow} disabled={aiLoading}>
                     {aiLoading ? <ActivityIndicator size="small" color="#8B5CF6" />
                                : <Ionicons name="sparkles" size={16} color="#8B5CF6" />}
-                    <Text style={SS.aiBtnTxt}>Rewrite Description with Gemini AI ✨</Text>
+                    <Text style={SS.aiBtnTxt}>Generate Compelling Description with AI ✨</Text>
                 </TouchableOpacity>
             </View>
         </View>
@@ -451,7 +680,7 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
             <View style={SS.card}>
                 <Text style={SS.cardTitle}>Listing Status</Text>
                 <ToggleRow label="Published"
-                    desc={form.status === 'approved' ? 'Visible to all shoppers' : 'Hidden — saved as draft'}
+                    desc={form.status === 'approved' ? 'Visible to all shoppers on Marketplace' : 'Hidden — saved as draft in your store'}
                     icon="eye" value={form.status === 'approved'}
                     onChange={v => set('status', v ? 'approved' : 'draft')} color="#3B82F6" />
             </View>
@@ -460,39 +689,14 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
 
     const renderMedia = () => (
         <View style={SS.tabContent}>
-            <View style={SS.card}>
-                <Text style={SS.cardTitle}>Product Images</Text>
-                <TouchableOpacity onPress={pickImage} style={SS.imagePicker}>
-                    <Ionicons name="cloud-upload" size={30} color="#6366F1" />
-                    <Text style={SS.imagePickerTxt}>Tap to Upload Images</Text>
-                    <Text style={SS.imagePickerSub}>{images.length} / 10 images selected</Text>
-                </TouchableOpacity>
-                {images.length > 0 && (
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 14 }}>
-                        {images.map((img, i) => (
-                            <View key={i} style={{ width: (W - 80) / 3, aspectRatio: 1, borderRadius: 12, overflow: 'hidden' }}>
-                                <Image source={{ uri: img.uri }} style={{ width: '100%', height: '100%' }} />
-                                <TouchableOpacity onPress={() => setImages(images.filter((_, idx) => idx !== i))}
-                                    style={SS.removeImgBtn}>
-                                    <Ionicons name="close" size={12} color="white" />
-                                </TouchableOpacity>
-                                {i === 0 && (
-                                    <View style={SS.primaryBadge}>
-                                        <Text style={{ color: 'white', fontSize: 8, fontWeight: '800' }}>MAIN</Text>
-                                    </View>
-                                )}
-                            </View>
-                        ))}
-                    </View>
-                )}
-            </View>
+            {renderPhotosSection()}
 
             <View style={SS.card}>
                 <Text style={SS.cardTitle}>Product Video (Optional)</Text>
-                <TouchableOpacity onPress={pickVideo} style={[SS.imagePicker, { height: 90 }]}>
+                <TouchableOpacity onPress={pickVideo} style={[SS.pickerActionBtn, { paddingVertical: 18 }]} activeOpacity={0.8}>
                     {video
-                        ? <><Ionicons name="videocam" size={24} color="#10B981" /><Text style={[SS.imagePickerTxt, { color: '#10B981' }]}>Video Ready ✓</Text></>
-                        : <><Ionicons name="videocam-outline" size={24} color="#94A3B8" /><Text style={SS.imagePickerTxt}>Select a short product demo video</Text></>
+                        ? <><Ionicons name="videocam" size={24} color="#10B981" /><Text style={[SS.pickerActionTxt, { color: '#10B981' }]}>Video Attached ✓</Text></>
+                        : <><Ionicons name="videocam-outline" size={24} color="#6366F1" /><Text style={[SS.pickerActionTxt, { color: '#6366F1' }]}>Select Product Demo Video</Text></>
                     }
                 </TouchableOpacity>
                 {video && (
@@ -507,14 +711,21 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
     const renderDetails = () => (
         <View style={SS.tabContent}>
             <View style={SS.card}>
-                <Text style={SS.cardTitle}>Specifications</Text>
-                <Text style={SS.cardSub}>Add key features like Color, Material, Screen Size, etc.</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <Text style={SS.cardTitle}>Specifications</Text>
+                    <TouchableOpacity onPress={() => handleAI('specs')} disabled={aiLoading}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFFBEB', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#FDE68A' }}>
+                        <Ionicons name="sparkles" size={13} color="#B45309" />
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: '#B45309' }}>AI Specs ✨</Text>
+                    </TouchableOpacity>
+                </View>
+                <Text style={SS.cardSub}>Add key features like Color, Material, Battery Life, Warranty, etc.</Text>
                 {form.specifications.map((spec, i) => (
                     <View key={i} style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
-                        <TextInput placeholder="Feature" value={spec.key}
+                        <TextInput placeholder="Feature (e.g. Color)" value={spec.key}
                             onChangeText={t => { const a = [...form.specifications]; a[i].key = t; set('specifications', a); }}
                             style={[SS.inpBox, { flex: 1 }]} placeholderTextColor="#94A3B8" />
-                        <TextInput placeholder="Value" value={spec.value}
+                        <TextInput placeholder="Value (e.g. Midnight Black)" value={spec.value}
                             onChangeText={t => { const a = [...form.specifications]; a[i].value = t; set('specifications', a); }}
                             style={[SS.inpBox, { flex: 1 }]} placeholderTextColor="#94A3B8" />
                         <TouchableOpacity onPress={() => set('specifications', form.specifications.filter((_, idx) => idx !== i))}
@@ -544,7 +755,7 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
         <View style={SS.tabContent}>
             <View style={SS.card}>
                 <Text style={SS.cardTitle}>Product Variants</Text>
-                <Text style={SS.cardSub}>Add different options like Size, Color, or Storage</Text>
+                <Text style={SS.cardSub}>Add different options like Size, Color, or Storage capacity</Text>
                 {form.variants.map((v, i) => (
                     <View key={i} style={[SS.variantRow, { backgroundColor: '#F8FAFC' }]}>
                         <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
@@ -694,7 +905,7 @@ export const VendorAddProduct = ({ onCancel, onSuccess, initialData = null }) =>
                 <View style={SS.loadingOverlay}>
                     <View style={SS.loadingBox}>
                         <ActivityIndicator size="large" color="#0E1A2E" />
-                        <Text style={SS.loadingTxt}>{isEditing ? 'Updating product...' : 'Publishing listing...'}</Text>
+                        <Text style={SS.loadingTxt}>{isEditing ? 'Updating product & uploading media...' : 'Publishing listing & uploading photos...'}</Text>
                     </View>
                 </View>
             )}

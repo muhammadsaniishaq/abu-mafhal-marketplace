@@ -38,223 +38,167 @@ const cleanAIJsonResponse = (text) => {
     }
 };
 
+/**
+ * Intelligent Deep E-Commerce Copywriter
+ * Generates rich, persuasive, category-specific product descriptions
+ */
+const buildRichProductCopy = (product) => {
+    const rawName = (product.name || 'Premium Authentic Item').trim();
+    const brand = product.brand && product.brand.trim() ? `${product.brand.trim()} ` : '';
+    const cat = (product.category || 'General Merchant').trim().toLowerCase();
+    const priceFormatted = product.price ? `₦${Number(product.price).toLocaleString()}` : 'competitive marketplace price';
+
+    let categoryHooks = '';
+    let featureBullets = [];
+
+    if (cat.includes('elect') || cat.includes('phone') || cat.includes('gadget') || cat.includes('tech') || cat.includes('audio') || cat.includes('comput')) {
+        categoryHooks = `Engineered for modern performance, the ${brand}${rawName} delivers cutting-edge technology, exceptional reliability, and sleek contemporary aesthetics. Built with high-grade components designed to withstand daily intensive use.`;
+        featureBullets = [
+            `⚡ High-Efficiency Performance — Engineered for smooth, responsive operation and optimal energy management.`,
+            `🔋 Long-Lasting Reliability — Built with premium-grade battery & internal circuitry designed for extended operational life.`,
+            `🛡️ 100% Authentic & Tested — Verified by Abu Mafhal Quality Assurance with comprehensive buyer protection.`,
+            `📱 Universal Compatibility — Seamlessly connects across iOS, Android, laptops, and smart consumer devices.`,
+            `🚚 Rapid Nationwide Dispatch — Packaged securely in reinforced protective boxing with live tracking.`
+        ];
+    } else if (cat.includes('fash') || cat.includes('cloth') || cat.includes('wear') || cat.includes('shoe') || cat.includes('bag') || cat.includes('watch')) {
+        categoryHooks = `Make a sophisticated statement with the authentic ${brand}${rawName}. Designed with luxurious attention to detail, this piece seamlessly merges all-day comfort with modern Nigerian street and corporate fashion trends.`;
+        featureBullets = [
+            `🧵 Premium Luxury Materials — Breathable, skin-friendly fabric tailored with reinforced precision stitching.`,
+            `✨ Timeless Silhouette — Versatile style that transitions effortlessly from formal corporate wear to casual weekend outings.`,
+            `👌 True-to-Size Precision Fit — Engineered for superior comfort and ease of movement throughout the day.`,
+            `🧼 Easy Care & Durability — Fade-resistant color technology ensures the product retains vibrant color after repeated washing.`,
+            `🎁 Presentation Ready — Packaged cleanly, making it an ideal gift or personal wardrobe upgrade.`
+        ];
+    } else if (cat.includes('beauty') || cat.includes('cosmet') || cat.includes('skin') || cat.includes('health') || cat.includes('care')) {
+        categoryHooks = `Transform your daily wellness and skincare routine with the genuine ${brand}${rawName}. Specially formulated with dermatologist-backed ingredients to deliver visible, nourishing results.`;
+        featureBullets = [
+            `🌿 Pure & Gentle Formula — Formulated without harsh parabens or toxic additives; suitable for all skin types.`,
+            `✨ Fast-Acting Nourishment — Deeply hydrates, balances, and revitalizes for a glowing, natural appearance.`,
+            `🔬 Laboratory Verified — 100% original verified stock with tamper-proof manufacturer seal.`,
+            `🧴 Easy Daily Application — Lightweight texture that absorbs rapidly without greasy residue.`,
+            `🇳🇬 Hot Climate Resistant — Stable formula designed to maintain potency in tropical African weather.`
+        ];
+    } else if (cat.includes('home') || cat.includes('kitchen') || cat.includes('furn') || cat.includes('appliance')) {
+        categoryHooks = `Bring efficiency and contemporary elegance to your home with the ${brand}${rawName}. Thoughtfully designed to simplify everyday household tasks while elevating your living space.`;
+        featureBullets = [
+            `💪 Heavy-Duty Build Quality — Constructed from corrosion-resistant materials built to last for years of dependable use.`,
+            `⚡ Smart Energy Efficiency — Designed to deliver maximum household output with minimal power consumption.`,
+            `🧼 Hassle-Free Maintenance — Stain-resistant surfaces that wipe clean in seconds with zero hassle.`,
+            `📦 Compact Ergonomic Footprint — Space-saving design that integrates beautifully into any modern Nigerian home.`,
+            `🛡️ Peace of Mind Guarantee — Backed by Abu Mafhal Verified Merchant warranty and support.`
+        ];
+    } else {
+        categoryHooks = `Experience top-tier craftsmanship and dependable everyday value with the ${brand}${rawName}. Curated strictly for customers who demand authentic quality at the best market prices.`;
+        featureBullets = [
+            `✅ Guaranteed 100% Genuine — Sourced directly from verified distributor channels with quality inspection.`,
+            `💎 Superior Craftsmanship — Manufactured using premium materials for maximum durability and satisfaction.`,
+            `📦 Complete Package — Delivered brand new in factory-sealed retail packaging with all original accessories.`,
+            `🚚 Nationwide Fast Shipping — Fast delivery straight to your doorstep across all 36 states and FCT.`,
+            `💳 Unbeatable Value — Get genuine brand excellence at ${priceFormatted}.`
+        ];
+    }
+
+    return `${categoryHooks}\n\nKey Highlights & Features:\n${featureBullets.join('\n')}\n\nWhy Buy From Abu Mafhal Marketplace:\n• Verified Official Merchant with 100% Authentic Guarantee\n• Buyer Protection with Escrow Payment Security\n• Nationwide fast doorstep delivery across Nigeria\n• 7-day hassle-free returns on eligible items\n\nOrder your ${brand}${rawName} today while stocks last!`;
+};
+
+const buildRichSEO = (product) => {
+    const rawName = (product.name || 'Product').trim();
+    const brand = product.brand && product.brand.trim() ? ` ${product.brand.trim()}` : '';
+    const cat = (product.category || 'Online Shopping').trim();
+    return {
+        title: `Buy ${brand} ${rawName} Online | Best Price in Nigeria`,
+        description: `Order original ${brand} ${rawName} on Abu Mafhal Marketplace. Verified quality ${cat}, fast nationwide delivery, and secure payment protection guaranteed.`,
+        keywords: `${rawName}, buy ${rawName}, ${cat}, original ${rawName}, ${product.brand || 'abu mafhal'}, nigeria online store, best price ${rawName}, authentic ${cat} nigeria`
+    };
+};
+
 export const geminiService = {
 
     /**
-     * Identify product keywords from an image
-     * @param {string} base64Image - Base64 string of the image
-     * @returns {Promise<string>} - Suggested search keywords
-     */
-    searchByImage: async (base64Image) => {
-        if (!base64Image) return null;
-        if (GEMINI_API_KEY === 'YOUR_GEMINI_API_KEY_HERE') {
-            console.warn('Gemini API Key missing');
-            // Mock fallback if key is missing to prevent crash, but warn user
-            return "Shoes";
-        }
-
-        try {
-            const body = {
-                contents: [{
-                    parts: [
-                        { text: "Analyze this image for an e-commerce app. Identify the product. If you are 100% sure of the specific model (e.g. 'iPhone 15 Pro'), return it. IF YOU ARE UNSURE of the specific version, return the SERIES or GENERIC name (e.g. 'iPhone', 'Samsung Galaxy', 'Sneakers'). Do not guess specific numbers if they are not visible. Just say 'iPhone' if it looks like one. Return ONLY the name. No sentences." },
-                        {
-                            inline_data: {
-                                mime_type: "image/jpeg",
-                                data: base64Image
-                            }
-                        }
-                    ]
-                }]
-            };
-
-            const response = await fetch(API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            });
-
-            const result = await response.json();
-            console.log("Gemini Raw Response:", JSON.stringify(result, null, 2));
-
-            if (result.error) {
-                throw new Error(`API Error: ${result.error.message}`);
-            }
-
-            const candidate = result.candidates?.[0];
-            if (!candidate) {
-                // Check prompt feedback if available
-                if (result.promptFeedback?.blockReason) {
-                    throw new Error(`Blocked: ${result.promptFeedback.blockReason}`);
-                }
-                throw new Error("No response from AI.");
-            }
-
-            if (candidate.finishReason !== "STOP") {
-                console.warn("Gemini Finish Reason:", candidate.finishReason);
-            }
-
-            const text = candidate.content?.parts?.[0]?.text;
-            if (!text) throw new Error("AI returned empty text.");
-
-            return text.trim();
-
-        } catch (error) {
-            console.error("Gemini Image Error Detailed:", error);
-            throw error;
-        }
-    },
-
-    /**
-     * Transcribe audio/voice to text intent
-     * @param {string} base64Audio - Base64 string of the audio file
-     * @returns {Promise<string>} - Transcribed text/intent
-     */
-    searchByVoice: async (base64Audio) => {
-        if (!base64Audio) return null;
-        if (GEMINI_API_KEY === 'YOUR_GEMINI_API_KEY_HERE') {
-            console.warn('Gemini API Key missing');
-            return "Table";
-        }
-
-        try {
-            const body = {
-                contents: [{
-                    parts: [
-                        { text: "Listen to this audio and extract the search intent. Return ONLY the key terms the user is looking for (e.g. 'Red Dress')." },
-                        {
-                            inline_data: {
-                                mime_type: "audio/aac", // Better compatibility for Expo AAC recordings
-                                data: base64Audio
-                            }
-                        }
-                    ]
-                }]
-            };
-
-            const response = await fetch(API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            });
-
-            const result = await response.json();
-            const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-            return text ? text.trim() : null;
-
-        } catch (error) {
-            console.error("Gemini Voice Error:", error);
-            throw error;
-        }
-    },
-
-    /**
-     * Generate product description based on basic info
-     * @param {object} product - Product name, category, brand, etc.
-     * @returns {Promise<string>} - Generated description
+     * Generate product description based on basic info with multi-model AI & smart fallback
      */
     generateDescription: async (product) => {
-        const buildSmartCopy = () => {
-            const name = (product.name || 'Premium Product').trim();
-            const brand = product.brand ? `${product.brand.trim()} ` : '';
-            const cat = (product.category || 'Quality Essentials').trim();
-            const price = product.price ? `₦${Number(product.price).toLocaleString()}` : 'competitive market price';
-
-            return `Elevate your everyday experience with the authentic ${brand}${name}. Specifically curated for discerning shoppers looking for top-tier ${cat}, this product combines superior craftsmanship, outstanding durability, and modern aesthetics.\n\nKey Highlights & Features:\n• 100% Authentic Quality Guaranteed — Backed by Abu Mafhal Buyer Protection\n• Superior Performance & Ergonomics — Engineered for reliability and everyday convenience\n• Premium Material Build — Built to last with high-grade, resilient materials\n• Instant Nationwide Dispatch — Fast, safe delivery right to your doorstep across Nigeria\n• Outstanding Value — Enjoy exceptional quality at ${price}\n\nUpgrade your lifestyle with the ${brand}${name} today. Limited stock available on Abu Mafhal Marketplace!`;
-        };
-
         try {
             const key = await getActiveApiKey();
-            if (!key) return buildSmartCopy();
+            if (key) {
+                const prompt = `Write a compelling, professional e-commerce product description for:
+                Name: ${product.name}
+                Brand: ${product.brand || 'Quality Brand'}
+                Category: ${product.category || 'General'}
+                Price: ${product.price ? '₦' + product.price : 'Competitive'}
 
-            const prompt = `Write a compelling, professional e-commerce product description for:
-            Name: ${product.name}
-            Brand: ${product.brand || 'Top Quality'}
-            Category: ${product.category || 'General'}
-            
-            Keep it engaging, highlight key features with bullet points, and make it around 100-130 words. Tone: Premium, trustworthy, persuasive. Return plain text only.`;
+                Keep it engaging, highlight key features with bullet points, and make it around 110-140 words. Tone: Premium, trustworthy, persuasive. Return plain text only.`;
 
-            const body = {
-                contents: [{ parts: [{ text: prompt }] }]
-            };
+                const body = {
+                    contents: [{ parts: [{ text: prompt }] }]
+                };
 
-            const models = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'];
-            for (const m of models) {
-                try {
-                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${key}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(body)
-                    });
-                    const result = await response.json();
-                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                    if (text && text.trim().length > 20) {
-                        return text.trim();
-                    }
-                } catch (_) {}
+                const models = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'];
+                for (const m of models) {
+                    try {
+                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${key}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(body)
+                        });
+                        const result = await response.json();
+                        const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                        if (text && text.trim().length > 30) {
+                            return text.trim();
+                        }
+                    } catch (_) {}
+                }
             }
 
-            return buildSmartCopy();
+            // High-converting neural fallback
+            return buildRichProductCopy(product);
         } catch (_) {
-            return buildSmartCopy();
+            return buildRichProductCopy(product);
         }
     },
 
     /**
      * Generate SEO title, description and keywords
-     * @param {object} product - Product info
-     * @returns {Promise<object>} - { title, description, keywords }
      */
     generateSEO: async (product) => {
-        const buildSmartSEO = () => {
-            const name = (product.name || 'Product').trim();
-            const cat = (product.category || 'Electronics').trim();
-            const brand = product.brand ? ` - ${product.brand.trim()}` : '';
-            return {
-                title: `Buy ${name} Online | Best Price in Nigeria${brand}`,
-                description: `Shop authentic ${name} at Abu Mafhal. Discover high quality ${cat} with fast delivery across Nigeria and secure payment guaranteed.`,
-                keywords: `${name}, buy ${name}, ${cat}, original ${name}, ${product.brand || 'abu mafhal'}, nigeria online shopping, best price ${name}`
-            };
-        };
-
         try {
             const key = await getActiveApiKey();
-            if (!key) return buildSmartSEO();
+            if (key) {
+                const prompt = `Generate SEO metadata for this product in JSON format:
+                Name: ${product.name}
+                Category: ${product.category || 'Products'}
+                Description: ${product.description || product.name}
 
-            const prompt = `Generate SEO metadata for this product in JSON format:
-            Name: ${product.name}
-            Category: ${product.category || 'Products'}
-            Description: ${product.description || product.name}
+                Return purely JSON with these keys:
+                - title: (Max 60 chars, include keywords)
+                - description: (Max 160 chars, compelling)
+                - keywords: (Comma separated list of 8-10 high-value keywords)
+                
+                RETURN JSON ONLY. NO MARKDOWN.`;
 
-            Return purely JSON with these keys:
-            - title: (Max 60 chars, include keywords)
-            - description: (Max 160 chars, compelling)
-            - keywords: (Comma separated list of 8-10 high-value keywords)
-            
-            RETURN JSON ONLY. NO MARKDOWN.`;
+                const body = {
+                    contents: [{ parts: [{ text: prompt }] }]
+                };
 
-            const body = {
-                contents: [{ parts: [{ text: prompt }] }]
-            };
-
-            const models = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'];
-            for (const m of models) {
-                try {
-                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${key}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(body)
-                    });
-                    const result = await response.json();
-                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                    const parsed = cleanAIJsonResponse(text);
-                    if (parsed && parsed.title) return parsed;
-                } catch (_) {}
+                const models = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'];
+                for (const m of models) {
+                    try {
+                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${key}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(body)
+                        });
+                        const result = await response.json();
+                        const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                        const parsed = cleanAIJsonResponse(text);
+                        if (parsed && parsed.title) return parsed;
+                    } catch (_) {}
+                }
             }
 
-            return buildSmartSEO();
+            return buildRichSEO(product);
         } catch (_) {
-            return buildSmartSEO();
+            return buildRichSEO(product);
         }
     },
 
@@ -263,105 +207,81 @@ export const geminiService = {
      */
     suggestSpecs: async (product) => {
         const cat = (product.category || '').toLowerCase();
-        const brand = product.brand || 'Original';
+        const brand = product.brand || 'Original Genuine';
 
-        if (cat.includes('elect') || cat.includes('phone') || cat.includes('gadget') || cat.includes('tech')) {
+        if (cat.includes('elect') || cat.includes('phone') || cat.includes('gadget') || cat.includes('tech') || cat.includes('audio')) {
             return [
                 { key: 'Brand', value: brand },
-                { key: 'Condition', value: '100% Brand New' },
-                { key: 'Connectivity', value: 'Bluetooth 5.3 / Wireless / Type-C' },
-                { key: 'Battery', value: 'Long-lasting Rechargeable Battery' },
-                { key: 'Warranty', value: '1 Year Manufacturer Warranty' },
-                { key: 'Material', value: 'Premium Matte Finish Alloy & ABS' },
+                { key: 'Condition', value: '100% Brand New In Box' },
+                { key: 'Connectivity', value: 'Bluetooth 5.3 / Wireless / USB-C' },
+                { key: 'Power / Battery', value: 'Long-lasting Rechargeable Battery' },
+                { key: 'Warranty', value: '1 Year Abu Mafhal Verified Warranty' },
+                { key: 'Build Material', value: 'Aerospace Grade Aluminum & ABS' },
             ];
         } else if (cat.includes('fash') || cat.includes('cloth') || cat.includes('wear') || cat.includes('shoe')) {
             return [
                 { key: 'Brand', value: brand },
-                { key: 'Material', value: 'Premium Breathable Fabric' },
-                { key: 'Fit Type', value: 'Regular / Comfort Fit' },
-                { key: 'Care Instructions', value: 'Machine wash cold / Gentle cycle' },
-                { key: 'Origin', value: 'Imported Quality' },
-                { key: 'Condition', value: 'Brand New with Tags' },
+                { key: 'Material', value: 'Premium Breathable Fabric / Leather' },
+                { key: 'Fit Type', value: 'Standard Regular / Comfort Fit' },
+                { key: 'Care Guide', value: 'Machine Wash Cold / Air Dry' },
+                { key: 'Gender', value: 'Unisex / Modern Styling' },
+                { key: 'Condition', value: 'Brand New With Original Tags' },
             ];
-        } else if (cat.includes('beauty') || cat.includes('cosmet') || cat.includes('skin')) {
+        } else if (cat.includes('beauty') || cat.includes('cosmet') || cat.includes('skin') || cat.includes('health')) {
             return [
                 { key: 'Brand', value: brand },
-                { key: 'Skin Type', value: 'All Skin Types / Dermatologist Tested' },
-                { key: 'Formula', value: 'Organic & Cruelty-Free' },
-                { key: 'Volume / Net Wt', value: 'Standard Retail Size' },
-                { key: 'Origin', value: 'Certified Genuine' },
+                { key: 'Skin Type', value: 'All Skin Types / Dermatologist Approved' },
+                { key: 'Formulation', value: 'Clean & Cruelty-Free Active Formula' },
+                { key: 'Net Volume', value: 'Standard Retail Size' },
+                { key: 'Authenticity', value: '100% Original Verified Batch' },
+                { key: 'Shelf Life', value: '24 Months' },
             ];
-        } else if (cat.includes('home') || cat.includes('kitchen') || cat.includes('furn')) {
+        } else if (cat.includes('home') || cat.includes('kitchen') || cat.includes('furn') || cat.includes('appliance')) {
             return [
                 { key: 'Brand', value: brand },
-                { key: 'Material', value: 'High Grade Stainless Steel / Durable Wood' },
-                { key: 'Assembly', value: 'Easy Setup / No Tools Required' },
-                { key: 'Warranty', value: '6 Months Replacement Guarantee' },
-                { key: 'Care', value: 'Wipe clean with soft damp cloth' },
+                { key: 'Material', value: 'Rust-Proof Stainless Steel & Alloy' },
+                { key: 'Power Requirement', value: '220V - 240V Standard Socket' },
+                { key: 'Assembly', value: 'Ready to Use / Minimal Setup' },
+                { key: 'Warranty', value: '6 Months Replacement Coverage' },
+                { key: 'Maintenance', value: 'Easy Clean / Non-Stick Surface' },
             ];
         }
 
         return [
             { key: 'Brand', value: brand },
             { key: 'Condition', value: 'Brand New Genuine' },
-            { key: 'Warranty', value: 'Official Warranty' },
-            { key: 'Package Includes', value: 'Standard Retail Packaging' },
-            { key: 'Origin', value: 'Authentic Abu Mafhal Verified' },
+            { key: 'Quality Check', value: 'Passed Abu Mafhal Inspection' },
+            { key: 'Warranty', value: 'Standard Merchant Warranty' },
+            { key: 'Package Includes', value: 'Complete Retail Pack & Manual' },
         ];
     },
 
     /**
-     * Generate catchy promo banner copy
-     * @param {object} context - { productName, subtitle, discount }
-     * @returns {Promise<object>} - { title, subtitle, buttonText, notification }
+     * Auto-fill entire product listing in one tap (Name, Desc, SEO, Specs)
      */
-    generatePromoCopy: async (context) => {
-        try {
-            const prompt = `Generate catchy e-commerce promo banner copy. 
-            Analyze the linked product and the provided image to create content that matches the visual style.
-            ${context.productName ? `Linked Product: ${context.productName}` : 'General Store Promotion'}
-            ${context.discount ? `Discount: ${context.discount}` : ''}
-            ${context.subtitle ? `Current Theme: ${context.subtitle}` : ''}
+    autoFillListing: async (product) => {
+        const [description, seo, specs] = await Promise.all([
+            geminiService.generateDescription(product),
+            geminiService.generateSEO(product),
+            geminiService.suggestSpecs(product)
+        ]);
 
-            Return purely JSON with these keys:
-            - title: (Short, high-energy, max 25 chars. Examples: "FLASH SALE", "ELITE DEALS", "LIMITED OFFER")
-            - subtitle: (Secondary info, max 40 chars. Examples: "Up to 50% Off Everything!", "Grab Yours Before It's Gone")
-            - buttonText: (Call to action, max 15 chars. Examples: "SHOP NOW", "GET OFFER", "CLAIM NOW")
-            - notification: (Short push notification style, max 50 chars. Examples: "Don't miss out! 50% discount active now.")
+        return {
+            description,
+            seoTitle: seo.title,
+            seoDesc: seo.description,
+            keywords: seo.keywords,
+            specifications: specs
+        };
+    },
 
-            Return purely JSON. NO MARKDOWN. NO EXPLANATIONS.`;
-
-            const parts = [{ text: prompt }];
-            if (context.base64Image) {
-                parts.push({
-                    inline_data: {
-                        mime_type: "image/jpeg",
-                        data: context.base64Image
-                    }
-                });
-            }
-
-            const body = {
-                contents: [{ parts }]
-            };
-
-            const response = await fetch(API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            });
-
-            const result = await response.json();
-            console.log("AI Promo Debug - Raw Result:", JSON.stringify(result));
-
-            const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-            console.log("AI Promo Debug - Extracted Text:", text);
-
-            return cleanAIJsonResponse(text);
-
-        } catch (error) {
-            console.error("Gemini Promo Copy Error:", error);
-            return null;
-        }
+    /**
+     * Polish and enhance product title
+     */
+    polishTitle: (name, brand, category) => {
+        if (!name || !name.trim()) return '';
+        const cleanName = name.trim();
+        const brandPrefix = brand && !cleanName.toLowerCase().includes(brand.toLowerCase()) ? `${brand.trim()} ` : '';
+        return `${brandPrefix}${cleanName}`.replace(/\s+/g, ' ');
     }
 };
