@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../lib/supabase';
 import { UserAvatar } from '../components/UserAvatar';
+import { VIPPassModal } from '../components/VIPPassModal';
 import { useAppSettings } from '../context/AppSettingsContext';
 import {
     getFollowedStoresList,
@@ -682,14 +683,23 @@ const ProfilePageInner = ({
 
                         {/* Decorative Top Passport Accent */}
                         <View style={s.heroTopBarDecor}>
-                            <View style={s.passportBadge}>
+                            <TouchableOpacity
+                                style={s.passportBadge}
+                                activeOpacity={0.75}
+                                onPress={() => setShowMemberPassModal(true)}
+                            >
                                 <Ionicons name="sparkles" size={11} color="#D4AF37" />
                                 <Text style={s.passportText}>✦ ROYAL VIP PASSPORT</Text>
-                            </View>
-                            <View style={s.heroChipBox}>
+                                <Ionicons name="chevron-forward" size={10} color="#D4AF37" style={{ marginLeft: 2 }} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={s.heroChipBox}
+                                activeOpacity={0.75}
+                                onPress={() => setShowMemberPassModal(true)}
+                            >
                                 <Ionicons name="hardware-chip-outline" size={16} color="#D4AF37" />
                                 <Text style={s.heroChipText}>ESCROW 256</Text>
-                            </View>
+                            </TouchableOpacity>
                         </View>
 
                         <View style={s.heroMainRow}>
@@ -733,7 +743,17 @@ const ProfilePageInner = ({
                                         onPress={() => onNavigate && onNavigate('editProfile')}
                                     >
                                         <Ionicons name="pencil-sharp" size={10} color="#D9A73A" style={{ marginRight: 3 }} />
-                                        <Text style={s.editPillText}>Edit Profile</Text>
+                                        <Text style={s.editPillText}>Edit</Text>
+                                    </TouchableOpacity>
+
+                                    {/* VIP Pass Shortcut Pill */}
+                                    <TouchableOpacity
+                                        style={s.heroVipPassPill}
+                                        activeOpacity={0.75}
+                                        onPress={() => setShowMemberPassModal(true)}
+                                    >
+                                        <Ionicons name="sparkles" size={10} color="#0A192F" style={{ marginRight: 3 }} />
+                                        <Text style={s.heroVipPassPillText}>VIP Pass</Text>
                                     </TouchableOpacity>
 
                                     {/* Followers Pill - Admin & Vendor Only */}
@@ -745,7 +765,7 @@ const ProfilePageInner = ({
                                         >
                                             <Ionicons name="people" size={10} color="#10B981" style={{ marginRight: 3 }} />
                                             <Text style={s.heroFollowersPillText}>
-                                                {vendorFollowersCount} {vendorFollowersCount === 1 ? 'Follower' : 'Followers'}
+                                                {vendorFollowersCount}
                                             </Text>
                                         </TouchableOpacity>
                                     )}
@@ -766,10 +786,14 @@ const ProfilePageInner = ({
                         </View>
 
                         {/* Luxury Membership Footer Ribbon inside Card */}
-                        <View style={s.heroPassportFooter}>
+                        <TouchableOpacity
+                            onPress={() => setShowMemberPassModal(true)}
+                            activeOpacity={0.8}
+                            style={s.heroPassportFooter}
+                        >
                             <View style={s.heroIdBadge}>
                                 <Ionicons name="card-outline" size={11} color="#D4AF37" />
-                                <Text style={s.heroIdText}>ID: AM-{(user?.id || '202688').slice(0, 8).toUpperCase()}</Text>
+                                <Text style={s.heroIdText}>ID: AM-{(user?.id || 'MEMBER').replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase()}</Text>
                             </View>
                             <View style={s.heroTierTag}>
                                 <Ionicons name="sparkles" size={10} color="#D4AF37" />
@@ -777,9 +801,9 @@ const ProfilePageInner = ({
                             </View>
                             <View style={s.heroSecTag}>
                                 <View style={s.heroSecDot} />
-                                <Text style={s.heroSecText}>VERIFIED ESCROW</Text>
+                                <Text style={s.heroSecText}>VERIFIED ESCROW ➔</Text>
                             </View>
-                        </View>
+                        </TouchableOpacity>
                     </LinearGradient>
                 ) : (
                     /* GUEST CARD */
@@ -970,11 +994,16 @@ const ProfilePageInner = ({
 
                 {/* ── VIP LOYALTY TIER PROGRESS TRACKER (LUXURY MILESTONES & PERKS) ── */}
                 {user && (
-                    <View style={s.loyaltyCard}>
+                    <TouchableOpacity
+                        style={s.loyaltyCard}
+                        activeOpacity={0.85}
+                        onPress={() => setShowMemberPassModal(true)}
+                    >
                         <View style={s.loyaltyTopRow}>
                             <View style={s.loyaltyTierBadge}>
                                 <Ionicons name={loyalty.icon || 'trophy'} size={12} color="#D4AF37" />
                                 <Text style={s.loyaltyTierName}>{loyalty.tier}</Text>
+                                <Ionicons name="chevron-forward" size={10} color="#D4AF37" style={{ marginLeft: 3 }} />
                             </View>
                             <Text style={s.loyaltyPointsText}>
                                 <Text style={s.loyaltyPointsBold}>{wallet.points}</Text> / {loyalty.nextPoints} pts
@@ -1014,7 +1043,7 @@ const ProfilePageInner = ({
                                 <Text style={s.perkPillText}>Priority Dispatch</Text>
                             </View>
                         </View>
-                    </View>
+                    </TouchableOpacity>
                 )}
 
                 {/* ── FOLLOWED STORES LIVE STRIP (QUICK STORE CAROUSEL) ── */}
@@ -1805,73 +1834,14 @@ const ProfilePageInner = ({
                 </View>
             </Modal>
 
-            {/* ── DIGITAL MEMBER PASSPORT & QR MODAL (NEW LUXURY FEATURE) ── */}
-            <Modal
+            {/* ── DIGITAL MEMBER PASSPORT & VIP PASS MODAL (DYNAMIC REAL QR & BARCODE - NO MOCKUP) ── */}
+            <VIPPassModal
                 visible={showMemberPassModal}
-                animationType="fade"
-                transparent={true}
-                onRequestClose={() => setShowMemberPassModal(false)}
-            >
-                <View style={s.modalOverlay}>
-                    <View style={s.memberPassCard}>
-                        <View style={s.passHeaderRow}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <Ionicons name="sparkles" size={13} color="#D9A73A" />
-                                <Text style={s.passHeaderTitle}>ABU MAFHAL PASSPORT</Text>
-                            </View>
-                            <TouchableOpacity
-                                onPress={() => setShowMemberPassModal(false)}
-                                style={s.passCloseBtn}
-                                activeOpacity={0.7}
-                            >
-                                <Ionicons name="close" size={16} color="#D9A73A" />
-                            </TouchableOpacity>
-                        </View>
-
-                        <View style={s.passInterior}>
-                            <View style={s.passUserRow}>
-                                <View style={s.passAvatarRing}>
-                                    <UserAvatar user={user} size={46} />
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={s.passUserName} numberOfLines={1}>{displayName}</Text>
-                                    <Text style={s.passMemberId}>
-                                        MEMBER ID: AM-{(user?.id || '202688').slice(0, 8).toUpperCase()}
-                                    </Text>
-                                    <View style={s.passTierBadge}>
-                                        <Ionicons name="shield-checkmark" size={10} color="#D9A73A" style={{ marginRight: 3 }} />
-                                        <Text style={s.passTierBadgeText}>{loyalty.tier.toUpperCase()}</Text>
-                                    </View>
-                                </View>
-                            </View>
-
-                            <View style={s.qrBoxContainer}>
-                                <View style={s.qrFrame}>
-                                    <Ionicons name="qr-code" size={130} color="#0A192F" />
-                                </View>
-                                <Text style={s.qrScanPrompt}>Scan for Hub VIP Verification & Partner Discounts</Text>
-                            </View>
-
-                            <View style={s.barcodeWrap}>
-                                <View style={s.barcodeLinesRow}>
-                                    {[2, 1, 3, 1, 2, 4, 1, 3, 2, 1, 4, 2, 3, 1, 2, 4, 1, 2, 3, 2, 1, 3, 2, 4, 1].map((w, i) => (
-                                        <View
-                                            key={i}
-                                            style={{
-                                                width: w,
-                                                height: 20,
-                                                backgroundColor: '#D9A73A',
-                                                marginHorizontal: 1.2
-                                            }}
-                                        />
-                                    ))}
-                                </View>
-                                <Text style={s.barcodeText}>SECURE PASSPORT • 2026-AM-VERIFIED</Text>
-                            </View>
-                        </View>
-                    </View>
-                </View>
-            </Modal>
+                onClose={() => setShowMemberPassModal(false)}
+                user={user}
+                wallet={wallet}
+                onNavigate={onNavigate}
+            />
         </SafeAreaView>
     );
 };
@@ -2111,6 +2081,24 @@ const s = StyleSheet.create({
         fontSize: 10,
         fontWeight: '800',
         color: '#D4AF37'
+    },
+    heroVipPassPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#D4AF37',
+        paddingHorizontal: 8,
+        paddingVertical: 3.5,
+        borderRadius: 6,
+        shadowColor: '#D4AF37',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.35,
+        shadowRadius: 3,
+        elevation: 2
+    },
+    heroVipPassPillText: {
+        fontSize: 10,
+        fontWeight: '900',
+        color: '#0A192F'
     },
     heroStoresPill: {
         flexDirection: 'row',
