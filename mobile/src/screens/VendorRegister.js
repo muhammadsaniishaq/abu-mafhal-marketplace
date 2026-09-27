@@ -239,8 +239,63 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
     const isRegistrationDisabled = settings?.features?.enable_vendor_registration === false;
     const defaultPlanId = activeVendorPlans.length > 0 ? activeVendorPlans[0].id : '1_year';
 
+    const getInitialStep = () => {
+        if (mode === 'renew') return 6;
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                const saved = parseInt(window.localStorage.getItem('@abumafhal_vendor_reg_step'), 10);
+                if (saved && saved >= 1 && saved <= 6) return saved;
+            }
+        } catch (_) {}
+        return 1;
+    };
+
+    const getInitialFormData = () => {
+        const base = {
+            fullName: user?.user_metadata?.full_name || '',
+            phone: user?.user_metadata?.phone_number || '',
+            businessType: 'limited_company',
+            businessName: '',
+            businessDescription: '',
+            businessCategory: 'Electronics',
+            salesModel: 'both',
+            locationType: 'shop',
+            operatingHub: 'Kano',
+            yearsInBusiness: '1 - 3 Years',
+            businessAddress: '',
+            cacNumber: '',
+            tinNumber: '',
+            bvn: '',
+            nin: '',
+            deliveryType: 'marketplace',
+            dispatchSla: 'same_day',
+            returnPolicy: '7_days',
+            guarantorName: '',
+            guarantorPhone: '',
+            bankName: NIGERIAN_BANKS[0].name,
+            accountNumber: '',
+            accountName: '',
+            whatsapp: user?.user_metadata?.phone_number || '',
+            instagram: '',
+            website: '',
+            selectedPlan: defaultPlanId
+        };
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                const rawDraft = window.localStorage.getItem('@abumafhal_vendor_reg_draft');
+                if (rawDraft) {
+                    const parsed = JSON.parse(rawDraft);
+                    if (parsed && typeof parsed === 'object') {
+                        return { ...base, ...parsed };
+                    }
+                }
+            }
+        } catch (_) {}
+        return base;
+    };
+
     // 1: Profile & KYC, 2: Catalog & Socials, 3: Documents, 4: Logistics & Policy, 5: Banking, 6: Plan & Pay
-    const [step, setStep] = useState(mode === 'renew' ? 6 : 1);
+    const [step, setStep] = useState(getInitialStep);
 
     const [loading, setLoading] = useState(false);
     const [checkingStatus, setCheckingStatus] = useState(true);
@@ -277,35 +332,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
     const [resolvingAccount, setResolvingAccount] = useState(false);
 
     // FORM STATE
-    const [formData, setFormData] = useState({
-        fullName: user?.user_metadata?.full_name || '',
-        phone: user?.user_metadata?.phone_number || '',
-        businessType: 'limited_company',
-        businessName: '',
-        businessDescription: '',
-        businessCategory: 'Electronics',
-        salesModel: 'both',
-        locationType: 'shop',
-        operatingHub: 'Kano',
-        yearsInBusiness: '1 - 3 Years',
-        businessAddress: '',
-        cacNumber: '',
-        tinNumber: '',
-        bvn: '',
-        nin: '',
-        deliveryType: 'marketplace',
-        dispatchSla: 'same_day',
-        returnPolicy: '7_days',
-        guarantorName: '',
-        guarantorPhone: '',
-        bankName: NIGERIAN_BANKS[0].name,
-        accountNumber: '',
-        accountName: '',
-        whatsapp: user?.user_metadata?.phone_number || '',
-        instagram: '',
-        website: '',
-        selectedPlan: defaultPlanId
-    });
+    const [formData, setFormData] = useState(getInitialFormData);
 
     const activeBusinessType = BUSINESS_TYPES.find(b => b.id === formData.businessType) || BUSINESS_TYPES[0];
 
@@ -327,6 +354,24 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
         memorandum: null,
         nin: null
     });
+
+    // Autosave current step so user remains in the exact step on refresh
+    useEffect(() => {
+        try {
+            if (typeof window !== 'undefined' && window.localStorage && mode !== 'renew') {
+                window.localStorage.setItem('@abumafhal_vendor_reg_step', String(step));
+            }
+        } catch (_) {}
+    }, [step, mode]);
+
+    // Autosave form inputs draft so user never loses their progress on refresh
+    useEffect(() => {
+        try {
+            if (typeof window !== 'undefined' && window.localStorage && mode !== 'renew') {
+                window.localStorage.setItem('@abumafhal_vendor_reg_draft', JSON.stringify(formData));
+            }
+        } catch (_) {}
+    }, [formData, mode]);
 
     useEffect(() => {
         try {
@@ -967,6 +1012,13 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                     await supabase.from('vendors').upsert([vendorData]);
                 } catch (_) {}
             }
+
+            try {
+                if (typeof window !== 'undefined' && window.localStorage) {
+                    window.localStorage.removeItem('@abumafhal_vendor_reg_draft');
+                    window.localStorage.removeItem('@abumafhal_vendor_reg_step');
+                }
+            } catch (_) {}
 
             LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
             setIsSuccess(true);

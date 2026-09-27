@@ -110,37 +110,79 @@ const STEPS = [
 const VendorApplication = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
-  const [step, setStep] = useState(1);
+
+  const getInitialStep = () => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = parseInt(window.localStorage.getItem('@abumafhal_desktop_vendor_step'), 10);
+        if (saved && saved >= 1 && saved <= 4) return saved;
+      }
+    } catch (_) {}
+    return 1;
+  };
+
+  const getInitialFormData = () => {
+    const base = {
+      fullName: currentUser?.name || currentUser?.user_metadata?.full_name || '',
+      email: currentUser?.email || '',
+      phone: currentUser?.phone || currentUser?.user_metadata?.phone_number || '',
+      ninNumber: '',
+      bvnNumber: '',
+      businessType: 'limited_company',
+      businessCategory: 'Electronics',
+      salesModel: 'both',
+      locationType: 'shop',
+      businessName: '',
+      businessAddress: '',
+      businessLocation: 'Kano (Kantin Kwari / Singa / Sabon Gari)',
+      cacNumber: '',
+      businessDescription: '',
+      whatsapp: currentUser?.phone || currentUser?.user_metadata?.phone_number || '',
+      instagram: '',
+      website: '',
+      bankName: 'OPay (Paycom)',
+      bankCode: '999992',
+      accountNumber: '',
+      accountName: '',
+      deliveryType: 'marketplace',
+      dispatchSla: 'same_day',
+      returnPolicy: '7_days'
+    };
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const raw = window.localStorage.getItem('@abumafhal_desktop_vendor_draft');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') return { ...base, ...parsed };
+        }
+      }
+    } catch (_) {}
+    return base;
+  };
+
+  const [step, setStep] = useState(getInitialStep);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
-  const [formData, setFormData] = useState({
-    fullName: currentUser?.name || currentUser?.user_metadata?.full_name || '',
-    email: currentUser?.email || '',
-    phone: currentUser?.phone || currentUser?.user_metadata?.phone_number || '',
-    ninNumber: '',
-    bvnNumber: '',
-    businessType: 'limited_company',
-    businessCategory: 'Electronics',
-    salesModel: 'both',
-    locationType: 'shop',
-    businessName: '',
-    businessAddress: '',
-    businessLocation: 'Kano (Kantin Kwari / Singa / Sabon Gari)',
-    cacNumber: '',
-    businessDescription: '',
-    whatsapp: currentUser?.phone || currentUser?.user_metadata?.phone_number || '',
-    instagram: '',
-    website: '',
-    bankName: 'OPay (Paycom)',
-    bankCode: '999992',
-    accountNumber: '',
-    accountName: '',
-    deliveryType: 'marketplace',
-    dispatchSla: 'same_day',
-    returnPolicy: '7_days'
-  });
+  const [formData, setFormData] = useState(getInitialFormData);
+
+  // Autosave step and formData
+  React.useEffect(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('@abumafhal_desktop_vendor_step', String(step));
+      }
+    } catch (_) {}
+  }, [step]);
+
+  React.useEffect(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('@abumafhal_desktop_vendor_draft', JSON.stringify(formData));
+      }
+    } catch (_) {}
+  }, [formData]);
 
   const [files, setFiles] = useState({
     businessImage: null,
@@ -489,6 +531,13 @@ const VendorApplication = () => {
       } catch (appErr) {
         console.warn('vendor_applications sync notice:', appErr);
       }
+
+      try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.removeItem('@abumafhal_desktop_vendor_draft');
+          window.localStorage.removeItem('@abumafhal_desktop_vendor_step');
+        }
+      } catch (_) {}
 
       setSuccess(true);
       setTimeout(() => {

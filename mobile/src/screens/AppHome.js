@@ -524,6 +524,9 @@ export const AppHome = ({ onGoToShop, onGoToCart, onGoToNotifications, onNavigat
                 if (lowerLink.includes('notification')) {
                     return onGoToNotifications();
                 }
+                if ((lowerLink.includes('vendor-register') || lowerLink.includes('vendor-application') || lowerLink.includes('vendorregister')) && onNavigate) {
+                    return onNavigate('VendorRegister');
+                }
                 if (lowerLink.includes('vendor') && onNavigate) {
                     return onNavigate('VendorDashboard');
                 }

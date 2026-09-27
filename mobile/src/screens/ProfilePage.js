@@ -399,7 +399,7 @@ const ProfilePageInner = ({
                     user?.user_metadata?.role === 'admin' ||
                     KNOWN_ADMIN_EMAILS.includes(userEmail) ||
                     userEmail.includes('admin');
-    const isVendor = role === 'vendor' || user?.role === 'vendor';
+    const isVendor = (role === 'vendor' || user?.role === 'vendor') && (!vendorApp || vendorApp.status === 'approved') && vendorApp?.status !== 'pending' && vendorApp?.status !== 'rejected';
     const isDriver = role === 'driver' || user?.role === 'driver';
 
     const handleOpenAdminConsole = () => {

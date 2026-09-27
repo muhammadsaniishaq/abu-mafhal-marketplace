@@ -561,7 +561,7 @@ export default function App() {
                 hash.includes('vendor-register') || hash.includes('vendorregister') || hash.includes('vendor-application') ||
                 path.includes('vendor-register') || path.includes('vendor-application') ||
                 search.includes('vendor-register') || search.includes('vendor-application') ||
-                (last === 'VendorRegister' && !hash.startsWith('#admin') && !hash.startsWith('#driver') && !hash.startsWith('#shop') && (hash === '' || hash.includes('vendor')));
+                (last === 'VendorRegister' && !hash.startsWith('#admin') && !hash.startsWith('#driver') && !hash.startsWith('#shop'));
 
             if (isVendorRegister) {
                 return 'VendorRegister';
