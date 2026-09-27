@@ -1,785 +1,530 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+/**
+ * WalletPage.js — Abu Mafhal Marketplace
+ * Premium Wallet Screen — Clean Rewrite
+ * Tables used: profiles (balance, mafhal_coins), transactions
+ */
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-    View,
-    Text,
-    TouchableOpacity,
-    SafeAreaView,
-    ScrollView,
-    TextInput,
-    ActivityIndicator,
-    Alert,
-    RefreshControl,
-    StyleSheet,
-    Modal,
-    Platform,
-    Image,
-    Dimensions
+    View, Text, TouchableOpacity, ScrollView, TextInput,
+    ActivityIndicator, Alert, RefreshControl, StyleSheet,
+    Modal, Platform, Image, Dimensions, Animated
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../lib/supabase';
 import { WebView } from 'react-native-webview';
 import { useAppSettings } from '../context/AppSettingsContext';
-import { whatsappService } from '../services/whatsappService';
 import { PaymentGatewayService } from '../services/paymentGatewayService';
+import { whatsappService } from '../services/whatsappService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const { width } = Dimensions.get('window');
-const USD_RATE = 1500; // 1 USD = ₦1,500 exchange benchmark
+const { width: W } = Dimensions.get('window');
+const USD_RATE = 1500;
 
-const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount).replace('NGN', '₦');
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const fmt = (n) =>
+    new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' })
+        .format(n || 0)
+        .replace('NGN', '₦');
+
+const cleanNum = (v) => {
+    const n = Number(String(v || '').replace(/[^0-9.]/g, ''));
+    return isNaN(n) ? 0 : Math.round(n);
 };
 
-const themeGradients = {
-    midnight: ['#0B1120', '#1E293B', '#0F172A'],
-    emerald: ['#022C22', '#065F46', '#047857'],
-    sapphire: ['#0F172A', '#1D4ED8', '#1E1B4B'],
-    ruby: ['#450A0A', '#9F1239', '#881337'],
-    gold: ['#451A03', '#B45309', '#78350F']
-};
-
-const copyToClipboard = (text, label = 'Information') => {
+const copyText = (text, label = 'Info') => {
     try {
         if (typeof navigator !== 'undefined' && navigator.clipboard) {
             navigator.clipboard.writeText(text);
         }
-        Alert.alert('Copied!', `${label} copied to clipboard.`);
-    } catch (_) {
-        Alert.alert('Copied!', `${text}`);
-    }
+    } catch (_) {}
+    Alert.alert('Copied! 📋', `${label} copied to clipboard.`);
 };
 
-const NIGERIAN_BANKS = [
-    'Access Bank', 'GTBank (Guaranty Trust)', 'Zenith Bank', 'First Bank of Nigeria',
-    'United Bank for Africa (UBA)', 'Opay', 'PalmPay', 'Kuda Bank', 'Moniepoint MFB',
-    'Fidelity Bank', 'Stanbic IBTC', 'Union Bank', 'Sterling Bank', 'Wema Bank (ALAT)'
-];
+// ─── Constants ────────────────────────────────────────────────────────────────
+const CARD_THEMES = {
+    midnight: { gradient: ['#0B1120', '#1E293B', '#0F172A'], accent: '#D9A73A' },
+    emerald:  { gradient: ['#022C22', '#065F46', '#047857'], accent: '#34D399' },
+    sapphire: { gradient: ['#0F172A', '#1D4ED8', '#1E1B4B'], accent: '#93C5FD' },
+    ruby:     { gradient: ['#450A0A', '#9F1239', '#881337'], accent: '#FCA5A5' },
+    gold:     { gradient: ['#451A03', '#B45309', '#78350F'], accent: '#FCD34D' },
+};
 
-const GATEWAY_OPTIONS = [
+const GATEWAYS = [
     {
-        id: 'paystack',
-        name: 'Paystack',
-        subtitle: 'Cards, USSD, Bank Transfer & QR',
-        badge: 'Instant Auto-Credit',
-        badgeColor: '#059669',
-        badgeBg: '#DCFCE7',
-        accentColor: '#0AA5FF',
-        currency: 'NGN',
-        currencySymbol: '₦',
-        logoUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSzFzmpCa0Tav9NttiYF10t9wftJPQ0XYPBkA&s',
-        fallbackIcon: 'card-outline',
-        fallbackColor: '#0AA5FF',
-        speed: 'Instant (10-30s)',
-        channels: ['Mastercard', 'Visa', 'Verve', 'Bank', 'USSD']
+        id: 'paystack', name: 'Paystack', subtitle: 'Cards, USSD, Bank Transfer & QR',
+        badge: 'Instant Credit', badgeColor: '#059669', icon: 'card-outline',
+        color: '#0AA5FF', speed: 'Instant (10-30s)',
+        channels: ['Mastercard', 'Visa', 'Verve', 'USSD', 'Bank']
     },
     {
-        id: 'flutterwave',
-        name: 'Flutterwave',
-        subtitle: 'Cards, Bank & Mobile Money',
-        badge: 'Fast Settlement',
-        badgeColor: '#2563EB',
-        badgeBg: '#EFF6FF',
-        accentColor: '#FB9129',
-        currency: 'NGN',
-        currencySymbol: '₦',
-        logoUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-W6MLvD_saE20EDSZzVPspKqcKxZ89rW8uw&s',
-        fallbackIcon: 'flash-outline',
-        fallbackColor: '#FB9129',
-        speed: 'Instant (15-45s)',
+        id: 'flutterwave', name: 'Flutterwave', subtitle: 'Cards, Bank & Mobile Money',
+        badge: 'Fast Settlement', badgeColor: '#2563EB', icon: 'flash-outline',
+        color: '#FB9129', speed: 'Instant (15-45s)',
         channels: ['Cards', 'Direct Bank', 'Barter', 'Mobile Money']
     },
     {
-        id: 'nowpayments',
-        name: 'NOWPayments (Crypto USD)',
-        subtitle: 'USDT, BTC, ETH, SOL & 150+ Coins',
-        badge: 'Strictly in USD ($)',
-        badgeColor: '#D97706',
-        badgeBg: '#FEF3C7',
-        accentColor: '#F59E0B',
-        currency: 'USD',
-        currencySymbol: '$',
-        isCrypto: true,
-        logoUrl: 'https://cryptologos.cc/logos/tether-usdt-logo.png',
-        cryptoCoins: [
-            { name: 'USDT', icon: 'https://cryptologos.cc/logos/tether-usdt-logo.png' },
-            { name: 'BTC', icon: 'https://cryptologos.cc/logos/bitcoin-btc-logo.png' },
-            { name: 'ETH', icon: 'https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/eth.png' }
-        ],
-        fallbackIcon: 'logo-bitcoin',
-        fallbackColor: '#F59E0B',
-        speed: '1-3 Blockchain Confirmations',
-        channels: ['USDT (TRC20/BEP20)', 'Bitcoin', 'Ethereum', 'Solana', 'BNB']
+        id: 'nowpayments', name: 'Crypto (NOWPayments)', subtitle: 'USDT, BTC, ETH & 150+ Coins',
+        badge: 'USD Only ($)', badgeColor: '#D97706', icon: 'logo-bitcoin',
+        color: '#F59E0B', isCrypto: true, speed: '1-3 Confirmations',
+        channels: ['USDT TRC20', 'Bitcoin', 'Ethereum', 'Solana', 'BNB']
     },
     {
-        id: 'bank_transfer',
-        name: 'Dedicated Bank Account',
-        subtitle: 'Permanent Virtual NUBAN • Auto-Credit',
-        badge: '0% Gateway Fee',
-        badgeColor: '#7C3AED',
-        badgeBg: '#EDE9FE',
-        accentColor: '#6366F1',
-        currency: 'NGN',
-        currencySymbol: '₦',
-        logoUrl: 'https://flutterwave.com/favicon.ico',
-        fallbackIcon: 'business-outline',
-        fallbackColor: '#7C3AED',
-        speed: 'Instant Auto-Credit'
-    }
+        id: 'bank_transfer', name: 'Bank Transfer', subtitle: 'Permanent Virtual NUBAN • Auto-Credit',
+        badge: '0% Gateway Fee', badgeColor: '#7C3AED', icon: 'business-outline',
+        color: '#6366F1', speed: 'Auto-Credit in 30-90s',
+        channels: ['OPay', 'Kuda', 'PalmPay', 'GTBank', 'Zenith', 'Access']
+    },
 ];
 
-const GatewayLogo = ({ gateway, size = 38 }) => {
-    const [imgErr, setImgErr] = useState(false);
+const NIGERIAN_BANKS = [
+    'Access Bank', 'GTBank', 'Zenith Bank', 'First Bank', 'UBA',
+    'Opay', 'PalmPay', 'Kuda Bank', 'Moniepoint MFB', 'Fidelity Bank',
+    'Stanbic IBTC', 'Union Bank', 'Sterling Bank', 'Wema Bank (ALAT)'
+];
 
-    if (gateway.isCrypto) {
-        return (
-            <View style={{
-                width: 62,
-                height: 38,
-                borderRadius: 10,
-                backgroundColor: '#FFFBEB',
-                borderColor: '#FDE68A',
-                borderWidth: 1.2,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 3,
-                paddingHorizontal: 4,
-                shadowColor: '#F59E0B',
-                shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: 0.08,
-                shadowRadius: 2,
-                elevation: 1
-            }}>
-                {gateway.cryptoCoins && gateway.cryptoCoins.map(coin => (
-                    <Image
-                        key={coin.name}
-                        source={{ uri: coin.icon }}
-                        style={{ width: 16, height: 16, borderRadius: 8 }}
-                        resizeMode="contain"
-                    />
-                ))}
-            </View>
-        );
-    }
+const QUICK_AMOUNTS = [1000, 2000, 5000, 10000, 20000, 50000];
 
-    if (imgErr || !gateway.logoUrl) {
-        return (
-            <View style={{
-                width: 56,
-                height: 38,
-                borderRadius: 10,
-                backgroundColor: `${gateway.accentColor}15`,
-                borderWidth: 1,
-                borderColor: `${gateway.accentColor}30`,
-                alignItems: 'center',
-                justifyContent: 'center'
-            }}>
-                <Ionicons name={gateway.fallbackIcon} size={20} color={gateway.accentColor} />
-            </View>
-        );
-    }
+// ─── Sub-components ───────────────────────────────────────────────────────────
+const Row = ({ children, style }) => (
+    <View style={[{ flexDirection: 'row', alignItems: 'center' }, style]}>{children}</View>
+);
 
-    const isPaystack = gateway.id === 'paystack';
-    const isBank = gateway.id === 'bank_transfer';
-    const imgWidth = isBank ? 32 : isPaystack ? 48 : 46;
-    const imgHeight = isBank ? 32 : 24;
+const Pill = ({ label, color, bg }) => (
+    <View style={{ backgroundColor: bg || `${color}20`, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3 }}>
+        <Text style={{ fontSize: 9, fontWeight: '800', color, letterSpacing: 0.5 }}>{label}</Text>
+    </View>
+);
 
+const ActionBtn = ({ icon, label, onPress, color = '#0F172A', disabled }) => (
+    <TouchableOpacity
+        onPress={onPress}
+        disabled={disabled}
+        style={[S.actionBtn, disabled && { opacity: 0.45 }]}
+        activeOpacity={0.7}
+    >
+        <View style={[S.actionIcon, { backgroundColor: `${color}18` }]}>
+            <Ionicons name={icon} size={20} color={color} />
+        </View>
+        <Text style={[S.actionLabel, { color }]}>{label}</Text>
+    </TouchableOpacity>
+);
+
+const TxIcon = ({ type }) => {
+    const map = {
+        topup: { icon: 'arrow-down-circle', color: '#10B981' },
+        credit: { icon: 'arrow-down-circle', color: '#10B981' },
+        deposit: { icon: 'arrow-down-circle', color: '#10B981' },
+        transfer_in: { icon: 'swap-horizontal', color: '#3B82F6' },
+        debit: { icon: 'arrow-up-circle', color: '#EF4444' },
+        withdrawal: { icon: 'arrow-up-circle', color: '#EF4444' },
+        wallet_payment: { icon: 'cart', color: '#F59E0B' },
+        wallet_purchase: { icon: 'cart', color: '#F59E0B' },
+    };
+    const { icon, color } = map[type] || { icon: 'ellipse-outline', color: '#64748B' };
     return (
-        <View style={{
-            width: 58,
-            height: 38,
-            borderRadius: 10,
-            backgroundColor: '#FFFFFF',
-            borderWidth: 1,
-            borderColor: '#E2E8F0',
-            alignItems: 'center',
-            justifyContent: 'center',
-            paddingHorizontal: 4,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 1 },
-            shadowOpacity: 0.05,
-            shadowRadius: 2,
-            elevation: 1
-        }}>
-            <Image
-                source={{ uri: gateway.logoUrl }}
-                style={{ width: imgWidth, height: imgHeight }}
-                resizeMode="contain"
-                onError={() => setImgErr(true)}
-            />
+        <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: `${color}18`, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name={icon} size={20} color={color} />
         </View>
     );
 };
 
-const WalletPageInner = ({ user, onBack, onNavigate }) => {
-    const [wallet, setWallet] = useState({ balance: 0, points: 0 });
-    const [transactions, setTransactions] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [refreshing, setRefreshing] = useState(false);
-
-    const [notLoggedIn, setNotLoggedIn] = useState(false);
-
-    // Multi-Currency Card Display Mode: 'NGN' | 'USD' | 'AMC'
-    const [balanceCurrency, setBalanceCurrency] = useState('NGN');
-    const [hideBalance, setHideBalance] = useState(false);
-    const [cardTheme, setCardTheme] = useState('midnight');
-
-    // ── TOP UP & PAYMENT MODAL STATES ──
-    const [showTopUpModal, setShowTopUpModal] = useState(false);
-    const [showBankTransferModal, setShowBankTransferModal] = useState(false);
-    const [showCryptoModal, setShowCryptoModal] = useState(false);
-    const [topUpGateway, setTopUpGateway] = useState('paystack'); // 'paystack' | 'flutterwave' | 'bank_transfer' | 'nowpayments'
-    const [topUpAmountNgn, setTopUpAmountNgn] = useState('5000');
-    const [topUpAmountUsd, setTopUpAmountUsd] = useState('25'); // For NOWPayments (USD, NOT Naira)
-    const [isTopUpPending, setIsTopUpPending] = useState(false);
-
-    const cleanNgnAmount = (val) => {
-        if (!val) return 0;
-        const n = Number(String(val).replace(/[^0-9.]/g, ''));
-        return isNaN(n) ? 0 : Math.round(n);
-    };
-
-    // ── VIRTUAL ACCOUNT (AUTO-GENERATED) STATES ──
-    const [virtualAccount, setVirtualAccount] = useState(null);   // { account_number, account_name, bank_name, is_permanent, expiry, provider }
-    const [isGeneratingVA, setIsGeneratingVA] = useState(false);
-    const [vaError, setVaError] = useState(null);
-    const [isSyncingBal, setIsSyncingBal] = useState(false);
-
-    // ── DEPOSIT SUCCESS CELEBRATION MODAL ──
-    const [showDepositSuccessModal, setShowDepositSuccessModal] = useState(false);
-    const [depositSuccessDetails, setDepositSuccessDetails] = useState(null);
-
-    // ── UNIFIED CHECKOUT WEBVIEW MODAL ──
-    const [showCheckoutWebView, setShowCheckoutWebView] = useState(false);
-    const [checkoutUrl, setCheckoutUrl] = useState(null);
-    const [activeRef, setActiveRef] = useState(null);
-    const [activeGatewayName, setActiveGatewayName] = useState('Paystack');
-    const [pendingCreditAmountNgn, setPendingCreditAmountNgn] = useState(0);
-
-    // ── P2P TRANSFER MODAL STATES ──
-    const [showTransferModal, setShowTransferModal] = useState(false);
-    const [transferRecipient, setTransferRecipient] = useState('');
-    const [transferAmount, setTransferAmount] = useState('');
-    const [transferNote, setTransferNote] = useState('');
-    const [isTransferPending, setIsTransferPending] = useState(false);
-
-    // Withdrawal feature completely removed as requested
-
-    // ── ESCROW MODAL STATE ──
-    const [showEscrowModal, setShowEscrowModal] = useState(false);
-
-    // ── TRANSACTION SEARCH & FILTER STATES ──
-    const [txFilter, setTxFilter] = useState('all'); // 'all' | 'credits' | 'debits'
-    const [txSearchQuery, setTxSearchQuery] = useState('');
-    const [selectedTx, setSelectedTx] = useState(null);
-
-    // ── SAVINGS POTS & BUDGET LIMIT STATES ──
-    const [savingsGoals, setSavingsGoals] = useState([]);
-    const [showCreatePotModal, setShowCreatePotModal] = useState(false);
-    const [newPotName, setNewPotName] = useState('');
-    const [newPotTarget, setNewPotTarget] = useState('20000');
-    const [newPotColor, setNewPotColor] = useState('#3B82F6');
-
-    const [monthlyLimit, setMonthlyLimit] = useState(50000);
-    const [showBudgetModal, setShowBudgetModal] = useState(false);
-    const [budgetInputVal, setBudgetInputVal] = useState('');
-
-    // ── VOUCHER REDEEM STATE ──
-    const [showVoucherModal, setShowVoucherModal] = useState(false);
-    const [voucherCode, setVoucherCode] = useState('');
-    const [isVoucherRedeeming, setIsVoucherRedeeming] = useState(false);
-
+// ─── Main Component ───────────────────────────────────────────────────────────
+const WalletPageInner = ({ user, onBack }) => {
     const { settings } = useAppSettings();
 
-    // ── FETCH WALLET & TRANSACTIONS ──
-    const fetchWalletData = async () => {
+    // ── Core state ──
+    const [wallet, setWallet]             = useState({ balance: 0, points: 0 });
+    const [transactions, setTransactions] = useState([]);
+    const [loading, setLoading]           = useState(true);
+    const [refreshing, setRefreshing]     = useState(false);
+    const [notLoggedIn, setNotLoggedIn]   = useState(false);
+
+    // ── Card display ──
+    const [cardTheme, setCardTheme]         = useState('midnight');
+    const [hideBalance, setHideBalance]     = useState(false);
+    const [balCurrency, setBalCurrency]     = useState('NGN'); // 'NGN' | 'USD' | 'AMC'
+
+    // ── Top-up modal ──
+    const [showTopUp, setShowTopUp]         = useState(false);
+    const [gateway, setGateway]             = useState('paystack');
+    const [amountNgn, setAmountNgn]         = useState('5000');
+    const [amountUsd, setAmountUsd]         = useState('25');
+    const [topUpPending, setTopUpPending]   = useState(false);
+
+    // ── Virtual account ──
+    const [virtualAcc, setVirtualAcc]       = useState(null);
+    const [vaLoading, setVaLoading]         = useState(false);
+    const [vaError, setVaError]             = useState(null);
+
+    // ── WebView checkout ──
+    const [showWebView, setShowWebView]     = useState(false);
+    const [checkoutUrl, setCheckoutUrl]     = useState(null);
+    const [activeRef, setActiveRef]         = useState(null);
+    const [activeGwName, setActiveGwName]   = useState('Paystack');
+    const [pendingAmt, setPendingAmt]       = useState(0);
+
+    // ── Success modal ──
+    const [showSuccess, setShowSuccess]     = useState(false);
+    const [successDetails, setSuccessDetails] = useState(null);
+
+    // ── P2P Transfer ──
+    const [showTransfer, setShowTransfer]   = useState(false);
+    const [recipient, setRecipient]         = useState('');
+    const [transferAmt, setTransferAmt]     = useState('');
+    const [transferNote, setTransferNote]   = useState('');
+    const [transferPending, setTransferPending] = useState(false);
+
+    // ── Bank sync ──
+    const [syncing, setSyncing]             = useState(false);
+
+    // ── Escrow ──
+    const [showEscrow, setShowEscrow]       = useState(false);
+
+    // ── Tx filters ──
+    const [txFilter, setTxFilter]           = useState('all');
+    const [txSearch, setTxSearch]           = useState('');
+    const [selectedTx, setSelectedTx]       = useState(null);
+
+    // ── Savings pots ──
+    const [pots, setPots]                   = useState([]);
+    const [showCreatePot, setShowCreatePot] = useState(false);
+    const [potName, setPotName]             = useState('');
+    const [potTarget, setPotTarget]         = useState('20000');
+    const [potColor, setPotColor]           = useState('#3B82F6');
+
+    // ── Budget ──
+    const [monthlyLimit, setMonthlyLimit]   = useState(50000);
+    const [showBudget, setShowBudget]       = useState(false);
+    const [budgetInput, setBudgetInput]     = useState('');
+
+    // ── Voucher ──
+    const [showVoucher, setShowVoucher]     = useState(false);
+    const [voucherCode, setVoucherCode]     = useState('');
+    const [voucherPending, setVoucherPending] = useState(false);
+
+    // ── Animation ──
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+    }, []);
+
+    // ── Resolve user ID ──
+    const resolveUserId = useCallback(async () => {
+        if (user?.id) return user.id;
         try {
-            let activeUserId = user?.id;
-            if (!activeUserId) {
-                try {
-                    const { data: authData } = await supabase.auth.getUser();
-                    activeUserId = authData?.user?.id;
-                } catch (_) {}
+            const { data } = await supabase.auth.getUser();
+            if (data?.user?.id) return data.user.id;
+        } catch (_) {}
+        try {
+            const raw = await AsyncStorage.getItem('@abumafhal_user_v1');
+            if (raw) {
+                const p = JSON.parse(raw);
+                if (p?.id) return p.id;
             }
-            if (!activeUserId) {
-                try {
-                    const raw = await AsyncStorage.getItem('@abumafhal_user_v1');
-                    if (raw) {
-                        const parsed = JSON.parse(raw);
-                        activeUserId = parsed?.id;
-                    }
-                } catch (_) {}
-            }
-            if (!activeUserId && typeof window !== 'undefined' && window.localStorage) {
-                try {
-                    const raw = window.localStorage.getItem('@abumafhal_user_v1') || window.localStorage.getItem('auth_user');
-                    if (raw) {
-                        const parsed = JSON.parse(raw);
-                        activeUserId = parsed?.id || parsed?.uid;
-                    }
-                } catch (_) {}
-            }
-            if (!activeUserId) {
-                setNotLoggedIn(true);
-                setLoading(false);
-                return;
-            }
+        } catch (_) {}
+        return null;
+    }, [user?.id]);
+
+    // ── Fetch wallet data ──────────────────────────────────────────────────────
+    const fetchWallet = useCallback(async () => {
+        try {
+            const uid = await resolveUserId();
+            if (!uid) { setNotLoggedIn(true); setLoading(false); return; }
             setNotLoggedIn(false);
 
-            // Cache retrieval
+            // Load cache first for instant render
             try {
-                const cacheKey = `@abumafhal_wallet_${activeUserId}`;
-                const cached = await AsyncStorage.getItem(cacheKey);
+                const cached = await AsyncStorage.getItem(`@amf_wallet_${uid}`);
                 if (cached) {
-                    const parsed = JSON.parse(cached);
-                    if (parsed.wallet) setWallet(parsed.wallet);
-                    if (parsed.transactions?.length) setTransactions(parsed.transactions);
+                    const c = JSON.parse(cached);
+                    if (c.wallet) setWallet(c.wallet);
+                    if (c.transactions?.length) setTransactions(c.transactions);
                     setLoading(false);
                 }
             } catch (_) {}
 
-            // Robust Database queries: Read profiles.balance and transactions table
+            // Parallel fetch
             const [pRes, txRes] = await Promise.allSettled([
-                supabase.from('profiles').select('id, balance, mafhal_coins, email, full_name, phone').eq('id', activeUserId).maybeSingle(),
-                supabase.from('transactions').select('*').eq('user_id', activeUserId).order('created_at', { ascending: false }).limit(50)
+                supabase.from('profiles')
+                    .select('id, balance, mafhal_coins, email, full_name, phone')
+                    .eq('id', uid).maybeSingle(),
+                supabase.from('transactions')
+                    .select('*').eq('user_id', uid)
+                    .order('created_at', { ascending: false }).limit(60)
             ]);
 
             const pData = pRes.status === 'fulfilled' ? pRes.value?.data : null;
-            const realBal = Number(pData?.balance ?? 0);
-            const displayPoints = Number(pData?.mafhal_coins || 0);
+            const txData = txRes.status === 'fulfilled' && Array.isArray(txRes.value?.data)
+                ? txRes.value.data : [];
 
-            let newWallet = {
-                balance: realBal,
-                points: displayPoints
-            };
+            const dbBal   = Number(pData?.balance ?? 0);
+            const coins   = Number(pData?.mafhal_coins ?? 0);
+
+            // Ledger verification
+            const credits = txData
+                .filter(t => ['topup','credit','deposit','transfer_in'].includes(t.type) && ['completed','successful'].includes(t.status))
+                .reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+            const debits = txData
+                .filter(t => ['withdrawal','debit','wallet_payment','wallet_purchase'].includes(t.type) && ['completed','successful'].includes(t.status))
+                .reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
+            const ledger = Math.max(0, credits - debits);
+            const finalBal = Math.max(dbBal, ledger);
+
+            const newWallet = { balance: finalBal, points: coins };
             setWallet(newWallet);
+            setTransactions(txData);
 
-            // Auto-check for newly confirmed Flutterwave bank transfers
+            // Self-heal: update profile if ledger > db
+            if (finalBal > dbBal) {
+                supabase.from('profiles').update({ balance: finalBal }).eq('id', uid).then(() => {});
+            }
+
+            // Cache
+            AsyncStorage.setItem(`@amf_wallet_${uid}`, JSON.stringify({
+                wallet: newWallet, transactions: txData, at: Date.now()
+            })).catch(() => {});
+
+            // Auto-sync Flutterwave bank deposits
             try {
-                const syncRes = await PaymentGatewayService.syncFlutterwaveDeposits({
-                    userId: activeUserId,
+                const sync = await PaymentGatewayService.syncFlutterwaveDeposits({
+                    userId: uid,
                     email: user?.email || pData?.email,
                     phone: user?.phone || pData?.phone || user?.user_metadata?.phone_number
                 });
-
-                if (syncRes?.success && syncRes?.totalNewAmount > 0) {
-                    const addedAmt = syncRes.totalNewAmount;
-                    const updatedBal = realBal + addedAmt;
-
-                    await supabase.from('profiles').update({ balance: updatedBal }).eq('id', activeUserId);
-                    newWallet = { ...newWallet, balance: updatedBal };
-                    setWallet(newWallet);
-
-                    const firstFlwTx = syncRes.uncreditedTxs?.[0];
-                    const flwRefCode = firstFlwTx?.flw_ref || firstFlwTx?.tx_ref || `FLW-${Date.now()}`;
+                if (sync?.success && sync?.totalNewAmount > 0) {
+                    const newBal = finalBal + sync.totalNewAmount;
+                    await supabase.from('profiles').update({ balance: newBal }).eq('id', uid);
+                    const ref = sync.uncreditedTxs?.[0]?.flw_ref || `FLW-${Date.now()}`;
                     await supabase.from('transactions').insert({
-                        user_id: activeUserId,
-                        type: 'topup',
-                        amount: addedAmt,
-                        status: 'completed',
-                        reference: flwRefCode,
-                        description: `Dedicated Bank Transfer Deposit of ₦${addedAmt.toLocaleString()} via Flutterwave MFB`
+                        user_id: uid, type: 'topup', amount: sync.totalNewAmount,
+                        status: 'completed', reference: ref,
+                        description: `Bank Transfer Deposit via Flutterwave MFB`
                     });
-
-                    if (AsyncStorage && syncRes.newTxIds?.length) {
-                        const raw = await AsyncStorage.getItem(`@abumafhal_credited_flw_${activeUserId}`);
-                        const prevCredited = raw ? JSON.parse(raw) : [];
-                        const combined = [...new Set([...prevCredited, ...syncRes.newTxIds])];
-                        await AsyncStorage.setItem(`@abumafhal_credited_flw_${activeUserId}`, JSON.stringify(combined));
-                    }
-
-                    setDepositSuccessDetails({
-                        amount: addedAmt,
-                        reference: flwRefCode,
-                        gateway: 'Flutterwave MFB Bank Transfer'
-                    });
-                    setShowDepositSuccessModal(true);
+                    setWallet(p => ({ ...p, balance: newBal }));
+                    setSuccessDetails({ amount: sync.totalNewAmount, reference: ref, gateway: 'Flutterwave MFB' });
+                    setShowSuccess(true);
                 }
             } catch (_) {}
 
-            let newTx = [];
-            if (txRes.status === 'fulfilled' && Array.isArray(txRes.value?.data)) {
-                newTx = txRes.value.data;
-                setTransactions(newTx);
-            }
-
-            // Calculate verified ledger balance from transactions
-            let ledgerBal = 0;
-            if (newTx && newTx.length > 0) {
-                const totalCredits = newTx
-                    .filter(t => (t.type === 'topup' || t.type === 'credit' || t.type === 'deposit') && (t.status === 'completed' || t.status === 'successful'))
-                    .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
-                const totalDebits = newTx
-                    .filter(t => (t.type === 'withdrawal' || t.type === 'debit' || t.type === 'wallet_payment' || t.type === 'wallet_purchase') && (t.status === 'completed' || t.status === 'successful'))
-                    .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
-                ledgerBal = Math.max(0, totalCredits - totalDebits);
-            }
-
-            const effectiveBal = Math.max(newWallet.balance, ledgerBal);
-            newWallet = { ...newWallet, balance: effectiveBal };
-            setWallet(newWallet);
-
-            // Self-heal DB profile balance if it lagged behind transaction ledger
-            if (effectiveBal > realBal && activeUserId) {
-                supabase.from('profiles').update({ balance: effectiveBal }).eq('id', activeUserId).catch(() => {});
-            }
-
-            // Update persistent cache
-            AsyncStorage.setItem(`@abumafhal_wallet_${activeUserId}`, JSON.stringify({
-                wallet: newWallet,
-                transactions: newTx,
-                updatedAt: Date.now()
-            })).catch(() => {});
-
-        } catch (error) {
-            console.log('Wallet Data Error:', error);
+        } catch (e) {
+            console.error('[Wallet] fetchWallet:', e);
         } finally {
             setLoading(false);
         }
-    };
-
-    // ── LIVE MANUAL BANK DEPOSIT SYNC ──
-    const handleManualBankSync = async () => {
-        setIsSyncingBal(true);
-        try {
-            const activeUserId = user?.id || (await supabase.auth.getUser()).data?.user?.id;
-            const syncRes = await PaymentGatewayService.syncFlutterwaveDeposits({
-                userId: activeUserId,
-                email: user?.email,
-                phone: user?.phone || user?.user_metadata?.phone_number
-            });
-
-            if (syncRes?.success && syncRes?.totalNewAmount > 0) {
-                const addedAmt = syncRes.totalNewAmount;
-                const { data: p } = await supabase.from('profiles').select('balance').eq('id', activeUserId).maybeSingle();
-                const updatedBal = (Number(p?.balance) || wallet.balance) + addedAmt;
-
-                await supabase.from('profiles').update({ balance: updatedBal }).eq('id', activeUserId);
-                setWallet(prev => ({ ...prev, balance: updatedBal }));
-
-                const firstFlwTx = syncRes.uncreditedTxs?.[0];
-                const flwRefCode = firstFlwTx?.flw_ref || firstFlwTx?.tx_ref || `FLW-${Date.now()}`;
-                await supabase.from('transactions').insert({
-                    user_id: activeUserId,
-                    type: 'topup',
-                    amount: addedAmt,
-                    status: 'completed',
-                    reference: flwRefCode,
-                    description: `Dedicated Bank Transfer Deposit of ₦${addedAmt.toLocaleString()} via Flutterwave MFB`
-                });
-
-                if (AsyncStorage && syncRes.newTxIds?.length) {
-                    const raw = await AsyncStorage.getItem(`@abumafhal_credited_flw_${activeUserId}`);
-                    const prevCredited = raw ? JSON.parse(raw) : [];
-                    const combined = [...new Set([...prevCredited, ...syncRes.newTxIds])];
-                    await AsyncStorage.setItem(`@abumafhal_credited_flw_${activeUserId}`, JSON.stringify(combined));
-                }
-
-                setShowBankTransferModal(false);
-                setDepositSuccessDetails({
-                    amount: addedAmt,
-                    reference: flwRefCode,
-                    gateway: 'Flutterwave MFB Bank Transfer'
-                });
-                setShowDepositSuccessModal(true);
-                fetchWalletData();
-            } else {
-                const { data: p } = await supabase.from('profiles').select('balance').eq('id', activeUserId).maybeSingle();
-                if (p && Number(p.balance) !== wallet.balance) {
-                    setWallet(prev => ({ ...prev, balance: Number(p.balance) }));
-                    Alert.alert('Balance Synced! ✅', `Your latest wallet balance is ${formatCurrency(Number(p.balance))}.`);
-                } else {
-                    Alert.alert(
-                        'Checking Complete',
-                        'No new bank transfer detected yet. Bank transfers usually reflect within 30-90 seconds. If you just transferred, please wait a moment and tap refresh again.'
-                    );
-                }
-                fetchWalletData();
-            }
-        } catch (syncErr) {
-            console.error('Manual sync error:', syncErr);
-            Alert.alert('Notice', 'Could not refresh bank transactions. Please check internet connection.');
-        } finally {
-            setIsSyncingBal(false);
-        }
-    };
-
-    // ── CONSTANT DEDICATED VIRTUAL ACCOUNT (PER USER) ──
-    const generateVirtualAccount = async () => {
-        if (!user?.id && !user?.email) return;
-
-        // Check local cache first (ignore legacy fake 980 accounts)
-        try {
-            const cacheKey = `@abumafhal_dedicated_va_${user.id}`;
-            const cached = await AsyncStorage.getItem(cacheKey);
-            if (cached) {
-                const parsed = JSON.parse(cached);
-                if (parsed?.account_number && !parsed.account_number.startsWith('980')) {
-                    setVirtualAccount(parsed);
-                    setVaError(null);
-                    return;
-                }
-            }
-        } catch (_) {}
-
-        setIsGeneratingVA(true);
-        setVaError(null);
-
-        try {
-            const email = user?.email || `wallet_${user?.id?.substring(0, 6)}@abumafhal.com`;
-            const fullName = [user?.user_metadata?.first_name, user?.user_metadata?.last_name]
-                .filter(Boolean).join(' ') || user?.user_metadata?.full_name || 'Valued Member';
-            const phone = user?.phone || user?.user_metadata?.phone_number || '';
-
-            const res = await PaymentGatewayService.getConstantVirtualAccount({
-                userId: user?.id,
-                email,
-                name: fullName,
-                phone
-            });
-
-            if (res.ok && res.data?.success && res.data?.data?.account_number) {
-                const va = res.data.data;
-                setVirtualAccount(va);
-                setVaError(null);
-                try {
-                    await AsyncStorage.setItem(`@abumafhal_dedicated_va_${user.id}`, JSON.stringify(va));
-                } catch (_) {}
-            } else {
-                const errMsg = res.data?.error || res.error || 'Could not load dedicated virtual account';
-                setVaError(errMsg);
-            }
-        } catch (err) {
-            setVaError(err?.message || 'Error loading dedicated account');
-        } finally {
-            setIsGeneratingVA(false);
-        }
-    };
-
-    const saveSavingsGoalsToStorage = async (updatedGoals) => {
-        if (!user?.id) return;
-        try {
-            await AsyncStorage.setItem(`SAVINGS_GOALS_${user.id}`, JSON.stringify(updatedGoals));
-        } catch (err) {
-            console.log('Error saving savings goals:', err);
-        }
-    };
-
-    // Auto-load constant virtual account when bank_transfer gateway is selected
-    useEffect(() => {
-        if (topUpGateway === 'bank_transfer' && showTopUpModal && !virtualAccount && !isGeneratingVA) {
-            generateVirtualAccount();
-        }
-    }, [topUpGateway, showTopUpModal]);
+    }, [resolveUserId, user]);
 
     useEffect(() => {
-        fetchWalletData();
+        fetchWallet();
 
-        const loadUserData = async () => {
-            if (!user?.id) return;
+        // Load savings pots
+        const loadPots = async () => {
+            const uid = await resolveUserId();
+            if (!uid) return;
             try {
-                const storageKey = `SAVINGS_GOALS_${user.id}`;
-                const savedData = await AsyncStorage.getItem(storageKey);
-                if (savedData) {
-                    setSavingsGoals(JSON.parse(savedData));
+                const raw = await AsyncStorage.getItem(`@amf_pots_${uid}`);
+                if (raw) {
+                    setPots(JSON.parse(raw));
                 } else {
-                    const defaultGoals = [
-                        { id: 'gadget', name: 'New Gadget Fund', target: 50000, saved: 0, icon: 'laptop-outline', color: '#3B82F6', bg: '#EFF6FF' },
-                        { id: 'eid', name: 'Eid Celebration Box', target: 30000, saved: 0, icon: 'gift-outline', color: '#10B981', bg: '#ECFDF5' }
+                    const defaults = [
+                        { id: 'gadget', name: 'Gadget Fund', target: 50000, saved: 0, color: '#3B82F6', icon: 'laptop-outline' },
+                        { id: 'eid',    name: 'Sallah Savings', target: 30000, saved: 0, color: '#10B981', icon: 'gift-outline' },
                     ];
-                    setSavingsGoals(defaultGoals);
-                    await AsyncStorage.setItem(storageKey, JSON.stringify(defaultGoals));
+                    setPots(defaults);
+                    await AsyncStorage.setItem(`@amf_pots_${uid}`, JSON.stringify(defaults));
                 }
+            } catch (_) {}
 
-                const limitKey = `MONTHLY_LIMIT_${user.id}`;
-                const savedLimit = await AsyncStorage.getItem(limitKey);
-                if (savedLimit) {
-                    setMonthlyLimit(parseInt(savedLimit));
-                }
-            } catch (err) {
-                console.log('Error loading user storage data:', err);
-            }
-        };
-        loadUserData();
-
-        // ── AUTOMATIC REDIRECT URL PAYMENT VERIFICATION ──
-        const checkReturnPayment = async () => {
-            if (Platform.OS !== 'web' || typeof window === 'undefined') return;
             try {
-                const searchParams = new URLSearchParams(window.location.search);
-                const ref = searchParams.get('reference') || searchParams.get('trxref') || searchParams.get('tx_ref');
-                const status = searchParams.get('status');
+                const lim = await AsyncStorage.getItem(`@amf_limit_${uid}`);
+                if (lim) setMonthlyLimit(parseInt(lim) || 50000);
+            } catch (_) {}
+        };
+        loadPots();
 
-                if (ref || status === 'successful') {
-                    let pendingRaw = window.localStorage.getItem('@pending_wallet_topup');
-                    if (!pendingRaw) {
-                        pendingRaw = await AsyncStorage.getItem('@pending_wallet_topup');
-                    }
-                    if (pendingRaw) {
-                        const pending = JSON.parse(pendingRaw);
-                        // Ensure it was created within the last 4 hours
-                        if (Date.now() - (pending.timestamp || 0) < 4 * 3600 * 1000) {
-                            const creditAmt = pending.amount || 0;
-                            const matchedRef = ref || pending.reference;
-                            const gw = pending.gateway || 'Paystack';
-                            const usdAmt = pending.usdAmount || null;
-
-                            // Clean URL parameters cleanly without page refresh
-                            const cleanUrl = window.location.origin + window.location.pathname;
-                            window.history.replaceState({}, document.title, cleanUrl);
-
-                            // Clear pending key
-                            window.localStorage.removeItem('@pending_wallet_topup');
-                            AsyncStorage.removeItem('@pending_wallet_topup').catch(() => {});
-
-                            // Verify & credit
-                            await handlePaymentCompleteVerification(creditAmt, matchedRef, gw, usdAmt);
+        // Web: Check return payment after redirect
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            const checkReturn = async () => {
+                try {
+                    const sp = new URLSearchParams(window.location.search);
+                    const ref = sp.get('reference') || sp.get('trxref') || sp.get('tx_ref');
+                    const status = sp.get('status');
+                    if (ref || status === 'successful') {
+                        const raw = window.localStorage.getItem('@amf_pending_topup')
+                            || await AsyncStorage.getItem('@amf_pending_topup').catch(() => null);
+                        if (raw) {
+                            const p = JSON.parse(raw);
+                            if (Date.now() - (p.timestamp || 0) < 4 * 3600 * 1000) {
+                                window.history.replaceState({}, '', window.location.origin + window.location.pathname);
+                                window.localStorage.removeItem('@amf_pending_topup');
+                                AsyncStorage.removeItem('@amf_pending_topup').catch(() => {});
+                                await creditWallet(p.amount, ref || p.reference, p.gateway, p.usdAmount);
+                            }
                         }
                     }
-                }
-            } catch (err) {
-                console.log('Return payment verification check:', err);
-            }
-        };
-        checkReturnPayment();
+                } catch (_) {}
+            };
+            checkReturn();
+        }
     }, [user?.id]);
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
+        const uid = await resolveUserId();
+        if (uid) await AsyncStorage.removeItem(`@amf_wallet_${uid}`).catch(() => {});
+        await fetchWallet();
+        setRefreshing(false);
+    }, [fetchWallet, resolveUserId]);
+
+    // ── Load virtual account ───────────────────────────────────────────────────
+    const loadVirtualAccount = useCallback(async () => {
+        if (!user?.id && !user?.email) return;
         try {
-            const activeUserId = user?.id || (await supabase.auth.getUser()).data?.user?.id;
-            if (activeUserId) {
-                await AsyncStorage.removeItem(`@abumafhal_wallet_${activeUserId}`).catch(() => {});
+            const cacheKey = `@amf_va_${user.id}`;
+            const cached = await AsyncStorage.getItem(cacheKey);
+            if (cached) {
+                const p = JSON.parse(cached);
+                if (p?.account_number && !p.account_number.startsWith('980')) {
+                    setVirtualAcc(p); return;
+                }
             }
         } catch (_) {}
-        await fetchWalletData();
-        setRefreshing(false);
-    }, [user?.id]);
 
-    // ── MULTI-GATEWAY TOP UP HANDLER ──
-    const handleStartTopUp = async () => {
-        // Dedicated Bank Transfer Handling
-        if (topUpGateway === 'bank_transfer') {
-            const userStr = String(user?.id || 'usr');
-            const userEmail = (user?.email || '').toLowerCase();
-            const isFounder = userEmail.includes('sani') || userEmail.includes('muhammad') || userEmail.includes('abumafhal') || userEmail.includes('sale');
-            const fallbackNumber = isFounder ? '9187255635' : '9176335569';
-            const fallbackName = isFounder ? 'Abu Mafhal / Muhammad Sani' : 'Abu Mafhal Dedicated FLW';
+        setVaLoading(true); setVaError(null);
+        try {
+            const email    = user?.email || `wallet_${user?.id?.substring(0, 6)}@abumafhal.com`;
+            const fullName = [user?.user_metadata?.first_name, user?.user_metadata?.last_name].filter(Boolean).join(' ')
+                || user?.user_metadata?.full_name || 'Valued Member';
+            const phone    = user?.phone || user?.user_metadata?.phone_number || '';
 
-            const activeAccount = (virtualAccount?.account_number && !virtualAccount.account_number.startsWith('980'))
-                ? virtualAccount
-                : {
-                    account_number: fallbackNumber,
-                    account_name: fallbackName,
-                    bank_name: 'Flutterwave MFB (Formerly OK MFB)'
-                };
+            const res = await PaymentGatewayService.getConstantVirtualAccount({
+                userId: user?.id, email, name: fullName, phone
+            });
 
-            const refCode = `AMF-${userStr.substring(0, 6).toUpperCase()}`;
+            if (res?.ok && res?.data?.success && res?.data?.data?.account_number) {
+                const va = res.data.data;
+                setVirtualAcc(va);
+                AsyncStorage.setItem(`@amf_va_${user.id}`, JSON.stringify(va)).catch(() => {});
+            } else {
+                setVaError(res?.data?.error || res?.error || 'Could not load virtual account');
+            }
+        } catch (e) {
+            setVaError(e?.message || 'Error loading virtual account');
+        } finally {
+            setVaLoading(false);
+        }
+    }, [user]);
 
-            copyToClipboard(
-                `Bank: ${activeAccount.bank_name}\nAccount Number: ${activeAccount.account_number}\nName: ${activeAccount.account_name}\nNarration/Ref: ${refCode}`,
-                'Dedicated Bank Details'
-            );
+    useEffect(() => {
+        if (gateway === 'bank_transfer' && showTopUp && !virtualAcc && !vaLoading) {
+            loadVirtualAccount();
+        }
+    }, [gateway, showTopUp]);
 
-            Alert.alert(
-                'Dedicated Account Details Copied',
-                `Bank: ${activeAccount.bank_name}\nAccount Number: ${activeAccount.account_number}\nName: ${activeAccount.account_name}\nReference: ${refCode}\n\nTransfer any amount from your banking app (OPay, Kuda, PalmPay, GTBank, Zenith, Access, etc.).\n\nYour wallet balance is automatically credited upon bank confirmation.`,
-                [{ text: 'Got It', style: 'default' }]
-            );
+    // ── Credit wallet (post-payment) ───────────────────────────────────────────
+    const creditWallet = useCallback(async (amount, reference, gwName, usdAmt = null) => {
+        setTopUpPending(true);
+        try {
+            const uid = await resolveUserId();
+            if (!uid) return;
+
+            const newBal = wallet.balance + amount;
+            await supabase.from('profiles').update({ balance: newBal }).eq('id', uid);
+            await supabase.from('transactions').insert({
+                user_id: uid, type: 'topup', amount, status: 'completed',
+                reference, description: usdAmt
+                    ? `Wallet Recharge via ${gwName} ($${usdAmt} USD • Ref: ${reference})`
+                    : `Wallet Recharge via ${gwName} (Ref: ${reference})`
+            });
+
+            setWallet(p => ({ ...p, balance: newBal }));
+            setSuccessDetails({ amount, reference, gateway: gwName, usdAmount: usdAmt });
+            setShowSuccess(true);
+
+            const phone = user?.phone || user?.user_metadata?.phone_number;
+            if (phone) {
+                whatsappService.sendDirect(phone,
+                    `Your Abu Mafhal wallet was recharged with ${fmt(amount)}. Thank you! 🎉`, uid
+                ).catch(() => {});
+            }
+            fetchWallet();
+        } catch (e) {
+            Alert.alert('Notice', 'Payment received. Refresh wallet to see updated balance.');
+        } finally {
+            setTopUpPending(false);
+        }
+    }, [wallet.balance, resolveUserId, fetchWallet, user]);
+
+    // ── Handle Top-Up ──────────────────────────────────────────────────────────
+    const handleTopUp = async () => {
+        // Bank transfer: just show account details
+        if (gateway === 'bank_transfer') {
+            const uid = String(user?.id || 'usr');
+            const acc = virtualAcc?.account_number && !virtualAcc.account_number.startsWith('980')
+                ? virtualAcc
+                : { account_number: '9176335569', account_name: 'Abu Mafhal Dedicated FLW', bank_name: 'Flutterwave MFB' };
+            const ref = `AMF-${uid.substring(0, 6).toUpperCase()}`;
+            const details = `Bank: ${acc.bank_name}\nAccount: ${acc.account_number}\nName: ${acc.account_name}\nNarration: ${ref}`;
+            copyText(details, 'Bank Details');
+            Alert.alert('Transfer Details Copied 📋', `${details}\n\nSend from OPay, Kuda, PalmPay, GTBank etc. Balance auto-credits in 30–90 seconds.`);
             return;
         }
 
-        let rechargeAmountNgn = 0;
-        let isCryptoMode = topUpGateway === 'nowpayments';
-
-        if (isCryptoMode) {
-            const usdNum = parseFloat(String(topUpAmountUsd || '').replace(/[^0-9.]/g, ''));
-            if (isNaN(usdNum) || usdNum < 2) {
-                Alert.alert('Enter Amount', 'Please enter at least $2.00 USD to pay with crypto');
-                return;
-            }
-            rechargeAmountNgn = Math.round(usdNum * USD_RATE);
+        let ngnAmt = 0;
+        if (gateway === 'nowpayments') {
+            const usd = parseFloat(String(amountUsd || '').replace(/[^0-9.]/g, ''));
+            if (isNaN(usd) || usd < 2) { Alert.alert('Enter Amount', 'Minimum is $2.00 USD'); return; }
+            ngnAmt = Math.round(usd * USD_RATE);
         } else {
-            const cleanNum = cleanNgnAmount(topUpAmountNgn);
-            if (cleanNum < 100) {
-                Alert.alert('Enter Amount', 'Please enter an amount of at least ₦100 to top up your wallet');
-                return;
-            }
-            rechargeAmountNgn = cleanNum;
+            ngnAmt = cleanNum(amountNgn);
+            if (ngnAmt < 100) { Alert.alert('Enter Amount', 'Minimum top-up is ₦100'); return; }
         }
 
-        setIsTopUpPending(true);
-
+        setTopUpPending(true);
         try {
-            const fallbackEmail = user?.email || `wallet_${user?.id?.substring(0, 6) || Math.floor(Math.random() * 1000)}@abumafhal.com`;
-            const ref = `WLT-${topUpGateway.toUpperCase().slice(0, 3)}-${Date.now()}`;
-            setPendingCreditAmountNgn(rechargeAmountNgn);
-            setActiveRef(ref);
-            const chosenGwName = topUpGateway === 'nowpayments' ? 'NOWPayments (Crypto USD)' :
-                topUpGateway === 'flutterwave' ? 'Flutterwave' : 'Paystack';
-            setActiveGatewayName(chosenGwName);
+            const fallbackEmail = user?.email || `wallet_${user?.id?.substring(0, 6) || Date.now()}@abumafhal.com`;
+            const ref = `WLT-${gateway.slice(0, 3).toUpperCase()}-${Date.now()}`;
+            setPendingAmt(ngnAmt); setActiveRef(ref);
+            const gwLabel = gateway === 'nowpayments' ? 'NOWPayments (Crypto)'
+                : gateway === 'flutterwave' ? 'Flutterwave' : 'Paystack';
+            setActiveGwName(gwLabel);
 
-            // Store pending topup in persistent storage for web/mobile redirect auto-recovery
-            const pendingData = {
-                reference: ref,
-                amount: rechargeAmountNgn,
-                usdAmount: isCryptoMode ? topUpAmountUsd : null,
-                gateway: chosenGwName,
-                timestamp: Date.now()
-            };
-            if (typeof window !== 'undefined' && window.localStorage) {
-                window.localStorage.setItem('@pending_wallet_topup', JSON.stringify(pendingData));
-            }
-            await AsyncStorage.setItem('@pending_wallet_topup', JSON.stringify(pendingData)).catch(() => {});
+            // Persist for redirect recovery
+            const pending = { reference: ref, amount: ngnAmt, usdAmount: gateway === 'nowpayments' ? amountUsd : null, gateway: gwLabel, timestamp: Date.now() };
+            if (typeof window !== 'undefined' && window.localStorage) window.localStorage.setItem('@amf_pending_topup', JSON.stringify(pending));
+            await AsyncStorage.setItem('@amf_pending_topup', JSON.stringify(pending)).catch(() => {});
 
             let res;
-            if (topUpGateway === 'nowpayments') {
-                // NOWPayments strictly in USD / Crypto (NOT NAIRA)
+            if (gateway === 'nowpayments') {
                 res = await PaymentGatewayService.initiateNowPayments({
-                    amount: parseFloat(topUpAmountUsd),
-                    currency: 'usd',
-                    email: fallbackEmail,
-                    reference: ref,
-                    metadata: {
-                        action: 'wallet_topup',
-                        user_id: user?.id,
-                        credited_ngn: rechargeAmountNgn
-                    }
+                    amount: parseFloat(amountUsd), currency: 'usd',
+                    email: fallbackEmail, reference: ref,
+                    metadata: { action: 'wallet_topup', user_id: user?.id, credited_ngn: ngnAmt }
                 });
-            } else if (topUpGateway === 'flutterwave') {
+            } else if (gateway === 'flutterwave') {
                 res = await PaymentGatewayService.initiateFlutterwave({
-                    amount: rechargeAmountNgn,
-                    email: fallbackEmail,
-                    reference: ref,
+                    amount: ngnAmt, email: fallbackEmail, reference: ref,
                     name: user?.user_metadata?.full_name || 'Mafhal Member',
                     callback_url: Platform.OS === 'web' ? window.location.href : 'https://standard.paystack.co/close',
                     metadata: { action: 'wallet_topup', user_id: user?.id }
                 });
             } else {
-                // Paystack via unified PaymentGatewayService (with multi-tier failovers, inline popup, and hosted page)
                 res = await PaymentGatewayService.initiatePaystack({
-                    amount: rechargeAmountNgn,
-                    email: fallbackEmail,
-                    reference: ref,
+                    amount: ngnAmt, email: fallbackEmail, reference: ref,
                     callback_url: Platform.OS === 'web' ? window.location.href : 'https://standard.paystack.co/close'
                 });
             }
 
-            // Inline Web Popup Option for Paystack (if supported on web)
+            // Inline popup (Paystack web)
             if (res?.type === 'inline_web' && typeof res?.openInline === 'function') {
-                setIsTopUpPending(false);
-                setShowTopUpModal(false);
+                setTopUpPending(false); setShowTopUp(false);
                 res.openInline(
-                    async (successData) => {
-                        await handlePaymentCompleteVerification(rechargeAmountNgn, successData?.reference || ref, 'Paystack');
-                        if (typeof window !== 'undefined' && window.localStorage) {
-                            window.localStorage.removeItem('@pending_wallet_topup');
-                        }
+                    async (d) => {
+                        if (typeof window !== 'undefined') window.localStorage.removeItem('@amf_pending_topup');
+                        await creditWallet(ngnAmt, d?.reference || ref, 'Paystack');
                     },
-                    () => {
-                        console.log('Paystack checkout closed by user');
-                    }
+                    () => {}
                 );
                 return;
             }
@@ -788,3320 +533,1041 @@ const WalletPageInner = ({ user, onBack, onNavigate }) => {
                 throw new Error(res?.error || res?.data?.error || 'Could not initialize gateway');
             }
 
-            const checkoutLink = res?.checkoutUrl || res?.data?.authorization_url || res?.data?.invoice_url;
-            if (!checkoutLink) throw new Error('Payment gateway link was not returned.');
+            const link = res?.checkoutUrl || res?.data?.authorization_url || res?.data?.invoice_url;
+            if (!link) throw new Error('Gateway did not return a payment link.');
 
-            setCheckoutUrl(checkoutLink);
-            setShowTopUpModal(false);
-
+            setCheckoutUrl(link); setShowTopUp(false);
             if (Platform.OS === 'web') {
-                Alert.alert(
-                    'Redirecting to Secure Payment',
-                    `You are being redirected to ${activeGatewayName} to complete your ${isCryptoMode ? `$${topUpAmountUsd} USD` : formatCurrency(rechargeAmountNgn)} payment.`
-                );
-                setTimeout(() => {
-                    window.location.href = checkoutLink;
-                }, 800);
+                setTimeout(() => { window.location.href = link; }, 600);
             } else {
-                setShowCheckoutWebView(true);
+                setShowWebView(true);
             }
-        } catch (err) {
-            console.error('[WALLET-TOPUP] Error:', err);
-            Alert.alert('Payment Error', err.message || 'Could not initialize payment. Please try another gateway.');
+        } catch (e) {
+            Alert.alert('Payment Error', e.message || 'Could not start payment. Try another gateway.');
         } finally {
-            setIsTopUpPending(false);
+            setTopUpPending(false);
         }
     };
 
-    // ── POST-PAYMENT VERIFICATION & CELEBRATION CREDIT ──
-    const handlePaymentCompleteVerification = async (creditAmount, reference, gateway, usdAmount = null) => {
-        setIsTopUpPending(true);
+    // ── Handle manual bank sync ────────────────────────────────────────────────
+    const handleBankSync = async () => {
+        setSyncing(true);
         try {
-            const currentBal = wallet.balance || 0;
-            const newBal = currentBal + creditAmount;
-
-            const activeUserId = user?.id || (await supabase.auth.getUser()).data?.user?.id;
-            if (activeUserId) {
-                // Update primary user balance in profiles table
-                await supabase.from('profiles').update({ balance: newBal }).eq('id', activeUserId);
-
-                const desc = usdAmount 
-                    ? `Wallet Recharge via ${gateway} ($${usdAmount} USD • Ref: ${reference})`
-                    : `Wallet Recharge via ${gateway} (Ref: ${reference})`;
-
+            const uid = await resolveUserId();
+            const sync = await PaymentGatewayService.syncFlutterwaveDeposits({
+                userId: uid, email: user?.email, phone: user?.phone || user?.user_metadata?.phone_number
+            });
+            if (sync?.success && sync?.totalNewAmount > 0) {
+                const newBal = wallet.balance + sync.totalNewAmount;
+                await supabase.from('profiles').update({ balance: newBal }).eq('id', uid);
+                const ref = sync.uncreditedTxs?.[0]?.flw_ref || `FLW-${Date.now()}`;
                 await supabase.from('transactions').insert({
-                    user_id: activeUserId,
-                    type: 'topup',
-                    amount: creditAmount,
-                    status: 'completed',
-                    reference: reference,
-                    description: desc
+                    user_id: uid, type: 'topup', amount: sync.totalNewAmount,
+                    status: 'completed', reference: ref,
+                    description: `Bank Transfer Deposit via Flutterwave MFB`
+                });
+                setWallet(p => ({ ...p, balance: newBal }));
+                setSuccessDetails({ amount: sync.totalNewAmount, reference: ref, gateway: 'Flutterwave MFB' });
+                setShowSuccess(true);
+                fetchWallet();
+            } else {
+                const { data: p } = await supabase.from('profiles').select('balance').eq('id', uid).maybeSingle();
+                const dbBal = Number(p?.balance ?? wallet.balance);
+                if (dbBal !== wallet.balance) {
+                    setWallet(prev => ({ ...prev, balance: dbBal }));
+                    Alert.alert('Balance Synced ✅', `Your wallet: ${fmt(dbBal)}`);
+                } else {
+                    Alert.alert('No New Deposits', 'No uncredited bank transfers found. Bank transfers reflect in 30–90s. Try again shortly.');
+                }
+            }
+        } catch (e) {
+            Alert.alert('Sync Error', 'Could not check bank deposits. Check internet connection.');
+        } finally {
+            setSyncing(false);
+        }
+    };
+
+    // ── P2P Transfer ───────────────────────────────────────────────────────────
+    const handleP2P = async () => {
+        const amt = parseInt(transferAmt);
+        if (isNaN(amt) || amt < 100) { Alert.alert('Invalid', 'Minimum transfer is ₦100'); return; }
+        if (amt > wallet.balance) { Alert.alert('Insufficient Balance', `You have ${fmt(wallet.balance)}`); return; }
+        if (!recipient.trim()) { Alert.alert('Recipient Required', 'Enter username, phone or email'); return; }
+
+        setTransferPending(true);
+        try {
+            const uid = await resolveUserId();
+            const newBal = wallet.balance - amt;
+
+            // Debit sender
+            const { error: de } = await supabase.from('profiles').update({ balance: newBal }).eq('id', uid);
+            if (de) throw de;
+
+            // Find & credit recipient
+            const target = recipient.trim().toLowerCase();
+            const { data: matches } = await supabase.from('profiles')
+                .select('id, full_name, email, phone, balance')
+                .or(`email.ilike.%${target}%,phone.ilike.%${target}%,username.ilike.%${target}%`);
+
+            const recip = matches?.[0];
+            const txRef = `TRF-${Date.now()}`;
+
+            if (recip) {
+                const recBal = Number(recip.balance || 0) + amt;
+                await supabase.from('profiles').update({ balance: recBal }).eq('id', recip.id);
+                await supabase.from('transactions').insert({
+                    user_id: recip.id, type: 'transfer_in', amount: amt, status: 'completed',
+                    reference: txRef,
+                    description: `Transfer from ${user?.user_metadata?.full_name || user?.email || 'Mafhal Member'}`
                 });
             }
 
-            setWallet(prev => ({ ...prev, balance: newBal }));
-            setDepositSuccessDetails({
-                amount: creditAmount,
-                reference: reference,
-                gateway: gateway,
-                usdAmount: usdAmount
-            });
-            setShowDepositSuccessModal(true);
-
-            const depositPhone = user?.phone || user?.user_metadata?.phone_number;
-            if (depositPhone && activeUserId) {
-                whatsappService.sendDirect(depositPhone, `Your Abu Mafhal wallet has been successfully recharged with ${formatCurrency(creditAmount)}. Thank you!`, activeUserId).catch(() => {});
-            }
-
-            fetchWalletData();
-        } catch (creditErr) {
-            console.error('Credit error:', creditErr);
-            Alert.alert('Balance Notice', 'Your payment was registered. Refresh wallet to see updated balance.');
-        } finally {
-            setIsTopUpPending(false);
-        }
-    };
-
-    // ── P2P TRANSFER HANDLER ──
-    const handleP2PTransfer = async () => {
-        const amt = parseInt(transferAmount);
-        if (isNaN(amt) || amt < 100) {
-            Alert.alert('Invalid Amount', 'Minimum peer transfer is ₦100');
-            return;
-        }
-        if (amt > wallet.balance) {
-            Alert.alert('Insufficient Balance', `Your wallet has ${formatCurrency(wallet.balance)}, but transfer requires ${formatCurrency(amt)}.`);
-            return;
-        }
-        if (!transferRecipient.trim()) {
-            Alert.alert('Recipient Required', 'Please enter recipient username, phone number, or email.');
-            return;
-        }
-
-        setIsTransferPending(true);
-        try {
-            const cleanTarget = transferRecipient.trim().toLowerCase();
-            const newBal = wallet.balance - amt;
-
-            // 1. Deduct sender balance in profiles
-            const { error: debitErr } = await supabase
-                .from('profiles')
-                .update({ balance: newBal })
-                .eq('id', user.id);
-
-            if (debitErr) throw debitErr;
-
-            // 2. Find recipient in profiles
-            let recipientUser = null;
-            try {
-                const { data: matchedProfiles } = await supabase
-                    .from('profiles')
-                    .select('id, full_name, email, phone, balance')
-                    .or(`email.ilike.%${cleanTarget}%,phone.ilike.%${cleanTarget}%,username.ilike.%${cleanTarget}%`);
-
-                if (matchedProfiles && matchedProfiles.length > 0) {
-                    recipientUser = matchedProfiles[0];
-                    const recNewBal = Number(recipientUser.balance || 0) + amt;
-                    await supabase.from('profiles').update({ balance: recNewBal }).eq('id', recipientUser.id);
-                    await supabase.from('transactions').insert({
-                        user_id: recipientUser.id,
-                        type: 'transfer_in',
-                        amount: amt,
-                        status: 'completed',
-                        reference: `TRF-${Date.now()}`,
-                        description: `Transfer received from ${user?.user_metadata?.full_name || user?.email || 'Mafhal Member'}`
-                    });
-                }
-            } catch (_) {}
-
-            const txRef = `TRF-${Date.now()}`;
-            const txDesc = `Transfer to ${recipientUser?.full_name || cleanTarget}${transferNote ? ` • "${transferNote.trim()}"` : ''}`;
+            // Record debit
             await supabase.from('transactions').insert({
-                user_id: user.id,
-                type: 'debit',
-                amount: -amt,
-                status: 'completed',
+                user_id: uid, type: 'debit', amount: -amt, status: 'completed',
                 reference: txRef,
-                description: txDesc
+                description: `Transfer to ${recip?.full_name || target}${transferNote ? ` • "${transferNote.trim()}"` : ''}`
             });
 
-            setWallet(prev => ({ ...prev, balance: newBal }));
-            setShowTransferModal(false);
-            setTransferRecipient('');
-            setTransferAmount('');
-            setTransferNote('');
-
-            Alert.alert('Transfer Successful! 🚀', `Successfully sent ${formatCurrency(amt)} to ${recipientUser?.full_name || cleanTarget}.`);
-            fetchWalletData();
-        } catch (p2pErr) {
-            console.error('P2P Transfer Error:', p2pErr);
-            Alert.alert('Transfer Failed', p2pErr.message || 'Could not process transfer. Please try again.');
+            setWallet(p => ({ ...p, balance: newBal }));
+            setShowTransfer(false);
+            setRecipient(''); setTransferAmt(''); setTransferNote('');
+            Alert.alert('Transfer Successful! 🚀', `Sent ${fmt(amt)} to ${recip?.full_name || target}`);
+            fetchWallet();
+        } catch (e) {
+            Alert.alert('Transfer Failed', e.message || 'Could not process. Try again.');
         } finally {
-            setIsTransferPending(false);
+            setTransferPending(false);
         }
     };
 
-
-
-    // ── VOUCHER REDEEM HANDLER ──
-    const handleRedeemVoucher = async () => {
-        if (!voucherCode.trim()) {
-            Alert.alert('Error', 'Please enter a valid voucher code.');
-            return;
-        }
-
-        setIsVoucherRedeeming(true);
+    // ── Voucher redeem ─────────────────────────────────────────────────────────
+    const handleVoucher = async () => {
+        if (!voucherCode.trim()) { Alert.alert('Error', 'Enter a voucher code'); return; }
+        setVoucherPending(true);
         try {
-            const codeClean = voucherCode.trim().toUpperCase();
-
-            // Check if it exists in coupons database
-            const { data: coupon, error } = await supabase
-                .from('coupons')
-                .select('*')
-                .eq('code', codeClean)
-                .eq('is_active', true)
-                .maybeSingle();
-
-            if (coupon && !error) {
-                const isPct = coupon.discount_type === 'percentage';
-                const discountDesc = isPct ? `${coupon.discount_value}% off` : `₦${Number(coupon.discount_value).toLocaleString()} off`;
-                Alert.alert(
-                    'Shopping Voucher Verified',
-                    `Code "${codeClean}" is an active marketplace coupon offering ${discountDesc}! You can apply it directly during Checkout or in your Shopping Cart.`
-                );
-                setShowVoucherModal(false);
-                setVoucherCode('');
+            const code = voucherCode.trim().toUpperCase();
+            const { data: coupon } = await supabase.from('coupons')
+                .select('*').eq('code', code).eq('is_active', true).maybeSingle();
+            if (coupon) {
+                const desc = coupon.discount_type === 'percentage'
+                    ? `${coupon.discount_value}% off` : `₦${Number(coupon.discount_value).toLocaleString()} off`;
+                Alert.alert('Voucher Valid ✅', `"${code}" gives ${desc}! Apply it at checkout or in your cart.`);
+                setShowVoucher(false); setVoucherCode('');
             } else {
-                Alert.alert('Invalid Code', 'The voucher code entered is invalid or has expired.');
+                Alert.alert('Invalid Code', 'This voucher is invalid or has expired.');
             }
-        } catch (e) {
-            Alert.alert('Error', 'Could not validate voucher code at this time.');
+        } catch (_) {
+            Alert.alert('Error', 'Could not validate code. Check connection and try again.');
         } finally {
-            setIsVoucherRedeeming(false);
+            setVoucherPending(false);
         }
     };
 
-    // ── SAVINGS POTS LOGIC ──
+    // ── Savings pots ───────────────────────────────────────────────────────────
+    const savePots = async (updated) => {
+        setPots(updated);
+        const uid = await resolveUserId();
+        if (uid) await AsyncStorage.setItem(`@amf_pots_${uid}`, JSON.stringify(updated)).catch(() => {});
+    };
+
     const handleCreatePot = async () => {
-        if (!newPotName.trim()) {
-            Alert.alert('Error', 'Please enter a name for your savings pot.');
-            return;
-        }
-        const targetNum = parseInt(newPotTarget);
-        if (isNaN(targetNum) || targetNum <= 0) {
-            Alert.alert('Error', 'Please enter a valid target amount.');
-            return;
-        }
-
-        const newGoal = {
-            id: `goal_${Date.now()}`,
-            name: newPotName.trim(),
-            target: targetNum,
-            saved: 0,
-            icon: 'wallet-outline',
-            color: newPotColor,
-            bg: `${newPotColor}15`
-        };
-
-        const updated = [...savingsGoals, newGoal];
-        setSavingsGoals(updated);
-        await saveSavingsGoalsToStorage(updated);
-
-        setNewPotName('');
-        setNewPotTarget('20000');
-        setShowCreatePotModal(false);
-        Alert.alert('Success', `Savings Pot "${newGoal.name}" created!`);
+        if (!potName.trim()) { Alert.alert('Error', 'Enter a pot name'); return; }
+        const t = parseInt(potTarget);
+        if (isNaN(t) || t <= 0) { Alert.alert('Error', 'Enter a valid target amount'); return; }
+        const pot = { id: `pot_${Date.now()}`, name: potName.trim(), target: t, saved: 0, color: potColor, icon: 'wallet-outline' };
+        await savePots([...pots, pot]);
+        setPotName(''); setPotTarget('20000'); setShowCreatePot(false);
+        Alert.alert('Savings Pot Created 🎯', `"${pot.name}" is ready!`);
     };
 
-    const processSavingsTransfer = async (goalId, amount, type) => {
-        const goal = savingsGoals.find(g => g.id === goalId);
-        if (!goal) return;
+    const handlePotTransfer = async (potId, amount, dir) => {
+        const pot = pots.find(p => p.id === potId);
+        if (!pot) return;
+        if (dir === 'in' && wallet.balance < amount) { Alert.alert('Insufficient Balance'); return; }
+        if (dir === 'out' && pot.saved < amount) { Alert.alert('Not Enough in Pot'); return; }
 
-        if (type === 'deposit' && wallet.balance < amount) {
-            Alert.alert('Insufficient Funds', 'Your wallet balance is less than the amount to save.');
-            return;
-        }
-        if (type === 'withdraw' && goal.saved < amount) {
-            Alert.alert('Limit Exceeded', 'You cannot withdraw more than the pot currently holds.');
-            return;
-        }
+        const uid = await resolveUserId();
+        const newBal = dir === 'in' ? wallet.balance - amount : wallet.balance + amount;
 
-        try {
-            const currentBal = wallet.balance || 0;
-            const newBal = type === 'deposit' ? currentBal - amount : currentBal + amount;
+        // Update profile balance
+        await supabase.from('profiles').update({ balance: newBal }).eq('id', uid);
+        // Record transaction
+        await supabase.from('transactions').insert({
+            user_id: uid,
+            type: dir === 'in' ? 'debit' : 'topup',
+            amount: dir === 'in' ? -amount : amount,
+            status: 'completed',
+            reference: `POT-${Date.now()}`,
+            description: dir === 'in' ? `Saved ₦${amount.toLocaleString()} in "${pot.name}"` : `Withdrew ₦${amount.toLocaleString()} from "${pot.name}"`
+        });
 
-            await supabase.from('wallets').update({ balance: newBal }).eq('user_id', user.id);
-            await supabase.from('wallet_transactions').insert({
-                user_id: user.id,
-                type: type === 'deposit' ? 'debit' : 'topup',
-                amount: type === 'deposit' ? -amount : amount,
-                description: type === 'deposit' ? `Saved in "${goal.name}"` : `Withdrew from "${goal.name}"`
-            });
-
-            const updatedGoals = savingsGoals.map(g => {
-                if (g.id === goalId) {
-                    const newSaved = type === 'deposit' ? g.saved + amount : g.saved - amount;
-                    return { ...g, saved: Math.max(0, newSaved) };
-                }
-                return g;
-            });
-
-            setWallet(prev => ({ ...prev, balance: newBal }));
-            setSavingsGoals(updatedGoals);
-            await saveSavingsGoalsToStorage(updatedGoals);
-            fetchWalletData();
-
-            Alert.alert('Success!', type === 'deposit' ? `Allocated ₦${amount.toLocaleString()} to "${goal.name}".` : `Returned ₦${amount.toLocaleString()} to your wallet balance.`);
-        } catch (e) {
-            Alert.alert('Error', 'Could not process savings allocation.');
-        }
+        const updated = pots.map(p => p.id === potId
+            ? { ...p, saved: Math.max(0, p.saved + (dir === 'in' ? amount : -amount)) }
+            : p);
+        await savePots(updated);
+        setWallet(p => ({ ...p, balance: newBal }));
+        Alert.alert('Done ✅', dir === 'in'
+            ? `₦${amount.toLocaleString()} allocated to "${pot.name}"`
+            : `₦${amount.toLocaleString()} returned to wallet`);
+        fetchWallet();
     };
 
-    // ── SEARCH & FILTERED TRANSACTIONS ──
-    const filteredTransactions = useMemo(() => {
+    // ── Derived values ─────────────────────────────────────────────────────────
+    const filteredTx = useMemo(() => {
         return transactions.filter(tx => {
-            if (txFilter === 'credits' && !(tx.amount > 0 || tx.points_change > 0)) return false;
-            if (txFilter === 'debits' && !(tx.amount < 0 || tx.points_change < 0)) return false;
-
-            if (txSearchQuery.trim()) {
-                const q = txSearchQuery.trim().toLowerCase();
-                const desc = (tx.description || '').toLowerCase();
-                const type = (tx.type || '').toLowerCase();
-                const amt = String(Math.abs(tx.amount || 0));
-                return desc.includes(q) || type.includes(q) || amt.includes(q);
+            const isCredit = tx.amount > 0;
+            if (txFilter === 'credits' && !isCredit) return false;
+            if (txFilter === 'debits'  && isCredit)  return false;
+            if (txSearch.trim()) {
+                const q = txSearch.toLowerCase();
+                return (tx.description || '').toLowerCase().includes(q)
+                    || (tx.type || '').toLowerCase().includes(q)
+                    || String(Math.abs(tx.amount || 0)).includes(q);
             }
             return true;
         });
-    }, [transactions, txFilter, txSearchQuery]);
+    }, [transactions, txFilter, txSearch]);
 
-    // Calendar Month Spending
-    const totalSpentThisMonth = useMemo(() => {
-        const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const spentThisMonth = useMemo(() => {
+        const start = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
         return transactions
-            .filter(tx => tx.amount < 0 && new Date(tx.created_at) >= startOfMonth)
-            .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+            .filter(t => t.amount < 0 && new Date(t.created_at) >= start)
+            .reduce((s, t) => s + Math.abs(t.amount), 0);
     }, [transactions]);
 
-    const budgetPercent = useMemo(() => {
-        if (!monthlyLimit || monthlyLimit <= 0) return 0;
-        return Math.min(Math.round((totalSpentThisMonth / monthlyLimit) * 100), 100);
-    }, [totalSpentThisMonth, monthlyLimit]);
+    const budgetPct = monthlyLimit > 0 ? Math.min((spentThisMonth / monthlyLimit) * 100, 100) : 0;
 
+    const displayBalance = useMemo(() => {
+        if (balCurrency === 'USD') return `$${(wallet.balance / USD_RATE).toFixed(2)}`;
+        if (balCurrency === 'AMC') return `${wallet.points.toLocaleString()} AMC`;
+        return fmt(wallet.balance);
+    }, [wallet, balCurrency]);
+
+    const theme = CARD_THEMES[cardTheme] || CARD_THEMES.midnight;
+
+    // ── Loading / Not-logged-in ────────────────────────────────────────────────
     if (loading && !refreshing) {
         return (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
+            <View style={S.center}>
                 <ActivityIndicator size="large" color="#0F172A" />
-                <Text style={{ marginTop: 12, color: '#64748B', fontWeight: '700', fontSize: 13 }}>Securing Wallet Session...</Text>
+                <Text style={S.loadTxt}>Securing Wallet…</Text>
             </View>
         );
     }
 
-    if (notLoggedIn && !loading) {
+    if (notLoggedIn) {
         return (
-            <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-                <View style={{ width: 68, height: 68, borderRadius: 34, backgroundColor: '#FEF3C7', justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
-                    <Ionicons name="wallet-outline" size={34} color="#D97706" />
-                </View>
-                <Text style={{ fontSize: 18, fontWeight: '900', color: '#0F172A', textAlign: 'center', marginBottom: 8 }}>
-                    Da Fatan Ka Shiga Asusunka
-                </Text>
-                <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center', lineHeight: 20, marginBottom: 24, maxWidth: 300 }}>
-                    Kuna buƙatar shiga asusunku domin duba kuɗin aljihunku (Wallet Balance), lambar bankin ajiya, da tarihin hada-hadar kuɗi.
-                </Text>
-                <TouchableOpacity
-                    style={{ backgroundColor: '#10B981', paddingVertical: 14, paddingHorizontal: 32, borderRadius: 14, width: '100%', maxWidth: 280, alignItems: 'center', marginBottom: 12 }}
-                    onPress={() => {
-                        if (typeof window !== 'undefined') window.location.href = '/login?redirect=/wallet';
-                        else if (typeof onNavigate === 'function') onNavigate('auth');
-                    }}
-                >
-                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>Shiga Ciki (Login)</Text>
+            <View style={S.center}>
+                <Ionicons name="lock-closed" size={48} color="#64748B" />
+                <Text style={[S.loadTxt, { marginTop: 14, fontSize: 16 }]}>Sign in to access your wallet</Text>
+                <TouchableOpacity onPress={onBack} style={S.backBtnFull}>
+                    <Text style={{ color: 'white', fontWeight: '800' }}>Go Back</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                    style={{ backgroundColor: '#E2E8F0', paddingVertical: 12, paddingHorizontal: 24, borderRadius: 14, width: '100%', maxWidth: 280, alignItems: 'center' }}
-                    onPress={() => { setLoading(true); fetchWalletData(); }}
-                >
-                    <Text style={{ color: '#334155', fontWeight: '700', fontSize: 13 }}>Sake Gwada Dubawa (Refresh)</Text>
-                </TouchableOpacity>
-            </SafeAreaView>
+            </View>
         );
     }
 
-    const cardHolderName = user?.fullName || user?.full_name || user?.user_metadata?.full_name || 'Mafhal Member';
-    const walletVirtualRef = `WLT-${(user?.id || '8492').substring(0, 8).toUpperCase()}`;
-
-    const getDisplayedBalance = () => {
-        if (hideBalance) return '••••••••';
-        if (balanceCurrency === 'USD') {
-            const usd = (wallet.balance / USD_RATE).toFixed(2);
-            return `$${Number(usd).toLocaleString()} USD`;
-        }
-        if (balanceCurrency === 'AMC') {
-            return `${wallet.points.toLocaleString()} AMC`;
-        }
-        return formatCurrency(wallet.balance);
-    };
-
+    // ── MAIN RENDER ────────────────────────────────────────────────────────────
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
-            {/* ══════════════════════════════════════════════════════════════
-                1. MODERN TOP HEADER
-            ══════════════════════════════════════════════════════════════ */}
-            <View style={localStyles.header}>
-                <TouchableOpacity onPress={onBack} style={localStyles.headerIconButton} activeOpacity={0.7}>
-                    <Ionicons name="arrow-back" size={19} color="#0F172A" />
+        <Animated.View style={[S.root, { opacity: fadeAnim }]}>
+            {/* ── Header ── */}
+            <View style={S.header}>
+                <TouchableOpacity onPress={onBack} style={S.backBtn}>
+                    <Ionicons name="arrow-back" size={22} color="#0F172A" />
                 </TouchableOpacity>
-
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={localStyles.headerTitle}>My Wallet</Text>
-                        <View style={localStyles.headerLiveDot} />
-                    </View>
-                    <Text style={localStyles.headerSub}>Decentralized Escrow & Instant Settlement</Text>
+                <View style={{ flex: 1 }}>
+                    <Text style={S.headerTitle}>My Wallet</Text>
+                    <Text style={S.headerSub}>Abu Mafhal • Secure Escrow</Text>
                 </View>
-
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <TouchableOpacity onPress={() => setShowEscrowModal(true)} style={localStyles.escrowHeaderPill} activeOpacity={0.8}>
-                        <Ionicons name="shield-checkmark" size={12} color="#059669" />
-                        <Text style={localStyles.escrowHeaderPillTxt}>100% Escrow</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={onRefresh} style={localStyles.headerIconButton} activeOpacity={0.7}>
-                        <Ionicons name="refresh" size={17} color="#0F172A" />
-                    </TouchableOpacity>
-                </View>
+                <TouchableOpacity onPress={onRefresh} style={S.backBtn}>
+                    <Ionicons name={refreshing ? 'sync' : 'refresh'} size={20} color="#0F172A" />
+                </TouchableOpacity>
             </View>
 
             <ScrollView
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 40 }}
+                style={{ flex: 1, backgroundColor: '#F8FAFC' }}
+                contentContainerStyle={S.scroll}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0F172A" />}
+                showsVerticalScrollIndicator={false}
             >
-                {/* ══════════════════════════════════════════════════════════════
-                    2. ULTRA-MODERN FINTECH CREDIT CARD BALANCE CARD
-                ══════════════════════════════════════════════════════════════ */}
-                <View style={localStyles.heroSection}>
-                    <LinearGradient
-                        colors={themeGradients[cardTheme] || themeGradients.midnight}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={localStyles.balanceCard}
-                    >
-                        {/* Ambient Glowing Background Orbs */}
-                        <View style={localStyles.decorCircle} />
-                        <View style={localStyles.decorCircle2} />
-
-                        {/* Top Card Row: Brand Badge + Currency Switcher + Eye Hide */}
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <View style={localStyles.vipBadge}>
-                                    <View style={localStyles.vipBadgeDot} />
-                                    <Text style={localStyles.vipBadgeTxt}>VIP TIER 1</Text>
-                                </View>
-                                <TouchableOpacity 
-                                    style={localStyles.eyeBtn}
-                                    onPress={() => setHideBalance(!hideBalance)}
-                                    activeOpacity={0.7}
-                                >
-                                    <Ionicons name={hideBalance ? "eye-off" : "eye"} size={14} color="rgba(255, 255, 255, 0.7)" />
-                                </TouchableOpacity>
-                            </View>
-
-                            {/* Multi-Currency Balance Switcher */}
-                            <View style={localStyles.currencySwitchGroup}>
-                                {['NGN', 'USD', 'AMC'].map(cur => (
-                                    <TouchableOpacity
-                                        key={cur}
-                                        style={[localStyles.currencySwitchBtn, balanceCurrency === cur && localStyles.currencySwitchBtnActive]}
-                                        onPress={() => setBalanceCurrency(cur)}
-                                        activeOpacity={0.8}
-                                    >
-                                        <Text style={[localStyles.currencySwitchTxt, balanceCurrency === cur && localStyles.currencySwitchTxtActive]}>
-                                            {cur === 'NGN' ? '₦' : cur === 'USD' ? '$' : '🪙'} {cur}
-                                        </Text>
+                {/* ── Wallet Card ── */}
+                <LinearGradient colors={theme.gradient} style={S.card} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+                    {/* Card top row */}
+                    <Row style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+                        <View>
+                            <Text style={S.cardLabel}>Available Balance</Text>
+                            <TouchableOpacity onPress={() => setHideBalance(p => !p)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Text style={S.cardBalance}>
+                                    {hideBalance ? '••••••' : displayBalance}
+                                </Text>
+                                <Ionicons name={hideBalance ? 'eye-off' : 'eye'} size={16} color="rgba(255,255,255,0.6)" />
+                            </TouchableOpacity>
+                        </View>
+                        <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                            {/* Theme switcher */}
+                            <Row style={{ gap: 5 }}>
+                                {Object.keys(CARD_THEMES).map(t => (
+                                    <TouchableOpacity key={t} onPress={() => setCardTheme(t)}
+                                        style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: CARD_THEMES[t].gradient[1], borderWidth: cardTheme === t ? 2 : 0, borderColor: 'white' }} />
+                                ))}
+                            </Row>
+                            {/* Currency switcher */}
+                            <Row style={{ gap: 4 }}>
+                                {['NGN', 'USD', 'AMC'].map(c => (
+                                    <TouchableOpacity key={c} onPress={() => setBalCurrency(c)}
+                                        style={[S.currBtn, { backgroundColor: balCurrency === c ? theme.accent : 'rgba(255,255,255,0.12)' }]}>
+                                        <Text style={[S.currBtnTxt, { color: balCurrency === c ? '#000' : '#fff' }]}>{c}</Text>
                                     </TouchableOpacity>
                                 ))}
-                            </View>
+                            </Row>
                         </View>
+                    </Row>
 
-                        {/* Middle Balance Section */}
-                        <View style={{ marginTop: 14 }}>
-                            <Text style={localStyles.balanceLabelText}>TOTAL ACCREDITED BALANCE</Text>
-                            <Text style={localStyles.balanceAmountText} numberOfLines={1}>
-                                {getDisplayedBalance()}
-                            </Text>
-
-                            {!hideBalance && (
-                                <Text style={localStyles.balanceEquivText}>
-                                    {balanceCurrency === 'NGN'
-                                        ? `≈ $${(wallet.balance / USD_RATE).toFixed(2)} USD • ${wallet.points.toLocaleString()} AMC Coins`
-                                        : balanceCurrency === 'USD'
-                                        ? `≈ ${formatCurrency(wallet.balance)} NGN`
-                                        : `≈ ${formatCurrency(wallet.points * 10)} NGN Value`}
-                                </Text>
-                            )}
-                        </View>
-
-                        {/* Metallic Smart Chip Simulation + Wi-Fi Contactless Symbol */}
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                <View style={localStyles.smartChip}>
-                                    <View style={localStyles.chipLineV1} />
-                                    <View style={localStyles.chipLineV2} />
-                                    <View style={localStyles.chipLineH} />
-                                </View>
-                                <Ionicons name="wifi" size={16} color="rgba(255,255,255,0.4)" style={{ transform: [{ rotate: '90deg' }] }} />
-                            </View>
-
-                            <TouchableOpacity 
-                                style={localStyles.copyRefBtn}
-                                onPress={() => copyToClipboard(walletVirtualRef, 'Virtual Wallet Reference')}
-                                activeOpacity={0.7}
-                            >
-                                <Text style={localStyles.copyRefTxt}>{walletVirtualRef}</Text>
-                                <Ionicons name="copy-outline" size={11} color="rgba(255,255,255,0.6)" />
-                            </TouchableOpacity>
-                        </View>
-
-                        {/* Card Holder & Expiry Row */}
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 14 }}>
-                            <View style={{ flex: 1, marginRight: 10 }}>
-                                <Text style={localStyles.cardMetaLabel}>CARD HOLDER</Text>
-                                <Text style={localStyles.cardMetaVal} numberOfLines={1}>{cardHolderName}</Text>
-                            </View>
-                            <View style={{ alignItems: 'flex-end' }}>
-                                <Text style={localStyles.cardMetaLabel}>SECURITY</Text>
-                                <Text style={[localStyles.cardMetaVal, { color: '#86EFAC' }]}>100% ESCROW</Text>
-                            </View>
-                        </View>
-                    </LinearGradient>
-
-                    {/* CARD SKIN THEME SELECTOR PILLS */}
-                    <View style={localStyles.cardSkinRow}>
-                        <Text style={localStyles.cardSkinTitle}>Theme Skin:</Text>
-                        <View style={{ flexDirection: 'row', gap: 6 }}>
-                            {Object.keys(themeGradients).map((theme) => {
-                                const colors = themeGradients[theme];
-                                return (
-                                    <TouchableOpacity
-                                        key={theme}
-                                        onPress={() => setCardTheme(theme)}
-                                        style={[
-                                            localStyles.cardSkinDot,
-                                            { backgroundColor: colors[1] },
-                                            cardTheme === theme && localStyles.cardSkinDotActive
-                                        ]}
-                                    />
-                                );
-                            })}
-                        </View>
-                    </View>
-                </View>
-
-                {/* ══════════════════════════════════════════════════════════════
-                    3. MODERN 5-ACTION QUICK ACTION BAR (NEW FEATURES)
-                ══════════════════════════════════════════════════════════════ */}
-                <View style={localStyles.actionStrip}>
-                    {/* 1. TOP UP */}
-                    <TouchableOpacity 
-                        activeOpacity={0.75} 
-                        style={localStyles.actionItem} 
-                        onPress={() => setShowTopUpModal(true)}
-                    >
-                        <View style={[localStyles.actionIconWrapper, { backgroundColor: '#DCFCE7' }]}>
-                            <Ionicons name="add" size={20} color="#059669" />
-                        </View>
-                        <Text style={localStyles.actionLabel}>Add Cash</Text>
-                    </TouchableOpacity>
-
-                    {/* 2. P2P SEND / TRANSFER */}
-                    <TouchableOpacity 
-                        activeOpacity={0.75} 
-                        style={localStyles.actionItem} 
-                        onPress={() => setShowTransferModal(true)}
-                    >
-                        <View style={[localStyles.actionIconWrapper, { backgroundColor: '#EFF6FF' }]}>
-                            <Ionicons name="paper-plane" size={17} color="#2563EB" />
-                        </View>
-                        <Text style={localStyles.actionLabel}>Transfer</Text>
-                    </TouchableOpacity>
-
-                    {/* 3. DEDICATED BANK NUBAN */}
-                    <TouchableOpacity 
-                        activeOpacity={0.75} 
-                        style={localStyles.actionItem} 
-                        onPress={() => setShowBankTransferModal(true)}
-                    >
-                        <View style={[localStyles.actionIconWrapper, { backgroundColor: '#EDE9FE' }]}>
-                            <Ionicons name="business" size={17} color="#7C3AED" />
-                        </View>
-                        <Text style={localStyles.actionLabel}>Bank NUBAN</Text>
-                    </TouchableOpacity>
-
-                    {/* 4. REDEEM VOUCHER */}
-                    <TouchableOpacity 
-                        activeOpacity={0.75} 
-                        style={localStyles.actionItem} 
-                        onPress={() => setShowVoucherModal(true)}
-                    >
-                        <View style={[localStyles.actionIconWrapper, { backgroundColor: '#EDE9FE' }]}>
-                            <Ionicons name="gift" size={17} color="#7C3AED" />
-                        </View>
-                        <Text style={localStyles.actionLabel}>Voucher</Text>
-                    </TouchableOpacity>
-
-                    {/* 5. ESCROW STATUS */}
-                    <TouchableOpacity 
-                        activeOpacity={0.75} 
-                        style={localStyles.actionItem} 
-                        onPress={() => setShowEscrowModal(true)}
-                    >
-                        <View style={[localStyles.actionIconWrapper, { backgroundColor: '#ECFDF5' }]}>
-                            <Ionicons name="shield-checkmark" size={18} color="#059669" />
-                        </View>
-                        <Text style={localStyles.actionLabel}>Escrow</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* ══════════════════════════════════════════════════════════════
-                    FUNDING GATEWAYS SHOWCASE STRIP (PAYSTACK, FLUTTERWAVE, CRYPTO, MONIEPOINT)
-                ══════════════════════════════════════════════════════════════ */}
-                <View style={localStyles.gatewayShowcaseContainer}>
-                    <View style={localStyles.gatewayShowcaseHeader}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Ionicons name="card" size={13} color="#059669" />
-                            <Text style={localStyles.gatewayShowcaseTitle}>INSTANT FUNDING GATEWAYS</Text>
-                        </View>
-                        <TouchableOpacity onPress={() => setShowTopUpModal(true)} activeOpacity={0.7}>
-                            <Text style={localStyles.gatewayShowcaseLink}>Top-up Now ➔</Text>
+                    {/* Escrow & Coins row */}
+                    <Row style={{ gap: 8, marginTop: 6 }}>
+                        <TouchableOpacity onPress={() => setShowEscrow(true)}
+                            style={[S.cardChip, { borderColor: `${theme.accent}60` }]}>
+                            <Ionicons name="shield-checkmark" size={12} color={theme.accent} />
+                            <Text style={[S.cardChipTxt, { color: theme.accent }]}>100% Escrow</Text>
                         </TouchableOpacity>
-                    </View>
+                        {wallet.points > 0 && (
+                            <View style={[S.cardChip, { borderColor: 'rgba(255,215,0,0.4)' }]}>
+                                <Ionicons name="star" size={12} color="#FCD34D" />
+                                <Text style={[S.cardChipTxt, { color: '#FCD34D' }]}>{wallet.points.toLocaleString()} AMC Coins</Text>
+                            </View>
+                        )}
+                    </Row>
 
-                    <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={{ gap: 8, paddingVertical: 2 }}
-                    >
-                        {GATEWAY_OPTIONS.map((gw) => (
-                            <TouchableOpacity
-                                key={gw.id}
-                                style={localStyles.gatewayShowcasePill}
-                                onPress={() => {
-                                    if (gw.id === 'bank_transfer') {
-                                        setShowBankTransferModal(true);
-                                    } else if (gw.id === 'nowpayments') {
-                                        setShowCryptoModal(true);
-                                    } else {
-                                        setTopUpGateway(gw.id);
-                                        setShowTopUpModal(true);
-                                    }
-                                }}
-                                activeOpacity={0.8}
-                            >
-                                <GatewayLogo gateway={gw} size={30} />
-                                <View style={{ marginLeft: 8 }}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                                        <Text style={localStyles.gatewayShowcaseName}>{gw.name}</Text>
-                                        <View style={[localStyles.gwMiniBadge, { backgroundColor: gw.badgeBg }]}>
-                                            <Text style={[localStyles.gwMiniBadgeTxt, { color: gw.badgeColor }]}>{gw.badge}</Text>
-                                        </View>
-                                    </View>
-                                    <Text style={localStyles.gatewayShowcaseChannels} numberOfLines={1}>
-                                        {gw.id === 'nowpayments'
-                                            ? 'USDT • BTC • ETH (USD Only)'
-                                            : gw.id === 'bank_transfer'
-                                            ? 'Flutterwave MFB • Auto-Credit'
-                                            : gw.channels.slice(0, 3).join(' • ')}
-                                    </Text>
-                                </View>
-                            </TouchableOpacity>
-                        ))}
-                    </ScrollView>
+                    {/* Budget bar */}
+                    <View style={{ marginTop: 14 }}>
+                        <Row style={{ justifyContent: 'space-between', marginBottom: 4 }}>
+                            <Text style={S.cardMicro}>Monthly Budget</Text>
+                            <Text style={S.cardMicro}>{fmt(spentThisMonth)} / {fmt(monthlyLimit)}</Text>
+                        </Row>
+                        <View style={{ height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.12)' }}>
+                            <View style={{ width: `${budgetPct}%`, height: 4, borderRadius: 2, backgroundColor: budgetPct > 85 ? '#EF4444' : theme.accent }} />
+                        </View>
+                    </View>
+                </LinearGradient>
+
+                {/* ── Action Buttons ── */}
+                <View style={S.actionsRow}>
+                    <ActionBtn icon="add-circle-outline"   label="Top Up"    onPress={() => setShowTopUp(true)}    color="#10B981" />
+                    <ActionBtn icon="swap-horizontal"      label="Transfer"  onPress={() => setShowTransfer(true)} color="#3B82F6" />
+                    <ActionBtn icon="sync-outline"         label="Sync Bank" onPress={handleBankSync}              color="#F59E0B" disabled={syncing} />
+                    <ActionBtn icon="ticket-outline"       label="Voucher"   onPress={() => setShowVoucher(true)}  color="#8B5CF6" />
+                    <ActionBtn icon="shield-checkmark-outline" label="Escrow" onPress={() => setShowEscrow(true)}  color="#0EA5E9" />
                 </View>
 
-                {/* ══════════════════════════════════════════════════════════════
-                    4. ESCROW BUYER VAULT STATUS BANNER
-                ══════════════════════════════════════════════════════════════ */}
-                <TouchableOpacity 
-                    style={localStyles.escrowVaultCard}
-                    onPress={() => setShowEscrowModal(true)}
-                    activeOpacity={0.85}
-                >
-                    <View style={localStyles.escrowVaultIconCircle}>
-                        <Ionicons name="lock-closed" size={16} color="#059669" />
-                    </View>
-                    <View style={{ flex: 1, marginLeft: 10 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <Text style={localStyles.escrowVaultTitle}>100% Escrow Protection Vault</Text>
-                            <View style={localStyles.escrowVaultTag}>
-                                <Text style={localStyles.escrowVaultTagTxt}>ACTIVE</Text>
-                            </View>
-                        </View>
-                        <Text style={localStyles.escrowVaultSub}>
-                            Every payment is safely locked in escrow until physical delivery inspection. Zero buyer risk.
+                {/* ── Budget Tracker ── */}
+                <TouchableOpacity style={S.section} onPress={() => setShowBudget(true)} activeOpacity={0.8}>
+                    <Row style={{ justifyContent: 'space-between', marginBottom: 10 }}>
+                        <Text style={S.sectionTitle}>📊 Monthly Budget</Text>
+                        <Text style={{ fontSize: 11, color: budgetPct > 85 ? '#EF4444' : '#10B981', fontWeight: '700' }}>
+                            {Math.round(budgetPct)}% used • Tap to edit
                         </Text>
+                    </Row>
+                    <View style={{ height: 8, borderRadius: 4, backgroundColor: '#E2E8F0' }}>
+                        <View style={{ width: `${budgetPct}%`, height: 8, borderRadius: 4, backgroundColor: budgetPct > 85 ? '#EF4444' : '#10B981' }} />
                     </View>
-                    <Ionicons name="chevron-forward" size={15} color="#059669" />
+                    <Row style={{ justifyContent: 'space-between', marginTop: 6 }}>
+                        <Text style={S.sectionSub}>Spent: {fmt(spentThisMonth)}</Text>
+                        <Text style={S.sectionSub}>Limit: {fmt(monthlyLimit)}</Text>
+                    </Row>
                 </TouchableOpacity>
 
-                {/* ══════════════════════════════════════════════════════════════
-                    5. MONTHLY BUDGET & COINS TRACKERS
-                ══════════════════════════════════════════════════════════════ */}
-                <View style={localStyles.widgetRow}>
-                    {/* Budget Control Widget */}
-                    <View style={localStyles.budgetWidget}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                                <Ionicons name="pie-chart" size={13} color={budgetPercent > 85 ? '#EF4444' : '#2563EB'} />
-                                <Text style={localStyles.widgetTitle}>Monthly Budget</Text>
-                            </View>
-                            <TouchableOpacity 
-                                onPress={() => {
-                                    setBudgetInputVal(monthlyLimit.toString());
-                                    setShowBudgetModal(true);
-                                }}
-                            >
-                                <Text style={localStyles.widgetEditTxt}>Modify</Text>
-                            </TouchableOpacity>
-                        </View>
-                        <View style={localStyles.widgetTrack}>
-                            <View style={[localStyles.widgetFill, { width: `${budgetPercent}%`, backgroundColor: budgetPercent > 85 ? '#EF4444' : '#2563EB' }]} />
-                        </View>
-                        <Text style={localStyles.widgetSub}>
-                            {formatCurrency(totalSpentThisMonth)} / {formatCurrency(monthlyLimit)} ({budgetPercent}%)
-                        </Text>
-                    </View>
-
-                    {/* Coins Boost Widget */}
-                    <View style={localStyles.budgetWidget}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                                <Ionicons name="flash" size={13} color="#D97706" />
-                                <Text style={localStyles.widgetTitle}>Loyalty Boost</Text>
-                            </View>
-                            <Text style={[localStyles.widgetEditTxt, { color: '#059669' }]}>Active 1.5x</Text>
-                        </View>
-                        <View style={localStyles.widgetTrack}>
-                            <View style={[localStyles.widgetFill, { width: '75%', backgroundColor: '#D97706' }]} />
-                        </View>
-                        <Text style={localStyles.widgetSub}>
-                            {wallet.points.toLocaleString()} AMC Coins Available
-                        </Text>
-                    </View>
-                </View>
-
-                {/* ══════════════════════════════════════════════════════════════
-                    6. SAVINGS POTS SECTION
-                ══════════════════════════════════════════════════════════════ */}
-                <View style={localStyles.savingsContainer}>
-                    <View style={localStyles.sectionHeaderSavings}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <View style={{ width: 3, height: 14, borderRadius: 1.5, backgroundColor: '#3B82F6' }} />
-                            <Text style={localStyles.sectionTitleText}>Savings Pots & Targets</Text>
-                        </View>
-                        <TouchableOpacity onPress={() => setShowCreatePotModal(true)}>
-                            <Text style={localStyles.addPotLink}>+ New Pot</Text>
+                {/* ── Savings Pots ── */}
+                <View style={S.section}>
+                    <Row style={{ justifyContent: 'space-between', marginBottom: 12 }}>
+                        <Text style={S.sectionTitle}>🏦 Savings Pots</Text>
+                        <TouchableOpacity onPress={() => setShowCreatePot(true)} style={S.pillBtn}>
+                            <Ionicons name="add" size={14} color="#10B981" />
+                            <Text style={[S.pillBtnTxt, { color: '#10B981' }]}>New Pot</Text>
                         </TouchableOpacity>
-                    </View>
-
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}>
-                        {/* Create Pot Card */}
-                        <TouchableOpacity 
-                            style={localStyles.createPotCard}
-                            onPress={() => setShowCreatePotModal(true)}
-                            activeOpacity={0.8}
-                        >
-                            <View style={localStyles.createPotCircle}>
-                                <Ionicons name="add" size={20} color="#3B82F6" />
-                            </View>
-                            <Text style={localStyles.createPotTitle}>Create Pot</Text>
-                            <Text style={localStyles.createPotSub}>Set custom goal</Text>
-                        </TouchableOpacity>
-
-                        {savingsGoals.map((goal) => {
-                            const pct = Math.min(Math.round((goal.saved / goal.target) * 100), 100);
-                            return (
-                                <TouchableOpacity 
-                                    key={goal.id} 
-                                    style={localStyles.savingsGoalCard}
-                                    activeOpacity={0.85}
-                                    onPress={() => {
-                                        Alert.alert(
-                                            goal.name,
-                                            `Target: ${formatCurrency(goal.target)}\nSaved: ${formatCurrency(goal.saved)} (${pct}%)`,
-                                            [
-                                                { text: 'Cancel', style: 'cancel' },
-                                                { text: '📥 Add to Pot', onPress: () => processSavingsTransfer(goal.id, 2000, 'deposit') },
-                                                { text: '🔓 Release to Wallet', onPress: () => processSavingsTransfer(goal.id, goal.saved, 'withdraw') }
-                                            ]
-                                        );
-                                    }}
-                                >
-                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                                        <View style={[localStyles.savingsIconWrapper, { backgroundColor: goal.bg }]}>
-                                            <Ionicons name={goal.icon || 'wallet'} size={15} color={goal.color} />
+                    </Row>
+                    {pots.map(pot => {
+                        const pct = pot.target > 0 ? Math.min((pot.saved / pot.target) * 100, 100) : 0;
+                        return (
+                            <View key={pot.id} style={[S.potCard, { borderLeftColor: pot.color }]}>
+                                <Row style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+                                    <Row style={{ gap: 10 }}>
+                                        <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: `${pot.color}18`, alignItems: 'center', justifyContent: 'center' }}>
+                                            <Ionicons name={pot.icon || 'wallet-outline'} size={18} color={pot.color} />
                                         </View>
-                                        <Text style={[localStyles.savingsGoalPercent, { color: goal.color }]}>{pct}%</Text>
-                                    </View>
-                                    <Text style={localStyles.savingsGoalName} numberOfLines={1}>{goal.name}</Text>
-                                    <Text style={localStyles.savingsGoalAmount}>
-                                        {formatCurrency(goal.saved)} <Text style={{ color: '#94A3B8', fontSize: 10 }}>/ {formatCurrency(goal.target)}</Text>
-                                    </Text>
-                                    <View style={localStyles.progressTrack}>
-                                        <View style={[localStyles.progressBar, { width: `${pct}%`, backgroundColor: goal.color }]} />
-                                    </View>
-                                </TouchableOpacity>
-                            );
-                        })}
-                    </ScrollView>
+                                        <View>
+                                            <Text style={S.potName}>{pot.name}</Text>
+                                            <Text style={S.potSub}>{fmt(pot.saved)} / {fmt(pot.target)}</Text>
+                                        </View>
+                                    </Row>
+                                    <Text style={{ fontSize: 13, fontWeight: '800', color: pot.color }}>{Math.round(pct)}%</Text>
+                                </Row>
+                                <View style={{ height: 6, borderRadius: 3, backgroundColor: `${pot.color}20`, marginBottom: 8 }}>
+                                    <View style={{ width: `${pct}%`, height: 6, borderRadius: 3, backgroundColor: pot.color }} />
+                                </View>
+                                <Row style={{ gap: 8 }}>
+                                    <TouchableOpacity onPress={() => {
+                                        Alert.prompt
+                                            ? Alert.prompt('Save to Pot', `How much to save in "${pot.name}"? (NGN)`, (v) => {
+                                                const a = parseInt(v); if (a > 0) handlePotTransfer(pot.id, a, 'in');
+                                            }, 'plain-text', '', 'numeric')
+                                            : Alert.alert('Pot Deposit', 'Enter amount in app console');
+                                    }} style={[S.potBtn, { backgroundColor: `${pot.color}18` }]}>
+                                        <Text style={{ fontSize: 12, fontWeight: '700', color: pot.color }}>+ Add</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity onPress={() => {
+                                        if (pot.saved <= 0) { Alert.alert('Empty Pot'); return; }
+                                        handlePotTransfer(pot.id, pot.saved, 'out');
+                                    }} style={[S.potBtn, { backgroundColor: '#FEF2F2' }]}>
+                                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#EF4444' }}>Withdraw All</Text>
+                                    </TouchableOpacity>
+                                </Row>
+                            </View>
+                        );
+                    })}
                 </View>
 
-                {/* ══════════════════════════════════════════════════════════════
-                    7. TRANSACTION ACTIVITY HUB & SEARCH FILTER
-                ══════════════════════════════════════════════════════════════ */}
-                <View style={localStyles.hubContainer}>
-                    <View style={localStyles.sectionHeader}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <View style={{ width: 3, height: 14, borderRadius: 1.5, backgroundColor: '#059669' }} />
-                            <Text style={localStyles.sectionTitleText}>Transaction History</Text>
-                        </View>
-                        <Text style={localStyles.txCountBadge}>{filteredTransactions.length} records</Text>
-                    </View>
+                {/* ── Transaction History ── */}
+                <View style={S.section}>
+                    <Row style={{ justifyContent: 'space-between', marginBottom: 10 }}>
+                        <Text style={S.sectionTitle}>📄 Transactions</Text>
+                        <Row style={{ gap: 6 }}>
+                            {['all', 'credits', 'debits'].map(f => (
+                                <TouchableOpacity key={f} onPress={() => setTxFilter(f)}
+                                    style={[S.filterBtn, txFilter === f && S.filterBtnActive]}>
+                                    <Text style={[S.filterBtnTxt, txFilter === f && { color: 'white' }]}>
+                                        {f.charAt(0).toUpperCase() + f.slice(1)}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </Row>
+                    </Row>
 
-                    {/* Real-Time Transaction Search Input */}
-                    <View style={localStyles.searchBarContainer}>
+                    {/* Search */}
+                    <View style={S.searchBox}>
                         <Ionicons name="search" size={15} color="#94A3B8" />
                         <TextInput
-                            style={localStyles.searchBarInput}
-                            placeholder="Search by description, reference, or amount..."
+                            style={[S.searchInput, Platform.OS === 'web' && { outlineStyle: 'none' }]}
+                            placeholder="Search transactions…"
                             placeholderTextColor="#94A3B8"
-                            value={txSearchQuery}
-                            onChangeText={setTxSearchQuery}
+                            value={txSearch}
+                            onChangeText={setTxSearch}
                         />
-                        {txSearchQuery.length > 0 && (
-                            <TouchableOpacity onPress={() => setTxSearchQuery('')}>
+                        {txSearch.length > 0 && (
+                            <TouchableOpacity onPress={() => setTxSearch('')}>
                                 <Ionicons name="close-circle" size={16} color="#94A3B8" />
                             </TouchableOpacity>
                         )}
                     </View>
 
-                    {/* Filter Tabs */}
-                    <View style={localStyles.filterRow}>
-                        {[
-                            { key: 'all', label: 'All Transactions' },
-                            { key: 'credits', label: 'Credits (+)' },
-                            { key: 'debits', label: 'Debits (-)' }
-                        ].map(f => (
-                            <TouchableOpacity 
-                                key={f.key}
-                                onPress={() => setTxFilter(f.key)}
-                                style={[localStyles.filterChip, txFilter === f.key && localStyles.activeFilterChip]}
-                            >
-                                <Text style={[localStyles.filterChipText, txFilter === f.key && localStyles.activeFilterChipText]}>
-                                    {f.label}
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-
-                    {/* Transaction List */}
-                    {filteredTransactions.length > 0 ? (
-                        <View style={localStyles.transactionContainerCard}>
-                            {filteredTransactions.map((tx, idx) => {
-                                const isDebit = tx.amount < 0 || tx.points_change < 0;
-                                const isBonus = tx.type === 'bonus' || tx.points_change > 0;
-
-                                return (
-                                    <View key={tx.id || idx}>
-                                        <TouchableOpacity 
-                                            activeOpacity={0.7}
-                                            style={localStyles.activityItem}
-                                            onPress={() => setSelectedTx(tx)}
-                                        >
-                                            <View style={[
-                                                localStyles.activityIconContainer,
-                                                { backgroundColor: isDebit ? '#FEF2F2' : isBonus ? '#FEF3C7' : '#ECFDF5' }
-                                            ]}>
-                                                <Ionicons 
-                                                    name={isDebit ? "arrow-up-outline" : isBonus ? "gift-outline" : "arrow-down-outline"} 
-                                                    size={16} 
-                                                    color={isDebit ? "#EF4444" : isBonus ? "#D97706" : "#059669"} 
-                                                />
-                                            </View>
-
-                                            <View style={{ flex: 1, paddingRight: 8 }}>
-                                                <Text style={localStyles.activityTitleText} numberOfLines={1}>
-                                                    {tx.description || 'Wallet Transaction'}
-                                                </Text>
-                                                <Text style={localStyles.activityTimeText}>
-                                                    {new Date(tx.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} • {new Date(tx.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                </Text>
-                                            </View>
-
-                                            <View style={{ alignItems: 'flex-end' }}>
-                                                <Text style={[
-                                                    localStyles.activityAmountText,
-                                                    { color: isDebit ? '#EF4444' : isBonus ? '#D97706' : '#059669' }
-                                                ]}>
-                                                    {tx.amount !== 0 ? (
-                                                        tx.amount > 0 ? `+₦${tx.amount.toLocaleString()}` : `-₦${Math.abs(tx.amount).toLocaleString()}`
-                                                    ) : tx.points_change !== 0 ? (
-                                                        `+${tx.points_change} AMC`
-                                                    ) : '-'}
-                                                </Text>
-                                                <View style={localStyles.statusBubble}>
-                                                    <View style={localStyles.statusDot} />
-                                                    <Text style={localStyles.statusBubbleText}>Success</Text>
-                                                </View>
-                                            </View>
-                                        </TouchableOpacity>
-                                        {idx < filteredTransactions.length - 1 && (
-                                            <View style={localStyles.txDivider} />
-                                        )}
-                                    </View>
-                                );
-                            })}
+                    {filteredTx.length === 0 ? (
+                        <View style={S.emptyTx}>
+                            <Ionicons name="receipt-outline" size={40} color="#CBD5E1" />
+                            <Text style={S.emptyTxTxt}>No transactions yet</Text>
                         </View>
                     ) : (
-                        <View style={localStyles.noActivityBox}>
-                            <Ionicons name="receipt-outline" size={28} color="#CBD5E1" />
-                            <Text style={localStyles.noActivityTitle}>No Transactions Found</Text>
-                            <Text style={localStyles.noActivitySub}>
-                                {txSearchQuery ? 'No records match your search filter.' : 'Your wallet activity will appear here in real-time.'}
-                            </Text>
-                        </View>
+                        filteredTx.map((tx, i) => {
+                            const isCredit = tx.amount > 0;
+                            const amt = Math.abs(tx.amount || 0);
+                            const date = tx.created_at ? new Date(tx.created_at).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+                            return (
+                                <TouchableOpacity key={tx.id || i} onPress={() => setSelectedTx(tx)}
+                                    style={[S.txRow, i === filteredTx.length - 1 && { borderBottomWidth: 0 }]}
+                                    activeOpacity={0.75}>
+                                    <TxIcon type={tx.type} />
+                                    <View style={{ flex: 1, marginLeft: 12 }}>
+                                        <Text style={S.txDesc} numberOfLines={1}>
+                                            {tx.description || tx.type || 'Transaction'}
+                                        </Text>
+                                        <Text style={S.txDate}>{date}</Text>
+                                    </View>
+                                    <Text style={[S.txAmt, { color: isCredit ? '#10B981' : '#EF4444' }]}>
+                                        {isCredit ? '+' : '-'}{fmt(amt)}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })
                     )}
                 </View>
+
+                <View style={{ height: 40 }} />
             </ScrollView>
 
-            {/* ══════════════════════════════════════════════════════════════
-                MODAL 1: CARD & INSTANT ONLINE TOP-UP (PAYSTACK & FLUTTERWAVE)
-            ══════════════════════════════════════════════════════════════ */}
-            <Modal
-                visible={showTopUpModal}
-                transparent={true}
-                animationType="slide"
-                onRequestClose={() => setShowTopUpModal(false)}
-            >
-                <View style={localStyles.modalDimLayer}>
-                    <View style={localStyles.modalContentSheet}>
-                        <View style={localStyles.modalHandleBar} />
+            {/* ══════════════════════════════════════════════════════════════════
+                MODALS
+            ══════════════════════════════════════════════════════════════════ */}
 
-                        <View style={localStyles.modalHeaderSection}>
-                            <View>
-                                <Text style={localStyles.modalMainTitle}>Top-up Wallet</Text>
-                                <Text style={localStyles.modalSecondaryTitle}>Instant credit via Debit Card, USSD & Online Pay</Text>
-                            </View>
-                            <TouchableOpacity style={localStyles.modalCloseCircle} onPress={() => setShowTopUpModal(false)}>
-                                <Ionicons name="close" size={18} color="#64748B" />
+            {/* ── Top-Up Modal ── */}
+            <Modal visible={showTopUp} transparent animationType="slide" onRequestClose={() => setShowTopUp(false)}>
+                <View style={S.modalBg}>
+                    <View style={S.modalSheet}>
+                        <Row style={{ justifyContent: 'space-between', marginBottom: 18 }}>
+                            <Text style={S.modalTitle}>Top Up Wallet</Text>
+                            <TouchableOpacity onPress={() => setShowTopUp(false)} style={S.closeBtn}>
+                                <Ionicons name="close" size={20} color="#0F172A" />
                             </TouchableOpacity>
-                        </View>
+                        </Row>
 
-                        <ScrollView 
-                            showsVerticalScrollIndicator={false}
-                            contentContainerStyle={{ paddingBottom: 20 }}
-                            style={{ maxHeight: Platform.OS === 'web' ? '80vh' : 580 }}
-                        >
-                            {/* AMOUNT IN NAIRA INPUT */}
-                            <Text style={localStyles.fieldSectionHeader}>ENTER AMOUNT IN NAIRA (₦)</Text>
-                            <View style={localStyles.inputAreaContainer}>
-                                <Text style={localStyles.inputPrefix}>₦</Text>
-                                <TextInput
-                                    style={localStyles.mainTextInput}
-                                    value={topUpAmountNgn}
-                                    onChangeText={setTopUpAmountNgn}
-                                    keyboardType="numeric"
-                                    placeholder="0.00"
-                                    placeholderTextColor="#94A3B8"
-                                />
-                            </View>
-
-                            {/* QUICK RECHARGE PRESETS */}
-                            <Text style={localStyles.quickSelectionLabel}>PRESET RECHARGE AMOUNTS</Text>
-                            <View style={localStyles.pillsGrid}>
-                                {['1000', '2500', '5000', '10000', '25000', '50000'].map(val => (
-                                    <TouchableOpacity
-                                        key={val}
-                                        style={[localStyles.amountPill, topUpAmountNgn === val && localStyles.activePill]}
-                                        onPress={() => setTopUpAmountNgn(val)}
-                                    >
-                                        <Text style={[localStyles.pillText, topUpAmountNgn === val && localStyles.activePillText]}>
-                                            ₦{parseInt(val).toLocaleString()}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-
-                            {/* LIVE BALANCE PROJECTION */}
-                            <View style={localStyles.balanceProjectionCard}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                        <Ionicons name="trending-up" size={14} color="#059669" />
-                                        <Text style={localStyles.projectionTitle}>LIVE BALANCE PROJECTION</Text>
-                                    </View>
-                                    <View style={localStyles.projectionBadge}>
-                                        <Text style={localStyles.projectionBadgeTxt}>INSTANT CREDIT</Text>
-                                    </View>
+                        {/* Gateway selector */}
+                        {GATEWAYS.map(gw => (
+                            <TouchableOpacity key={gw.id} onPress={() => setGateway(gw.id)}
+                                style={[S.gwCard, gateway === gw.id && { borderColor: gw.color, backgroundColor: `${gw.color}08` }]}>
+                                <View style={[S.gwIcon, { backgroundColor: `${gw.color}18` }]}>
+                                    <Ionicons name={gw.icon} size={22} color={gw.color} />
                                 </View>
-
-                                <View style={localStyles.projectionMathRow}>
-                                    <View style={localStyles.projectionMathCol}>
-                                        <Text style={localStyles.projectionMathLabel}>Current</Text>
-                                        <Text style={localStyles.projectionMathVal}>{formatCurrency(wallet.balance || 0)}</Text>
-                                    </View>
-
-                                    <Ionicons name="add" size={15} color="#94A3B8" />
-
-                                    <View style={localStyles.projectionMathCol}>
-                                        <Text style={localStyles.projectionMathLabel}>Top-up</Text>
-                                        <Text style={[localStyles.projectionMathVal, { color: '#059669' }]}>
-                                            +{formatCurrency(cleanNgnAmount(topUpAmountNgn))}
-                                        </Text>
-                                    </View>
-
-                                    <Ionicons name="arrow-forward" size={15} color="#059669" />
-
-                                    <View style={[localStyles.projectionMathCol, { alignItems: 'flex-end' }]}>
-                                        <Text style={localStyles.projectionMathLabel}>New Balance</Text>
-                                        <Text style={[localStyles.projectionMathVal, { color: '#059669', fontWeight: '900', fontSize: 14 }]}>
-                                            {formatCurrency((wallet.balance || 0) + cleanNgnAmount(topUpAmountNgn))}
-                                        </Text>
-                                    </View>
+                                <View style={{ flex: 1, marginLeft: 12 }}>
+                                    <Row style={{ gap: 8 }}>
+                                        <Text style={[S.gwName, { color: gateway === gw.id ? gw.color : '#0F172A' }]}>{gw.name}</Text>
+                                        <Pill label={gw.badge} color={gw.badgeColor} />
+                                    </Row>
+                                    <Text style={S.gwSub}>{gw.subtitle}</Text>
+                                    <Text style={S.gwSpeed}>⚡ {gw.speed}</Text>
                                 </View>
-                            </View>
+                                {gateway === gw.id && <Ionicons name="checkmark-circle" size={22} color={gw.color} />}
+                            </TouchableOpacity>
+                        ))}
 
-                            {/* SELECT ONLINE GATEWAY */}
-                            <Text style={localStyles.fieldSectionHeader}>SELECT PAYMENT GATEWAY</Text>
-                            <View style={localStyles.luxuryGatewayList}>
-                                {GATEWAY_OPTIONS.filter(gw => gw.id === 'paystack' || gw.id === 'flutterwave').map((gw) => {
-                                    const isSelected = topUpGateway === gw.id;
-                                    return (
-                                        <TouchableOpacity
-                                            key={gw.id}
-                                            style={[
-                                                localStyles.luxuryGwCard,
-                                                isSelected && localStyles.luxuryGwCardActive,
-                                                isSelected && { borderColor: gw.accentColor }
-                                            ]}
-                                            onPress={() => setTopUpGateway(gw.id)}
-                                            activeOpacity={0.82}
-                                        >
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                                                <GatewayLogo gateway={gw} size={36} />
-
-                                                <View style={{ marginLeft: 12, flex: 1 }}>
-                                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                                        <Text style={[localStyles.luxuryGwName, isSelected && { color: '#0F172A', fontWeight: '900' }]}>
-                                                            {gw.name}
+                        {/* Amount input */}
+                        {gateway !== 'bank_transfer' && (
+                            <View style={{ marginTop: 14 }}>
+                                {gateway === 'nowpayments' ? (
+                                    <>
+                                        <Text style={S.inputLabel}>Amount (USD) — Converted at ₦{USD_RATE}/$</Text>
+                                        <TextInput
+                                            style={S.amtInput}
+                                            value={amountUsd}
+                                            onChangeText={setAmountUsd}
+                                            keyboardType="numeric"
+                                            placeholder="25"
+                                        />
+                                        {amountUsd && !isNaN(parseFloat(amountUsd)) && (
+                                            <Text style={S.convertHint}>= {fmt(Math.round(parseFloat(amountUsd) * USD_RATE))} to wallet</Text>
+                                        )}
+                                    </>
+                                ) : (
+                                    <>
+                                        <Text style={S.inputLabel}>Amount (NGN)</Text>
+                                        <TextInput
+                                            style={S.amtInput}
+                                            value={amountNgn}
+                                            onChangeText={setAmountNgn}
+                                            keyboardType="numeric"
+                                            placeholder="5000"
+                                        />
+                                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+                                            <Row style={{ gap: 8 }}>
+                                                {QUICK_AMOUNTS.map(q => (
+                                                    <TouchableOpacity key={q} onPress={() => setAmountNgn(String(q))}
+                                                        style={[S.quickBtn, amountNgn === String(q) && { backgroundColor: '#0F172A' }]}>
+                                                        <Text style={[S.quickBtnTxt, amountNgn === String(q) && { color: 'white' }]}>
+                                                            {q >= 1000 ? `₦${q / 1000}k` : `₦${q}`}
                                                         </Text>
-                                                        <View style={[localStyles.gwMiniBadge, { backgroundColor: gw.badgeBg }]}>
-                                                            <Text style={[localStyles.gwMiniBadgeTxt, { color: gw.badgeColor }]}>
-                                                                {gw.badge}
-                                                            </Text>
-                                                        </View>
-                                                    </View>
-
-                                                    <Text style={localStyles.luxuryGwSub} numberOfLines={1}>
-                                                        {gw.subtitle}
-                                                    </Text>
-
-                                                    <View style={localStyles.gwChannelsRow}>
-                                                        <View style={localStyles.gwSpeedTag}>
-                                                            <Ionicons name="flash" size={10} color="#059669" />
-                                                            <Text style={localStyles.gwSpeedTagTxt}>{gw.speed}</Text>
-                                                        </View>
-                                                        <Text style={localStyles.gwCurrencyTag}>[NGN ₦]</Text>
-                                                    </View>
-                                                </View>
-                                            </View>
-
-                                            <View style={localStyles.gwRadioContainer}>
-                                                <Ionicons
-                                                    name={isSelected ? "checkmark-circle" : "ellipse-outline"}
-                                                    size={22}
-                                                    color={isSelected ? gw.accentColor : "#CBD5E1"}
-                                                />
-                                            </View>
-                                        </TouchableOpacity>
-                                    );
-                                })}
-                            </View>
-
-                            {/* RECHARGE ACTION BUTTON */}
-                            <TouchableOpacity
-                                style={[localStyles.primaryActionBtn, isTopUpPending && { opacity: 0.7 }]}
-                                onPress={handleStartTopUp}
-                                disabled={isTopUpPending}
-                                activeOpacity={0.88}
-                            >
-                                {isTopUpPending ? (
-                                    <ActivityIndicator color="white" />
-                                ) : (
-                                    <View style={localStyles.actionBtnContent}>
-                                        <Text style={localStyles.actionBtnText}>
-                                            {cleanNgnAmount(topUpAmountNgn) > 0 ? `Recharge ${formatCurrency(cleanNgnAmount(topUpAmountNgn))} Now` : `Recharge Wallet`}
-                                        </Text>
-                                        <Ionicons name="arrow-forward" size={15} color="white" />
-                                    </View>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </Row>
+                                        </ScrollView>
+                                    </>
                                 )}
-                            </TouchableOpacity>
-
-                            {/* CLEAN SHORTCUT SWITCHERS TO DEDICATED MODALS */}
-                            <View style={{ marginTop: 18, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 14 }}>
-                                <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' }}>
-                                    OTHER PAYMENT OPTIONS
-                                </Text>
-
-                                <TouchableOpacity
-                                    style={{
-                                        flexDirection: 'row',
-                                        alignItems: 'center',
-                                        backgroundColor: '#F8FAFC',
-                                        padding: 12,
-                                        borderRadius: 12,
-                                        borderWidth: 1,
-                                        borderColor: '#E2E8F0',
-                                        marginBottom: 8
-                                    }}
-                                    onPress={() => {
-                                        setShowTopUpModal(false);
-                                        setShowBankTransferModal(true);
-                                    }}
-                                    activeOpacity={0.75}
-                                >
-                                    <View style={{ width: 34, height: 34, borderRadius: 9, backgroundColor: '#EDE9FE', alignItems: 'center', justifyContent: 'center' }}>
-                                        <Ionicons name="business" size={17} color="#7C3AED" />
-                                    </View>
-                                    <View style={{ flex: 1, marginLeft: 10 }}>
-                                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>Dedicated Bank Transfer</Text>
-                                        <Text style={{ fontSize: 11, color: '#64748B' }}>Transfer from OPay, PalmPay, Kuda or your bank app</Text>
-                                    </View>
-                                    <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
-                                </TouchableOpacity>
-
-                                <TouchableOpacity
-                                    style={{
-                                        flexDirection: 'row',
-                                        alignItems: 'center',
-                                        backgroundColor: '#F8FAFC',
-                                        padding: 12,
-                                        borderRadius: 12,
-                                        borderWidth: 1,
-                                        borderColor: '#E2E8F0'
-                                    }}
-                                    onPress={() => {
-                                        setShowTopUpModal(false);
-                                        setShowCryptoModal(true);
-                                    }}
-                                    activeOpacity={0.75}
-                                >
-                                    <View style={{ width: 34, height: 34, borderRadius: 9, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center' }}>
-                                        <Ionicons name="logo-bitcoin" size={17} color="#D97706" />
-                                    </View>
-                                    <View style={{ flex: 1, marginLeft: 10 }}>
-                                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>Deposit with Crypto (USD)</Text>
-                                        <Text style={{ fontSize: 11, color: '#64748B' }}>USDT, BTC, ETH via NOWPayments</Text>
-                                    </View>
-                                    <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
-                                </TouchableOpacity>
-                            </View>
-
-                            <View style={localStyles.footerSecurityLine}>
-                                <Ionicons name="lock-closed" size={11} color="#059669" />
-                                <Text style={localStyles.footerSecurityText}>
-                                    Bank-Grade 256-Bit SSL • Instant Escrow Credit Guarantee
-                                </Text>
-                            </View>
-                        </ScrollView>
-                    </View>
-                </View>
-            </Modal>
-
-            {/* ══════════════════════════════════════════════════════════════
-                MODAL 1B: DEDICATED BANK TRANSFER MODAL (FLUTTERWAVE MFB)
-            ══════════════════════════════════════════════════════════════ */}
-            <Modal
-                visible={showBankTransferModal}
-                transparent={true}
-                animationType="slide"
-                onRequestClose={() => setShowBankTransferModal(false)}
-            >
-                <View style={localStyles.modalDimLayer}>
-                    <View style={localStyles.modalContentSheet}>
-                        <View style={localStyles.modalHandleBar} />
-
-                        <View style={localStyles.modalHeaderSection}>
-                            <View>
-                                <Text style={localStyles.modalMainTitle}>Bank Transfer</Text>
-                                <Text style={localStyles.modalSecondaryTitle}>Instant 24/7 top-up via your banking app</Text>
-                            </View>
-                            <TouchableOpacity style={localStyles.modalCloseCircle} onPress={() => setShowBankTransferModal(false)}>
-                                <Ionicons name="close" size={18} color="#64748B" />
-                            </TouchableOpacity>
-                        </View>
-
-                        <ScrollView 
-                            showsVerticalScrollIndicator={false}
-                            contentContainerStyle={{ paddingBottom: 20 }}
-                            style={{ maxHeight: Platform.OS === 'web' ? '80vh' : 580 }}
-                        >
-                            {(() => {
-                                const userStr = String(user?.id || 'usr');
-                                const refCode = `AMF-${userStr.substring(0, 6).toUpperCase()}`;
-                                const accNum = '9187255635';
-                                const accName = 'Abu Mafhal Valued';
-                                const bankName = 'Flutterwave MFB';
-
-                                return (
-                                    <View>
-                                        {/* Main Dedicated Account Card */}
-                                        <View style={localStyles.vaAccountCard}>
-                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                                                    <Ionicons name="shield-checkmark" size={13} color="#059669" />
-                                                    <Text style={localStyles.bankDetailLabel}>YOUR PERMANENT DEDICATED ACCOUNT</Text>
-                                                </View>
-                                                <View style={[localStyles.bankInstantTag, { backgroundColor: '#DCFCE7' }]}>
-                                                    <Text style={[localStyles.bankInstantTagTxt, { color: '#15803D' }]}>LIVE NIBSS NUBAN</Text>
-                                                </View>
-                                            </View>
-
-                                            <Text style={localStyles.bankNameTxt}>{bankName}</Text>
-
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
-                                                <Text style={[localStyles.bankAccNumTxt, { letterSpacing: 2, fontSize: 24, color: '#0F172A', fontWeight: '900' }]}>
-                                                    {accNum}
-                                                </Text>
-                                                <TouchableOpacity
-                                                    style={localStyles.bankCopyBtn}
-                                                    onPress={() => copyToClipboard(accNum, 'Dedicated Account Number')}
-                                                >
-                                                    <Ionicons name="copy" size={13} color="#2563EB" />
-                                                    <Text style={localStyles.bankCopyBtnTxt}>Copy</Text>
-                                                </TouchableOpacity>
-                                            </View>
-
-                                            <Text style={[localStyles.bankAccNameTxt, { fontSize: 14, color: '#334155', fontWeight: '700' }]}>
-                                                {accName}
-                                            </Text>
-
-                                            {/* Reference / Narration */}
-                                            <View style={[localStyles.vaExpiryRow, { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', marginTop: 10 }]}>
-                                                <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '700' }}>
-                                                    Narration / Ref: <Text style={{ color: '#0F172A', fontWeight: '900' }}>{refCode}</Text>
-                                                </Text>
-                                                <TouchableOpacity
-                                                    style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 3 }}
-                                                    onPress={() => copyToClipboard(refCode, 'Payment Reference')}
-                                                >
-                                                    <Ionicons name="copy-outline" size={11} color="#6366F1" />
-                                                    <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#6366F1' }}>Copy Ref</Text>
-                                                </TouchableOpacity>
-                                            </View>
-
-                                            {/* Permanent Account Guarantee Notice */}
-                                            <View style={[localStyles.vaExpiryRow, { backgroundColor: '#F0FDF4', marginTop: 8 }]}>
-                                                <Ionicons name="infinite" size={13} color="#059669" />
-                                                <Text style={[localStyles.vaExpiryTxt, { color: '#065F46' }]}>
-                                                    Permanent dedicated account • Never changes • Transfer any amount anytime
-                                                </Text>
-                                            </View>
-                                        </View>
-
-                                        {/* Instructions Box */}
-                                        <View style={[localStyles.vaInstructionBox, { marginTop: 12 }]}>
-                                            <Ionicons name="information-circle-outline" size={16} color="#6366F1" style={{ marginTop: 2 }} />
-                                            <Text style={localStyles.vaInstructionTxt}>
-                                                Transfer any amount from your bank app (OPay, Kuda, PalmPay, Moniepoint, GTBank, Zenith, Access, etc.) to your dedicated Flutterwave MFB account above. Your Abu Mafhal wallet is automatically credited 24/7 upon bank confirmation.
-                                            </Text>
-                                        </View>
-
-                                        {/* Direct Action Buttons for Bank Transfer */}
-                                        <View style={{ marginTop: 14, gap: 10 }}>
-                                            <TouchableOpacity
-                                                style={[localStyles.primaryActionBtn, { backgroundColor: '#2563EB' }]}
-                                                onPress={() => copyToClipboard(accNum, 'Dedicated Account Number')}
-                                                activeOpacity={0.88}
-                                            >
-                                                <Ionicons name="copy" size={16} color="white" />
-                                                <Text style={localStyles.actionBtnText}>Copy Account Number</Text>
-                                            </TouchableOpacity>
-
-                                            <TouchableOpacity
-                                                style={[localStyles.vaCopyAllBtn, { borderColor: '#059669', backgroundColor: '#ECFDF5', paddingVertical: 13 }]}
-                                                onPress={handleManualBankSync}
-                                                activeOpacity={0.8}
-                                                disabled={isSyncingBal}
-                                            >
-                                                {isSyncingBal ? (
-                                                    <ActivityIndicator size="small" color="#059669" />
-                                                ) : (
-                                                    <Ionicons name="refresh" size={15} color="#059669" />
-                                                )}
-                                                <Text style={[localStyles.vaCopyAllBtnTxt, { color: '#059669', fontWeight: '800' }]}>
-                                                    {isSyncingBal ? 'Checking Bank Transfers...' : '🔄 I Have Transferred • Check & Refresh Balance'}
-                                                </Text>
-                                            </TouchableOpacity>
-                                        </View>
-
-                                        {/* Switcher to Card Payment */}
-                                        <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 12 }}>
-                                            <TouchableOpacity
-                                                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, gap: 6 }}
-                                                onPress={() => {
-                                                    setShowBankTransferModal(false);
-                                                    setShowTopUpModal(true);
-                                                }}
-                                                activeOpacity={0.75}
-                                            >
-                                                <Ionicons name="card-outline" size={14} color="#2563EB" />
-                                                <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#2563EB' }}>
-                                                    Prefer paying with Debit Card or USSD? Pay Online ➔
-                                                </Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                    </View>
-                                );
-                            })()}
-                        </ScrollView>
-                    </View>
-                </View>
-            </Modal>
-
-            {/* ══════════════════════════════════════════════════════════════
-                MODAL 1C: CRYPTO TOP-UP MODAL (NOWPAYMENTS IN USD)
-            ══════════════════════════════════════════════════════════════ */}
-            <Modal
-                visible={showCryptoModal}
-                transparent={true}
-                animationType="slide"
-                onRequestClose={() => setShowCryptoModal(false)}
-            >
-                <View style={localStyles.modalDimLayer}>
-                    <View style={localStyles.modalContentSheet}>
-                        <View style={localStyles.modalHandleBar} />
-
-                        <View style={localStyles.modalHeaderSection}>
-                            <View>
-                                <Text style={localStyles.modalMainTitle}>Deposit with Crypto</Text>
-                                <Text style={localStyles.modalSecondaryTitle}>USDT, BTC, ETH & 150+ Coins via NOWPayments</Text>
-                            </View>
-                            <TouchableOpacity style={localStyles.modalCloseCircle} onPress={() => setShowCryptoModal(false)}>
-                                <Ionicons name="close" size={18} color="#64748B" />
-                            </TouchableOpacity>
-                        </View>
-
-                        <ScrollView 
-                            showsVerticalScrollIndicator={false}
-                            contentContainerStyle={{ paddingBottom: 20 }}
-                            style={{ maxHeight: Platform.OS === 'web' ? '80vh' : 580 }}
-                        >
-                            <View style={localStyles.cryptoAlertBanner}>
-                                <Ionicons name="flash" size={14} color="#D97706" />
-                                <Text style={localStyles.cryptoAlertTxt}>
-                                    NOWPayments Crypto Invoice is in <Text style={{ fontWeight: '900' }}>USD ($)</Text>. Auto-converted to Naira at live rate ($1 = ₦1,500).
-                                </Text>
-                            </View>
-
-                            <Text style={localStyles.fieldSectionHeader}>ENTER AMOUNT IN USD ($)</Text>
-                            <View style={localStyles.inputAreaContainer}>
-                                <Text style={[localStyles.inputPrefix, { color: '#D97706' }]}>$</Text>
-                                <TextInput
-                                    style={localStyles.mainTextInput}
-                                    value={topUpAmountUsd}
-                                    onChangeText={setTopUpAmountUsd}
-                                    keyboardType="numeric"
-                                    placeholder="25.00"
-                                    placeholderTextColor="#94A3B8"
-                                />
-                            </View>
-
-                            {/* Live NGN Equivalent Display */}
-                            <View style={localStyles.conversionPill}>
-                                <Ionicons name="swap-horizontal" size={13} color="#059669" />
-                                <Text style={localStyles.conversionPillTxt}>
-                                    ${topUpAmountUsd || '0'} USD ≈ <Text style={{ fontWeight: '900', color: '#059669' }}>{formatCurrency((parseFloat(topUpAmountUsd) || 0) * USD_RATE)}</Text> credited to wallet
-                                </Text>
-                            </View>
-
-                            {/* USD Quick Presets */}
-                            <Text style={localStyles.quickSelectionLabel}>PRESET CRYPTO AMOUNTS (USD)</Text>
-                            <View style={localStyles.pillsGrid}>
-                                {['10', '25', '50', '100', '250', '500'].map(val => (
-                                    <TouchableOpacity
-                                        key={val}
-                                        style={[localStyles.amountPill, topUpAmountUsd === val && [localStyles.activePill, { borderColor: '#F59E0B', backgroundColor: '#FFFBEB' }]]}
-                                        onPress={() => setTopUpAmountUsd(val)}
-                                    >
-                                        <Text style={[localStyles.pillText, topUpAmountUsd === val && { color: '#D97706', fontWeight: '900' }]}>
-                                            ${val} USD
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-
-                            {/* Supported Coins Showcase */}
-                            <Text style={localStyles.quickSelectionLabel}>ACCEPTED CRYPTOCURRENCIES</Text>
-                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
-                                {['USDT (TRC20)', 'USDT (BEP20)', 'Bitcoin (BTC)', 'Ethereum (ETH)', 'Solana (SOL)', 'USDC'].map(coin => (
-                                    <View key={coin} style={{ backgroundColor: '#F8FAFC', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#334155' }}>{coin}</Text>
-                                    </View>
-                                ))}
-                            </View>
-
-                            {/* Submit Crypto Top-up */}
-                            <TouchableOpacity
-                                style={[localStyles.primaryActionBtn, { backgroundColor: '#D97706' }, isTopUpPending && { opacity: 0.7 }]}
-                                onPress={() => {
-                                    setTopUpGateway('nowpayments');
-                                    handleStartTopUp();
-                                }}
-                                disabled={isTopUpPending}
-                                activeOpacity={0.88}
-                            >
-                                {isTopUpPending ? (
-                                    <ActivityIndicator color="white" />
-                                ) : (
-                                    <View style={localStyles.actionBtnContent}>
-                                        <Text style={localStyles.actionBtnText}>
-                                            Pay ${topUpAmountUsd || '0'} USD via Crypto
-                                        </Text>
-                                        <Ionicons name="arrow-forward" size={15} color="white" />
-                                    </View>
-                                )}
-                            </TouchableOpacity>
-
-                            {/* Switcher to Naira */}
-                            <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 12 }}>
-                                <TouchableOpacity
-                                    style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, gap: 6 }}
-                                    onPress={() => {
-                                        setShowCryptoModal(false);
-                                        setShowTopUpModal(true);
-                                    }}
-                                    activeOpacity={0.75}
-                                >
-                                    <Ionicons name="cash-outline" size={14} color="#059669" />
-                                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#059669' }}>
-                                        Prefer paying in Naira (₦) via Card or Bank? Click here ➔
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
-                        </ScrollView>
-                    </View>
-                </View>
-            </Modal>
-
-            {/* ══════════════════════════════════════════════════════════════
-                MODAL 2: UNIFIED PAYMENT WEBVIEW (PAYSTACK, FLUTTERWAVE, NOWPAYMENTS)
-            ══════════════════════════════════════════════════════════════ */}
-            <Modal visible={showCheckoutWebView} animationType="slide" transparent={false}>
-                <SafeAreaView style={{ flex: 1, backgroundColor: 'white' }}>
-                    <View style={localStyles.webViewHeader}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            <Ionicons name="shield-checkmark" size={16} color="#059669" />
-                            <Text style={localStyles.webViewHeaderTitle}>{activeGatewayName} Secure Gateway</Text>
-                        </View>
-                        <TouchableOpacity 
-                            onPress={() => {
-                                setShowCheckoutWebView(false);
-                                Alert.alert('Notice', 'Payment window closed. If your payment was completed, it will reflect within 60 seconds.');
-                                fetchWalletData();
-                            }}
-                        >
-                            <Ionicons name="close" size={22} color="#0F172A" />
-                        </TouchableOpacity>
-                    </View>
-                    <WebView
-                        source={{ uri: checkoutUrl }}
-                        onNavigationStateChange={async (navState) => {
-                            const url = (navState.url || '').toLowerCase();
-                            if (url.includes('status=successful') || url.includes('standard.paystack.co/close') || url.includes('payment/verify')) {
-                                setShowCheckoutWebView(false);
-                                await handlePaymentCompleteVerification(pendingCreditAmountNgn, activeRef, activeGatewayName);
-                            }
-                        }}
-                        startInLoadingState={true}
-                        renderLoading={() => (
-                            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                                <ActivityIndicator size="large" color="#0F172A" />
-                                <Text style={{ marginTop: 10, color: '#64748B', fontWeight: '700' }}>Loading Secure Gateway...</Text>
                             </View>
                         )}
-                        style={{ flex: 1 }}
-                    />
-                </SafeAreaView>
-            </Modal>
 
-            {/* ══════════════════════════════════════════════════════════════
-                MODAL 3: P2P TRANSFER MODAL
-            ══════════════════════════════════════════════════════════════ */}
-            <Modal
-                visible={showTransferModal}
-                transparent={true}
-                animationType="slide"
-                onRequestClose={() => setShowTransferModal(false)}
-            >
-                <View style={localStyles.modalDimLayer}>
-                    <View style={localStyles.modalContentSheet}>
-                        <View style={localStyles.modalHandleBar} />
-                        <View style={localStyles.modalHeaderSection}>
-                            <View>
-                                <Text style={localStyles.modalMainTitle}>Send Money (P2P)</Text>
-                                <Text style={localStyles.modalSecondaryTitle}>Instant transfer to any Mafhal member</Text>
+                        {/* Bank transfer: show virtual account */}
+                        {gateway === 'bank_transfer' && (
+                            <View style={S.vaBox}>
+                                {vaLoading ? (
+                                    <Row style={{ gap: 10, justifyContent: 'center' }}>
+                                        <ActivityIndicator color="#6366F1" />
+                                        <Text style={{ color: '#64748B', fontSize: 13 }}>Loading your dedicated account…</Text>
+                                    </Row>
+                                ) : vaError ? (
+                                    <>
+                                        <Text style={{ color: '#EF4444', fontSize: 12, marginBottom: 8 }}>⚠️ {vaError}</Text>
+                                        <TouchableOpacity onPress={loadVirtualAccount} style={S.retryBtn}>
+                                            <Text style={{ color: '#6366F1', fontWeight: '700', fontSize: 13 }}>Retry</Text>
+                                        </TouchableOpacity>
+                                    </>
+                                ) : virtualAcc ? (
+                                    <>
+                                        <Text style={S.vaLabel}>YOUR DEDICATED ACCOUNT</Text>
+                                        <View style={S.vaDetail}><Text style={S.vaKey}>Bank</Text><Text style={S.vaVal}>{virtualAcc.bank_name}</Text></View>
+                                        <View style={S.vaDetail}><Text style={S.vaKey}>Account No.</Text>
+                                            <TouchableOpacity onPress={() => copyText(virtualAcc.account_number, 'Account Number')}>
+                                                <Text style={[S.vaVal, { color: '#6366F1', fontWeight: '900' }]}>{virtualAcc.account_number} 📋</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                        <View style={S.vaDetail}><Text style={S.vaKey}>Account Name</Text><Text style={S.vaVal}>{virtualAcc.account_name}</Text></View>
+                                        <Text style={{ fontSize: 11, color: '#10B981', marginTop: 10, fontWeight: '600' }}>
+                                            ✅ Transfer any amount from OPay, Kuda, PalmPay, GTBank etc. Balance auto-credits in 30–90 seconds.
+                                        </Text>
+                                        <TouchableOpacity onPress={handleBankSync} disabled={syncing}
+                                            style={[S.syncBtn, { opacity: syncing ? 0.6 : 1 }]}>
+                                            {syncing ? <ActivityIndicator size="small" color="white" />
+                                                : <><Ionicons name="sync" size={15} color="white" /><Text style={S.syncBtnTxt}>Check & Sync Now</Text></>}
+                                        </TouchableOpacity>
+                                    </>
+                                ) : (
+                                    <TouchableOpacity onPress={loadVirtualAccount} style={S.retryBtn}>
+                                        <Text style={{ color: '#6366F1', fontWeight: '700' }}>Load My Dedicated Account</Text>
+                                    </TouchableOpacity>
+                                )}
                             </View>
-                            <TouchableOpacity style={localStyles.modalCloseCircle} onPress={() => setShowTransferModal(false)}>
-                                <Ionicons name="close" size={18} color="#64748B" />
+                        )}
+
+                        {gateway !== 'bank_transfer' && (
+                            <TouchableOpacity
+                                onPress={handleTopUp}
+                                disabled={topUpPending}
+                                style={[S.primaryBtn, { opacity: topUpPending ? 0.7 : 1 }]}
+                            >
+                                {topUpPending
+                                    ? <ActivityIndicator color="white" />
+                                    : <Text style={S.primaryBtnTxt}>
+                                        {gateway === 'nowpayments' ? `Pay $${amountUsd} with Crypto` : `Top Up ${fmt(cleanNum(amountNgn))}`}
+                                    </Text>}
                             </TouchableOpacity>
-                        </View>
-
-                        <Text style={localStyles.fieldSectionHeader}>RECIPIENT (PHONE, EMAIL, OR USERNAME)</Text>
-                        <View style={[localStyles.inputAreaContainer, { marginBottom: 12 }]}>
-                            <Ionicons name="person-outline" size={16} color="#94A3B8" style={{ marginRight: 8 }} />
-                            <TextInput
-                                style={[localStyles.mainTextInput, { fontSize: 15 }]}
-                                value={transferRecipient}
-                                onChangeText={setTransferRecipient}
-                                placeholder="e.g. 08012345678 or user@example.com"
-                                placeholderTextColor="#CBD5E1"
-                                autoCapitalize="none"
-                            />
-                        </View>
-
-                        <Text style={localStyles.fieldSectionHeader}>AMOUNT TO SEND (₦)</Text>
-                        <View style={[localStyles.inputAreaContainer, { marginBottom: 12 }]}>
-                            <Text style={localStyles.inputPrefix}>₦</Text>
-                            <TextInput
-                                style={localStyles.mainTextInput}
-                                value={transferAmount}
-                                onChangeText={setTransferAmount}
-                                keyboardType="numeric"
-                                placeholder="0"
-                                placeholderTextColor="#CBD5E1"
-                            />
-                        </View>
-
-                        <Text style={localStyles.fieldSectionHeader}>NOTE / PURPOSE (OPTIONAL)</Text>
-                        <View style={[localStyles.inputAreaContainer, { marginBottom: 18 }]}>
-                            <TextInput
-                                style={[localStyles.mainTextInput, { fontSize: 13 }]}
-                                value={transferNote}
-                                onChangeText={setTransferNote}
-                                placeholder="e.g. Lunch refund, Birthday gift"
-                                placeholderTextColor="#CBD5E1"
-                            />
-                        </View>
-
-                        <TouchableOpacity
-                            style={[localStyles.primaryActionBtn, { backgroundColor: '#2563EB' }, isTransferPending && { opacity: 0.7 }]}
-                            onPress={handleP2PTransfer}
-                            disabled={isTransferPending}
-                        >
-                            {isTransferPending ? (
-                                <ActivityIndicator color="white" />
-                            ) : (
-                                <View style={localStyles.actionBtnContent}>
-                                    <Text style={localStyles.actionBtnText}>Send {transferAmount ? formatCurrency(parseInt(transferAmount) || 0) : 'Funds'}</Text>
-                                    <Ionicons name="paper-plane" size={14} color="white" />
-                                </View>
-                            )}
-                        </TouchableOpacity>
+                        )}
                     </View>
                 </View>
             </Modal>
 
-
-
-            {/* ══════════════════════════════════════════════════════════════
-                MODAL 5: 100% ESCROW DETAILS MODAL
-            ══════════════════════════════════════════════════════════════ */}
-            <Modal visible={showEscrowModal} transparent={true} animationType="slide" onRequestClose={() => setShowEscrowModal(false)}>
-                <View style={localStyles.modalDimLayer}>
-                    <View style={localStyles.modalContentSheet}>
-                        <View style={localStyles.modalHandleBar} />
-                        <View style={localStyles.modalHeaderSection}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                <View style={localStyles.escrowShieldCircle}>
-                                    <Ionicons name="shield-checkmark" size={20} color="#059669" />
-                                </View>
-                                <View>
-                                    <Text style={localStyles.modalMainTitle}>100% Escrow Protection</Text>
-                                    <Text style={localStyles.modalSecondaryTitle}>Bank-Grade Buyer Defense Protocol</Text>
-                                </View>
-                            </View>
-                            <TouchableOpacity style={localStyles.modalCloseCircle} onPress={() => setShowEscrowModal(false)}>
-                                <Ionicons name="close" size={18} color="#64748B" />
+            {/* ── Checkout WebView (Mobile only) ── */}
+            {Platform.OS !== 'web' && (
+                <Modal visible={showWebView} transparent={false} animationType="slide" onRequestClose={() => setShowWebView(false)}>
+                    <View style={{ flex: 1, backgroundColor: '#0F172A' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14, paddingTop: 50, gap: 12 }}>
+                            <TouchableOpacity onPress={() => {
+                                Alert.alert('Cancel Payment?', 'Are you sure you want to leave the payment screen?', [
+                                    { text: 'Stay', style: 'cancel' },
+                                    { text: 'Leave', style: 'destructive', onPress: () => setShowWebView(false) }
+                                ]);
+                            }} style={{ padding: 6 }}>
+                                <Ionicons name="close" size={22} color="white" />
                             </TouchableOpacity>
+                            <Text style={{ color: 'white', fontWeight: '800', fontSize: 15, flex: 1 }}>{activeGwName} Checkout</Text>
                         </View>
-
-                        <ScrollView style={{ maxHeight: 320, marginTop: 10 }}>
-                            <View style={localStyles.escrowModalRow}>
-                                <Ionicons name="lock-closed" size={16} color="#059669" style={{ marginTop: 2 }} />
-                                <View style={{ flex: 1, marginLeft: 10 }}>
-                                    <Text style={localStyles.escrowModalBulletTitle}>Zero Upfront Merchant Payout</Text>
-                                    <Text style={localStyles.escrowModalBulletDesc}>
-                                        Funds remain securely locked in Abu Mafhal's escrow vault until you physically inspect and accept your delivery.
-                                    </Text>
-                                </View>
-                            </View>
-
-                            <View style={localStyles.escrowModalRow}>
-                                <Ionicons name="repeat" size={16} color="#2563EB" style={{ marginTop: 2 }} />
-                                <View style={{ flex: 1, marginLeft: 10 }}>
-                                    <Text style={localStyles.escrowModalBulletTitle}>7-Day Free Return & Replacement</Text>
-                                    <Text style={localStyles.escrowModalBulletDesc}>
-                                        Damaged, defective, or incorrect items qualify for an immediate 100% refund or free item replacement.
-                                    </Text>
-                                </View>
-                            </View>
-
-                            <View style={localStyles.escrowModalRow}>
-                                <Ionicons name="checkmark-done-circle" size={16} color="#D97706" style={{ marginTop: 2 }} />
-                                <View style={{ flex: 1, marginLeft: 10 }}>
-                                    <Text style={localStyles.escrowModalBulletTitle}>Verified Courier Handover</Text>
-                                    <Text style={localStyles.escrowModalBulletDesc}>
-                                        Delivery drivers require your unique secret confirmation code before an order can be marked as complete.
-                                    </Text>
-                                </View>
-                            </View>
-                        </ScrollView>
-
-                        <TouchableOpacity style={localStyles.primaryActionBtn} onPress={() => setShowEscrowModal(false)}>
-                            <Text style={localStyles.actionBtnText}>I Understand • My Funds Are Safe</Text>
-                        </TouchableOpacity>
+                        {checkoutUrl && (
+                            <WebView
+                                source={{ uri: checkoutUrl }}
+                                style={{ flex: 1 }}
+                                onNavigationStateChange={async (nav) => {
+                                    const url = nav.url || '';
+                                    if (url.includes('paystack.co/close') || url.includes('success') || url.includes('callback') || url.includes('reference=')) {
+                                        setShowWebView(false);
+                                        if (activeRef && pendingAmt > 0) {
+                                            await creditWallet(pendingAmt, activeRef, activeGwName);
+                                        }
+                                        if (typeof window !== 'undefined') window.localStorage.removeItem('@amf_pending_topup');
+                                        AsyncStorage.removeItem('@amf_pending_topup').catch(() => {});
+                                    }
+                                }}
+                            />
+                        )}
                     </View>
-                </View>
-            </Modal>
+                </Modal>
+            )}
 
-            {/* ══════════════════════════════════════════════════════════════
-                MODAL 6: TRANSACTION RECEIPT MODAL
-            ══════════════════════════════════════════════════════════════ */}
-            <Modal visible={selectedTx !== null} transparent={true} animationType="fade" onRequestClose={() => setSelectedTx(null)}>
-                {selectedTx ? (
-                    <View style={[localStyles.modalDimLayer, { justifyContent: 'center', padding: 24 }]}>
-                        <View style={localStyles.receiptCard}>
-                            <TouchableOpacity style={{ position: 'absolute', top: 16, right: 16 }} onPress={() => setSelectedTx(null)}>
-                                <Ionicons name="close" size={20} color="#64748B" />
-                            </TouchableOpacity>
-
-                            <View style={{ alignItems: 'center', marginTop: 10 }}>
-                                <View style={localStyles.receiptIconCircle}>
-                                    <Ionicons name="checkmark-circle" size={32} color="#059669" />
-                                </View>
-                                <Text style={localStyles.receiptHeaderTxt}>Digital Payment Receipt</Text>
-                                <Text style={localStyles.receiptAmountTxt}>
-                                    {selectedTx.amount !== 0 ? (
-                                        selectedTx.amount > 0 ? `+₦${selectedTx.amount.toLocaleString()}` : `-₦${Math.abs(selectedTx.amount).toLocaleString()}`
-                                    ) : selectedTx.points_change ? `+${selectedTx.points_change} AMC` : '-'}
+            {/* ── Success Modal ── */}
+            <Modal visible={showSuccess} transparent animationType="fade" onRequestClose={() => setShowSuccess(false)}>
+                <View style={[S.modalBg, { justifyContent: 'center', paddingHorizontal: 24 }]}>
+                    <View style={[S.modalSheet, { alignItems: 'center', paddingVertical: 32 }]}>
+                        <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: '#DCFCE7', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                            <Ionicons name="checkmark-circle" size={44} color="#10B981" />
+                        </View>
+                        <Text style={[S.modalTitle, { textAlign: 'center', marginBottom: 8 }]}>Payment Successful! 🎉</Text>
+                        {successDetails && (
+                            <>
+                                <Text style={{ fontSize: 28, fontWeight: '900', color: '#0F172A', marginBottom: 4 }}>
+                                    {fmt(successDetails.amount)}
                                 </Text>
-                            </View>
-
-                            <View style={localStyles.receiptDashedLine} />
-
-                            <View style={{ gap: 8 }}>
-                                <View style={localStyles.receiptRow}>
-                                    <Text style={localStyles.receiptFieldLabel}>Reference</Text>
-                                    <Text style={localStyles.receiptFieldVal}>#{selectedTx.id?.toString().slice(0, 12).toUpperCase() || 'TX-8492'}</Text>
-                                </View>
-                                <View style={localStyles.receiptRow}>
-                                    <Text style={localStyles.receiptFieldLabel}>Type</Text>
-                                    <Text style={[localStyles.receiptFieldVal, { textTransform: 'capitalize' }]}>{selectedTx.type || 'payment'}</Text>
-                                </View>
-                                <View style={localStyles.receiptRow}>
-                                    <Text style={localStyles.receiptFieldLabel}>Status</Text>
-                                    <Text style={[localStyles.receiptFieldVal, { color: '#059669' }]}>SUCCESSFUL</Text>
-                                </View>
-                                <View style={localStyles.receiptRow}>
-                                    <Text style={localStyles.receiptFieldLabel}>Description</Text>
-                                    <Text style={[localStyles.receiptFieldVal, { maxWidth: 180, textAlign: 'right' }]} numberOfLines={2}>
-                                        {selectedTx.description || 'Wallet Transaction'}
-                                    </Text>
-                                </View>
-                                <View style={localStyles.receiptRow}>
-                                    <Text style={localStyles.receiptFieldLabel}>Timestamp</Text>
-                                    <Text style={localStyles.receiptFieldVal}>{new Date(selectedTx.created_at).toLocaleString()}</Text>
-                                </View>
-                            </View>
-
-                            <TouchableOpacity style={localStyles.receiptCloseBtn} onPress={() => setSelectedTx(null)}>
-                                <Text style={localStyles.receiptCloseBtnTxt}>Close Receipt</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                ) : null}
-            </Modal>
-
-            {/* ══════════════════════════════════════════════════════════════
-                MODAL 7: CREATE SAVINGS POT
-            ══════════════════════════════════════════════════════════════ */}
-            <Modal visible={showCreatePotModal} transparent={true} animationType="slide" onRequestClose={() => setShowCreatePotModal(false)}>
-                <View style={localStyles.modalDimLayer}>
-                    <View style={localStyles.modalContentSheet}>
-                        <View style={localStyles.modalHandleBar} />
-                        <View style={localStyles.modalHeaderSection}>
-                            <View>
-                                <Text style={localStyles.modalMainTitle}>Create Savings Pot</Text>
-                                <Text style={localStyles.modalSecondaryTitle}>Set a dedicated financial milestone</Text>
-                            </View>
-                            <TouchableOpacity style={localStyles.modalCloseCircle} onPress={() => setShowCreatePotModal(false)}>
-                                <Ionicons name="close" size={18} color="#64748B" />
-                            </TouchableOpacity>
-                        </View>
-
-                        <Text style={localStyles.fieldSectionHeader}>POT NAME</Text>
-                        <View style={[localStyles.inputAreaContainer, { marginBottom: 12 }]}>
-                            <TextInput
-                                style={[localStyles.mainTextInput, { fontSize: 15 }]}
-                                value={newPotName}
-                                onChangeText={setNewPotName}
-                                placeholder="e.g. Wedding Gift, New iPhone, Rent"
-                                placeholderTextColor="#CBD5E1"
-                            />
-                        </View>
-
-                        <Text style={localStyles.fieldSectionHeader}>TARGET AMOUNT (₦)</Text>
-                        <View style={[localStyles.inputAreaContainer, { marginBottom: 18 }]}>
-                            <Text style={localStyles.inputPrefix}>₦</Text>
-                            <TextInput
-                                style={localStyles.mainTextInput}
-                                value={newPotTarget}
-                                onChangeText={setNewPotTarget}
-                                keyboardType="numeric"
-                                placeholder="20000"
-                                placeholderTextColor="#CBD5E1"
-                            />
-                        </View>
-
-                        <TouchableOpacity style={localStyles.primaryActionBtn} onPress={handleCreatePot}>
-                            <Text style={localStyles.actionBtnText}>Create Pot</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
-
-            {/* ══════════════════════════════════════════════════════════════
-                MODAL 8: BUDGET LIMIT MODAL
-            ══════════════════════════════════════════════════════════════ */}
-            <Modal visible={showBudgetModal} transparent={true} animationType="slide" onRequestClose={() => setShowBudgetModal(false)}>
-                <View style={localStyles.modalDimLayer}>
-                    <View style={localStyles.modalContentSheet}>
-                        <View style={localStyles.modalHandleBar} />
-                        <View style={localStyles.modalHeaderSection}>
-                            <View>
-                                <Text style={localStyles.modalMainTitle}>Monthly Spend Limit</Text>
-                                <Text style={localStyles.modalSecondaryTitle}>Set a budget ceiling to keep expenses in check</Text>
-                            </View>
-                            <TouchableOpacity style={localStyles.modalCloseCircle} onPress={() => setShowBudgetModal(false)}>
-                                <Ionicons name="close" size={18} color="#64748B" />
-                            </TouchableOpacity>
-                        </View>
-
-                        <Text style={localStyles.fieldSectionHeader}>MONTHLY LIMIT (₦)</Text>
-                        <View style={[localStyles.inputAreaContainer, { marginBottom: 18 }]}>
-                            <Text style={localStyles.inputPrefix}>₦</Text>
-                            <TextInput
-                                style={localStyles.mainTextInput}
-                                value={budgetInputVal}
-                                onChangeText={setBudgetInputVal}
-                                keyboardType="numeric"
-                                placeholder={monthlyLimit.toString()}
-                                placeholderTextColor="#CBD5E1"
-                            />
-                        </View>
-
-                        <TouchableOpacity 
-                            style={localStyles.primaryActionBtn} 
-                            onPress={async () => {
-                                const val = parseInt(budgetInputVal);
-                                if (isNaN(val) || val <= 0) {
-                                    Alert.alert('Error', 'Please enter a valid amount');
-                                    return;
-                                }
-                                setMonthlyLimit(val);
-                                if (user?.id) AsyncStorage.setItem(`MONTHLY_LIMIT_${user.id}`, val.toString());
-                                setShowBudgetModal(false);
-                                Alert.alert('Saved', `Monthly limit updated to ${formatCurrency(val)}`);
-                            }}
-                        >
-                            <Text style={localStyles.actionBtnText}>Save Limit</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
-
-            {/* ══════════════════════════════════════════════════════════════
-                MODAL 9: REDEEM VOUCHER MODAL
-            ══════════════════════════════════════════════════════════════ */}
-            <Modal visible={showVoucherModal} transparent={true} animationType="slide" onRequestClose={() => setShowVoucherModal(false)}>
-                <View style={localStyles.modalDimLayer}>
-                    <View style={localStyles.modalContentSheet}>
-                        <View style={localStyles.modalHandleBar} />
-                        <View style={localStyles.modalHeaderSection}>
-                            <View>
-                                <Text style={localStyles.modalMainTitle}>Redeem Promo Voucher</Text>
-                                <Text style={localStyles.modalSecondaryTitle}>Enter your secret code to claim bonus coins</Text>
-                            </View>
-                            <TouchableOpacity style={localStyles.modalCloseCircle} onPress={() => setShowVoucherModal(false)}>
-                                <Ionicons name="close" size={18} color="#64748B" />
-                            </TouchableOpacity>
-                        </View>
-
-                        <View style={[localStyles.inputAreaContainer, { marginBottom: 18 }]}>
-                            <Ionicons name="gift-outline" size={18} color="#94A3B8" style={{ marginRight: 8 }} />
-                            <TextInput
-                                style={[localStyles.mainTextInput, { fontSize: 17 }]}
-                                value={voucherCode}
-                                onChangeText={setVoucherCode}
-                                placeholder="e.g. Enter discount voucher code"
-                                placeholderTextColor="#CBD5E1"
-                                autoCapitalize="characters"
-                            />
-                        </View>
-
-                        <TouchableOpacity 
-                            style={[localStyles.primaryActionBtn, { backgroundColor: '#059669' }]} 
-                            onPress={handleRedeemVoucher}
-                            disabled={isVoucherRedeeming}
-                        >
-                            {isVoucherRedeeming ? (
-                                <ActivityIndicator color="white" />
-                            ) : (
-                                <Text style={localStyles.actionBtnText}>Redeem Code</Text>
-                            )}
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
-
-            {/* ══════════════════════════════════════════════════════════════
-                MODAL 10: CELEBRATORY DEPOSIT SUCCESS MODAL
-            ══════════════════════════════════════════════════════════════ */}
-            <Modal
-                visible={showDepositSuccessModal}
-                transparent={true}
-                animationType="fade"
-                onRequestClose={() => setShowDepositSuccessModal(false)}
-            >
-                <View style={localStyles.modalDimLayer}>
-                    <View style={[localStyles.modalContentSheet, { paddingBottom: 28, alignItems: 'center' }]}>
-                        <View style={localStyles.modalHandleBar} />
-
-                        <View style={localStyles.successCelebrationIconRing}>
-                            <View style={localStyles.successCelebrationIconInner}>
-                                <Ionicons name="checkmark-circle" size={44} color="#059669" />
-                            </View>
-                        </View>
-
-                        <Text style={localStyles.successTitle}>Deposit Successful! 🎉</Text>
-                        <Text style={localStyles.successSubtitle}>
-                            Your wallet balance has been credited instantly with 100% Escrow Protection.
+                                {successDetails.usdAmount && (
+                                    <Text style={{ color: '#64748B', fontSize: 13, marginBottom: 4 }}>= ${successDetails.usdAmount} USD</Text>
+                                )}
+                                <Text style={{ color: '#64748B', fontSize: 13, marginBottom: 4 }}>via {successDetails.gateway}</Text>
+                                <Text style={{ color: '#94A3B8', fontSize: 11 }}>Ref: {successDetails.reference}</Text>
+                            </>
+                        )}
+                        <Text style={{ fontSize: 13, color: '#10B981', fontWeight: '700', marginTop: 12 }}>
+                            Your wallet balance has been updated ✅
                         </Text>
-
-                        <View style={localStyles.successAmountCard}>
-                            <Text style={localStyles.successAmountLabel}>TOTAL ACCREDITED AMOUNT</Text>
-                            <Text style={localStyles.successAmountBig}>
-                                +{formatCurrency(depositSuccessDetails?.amount || 0)}
-                            </Text>
-                            {depositSuccessDetails?.usdAmount ? (
-                                <Text style={localStyles.successUsdSub}>
-                                    (${depositSuccessDetails.usdAmount} USD via {depositSuccessDetails.gateway || 'NOWPayments'})
-                                </Text>
-                            ) : null}
-                        </View>
-
-                        <View style={localStyles.successReceiptTable}>
-                            <View style={localStyles.receiptRow}>
-                                <Text style={localStyles.receiptKey}>Payment Gateway</Text>
-                                <Text style={localStyles.receiptVal}>{depositSuccessDetails?.gateway || 'Paystack'}</Text>
-                            </View>
-                            <View style={localStyles.receiptRow}>
-                                <Text style={localStyles.receiptKey}>Transaction Ref</Text>
-                                <Text style={[localStyles.receiptVal, { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 11 }]}>
-                                    {depositSuccessDetails?.reference || 'WLT-TX-SUCCESS'}
-                                </Text>
-                            </View>
-                            <View style={localStyles.receiptRow}>
-                                <Text style={localStyles.receiptKey}>New Wallet Balance</Text>
-                                <Text style={[localStyles.receiptVal, { color: '#059669', fontWeight: '900' }]}>
-                                    {formatCurrency(wallet.balance || 0)}
-                                </Text>
-                            </View>
-                            <View style={[localStyles.receiptRow, { borderBottomWidth: 0 }]}>
-                                <Text style={localStyles.receiptKey}>Escrow Status</Text>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                    <Ionicons name="shield-checkmark" size={12} color="#059669" />
-                                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#059669' }}>Secured (Tier 1)</Text>
-                                </View>
-                            </View>
-                        </View>
-
-                        <TouchableOpacity
-                            style={[localStyles.primaryActionBtn, { width: '100%', marginTop: 16 }]}
-                            onPress={() => {
-                                setShowDepositSuccessModal(false);
-                                fetchWalletData();
-                            }}
-                            activeOpacity={0.85}
-                        >
-                            <Text style={localStyles.actionBtnText}>Done / View Updated Wallet</Text>
+                        <TouchableOpacity onPress={() => setShowSuccess(false)} style={[S.primaryBtn, { marginTop: 20, width: '100%' }]}>
+                            <Text style={S.primaryBtnTxt}>Done</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
             </Modal>
-        </SafeAreaView>
+
+            {/* ── P2P Transfer Modal ── */}
+            <Modal visible={showTransfer} transparent animationType="slide" onRequestClose={() => setShowTransfer(false)}>
+                <View style={S.modalBg}>
+                    <View style={S.modalSheet}>
+                        <Row style={{ justifyContent: 'space-between', marginBottom: 18 }}>
+                            <Text style={S.modalTitle}>Send Money</Text>
+                            <TouchableOpacity onPress={() => setShowTransfer(false)} style={S.closeBtn}>
+                                <Ionicons name="close" size={20} color="#0F172A" />
+                            </TouchableOpacity>
+                        </Row>
+
+                        <Text style={S.inputLabel}>Recipient (username / phone / email)</Text>
+                        <TextInput
+                            style={S.textInput}
+                            value={recipient}
+                            onChangeText={setRecipient}
+                            placeholder="e.g. john@email.com or 08012345678"
+                            placeholderTextColor="#94A3B8"
+                            autoCapitalize="none"
+                        />
+
+                        <Text style={[S.inputLabel, { marginTop: 12 }]}>Amount (NGN)</Text>
+                        <TextInput
+                            style={S.textInput}
+                            value={transferAmt}
+                            onChangeText={setTransferAmt}
+                            keyboardType="numeric"
+                            placeholder="e.g. 2000"
+                            placeholderTextColor="#94A3B8"
+                        />
+
+                        <Text style={[S.inputLabel, { marginTop: 12 }]}>Note (optional)</Text>
+                        <TextInput
+                            style={S.textInput}
+                            value={transferNote}
+                            onChangeText={setTransferNote}
+                            placeholder="What's this for?"
+                            placeholderTextColor="#94A3B8"
+                        />
+
+                        <View style={[S.infoBox, { marginTop: 14 }]}>
+                            <Ionicons name="information-circle" size={16} color="#3B82F6" />
+                            <Text style={{ fontSize: 12, color: '#1D4ED8', flex: 1 }}>
+                                Available: {fmt(wallet.balance)} • Min transfer: ₦100
+                            </Text>
+                        </View>
+
+                        <TouchableOpacity
+                            onPress={handleP2P}
+                            disabled={transferPending}
+                            style={[S.primaryBtn, { marginTop: 16, opacity: transferPending ? 0.7 : 1 }]}
+                        >
+                            {transferPending
+                                ? <ActivityIndicator color="white" />
+                                : <Text style={S.primaryBtnTxt}>Send {transferAmt ? fmt(parseInt(transferAmt) || 0) : 'Money'}</Text>}
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ── Voucher Modal ── */}
+            <Modal visible={showVoucher} transparent animationType="slide" onRequestClose={() => setShowVoucher(false)}>
+                <View style={S.modalBg}>
+                    <View style={S.modalSheet}>
+                        <Row style={{ justifyContent: 'space-between', marginBottom: 18 }}>
+                            <Text style={S.modalTitle}>Redeem Voucher</Text>
+                            <TouchableOpacity onPress={() => setShowVoucher(false)} style={S.closeBtn}>
+                                <Ionicons name="close" size={20} color="#0F172A" />
+                            </TouchableOpacity>
+                        </Row>
+
+                        <View style={[S.infoBox, { marginBottom: 14 }]}>
+                            <Ionicons name="ticket-outline" size={16} color="#8B5CF6" />
+                            <Text style={{ flex: 1, fontSize: 12, color: '#6D28D9' }}>
+                                Enter your voucher or coupon code to apply discounts at checkout.
+                            </Text>
+                        </View>
+
+                        <TextInput
+                            style={[S.textInput, { textTransform: 'uppercase', letterSpacing: 2 }]}
+                            value={voucherCode}
+                            onChangeText={setVoucherCode}
+                            placeholder="ENTER CODE"
+                            placeholderTextColor="#94A3B8"
+                            autoCapitalize="characters"
+                        />
+
+                        <TouchableOpacity
+                            onPress={handleVoucher}
+                            disabled={voucherPending}
+                            style={[S.primaryBtn, { marginTop: 16, backgroundColor: '#8B5CF6', opacity: voucherPending ? 0.7 : 1 }]}
+                        >
+                            {voucherPending
+                                ? <ActivityIndicator color="white" />
+                                : <Text style={S.primaryBtnTxt}>Verify Code</Text>}
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ── Budget Modal ── */}
+            <Modal visible={showBudget} transparent animationType="slide" onRequestClose={() => setShowBudget(false)}>
+                <View style={S.modalBg}>
+                    <View style={S.modalSheet}>
+                        <Row style={{ justifyContent: 'space-between', marginBottom: 18 }}>
+                            <Text style={S.modalTitle}>Set Monthly Budget</Text>
+                            <TouchableOpacity onPress={() => setShowBudget(false)} style={S.closeBtn}>
+                                <Ionicons name="close" size={20} color="#0F172A" />
+                            </TouchableOpacity>
+                        </Row>
+                        <Text style={S.inputLabel}>Budget Limit (NGN)</Text>
+                        <TextInput
+                            style={S.textInput}
+                            value={budgetInput}
+                            onChangeText={setBudgetInput}
+                            keyboardType="numeric"
+                            placeholder={String(monthlyLimit)}
+                            placeholderTextColor="#94A3B8"
+                        />
+                        <TouchableOpacity
+                            onPress={async () => {
+                                const v = parseInt(budgetInput);
+                                if (isNaN(v) || v <= 0) { Alert.alert('Invalid', 'Enter a valid limit'); return; }
+                                setMonthlyLimit(v);
+                                setBudgetInput('');
+                                setShowBudget(false);
+                                const uid = await resolveUserId();
+                                if (uid) await AsyncStorage.setItem(`@amf_limit_${uid}`, String(v)).catch(() => {});
+                                Alert.alert('Budget Set ✅', `Monthly limit set to ${fmt(v)}`);
+                            }}
+                            style={[S.primaryBtn, { marginTop: 16 }]}
+                        >
+                            <Text style={S.primaryBtnTxt}>Save Budget Limit</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ── Create Savings Pot Modal ── */}
+            <Modal visible={showCreatePot} transparent animationType="slide" onRequestClose={() => setShowCreatePot(false)}>
+                <View style={S.modalBg}>
+                    <View style={S.modalSheet}>
+                        <Row style={{ justifyContent: 'space-between', marginBottom: 18 }}>
+                            <Text style={S.modalTitle}>New Savings Pot 🏦</Text>
+                            <TouchableOpacity onPress={() => setShowCreatePot(false)} style={S.closeBtn}>
+                                <Ionicons name="close" size={20} color="#0F172A" />
+                            </TouchableOpacity>
+                        </Row>
+
+                        <Text style={S.inputLabel}>Pot Name</Text>
+                        <TextInput style={S.textInput} value={potName} onChangeText={setPotName} placeholder="e.g. Hajj Savings, New Phone" placeholderTextColor="#94A3B8" />
+
+                        <Text style={[S.inputLabel, { marginTop: 12 }]}>Target Amount (NGN)</Text>
+                        <TextInput style={S.textInput} value={potTarget} onChangeText={setPotTarget} keyboardType="numeric" placeholder="20000" placeholderTextColor="#94A3B8" />
+
+                        <Text style={[S.inputLabel, { marginTop: 12 }]}>Color</Text>
+                        <Row style={{ gap: 10, marginTop: 6 }}>
+                            {['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#0F172A'].map(c => (
+                                <TouchableOpacity key={c} onPress={() => setPotColor(c)}
+                                    style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: c, borderWidth: potColor === c ? 3 : 0, borderColor: '#0F172A' }} />
+                            ))}
+                        </Row>
+
+                        <TouchableOpacity onPress={handleCreatePot} style={[S.primaryBtn, { marginTop: 20 }]}>
+                            <Text style={S.primaryBtnTxt}>Create Pot</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ── Transaction Detail Modal ── */}
+            <Modal visible={!!selectedTx} transparent animationType="slide" onRequestClose={() => setSelectedTx(null)}>
+                <View style={S.modalBg}>
+                    <View style={S.modalSheet}>
+                        <Row style={{ justifyContent: 'space-between', marginBottom: 18 }}>
+                            <Text style={S.modalTitle}>Transaction Detail</Text>
+                            <TouchableOpacity onPress={() => setSelectedTx(null)} style={S.closeBtn}>
+                                <Ionicons name="close" size={20} color="#0F172A" />
+                            </TouchableOpacity>
+                        </Row>
+                        {selectedTx && (
+                            <>
+                                <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                                    <TxIcon type={selectedTx.type} />
+                                    <Text style={[S.txAmt, { fontSize: 28, marginTop: 12, color: selectedTx.amount > 0 ? '#10B981' : '#EF4444' }]}>
+                                        {selectedTx.amount > 0 ? '+' : '-'}{fmt(Math.abs(selectedTx.amount || 0))}
+                                    </Text>
+                                    <Text style={[S.txDate, { marginTop: 4, fontSize: 13 }]}>
+                                        {selectedTx.status?.toUpperCase() || 'COMPLETED'}
+                                    </Text>
+                                </View>
+                                {[
+                                    ['Type', selectedTx.type],
+                                    ['Description', selectedTx.description],
+                                    ['Reference', selectedTx.reference],
+                                    ['Date', selectedTx.created_at ? new Date(selectedTx.created_at).toLocaleString('en-NG') : '—'],
+                                ].map(([k, v]) => v ? (
+                                    <View key={k} style={S.detailRow}>
+                                        <Text style={S.detailKey}>{k}</Text>
+                                        <Text style={S.detailVal} numberOfLines={2}>{String(v)}</Text>
+                                    </View>
+                                ) : null)}
+                                <TouchableOpacity
+                                    onPress={() => copyText(`${selectedTx.type} • ${fmt(Math.abs(selectedTx.amount || 0))} • ${selectedTx.reference || ''}`, 'Transaction details')}
+                                    style={[S.primaryBtn, { marginTop: 20, backgroundColor: '#F1F5F9' }]}>
+                                    <Row style={{ gap: 8 }}>
+                                        <Ionicons name="copy-outline" size={16} color="#0F172A" />
+                                        <Text style={[S.primaryBtnTxt, { color: '#0F172A' }]}>Copy Details</Text>
+                                    </Row>
+                                </TouchableOpacity>
+                            </>
+                        )}
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ── Escrow Modal ── */}
+            <Modal visible={showEscrow} transparent animationType="slide" onRequestClose={() => setShowEscrow(false)}>
+                <View style={S.modalBg}>
+                    <View style={S.modalSheet}>
+                        <Row style={{ justifyContent: 'space-between', marginBottom: 18 }}>
+                            <Text style={S.modalTitle}>🛡️ Escrow Protection</Text>
+                            <TouchableOpacity onPress={() => setShowEscrow(false)} style={S.closeBtn}>
+                                <Ionicons name="close" size={20} color="#0F172A" />
+                            </TouchableOpacity>
+                        </Row>
+
+                        <View style={{ backgroundColor: '#ECFDF5', borderRadius: 14, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: '#86EFAC' }}>
+                            <Row style={{ gap: 10, marginBottom: 10 }}>
+                                <Ionicons name="shield-checkmark" size={28} color="#10B981" />
+                                <View>
+                                    <Text style={{ fontSize: 15, fontWeight: '900', color: '#065F46' }}>100% Escrow Vault</Text>
+                                    <Text style={{ fontSize: 12, color: '#059669' }}>Every order is fully protected</Text>
+                                </View>
+                            </Row>
+                            <Text style={{ fontSize: 13, color: '#065F46', lineHeight: 20 }}>
+                                When you pay for an order, your money is locked in Abu Mafhal's secure escrow vault. The vendor only receives payment after you confirm delivery.
+                            </Text>
+                        </View>
+
+                        {[
+                            { icon: 'lock-closed', color: '#3B82F6', title: 'Payment Locked', desc: 'Funds held securely until delivery confirmation' },
+                            { icon: 'cube', color: '#F59E0B', title: 'Order Delivered', desc: 'Vendor ships — driver delivers to your doorstep' },
+                            { icon: 'checkmark-circle', color: '#10B981', title: 'You Confirm', desc: 'Vendor gets paid only after your approval' },
+                            { icon: 'refresh-circle', color: '#EF4444', title: 'Dispute Protection', desc: 'Full refund if order is not as described' },
+                        ].map((item, i) => (
+                            <Row key={i} style={{ gap: 12, marginBottom: 14, alignItems: 'flex-start' }}>
+                                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: `${item.color}18`, alignItems: 'center', justifyContent: 'center' }}>
+                                    <Ionicons name={item.icon} size={18} color={item.color} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>{item.title}</Text>
+                                    <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{item.desc}</Text>
+                                </View>
+                            </Row>
+                        ))}
+
+                        <TouchableOpacity onPress={() => setShowEscrow(false)} style={[S.primaryBtn, { backgroundColor: '#10B981' }]}>
+                            <Text style={S.primaryBtnTxt}>Got It — Shop Safely 🛡️</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+        </Animated.View>
     );
 };
 
-// ══════════════════════════════════════════════════════════════════════════
-// LUXURY FINTECH STYLESHEET
-// ══════════════════════════════════════════════════════════════════════════
-const localStyles = StyleSheet.create({
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingTop: Platform.OS === 'android' ? 12 : 6,
-        paddingBottom: 10,
-        backgroundColor: '#FFFFFF',
-        borderBottomWidth: 1,
-        borderBottomColor: '#F1F5F9'
-    },
-    headerIconButton: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: '#F8FAFC',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        alignItems: 'center',
-        justifyContent: 'center'
-    },
-    headerTitle: {
-        fontSize: 16,
-        fontWeight: '900',
-        color: '#0F172A',
-        letterSpacing: -0.2
-    },
-    headerLiveDot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-        backgroundColor: '#10B981'
-    },
-    headerSub: {
-        fontSize: 10.5,
-        color: '#64748B',
-        marginTop: 1
-    },
-    escrowHeaderPill: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        backgroundColor: '#ECFDF5',
-        borderWidth: 1,
-        borderColor: '#86EFAC',
-        paddingHorizontal: 8,
-        paddingVertical: 4.5,
-        borderRadius: 12
-    },
-    escrowHeaderPillTxt: {
-        fontSize: 10,
-        fontWeight: '800',
-        color: '#065F46'
-    },
+// ─── Wrapper (export) ─────────────────────────────────────────────────────────
+export const WalletPage = ({ user, onBack, onNavigate }) => (
+    <WalletPageInner user={user} onBack={onBack} onNavigate={onNavigate} />
+);
 
-    // HERO CREDIT CARD
-    heroSection: {
-        paddingHorizontal: 16,
-        paddingTop: 12
-    },
-    balanceCard: {
-        borderRadius: 20,
-        padding: 18,
-        position: 'relative',
-        overflow: 'hidden',
-        minHeight: 180,
-        shadowColor: '#0F172A',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-        elevation: 4
-    },
-    decorCircle: {
-        position: 'absolute',
-        top: -30,
-        right: -30,
-        width: 120,
-        height: 120,
-        borderRadius: 60,
-        backgroundColor: 'rgba(255, 255, 255, 0.05)'
-    },
-    decorCircle2: {
-        position: 'absolute',
-        bottom: -40,
-        left: -30,
-        width: 140,
-        height: 140,
-        borderRadius: 70,
-        backgroundColor: 'rgba(255, 255, 255, 0.03)'
-    },
-    vipBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        backgroundColor: 'rgba(255, 255, 255, 0.12)',
-        paddingHorizontal: 7,
-        paddingVertical: 2.5,
-        borderRadius: 8
-    },
-    vipBadgeDot: {
-        width: 4,
-        height: 4,
-        borderRadius: 2,
-        backgroundColor: '#86EFAC'
-    },
-    vipBadgeTxt: {
-        color: '#FFFFFF',
-        fontSize: 9,
-        fontWeight: '900',
-        letterSpacing: 0.4
-    },
-    eyeBtn: {
-        padding: 4
-    },
-    currencySwitchGroup: {
-        flexDirection: 'row',
-        backgroundColor: 'rgba(0, 0, 0, 0.25)',
-        borderRadius: 8,
-        padding: 2,
-        gap: 2
-    },
-    currencySwitchBtn: {
-        paddingHorizontal: 7,
-        paddingVertical: 3,
-        borderRadius: 6
-    },
-    currencySwitchBtnActive: {
-        backgroundColor: 'rgba(255, 255, 255, 0.22)'
-    },
-    currencySwitchTxt: {
-        color: 'rgba(255, 255, 255, 0.6)',
-        fontSize: 9.5,
-        fontWeight: '800'
-    },
-    currencySwitchTxtActive: {
-        color: '#FFFFFF',
-        fontWeight: '900'
-    },
-    balanceLabelText: {
-        fontSize: 9.5,
-        fontWeight: '800',
-        color: 'rgba(255, 255, 255, 0.6)',
-        letterSpacing: 0.6
-    },
-    balanceAmountText: {
-        fontSize: 27,
-        fontWeight: '900',
-        color: '#FFFFFF',
-        letterSpacing: -0.5,
-        marginTop: 4
-    },
-    balanceEquivText: {
-        fontSize: 11,
-        color: 'rgba(255, 255, 255, 0.75)',
-        fontWeight: '700',
-        marginTop: 3
-    },
-    smartChip: {
-        width: 24,
-        height: 18,
-        borderRadius: 3,
-        backgroundColor: '#FDE68A',
-        position: 'relative',
-        overflow: 'hidden'
-    },
-    chipLineV1: {
-        position: 'absolute',
-        left: 8,
-        top: 0,
-        bottom: 0,
-        width: 1,
-        backgroundColor: '#D97706'
-    },
-    chipLineV2: {
-        position: 'absolute',
-        right: 8,
-        top: 0,
-        bottom: 0,
-        width: 1,
-        backgroundColor: '#D97706'
-    },
-    chipLineH: {
-        position: 'absolute',
-        top: 9,
-        left: 0,
-        right: 0,
-        height: 1,
-        backgroundColor: '#D97706'
-    },
-    copyRefBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-        paddingHorizontal: 7,
-        paddingVertical: 2.5,
-        borderRadius: 6
-    },
-    copyRefTxt: {
-        color: 'rgba(255, 255, 255, 0.75)',
-        fontSize: 9.5,
-        fontWeight: '800',
-        letterSpacing: 0.4
-    },
-    cardMetaLabel: {
-        fontSize: 8,
-        fontWeight: '800',
-        color: 'rgba(255, 255, 255, 0.4)',
-        letterSpacing: 0.4
-    },
-    cardMetaVal: {
-        fontSize: 11.5,
-        fontWeight: '800',
-        color: '#FFFFFF',
-        marginTop: 1
-    },
-    cardSkinRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        marginTop: 10
-    },
-    cardSkinTitle: {
-        fontSize: 9.5,
-        fontWeight: '800',
-        color: '#94A3B8',
-        textTransform: 'uppercase'
-    },
-    cardSkinDot: {
-        width: 16,
-        height: 16,
-        borderRadius: 8,
-        borderWidth: 1.5,
-        borderColor: '#E2E8F0'
-    },
-    cardSkinDotActive: {
-        borderColor: '#0F172A',
-        transform: [{ scale: 1.2 }]
-    },
+export default WalletPage;
 
-    // ACTION STRIP
-    actionStrip: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        marginTop: 14
-    },
-    actionItem: {
-        alignItems: 'center',
-        flex: 1
-    },
-    actionIconWrapper: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 6,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 1
-    },
-    actionLabel: {
-        fontSize: 11,
-        fontWeight: '800',
-        color: '#0F172A'
-    },
+// ─── Styles ───────────────────────────────────────────────────────────────────
+const S = StyleSheet.create({
+    root:          { flex: 1, backgroundColor: '#F8FAFC' },
+    center:        { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8FAFC' },
+    loadTxt:       { marginTop: 10, color: '#64748B', fontWeight: '700', fontSize: 13 },
+    scroll:        { paddingBottom: 20 },
 
-    // ESCROW VAULT BANNER
-    escrowVaultCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F0FDF4',
-        borderWidth: 1.5,
-        borderColor: '#86EFAC',
-        borderRadius: 14,
-        padding: 12,
-        marginHorizontal: 16,
-        marginTop: 14
-    },
-    escrowVaultIconCircle: {
-        width: 34,
-        height: 34,
-        borderRadius: 17,
-        backgroundColor: '#DCFCE7',
-        alignItems: 'center',
-        justifyContent: 'center'
-    },
-    escrowVaultTitle: {
-        fontSize: 12.5,
-        fontWeight: '900',
-        color: '#065F46'
-    },
-    escrowVaultTag: {
-        backgroundColor: '#DCFCE7',
-        paddingHorizontal: 6,
-        paddingVertical: 1.5,
-        borderRadius: 6
-    },
-    escrowVaultTagTxt: {
-        fontSize: 8.5,
-        fontWeight: '900',
-        color: '#065F46'
-    },
-    escrowVaultSub: {
-        fontSize: 10.5,
-        color: '#047857',
-        marginTop: 2,
-        lineHeight: 14
-    },
+    // Header
+    header:        { flexDirection: 'row', alignItems: 'center', padding: 16, paddingTop: Platform.OS === 'ios' ? 54 : 20, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderColor: '#E2E8F0', gap: 12 },
+    backBtn:       { width: 38, height: 38, borderRadius: 12, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
+    backBtnFull:   { marginTop: 20, backgroundColor: '#0F172A', paddingHorizontal: 32, paddingVertical: 14, borderRadius: 14 },
+    headerTitle:   { fontSize: 17, fontWeight: '900', color: '#0F172A' },
+    headerSub:     { fontSize: 11, color: '#64748B', fontWeight: '600' },
 
-    // TRACKERS
-    widgetRow: {
-        flexDirection: 'row',
-        gap: 10,
-        paddingHorizontal: 16,
-        marginTop: 12
-    },
-    budgetWidget: {
-        flex: 1,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 12,
-        padding: 10,
-        borderWidth: 1,
-        borderColor: '#E2E8F0'
-    },
-    widgetTitle: {
-        fontSize: 11,
-        fontWeight: '800',
-        color: '#1E293B'
-    },
-    widgetEditTxt: {
-        fontSize: 9.5,
-        fontWeight: '800',
-        color: '#2563EB'
-    },
-    widgetTrack: {
-        height: 4,
-        backgroundColor: '#F1F5F9',
-        borderRadius: 2,
-        overflow: 'hidden',
-        marginVertical: 6
-    },
-    widgetFill: {
-        height: '100%',
-        borderRadius: 2
-    },
-    widgetSub: {
-        fontSize: 9.5,
-        color: '#64748B',
-        fontWeight: '600'
-    },
+    // Card
+    card:          { margin: 16, borderRadius: 22, padding: 22, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
+    cardLabel:     { fontSize: 11, color: 'rgba(255,255,255,0.6)', fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 4 },
+    cardBalance:   { fontSize: 28, fontWeight: '900', color: 'white', letterSpacing: -0.5 },
+    cardChip:      { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
+    cardChipTxt:   { fontSize: 11, fontWeight: '700' },
+    cardMicro:     { fontSize: 10, color: 'rgba(255,255,255,0.55)', fontWeight: '600' },
+    currBtn:       { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+    currBtnTxt:    { fontSize: 9.5, fontWeight: '800' },
 
-    // SAVINGS SECTION
-    savingsContainer: {
-        marginTop: 16
-    },
-    sectionHeaderSavings: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        marginBottom: 10
-    },
-    sectionTitleText: {
-        fontSize: 13.5,
-        fontWeight: '900',
-        color: '#0F172A'
-    },
-    addPotLink: {
-        fontSize: 11,
-        fontWeight: '800',
-        color: '#2563EB'
-    },
-    createPotCard: {
-        width: 110,
-        height: 105,
-        borderRadius: 14,
-        borderWidth: 1.5,
-        borderColor: '#3B82F6',
-        borderStyle: 'dashed',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 8
-    },
-    createPotCircle: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: '#EFF6FF',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 4
-    },
-    createPotTitle: {
-        fontSize: 11,
-        fontWeight: '800',
-        color: '#2563EB'
-    },
-    createPotSub: {
-        fontSize: 8.5,
-        color: '#94A3B8',
-        marginTop: 1
-    },
-    savingsGoalCard: {
-        width: 145,
-        height: 105,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 14,
-        padding: 10,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        justifyContent: 'space-between'
-    },
-    savingsIconWrapper: {
-        width: 26,
-        height: 26,
-        borderRadius: 13,
-        alignItems: 'center',
-        justifyContent: 'center'
-    },
-    savingsGoalPercent: {
-        fontSize: 10.5,
-        fontWeight: '900'
-    },
-    savingsGoalName: {
-        fontSize: 11.5,
-        fontWeight: '800',
-        color: '#0F172A'
-    },
-    savingsGoalAmount: {
-        fontSize: 11,
-        fontWeight: '800',
-        color: '#059669'
-    },
-    progressTrack: {
-        height: 3.5,
-        backgroundColor: '#F1F5F9',
-        borderRadius: 2,
-        overflow: 'hidden'
-    },
-    progressBar: {
-        height: '100%',
-        borderRadius: 2
-    },
+    // Actions
+    actionsRow:    { flexDirection: 'row', justifyContent: 'space-around', backgroundColor: '#FFFFFF', paddingVertical: 16, paddingHorizontal: 8, borderBottomWidth: 1, borderColor: '#F1F5F9' },
+    actionBtn:     { alignItems: 'center', gap: 6, flex: 1 },
+    actionIcon:    { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+    actionLabel:   { fontSize: 10, fontWeight: '800', letterSpacing: 0.2 },
 
-    // TRANSACTIONS
-    hubContainer: {
-        paddingHorizontal: 16,
-        marginTop: 18
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 10
-    },
-    txCountBadge: {
-        fontSize: 10,
-        fontWeight: '700',
-        color: '#64748B',
-        backgroundColor: '#F1F5F9',
-        paddingHorizontal: 7,
-        paddingVertical: 2,
-        borderRadius: 8
-    },
-    searchBarContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FFFFFF',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderRadius: 10,
-        paddingHorizontal: 10,
-        paddingVertical: 8,
-        marginBottom: 10
-    },
-    searchBarInput: {
-        flex: 1,
-        marginLeft: 6,
-        fontSize: 12,
-        color: '#0F172A',
-        padding: 0
-    },
-    filterRow: {
-        flexDirection: 'row',
-        gap: 6,
-        marginBottom: 10
-    },
-    filterChip: {
-        paddingHorizontal: 10,
-        paddingVertical: 5,
-        borderRadius: 8,
-        backgroundColor: '#FFFFFF',
-        borderWidth: 1,
-        borderColor: '#E2E8F0'
-    },
-    activeFilterChip: {
-        backgroundColor: '#0F172A',
-        borderColor: '#0F172A'
-    },
-    filterChipText: {
-        fontSize: 10.5,
-        fontWeight: '700',
-        color: '#64748B'
-    },
-    activeFilterChipText: {
-        color: '#FFFFFF',
-        fontWeight: '800'
-    },
-    transactionContainerCard: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        paddingVertical: 4
-    },
-    activityItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 12,
-        paddingVertical: 10
-    },
-    activityIconContainer: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 10
-    },
-    activityTitleText: {
-        fontSize: 12,
-        fontWeight: '800',
-        color: '#0F172A'
-    },
-    activityTimeText: {
-        fontSize: 10,
-        color: '#94A3B8',
-        marginTop: 2
-    },
-    activityAmountText: {
-        fontSize: 12.5,
-        fontWeight: '900'
-    },
-    statusBubble: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 3,
-        marginTop: 2
-    },
-    statusDot: {
-        width: 4,
-        height: 4,
-        borderRadius: 2,
-        backgroundColor: '#059669'
-    },
-    statusBubbleText: {
-        fontSize: 9,
-        fontWeight: '800',
-        color: '#059669'
-    },
-    txDivider: {
-        height: 1,
-        backgroundColor: '#F8FAFC',
-        marginLeft: 54
-    },
-    noActivityBox: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 30,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: '#E2E8F0'
-    },
-    noActivityTitle: {
-        fontSize: 13,
-        fontWeight: '800',
-        color: '#0F172A',
-        marginTop: 8
-    },
-    noActivitySub: {
-        fontSize: 11,
-        color: '#94A3B8',
-        marginTop: 2,
-        textAlign: 'center',
-        paddingHorizontal: 20
-    },
+    // Section
+    section:       { margin: 16, marginBottom: 0, backgroundColor: '#FFFFFF', borderRadius: 18, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' },
+    sectionTitle:  { fontSize: 14, fontWeight: '900', color: '#0F172A' },
+    sectionSub:    { fontSize: 11, color: '#64748B', fontWeight: '600' },
+    pillBtn:       { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: '#10B981' },
+    pillBtnTxt:    { fontSize: 11, fontWeight: '700' },
 
-    // MODAL BASICS
-    modalDimLayer: {
-        flex: 1,
-        backgroundColor: 'rgba(15, 23, 42, 0.65)',
-        justifyContent: 'flex-end'
-    },
-    modalContentSheet: {
-        backgroundColor: '#FFFFFF',
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        paddingHorizontal: 18,
-        paddingTop: 10,
-        paddingBottom: Platform.OS === 'ios' ? 34 : 20,
-        maxWidth: 540,
-        width: '100%',
-        alignSelf: 'center'
-    },
-    modalHandleBar: {
-        width: 36,
-        height: 4,
-        borderRadius: 2,
-        backgroundColor: '#E2E8F0',
-        alignSelf: 'center',
-        marginBottom: 12
-    },
-    modalHeaderSection: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 14
-    },
-    modalMainTitle: {
-        fontSize: 16,
-        fontWeight: '900',
-        color: '#0F172A',
-        letterSpacing: -0.2
-    },
-    modalSecondaryTitle: {
-        fontSize: 11,
-        color: '#64748B',
-        marginTop: 1
-    },
-    modalCloseCircle: {
-        width: 28,
-        height: 28,
-        borderRadius: 14,
-        backgroundColor: '#F1F5F9',
-        alignItems: 'center',
-        justifyContent: 'center'
-    },
-    fieldSectionHeader: {
-        fontSize: 9.5,
-        fontWeight: '800',
-        color: '#94A3B8',
-        textTransform: 'uppercase',
-        letterSpacing: 0.6,
-        marginBottom: 6
-    },
+    // Savings pot
+    potCard:       { borderLeftWidth: 4, backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, marginBottom: 10 },
+    potName:       { fontSize: 13, fontWeight: '800', color: '#0F172A' },
+    potSub:        { fontSize: 11, color: '#64748B', fontWeight: '600', marginTop: 1 },
+    potBtn:        { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8 },
 
-    // GATEWAY SHOWCASE STRIP (MAIN WALLET PAGE)
-    gatewayShowcaseContainer: {
-        marginHorizontal: 16,
-        marginTop: 12,
-        marginBottom: 8,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 16,
-        padding: 12,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.04,
-        shadowRadius: 3,
-        elevation: 1
-    },
-    gatewayShowcaseHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 10
-    },
-    gatewayShowcaseTitle: {
-        fontSize: 10.5,
-        fontWeight: '900',
-        color: '#334155',
-        letterSpacing: 0.6
-    },
-    gatewayShowcaseLink: {
-        fontSize: 11,
-        fontWeight: '800',
-        color: '#059669'
-    },
-    gatewayShowcasePill: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F8FAFC',
-        paddingVertical: 7,
-        paddingHorizontal: 10,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#E2E8F0'
-    },
-    gatewayShowcaseName: {
-        fontSize: 11.5,
-        fontWeight: '800',
-        color: '#0F172A'
-    },
-    gatewayShowcaseChannels: {
-        fontSize: 9.5,
-        color: '#64748B',
-        marginTop: 2
-    },
+    // Transactions
+    txRow:         { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderColor: '#F1F5F9' },
+    txDesc:        { fontSize: 13, fontWeight: '700', color: '#0F172A' },
+    txDate:        { fontSize: 11, color: '#94A3B8', fontWeight: '600', marginTop: 2 },
+    txAmt:         { fontSize: 14, fontWeight: '900' },
+    emptyTx:       { alignItems: 'center', paddingVertical: 32, gap: 10 },
+    emptyTxTxt:    { fontSize: 14, color: '#94A3B8', fontWeight: '700' },
 
-    // LUXURY SELECTABLE GATEWAY LIST (MODAL 1)
-    luxuryGatewayList: {
-        gap: 8,
-        marginBottom: 12
-    },
-    luxuryGwCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: '#FFFFFF',
-        borderWidth: 1.5,
-        borderColor: '#E2E8F0',
-        borderRadius: 14,
-        paddingVertical: 10,
-        paddingHorizontal: 12,
-        shadowColor: '#0F172A',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.04,
-        shadowRadius: 3,
-        elevation: 1
-    },
-    luxuryGwCardActive: {
-        backgroundColor: '#F8FAFC',
-        shadowOpacity: 0.08,
-        shadowRadius: 5
-    },
-    luxuryGwName: {
-        fontSize: 13,
-        fontWeight: '800',
-        color: '#1E293B'
-    },
-    luxuryGwSub: {
-        fontSize: 10.5,
-        color: '#64748B',
-        marginTop: 2
-    },
-    gwMiniBadge: {
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 6
-    },
-    gwMiniBadgeTxt: {
-        fontSize: 9,
-        fontWeight: '800'
-    },
-    gwChannelsRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        marginTop: 4
-    },
-    gwSpeedTag: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 3,
-        backgroundColor: '#ECFDF5',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 5
-    },
-    gwSpeedTagTxt: {
-        fontSize: 9,
-        fontWeight: '700',
-        color: '#059669'
-    },
-    gwCurrencyTag: {
-        fontSize: 9.5,
-        fontWeight: '800',
-        color: '#94A3B8'
-    },
-    gwRadioContainer: {
-        marginLeft: 8,
-        justifyContent: 'center',
-        alignItems: 'center'
-    },
+    // Filters
+    filterBtn:     { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: '#F1F5F9' },
+    filterBtnActive:{ backgroundColor: '#0F172A' },
+    filterBtnTxt:  { fontSize: 10, fontWeight: '800', color: '#64748B' },
+    searchBox:     { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F8FAFC', borderRadius: 10, paddingHorizontal: 12, height: 38, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 10 },
+    searchInput:   { flex: 1, fontSize: 13, color: '#0F172A', fontWeight: '600' },
 
-    // LIVE BALANCE PROJECTION CARD
-    balanceProjectionCard: {
-        backgroundColor: '#F0FDF4',
-        borderRadius: 14,
-        borderWidth: 1.2,
-        borderColor: '#BBF7D0',
-        padding: 12,
-        marginBottom: 12
-    },
-    projectionTitle: {
-        fontSize: 9.5,
-        fontWeight: '900',
-        color: '#166534',
-        letterSpacing: 0.5
-    },
-    projectionBadge: {
-        backgroundColor: '#DCFCE7',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 5
-    },
-    projectionBadgeTxt: {
-        fontSize: 8.5,
-        fontWeight: '900',
-        color: '#15803D'
-    },
-    projectionMathRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginTop: 8
-    },
-    projectionMathCol: {
-        alignItems: 'flex-start'
-    },
-    projectionMathLabel: {
-        fontSize: 9,
-        fontWeight: '700',
-        color: '#4B5563'
-    },
-    projectionMathVal: {
-        fontSize: 12.5,
-        fontWeight: '800',
-        color: '#1F2937',
-        marginTop: 1
-    },
+    // Modals
+    modalBg:       { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+    modalSheet:    { backgroundColor: '#FFFFFF', borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 22, maxHeight: '92%' },
+    modalTitle:    { fontSize: 17, fontWeight: '900', color: '#0F172A' },
+    closeBtn:      { width: 34, height: 34, borderRadius: 10, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
 
-    // CELEBRATORY DEPOSIT SUCCESS MODAL (MODAL 10)
-    successCelebrationIconRing: {
-        width: 76,
-        height: 76,
-        borderRadius: 38,
-        backgroundColor: '#ECFDF5',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 12,
-        borderWidth: 2,
-        borderColor: '#A7F3D0'
-    },
-    successCelebrationIconInner: {
-        width: 58,
-        height: 58,
-        borderRadius: 29,
-        backgroundColor: '#DCFCE7',
-        alignItems: 'center',
-        justifyContent: 'center'
-    },
-    successTitle: {
-        fontSize: 19,
-        fontWeight: '900',
-        color: '#0F172A',
-        letterSpacing: -0.3
-    },
-    successSubtitle: {
-        fontSize: 12,
-        color: '#64748B',
-        textAlign: 'center',
-        marginTop: 4,
-        paddingHorizontal: 16
-    },
-    successAmountCard: {
-        width: '100%',
-        backgroundColor: '#F8FAFC',
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        padding: 14,
-        alignItems: 'center',
-        marginTop: 14,
-        marginBottom: 12
-    },
-    successAmountLabel: {
-        fontSize: 9.5,
-        fontWeight: '800',
-        color: '#94A3B8',
-        letterSpacing: 0.6
-    },
-    successAmountBig: {
-        fontSize: 26,
-        fontWeight: '900',
-        color: '#059669',
-        marginTop: 2
-    },
-    successUsdSub: {
-        fontSize: 11,
-        color: '#D97706',
-        fontWeight: '700',
-        marginTop: 2
-    },
-    successReceiptTable: {
-        width: '100%',
-        backgroundColor: '#FFFFFF',
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#F1F5F9',
-        paddingHorizontal: 12,
-        paddingVertical: 6
-    },
-    receiptRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 7,
-        borderBottomWidth: 1,
-        borderBottomColor: '#F8FAFC'
-    },
-    receiptKey: {
-        fontSize: 11,
-        color: '#64748B',
-        fontWeight: '600'
-    },
-    receiptVal: {
-        fontSize: 11.5,
-        color: '#0F172A',
-        fontWeight: '700'
-    },
+    // Gateway card
+    gwCard:        { flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: 1.5, borderColor: '#E2E8F0', padding: 12, marginBottom: 8 },
+    gwIcon:        { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    gwName:        { fontSize: 13, fontWeight: '800' },
+    gwSub:         { fontSize: 11, color: '#64748B', marginTop: 2 },
+    gwSpeed:       { fontSize: 10, color: '#94A3B8', fontWeight: '600', marginTop: 2 },
 
-    // LEGACY FALLBACK GATEWAY CARDS
-    gatewayCardRow: {
-        flexDirection: 'row',
-        gap: 6,
-        marginBottom: 10
-    },
-    gwCard: {
-        flex: 1,
-        backgroundColor: '#F8FAFC',
-        borderWidth: 1.5,
-        borderColor: '#E2E8F0',
-        borderRadius: 12,
-        paddingVertical: 10,
-        paddingHorizontal: 6,
-        alignItems: 'center'
-    },
-    gwCardActive: {
-        borderColor: '#059669',
-        backgroundColor: '#F0FDF4'
-    },
-    gwIconBox: {
-        width: 28,
-        height: 28,
-        borderRadius: 14,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 4
-    },
-    gwCardTitle: {
-        fontSize: 10,
-        fontWeight: '800',
-        color: '#0F172A'
-    },
-    gwCardSub: {
-        fontSize: 8,
-        color: '#64748B',
-        marginTop: 1
-    },
+    // Input
+    inputLabel:    { fontSize: 11, fontWeight: '800', color: '#374151', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
+    amtInput:      { borderWidth: 1.5, borderColor: '#E2E8F0', borderRadius: 12, padding: 14, fontSize: 20, fontWeight: '900', color: '#0F172A', backgroundColor: '#F8FAFC' },
+    textInput:     { borderWidth: 1.5, borderColor: '#E2E8F0', borderRadius: 12, padding: 13, fontSize: 14, fontWeight: '600', color: '#0F172A', backgroundColor: '#F8FAFC' },
+    convertHint:   { fontSize: 12, color: '#10B981', fontWeight: '700', marginTop: 6 },
+    quickBtn:      { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 9, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
+    quickBtnTxt:   { fontSize: 12, fontWeight: '700', color: '#374151' },
 
-    // MODERN FINTECH INPUTS (CLEAN ROUNDED CARD - NO INNER TURBAN/RAWANI WRAPPERS)
-    inputAreaContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F8FAFC',
-        borderRadius: 16,
-        paddingHorizontal: 16,
-        paddingVertical: 13,
-        borderWidth: 1.5,
-        borderColor: '#E2E8F0',
-        shadowColor: '#64748B',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.04,
-        shadowRadius: 3,
-        elevation: 1,
-    },
-    inputPrefix: {
-        fontSize: 20,
-        fontWeight: '900',
-        color: '#0F172A',
-        marginRight: 8
-    },
-    mainTextInput: {
-        flex: 1,
-        fontSize: 18,
-        fontWeight: '800',
-        color: '#0F172A',
-        padding: 0,
-        letterSpacing: 0.5
-    },
-    currencyTag: {
-        backgroundColor: '#EEF2FF',
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: '#E0E7FF'
-    },
-    currencyTagTxt: {
-        fontSize: 11,
-        fontWeight: '900',
-        color: '#4F46E5',
-        letterSpacing: 0.5
-    },
+    // Virtual account
+    vaBox:         { backgroundColor: '#F0F9FF', borderRadius: 14, padding: 14, marginTop: 8, borderWidth: 1, borderColor: '#BAE6FD' },
+    vaLabel:       { fontSize: 9, fontWeight: '800', color: '#0284C7', letterSpacing: 1, marginBottom: 10 },
+    vaDetail:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 7, borderBottomWidth: 1, borderColor: '#E0F2FE' },
+    vaKey:         { fontSize: 12, color: '#64748B', fontWeight: '600' },
+    vaVal:         { fontSize: 13, fontWeight: '800', color: '#0F172A', textAlign: 'right', flex: 1, marginLeft: 10 },
+    syncBtn:       { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#6366F1', borderRadius: 10, paddingVertical: 10, justifyContent: 'center', marginTop: 12 },
+    syncBtnTxt:    { color: 'white', fontWeight: '800', fontSize: 13 },
+    retryBtn:      { borderRadius: 10, borderWidth: 1.5, borderColor: '#6366F1', paddingVertical: 10, alignItems: 'center' },
 
-    // PRESETS
-    quickSelectionLabel: {
-        fontSize: 9,
-        fontWeight: '800',
-        color: '#94A3B8',
-        textTransform: 'uppercase',
-        letterSpacing: 0.6,
-        marginTop: 12,
-        marginBottom: 6
-    },
-    pillsGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 6,
-        marginBottom: 16
-    },
-    amountPill: {
-        paddingVertical: 6,
-        paddingHorizontal: 10,
-        borderRadius: 8,
-        backgroundColor: '#FFFFFF',
-        borderWidth: 1,
-        borderColor: '#E2E8F0'
-    },
-    activePill: {
-        backgroundColor: '#ECFDF5',
-        borderColor: '#059669'
-    },
-    pillText: {
-        fontSize: 11,
-        fontWeight: '700',
-        color: '#64748B'
-    },
-    activePillText: {
-        color: '#059669',
-        fontWeight: '900'
-    },
+    // Buttons
+    primaryBtn:    { backgroundColor: '#0F172A', borderRadius: 14, paddingVertical: 15, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 },
+    primaryBtnTxt: { color: 'white', fontWeight: '900', fontSize: 15 },
 
-    // CRYPTO SPECIFIC STYLES
-    cryptoAlertBanner: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        backgroundColor: '#FEF3C7',
-        borderWidth: 1,
-        borderColor: '#FDE68A',
-        borderRadius: 10,
-        padding: 8,
-        marginBottom: 10
-    },
-    cryptoAlertTxt: {
-        fontSize: 10.5,
-        color: '#92400E',
-        flex: 1,
-        lineHeight: 14
-    },
-    conversionPill: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        marginTop: 6,
-        paddingHorizontal: 2
-    },
-    conversionPillTxt: {
-        fontSize: 10.5,
-        color: '#64748B',
-        fontWeight: '600'
-    },
+    // Info box
+    infoBox:       { flexDirection: 'row', gap: 8, backgroundColor: '#EFF6FF', padding: 11, borderRadius: 10, alignItems: 'flex-start' },
 
-    // BANK TRANSFER SPECIFIC
-    bankDetailsCard: {
-        backgroundColor: '#F8FAFC',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderRadius: 12,
-        padding: 12,
-        marginBottom: 10
-    },
-    bankDetailLabel: {
-        fontSize: 8.5,
-        fontWeight: '800',
-        color: '#94A3B8',
-        letterSpacing: 0.5
-    },
-    bankInstantTag: {
-        backgroundColor: '#DCFCE7',
-        paddingHorizontal: 5,
-        paddingVertical: 1,
-        borderRadius: 4
-    },
-    bankInstantTagTxt: {
-        fontSize: 8,
-        fontWeight: '900',
-        color: '#065F46'
-    },
-    bankNameTxt: {
-        fontSize: 13,
-        fontWeight: '900',
-        color: '#0F172A',
-        marginTop: 2
-    },
-    bankAccNumTxt: {
-        fontSize: 18,
-        fontWeight: '900',
-        color: '#2563EB',
-        letterSpacing: 0.8
-    },
-    bankCopyBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 3,
-        backgroundColor: '#EFF6FF',
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 6
-    },
-    bankCopyBtnTxt: {
-        fontSize: 10,
-        fontWeight: '800',
-        color: '#2563EB'
-    },
-    bankAccNameTxt: {
-        fontSize: 11,
-        color: '#64748B',
-        fontWeight: '700',
-        marginTop: 2
-    },
-
-    // VIRTUAL ACCOUNT AUTO-GENERATE STYLES
-    vaLoadingCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#EDE9FE',
-        borderRadius: 12,
-        padding: 14,
-        marginBottom: 10,
-        borderWidth: 1,
-        borderColor: '#C4B5FD'
-    },
-    vaLoadingTitle: {
-        fontSize: 13,
-        fontWeight: '800',
-        color: '#4C1D95'
-    },
-    vaLoadingSubtitle: {
-        fontSize: 11,
-        color: '#7C3AED',
-        marginTop: 2
-    },
-    vaErrorCard: {
-        backgroundColor: '#FEF2F2',
-        borderRadius: 12,
-        padding: 12,
-        marginBottom: 10,
-        borderWidth: 1,
-        borderColor: '#FECACA'
-    },
-    vaErrorTitle: {
-        fontSize: 13,
-        fontWeight: '800',
-        color: '#DC2626'
-    },
-    vaErrorMsg: {
-        fontSize: 11,
-        color: '#7F1D1D',
-        marginBottom: 8,
-        lineHeight: 16
-    },
-    vaRetryBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        alignSelf: 'flex-start',
-        backgroundColor: '#EDE9FE',
-        paddingHorizontal: 12,
-        paddingVertical: 5,
-        borderRadius: 8
-    },
-    vaRetryBtnTxt: {
-        fontSize: 11,
-        fontWeight: '800',
-        color: '#6366F1'
-    },
-    vaProviderBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        backgroundColor: '#ECFDF5',
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 6,
-        flex: 1
-    },
-    vaProviderBadgeTxt: {
-        fontSize: 9.5,
-        fontWeight: '800',
-        color: '#065F46'
-    },
-    vaAccountCard: {
-        backgroundColor: '#F8FAFC',
-        borderRadius: 14,
-        borderWidth: 1.5,
-        borderColor: '#6366F1',
-        padding: 14,
-        marginBottom: 10,
-        shadowColor: '#6366F1',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 6,
-        elevation: 2
-    },
-    vaExpiryRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 5,
-        marginTop: 8,
-        backgroundColor: '#FFFBEB',
-        borderRadius: 6,
-        paddingHorizontal: 8,
-        paddingVertical: 5
-    },
-    vaExpiryTxt: {
-        fontSize: 10,
-        fontWeight: '700',
-        color: '#92400E',
-        flex: 1
-    },
-    vaCopyAllBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        justifyContent: 'center',
-        backgroundColor: '#EDE9FE',
-        borderRadius: 10,
-        paddingVertical: 10,
-        marginBottom: 4,
-        borderWidth: 1,
-        borderColor: '#C4B5FD'
-    },
-    vaCopyAllBtnTxt: {
-        fontSize: 12,
-        fontWeight: '800',
-        color: '#6366F1'
-    },
-    vaInstructionBox: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: 8,
-        backgroundColor: '#EEF2FF',
-        borderRadius: 10,
-        padding: 10,
-        marginTop: 10,
-        borderWidth: 1,
-        borderColor: '#C7D2FE'
-    },
-    vaInstructionTxt: {
-        fontSize: 11,
-        color: '#3730A3',
-        fontWeight: '600',
-        lineHeight: 16,
-        flex: 1
-    },
-    bankChip: {
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 8,
-        backgroundColor: '#F8FAFC',
-        borderWidth: 1,
-        borderColor: '#E2E8F0'
-    },
-    bankChipActive: {
-        backgroundColor: '#FEF3C7',
-        borderColor: '#D97706'
-    },
-    bankChipTxt: {
-        fontSize: 11,
-        fontWeight: '700',
-        color: '#64748B'
-    },
-    bankChipTxtActive: {
-        color: '#92400E',
-        fontWeight: '900'
-    },
-
-    // BUTTONS
-    primaryActionBtn: {
-        backgroundColor: '#0F172A',
-        paddingVertical: 13,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.1,
-        shadowRadius: 5,
-        elevation: 2,
-        marginTop: 6
-    },
-    actionBtnContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6
-    },
-    actionBtnText: {
-        color: '#FFFFFF',
-        fontSize: 13.5,
-        fontWeight: '900',
-        letterSpacing: 0.2
-    },
-    footerSecurityLine: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 10,
-        gap: 4
-    },
-    footerSecurityText: {
-        fontSize: 9.5,
-        color: '#64748B',
-        fontWeight: '600'
-    },
-
-    // WEBVIEW MODAL
-    webViewHeader: {
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E2E8F0',
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-    },
-    webViewHeaderTitle: {
-        fontSize: 13.5,
-        fontWeight: '800',
-        color: '#0F172A'
-    },
-
-    // ESCROW MODAL BULLETS
-    escrowShieldCircle: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: '#ECFDF5',
-        alignItems: 'center',
-        justifyContent: 'center'
-    },
-    escrowModalRow: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        paddingVertical: 10,
-        borderBottomWidth: 0.5,
-        borderBottomColor: '#F1F5F9'
-    },
-    escrowModalBulletTitle: {
-        fontSize: 12.5,
-        fontWeight: '900',
-        color: '#0F172A'
-    },
-    escrowModalBulletDesc: {
-        fontSize: 11,
-        color: '#64748B',
-        lineHeight: 15,
-        marginTop: 2
-    },
-
-    // RECEIPT MODAL
-    receiptCard: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 20,
-        padding: 20,
-        width: '100%',
-        maxWidth: 400
-    },
-    receiptIconCircle: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: '#DCFCE7',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 8
-    },
-    receiptHeaderTxt: {
-        fontSize: 12,
-        fontWeight: '800',
-        color: '#64748B',
-        textTransform: 'uppercase',
-        letterSpacing: 0.5
-    },
-    receiptAmountTxt: {
-        fontSize: 24,
-        fontWeight: '900',
-        color: '#0F172A',
-        marginTop: 4
-    },
-    receiptDashedLine: {
-        borderStyle: 'dashed',
-        borderWidth: 0.8,
-        borderColor: '#E2E8F0',
-        marginVertical: 14
-    },
-    receiptRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-    },
-    receiptFieldLabel: {
-        color: '#94A3B8',
-        fontSize: 11.5,
-        fontWeight: '600'
-    },
-    receiptFieldVal: {
-        color: '#1E293B',
-        fontSize: 12,
-        fontWeight: '800'
-    },
-    receiptCloseBtn: {
-        backgroundColor: '#F1F5F9',
-        paddingVertical: 11,
-        borderRadius: 10,
-        alignItems: 'center',
-        marginTop: 16
-    },
-    receiptCloseBtnTxt: {
-        color: '#1E293B',
-        fontWeight: '800',
-        fontSize: 12.5
-    }
+    // Transaction detail
+    detailRow:     { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderColor: '#F1F5F9' },
+    detailKey:     { fontSize: 12, color: '#64748B', fontWeight: '600', flex: 1 },
+    detailVal:     { fontSize: 12, fontWeight: '700', color: '#0F172A', flex: 2, textAlign: 'right' },
 });
-
-export const WalletPage = (props) => {
-    const { settings } = useAppSettings();
-
-    if (settings?.loading) {
-        return (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
-                <ActivityIndicator size="large" color="#0F172A" />
-                <Text style={{ marginTop: 12, color: '#64748B', fontWeight: '700', fontSize: 13 }}>Initializing Wallet Security...</Text>
-            </View>
-        );
-    }
-    return (
-        <WalletPageInner {...props} />
-    );
-};
