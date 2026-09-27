@@ -173,6 +173,13 @@ export const ConversationsScreen = ({ navigation }) => {
         const isSupport = profile.role === 'admin' || profile.is_official || displayName.toLowerCase().includes('support');
         const isMe = msg.sender_id === currentUser?.id;
         const timeStr = formatTimestamp(msg.created_at);
+        const hasProductTag = !!msg.product_id || (msg.message && msg.message.includes('[Product Inquiry:'));
+
+        let cleanPreview = msg.message_type === 'image' ? '📷 Photo Attachment' : (msg.message || '');
+        if (cleanPreview.includes('[Product Inquiry:')) {
+            cleanPreview = cleanPreview.replace(/🛍️\s*\[Product Inquiry:.*?\]\n?/, '').replace(/\[Product Inquiry:.*?\]\n?/, '');
+            if (!cleanPreview.trim()) cleanPreview = 'Product inquiry';
+        }
 
         return (
             <TouchableOpacity
@@ -181,7 +188,8 @@ export const ConversationsScreen = ({ navigation }) => {
                     vendorId: item.partnerId,
                     vendorName: displayName,
                     vendorAvatar: profile.avatar_url,
-                    vendorRole: isSupport ? 'Official Store' : (profile.role || 'Vendor')
+                    vendorRole: isSupport ? 'Official Store' : (profile.role || 'Vendor'),
+                    productId: msg.product_id || null,
                 })}
                 activeOpacity={0.7}
             >
@@ -218,10 +226,18 @@ export const ConversationsScreen = ({ navigation }) => {
                     </View>
 
                     <View style={s.messagePreviewRow}>
-                        <Text style={s.previewTxt} numberOfLines={1}>
-                            {isMe ? <Text style={{ color: BRAND.sky, fontWeight: '700' }}>You: </Text> : ''}
-                            {msg.message_type === 'image' ? '📷 Photo Attachment' : msg.message}
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 6 }}>
+                            {hasProductTag && (
+                                <View style={s.prodTagBadge}>
+                                    <Ionicons name="pricetag" size={9} color={BRAND.navy} />
+                                    <Text style={s.prodTagBadgeTxt}>Product</Text>
+                                </View>
+                            )}
+                            <Text style={s.previewTxt} numberOfLines={1}>
+                                {isMe ? <Text style={{ color: BRAND.sky, fontWeight: '700' }}>You: </Text> : ''}
+                                {cleanPreview}
+                            </Text>
+                        </View>
                         <Ionicons name="chevron-forward" size={14} color="#CBD5E1" />
                     </View>
                 </View>
@@ -530,11 +546,27 @@ const s = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
     },
+    prodTagBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+        backgroundColor: '#FEF3C7',
+        borderWidth: 0.8,
+        borderColor: '#FDE68A',
+        paddingHorizontal: 5,
+        paddingVertical: 1,
+        borderRadius: 4,
+        marginRight: 6,
+    },
+    prodTagBadgeTxt: {
+        fontSize: 8.5,
+        fontWeight: '800',
+        color: BRAND.navy,
+    },
     previewTxt: {
         fontSize: 12.5,
         color: BRAND.slate,
         flex: 1,
-        paddingRight: 8,
     },
 
     // Loading & Empty States

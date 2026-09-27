@@ -45,6 +45,18 @@ export const ChatScreen = ({ route, navigation }) => {
         vendorRole
     } = route.params || {};
 
+    const [taggedProduct, setTaggedProduct] = useState(() => {
+        if (productId || productName) {
+            return {
+                id: productId,
+                name: productName || 'Product',
+                price: productPrice,
+                image_url: productImage
+            };
+        }
+        return null;
+    });
+
     const [messages, setMessages] = useState([]);
     const [inputText, setInputText] = useState('');
     const [loading, setLoading] = useState(true);
@@ -53,7 +65,19 @@ export const ChatScreen = ({ route, navigation }) => {
     const [uploading, setUploading] = useState(false);
     const [zoomImg, setZoomImg] = useState(null);
     const [showOptionsModal, setShowOptionsModal] = useState(false);
-    const [productsCache, setProductsCache] = useState({});
+    const [productsCache, setProductsCache] = useState(() => {
+        if (productId) {
+            return {
+                [productId]: {
+                    id: productId,
+                    name: productName || 'Product',
+                    price: productPrice,
+                    image_url: productImage
+                }
+            };
+        }
+        return {};
+    });
 
     const isSupport = vendorId === 'admin' || vendorId === 'admin_support' || vendorName?.toLowerCase()?.includes('support');
 
@@ -71,6 +95,35 @@ export const ChatScreen = ({ route, navigation }) => {
     useEffect(() => {
         initChat();
     }, []);
+
+    // Keep tagged product & productsCache in sync if route params arrive dynamically
+    useEffect(() => {
+        if (productId) {
+            if (!taggedProduct) {
+                setTaggedProduct({
+                    id: productId,
+                    name: productName || 'Product',
+                    price: productPrice,
+                    image_url: productImage
+                });
+            }
+            if (!productsCache[productId]) {
+                if (productName || productImage) {
+                    setProductsCache(prev => ({
+                        ...prev,
+                        [productId]: {
+                            id: productId,
+                            name: productName || 'Product',
+                            price: productPrice,
+                            image_url: productImage
+                        }
+                    }));
+                } else {
+                    fetchProductInfo(productId);
+                }
+            }
+        }
+    }, [productId, productName, productPrice, productImage]);
 
     // Fetch missing products when messages change
     useEffect(() => {
@@ -268,6 +321,10 @@ export const ChatScreen = ({ route, navigation }) => {
 
         if (type === 'text') setInputText('');
 
+        const currentTagged = taggedProduct;
+        const msgType = currentTagged ? 'product_inquiry' : type;
+        const currentProdId = currentTagged?.id || null;
+
         const tempId = `temp_${Date.now()}`;
         const optimisticMsg = {
             id: tempId,
@@ -275,7 +332,8 @@ export const ChatScreen = ({ route, navigation }) => {
             receiver_id: activeTargetId,
             message: textToSend,
             media_url: mediaUrl,
-            message_type: type,
+            message_type: msgType,
+            product_id: currentProdId,
             created_at: new Date().toISOString(),
         };
 
@@ -289,7 +347,8 @@ export const ChatScreen = ({ route, navigation }) => {
                 receiver_id: activeTargetId,
                 message: textToSend,
                 media_url: mediaUrl,
-                message_type: type,
+                message_type: msgType,
+                product_id: currentProdId,
                 created_at: new Date().toISOString()
             };
 
@@ -305,17 +364,29 @@ export const ChatScreen = ({ route, navigation }) => {
         }
     };
 
+    const sendProductInquiry = () => {
+        if (!taggedProduct) return;
+        const msg = `🛍️ [Product Inquiry: ${taggedProduct.name} - ${fmtPrice(taggedProduct.price)}]\nHello! I want to order this item on Abu Mafhal. Is this item currently in stock for fast delivery?`;
+        sendMessage('text', msg);
+    };
+
     const handleDirectWhatsApp = () => {
         const raw = targetProfile.whatsapp || targetProfile.phone || '08145853539';
         const phone = raw.replace(/[^0-9]/g, '');
-        const pContext = productName ? ` about "${productName}" (${fmtPrice(productPrice)})` : '';
-        const msg = encodeURIComponent(`Hello ${targetProfile.full_name}, I am chatting with you from Abu Mafhal Marketplace${pContext}.`);
+        const currentTagged = taggedProduct || (productId ? { id: productId, name: productName, price: productPrice } : null);
+        const pContext = currentTagged ? ` regarding "${currentTagged.name}" (${fmtPrice(currentTagged.price)})\nLink: https://abumafhal.com/mobile#product/${currentTagged.id || ''}` : '';
+        const msg = encodeURIComponent(`Hello ${targetProfile.full_name}, I am chatting with you from Abu Mafhal Marketplace${pContext ? '\n' + pContext : ''}.`);
         Linking.openURL(`https://wa.me/${phone}?text=${msg}`).catch(() => {
             Alert.alert('WhatsApp Call', `Phone number: +${phone}`);
         });
     };
 
-    const quickReplies = [
+    const quickReplies = taggedProduct ? [
+        `Is ${taggedProduct.name} still in stock?`,
+        "Can you deliver to my city today?",
+        "What is the warranty policy on this?",
+        "Can I get a discount for multiple units?"
+    ] : [
         "Is this item still available?",
         "Can you deliver to my city today?",
         "What is the warranty policy?",
@@ -326,9 +397,32 @@ export const ChatScreen = ({ route, navigation }) => {
         const isMe = item.sender_id === currentUser?.id;
         const timeStr = new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         
-        // Is this a product inquiry message?
-        const isProductInquiry = item.product_id || (item.message && item.message.includes('[Product Inquiry:'));
-        const embeddedProduct = item.product_id ? productsCache[item.product_id] : null;
+        // Is this a product inquiry message or has tagged product?
+        const targetProdId = item.product_id;
+        let embeddedProduct = targetProdId ? (productsCache[targetProdId] || (taggedProduct?.id === targetProdId ? taggedProduct : null)) : null;
+
+        let prodName = embeddedProduct?.name;
+        let prodPrice = embeddedProduct?.price;
+        let prodImg = embeddedProduct?.image_url;
+        let prodId = embeddedProduct?.id || targetProdId;
+
+        const hasInquiryHeader = item.message && item.message.includes('[Product Inquiry:');
+        if (!prodName && hasInquiryHeader) {
+            const match = item.message.match(/\[Product Inquiry:\s*(.*?)\s*-\s*(.*?)\]/);
+            if (match) {
+                prodName = match[1];
+                prodPrice = match[2];
+            }
+        }
+        if (!prodName && taggedProduct && (item.message_type === 'product_inquiry' || hasInquiryHeader)) {
+            prodName = taggedProduct.name;
+            prodPrice = taggedProduct.price;
+            prodImg = taggedProduct.image_url;
+            prodId = taggedProduct.id;
+        }
+
+        const showProductCard = (!!targetProdId || hasInquiryHeader) && (!!prodName || !!prodImg);
+        const displayMessage = item.message ? item.message.replace(/🛍️\s*\[Product Inquiry:.*?\]\n?/, '').replace(/\[Product Inquiry:.*?\]\n?/, '') : '';
 
         return (
             <View style={[s.msgWrapper, isMe ? s.msgWrapperMe : s.msgWrapperThem]}>
@@ -345,28 +439,48 @@ export const ChatScreen = ({ route, navigation }) => {
                     )
                 )}
 
-                <View style={{ maxWidth: '78%' }}>
+                <View style={{ maxWidth: '82%' }}>
                     <View style={[s.bubble, isMe ? s.bubbleMe : s.bubbleThem]}>
                         
                         {/* PRODUCT CONTEXT EMBED */}
-                        {isProductInquiry && embeddedProduct && (
+                        {showProductCard && (
                             <TouchableOpacity 
-                                style={s.embeddedProductCard} 
-                                activeOpacity={0.8}
-                                onPress={() => navigation.navigate('ProductDetails', { id: embeddedProduct.id, product: embeddedProduct })}
+                                style={[s.embeddedProductCard, isMe ? s.embeddedProductCardMe : s.embeddedProductCardThem]} 
+                                activeOpacity={0.85}
+                                onPress={() => {
+                                    if (prodId) {
+                                        navigation.navigate('ProductDetails', {
+                                            id: prodId,
+                                            productId: prodId,
+                                            product: embeddedProduct || { id: prodId, name: prodName, price: prodPrice, image_url: prodImg }
+                                        });
+                                    }
+                                }}
                             >
-                                {embeddedProduct.image_url ? (
-                                    <Image source={{ uri: embeddedProduct.image_url }} style={s.embedImg} />
-                                ) : (
-                                    <View style={[s.embedImg, { backgroundColor: BRAND.slateLight, alignItems: 'center', justifyContent: 'center' }]}>
-                                        <Ionicons name="cube-outline" size={16} color={BRAND.slate} />
+                                <View style={s.embedTopRow}>
+                                    <View style={s.embedBadge}>
+                                        <Ionicons name="pricetag" size={10} color={isMe ? BRAND.gold : BRAND.navy} />
+                                        <Text style={[s.embedBadgeTxt, isMe && { color: BRAND.gold }]}>TAGGED PRODUCT</Text>
                                     </View>
-                                )}
-                                <View style={s.embedInfo}>
-                                    <Text numberOfLines={1} style={s.embedTitle}>{embeddedProduct.name}</Text>
-                                    <Text style={s.embedPrice}>{fmtPrice(embeddedProduct.price)}</Text>
+                                    <Text style={[s.embedTapTxt, isMe && { color: '#93C5FD' }]}>Tap to View ›</Text>
                                 </View>
-                                <Ionicons name="chevron-forward" size={16} color={BRAND.navy} />
+                                <View style={s.embedBody}>
+                                    {prodImg ? (
+                                        <Image source={{ uri: prodImg }} style={s.embedImg} />
+                                    ) : (
+                                        <View style={[s.embedImg, { backgroundColor: isMe ? 'rgba(255,255,255,0.1)' : BRAND.slateLight, alignItems: 'center', justifyContent: 'center' }]}>
+                                            <Ionicons name="cube-outline" size={18} color={isMe ? BRAND.gold : BRAND.slate} />
+                                        </View>
+                                    )}
+                                    <View style={s.embedInfo}>
+                                        <Text numberOfLines={2} style={[s.embedTitle, isMe && { color: '#FFFFFF' }]}>
+                                            {prodName || 'Product'}
+                                        </Text>
+                                        <Text style={[s.embedPrice, isMe && { color: BRAND.gold }]}>
+                                            {fmtPrice(prodPrice)}
+                                        </Text>
+                                    </View>
+                                </View>
                             </TouchableOpacity>
                         )}
 
@@ -379,9 +493,11 @@ export const ChatScreen = ({ route, navigation }) => {
                                 />
                             </TouchableOpacity>
                         ) : (
-                            <Text style={[s.msgText, isMe ? s.msgTextMe : s.msgTextThem]}>
-                                {item.message?.replace(/\[Product Inquiry:.*?\]\n?/, '')}
-                            </Text>
+                            displayMessage.length > 0 ? (
+                                <Text style={[s.msgText, isMe ? s.msgTextMe : s.msgTextThem]}>
+                                    {displayMessage}
+                                </Text>
+                            ) : null
                         )}
                     </View>
 
@@ -467,35 +583,63 @@ export const ChatScreen = ({ route, navigation }) => {
             {/* ══════════════════════════════════════════════════
                 2. INTERACTIVE PRODUCT ATTACHMENT CARD
             ══════════════════════════════════════════════════ */}
-            {(productName || productImage) && (
+            {taggedProduct && (
                 <View style={s.productBar}>
-                    {productImage && (
+                    {taggedProduct.image_url ? (
                         <Image
-                            source={{ uri: typeof productImage === 'string' && productImage.startsWith('http') ? productImage : 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=300' }}
+                            source={{ uri: typeof taggedProduct.image_url === 'string' && taggedProduct.image_url.startsWith('http') ? taggedProduct.image_url : 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=300' }}
                             style={s.productImg}
                         />
+                    ) : (
+                        <View style={[s.productImg, { alignItems: 'center', justifyContent: 'center', backgroundColor: BRAND.slateLight }]}>
+                            <Ionicons name="cube-outline" size={18} color={BRAND.slate} />
+                        </View>
                     )}
                     <View style={{ flex: 1, marginLeft: 10 }}>
-                        <Text style={s.inquiryLabel}>Inquiry Regarding Product:</Text>
-                        <Text numberOfLines={1} style={s.productTitleTxt}>{productName || 'Special Item'}</Text>
-                        {productPrice && (
-                            <Text style={s.productPriceTxt}>{fmtPrice(productPrice)}</Text>
-                        )}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Ionicons name="pricetag" size={11} color={BRAND.emerald} />
+                            <Text style={s.inquiryLabel}>TAGGED PRODUCT</Text>
+                        </View>
+                        <Text numberOfLines={1} style={s.productTitleTxt}>{taggedProduct.name || 'Special Item'}</Text>
+                        <Text style={s.productPriceTxt}>{fmtPrice(taggedProduct.price)}</Text>
                     </View>
 
-                    {/* Direct Buy/View Action */}
-                    <TouchableOpacity
-                        style={s.productActionBtn}
-                        onPress={() => {
-                            if (productId) {
-                                navigation.navigate('ProductDetails', { id: productId, product: { id: productId, name: productName, price: productPrice, image_url: productImage } });
-                            } else {
-                                navigation.navigate('Main', { screen: 'shop' });
-                            }
-                        }}
-                    >
-                        <Text style={s.productActionBtnTxt}>View Item</Text>
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        {/* 1-tap Send Inquiry Button */}
+                        <TouchableOpacity
+                            style={s.sendInquiryBtn}
+                            onPress={sendProductInquiry}
+                            activeOpacity={0.8}
+                        >
+                            <Ionicons name="paper-plane" size={11} color="#FFFFFF" />
+                            <Text style={s.sendInquiryBtnTxt}>Inquire</Text>
+                        </TouchableOpacity>
+
+                        {/* View Item Button */}
+                        <TouchableOpacity
+                            style={s.productActionBtn}
+                            onPress={() => {
+                                navigation.navigate('ProductDetails', {
+                                    id: taggedProduct.id,
+                                    productId: taggedProduct.id,
+                                    product: taggedProduct
+                                });
+                            }}
+                            activeOpacity={0.8}
+                        >
+                            <Text style={s.productActionBtnTxt}>View</Text>
+                        </TouchableOpacity>
+
+                        {/* Untag Button */}
+                        <TouchableOpacity
+                            style={s.untagBtn}
+                            onPress={() => setTaggedProduct(null)}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                            <Ionicons name="close" size={15} color={BRAND.slate} />
+                        </TouchableOpacity>
+                    </View>
                 </View>
             )}
 
@@ -524,6 +668,19 @@ export const ChatScreen = ({ route, navigation }) => {
                             <Text style={s.emptyChatSub}>
                                 Direct live chat with {targetProfile.full_name}. Inquiries are protected by Abu Mafhal Escrow Security.
                             </Text>
+                            {taggedProduct && (
+                                <TouchableOpacity
+                                    style={s.emptyInquiryCard}
+                                    onPress={sendProductInquiry}
+                                    activeOpacity={0.85}
+                                >
+                                    <Ionicons name="pricetag" size={15} color={BRAND.navy} />
+                                    <Text numberOfLines={1} style={s.emptyInquiryCardTxt}>
+                                        Send inquiry for "{taggedProduct.name}"
+                                    </Text>
+                                    <Ionicons name="paper-plane" size={13} color={BRAND.navy} />
+                                </TouchableOpacity>
+                            )}
                         </View>
                     }
                 />
@@ -557,6 +714,28 @@ export const ChatScreen = ({ route, navigation }) => {
                     />
                 </View>
 
+                {/* Active Tag Indicator Strip */}
+                {taggedProduct && (
+                    <View style={s.inputTagBanner}>
+                        <View style={s.inputTagLeft}>
+                            <View style={s.inputTagIconBox}>
+                                <Ionicons name="pricetag" size={12} color={BRAND.navy} />
+                            </View>
+                            <Text numberOfLines={1} style={s.inputTagTxt}>
+                                Tagging: <Text style={s.inputTagBold}>{taggedProduct.name}</Text> ({fmtPrice(taggedProduct.price)})
+                            </Text>
+                        </View>
+                        <TouchableOpacity
+                            style={s.inputTagCloseBtn}
+                            onPress={() => setTaggedProduct(null)}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                            <Ionicons name="close-circle" size={18} color={BRAND.slate} />
+                        </TouchableOpacity>
+                    </View>
+                )}
+
                 {/* Input Bar */}
                 <View style={s.inputContainer}>
                     {/* Image Attachment Button */}
@@ -575,7 +754,7 @@ export const ChatScreen = ({ route, navigation }) => {
                     {/* Text Field */}
                     <View style={s.textInputBox}>
                         <TextInput
-                            placeholder="Type your message..."
+                            placeholder={taggedProduct ? `Inquire about ${taggedProduct.name}...` : "Type your message..."}
                             placeholderTextColor="#94A3B8"
                             value={inputText}
                             onChangeText={setInputText}
@@ -777,9 +956,23 @@ const s = StyleSheet.create({
         fontWeight: '800',
         color: BRAND.goldDark,
     },
+    sendInquiryBtn: {
+        backgroundColor: BRAND.emerald,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+        paddingHorizontal: 8,
+        paddingVertical: 5,
+        borderRadius: 6,
+    },
+    sendInquiryBtnTxt: {
+        color: '#FFFFFF',
+        fontSize: 10.5,
+        fontWeight: '800',
+    },
     productActionBtn: {
         backgroundColor: BRAND.navy,
-        paddingHorizontal: 10,
+        paddingHorizontal: 9,
         paddingVertical: 5,
         borderRadius: 6,
     },
@@ -787,6 +980,15 @@ const s = StyleSheet.create({
         color: '#FFFFFF',
         fontSize: 10.5,
         fontWeight: '800',
+    },
+    untagBtn: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: 'rgba(0,0,0,0.06)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginLeft: 2,
     },
 
     // ── 3. Messages List ──
@@ -1014,16 +1216,109 @@ const s = StyleSheet.create({
         fontWeight: '600',
         color: BRAND.slateDark,
     },
-    embeddedProductCard: {
+    emptyInquiryCard: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#FEF3C7',
+        borderWidth: 1,
+        borderColor: BRAND.gold,
+        borderRadius: 20,
+        paddingVertical: 9,
+        paddingHorizontal: 14,
+        marginTop: 16,
+        gap: 6,
+        maxWidth: 320,
+    },
+    emptyInquiryCardTxt: {
+        color: BRAND.navy,
+        fontWeight: '800',
+        fontSize: 12,
+        flexShrink: 1,
+    },
+    inputTagBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#EFF6FF',
+        borderTopWidth: 1,
+        borderBottomWidth: 1,
+        borderColor: '#BFDBFE',
+        paddingHorizontal: 14,
+        paddingVertical: 6,
+    },
+    inputTagLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+        gap: 6,
+        marginRight: 8,
+    },
+    inputTagIconBox: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: '#DBEAFE',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    inputTagTxt: {
+        fontSize: 11.5,
+        color: BRAND.slateDark,
+        flex: 1,
+    },
+    inputTagBold: {
+        fontWeight: '800',
+        color: BRAND.navy,
+    },
+    inputTagCloseBtn: {
+        padding: 2,
+    },
+    embeddedProductCard: {
         backgroundColor: '#FFFFFF',
-        borderRadius: 8,
+        borderRadius: 10,
         padding: 8,
-        marginBottom: 6,
+        marginBottom: 8,
         borderWidth: 1,
         borderColor: '#E2E8F0',
-        width: 220,
+        width: 230,
+    },
+    embeddedProductCardMe: {
+        backgroundColor: 'rgba(255, 255, 255, 0.12)',
+        borderColor: 'rgba(229, 169, 60, 0.4)',
+    },
+    embeddedProductCardThem: {
+        backgroundColor: '#FFFFFF',
+        borderColor: '#E2E8F0',
+    },
+    embedTopRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingBottom: 5,
+        marginBottom: 5,
+        borderBottomWidth: 0.5,
+        borderBottomColor: 'rgba(150, 150, 150, 0.25)',
+    },
+    embedBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+    },
+    embedBadgeTxt: {
+        fontSize: 9,
+        fontWeight: '800',
+        color: BRAND.navy,
+        letterSpacing: 0.3,
+    },
+    embedTapTxt: {
+        fontSize: 9.5,
+        fontWeight: '700',
+        color: BRAND.sky,
+    },
+    embedBody: {
+        flexDirection: 'row',
+        alignItems: 'center',
     },
     embedImg: {
         width: 44,
@@ -1038,13 +1333,13 @@ const s = StyleSheet.create({
     },
     embedTitle: {
         fontSize: 12,
-        fontWeight: '600',
+        fontWeight: '700',
         color: BRAND.navy,
         marginBottom: 2,
     },
     embedPrice: {
-        fontSize: 11,
-        fontWeight: '700',
+        fontSize: 11.5,
+        fontWeight: '800',
         color: BRAND.goldDark,
     },
 });
