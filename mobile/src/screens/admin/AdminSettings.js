@@ -400,9 +400,9 @@ export const AdminSettings = ({ navigation }) => {
     const [latestAppVersion,       setLatestAppVersion]       = useState(settings?.latest_app_version || '1.0.0');
     const [minRequiredVersion,     setMinRequiredVersion]     = useState(settings?.min_required_version || '1.0.0');
     const [forceUpdateEnabled,     setForceUpdateEnabled]     = useState(settings?.force_update_enabled || false);
-    const [updateTitle,            setUpdateTitle]            = useState(settings?.update_title || 'Sabon Version Ya Fito A Play Store!');
-    const [updateMessage,          setUpdateMessage]          = useState(settings?.update_message || 'Muna bukatar kayi update na manhajar Abu Mafhal zuwa sabon version domin samun sabbin fasaloli da ingantaccen tsaro kafin ka shiga.');
-    const [updateReleaseNotes,     setUpdateReleaseNotes]     = useState(settings?.update_release_notes || '• Karin sabbin fasaloli da inganta sauri\n• Sabon tsarin VIP Pass da katin shaida mai lambar QR\n• Karin tsaro ga asusunka da biyan kudi\n• Gyaran kurakurai da saukaka siyayya');
+    const [updateTitle,            setUpdateTitle]            = useState(settings?.update_title || 'New Version Available on Play Store!');
+    const [updateMessage,          setUpdateMessage]          = useState(settings?.update_message || 'Please update your Abu Mafhal app to the latest version to enjoy new features, enhanced security, and performance improvements.');
+    const [updateReleaseNotes,     setUpdateReleaseNotes]     = useState(settings?.update_release_notes || '• New features and performance improvements\n• Enhanced account security and payment protection\n• Bug fixes and streamlined checkout experience');
     const [showUpdatePreviewModal, setShowUpdatePreviewModal] = useState(false);
     const [privacyPolicyUrl, setPrivacyPolicyUrl] = useState(settings?.privacy_policy_url || '');
     const [termsUrl,         setTermsUrl]         = useState(settings?.terms_url || '');
@@ -904,25 +904,25 @@ export const AdminSettings = ({ navigation }) => {
         const planId = `plan_${Date.now()}`;
         setVendorPlans(prev => [
             ...prev,
-            { id: planId, label: 'Sabuwar Kunshin Biyan Kuɗi', price: 5000, duration_months: 1, is_active: true, badge: 'New' }
+            { id: planId, label: 'New Subscription Plan', price: 5000, duration_months: 1, is_active: true, badge: 'New' }
         ]);
         setUnsaved(true);
-        Alert.alert('Plan Added', 'Sabon kunshin biyan kudi ya shiga. Zaka iya canza sunansa da farashinsa sannan ka danna Deploy.');
+        Alert.alert('Plan Added', 'New subscription plan added. You can customize its name and fee, then click Save.');
     };
 
     const removeVendorPlan = (idx) => {
         if (vendorPlans.length <= 1) {
-            Alert.alert('Cannot Remove', 'Dole ne a bar akalla kunshin biyan kudi guda daya.');
+            Alert.alert('Cannot Remove', 'At least one subscription plan must remain active.');
             return;
         }
         const planToRemove = vendorPlans[idx];
         Alert.alert(
-            'Goge Kunshin Biyan Kudi?',
-            `Kana son goge "${planToRemove?.label || 'Wannan Plan'}"?`,
+            'Delete Subscription Plan?',
+            `Are you sure you want to delete "${planToRemove?.label || 'this plan'}"?`,
             [
-                { text: 'A\'a (Cancel)', style: 'cancel' },
+                { text: 'Cancel', style: 'cancel' },
                 {
-                    text: 'Goge (Delete)',
+                    text: 'Delete',
                     style: 'destructive',
                     onPress: () => {
                         const np = vendorPlans.filter((_, i) => i !== idx);
@@ -967,21 +967,21 @@ export const AdminSettings = ({ navigation }) => {
     const applyReleaseNotesTemplate = (tmplKey) => {
         let text = '';
         if (tmplKey === 'general') {
-            setUpdateTitle('Sabon Version Ya Fito A Play Store! 🚀');
-            setUpdateMessage('Muna bukatar kayi update na manhajar Abu Mafhal zuwa sabon version domin samun sabbin fasaloli da ingantaccen tsaro kafin ka shiga.');
-            text = '• Karin sabbin fasaloli da inganta saurin manhaja\n• Sabon tsarin VIP Pass da katin shaida mai lambar QR\n• Karin tsaro ga asusunka da tsarin biyan kudi\n• Gyaran kurakurai da saukaka siyayya da sayarwa';
+            setUpdateTitle('New Version Available on Play Store! 🚀');
+            setUpdateMessage('Please update your Abu Mafhal app to access the latest features, improved performance, and enhanced security.');
+            text = '• New features and app speed improvements\n• Enhanced user profiles and security\n• Real-time escrow payment updates\n• Bug fixes and smoother shopping experience';
         } else if (tmplKey === 'security') {
-            setUpdateTitle('Sabuntawar Tsaro da Asusu 🔒');
-            setUpdateMessage('Wannan sabuntawar tana da matukar muhimmanci domin tsaron asusunka, kudaden shiga, da ingantaccen tsarin biyan kudi.');
-            text = '• Sabon ingantaccen tsarin Escrow Safe Protection\n• Kariyar satar asusu da tantance lambar waya\n• Saukin biyan kudi ta Paystack, Crypto da Bank Transfer\n• Saurin samun kudin shiga ga yan kasuwa (Instant Payouts)';
+            setUpdateTitle('Security & Account Protection Update 🔒');
+            setUpdateMessage('This update includes critical improvements to account protection, escrow security, and checkout reliability.');
+            text = '• Upgraded Escrow Safe Protection architecture\n• Two-factor verification & phone confirmation\n• Faster Paystack, Flutterwave & Crypto checkout\n• Instant merchant payout processing';
         } else if (tmplKey === 'market') {
-            setUpdateTitle('Sabbin Fasalolin Kasuwa & Live Chat! 🛍️');
-            setUpdateMessage('An kara sabbin fasaloli masu kayatarwa ciki har da tagging din kaya kai tsaye a cikin chat da bibiyar kaya!');
-            text = '• Sabon tsarin Tagging din kaya kai tsaye a cikin Live Chat\n• Bibiyar direba da kaya a taswira (Live GPS Navigation)\n• Sabon tsarin katin shaida mai lambar QR ga yan kasuwa\n• Gyaran saurin bude shafukan kaya da hotuna';
+            setUpdateTitle('New Marketplace Features & Live Chat! 🛍️');
+            setUpdateMessage('Exciting new features added including real-time item tagging in chat and enhanced order tracking!');
+            text = '• Real-time item tagging in Live Chat\n• Live GPS order tracking and driver dispatch\n• QR code merchant authentication badges\n• Faster product image loading';
         } else if (tmplKey === 'bugfix') {
-            setUpdateTitle('Ingantawa & Gyaran Kurakurai ⚡');
-            setUpdateMessage('Mun gyara kurakurai tare da inganta saurin manhaja domin saukaka muku kwarewar amfani.');
-            text = '• Gyaran matsalar reloading a shafin kaya\n• Inganta saurin bude manhaja da saukin amfani\n• Gyaran alamar rajistar vendor da zuba kaya\n• Tabbatar da aikin sanarwa (Push Notifications)';
+            setUpdateTitle('Performance & Bug Fixes ⚡');
+            setUpdateMessage('We resolved bugs and boosted app responsiveness for a seamless experience.');
+            text = '• Resolved product list refresh glitches\n• Faster app load times and responsive UI\n• Optimized vendor registration and catalog forms\n• Reliable push notification delivery';
         }
         setUpdateReleaseNotes(text);
         setUnsaved(true);
@@ -1749,7 +1749,7 @@ export const AdminSettings = ({ navigation }) => {
 
             {/* Google Play Store & Force Update Management */}
             {/* Google Play Store & Force Update Management */}
-            <Sect title="Play Store & App Force Update Hub" icon="logo-google-playstore" subtitle="Saita sabon version na Play Store da tilasta yin update kafin a shiga manhaja">
+            <Sect title="Play Store & App Force Update Hub" icon="logo-google-playstore" subtitle="Manage Play Store releases and enforce minimum version requirements">
                 <Card>
                     {/* Google Play Status Header */}
                     <View style={{ marginBottom: 14, backgroundColor: darkMode ? '#112217' : '#ECFDF5', padding: 14, borderRadius: 16, borderWidth: 1, borderColor: '#10B981' }}>
@@ -1822,11 +1822,11 @@ export const AdminSettings = ({ navigation }) => {
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
                             <Ionicons name="flash" size={14} color="#D9A73A" />
                             <Text style={{ fontSize: 11.5, fontWeight: '900', color: darkMode ? '#F8FAFC' : '#0F172A', letterSpacing: 0.3 }}>
-                                QUICK VERSION BUMP (SAURI WAJEN SAITA VERSION)
+                                QUICK VERSION BUMP
                             </Text>
                         </View>
                         <Text style={{ fontSize: 11, color: '#64748B', marginBottom: 10 }}>
-                            Danna kowane madanni don kara lambar version cikin sauki ba tare da kuskure ba:
+                            Click any button to increment the version number easily:
                         </Text>
                         <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
                             <TouchableOpacity
@@ -1835,7 +1835,7 @@ export const AdminSettings = ({ navigation }) => {
                                 activeOpacity={0.8}
                             >
                                 <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '900' }}>+0.0.1 Patch</Text>
-                                <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 9 }}>Gyaran Kurakurai</Text>
+                                <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 9 }}>Bug Fixes</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={() => bumpVersion('minor')}
@@ -1843,7 +1843,7 @@ export const AdminSettings = ({ navigation }) => {
                                 activeOpacity={0.8}
                             >
                                 <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '900' }}>+0.1.0 Feature</Text>
-                                <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 9 }}>Sabbin Fasaloli</Text>
+                                <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 9 }}>New Features</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={() => bumpVersion('major')}
@@ -1851,7 +1851,7 @@ export const AdminSettings = ({ navigation }) => {
                                 activeOpacity={0.8}
                             >
                                 <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '900' }}>+1.0.0 Major</Text>
-                                <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 9 }}>Babban Sauyi</Text>
+                                <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 9 }}>Major Upgrade</Text>
                             </TouchableOpacity>
                         </View>
 
@@ -1861,22 +1861,22 @@ export const AdminSettings = ({ navigation }) => {
                                 style={{ flex: 1, backgroundColor: 'rgba(239, 68, 68, 0.1)', borderWidth: 1, borderColor: '#EF4444', paddingVertical: 6, borderRadius: 8, alignItems: 'center' }}
                                 activeOpacity={0.8}
                             >
-                                <Text style={{ color: '#EF4444', fontSize: 10.5, fontWeight: '800' }}>Set Min = Latest (Tilasta Kowa)</Text>
+                                <Text style={{ color: '#EF4444', fontSize: 10.5, fontWeight: '800' }}>Set Min = Latest (Enforce All)</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={resetMinToDefault}
                                 style={{ flex: 1, backgroundColor: 'rgba(16, 185, 129, 0.1)', borderWidth: 1, borderColor: '#10B981', paddingVertical: 6, borderRadius: 8, alignItems: 'center' }}
                                 activeOpacity={0.8}
                             >
-                                <Text style={{ color: '#10B981', fontSize: 10.5, fontWeight: '800' }}>Set Min = 1.0.0 (Mai Sauki)</Text>
+                                <Text style={{ color: '#10B981', fontSize: 10.5, fontWeight: '800' }}>Set Min = 1.0.0 (Flexible)</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
 
                     {/* Force Update Toggle */}
                     <Tog
-                        label="Dole Sai Anyi Update (Force Update)"
-                        desc="Idan an kunna, duk wanda yake da tsohon version ba zai iya shiga app din ba sai yayi update a Play Store"
+                        label="Enforce App Update (Force Update)"
+                        desc="When enabled, users with older versions are required to update via Play Store before using the app"
                         icon="shield-alert"
                         value={forceUpdateEnabled}
                         onToggle={() => { setForceUpdateEnabled(p => !p); setUnsaved(true); }}
@@ -1892,7 +1892,7 @@ export const AdminSettings = ({ navigation }) => {
                                 onChange={v => { setLatestAppVersion(v); setUnsaved(true); }}
                                 icon="cloud-upload"
                                 placeholder="1.0.1"
-                                hint="Sabuwar sigar da ke kan Play Store"
+                                hint="Latest published release on Play Store"
                             />
                         </View>
                         <View style={{ flex: 1 }}>
@@ -1902,7 +1902,7 @@ export const AdminSettings = ({ navigation }) => {
                                 onChange={v => { setMinRequiredVersion(v); setUnsaved(true); }}
                                 icon="lock-closed"
                                 placeholder="1.0.0"
-                                hint="Kasa da wannan dole a yi update"
+                                hint="Versions below this cannot open the app"
                             />
                         </View>
                     </View>
@@ -1912,7 +1912,7 @@ export const AdminSettings = ({ navigation }) => {
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(239, 68, 68, 0.1)', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#EF4444', marginBottom: 12 }}>
                             <Ionicons name="warning" size={16} color="#EF4444" />
                             <Text style={{ fontSize: 11, color: '#EF4444', flex: 1, fontWeight: '700' }}>
-                                Lura: Minimum Required Version ya fi Latest Version girma. Ka daidaita su don gujewa toshe kowa a app din.
+                                Warning: Minimum Required Version cannot exceed Latest Version. Adjust values to avoid locking users out.
                             </Text>
                         </View>
                     )}
@@ -1925,7 +1925,7 @@ export const AdminSettings = ({ navigation }) => {
                             icon="link"
                             placeholder="https://play.google.com/store/apps/details?id=com.abumafhal.app"
                             keyboard="url"
-                            hint="Adireshin da ake turawa domin bude Google Play Store a waya"
+                            hint="URL that directs users to Google Play Store"
                         />
                         <TouchableOpacity
                             onPress={restoreDefaultPlayStoreUrl}
@@ -1938,7 +1938,7 @@ export const AdminSettings = ({ navigation }) => {
                     {/* Release Notes Quick Templates */}
                     <View style={{ marginTop: 14, marginBottom: 12 }}>
                         <Text style={{ fontSize: 11.5, fontWeight: '800', color: darkMode ? '#CBD5E1' : '#475569', marginBottom: 6 }}>
-                            ZABI TSARIN BAYANI (RELEASE NOTES TEMPLATES):
+                            SELECT RELEASE NOTES TEMPLATE:
                         </Text>
                         <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
                             <TouchableOpacity
@@ -2083,45 +2083,9 @@ export const AdminSettings = ({ navigation }) => {
 
     const renderVendors = () => (
         <View style={S.section}>
-            {/* 1. Official Store Subscription Bank Account */}
-            <Sect title="Official Subscription Bank Account" subtitle="Asusun da yan kasuwa za su tura kudin subscription idan sun zabi Direct Bank Transfer" icon="business">
-                <Card>
-                    <Inp
-                        label="Bank Name (Sunan Bankin Abu Mafhal)"
-                        value={officialBankName}
-                        onChange={v => { setOfficialBankName(v); setUnsaved(true); }}
-                        icon="business"
-                        placeholder="Moniepoint MFB / Opay / Zenith"
-                        color="#D9A73A"
-                    />
-                    <Inp
-                        label="Account Number (Lambar Asusu)"
-                        value={officialAccountNumber}
-                        onChange={v => { setOfficialAccountNumber(v); setUnsaved(true); }}
-                        icon="card"
-                        placeholder="5051567890"
-                        keyboard="numeric"
-                        color="#3B82F6"
-                    />
-                    <Inp
-                        label="Account Beneficiary Name (Sunan Mai Asusu)"
-                        value={officialAccountName}
-                        onChange={v => { setOfficialAccountName(v); setUnsaved(true); }}
-                        icon="person"
-                        placeholder="Abu Mafhal Global Concept Ltd"
-                        color="#10B981"
-                    />
-                    <View style={[S.infoBox, { backgroundColor: darkMode ? '#1E3A5F' : '#EFF6FF' }]}>
-                        <Ionicons name="information-circle" size={15} color="#3B82F6" />
-                        <Text style={{ fontSize: 12, color: darkMode ? '#93C5FD' : '#1E40AF', flex: 1 }}>
-                            Wadannan bayanan banki sune za su fito ga duk mai neman shiga kasuwa a shafin Vendor Register idan ya zabi "Direct Bank Transfer" tare da madannin kwafa (Copy) mai sauki.
-                        </Text>
-                    </View>
-                </Card>
-            </Sect>
 
-            {/* 2. Dynamic Subscription Plans */}
-            <Sect title="Storefront Subscription Plans" subtitle="Kunshin biyan kudi na yan kasuwa (ana iya sauyawa ko kara sabo a kowane lokaci)" icon="ribbon">
+            {/* Storefront Subscription Plans */}
+            <Sect title="Storefront Subscription Plans" subtitle="Merchant subscription tiers and pricing (configurable in real-time)" icon="ribbon">
                 {vendorPlans.map((plan, idx) => (
                     <Card key={plan.id}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -2156,11 +2120,11 @@ export const AdminSettings = ({ navigation }) => {
                         {plan.is_active !== false && (
                             <View style={{ marginTop: 14, gap: 10 }}>
                                 <Inp
-                                    label="Plan Title (Sunan Kunshi)"
+                                    label="Plan Title"
                                     value={plan.label}
                                     onChange={val => updateVendorPlan(idx, 'label', val)}
                                     icon="pricetag"
-                                    placeholder="e.g. 1 Wata (1 Month Storefront)"
+                                    placeholder="e.g. 1 Month Pro Storefront"
                                 />
                                 <Inp
                                     label={`Price (${selectedCurrency.symbol})`}
@@ -2168,7 +2132,7 @@ export const AdminSettings = ({ navigation }) => {
                                     onChange={val => updateVendorPlan(idx, 'price', val)}
                                     icon="cash"
                                     keyboard="numeric"
-                                    hint="Sanya 0 idan gwajin kyauta ne (Free Trial)"
+                                    hint="Enter 0 for Free Trial tier"
                                 />
                             </View>
                         )}
@@ -2194,7 +2158,7 @@ export const AdminSettings = ({ navigation }) => {
                 >
                     <Ionicons name="add-circle" size={20} color="#10B981" />
                     <Text style={{ fontSize: 13, fontWeight: '800', color: '#10B981' }}>
-                        + Kara Sabon Kunshin Biyan Kudi (Add Plan)
+                        + Add New Subscription Plan
                     </Text>
                 </TouchableOpacity>
             </Sect>
@@ -2275,12 +2239,12 @@ export const AdminSettings = ({ navigation }) => {
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={[S.cardTitle, { color: T.text }]}>
-                                    {forceUpdateEnabled ? 'Strict Lock (Tilas Ayi Update)' : 'Flexible (Zabi Ne)'}
+                                    {forceUpdateEnabled ? 'Strict Lock (Forced Update)' : 'Flexible (Optional)'}
                                 </Text>
                                 <Text style={[S.cardSub, { color: T.muted }]}>
                                     {forceUpdateEnabled
-                                        ? 'Duk mai tsohon version dole ne yayi update kafin ya shiga'
-                                        : 'Ana nuna sanarwa tare da zabin "Remind me later"'}
+                                        ? 'All users with older versions must update before entering'
+                                        : 'A non-blocking notification with "Remind me later" is displayed'}
                                 </Text>
                             </View>
                         </View>
@@ -2316,17 +2280,17 @@ export const AdminSettings = ({ navigation }) => {
                 <Card>
                     <View style={{ marginBottom: 12 }}>
                         <Inp
-                            label="Latest Published Version (Sabuwar Sigar Play Store)"
+                            label="Latest Published Version"
                             value={latestAppVersion}
                             onChange={(v) => { setLatestAppVersion(v); setUnsaved(true); }}
                             icon="cloud-upload"
                             placeholder="1.0.1"
                             color="#3B82F6"
-                            hint="Format: X.Y.Z (misali 1.0.1 ko 1.1.0)"
+                            hint="Format: X.Y.Z (e.g. 1.0.1 or 1.1.0)"
                         />
                         {/* Quick Version Increment Buttons */}
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
-                            <Text style={{ fontSize: 10.5, fontWeight: '700', color: T.muted }}>Karin Sauri:</Text>
+                            <Text style={{ fontSize: 10.5, fontWeight: '700', color: T.muted }}>Quick Increment:</Text>
                             <TouchableOpacity
                                 onPress={() => bumpVersion('patch')}
                                 style={{ backgroundColor: T.surface, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: T.border }}
@@ -2353,13 +2317,13 @@ export const AdminSettings = ({ navigation }) => {
 
                     <View style={{ marginTop: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: T.border }}>
                         <Inp
-                            label="Minimum Required Version (Mafi Karancin Version da Zai Bude)"
+                            label="Minimum Required Version"
                             value={minRequiredVersion}
                             onChange={(v) => { setMinRequiredVersion(v); setUnsaved(true); }}
                             icon="lock-closed"
                             placeholder="1.0.0"
                             color="#D97706"
-                            hint="Duk wanda ke kasa da wannan version ba zai iya shiga ba (Dole yayi update)"
+                            hint="App builds below this version must update"
                         />
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
                             <TouchableOpacity
@@ -2368,7 +2332,7 @@ export const AdminSettings = ({ navigation }) => {
                                 activeOpacity={0.7}
                             >
                                 <Text style={{ fontSize: 11, fontWeight: '800', color: '#92400E' }}>
-                                    Yi Daidai da Sabon Version (= {latestAppVersion})
+                                    Sync with Latest (= {latestAppVersion})
                                 </Text>
                             </TouchableOpacity>
                             <TouchableOpacity
@@ -2377,7 +2341,7 @@ export const AdminSettings = ({ navigation }) => {
                                 activeOpacity={0.7}
                             >
                                 <Text style={{ fontSize: 11, fontWeight: '700', color: T.muted }}>
-                                    Maida 1.0.0
+                                    Reset to 1.0.0
                                 </Text>
                             </TouchableOpacity>
                         </View>
@@ -2393,7 +2357,7 @@ export const AdminSettings = ({ navigation }) => {
                         icon="logo-google-playstore"
                         placeholder="https://play.google.com/store/apps/details?id=com.abumafhal.app"
                         color="#10B981"
-                        hint="Link din da zai bude kai tsaye lokacin da mai amfani ya danna 'YI UPDATE YANZU'"
+                        hint="Direct link opened when user taps UPDATE NOW"
                     />
                     <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 4 }}>
                         <TouchableOpacity
@@ -2401,7 +2365,7 @@ export const AdminSettings = ({ navigation }) => {
                             style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: 8 }}
                         >
                             <Ionicons name="open-outline" size={13} color="#0284C7" />
-                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#0284C7' }}>Gwada Link din a Wayarka</Text>
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#0284C7' }}>Test Link on Device</Text>
                         </TouchableOpacity>
                     </View>
                 </Card>
@@ -2409,22 +2373,22 @@ export const AdminSettings = ({ navigation }) => {
                 {/* 4. Update Announcement Title & Message */}
                 <Card>
                     <Inp
-                        label="Update Title (Taken Sanarwa)"
+                        label="Update Title"
                         value={updateTitle}
                         onChange={(v) => { setUpdateTitle(v); setUnsaved(true); }}
                         icon="megaphone"
-                        placeholder="Sabon Version Ya Fito A Play Store!"
+                        placeholder="New Version Available on Play Store!"
                         color="#0E1A2E"
                     />
                     <Inp
-                        label="Update Message (Bayanin Sanarwa)"
+                        label="Update Message"
                         value={updateMessage}
                         onChange={(v) => { setUpdateMessage(v); setUnsaved(true); }}
                         icon="document-text"
                         multi
-                        placeholder="Muna bukatar kayi update na manhajar Abu Mafhal zuwa sabon version..."
+                        placeholder="Please update your Abu Mafhal app..."
                         color="#0E1A2E"
-                        hint="Bayanin da ke bayyana dalilin sabuntawa ga mai amfani"
+                        hint="Explanation shown to users describing reasons for update"
                     />
                 </Card>
 
@@ -2432,10 +2396,10 @@ export const AdminSettings = ({ navigation }) => {
                 <Card>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
                         <Ionicons name="gift" size={16} color="#D9A73A" />
-                        <Text style={[S.cardTitle, { color: T.text }]}>Sabbin Features da Gyare-gyare (Release Notes)</Text>
+                        <Text style={[S.cardTitle, { color: T.text }]}>New Features & Improvements (Release Notes)</Text>
                     </View>
                     <Text style={[S.cardSub, { color: T.muted, marginBottom: 12 }]}>
-                        Zabi samfurin rubutu da aka riga aka tsara ko ka rubuta sabbin features a layuka masu alamar "•":
+                        Select a template or write customized release notes bulleted with "•":
                     </Text>
 
                     {/* Quick Feature Templates */}
@@ -2445,41 +2409,41 @@ export const AdminSettings = ({ navigation }) => {
                             style={{ backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE', paddingHorizontal: 9, paddingVertical: 6, borderRadius: 8 }}
                             activeOpacity={0.7}
                         >
-                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#1E40AF' }}>🚀 Sabbin Fasaloli</Text>
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#1E40AF' }}>🚀 General & Speed</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                             onPress={() => applyReleaseNotesTemplate('security')}
                             style={{ backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#BBF7D0', paddingHorizontal: 9, paddingVertical: 6, borderRadius: 8 }}
                             activeOpacity={0.7}
                         >
-                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#166534' }}>🔒 Tsaro & Biyan Kudi</Text>
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#166534' }}>🔒 Security & Payments</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                             onPress={() => applyReleaseNotesTemplate('market')}
                             style={{ backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: '#FDE68A', paddingHorizontal: 9, paddingVertical: 6, borderRadius: 8 }}
                             activeOpacity={0.7}
                         >
-                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#92400E' }}>🛍️ Kasuwa & Chat</Text>
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#92400E' }}>🛍️ Market & Chat</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                             onPress={() => applyReleaseNotesTemplate('bugfix')}
                             style={{ backgroundColor: '#F3E8FF', borderWidth: 1, borderColor: '#E9D5FF', paddingHorizontal: 9, paddingVertical: 6, borderRadius: 8 }}
                             activeOpacity={0.7}
                         >
-                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#6B21A8' }}>⚡ Gyaran Kurakurai</Text>
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#6B21A8' }}>⚡ Bug Fixes</Text>
                         </TouchableOpacity>
                     </View>
 
                     {/* Release Notes Text Input */}
                     <Inp
-                        label="Features List (Rubuta Kowanne a Layi guda da •)"
+                        label="Features List (Bulleted with •)"
                         value={updateReleaseNotes}
                         onChange={(v) => { setUpdateReleaseNotes(v); setUnsaved(true); }}
                         icon="list"
                         multi
-                        placeholder={"• Karin sabbin fasaloli da inganta sauri\n• Sabon tsarin Tagging din kaya a chat\n• Kariyar asusunka da tsarin biyan kudi"}
+                        placeholder={"• New features and performance improvements\n• Enhanced order tracking and chat\n• Account security and escrow protection"}
                         color="#D9A73A"
-                        hint="Kowanne layi zai fito a matsayin feature mai tambarin koren checkmark a wayar mai amfani"
+                        hint="Each line will appear as a checkmarked feature on user devices"
                     />
 
                     {/* Live Test Preview Button */}
@@ -2501,7 +2465,7 @@ export const AdminSettings = ({ navigation }) => {
                     >
                         <Ionicons name="eye" size={17} color="#D9A73A" />
                         <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>
-                            Duba Yadda Popup Din Zai Fito (Live Test Preview)
+                            Preview Update Screen (Live Test Preview)
                         </Text>
                     </TouchableOpacity>
                 </Card>

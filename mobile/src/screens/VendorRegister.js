@@ -232,12 +232,50 @@ const STEP_LABELS = [
     'Plan & Pay'
 ];
 
-const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'register', activeVendorPlans = [] }) => {
+const DEFAULT_VENDOR_PLANS = [
+    {
+        id: 'starter_plan',
+        label: 'Starter Storefront',
+        price: 3000,
+        duration_months: 1,
+        badge: 'STARTER',
+        description: 'Ideal for emerging sellers & artisan shops',
+        features: ['Up to 30 Active Product Listings', 'Standard Escrow Settlements', 'Direct In-App Messaging', 'Nationwide Delivery Support']
+    },
+    {
+        id: 'pro_merchant',
+        label: 'Pro Verified Merchant',
+        price: 7500,
+        duration_months: 1,
+        badge: 'POPULAR ⭐',
+        description: 'Designed for high-growth merchants & wholesale distributors',
+        features: ['Up to 150 Active Product Listings', 'Gold Verified Store Badge', 'Instant Escrow Settlements', 'Priority Search Ranking', '24/7 Priority Support']
+    },
+    {
+        id: 'enterprise_vip',
+        label: 'VIP Enterprise Pro',
+        price: 25000,
+        duration_months: 6,
+        badge: 'BEST VALUE 👑',
+        description: 'Complete 6-month elite merchant storefront & marketing',
+        features: ['Unlimited Product Listings', 'VIP Platinum Accreditation', 'Top Homepage Showcase', 'Dedicated Account Manager', 'Custom Store URL & Marketing']
+    }
+];
+
+const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'register', activeVendorPlans: propActivePlans = [] }) => {
     const insets = useSafeAreaInsets();
     const { settings } = useAppSettings();
 
     const isRegistrationDisabled = settings?.features?.enable_vendor_registration === false;
-    const defaultPlanId = activeVendorPlans.length > 0 ? activeVendorPlans[0].id : '1_year';
+
+    // Guaranteed fallback so plans & gateways never vanish
+    const activeVendorPlans = (propActivePlans && propActivePlans.length > 0)
+        ? propActivePlans
+        : ((settings?.vendor_plans && settings.vendor_plans.length > 0)
+            ? settings.vendor_plans.filter(p => p.is_active !== false)
+            : DEFAULT_VENDOR_PLANS);
+
+    const defaultPlanId = activeVendorPlans.find(p => p.id === 'pro_merchant')?.id || activeVendorPlans[0]?.id || 'pro_merchant';
 
     const getInitialStep = () => {
         if (mode === 'renew') return 6;
@@ -2786,6 +2824,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                             {activeVendorPlans.map(planItem => {
                                 const isSelected = formData.selectedPlan === planItem.id;
                                 const isFree = planItem.price === 0;
+                                const durationText = planItem.duration_months ? (planItem.duration_months === 1 ? '1 Month' : `${planItem.duration_months} Months`) : '1 Month';
                                 return (
                                     <TouchableOpacity
                                         key={planItem.id}
@@ -2798,20 +2837,54 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                                     >
                                         {isSelected && <View style={localStyles.planCardAccentLine} />}
                                         <View style={{ flex: 1 }}>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                                                <Text style={[localStyles.modernPlanLabel, isSelected && { color: NAVY_DARK }]}>
-                                                    {planItem.label}
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, flexWrap: 'wrap', gap: 6 }}>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                    <Text style={[localStyles.modernPlanLabel, isSelected && { color: NAVY_DARK, fontWeight: '900' }]}>
+                                                        {planItem.label}
+                                                    </Text>
+                                                    {planItem.badge && (
+                                                        <View style={[localStyles.modernPlanBadge, isSelected && { backgroundColor: GOLD, borderColor: GOLD_DARK }]}>
+                                                            <Text style={[localStyles.modernPlanBadgeText, isSelected && { color: NAVY_DARK }]}>{planItem.badge}</Text>
+                                                        </View>
+                                                    )}
+                                                </View>
+                                                <View style={{ backgroundColor: isSelected ? 'rgba(217, 167, 58, 0.2)' : '#F1F5F9', paddingHorizontal: 8, paddingVertical: 2.5, borderRadius: 6 }}>
+                                                    <Text style={{ fontSize: 10, fontWeight: '800', color: isSelected ? NAVY_DARK : TEXT_MUTED }}>
+                                                        {durationText}
+                                                    </Text>
+                                                </View>
+                                            </View>
+
+                                            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4, marginBottom: 4 }}>
+                                                <Text style={[localStyles.modernPlanPrice, isFree && { color: EMERALD }]}>
+                                                    {isFree ? 'Free Trial' : `₦${planItem.price.toLocaleString()}`}
                                                 </Text>
-                                                {planItem.badge && (
-                                                    <View style={localStyles.modernPlanBadge}>
-                                                        <Text style={localStyles.modernPlanBadgeText}>{planItem.badge}</Text>
-                                                    </View>
+                                                {!isFree && (
+                                                    <Text style={{ fontSize: 12, color: TEXT_MUTED, fontWeight: '700' }}>
+                                                        / {durationText.toLowerCase()}
+                                                    </Text>
                                                 )}
                                             </View>
-                                            <Text style={[localStyles.modernPlanPrice, isFree && { color: EMERALD }]}>
-                                                {isFree ? 'Free Trial' : `₦${planItem.price.toLocaleString()}`}
-                                            </Text>
-                                            {planItem.description ? <Text style={localStyles.modernPlanDesc}>{planItem.description}</Text> : null}
+
+                                            {planItem.description ? (
+                                                <Text style={[localStyles.modernPlanDesc, { marginBottom: Array.isArray(planItem.features) && planItem.features.length > 0 ? 8 : 0 }]}>
+                                                    {planItem.description}
+                                                </Text>
+                                            ) : null}
+
+                                            {/* Plan Features Checklist */}
+                                            {Array.isArray(planItem.features) && planItem.features.length > 0 && (
+                                                <View style={{ marginTop: 4, gap: 5 }}>
+                                                    {planItem.features.map((feat, fIdx) => (
+                                                        <View key={fIdx} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                            <Ionicons name="checkmark-circle" size={13} color={EMERALD} />
+                                                            <Text style={{ fontSize: 11.5, color: isSelected ? NAVY_DARK : TEXT_SECONDARY, fontWeight: isSelected ? '700' : '500' }}>
+                                                                {feat}
+                                                            </Text>
+                                                        </View>
+                                                    ))}
+                                                </View>
+                                            )}
                                         </View>
                                         <View style={[localStyles.modernPlanCheck, isSelected && localStyles.modernPlanCheckActive]}>
                                             {isSelected ? <Ionicons name="checkmark" size={16} color={NAVY_DARK} /> : null}
@@ -3359,7 +3432,9 @@ export const VendorRegister = (props) => {
         );
     }
 
-    const vendorPlansRaw = settings?.vendor_plans || [];
+    const vendorPlansRaw = (settings?.vendor_plans && settings.vendor_plans.length > 0)
+        ? settings.vendor_plans
+        : DEFAULT_VENDOR_PLANS;
     const activeVendorPlans = vendorPlansRaw.filter(p => p.is_active !== false);
 
     return (

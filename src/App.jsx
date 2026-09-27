@@ -131,8 +131,10 @@ function App() {
     );
     const isAlreadyMobile = typeof window !== 'undefined' && window.location.pathname.startsWith('/mobile');
 
-    if (isMobileDevice && !isForcedWeb && !isAlreadyMobile) {
-      const currentPath = (window.location.pathname || '').toLowerCase();
+    const currentPath = (typeof window !== 'undefined' ? window.location.pathname || '' : '').toLowerCase();
+    const isVendorRegPath = currentPath.includes('vendor-application') || currentPath.includes('vendor-register') || currentPath.includes('vendorregister');
+
+    if ((isMobileDevice || isVendorRegPath) && !isAlreadyMobile) {
       let targetHash = '';
       if (currentPath.includes('admin')) {
         let sub = '';
@@ -145,7 +147,7 @@ function App() {
         else if (currentPath.includes('financial') || currentPath.includes('payout')) sub = '?tab=financials';
         targetHash = '#admin' + sub;
       }
-      else if (currentPath.includes('vendor-application') || currentPath.includes('vendor-register') || currentPath.includes('vendorregister')) {
+      else if (isVendorRegPath) {
         targetHash = '#vendor-register';
       }
       else if (currentPath.includes('vendor')) {

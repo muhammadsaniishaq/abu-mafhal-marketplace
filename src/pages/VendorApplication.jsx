@@ -111,6 +111,14 @@ const VendorApplication = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
 
+  React.useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        window.location.replace('/mobile#vendor-register');
+      }
+    } catch (_) {}
+  }, []);
+
   const getInitialStep = () => {
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
