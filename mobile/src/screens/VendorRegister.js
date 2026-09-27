@@ -2758,441 +2758,230 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                             </View>
                         )}
 
-                        <View style={localStyles.cardHeaderRow}>
-                            <View style={localStyles.cardIconBox}>
-                                <Ionicons name="trophy" size={20} color={GOLD} />
+                        {/* ── SECTION HEADER ── */}
+                        <View style={localStyles.modernSectionHeader}>
+                            <View style={localStyles.modernSectionIconWrap}>
+                                <Ionicons name="trophy" size={18} color={GOLD} />
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Text style={localStyles.cardHeading}>Select Storefront Subscription</Text>
-                                <Text style={localStyles.cardSub}>Choose your commercial membership package</Text>
+                                <Text style={localStyles.modernSectionTitle}>Choose Your Plan</Text>
+                                <Text style={localStyles.modernSectionSub}>Select the subscription that fits your business</Text>
                             </View>
                         </View>
 
-                        {/* Plans List */}
-                        <View style={{ gap: 12, marginBottom: 20 }}>
+                        {/* ── PLAN CARDS ── */}
+                        <View style={{ gap: 10, marginBottom: 24 }}>
                             {activeVendorPlans.map(planItem => {
                                 const isSelected = formData.selectedPlan === planItem.id;
+                                const isFree = planItem.price === 0;
                                 return (
                                     <TouchableOpacity
                                         key={planItem.id}
                                         style={[
-                                            localStyles.planCard,
-                                            isSelected && localStyles.planCardSelected
+                                            localStyles.modernPlanCard,
+                                            isSelected && localStyles.modernPlanCardSelected
                                         ]}
                                         onPress={() => updateForm('selectedPlan', planItem.id)}
-                                        activeOpacity={0.8}
+                                        activeOpacity={0.75}
                                     >
-                                        <View style={{ flex: 1, paddingRight: 8 }}>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                                <Text style={[localStyles.planLabel, isSelected && { color: NAVY_DARK }]}>
+                                        {isSelected && <View style={localStyles.planCardAccentLine} />}
+                                        <View style={{ flex: 1 }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                                <Text style={[localStyles.modernPlanLabel, isSelected && { color: NAVY_DARK }]}>
                                                     {planItem.label}
                                                 </Text>
                                                 {planItem.badge && (
-                                                    <View style={localStyles.planBadge}>
-                                                        <Text style={localStyles.planBadgeText}>{planItem.badge}</Text>
+                                                    <View style={localStyles.modernPlanBadge}>
+                                                        <Text style={localStyles.modernPlanBadgeText}>{planItem.badge}</Text>
                                                     </View>
                                                 )}
                                             </View>
-                                            <Text style={localStyles.planPrice}>
-                                                {planItem.price === 0 ? 'Free Trial' : `₦${planItem.price.toLocaleString()}`}
+                                            <Text style={[localStyles.modernPlanPrice, isFree && { color: EMERALD }]}>
+                                                {isFree ? 'Free Trial' : `₦${planItem.price.toLocaleString()}`}
                                             </Text>
+                                            {planItem.description ? <Text style={localStyles.modernPlanDesc}>{planItem.description}</Text> : null}
                                         </View>
-
-                                        <View style={[localStyles.radioCircle, isSelected && localStyles.radioCircleActive]}>
-                                            {isSelected && <View style={localStyles.radioDot} />}
+                                        <View style={[localStyles.modernPlanCheck, isSelected && localStyles.modernPlanCheckActive]}>
+                                            {isSelected ? <Ionicons name="checkmark" size={16} color={NAVY_DARK} /> : null}
                                         </View>
                                     </TouchableOpacity>
                                 );
                             })}
                         </View>
 
-                        {/* PAYMENT METHODS SELECTOR (IF PLAN.PRICE > 0) */}
+                        {/* ── PAYMENT METHOD TABS ── */}
                         {plan.price > 0 && (
                             <View style={{ marginBottom: 20 }}>
-                                <View style={localStyles.methodSectionHeader}>
-                                    <Text style={localStyles.methodSectionTitle}>ZABI HANYAR BIYAN KUƊI (PAYMENT METHOD)</Text>
-                                    <Text style={localStyles.methodSectionSub}>Zaɓi hanyar da ta fi maka sauƙi wajen biyan kuɗin shago</Text>
+                                <Text style={localStyles.modernMethodLabel}>PAYMENT METHOD</Text>
+                                <View style={localStyles.modernMethodTabs}>
+                                    {[
+                                        { key: 'paystack',      icon: 'card-outline',     label: 'Paystack',    color: '#0284C7' },
+                                        { key: 'flutterwave',   icon: 'globe-outline',    label: 'Flutterwave', color: '#D97706' },
+                                        { key: 'bank_transfer', icon: 'business-outline', label: 'Bank',        color: '#059669' },
+                                        { key: 'wallet',        icon: 'wallet-outline',   label: 'Wallet',      color: '#7C3AED' },
+                                    ].map(m => {
+                                        const active = paymentMethod === m.key;
+                                        return (
+                                            <TouchableOpacity
+                                                key={m.key}
+                                                style={[localStyles.modernMethodTab, active && { borderColor: m.color, backgroundColor: m.color + '14' }]}
+                                                onPress={() => setPaymentMethod(m.key)}
+                                                activeOpacity={0.75}
+                                            >
+                                                <Ionicons name={m.icon} size={18} color={active ? m.color : TEXT_MUTED} />
+                                                <Text style={[localStyles.modernMethodTabText, active && { color: m.color }]}>{m.label}</Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
                                 </View>
 
-                                <View style={localStyles.methodsGrid}>
-                                    {/* 1. Paystack */}
-                                    <TouchableOpacity
-                                        style={[
-                                            localStyles.methodCard,
-                                            paymentMethod === 'paystack' && localStyles.methodCardSelected
-                                        ]}
-                                        onPress={() => setPaymentMethod('paystack')}
-                                        activeOpacity={0.8}
-                                    >
-                                        <View style={[localStyles.methodCardIconBox, paymentMethod === 'paystack' && { backgroundColor: '#0EA5E920' }]}>
-                                            <Ionicons name="card" size={22} color={paymentMethod === 'paystack' ? '#0284C7' : TEXT_MUTED} />
-                                        </View>
-                                        <View style={{ flex: 1 }}>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                                <Text style={localStyles.methodCardTitle}>Paystack Secure Checkout</Text>
-                                                <View style={{ backgroundColor: '#0284C718', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                                                    <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#0284C7' }}>AUTO-VERIFY</Text>
-                                                </View>
-                                            </View>
-                                            <Text style={localStyles.methodCardSub}>Cards, USSD, Bank Transfer, Apple Pay</Text>
-                                        </View>
-                                        <View style={[localStyles.radioCircle, paymentMethod === 'paystack' && localStyles.radioCircleActive]}>
-                                            {paymentMethod === 'paystack' && <View style={localStyles.radioDot} />}
-                                        </View>
-                                    </TouchableOpacity>
-
-                                    {/* 2. Flutterwave */}
-                                    <TouchableOpacity
-                                        style={[
-                                            localStyles.methodCard,
-                                            paymentMethod === 'flutterwave' && localStyles.methodCardSelected
-                                        ]}
-                                        onPress={() => setPaymentMethod('flutterwave')}
-                                        activeOpacity={0.8}
-                                    >
-                                        <View style={[localStyles.methodCardIconBox, paymentMethod === 'flutterwave' && { backgroundColor: '#F59E0B20' }]}>
-                                            <Ionicons name="globe" size={22} color={paymentMethod === 'flutterwave' ? '#D97706' : TEXT_MUTED} />
-                                        </View>
-                                        <View style={{ flex: 1 }}>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                                <Text style={localStyles.methodCardTitle}>Flutterwave Africa</Text>
-                                                <View style={{ backgroundColor: '#F59E0B18', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                                                    <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#D97706' }}>CARDS & MOBILE</Text>
-                                                </View>
-                                            </View>
-                                            <Text style={localStyles.methodCardSub}>Mastercard, Visa, Mobile Money, Africa Payout</Text>
-                                        </View>
-                                        <View style={[localStyles.radioCircle, paymentMethod === 'flutterwave' && localStyles.radioCircleActive]}>
-                                            {paymentMethod === 'flutterwave' && <View style={localStyles.radioDot} />}
-                                        </View>
-                                    </TouchableOpacity>
-
-                                    {/* 3. Direct Manual Bank Transfer */}
-                                    <TouchableOpacity
-                                        style={[
-                                            localStyles.methodCard,
-                                            paymentMethod === 'bank_transfer' && localStyles.methodCardSelected
-                                        ]}
-                                        onPress={() => setPaymentMethod('bank_transfer')}
-                                        activeOpacity={0.8}
-                                    >
-                                        <View style={[localStyles.methodCardIconBox, paymentMethod === 'bank_transfer' && { backgroundColor: '#10B98120' }]}>
-                                            <Ionicons name="business" size={22} color={paymentMethod === 'bank_transfer' ? '#059669' : TEXT_MUTED} />
-                                        </View>
-                                        <View style={{ flex: 1 }}>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                                <Text style={localStyles.methodCardTitle}>Direct Bank Transfer (Abu Mafhal)</Text>
-                                                <View style={{ backgroundColor: '#10B98118', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                                                    <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#059669' }}>MANUAL RECEIPT</Text>
-                                                </View>
-                                            </View>
-                                            <Text style={localStyles.methodCardSub}>Tura kudi kai tsaye zuwa asusun kasuwa tare da loda shaidar biya</Text>
-                                        </View>
-                                        <View style={[localStyles.radioCircle, paymentMethod === 'bank_transfer' && localStyles.radioCircleActive]}>
-                                            {paymentMethod === 'bank_transfer' && <View style={localStyles.radioDot} />}
-                                        </View>
-                                    </TouchableOpacity>
-
-                                    {/* 4. Abu Mafhal In-App Wallet */}
-                                    <TouchableOpacity
-                                        style={[
-                                            localStyles.methodCard,
-                                            paymentMethod === 'wallet' && localStyles.methodCardSelected
-                                        ]}
-                                        onPress={() => setPaymentMethod('wallet')}
-                                        activeOpacity={0.8}
-                                    >
-                                        <View style={[localStyles.methodCardIconBox, paymentMethod === 'wallet' && { backgroundColor: '#8B5CF620' }]}>
-                                            <Ionicons name="wallet" size={22} color={paymentMethod === 'wallet' ? '#7C3AED' : TEXT_MUTED} />
-                                        </View>
-                                        <View style={{ flex: 1 }}>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                                <Text style={localStyles.methodCardTitle}>Abu Mafhal Wallet</Text>
-                                                <View style={{ backgroundColor: '#8B5CF618', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                                                    <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#7C3AED' }}>INSTANT</Text>
-                                                </View>
-                                            </View>
-                                            <Text style={localStyles.methodCardSub}>Cire kudi kai tsaye daga walat dinka na ciki (₦{walletBalance.toLocaleString()})</Text>
-                                        </View>
-                                        <View style={[localStyles.radioCircle, paymentMethod === 'wallet' && localStyles.radioCircleActive]}>
-                                            {paymentMethod === 'wallet' && <View style={localStyles.radioDot} />}
-                                        </View>
-                                    </TouchableOpacity>
-                                </View>
-
-                                {/* PANEL 1: PAYSTACK DETAILS */}
+                                {/* PAYSTACK PANEL */}
                                 {paymentMethod === 'paystack' && (
-                                    <View style={localStyles.gatewaySecurityCard}>
-                                        <Ionicons name="shield-checkmark" size={24} color="#0284C7" />
+                                    <View style={[localStyles.modernGatewayPanel, { borderLeftColor: '#0284C7' }]}>
+                                        <View style={[localStyles.modernGatewayIconCircle, { backgroundColor: '#0284C720' }]}>
+                                            <Ionicons name="shield-checkmark" size={22} color="#0284C7" />
+                                        </View>
                                         <View style={{ flex: 1 }}>
-                                            <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY_DARK }}>Biyan Kuɗi Cikin Sauƙi da Paystack</Text>
-                                            <Text style={{ fontSize: 11.5, color: TEXT_SECONDARY, marginTop: 2 }}>
-                                                Za a buɗe shafin Paystack mai cikakken tsaro. Zaka iya amfani da katin ATM, USSD, ko transfer. Idan ka kammala, za a tabbatar da shagonka nan take.
-                                            </Text>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                                <Text style={localStyles.modernGatewayTitle}>Paystack Secure Checkout</Text>
+                                                <View style={localStyles.autoVerifyBadge}>
+                                                    <Text style={localStyles.autoVerifyBadgeText}>AUTO-VERIFY</Text>
+                                                </View>
+                                            </View>
+                                            <Text style={localStyles.modernGatewaySub}>ATM card · USSD · Bank Transfer · Apple Pay. Store activates instantly after payment.</Text>
                                         </View>
                                     </View>
                                 )}
 
-                                {/* PANEL 2: FLUTTERWAVE DETAILS */}
+                                {/* FLUTTERWAVE PANEL */}
                                 {paymentMethod === 'flutterwave' && (
-                                    <View style={localStyles.gatewaySecurityCard}>
-                                        <Ionicons name="shield-checkmark" size={24} color="#D97706" />
+                                    <View style={[localStyles.modernGatewayPanel, { borderLeftColor: '#D97706' }]}>
+                                        <View style={[localStyles.modernGatewayIconCircle, { backgroundColor: '#F59E0B20' }]}>
+                                            <Ionicons name="globe" size={22} color="#D97706" />
+                                        </View>
                                         <View style={{ flex: 1 }}>
-                                            <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY_DARK }}>Biyan Kuɗi ta Flutterwave Africa</Text>
-                                            <Text style={{ fontSize: 11.5, color: TEXT_SECONDARY, marginTop: 2 }}>
-                                                Hanyar biyan kudi ta Flutterwave mai karbar katunan gida da na waje, tare da Mobile Money da sauran hanyoyi masu aminci.
-                                            </Text>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                                <Text style={localStyles.modernGatewayTitle}>Flutterwave Africa</Text>
+                                                <View style={[localStyles.autoVerifyBadge, { backgroundColor: '#F59E0B18', borderColor: '#D97706' }]}>
+                                                    <Text style={[localStyles.autoVerifyBadgeText, { color: '#D97706' }]}>CARDS & MOBILE</Text>
+                                                </View>
+                                            </View>
+                                            <Text style={localStyles.modernGatewaySub}>Mastercard · Visa · Mobile Money · Africa-wide payout. Auto-verified on success.</Text>
                                         </View>
                                     </View>
                                 )}
 
-                                {/* PANEL 3: DIRECT MANUAL BANK TRANSFER DETAILS */}
+                                {/* BANK TRANSFER PANEL */}
                                 {paymentMethod === 'bank_transfer' && (
                                     <View>
-                                        <LinearGradient
-                                            colors={['#071324', '#0F274B', '#16335F']}
-                                            start={{ x: 0, y: 0 }}
-                                            end={{ x: 1, y: 1 }}
-                                            style={localStyles.officialBankCard}
-                                        >
+                                        <LinearGradient colors={['#071324', '#0F274B', '#16335F']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={localStyles.officialBankCard}>
                                             <View style={localStyles.officialBankHeader}>
-                                                <View style={localStyles.cardIconBox}>
-                                                    <Ionicons name="business" size={18} color={GOLD} />
-                                                </View>
+                                                <View style={localStyles.cardIconBox}><Ionicons name="business" size={18} color={GOLD} /></View>
                                                 <View style={{ flex: 1 }}>
-                                                    <Text style={localStyles.officialBankTitle}>ASUSUN BANKIN ABU MAFHAL</Text>
-                                                    <Text style={localStyles.officialBankSub}>Tura ainihin adadin kuɗin da ke ƙasa zuwa wannan asusu</Text>
+                                                    <Text style={localStyles.officialBankTitle}>ABU MAFHAL OFFICIAL ACCOUNT</Text>
+                                                    <Text style={localStyles.officialBankSub}>Transfer the exact amount below to this account</Text>
                                                 </View>
                                             </View>
-
-                                            {/* Bank Name */}
-                                            <View style={localStyles.bankCopyRow}>
-                                                <View style={{ flex: 1 }}>
-                                                    <Text style={localStyles.bankCopyLabel}>Sunan Banki (Bank)</Text>
-                                                    <Text style={localStyles.bankCopyVal}>{settings?.official_bank_name || 'Moniepoint MFB'}</Text>
+                                            {[
+                                                { label: 'Bank Name',          value: settings?.official_bank_name      || 'Moniepoint MFB',                field: 'bank',     style: {} },
+                                                { label: 'Account Number',     value: settings?.official_account_number || '5051567890',                    field: 'acc_num',  style: { letterSpacing: 1.5, color: '#FCD34D' } },
+                                                { label: 'Account Name',       value: settings?.official_account_name   || 'Abu Mafhal Global Concept Ltd',  field: 'acc_name', style: {} },
+                                                { label: 'Amount to Transfer', value: `₦${plan.price.toLocaleString()}`,                                     field: 'amount',   style: { color: '#34D399', fontSize: 16 } },
+                                            ].map((row, idx, arr) => (
+                                                <View key={row.field} style={[localStyles.bankCopyRow, idx === arr.length - 1 && { borderBottomWidth: 0 }]}>
+                                                    <View style={{ flex: 1 }}>
+                                                        <Text style={localStyles.bankCopyLabel}>{row.label}</Text>
+                                                        <Text style={[localStyles.bankCopyVal, row.style]}>{row.value}</Text>
+                                                    </View>
+                                                    <TouchableOpacity style={[localStyles.copyActionBtn, copiedField === row.field && localStyles.copyActionBtnSuccess]} onPress={() => copyToClipboard(row.field === 'amount' ? plan.price.toString() : row.value, row.field)} activeOpacity={0.8}>
+                                                        <Ionicons name={copiedField === row.field ? 'checkmark-circle' : 'copy-outline'} size={13} color={copiedField === row.field ? '#34D399' : GOLD} />
+                                                        <Text style={[localStyles.copyActionText, copiedField === row.field && localStyles.copyActionTextSuccess]}>{copiedField === row.field ? 'Copied!' : 'Copy'}</Text>
+                                                    </TouchableOpacity>
                                                 </View>
-                                                <TouchableOpacity
-                                                    style={[localStyles.copyActionBtn, copiedField === 'bank' && localStyles.copyActionBtnSuccess]}
-                                                    onPress={() => copyToClipboard(settings?.official_bank_name || 'Moniepoint MFB', 'bank')}
-                                                    activeOpacity={0.8}
-                                                >
-                                                    <Ionicons name={copiedField === 'bank' ? "checkmark-circle" : "copy-outline"} size={13} color={copiedField === 'bank' ? '#34D399' : GOLD} />
-                                                    <Text style={[localStyles.copyActionText, copiedField === 'bank' && localStyles.copyActionTextSuccess]}>
-                                                        {copiedField === 'bank' ? 'An Kwafa' : 'Kwafa'}
-                                                    </Text>
-                                                </TouchableOpacity>
-                                            </View>
-
-                                            {/* Account Number */}
-                                            <View style={localStyles.bankCopyRow}>
+                                            ))}
+                                            <View style={[localStyles.bankCopyRow, { borderBottomWidth: 0, marginTop: 4 }]}>
                                                 <View style={{ flex: 1 }}>
-                                                    <Text style={localStyles.bankCopyLabel}>Lambar Asusu (Account Number)</Text>
-                                                    <Text style={[localStyles.bankCopyVal, { letterSpacing: 1.5, color: '#FCD34D' }]}>
-                                                        {settings?.official_account_number || '5051567890'}
-                                                    </Text>
+                                                    <Text style={localStyles.bankCopyLabel}>Payment Reference</Text>
+                                                    <Text style={[localStyles.bankCopyVal, { fontSize: 12, color: 'rgba(255,255,255,0.8)' }]}>{manualReference}</Text>
                                                 </View>
-                                                <TouchableOpacity
-                                                    style={[localStyles.copyActionBtn, copiedField === 'acc_num' && localStyles.copyActionBtnSuccess]}
-                                                    onPress={() => copyToClipboard(settings?.official_account_number || '5051567890', 'acc_num')}
-                                                    activeOpacity={0.8}
-                                                >
-                                                    <Ionicons name={copiedField === 'acc_num' ? "checkmark-circle" : "copy-outline"} size={13} color={copiedField === 'acc_num' ? '#34D399' : GOLD} />
-                                                    <Text style={[localStyles.copyActionText, copiedField === 'acc_num' && localStyles.copyActionTextSuccess]}>
-                                                        {copiedField === 'acc_num' ? 'An Kwafa' : 'Kwafa'}
-                                                    </Text>
-                                                </TouchableOpacity>
-                                            </View>
-
-                                            {/* Account Name */}
-                                            <View style={localStyles.bankCopyRow}>
-                                                <View style={{ flex: 1 }}>
-                                                    <Text style={localStyles.bankCopyLabel}>Sunan Mai Asusu (Beneficiary)</Text>
-                                                    <Text style={localStyles.bankCopyVal}>{settings?.official_account_name || 'Abu Mafhal Global Concept Ltd'}</Text>
-                                                </View>
-                                                <TouchableOpacity
-                                                    style={[localStyles.copyActionBtn, copiedField === 'acc_name' && localStyles.copyActionBtnSuccess]}
-                                                    onPress={() => copyToClipboard(settings?.official_account_name || 'Abu Mafhal Global Concept Ltd', 'acc_name')}
-                                                    activeOpacity={0.8}
-                                                >
-                                                    <Ionicons name={copiedField === 'acc_name' ? "checkmark-circle" : "copy-outline"} size={13} color={copiedField === 'acc_name' ? '#34D399' : GOLD} />
-                                                    <Text style={[localStyles.copyActionText, copiedField === 'acc_name' && localStyles.copyActionTextSuccess]}>
-                                                        {copiedField === 'acc_name' ? 'An Kwafa' : 'Kwafa'}
-                                                    </Text>
-                                                </TouchableOpacity>
-                                            </View>
-
-                                            {/* Amount to Send */}
-                                            <View style={localStyles.bankCopyRow}>
-                                                <View style={{ flex: 1 }}>
-                                                    <Text style={localStyles.bankCopyLabel}>Adadin Kuɗin da Zaka Tura</Text>
-                                                    <Text style={[localStyles.bankCopyVal, { color: '#34D399', fontSize: 16 }]}>
-                                                        ₦{plan.price.toLocaleString()}
-                                                    </Text>
-                                                </View>
-                                                <TouchableOpacity
-                                                    style={[localStyles.copyActionBtn, copiedField === 'amount' && localStyles.copyActionBtnSuccess]}
-                                                    onPress={() => copyToClipboard(plan.price.toString(), 'amount')}
-                                                    activeOpacity={0.8}
-                                                >
-                                                    <Ionicons name={copiedField === 'amount' ? "checkmark-circle" : "copy-outline"} size={13} color={copiedField === 'amount' ? '#34D399' : GOLD} />
-                                                    <Text style={[localStyles.copyActionText, copiedField === 'amount' && localStyles.copyActionTextSuccess]}>
-                                                        {copiedField === 'amount' ? 'An Kwafa' : 'Kwafa'}
-                                                    </Text>
-                                                </TouchableOpacity>
-                                            </View>
-
-                                            {/* Reference */}
-                                            <View style={[localStyles.bankCopyRow, { borderBottomWidth: 0 }]}>
-                                                <View style={{ flex: 1 }}>
-                                                    <Text style={localStyles.bankCopyLabel}>Payment Reference / Narration</Text>
-                                                    <Text style={[localStyles.bankCopyVal, { fontSize: 12, color: 'rgba(255,255,255,0.8)' }]}>
-                                                        {manualReference}
-                                                    </Text>
-                                                </View>
-                                                <TouchableOpacity
-                                                    style={[localStyles.copyActionBtn, copiedField === 'ref' && localStyles.copyActionBtnSuccess]}
-                                                    onPress={() => copyToClipboard(manualReference, 'ref')}
-                                                    activeOpacity={0.8}
-                                                >
-                                                    <Ionicons name={copiedField === 'ref' ? "checkmark-circle" : "copy-outline"} size={13} color={copiedField === 'ref' ? '#34D399' : GOLD} />
-                                                    <Text style={[localStyles.copyActionText, copiedField === 'ref' && localStyles.copyActionTextSuccess]}>
-                                                        {copiedField === 'ref' ? 'An Kwafa' : 'Kwafa'}
-                                                    </Text>
+                                                <TouchableOpacity style={[localStyles.copyActionBtn, copiedField === 'ref' && localStyles.copyActionBtnSuccess]} onPress={() => copyToClipboard(manualReference, 'ref')} activeOpacity={0.8}>
+                                                    <Ionicons name={copiedField === 'ref' ? 'checkmark-circle' : 'copy-outline'} size={13} color={copiedField === 'ref' ? '#34D399' : GOLD} />
+                                                    <Text style={[localStyles.copyActionText, copiedField === 'ref' && localStyles.copyActionTextSuccess]}>{copiedField === 'ref' ? 'Copied!' : 'Copy'}</Text>
                                                 </TouchableOpacity>
                                             </View>
                                         </LinearGradient>
-
-                                        {/* Sender Information Inputs */}
                                         <View style={{ gap: 12, marginBottom: 14 }}>
                                             <View>
-                                                <Text style={localStyles.inputLabel}>Sunan Mai Tura Kuɗin (Sender Name) *</Text>
-                                                <TextInput
-                                                    style={localStyles.textInput}
-                                                    value={senderName}
-                                                    onChangeText={setSenderName}
-                                                    placeholder="Sunan da ke jikin asusun da ka turo kudin..."
-                                                    placeholderTextColor={TEXT_MUTED}
-                                                />
+                                                <Text style={localStyles.inputLabel}>Sender Name *</Text>
+                                                <TextInput style={localStyles.textInput} value={senderName} onChangeText={setSenderName} placeholder="Full name on the sending account..." placeholderTextColor={TEXT_MUTED} />
                                             </View>
                                             <View>
-                                                <Text style={localStyles.inputLabel}>Sunan Bankin da Ka Turo Kuɗin (Sender Bank) *</Text>
-                                                <TextInput
-                                                    style={localStyles.textInput}
-                                                    value={senderBank}
-                                                    onChangeText={setSenderBank}
-                                                    placeholder="Misali: GTBank, Opay, Kuda, First Bank..."
-                                                    placeholderTextColor={TEXT_MUTED}
-                                                />
+                                                <Text style={localStyles.inputLabel}>Sender Bank *</Text>
+                                                <TextInput style={localStyles.textInput} value={senderBank} onChangeText={setSenderBank} placeholder="e.g. GTBank, Opay, Kuda, First Bank..." placeholderTextColor={TEXT_MUTED} />
                                             </View>
                                         </View>
-
-                                        {/* Receipt Upload Button */}
-                                        <Text style={localStyles.inputLabel}>Shaidar Biyan Kuɗi (Receipt / Screenshot) *</Text>
-                                        <TouchableOpacity
-                                            style={[
-                                                localStyles.receiptUploadBox,
-                                                manualReceipt && localStyles.receiptUploadBoxActive
-                                            ]}
-                                            onPress={handlePickReceipt}
-                                            activeOpacity={0.8}
-                                        >
-                                            <Ionicons
-                                                name={manualReceipt ? "checkmark-circle" : "cloud-upload-outline"}
-                                                size={32}
-                                                color={manualReceipt ? EMERALD : GOLD_DARK}
-                                            />
-                                            <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY_DARK, marginTop: 6 }}>
-                                                {manualReceipt ? (manualReceipt.name || 'Receipt An Zaba ✅') : 'Danna Nan Domin Loda Hoton Receipt'}
-                                            </Text>
-                                            <Text style={{ fontSize: 11, color: TEXT_MUTED, marginTop: 2 }}>
-                                                {manualReceipt ? 'Danna domin canza hoton idan kana bukata' : 'Loda hoton screenshot ko PDF na shaidar biya'}
-                                            </Text>
+                                        <Text style={localStyles.inputLabel}>Payment Receipt / Screenshot *</Text>
+                                        <TouchableOpacity style={[localStyles.receiptUploadBox, manualReceipt && localStyles.receiptUploadBoxActive]} onPress={handlePickReceipt} activeOpacity={0.8}>
+                                            <Ionicons name={manualReceipt ? 'checkmark-circle' : 'cloud-upload-outline'} size={32} color={manualReceipt ? EMERALD : GOLD_DARK} />
+                                            <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY_DARK, marginTop: 6 }}>{manualReceipt ? (manualReceipt.name || 'Receipt Selected ✅') : 'Tap to Upload Payment Receipt'}</Text>
+                                            <Text style={{ fontSize: 11, color: TEXT_MUTED, marginTop: 2 }}>{manualReceipt ? 'Tap to change the selected file' : 'Upload a screenshot or PDF of your payment proof'}</Text>
                                         </TouchableOpacity>
                                     </View>
                                 )}
 
-                                {/* PANEL 4: ABU MAFHAL WALLET DETAILS */}
+                                {/* WALLET PANEL */}
                                 {paymentMethod === 'wallet' && (
-                                    <View style={localStyles.walletStatusCard}>
-                                        <View style={localStyles.walletBalanceDisplay}>
+                                    <View style={localStyles.modernWalletPanel}>
+                                        <LinearGradient colors={walletBalance >= plan.price ? ['#064E3B', '#065F46'] : ['#450A0A', '#7F1D1D']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={localStyles.modernWalletGradient}>
                                             <View>
-                                                <Text style={{ fontSize: 11, fontWeight: '800', color: TEXT_MUTED, textTransform: 'uppercase' }}>
-                                                    KUDIN ASUSUN WALAT DINKA
-                                                </Text>
-                                                <Text style={localStyles.walletBalanceVal}>
-                                                    ₦{walletBalance.toLocaleString()}
-                                                </Text>
+                                                <Text style={{ fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: 1 }}>Wallet Balance</Text>
+                                                <Text style={{ fontSize: 26, fontWeight: '900', color: '#FFFFFF', marginTop: 2 }}>₦{walletBalance.toLocaleString()}</Text>
                                             </View>
-                                            <View style={walletBalance >= plan.price ? localStyles.walletBadgeSufficient : localStyles.walletBadgeInsufficient}>
-                                                <Ionicons
-                                                    name={walletBalance >= plan.price ? "checkmark-circle" : "alert-circle"}
-                                                    size={14}
-                                                    color={walletBalance >= plan.price ? EMERALD : '#EF4444'}
-                                                />
-                                                <Text style={{ fontSize: 11, fontWeight: '800', color: walletBalance >= plan.price ? EMERALD : '#EF4444' }}>
-                                                    {walletBalance >= plan.price ? 'Isasshen Kuɗi' : 'Bai Isa Ba'}
-                                                </Text>
+                                            <View style={[localStyles.modernWalletStatusBadge, { backgroundColor: walletBalance >= plan.price ? 'rgba(52,211,153,0.2)' : 'rgba(239,68,68,0.2)', borderColor: walletBalance >= plan.price ? '#34D399' : '#EF4444' }]}>
+                                                <Ionicons name={walletBalance >= plan.price ? 'checkmark-circle' : 'close-circle'} size={15} color={walletBalance >= plan.price ? '#34D399' : '#EF4444'} />
+                                                <Text style={{ fontSize: 11, fontWeight: '800', color: walletBalance >= plan.price ? '#34D399' : '#EF4444' }}>{walletBalance >= plan.price ? 'Sufficient' : 'Insufficient'}</Text>
                                             </View>
+                                        </LinearGradient>
+                                        <View style={{ padding: 14 }}>
+                                            {walletBalance >= plan.price ? (
+                                                <Text style={{ fontSize: 12.5, color: '#047857', lineHeight: 19, fontWeight: '600' }}>₦{plan.price.toLocaleString()} will be deducted from your wallet instantly to activate this subscription.</Text>
+                                            ) : (
+                                                <Text style={{ fontSize: 12.5, color: '#B91C1C', lineHeight: 19, fontWeight: '600' }}>Your wallet balance (₦{walletBalance.toLocaleString()}) is insufficient for this plan (₦{plan.price.toLocaleString()}). Please select Paystack or Direct Bank Transfer above.</Text>
+                                            )}
                                         </View>
-
-                                        {walletBalance >= plan.price ? (
-                                            <Text style={{ fontSize: 12, color: '#047857', lineHeight: 18 }}>
-                                                Za a cire ₦{plan.price.toLocaleString()} kai tsaye daga walat dinka domin kunna wannan kunshin biyan kudi ba tare da jinkiri ba.
-                                            </Text>
-                                        ) : (
-                                            <Text style={{ fontSize: 12, color: '#B91C1C', lineHeight: 18 }}>
-                                                Kudin walat dinka (₦{walletBalance.toLocaleString()}) bai kai ₦{plan.price.toLocaleString()} ba. Da fatan za a zabi Paystack ko Direct Bank Transfer a sama.
-                                            </Text>
-                                        )}
                                     </View>
                                 )}
                             </View>
                         )}
 
-                        {/* Summary Card */}
-                        <View style={localStyles.summaryBox}>
-                            <Text style={localStyles.summaryTitle}>APPLICATION SUMMARY</Text>
-                            <View style={localStyles.summaryRow}>
-                                <Text style={localStyles.summaryLabel}>Store Name</Text>
-                                <Text style={localStyles.summaryVal} numberOfLines={1}>{formData.businessName || '—'}</Text>
+                        {/* ── ORDER SUMMARY ── */}
+                        <View style={localStyles.modernSummaryCard}>
+                            <View style={localStyles.modernSummaryHeader}>
+                                <Ionicons name="receipt-outline" size={16} color={NAVY_DARK} />
+                                <Text style={localStyles.modernSummaryHeaderText}>Order Summary</Text>
                             </View>
-                            <View style={localStyles.summaryRow}>
-                                <Text style={localStyles.summaryLabel}>Structure</Text>
-                                <Text style={localStyles.summaryVal}>{activeBusinessType.badge}</Text>
-                            </View>
-                            <View style={localStyles.summaryRow}>
-                                <Text style={localStyles.summaryLabel}>Primary Category</Text>
-                                <Text style={localStyles.summaryVal}>{formData.businessCategory || 'General'}</Text>
-                            </View>
-                            <View style={localStyles.summaryRow}>
-                                <Text style={localStyles.summaryLabel}>Trading Hub</Text>
-                                <Text style={localStyles.summaryVal}>{formData.operatingHub || 'Kano'}</Text>
-                            </View>
-                            <View style={localStyles.summaryRow}>
-                                <Text style={localStyles.summaryLabel}>Settlement Bank</Text>
-                                <Text style={localStyles.summaryVal}>{formData.bankName || '—'}</Text>
-                            </View>
-                            <View style={localStyles.summaryRow}>
-                                <Text style={localStyles.summaryLabel}>Beneficiary Name</Text>
-                                <Text style={localStyles.summaryVal} numberOfLines={1}>{formData.accountName || '—'}</Text>
-                            </View>
-                            {plan.price > 0 && (
-                                <View style={localStyles.summaryRow}>
-                                    <Text style={localStyles.summaryLabel}>Payment Method</Text>
-                                    <Text style={[localStyles.summaryVal, { fontWeight: '800', color: NAVY_DARK }]}>
-                                        {paymentMethod === 'bank_transfer'
-                                            ? 'Direct Bank Transfer'
-                                            : paymentMethod === 'wallet'
-                                                ? 'Abu Mafhal Wallet'
-                                                : paymentMethod === 'flutterwave'
-                                                    ? 'Flutterwave'
-                                                    : 'Paystack Checkout'}
-                                    </Text>
+                            {[
+                                { label: 'Store Name',      value: formData.businessName     || '—' },
+                                { label: 'Structure',       value: activeBusinessType.badge  || '—' },
+                                { label: 'Category',        value: formData.businessCategory || 'General' },
+                                { label: 'Trading Hub',     value: formData.operatingHub     || 'Kano' },
+                                { label: 'Settlement Bank', value: formData.bankName         || '—' },
+                                { label: 'Account Name',    value: formData.accountName      || '—' },
+                                ...(plan.price > 0 ? [{ label: 'Payment Via', value:
+                                    paymentMethod === 'bank_transfer' ? 'Direct Bank Transfer'
+                                    : paymentMethod === 'wallet'      ? 'Abu Mafhal Wallet'
+                                    : paymentMethod === 'flutterwave' ? 'Flutterwave'
+                                    : 'Paystack Checkout'
+                                }] : []),
+                            ].map((row, idx) => (
+                                <View key={idx} style={localStyles.modernSummaryRow}>
+                                    <Text style={localStyles.modernSummaryLabel}>{row.label}</Text>
+                                    <Text style={localStyles.modernSummaryVal} numberOfLines={1}>{row.value}</Text>
                                 </View>
-                            )}
-                            <View style={[localStyles.summaryRow, { borderBottomWidth: 0, paddingTop: 10 }]}>
-                                <Text style={[localStyles.summaryLabel, { color: NAVY_DARK, fontWeight: '900' }]}>Total Subscription Fee</Text>
-                                <Text style={localStyles.summaryFee}>₦{plan.price.toLocaleString()}</Text>
+                            ))}
+                            <View style={localStyles.modernSummaryTotalRow}>
+                                <Text style={localStyles.modernSummaryTotalLabel}>{plan.price === 0 ? 'No charge today' : 'Total Due'}</Text>
+                                <Text style={localStyles.modernSummaryTotalFee}>{plan.price === 0 ? 'FREE' : `₦${plan.price.toLocaleString()}`}</Text>
                             </View>
                         </View>
                     </View>
@@ -3244,7 +3033,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                 <ActivityIndicator color={NAVY_DARK} size="small" />
                                 <Text style={localStyles.nextStepBtnText}>
-                                    {uploading ? 'Processing Documents...' : 'Submitting...'}
+                                    {uploading ? 'Uploading Documents...' : 'Submitting...'}
                                 </Text>
                             </View>
                         ) : (
@@ -3266,14 +3055,14 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                                 />
                                 <Text style={localStyles.nextStepBtnText}>
                                     {plan.price === 0
-                                        ? 'Fara Gwajin Kyauta (Start Free Trial)'
+                                        ? 'Start Free Trial'
                                         : paymentMethod === 'wallet'
-                                            ? `Biya ₦${plan.price.toLocaleString()} Daga Wallet`
+                                            ? `Pay ₦${plan.price.toLocaleString()} from Wallet`
                                             : paymentMethod === 'bank_transfer'
-                                                ? 'Aika da Shaidar Biya & Shago'
+                                                ? 'Submit Receipt & Activate Store'
                                                 : paymentMethod === 'flutterwave'
-                                                    ? `Biya ₦${plan.price.toLocaleString()} da Flutterwave`
-                                                    : `Biya ₦${plan.price.toLocaleString()} da Paystack`}
+                                                    ? `Pay ₦${plan.price.toLocaleString()} via Flutterwave`
+                                                    : `Pay ₦${plan.price.toLocaleString()} via Paystack`}
                                 </Text>
                             </View>
                         )}
@@ -3289,7 +3078,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                             <View>
                                 <Text style={localStyles.modalTitle}>Select Settlement Bank</Text>
                                 <Text style={{ fontSize: 12, color: TEXT_MUTED }}>
-                                    {filteredBanks.length} Central Bank & NIBSS licensed banks
+                                    {filteredBanks.length} CBN & NIBSS licensed banks
                                 </Text>
                             </View>
                             <TouchableOpacity onPress={() => setShowBankDropdown(false)} style={{ padding: 6 }}>
@@ -4269,84 +4058,179 @@ const localStyles = StyleSheet.create({
     },
 
     // Plan Selection
-    planCard: {
+    // ── Modern Plan Cards ──
+    modernSectionHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: '#F8FAFC',
-        borderRadius: 14,
-        padding: 16,
+        gap: 10,
+        marginBottom: 18
+    },
+    modernSectionIconWrap: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: GOLD_SURFACE,
         borderWidth: 1,
-        borderColor: BORDER_COLOR
+        borderColor: GOLD + '60',
+        justifyContent: 'center',
+        alignItems: 'center'
     },
-    planCardSelected: {
+    modernSectionTitle: {
+        fontSize: 16,
+        fontWeight: '900',
+        color: NAVY_DARK
+    },
+    modernSectionSub: {
+        fontSize: 12,
+        color: TEXT_SECONDARY,
+        marginTop: 1
+    },
+    modernPlanCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 16,
+        borderWidth: 1.5,
+        borderColor: BORDER_COLOR,
+        overflow: 'hidden',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.04,
+        shadowRadius: 4,
+        elevation: 1
+    },
+    modernPlanCardSelected: {
         borderColor: GOLD,
-        backgroundColor: GOLD_SURFACE
+        backgroundColor: GOLD_SURFACE,
+        shadowColor: GOLD,
+        shadowOpacity: 0.18,
+        shadowRadius: 8,
+        elevation: 3
     },
-    planLabel: {
+    planCardAccentLine: {
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        bottom: 0,
+        width: 4,
+        backgroundColor: GOLD,
+        borderTopLeftRadius: 16,
+        borderBottomLeftRadius: 16
+    },
+    modernPlanLabel: {
         fontSize: 15,
         fontWeight: '900',
         color: NAVY_DARK
     },
-    planBadge: {
+    modernPlanBadge: {
         backgroundColor: NAVY_DARK,
-        paddingHorizontal: 6,
-        paddingVertical: 1.5,
-        borderRadius: 4,
+        paddingHorizontal: 7,
+        paddingVertical: 2,
+        borderRadius: 5,
         borderWidth: 1,
         borderColor: GOLD
     },
-    planBadgeText: {
-        fontSize: 9.5,
+    modernPlanBadgeText: {
+        fontSize: 9,
         fontWeight: '900',
-        color: GOLD
+        color: GOLD,
+        letterSpacing: 0.3
     },
-    planPrice: {
-        fontSize: 16,
+    modernPlanPrice: {
+        fontSize: 20,
         fontWeight: '900',
-        color: GOLD_DARK,
-        marginTop: 2
+        color: GOLD_DARK
+    },
+    modernPlanDesc: {
+        fontSize: 11.5,
+        color: TEXT_SECONDARY,
+        marginTop: 4,
+        lineHeight: 16
+    },
+    modernPlanCheck: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        borderWidth: 2,
+        borderColor: BORDER_COLOR,
+        backgroundColor: '#F1F5F9',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginLeft: 8
+    },
+    modernPlanCheckActive: {
+        borderColor: GOLD,
+        backgroundColor: GOLD
     },
 
-    // Summary Box
-    summaryBox: {
-        backgroundColor: '#F8FAFC',
-        borderRadius: 14,
-        padding: 14,
+    // ── Modern Order Summary ──
+    modernSummaryCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
         borderWidth: 1,
-        borderColor: BORDER_COLOR
+        borderColor: BORDER_COLOR,
+        overflow: 'hidden',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+        elevation: 2
     },
-    summaryTitle: {
-        fontSize: 11,
-        fontWeight: '900',
-        color: NAVY_DARK,
-        letterSpacing: 0.5,
-        marginBottom: 8
-    },
-    summaryRow: {
+    modernSummaryHeader: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        paddingVertical: 7,
+        gap: 8,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        backgroundColor: '#F8FAFC',
         borderBottomWidth: 1,
         borderBottomColor: BORDER_COLOR
     },
-    summaryLabel: {
+    modernSummaryHeaderText: {
         fontSize: 12,
-        color: TEXT_SECONDARY,
+        fontWeight: '900',
+        color: NAVY_DARK,
+        letterSpacing: 0.3
+    },
+    modernSummaryRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 9,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9'
+    },
+    modernSummaryLabel: {
+        fontSize: 12,
+        color: TEXT_MUTED,
         fontWeight: '600'
     },
-    summaryVal: {
-        fontSize: 13,
+    modernSummaryVal: {
+        fontSize: 12.5,
         fontWeight: '700',
         color: NAVY_DARK,
         maxWidth: '55%',
         textAlign: 'right'
     },
-    summaryFee: {
-        fontSize: 18,
+    modernSummaryTotalRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        backgroundColor: NAVY_DARK
+    },
+    modernSummaryTotalLabel: {
+        fontSize: 13,
+        fontWeight: '800',
+        color: 'rgba(255,255,255,0.75)'
+    },
+    modernSummaryTotalFee: {
+        fontSize: 22,
         fontWeight: '900',
-        color: GOLD_DARK
+        color: GOLD
     },
 
     // Sticky Bottom Bar (Navy & Gold Accent)
@@ -4733,61 +4617,102 @@ const localStyles = StyleSheet.create({
         fontWeight: '700',
         lineHeight: 18
     },
-    methodSectionHeader: {
-        marginTop: 6,
-        marginBottom: 12
-    },
-    methodSectionTitle: {
-        fontSize: 13,
+    // ── Modern Method Tabs ──
+    modernMethodLabel: {
+        fontSize: 10.5,
         fontWeight: '900',
-        color: NAVY_DARK,
-        letterSpacing: 0.3
-    },
-    methodSectionSub: {
-        fontSize: 11.5,
         color: TEXT_MUTED,
-        marginTop: 2
+        letterSpacing: 0.8,
+        marginBottom: 10
     },
-    methodsGrid: {
-        gap: 10,
-        marginBottom: 16
+    modernMethodTabs: {
+        flexDirection: 'row',
+        gap: 8,
+        marginBottom: 16,
+        flexWrap: 'wrap'
     },
-    methodCard: {
+    modernMethodTab: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 14,
-        borderRadius: 14,
-        backgroundColor: '#FFFFFF',
+        gap: 6,
+        paddingHorizontal: 14,
+        paddingVertical: 9,
+        borderRadius: 50,
         borderWidth: 1.5,
         borderColor: BORDER_COLOR,
-        gap: 12
+        backgroundColor: '#F8FAFC'
     },
-    methodCardSelected: {
-        borderColor: GOLD,
-        backgroundColor: '#FFFDF5',
-        shadowColor: GOLD,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 6,
-        elevation: 2
+    modernMethodTabText: {
+        fontSize: 12.5,
+        fontWeight: '800',
+        color: TEXT_MUTED
     },
-    methodCardIconBox: {
+    // ── Modern Gateway Panels ──
+    modernGatewayPanel: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 12,
+        backgroundColor: '#F8FAFC',
+        borderRadius: 14,
+        padding: 14,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: BORDER_COLOR,
+        borderLeftWidth: 4
+    },
+    modernGatewayIconCircle: {
         width: 44,
         height: 44,
-        borderRadius: 12,
-        backgroundColor: '#F1F5F9',
+        borderRadius: 22,
         justifyContent: 'center',
         alignItems: 'center'
     },
-    methodCardTitle: {
-        fontSize: 14,
+    modernGatewayTitle: {
+        fontSize: 13.5,
         fontWeight: '800',
         color: NAVY_DARK
     },
-    methodCardSub: {
+    modernGatewaySub: {
         fontSize: 11.5,
         color: TEXT_SECONDARY,
-        marginTop: 2
+        lineHeight: 17
+    },
+    autoVerifyBadge: {
+        backgroundColor: '#0284C718',
+        borderWidth: 1,
+        borderColor: '#0284C7',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4
+    },
+    autoVerifyBadgeText: {
+        fontSize: 9,
+        fontWeight: '900',
+        color: '#0284C7',
+        letterSpacing: 0.3
+    },
+    // ── Modern Wallet Panel ──
+    modernWalletPanel: {
+        borderRadius: 14,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: BORDER_COLOR,
+        marginBottom: 16
+    },
+    modernWalletGradient: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 18
+    },
+    modernWalletStatusBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 20,
+        borderWidth: 1
     },
     officialBankCard: {
         borderRadius: 16,
