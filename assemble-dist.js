@@ -22,6 +22,9 @@ if (!fs.existsSync(mobileDistDir)) {
 
 // 1. Copy mobile/dist to dist/mobile
 const targetMobileDir = path.join(distDir, 'mobile');
+if (fs.existsSync(targetMobileDir)) {
+    fs.rmSync(targetMobileDir, { recursive: true, force: true });
+}
 fs.mkdirSync(targetMobileDir, { recursive: true });
 fs.cpSync(mobileDistDir, targetMobileDir, { recursive: true });
 console.log('✓ Copied mobile/dist -> dist/mobile');
@@ -30,6 +33,9 @@ console.log('✓ Copied mobile/dist -> dist/mobile');
 const mobileExpoDir = path.join(mobileDistDir, '_expo');
 if (fs.existsSync(mobileExpoDir)) {
     const targetExpoDir = path.join(distDir, '_expo');
+    if (fs.existsSync(targetExpoDir)) {
+        fs.rmSync(targetExpoDir, { recursive: true, force: true });
+    }
     fs.mkdirSync(targetExpoDir, { recursive: true });
     fs.cpSync(mobileExpoDir, targetExpoDir, { recursive: true });
     console.log('✓ Copied mobile/dist/_expo -> dist/_expo');

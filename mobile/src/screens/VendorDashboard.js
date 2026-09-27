@@ -33,7 +33,6 @@ import { VendorFollowers } from './VendorFollowers';
 import { VendorStoreProfile } from './VendorStoreProfile';
 import { VendorAddProduct } from './VendorAddProduct';
 import { VendorCertificate } from './VendorCertificate';
-import { VendorRegister } from './VendorRegister';
 import { VendorAnalytics } from './VendorAnalytics';
 import { VendorShippingSettings } from './VendorShippingSettings';
 import { VendorQRCodeCard } from './VendorQRCodeCard';
@@ -84,8 +83,33 @@ const getInitialVendorTab = (route) => {
 export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
     const insets = useSafeAreaInsets();
 
-    // Tab & View State (with persistence across refresh/reload)
+    // 1. Tab & View State (with persistence across refresh/reload)
     const [activeTab, _setActiveTab] = useState(() => getInitialVendorTab(route));
+    const [viewMode, setViewMode] = useState('list'); // list, add-product
+    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
+    // 2. Access Control & Vendor Application Status
+    const [vendorAccessStatus, setVendorAccessStatus] = useState('checking'); // 'checking' | 'authorized' | 'pending' | 'unpaid' | 'rejected' | 'not_applied'
+    const [applicationData, setApplicationData] = useState(null);
+
+    // 3. UI & Modal State
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [showRenewal, setShowRenewal] = useState(false);
+    const [showCertificate, setShowCertificate] = useState(false);
+    const [orderFilter, setOrderFilter] = useState('All');
+
+    // 4. Products Filter State
+    const [search, setSearch] = useState('');
+    const [stockFilter, setStockFilter] = useState('all');
+    const [selectedProduct, setSelectedProduct] = useState(null);
+
+    // 5. Data State
+    const [vendor, setVendor] = useState(null);
+    const [products, setProducts] = useState([]);
+    const [orders, setOrders] = useState([]);
+    const [wallet, setWallet] = useState({ balance: 0, pending_balance: 0, total_sales: 0 });
+    const [stats, setStats] = useState({ earnings: 0, orders: 0, products: 0, followers: 0 });
 
     const setActiveTab = useCallback((tabName) => {
         const cleanTab = tabName === 'store profile' ? 'store_profile' : tabName;
@@ -133,31 +157,31 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
             } catch (_) {}
         }
     }, [vendorAccessStatus, activeTab]);
-    const [viewMode, setViewMode] = useState('list'); // list, add-product
-    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
-    // Data State
-    const [vendor, setVendor] = useState(null);
-    const [products, setProducts] = useState([]);
-    const [orders, setOrders] = useState([]);
-    const [wallet, setWallet] = useState({ balance: 0, pending_balance: 0, total_sales: 0 });
-    const [stats, setStats] = useState({ earnings: 0, orders: 0, products: 0, followers: 0 });
+    // Redirect to VendorRegister if not authorized
+    useEffect(() => {
+        if (vendorAccessStatus !== 'checking' && vendorAccessStatus !== 'authorized') {
+            try {
+                if (typeof window !== 'undefined' && window.localStorage) {
+                    window.localStorage.setItem('@abumafhal_last_screen', 'VendorRegister');
+                    if (window.history && window.history.replaceState) {
+                        window.history.replaceState(null, '', '/mobile#vendor-register');
+                    } else {
+                        window.location.hash = '#vendor-register';
+                    }
+                }
+                AsyncStorage.setItem('@abumafhal_last_screen', 'VendorRegister').catch(() => {});
+            } catch (_) {}
 
-    // Access Control & Vendor Application Status
-    const [vendorAccessStatus, setVendorAccessStatus] = useState('checking'); // 'checking' | 'authorized' | 'pending' | 'unpaid' | 'rejected' | 'not_applied'
-    const [applicationData, setApplicationData] = useState(null);
-
-    // UI & Modal State
-    const [loading, setLoading] = useState(true);
-    const [refreshing, setRefreshing] = useState(false);
-    const [showRenewal, setShowRenewal] = useState(false);
-    const [showCertificate, setShowCertificate] = useState(false);
-    const [orderFilter, setOrderFilter] = useState('All');
-
-    // Products Filter State
-    const [search, setSearch] = useState('');
-    const [stockFilter, setStockFilter] = useState('all');
-    const [selectedProduct, setSelectedProduct] = useState(null);
+            if (navigation) {
+                if (typeof navigation.replace === 'function') {
+                    navigation.replace('VendorRegister');
+                } else if (typeof navigation.navigate === 'function') {
+                    navigation.navigate('VendorRegister');
+                }
+            }
+        }
+    }, [vendorAccessStatus, navigation]);
 
     // Hardware Back Button Handler
     useEffect(() => {
@@ -584,78 +608,21 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
     }
 
     if (showRenewal) {
-        return (
-            <VendorRegister
-                user={user}
-                mode="renew"
-                onBack={() => setShowRenewal(false)}
-                onSubmit={() => {
-                    setShowRenewal(false);
-                    fetchDashboardData();
-                }}
-            />
-        );
+        if (navigation && typeof navigation.navigate === 'function') {
+            navigation.navigate('VendorRegister', { mode: 'renew' });
+        }
+        setShowRenewal(false);
     }
 
-    if (loading) {
+    if (loading || vendorAccessStatus !== 'authorized') {
         return (
             <SafeAreaView style={{ flex: 1, backgroundColor: NAVY, justifyContent: 'center', alignItems: 'center' }}>
                 <StatusBar barStyle="light-content" backgroundColor={NAVY} />
                 <ActivityIndicator size="large" color={GOLD} />
                 <Text style={{ marginTop: 14, color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>
-                    Tabbatar da Shagonka / Loading Store...
+                    {vendorAccessStatus === 'checking' || loading ? 'Tabbatar da Shagonka / Loading Store...' : 'Ana tura ka zuwa Shafi / Redirecting...'}
                 </Text>
             </SafeAreaView>
-        );
-    }
-
-    if (vendorAccessStatus !== 'authorized') {
-        const handleReturnToMarketplace = () => {
-            try {
-                if (typeof window !== 'undefined' && window.localStorage) {
-                    window.localStorage.setItem('@abumafhal_last_screen', 'Main');
-                    window.location.hash = '';
-                }
-            } catch (_) {}
-            if (navigation) {
-                if (typeof navigation.reset === 'function') {
-                    navigation.reset({ index: 0, routes: [{ name: 'Main', params: { screen: 'home' } }] });
-                    return;
-                }
-                if (typeof navigation.navigate === 'function') {
-                    navigation.navigate('Main', { screen: 'home' });
-                    return;
-                }
-            }
-            onLogout && onLogout();
-        };
-
-        // User is not yet an authorized vendor.
-        // Never show an intermediate blocking screen or "Baka Da Rajistar Shago Tukuna".
-        // Instead, seamlessly render VendorRegister so they can fill out or view their application directly.
-        try {
-            if (typeof window !== 'undefined' && window.localStorage) {
-                window.localStorage.setItem('@abumafhal_last_screen', 'VendorRegister');
-                const curH = window.location.hash || '';
-                if (!curH.startsWith('#vendor-register')) {
-                    if (window.history && window.history.replaceState) {
-                        window.history.replaceState(null, '', '/mobile#vendor-register');
-                    } else {
-                        window.location.hash = '#vendor-register';
-                    }
-                }
-            }
-            AsyncStorage.setItem('@abumafhal_last_screen', 'VendorRegister').catch(() => {});
-        } catch (_) {}
-
-        return (
-            <VendorRegister
-                user={user}
-                onBack={handleReturnToMarketplace}
-                onSubmit={() => {
-                    fetchDashboardData();
-                }}
-            />
         );
     }
 

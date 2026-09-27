@@ -587,7 +587,8 @@ export default function App() {
 
             const isStrictVendor = (hash === '#vendor' || hash.startsWith('#vendor?') || hash.startsWith('#vendor/') || path === '/vendor' || path === '/vendor/') && !hash.includes('vendor-register') && !hash.includes('vendor-application');
             if (isStrictVendor) {
-                return 'VendorDashboard';
+                const isApprovedVendor = storedUser?.role === 'vendor' || storedUser?.role === 'admin' || storedUser?.user_metadata?.role === 'vendor';
+                return isApprovedVendor ? 'VendorDashboard' : 'VendorRegister';
             }
 
             const isStrictDriver = hash === '#driver' || hash.startsWith('#driver?') || hash.startsWith('#driver/') || path === '/driver' || path === '/driver/';
@@ -600,6 +601,10 @@ export default function App() {
             }
 
             if (last && ['AdminDashboard', 'VendorDashboard', 'DriverDashboard', 'Main', 'CheckoutPage', 'TrackOrder', 'ProductDetails', 'VendorRegister', 'PaySmallSmall'].includes(last)) {
+                if (last === 'VendorDashboard') {
+                    const isApprovedVendor = storedUser?.role === 'vendor' || storedUser?.role === 'admin' || storedUser?.user_metadata?.role === 'vendor';
+                    if (!isApprovedVendor) return 'VendorRegister';
+                }
                 return last;
             }
 
@@ -782,7 +787,20 @@ export default function App() {
                                 {props => <AdminDashboard {...props} user={user} onLogout={handleLogout} />}
                             </Stack.Screen>
                             <Stack.Screen name="VendorDashboard">
-                                {props => <VendorDashboard {...props} user={user} onLogout={handleLogout} />}
+                                {props => {
+                                    const isVendor = user?.role === 'vendor' || user?.user_metadata?.role === 'vendor' || user?.role === 'admin' || user?.user_metadata?.role === 'admin';
+                                    if (!isVendor) {
+                                        return (
+                                            <VendorRegister
+                                                {...props}
+                                                user={user}
+                                                onBack={() => props.navigation.navigate('Main', { screen: 'home' })}
+                                                onSubmit={() => props.navigation.navigate('VendorDashboard')}
+                                            />
+                                        );
+                                    }
+                                    return <VendorDashboard {...props} user={user} onLogout={handleLogout} />;
+                                }}
                             </Stack.Screen>
                             <Stack.Screen name="DriverDashboard">
                                 {props => <DriverDashboard {...props} user={user} onLogout={handleLogout} />}
