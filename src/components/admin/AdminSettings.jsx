@@ -211,7 +211,11 @@ const AdminSettings = () => {
         } else if (type === 'market') {
             updateField('update_title', 'Sabbin Fasaloli da More Rayuwa! 🎉');
             updateField('update_message', 'Muna alfaharin sanar da kai sabbin hanyoyin ciniki da katin shaida mai lambar QR!');
-            updateField('update_release_notes', '• Sabon tsarin katin shaida mai lambar QR\n• Sabon tsarin rajistar shagunan VIP\n• Saukin neman kaya da duba makota\n• Inganta saurin karbar oda da isarwa');
+            updateField('update_release_notes', '• Sabon tsarin katin shaida mai lambar QR\n• Sabon tsarin rajistar shagunan VIP\n• Saukin neman kaya da duba makota\n• Inganta saurin karbar oda da isarwa\n• Sabon Chat: Iya tag din kaya a cikin tattaunawa');
+        } else if (type === 'bugfix') {
+            updateField('update_title', 'Gyaran Kurakurai & Ingantawa ⚡');
+            updateField('update_message', 'Wannan sabuntawar ta gyara matsaloli da dama da aka gano, tana kuma inganta saurin manhaja gaba daya.');
+            updateField('update_release_notes', '• Gyaran kuskuren da ke faruwa yayin bude manhaja\n• Inganta saurin loda shafukan kaya da hotuna\n• Gyaran matsalar biyan kudi da walat\n• Karancin amfani da batir da internet\n• Sauran gyare-gyare da dama bisa rahoton masu amfani');
         }
     };
 
@@ -778,7 +782,7 @@ const AdminSettings = () => {
                                                 <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">
                                                     Sanya Samfurin Rubutu (Quick Templates):
                                                 </label>
-                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                                                     <button
                                                         type="button"
                                                         onClick={() => applyReleaseNotesTemplate('general')}
@@ -798,7 +802,14 @@ const AdminSettings = () => {
                                                         onClick={() => applyReleaseNotesTemplate('market')}
                                                         className="px-3 py-2 text-xs font-bold rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-900 text-left transition-colors"
                                                     >
-                                                        🎉 Sabbin Fasaloli
+                                                        🛍️ Kasuwa & Chat
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => applyReleaseNotesTemplate('bugfix')}
+                                                        className="px-3 py-2 text-xs font-bold rounded-lg border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-900 text-left transition-colors"
+                                                    >
+                                                        ⚡ Gyaran Bugs
                                                     </button>
                                                 </div>
                                             </div>
