@@ -89,8 +89,14 @@ const linking = {
         if (typeof window !== 'undefined' && window.location) {
             let hash = window.location.hash || '';
             if (hash.startsWith('#')) hash = hash.substring(1);
-            if (hash) {
-                const [routePart, queryPart] = hash.split('?');
+            let pathPart = path || '';
+            if (pathPart.startsWith('/mobile/')) pathPart = pathPart.replace('/mobile/', '');
+            else if (pathPart.startsWith('/mobile')) pathPart = pathPart.replace('/mobile', '');
+            if (pathPart.startsWith('/')) pathPart = pathPart.substring(1);
+
+            const target = hash || pathPart;
+            if (target) {
+                const [routePart, queryPart] = target.split('?');
                 const params = {};
                 if (queryPart) {
                     const searchParams = new URLSearchParams(queryPart);
@@ -99,7 +105,9 @@ const linking = {
                     }
                 }
                 const clean = (routePart || '').toLowerCase();
-                if (clean === 'vendor-register' || clean === 'vendorregister' || clean === 'vendor-application') return { routes: [{ name: 'VendorRegister', params }] };
+                if (clean === 'vendor-register' || clean === 'vendorregister' || clean === 'vendor-application' || clean.includes('vendor-register') || clean.includes('vendor-application')) {
+                    return { routes: [{ name: 'VendorRegister', params }] };
+                }
                 if (clean === 'admin') return { routes: [{ name: 'AdminDashboard', params }] };
                 if (clean === 'vendor') return { routes: [{ name: 'VendorDashboard', params }] };
                 if (clean === 'driver') return { routes: [{ name: 'DriverDashboard', params }] };
@@ -544,11 +552,18 @@ export default function App() {
         try {
             const hash = typeof window !== 'undefined' ? (window.location.hash || '').toLowerCase() : '';
             const path = typeof window !== 'undefined' ? (window.location.pathname || '').toLowerCase() : '';
+            const search = typeof window !== 'undefined' ? (window.location.search || '').toLowerCase() : '';
             const last = typeof window !== 'undefined' ? window.localStorage?.getItem('@abumafhal_last_screen') : null;
             const storedUser = user || getStoredUserSync();
 
-            // 1. SPECIFIC MULTI-PART ROUTES MUST MATCH FIRST (Never let generic 'vendor' or 'register' shadow these!)
-            if (hash.includes('vendor-register') || hash.includes('vendorregister') || hash.includes('vendor-application') || path.includes('vendor-register') || path.includes('vendor-application')) {
+            // 1. SPECIFIC VENDOR REGISTRATION CHECK (Always takes 100% precedence on reload)
+            const isVendorRegister = 
+                hash.includes('vendor-register') || hash.includes('vendorregister') || hash.includes('vendor-application') ||
+                path.includes('vendor-register') || path.includes('vendor-application') ||
+                search.includes('vendor-register') || search.includes('vendor-application') ||
+                (last === 'VendorRegister' && !hash.startsWith('#admin') && !hash.startsWith('#driver') && !hash.startsWith('#shop') && (hash === '' || hash.includes('vendor')));
+
+            if (isVendorRegister) {
                 return 'VendorRegister';
             }
             if (hash.includes('checkout')) return 'CheckoutPage';
@@ -564,13 +579,13 @@ export default function App() {
                 return 'Auth';
             }
 
-            // 3. STRICT DASHBOARD CHECKS (Must NOT match substrings like vendor-register)
+            // 3. STRICT DASHBOARD CHECKS (Must NEVER match substrings like vendor-register)
             const isStrictAdmin = hash === '#admin' || hash.startsWith('#admin?') || hash.startsWith('#admin/') || (path === '/admin' || path === '/admin/');
             if (isStrictAdmin) {
                 return 'AdminDashboard';
             }
 
-            const isStrictVendor = (hash === '#vendor' || hash.startsWith('#vendor?') || hash.startsWith('#vendor/') || path === '/vendor' || path === '/vendor/') && !hash.includes('vendor-register');
+            const isStrictVendor = (hash === '#vendor' || hash.startsWith('#vendor?') || hash.startsWith('#vendor/') || path === '/vendor' || path === '/vendor/') && !hash.includes('vendor-register') && !hash.includes('vendor-application');
             if (isStrictVendor) {
                 return 'VendorDashboard';
             }
@@ -640,7 +655,12 @@ export default function App() {
                                                         }
                                                     }
                                                 } else if (currentRoute.name === 'VendorDashboard') {
-                                                    if (!curHash.startsWith('#vendor') || curHash.includes('vendor-register')) {
+                                                    // CRITICAL: NEVER overwrite or hijack if the user is on vendor-register
+                                                    if (curHash.includes('vendor-register') || curHash.includes('vendorregister') || curHash.includes('vendor-application')) {
+                                                        return;
+                                                    }
+                                                    const cleanHash = curHash.split('?')[0].replace('#', '');
+                                                    if (cleanHash !== 'vendor') {
                                                         const savedTab = window.localStorage.getItem('@abumafhal_vendor_tab');
                                                         const targetHash = (savedTab && savedTab !== 'overview') ? `#vendor?tab=${savedTab}` : '#vendor';
                                                         if (window.history && window.history.replaceState) {
@@ -650,6 +670,8 @@ export default function App() {
                                                         }
                                                     }
                                                 } else if (currentRoute.name === 'VendorRegister') {
+                                                    window.localStorage.setItem('@abumafhal_last_screen', 'VendorRegister');
+                                                    AsyncStorage.setItem('@abumafhal_last_screen', 'VendorRegister').catch(() => {});
                                                     if (!curHash.startsWith('#vendor-register')) {
                                                         const targetHash = '#vendor-register';
                                                         if (window.history && window.history.replaceState) {
@@ -769,7 +791,7 @@ export default function App() {
                                 {props => <ProductDetails {...props} user={user} addToCart={handleAddToCart} />}
                             </Stack.Screen>
                             <Stack.Screen name="VendorRegister">
-                                {props => <VendorRegister {...props} user={user} onBack={() => props.navigation.goBack()} />}
+                                {props => <VendorRegister {...props} user={user} onBack={() => props.navigation.goBack()} onSubmit={() => props.navigation.navigate('VendorDashboard')} />}
                             </Stack.Screen>
                             <Stack.Screen name="ChatScreen" component={ChatScreen} />
                             <Stack.Screen name="ConversationsScreen" component={ConversationsScreen} />

@@ -145,6 +145,9 @@ function App() {
         else if (currentPath.includes('financial') || currentPath.includes('payout')) sub = '?tab=financials';
         targetHash = '#admin' + sub;
       }
+      else if (currentPath.includes('vendor-application') || currentPath.includes('vendor-register') || currentPath.includes('vendorregister')) {
+        targetHash = '#vendor-register';
+      }
       else if (currentPath.includes('vendor')) {
         let sub = '';
         if (currentPath.includes('product')) sub = '?tab=products';
@@ -216,15 +219,9 @@ function App() {
                 <Route path="/register" element={<Register />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
 
-                {/* ==================== VENDOR APPLICATION ==================== */}
-                <Route
-                  path="/vendor-application"
-                  element={
-                    <ProtectedRoute allowedRoles={['buyer']}>
-                      <VendorApplication />
-                    </ProtectedRoute>
-                  }
-                />
+                {/* ==================== VENDOR APPLICATION & REGISTRATION ==================== */}
+                <Route path="/vendor-application" element={<VendorApplication />} />
+                <Route path="/vendor-register" element={<VendorApplication />} />
 
                 {/* ==================== CART & CHECKOUT ==================== */}
                 <Route

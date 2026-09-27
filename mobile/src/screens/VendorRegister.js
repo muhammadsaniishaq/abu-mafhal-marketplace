@@ -329,6 +329,20 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
     });
 
     useEffect(() => {
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.setItem('@abumafhal_last_screen', 'VendorRegister');
+                const hash = window.location.hash || '';
+                if (!hash.startsWith('#vendor-register')) {
+                    if (window.history && window.history.replaceState) {
+                        window.history.replaceState(null, '', '/mobile#vendor-register');
+                    } else {
+                        window.location.hash = '#vendor-register';
+                    }
+                }
+            }
+            AsyncStorage.setItem('@abumafhal_last_screen', 'VendorRegister').catch(() => {});
+        } catch (_) {}
         checkApplicationStatus();
         fetchBanks();
         fetchWalletBalance();
@@ -1465,104 +1479,194 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
 
     if (checkingStatus) {
         return (
-            <View style={[localStyles.screenContainer, { justifyContent: 'center', alignItems: 'center' }]}>
+            <SafeAreaView style={[localStyles.screenContainer, { justifyContent: 'center', alignItems: 'center', backgroundColor: CANVAS_BG }]}>
                 <StatusBar barStyle="light-content" backgroundColor={NAVY_DARK} />
-                <ActivityIndicator size="large" color={GOLD} />
-                <Text style={{ marginTop: 16, color: NAVY_DARK, fontWeight: '800' }}>Initializing Merchant Suite...</Text>
-            </View>
+                <View style={[localStyles.statusIconCircle, { backgroundColor: '#FFFFFF', borderColor: GOLD, borderWidth: 2, shadowColor: NAVY_DARK, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }]}>
+                    <ActivityIndicator size="large" color={GOLD_DARK} />
+                </View>
+                <Text style={{ marginTop: 20, color: NAVY_DARK, fontWeight: '900', fontSize: 16, letterSpacing: 0.3 }}>
+                    Abu Mafhal Merchant Suite
+                </Text>
+                <Text style={{ marginTop: 6, color: TEXT_SECONDARY, fontSize: 12, fontWeight: '600' }}>
+                    Ana tabbatar da bayanan rajistar shagonka...
+                </Text>
+            </SafeAreaView>
         );
     }
 
-    if (existingApp && existingApp.status === 'approved') {
+    if (existingApp && existingApp.status === 'approved' && mode !== 'renew') {
         return (
-            <SafeAreaView style={[localStyles.screenContainer, { justifyContent: 'center', alignItems: 'center', padding: 28 }]}>
+            <SafeAreaView style={[localStyles.screenContainer, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
                 <StatusBar barStyle="light-content" backgroundColor={NAVY_DARK} />
-                <View style={[localStyles.statusIconCircle, { backgroundColor: EMERALD_SURFACE, borderColor: EMERALD }]}>
-                    <Ionicons name="shield-checkmark" size={54} color={EMERALD} />
+                <View style={[localStyles.statusIconCircle, { backgroundColor: EMERALD_SURFACE, borderColor: EMERALD, width: 84, height: 84, borderRadius: 42 }]}>
+                    <Ionicons name="shield-checkmark" size={50} color={EMERALD} />
                 </View>
-                <Text style={localStyles.statusTitle}>Application Approved!</Text>
+                <Text style={localStyles.statusTitle}>Application Approved ✓</Text>
                 <Text style={localStyles.statusSub}>
-                    Congratulations! Your store is officially accredited as an Abu Mafhal Verified Merchant.
+                    Murna! Shagonka ya samu amincewa kuma yana aiki a matsayin Abu Mafhal Verified Merchant. Zaka iya sarrafa kaya, kudaden shiga, da oda.
                 </Text>
-                <TouchableOpacity
-                    style={[localStyles.primaryActionBtn, { width: '100%', marginBottom: 12 }]}
-                    onPress={onSubmit || onBack}
-                    activeOpacity={0.85}
-                >
-                    <Text style={localStyles.primaryActionBtnText}>Open Vendor Dashboard</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => setShowCertificate(true)} style={{ padding: 8 }}>
-                    <Text style={{ color: GOLD_DARK, fontWeight: '800', fontSize: 14 }}>View Merchant Certificate</Text>
-                </TouchableOpacity>
+
+                <View style={{ width: '100%', gap: 10, marginTop: 14 }}>
+                    <TouchableOpacity
+                        style={[localStyles.primaryActionBtn, { width: '100%' }]}
+                        onPress={onSubmit || onBack}
+                        activeOpacity={0.85}
+                    >
+                        <Ionicons name="speedometer" size={18} color={NAVY_DARK} />
+                        <Text style={localStyles.primaryActionBtnText}>Shiga Vendor Dashboard</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[localStyles.secondaryActionBtn, { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}
+                        onPress={() => setShowCertificate(true)}
+                        activeOpacity={0.85}
+                    >
+                        <Ionicons name="ribbon-outline" size={18} color={GOLD_DARK} />
+                        <Text style={[localStyles.secondaryActionBtnText, { color: GOLD_DARK, fontWeight: '800' }]}>
+                            Duba Takardar Shaida (Certificate)
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={{ paddingVertical: 10, alignItems: 'center' }}
+                        onPress={() => handleRetryApplication(existingApp)}
+                        activeOpacity={0.8}
+                    >
+                        <Text style={{ color: TEXT_SECONDARY, fontWeight: '700', fontSize: 13, textDecorationLine: 'underline' }}>
+                            Sabunta / Canza Bayanan Shagonka (Edit / Update Store)
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={{ paddingVertical: 8, alignItems: 'center' }}
+                        onPress={onBack}
+                        activeOpacity={0.8}
+                    >
+                        <Text style={{ color: TEXT_MUTED, fontWeight: '600', fontSize: 12 }}>
+                            Koma Kasuwa (Back to Marketplace)
+                        </Text>
+                    </TouchableOpacity>
+                </View>
             </SafeAreaView>
         );
     }
 
     if (existingApp && existingApp.status === 'pending') {
         return (
-            <SafeAreaView style={[localStyles.screenContainer, { justifyContent: 'center', alignItems: 'center', padding: 28 }]}>
+            <SafeAreaView style={[localStyles.screenContainer, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
                 <StatusBar barStyle="light-content" backgroundColor={NAVY_DARK} />
-                <View style={[localStyles.statusIconCircle, { backgroundColor: GOLD_SURFACE, borderColor: GOLD }]}>
-                    <Ionicons name="time" size={54} color={GOLD_DARK} />
+                <View style={[localStyles.statusIconCircle, { backgroundColor: GOLD_SURFACE, borderColor: GOLD, width: 84, height: 84, borderRadius: 42 }]}>
+                    <Ionicons name="time" size={50} color={GOLD_DARK} />
                 </View>
-                <Text style={localStyles.statusTitle}>Application Under Review</Text>
+                <Text style={localStyles.statusTitle}>Aikace-aikacenka na Kan Bita</Text>
                 <Text style={localStyles.statusSub}>
-                    We are currently verifying your credentials and NUBAN settlement account. This process usually completes within 24 hours.
+                    Mun karɓi bayanan shagonka. Tawagarmu na kan duba takardunku da asusun banki. Wannan na ɗaukar tsawon sa'o'i 24 kacal.
                 </Text>
 
-                <View style={localStyles.statusInfoBox}>
+                <View style={[localStyles.statusInfoBox, { width: '100%', marginBottom: 16 }]}>
                     <View style={localStyles.statusInfoRow}>
-                        <Text style={localStyles.statusInfoLabel}>Submitted Date</Text>
+                        <Text style={localStyles.statusInfoLabel}>Ranar Gabatarwa</Text>
                         <Text style={localStyles.statusInfoVal}>{new Date(existingApp.created_at).toLocaleDateString()}</Text>
                     </View>
                     <View style={localStyles.statusInfoRow}>
-                        <Text style={localStyles.statusInfoLabel}>Store Plan</Text>
+                        <Text style={localStyles.statusInfoLabel}>Kunshin Shago</Text>
                         <Text style={[localStyles.statusInfoVal, { color: GOLD_DARK }]}>{existingApp.subscription_plan}</Text>
                     </View>
                     <View style={localStyles.statusInfoRow}>
-                        <Text style={localStyles.statusInfoLabel}>Current Status</Text>
+                        <Text style={localStyles.statusInfoLabel}>Halin Yanzu</Text>
                         <View style={localStyles.pendingPill}>
-                            <Text style={localStyles.pendingPillText}>Pending Review</Text>
+                            <Text style={localStyles.pendingPillText}>Ana Dubawa (Pending Review)</Text>
                         </View>
                     </View>
                 </View>
 
-                <TouchableOpacity style={[localStyles.primaryActionBtn, { width: '100%' }]} onPress={onBack}>
-                    <Text style={localStyles.primaryActionBtnText}>Back to App</Text>
-                </TouchableOpacity>
+                <View style={{ width: '100%', gap: 10 }}>
+                    <TouchableOpacity
+                        style={[localStyles.primaryActionBtn, { width: '100%' }]}
+                        onPress={() => handleRetryApplication(existingApp)}
+                        activeOpacity={0.85}
+                    >
+                        <Ionicons name="create-outline" size={18} color={NAVY_DARK} />
+                        <Text style={localStyles.primaryActionBtnText}>Duba ko Gyara Bayanai (Edit Details)</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[localStyles.secondaryActionBtn, { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}
+                        onPress={openWhatsAppHelp}
+                        activeOpacity={0.85}
+                    >
+                        <Ionicons name="logo-whatsapp" size={18} color="#16A34A" />
+                        <Text style={[localStyles.secondaryActionBtnText, { color: '#16A34A', fontWeight: '800' }]}>
+                            Tuntubi Admin a WhatsApp
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={{ paddingVertical: 8, alignItems: 'center' }}
+                        onPress={onBack}
+                        activeOpacity={0.8}
+                    >
+                        <Text style={{ color: TEXT_SECONDARY, fontWeight: '700', fontSize: 13 }}>
+                            Koma Kasuwa (Back to App)
+                        </Text>
+                    </TouchableOpacity>
+                </View>
             </SafeAreaView>
         );
     }
 
     if (existingApp && existingApp.status === 'rejected') {
         return (
-            <SafeAreaView style={[localStyles.screenContainer, { justifyContent: 'center', alignItems: 'center', padding: 28 }]}>
+            <SafeAreaView style={[localStyles.screenContainer, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
                 <StatusBar barStyle="light-content" backgroundColor={NAVY_DARK} />
-                <View style={[localStyles.statusIconCircle, { backgroundColor: '#FEE2E2', borderColor: '#EF4444' }]}>
-                    <Ionicons name="close-circle" size={54} color="#EF4444" />
+                <View style={[localStyles.statusIconCircle, { backgroundColor: '#FEE2E2', borderColor: '#EF4444', width: 84, height: 84, borderRadius: 42 }]}>
+                    <Ionicons name="close-circle" size={50} color="#EF4444" />
                 </View>
-                <Text style={localStyles.statusTitle}>Application Needs Review</Text>
+                <Text style={localStyles.statusTitle}>Bayanin Ba da Amsa</Text>
                 <Text style={localStyles.statusSub}>
-                    Your application could not be verified automatically with the details provided.
+                    Bayan duba bayanan shagonka, an sami wasu takardu ko bayanai da ke buƙatar gyara kafin kunna shago.
                 </Text>
 
-                <View style={[localStyles.statusInfoBox, { borderColor: '#FCA5A5', backgroundColor: '#FEF2F2' }]}>
+                <View style={[localStyles.statusInfoBox, { borderColor: '#FCA5A5', backgroundColor: '#FEF2F2', width: '100%', marginBottom: 16 }]}>
                     <Text style={{ fontSize: 11, color: '#DC2626', fontWeight: '900', textTransform: 'uppercase', marginBottom: 4 }}>
-                        Reason for Feedback
+                        Dalilin Shawara / Dalilin Gyara:
                     </Text>
                     <Text style={{ color: TEXT_PRIMARY, fontSize: 13, lineHeight: 18 }}>
-                        {existingApp.rejection_reason || 'Please verify that your NIN and bank account details match your corporate records.'}
+                        {existingApp.rejection_reason || 'Da fatan a tabbatar da cewa lambar NIN, CAC, ko bayanan asusun banki sun dace da bayanan rajista.'}
                     </Text>
                 </View>
 
-                <TouchableOpacity
-                    style={[localStyles.primaryActionBtn, { width: '100%' }]}
-                    onPress={() => handleRetryApplication(existingApp)}
-                    activeOpacity={0.85}
-                >
-                    <Text style={localStyles.primaryActionBtnText}>Correct & Resubmit</Text>
-                    <Ionicons name="refresh" size={18} color={NAVY_DARK} />
-                </TouchableOpacity>
+                <View style={{ width: '100%', gap: 10 }}>
+                    <TouchableOpacity
+                        style={[localStyles.primaryActionBtn, { width: '100%' }]}
+                        onPress={() => handleRetryApplication(existingApp)}
+                        activeOpacity={0.85}
+                    >
+                        <Ionicons name="refresh" size={18} color={NAVY_DARK} />
+                        <Text style={localStyles.primaryActionBtnText}>Gyara Bayanai & Sake Tura Aikace-aikace</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[localStyles.secondaryActionBtn, { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}
+                        onPress={openWhatsAppHelp}
+                        activeOpacity={0.85}
+                    >
+                        <Ionicons name="logo-whatsapp" size={18} color="#16A34A" />
+                        <Text style={[localStyles.secondaryActionBtnText, { color: '#16A34A', fontWeight: '800' }]}>
+                            Yi Magana da Admin a WhatsApp
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={{ paddingVertical: 8, alignItems: 'center' }}
+                        onPress={onBack}
+                        activeOpacity={0.8}
+                    >
+                        <Text style={{ color: TEXT_MUTED, fontWeight: '600', fontSize: 12 }}>
+                            Koma Kasuwa (Back to Marketplace)
+                        </Text>
+                    </TouchableOpacity>
+                </View>
             </SafeAreaView>
         );
     }
