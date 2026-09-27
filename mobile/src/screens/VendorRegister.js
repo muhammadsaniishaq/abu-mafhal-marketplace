@@ -254,7 +254,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
         const base = {
             fullName: user?.user_metadata?.full_name || '',
             phone: user?.user_metadata?.phone_number || '',
-            businessType: 'limited_company',
+            businessType: 'sole_proprietor',
             businessName: '',
             businessDescription: '',
             businessCategory: 'Electronics',
@@ -673,28 +673,30 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         if (step === 1) {
             if (!formData.businessName?.trim()) {
-                Alert.alert('Store Name Required', 'Please enter your Store / Business Name.');
+                Alert.alert('Store Name Required ⚠️', 'Please enter your Store / Business Name before continuing.');
                 return false;
             }
             if (!formData.phone?.trim()) {
-                Alert.alert('Phone Number Required', 'Please enter your official Business Phone Number.');
+                Alert.alert('Phone Number Required ⚠️', 'Please enter your official Business Phone Number.');
                 return false;
             }
             if (!formData.businessAddress?.trim()) {
-                Alert.alert('Address Required', 'Please enter your Physical Business Address.');
+                Alert.alert('Address Required ⚠️', 'Please enter your Physical Business Address.');
                 return false;
             }
-            // ONLY require CAC if NOT individual
-            if (formData.businessType !== 'sole_proprietor' && activeBusinessType.cacRequired && !formData.cacNumber?.trim()) {
-                Alert.alert('CAC Number Required', `Please enter your ${activeBusinessType.cacLabel}.`);
+            // CAC only required for registered business types
+            if (formData.businessType !== 'sole_proprietor' && activeBusinessType?.cacRequired && !formData.cacNumber?.trim()) {
+                Alert.alert('CAC Number Required ⚠️', `Please enter your ${activeBusinessType.cacLabel} or select "Individual Trader" to skip this.`);
                 return false;
             }
-            if (!formData.nin?.trim()) {
-                Alert.alert('NIN Required', 'Please enter your 11-digit National Identity Number (NIN).');
+            // NIN: required but allow 9-11 digits (some NINs are 9 or 10 digits)
+            const ninClean = (formData.nin || '').trim().replace(/\s/g, '');
+            if (!ninClean) {
+                Alert.alert('NIN Required ⚠️', 'Please enter your National Identity Number (NIN). It is printed on your National ID card or NIMC slip.');
                 return false;
             }
-            if (formData.nin.trim().length < 11) {
-                Alert.alert('Invalid NIN', 'National Identity Number (NIN) must be at least 11 digits.');
+            if (ninClean.length < 9 || ninClean.length > 11) {
+                Alert.alert('Invalid NIN ⚠️', `Your NIN should be 11 digits. You entered ${ninClean.length} digit(s). Please check your National ID card or NIMC slip.`);
                 return false;
             }
             return true;
@@ -740,9 +742,19 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                     return false;
                 }
             }
-            if (!files.nin) {
-                Alert.alert('NIN Document Required', 'Please attach your NIN Slip / Identity Document.');
-                return false;
+            // NIN document: recommended but not a hard blocker (NIN number is already captured in Step 1)
+            // For sole proprietors, no documents are required beyond their NIN number from step 1
+            if (formData.businessType !== 'sole_proprietor' && !files.nin) {
+                // Show a warning but allow proceeding - compliance desk will verify
+                Alert.alert(
+                    'NIN Document Recommended',
+                    'Attaching your NIN Slip helps speed up verification. Would you like to continue without it?',
+                    [
+                        { text: 'Go Back & Attach', style: 'cancel' },
+                        { text: 'Continue Anyway', style: 'default', onPress: () => setStep(4) }
+                    ]
+                );
+                return false; // block here — the Continue button in the alert will navigate
             }
             return true;
         }
