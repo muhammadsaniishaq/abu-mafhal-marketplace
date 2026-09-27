@@ -262,7 +262,7 @@ export const ProductComparison = ({ navigation, addToCart }) => {
 
                                         <TouchableOpacity 
                                             activeOpacity={0.7}
-                                            onPress={() => navigation.navigate('ProductDetails', { product })}
+                                            onPress={() => navigation.navigate('ProductDetails', { product, id: product?.id })}
                                             style={{ alignItems: 'center', width: '100%', marginTop: 2 }}
                                         >
                                             <Text style={styles.productName} numberOfLines={2}>{product.name || 'Product'}</Text>

@@ -44,9 +44,72 @@ const fmtPrice = (n) => {
     return `₦${num.toLocaleString()}`;
 };
 
+const getStoredProductSync = (targetId) => {
+    try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+            const raw = window.localStorage.getItem('@abumafhal_last_product_data');
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && (!targetId || String(parsed.id) === String(targetId))) {
+                    return parsed;
+                }
+            }
+        }
+    } catch (_) {}
+    return null;
+};
+
+const resolveProductId = (route) => {
+    // 1. Direct param from route
+    const direct = route?.params?.id || route?.params?.productId || route?.params?.product?.id;
+    if (direct) return String(direct);
+
+    if (typeof window !== 'undefined') {
+        try {
+            // 2. Hash parsing: #product/123 or #product?id=123
+            const hash = window.location.hash || '';
+            const hashMatch = hash.match(/product\/([^\/?#]+)/i);
+            if (hashMatch && hashMatch[1]) return hashMatch[1];
+            if (hash.includes('id=')) {
+                const sp = new URLSearchParams(hash.split('?')[1] || '');
+                const hid = sp.get('id') || sp.get('productId');
+                if (hid) return hid;
+            }
+
+            // 3. Pathname: /product/123 or /mobile/product/123
+            const path = window.location.pathname || '';
+            const pathMatch = path.match(/product\/([^\/?#]+)/i);
+            if (pathMatch && pathMatch[1]) return pathMatch[1];
+
+            // 4. Search query: ?id=123
+            const search = window.location.search || '';
+            if (search) {
+                const sp = new URLSearchParams(search);
+                const sid = sp.get('id') || sp.get('productId');
+                if (sid) return sid;
+            }
+
+            // 5. Local storage cached ID
+            if (window.localStorage) {
+                const storedId = window.localStorage.getItem('@abumafhal_last_product_id');
+                if (storedId) return storedId;
+            }
+        } catch (_) {}
+    }
+    return null;
+};
+
+const resolveInitialProduct = (route, targetId) => {
+    if (route?.params?.product) return route.params.product;
+    return getStoredProductSync(targetId);
+};
+
 export const ProductDetails = ({ route, navigation, addToCart, user }) => {
-    const initialProduct = route?.params?.product || null;
-    const productId = route?.params?.id || route?.params?.productId || initialProduct?.id;
+    const [productId, setProductId] = useState(() => resolveProductId(route));
+    const [product, setProduct] = useState(() => resolveInitialProduct(route, productId));
+    const [fetchFailed, setFetchFailed] = useState(false);
+
+    const initialProduct = product || route?.params?.product || null;
 
     const insets = useSafeAreaInsets();
     const { addToComparison } = useComparison();
@@ -73,6 +136,57 @@ export const ProductDetails = ({ route, navigation, addToCart, user }) => {
             }).catch(() => {});
         }
     }, [user]);
+
+    // Dynamic param update watcher
+    useEffect(() => {
+        const nextId = resolveProductId(route);
+        if (nextId && nextId !== productId) {
+            setProductId(nextId);
+            setFetchFailed(false);
+            if (route?.params?.product) {
+                setProduct(route.params.product);
+            }
+        } else if (route?.params?.product && route.params.product !== product) {
+            setProduct(route.params.product);
+        }
+    }, [route?.params?.id, route?.params?.productId, route?.params?.product]);
+
+    // Persist active product and sync URL hash
+    useEffect(() => {
+        const activeId = productId || product?.id;
+        if (!activeId) return;
+
+        try {
+            if (typeof window !== 'undefined') {
+                if (window.localStorage) {
+                    window.localStorage.setItem('@abumafhal_last_product_id', String(activeId));
+                    if (product) {
+                        window.localStorage.setItem('@abumafhal_last_product_data', JSON.stringify(product));
+                    }
+                }
+                const curHash = window.location.hash || '';
+                const targetHash = `#product/${activeId}`;
+                if (!curHash.includes(activeId)) {
+                    if (window.history && window.history.replaceState) {
+                        window.history.replaceState(null, '', '/mobile' + targetHash);
+                    } else {
+                        window.location.hash = targetHash;
+                    }
+                }
+            }
+        } catch (_) {}
+    }, [productId, product]);
+
+    // Timeout safety net so page never spins indefinitely
+    useEffect(() => {
+        if (product) return;
+        const timer = setTimeout(() => {
+            if (!product) {
+                setFetchFailed(true);
+            }
+        }, 5000);
+        return () => clearTimeout(timer);
+    }, [product]);
 
     // Gating check: User MUST be logged in only if guest browsing is explicitly disabled
     if (!user && !currentUser && !allowGuest) {
@@ -109,7 +223,6 @@ export const ProductDetails = ({ route, navigation, addToCart, user }) => {
     }
 
     // ── States ────────────────────────────────────────────────────────────────
-    const [product, setProduct] = useState(initialProduct);
     const [activeImg, setActiveImg] = useState(0);
     const [quantity, setQuantity] = useState(1);
     const [selectedVariant, setSelectedVariant] = useState(null);
@@ -150,32 +263,52 @@ export const ProductDetails = ({ route, navigation, addToCart, user }) => {
     }, [productId]);
 
     const fetchLiveProduct = async () => {
-        if (!productId) return;
+        const targetId = productId || resolveProductId(route);
+        if (!targetId) {
+            if (!product) {
+                setFetchFailed(true);
+            }
+            return;
+        }
+
         try {
             const { data, error } = await supabase
                 .from('products')
                 .select('*')
-                .eq('id', productId)
+                .eq('id', targetId)
                 .maybeSingle();
 
             if (data) {
+                const baseProd = product || route?.params?.product;
                 const merged = {
                     ...data,
-                    vendor_id: data.vendor_id || initialProduct?.vendor_id || initialProduct?.vendor?.userId || initialProduct?.vendor?.id,
-                    store_id: data.store_id || initialProduct?.store_id || initialProduct?.vendor?.id,
-                    vendor: initialProduct?.vendor || null
+                    vendor_id: data.vendor_id || baseProd?.vendor_id || baseProd?.vendor?.userId || baseProd?.vendor?.id,
+                    store_id: data.store_id || baseProd?.store_id || baseProd?.vendor?.id,
+                    vendor: baseProd?.vendor || null
                 };
                 setProduct(merged);
+                setFetchFailed(false);
+                try {
+                    if (typeof window !== 'undefined' && window.localStorage) {
+                        window.localStorage.setItem('@abumafhal_last_product_id', String(data.id));
+                        window.localStorage.setItem('@abumafhal_last_product_data', JSON.stringify(merged));
+                    }
+                } catch (_) {}
                 fetchVendor(merged);
                 fetchRelatedProducts(data.category, data.id);
                 fetchReviews(data.id);
-            } else if (initialProduct) {
-                fetchVendor(initialProduct);
-                fetchRelatedProducts(initialProduct.category, initialProduct.id);
-                fetchReviews(initialProduct.id);
+            } else if (product) {
+                fetchVendor(product);
+                fetchRelatedProducts(product.category, product.id);
+                fetchReviews(product.id);
+            } else {
+                setFetchFailed(true);
             }
         } catch (err) {
             console.log('Error fetching live product:', err);
+            if (!product) {
+                setFetchFailed(true);
+            }
         }
     };
 
@@ -513,6 +646,35 @@ export const ProductDetails = ({ route, navigation, addToCart, user }) => {
         (product?.condition ? `${product.condition} • 100% Authentic` : '100% Genuine Quality Guaranteed'));
 
     if (!product) {
+        if (fetchFailed) {
+            return (
+                <SafeAreaView style={s.notFoundContainer}>
+                    <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+                    <View style={s.notFoundCircle}>
+                        <Ionicons name="bag-remove-outline" size={48} color={BRAND.gold} />
+                    </View>
+                    <Text style={s.notFoundTitle}>Product Not Found</Text>
+                    <Text style={s.notFoundSubtitle}>
+                        Ba a samu bayanan wannan kayan ba, ko kuma an riga an cire shi daga shago.
+                    </Text>
+                    <TouchableOpacity
+                        style={s.notFoundBtn}
+                        onPress={() => navigation.navigate('Main', { screen: 'shop' })}
+                        activeOpacity={0.85}
+                    >
+                        <Ionicons name="storefront-outline" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                        <Text style={s.notFoundBtnTxt}>Koma Babban Shago (Go to Shop)</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={s.notFoundBackBtn}
+                        onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Main', { screen: 'home' })}
+                    >
+                        <Text style={s.notFoundBackTxt}>Koma Baya (Go Back)</Text>
+                    </TouchableOpacity>
+                </SafeAreaView>
+            );
+        }
+
         return (
             <View style={s.loadingContainer}>
                 <ActivityIndicator size="large" color={BRAND.navy} />
@@ -1285,6 +1447,69 @@ const s = StyleSheet.create({
         fontSize: 12,
         fontWeight: '700',
         color: BRAND.slate,
+    },
+    notFoundContainer: {
+        flex: 1,
+        backgroundColor: '#FFFFFF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 24,
+    },
+    notFoundCircle: {
+        width: 88,
+        height: 88,
+        borderRadius: 44,
+        backgroundColor: '#FEF3C7',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 18,
+        borderWidth: 1.5,
+        borderColor: '#FDE68A',
+    },
+    notFoundTitle: {
+        fontSize: 20,
+        fontWeight: '900',
+        color: BRAND.slateDark,
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    notFoundSubtitle: {
+        fontSize: 13,
+        color: BRAND.slate,
+        textAlign: 'center',
+        lineHeight: 20,
+        maxWidth: 320,
+        marginBottom: 24,
+    },
+    notFoundBtn: {
+        backgroundColor: BRAND.navy,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 14,
+        paddingHorizontal: 24,
+        borderRadius: 14,
+        width: '100%',
+        maxWidth: 280,
+        elevation: 3,
+        shadowColor: BRAND.navy,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.2,
+        shadowRadius: 5,
+    },
+    notFoundBtnTxt: {
+        color: '#FFFFFF',
+        fontWeight: '800',
+        fontSize: 13.5,
+    },
+    notFoundBackBtn: {
+        marginTop: 14,
+        padding: 8,
+    },
+    notFoundBackTxt: {
+        color: BRAND.slate,
+        fontWeight: '700',
+        fontSize: 12.5,
     },
 
     // ── 1. Top Header ──

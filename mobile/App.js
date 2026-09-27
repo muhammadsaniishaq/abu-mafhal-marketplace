@@ -118,8 +118,11 @@ const linking = {
                 if (clean === 'invoice') return { routes: [{ name: 'Invoice', params }] };
                 if (clean === 'compare') return { routes: [{ name: 'ProductComparison', params }] };
                 if (clean === 'pay-small-small') return { routes: [{ name: 'PaySmallSmall', params }] };
-                if (clean.startsWith('product/')) {
-                    const id = routePart.split('/')[1];
+                if (clean.startsWith('product/') || clean === 'product' || clean.startsWith('product?')) {
+                    let id = routePart.includes('/') ? routePart.split('/')[1] : (params.id || params.productId);
+                    if (!id && typeof window !== 'undefined' && window.localStorage) {
+                        id = window.localStorage.getItem('@abumafhal_last_product_id');
+                    }
                     return { routes: [{ name: 'ProductDetails', params: { id, ...params } }] };
                 }
                 if (['shop', 'cart', 'wishlist', 'profile', 'categories', 'stores', 'wallet', 'home', 'settings'].includes(clean)) {
@@ -569,7 +572,9 @@ export default function App() {
             if (hash.includes('checkout')) return 'CheckoutPage';
             if (hash.includes('track') || hash.includes('order')) return 'TrackOrder';
             if (hash.includes('invoice')) return 'Invoice';
-            if (hash.includes('product/')) return 'ProductDetails';
+            if (hash.includes('product/') || hash.startsWith('#product') || (last === 'ProductDetails' && !hash.startsWith('#admin') && !hash.startsWith('#driver') && !hash.startsWith('#shop') && !hash.startsWith('#vendor'))) {
+                return 'ProductDetails';
+            }
             if (hash.includes('compare')) return 'ProductComparison';
             if (hash.includes('pay-small-small')) return 'PaySmallSmall';
 
@@ -683,6 +688,26 @@ export default function App() {
                                                             window.history.replaceState(null, '', '/mobile' + targetHash);
                                                         } else {
                                                             window.location.hash = targetHash;
+                                                        }
+                                                    }
+                                                } else if (currentRoute.name === 'ProductDetails') {
+                                                    window.localStorage.setItem('@abumafhal_last_screen', 'ProductDetails');
+                                                    AsyncStorage.setItem('@abumafhal_last_screen', 'ProductDetails').catch(() => {});
+                                                    const pId = currentRoute.params?.id || currentRoute.params?.productId || currentRoute.params?.product?.id;
+                                                    if (pId) {
+                                                        window.localStorage.setItem('@abumafhal_last_product_id', String(pId));
+                                                        if (currentRoute.params?.product) {
+                                                            try {
+                                                                window.localStorage.setItem('@abumafhal_last_product_data', JSON.stringify(currentRoute.params.product));
+                                                            } catch (_) {}
+                                                        }
+                                                        if (!curHash.includes(pId)) {
+                                                            const targetHash = `#product/${pId}`;
+                                                            if (window.history && window.history.replaceState) {
+                                                                window.history.replaceState(null, '', '/mobile' + targetHash);
+                                                            } else {
+                                                                window.location.hash = targetHash;
+                                                            }
                                                         }
                                                     }
                                                 } else if (currentRoute.name === 'DriverDashboard') {
@@ -806,7 +831,32 @@ export default function App() {
                                 {props => <DriverDashboard {...props} user={user} onLogout={handleLogout} />}
                             </Stack.Screen>
                             <Stack.Screen name="ProductDetails">
-                                {props => <ProductDetails {...props} user={user} addToCart={handleAddToCart} />}
+                                {props => {
+                                    let enrichedRoute = props.route;
+                                    if (!enrichedRoute?.params?.id && !enrichedRoute?.params?.product) {
+                                        try {
+                                            if (typeof window !== 'undefined' && window.localStorage) {
+                                                const cachedId = window.localStorage.getItem('@abumafhal_last_product_id');
+                                                const cachedData = window.localStorage.getItem('@abumafhal_last_product_data');
+                                                let parsed = null;
+                                                if (cachedData) {
+                                                    try { parsed = JSON.parse(cachedData); } catch (_) {}
+                                                }
+                                                if (cachedId || parsed) {
+                                                    enrichedRoute = {
+                                                        ...props.route,
+                                                        params: {
+                                                            ...props.route?.params,
+                                                            id: cachedId || parsed?.id,
+                                                            product: parsed
+                                                        }
+                                                    };
+                                                }
+                                            }
+                                        } catch (_) {}
+                                    }
+                                    return <ProductDetails {...props} route={enrichedRoute} user={user} addToCart={handleAddToCart} />;
+                                }}
                             </Stack.Screen>
                             <Stack.Screen name="VendorRegister">
                                 {props => <VendorRegister {...props} user={user} onBack={() => props.navigation.goBack()} onSubmit={() => props.navigation.navigate('VendorDashboard')} />}

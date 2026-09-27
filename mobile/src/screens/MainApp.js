@@ -147,7 +147,7 @@ export const MainApp = ({ route, navigation, user, onLogout, cartLines, onUpdate
                         onGoToCart={() => setActiveTab('cart')}
                         onGoToNotifications={() => setActiveTab('notifications')}
                         onNavigate={(screen) => setActiveTab(screen)}
-                        onProductClick={(product) => handleNavigate('ProductDetails', { product })}
+                        onProductClick={(product) => handleNavigate('ProductDetails', { product, id: product?.id })}
                         cartCount={cartLines?.length || 0}
                         onAddToCart={onAddToCart}
                     />
@@ -157,13 +157,13 @@ export const MainApp = ({ route, navigation, user, onLogout, cartLines, onUpdate
                     cartCount={cartLines.length}
                     onGoToCart={() => setActiveTab('cart')}
                     addToCart={onAddToCart}
-                    onProductClick={(product) => handleNavigate('ProductDetails', { product })}
+                    onProductClick={(product) => handleNavigate('ProductDetails', { product, id: product?.id })}
                     onCompareClick={() => handleNavigate('ProductComparison')}
                     initialQuery={route?.params?.query}
                     initialCategory={route?.params?.category}
                 />}
                 {activeTab === 'cart' && <CartPage cart={cartLines} user={user} onBack={() => setActiveTab('home')} onUpdateQty={onUpdateQty} onRemove={onRemoveCart} onClear={onClearCart} />}
-                {activeTab === 'wishlist' && <WishlistPage onBack={() => setActiveTab('home')} onAddToCart={onAddToCart} onProductClick={(product) => handleNavigate('ProductDetails', { product })} />}
+                {activeTab === 'wishlist' && <WishlistPage onBack={() => setActiveTab('home')} onAddToCart={onAddToCart} onProductClick={(product) => handleNavigate('ProductDetails', { product, id: product?.id })} />}
                 {activeTab === 'profile' && <ProfilePage
                     user={user}
                     onLogout={onLogout}
@@ -195,7 +195,7 @@ export const MainApp = ({ route, navigation, user, onLogout, cartLines, onUpdate
                         }}
                         onGoToCart={() => setActiveTab('cart')}
                         cartCount={cartLines.length}
-                        onProductClick={(product) => handleNavigate('ProductDetails', { product })}
+                        onProductClick={(product) => handleNavigate('ProductDetails', { product, id: product?.id })}
                         onAddToCart={onAddToCart}
                         onGoToShop={(category) => handleNavigate('shop', { category })}
                         onNavigate={handleNavigate}
@@ -207,7 +207,7 @@ export const MainApp = ({ route, navigation, user, onLogout, cartLines, onUpdate
                         onGoToCart={() => setActiveTab('cart')}
                         onGoToNotifications={() => setActiveTab('notifications')}
                         cartCount={cartLines.length}
-                        onProductClick={(product) => handleNavigate('ProductDetails', { product })}
+                        onProductClick={(product) => handleNavigate('ProductDetails', { product, id: product?.id })}
                         onAddToCart={onAddToCart}
                         onGoToShop={(category) => handleNavigate('shop', { category })}
                         onNavigate={handleNavigate}

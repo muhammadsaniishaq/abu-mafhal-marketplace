@@ -149,7 +149,7 @@ const ContextMenu = ({ msg, visible, onClose, onCopy, onShare, onSpeak, onFeedba
 // Product Card
 // ────────────────────────────────────────────
 const ProductCard = ({ product, onNavigate }) => (
-    <TouchableOpacity onPress={() => onNavigate?.('ProductDetails', { product })} activeOpacity={0.82}
+    <TouchableOpacity onPress={() => onNavigate?.('ProductDetails', { product, id: product?.id })} activeOpacity={0.82}
         style={{ marginRight: 12, width: 148, backgroundColor: 'white', borderRadius: 18, overflow: 'hidden', shadowColor: '#4F46E5', shadowOpacity: 0.1, shadowRadius: 12, elevation: 4 }}>
         <Image source={{ uri: product.images?.[0] || 'https://placehold.co/148' }} style={{ width: 148, height: 108 }} resizeMode="cover" />
         <View style={{ padding: 10 }}>
