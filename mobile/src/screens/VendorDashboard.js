@@ -489,6 +489,8 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
     if (viewMode === 'add-product') {
         return (
             <VendorAddProduct
+                user={user}
+                vendorData={vendor}
                 initialData={selectedProduct}
                 onCancel={() => {
                     setViewMode('list');

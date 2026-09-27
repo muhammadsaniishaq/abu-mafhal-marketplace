@@ -41,6 +41,13 @@ const TABS = [
     { id: 'shipping', label: 'SEO',       icon: 'search' },
 ];
 
+const normalizeMimeAndExt = (mime, uri) => {
+    const raw = ((mime || '') + ' ' + (uri || '')).toLowerCase();
+    if (raw.includes('png')) return { mime: 'image/png', ext: 'png' };
+    if (raw.includes('webp')) return { mime: 'image/webp', ext: 'webp' };
+    return { mime: 'image/jpeg', ext: 'jpg' };
+};
+
 // ─── Inp: MUST be defined OUTSIDE component to avoid keyboard dismiss ─────────
 const Inp = ({ label, field, form, onSet, placeholder, numeric, multi, hint }) => (
     <View style={SS.inpWrap}>
@@ -195,7 +202,9 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
 
         return Promise.all(assets.map(async (a) => {
             let b64 = a.base64;
-            if (!b64 && a.uri) {
+            const { mime, ext } = normalizeMimeAndExt(a.mimeType, a.uri);
+
+            if (!b64 && a.uri && Platform.OS === 'web') {
                 try {
                     const resp = await fetch(a.uri);
                     const blob = await resp.blob();
@@ -213,12 +222,19 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
                         reader.readAsDataURL(blob);
                     });
                 } catch (_) {}
+            } else if (!b64 && a.uri && Platform.OS !== 'web') {
+                try {
+                    b64 = await FileSystem.readAsStringAsync(a.uri, { encoding: 'base64' });
+                } catch (_) {}
             }
+
             return {
                 uri: a.uri,
                 base64: b64,
-                type: a.mimeType || 'image/jpeg',
-                status: 'pending'
+                type: mime,
+                ext: ext,
+                status: 'pending',
+                url: null
             };
         }));
     };
@@ -288,6 +304,8 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
 
     const uploadImages = async () => {
         const urls = [];
+        const updatedImages = [...images];
+
         for (let i = 0; i < images.length; i++) {
             const img = images[i];
             if (img.status === 'success' && img.url) {
@@ -298,35 +316,46 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
                 urls.push(img);
                 continue;
             }
+            if (img.uri && img.uri.startsWith('http') && !img.uri.startsWith('blob:')) {
+                urls.push(img.uri);
+                continue;
+            }
 
-            const fname = `admin_prod_${Date.now()}_${i}_${Math.random().toString(36).substring(2, 7)}.jpg`;
+            const { mime, ext } = normalizeMimeAndExt(img.type, img.uri);
+            const fname = `admin/${Date.now()}_prod_${i}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
             let publicUrl = null;
+            let lastError = null;
 
-            // Strategy 1: Web native Blob upload
-            if (Platform.OS === 'web' && img.uri) {
+            // Strategy 1: Base64 decode upload (Most reliable across Web & React Native)
+            if (img.base64) {
+                try {
+                    const arrayBuf = decode(img.base64);
+                    const { error } = await supabase.storage.from('products')
+                        .upload(fname, arrayBuf, { contentType: mime, upsert: true });
+                    if (!error) {
+                        publicUrl = supabase.storage.from('products').getPublicUrl(fname).data.publicUrl;
+                    } else {
+                        lastError = error.message;
+                    }
+                } catch (e) {
+                    lastError = e.message;
+                }
+            }
+
+            // Strategy 2: Web native Blob upload
+            if (!publicUrl && Platform.OS === 'web' && img.uri) {
                 try {
                     const resp = await fetch(img.uri);
                     const blob = await resp.blob();
                     const { error } = await supabase.storage.from('products')
-                        .upload(fname, blob, { contentType: blob.type || 'image/jpeg', upsert: true });
+                        .upload(fname, blob, { contentType: mime, upsert: true });
                     if (!error) {
                         publicUrl = supabase.storage.from('products').getPublicUrl(fname).data.publicUrl;
+                    } else {
+                        lastError = error.message;
                     }
                 } catch (e) {
-                    console.warn('Admin web blob upload error:', e);
-                }
-            }
-
-            // Strategy 2: Base64 decode upload
-            if (!publicUrl && img.base64) {
-                try {
-                    const { error } = await supabase.storage.from('products')
-                        .upload(fname, decode(img.base64), { contentType: 'image/jpeg', upsert: true });
-                    if (!error) {
-                        publicUrl = supabase.storage.from('products').getPublicUrl(fname).data.publicUrl;
-                    }
-                } catch (e) {
-                    console.warn('Admin base64 decode upload error:', e);
+                    lastError = e.message;
                 }
             }
 
@@ -334,42 +363,29 @@ export const AdminAddProduct = ({ onCancel, onSuccess, initialData = null }) => 
             if (!publicUrl && img.uri && Platform.OS !== 'web') {
                 try {
                     const b64 = await FileSystem.readAsStringAsync(img.uri, { encoding: 'base64' });
+                    const arrayBuf = decode(b64);
                     const { error } = await supabase.storage.from('products')
-                        .upload(fname, decode(b64), { contentType: 'image/jpeg', upsert: true });
+                        .upload(fname, arrayBuf, { contentType: mime, upsert: true });
                     if (!error) {
                         publicUrl = supabase.storage.from('products').getPublicUrl(fname).data.publicUrl;
+                    } else {
+                        lastError = error.message;
                     }
                 } catch (e) {
-                    console.warn('Admin native FileSystem upload error:', e);
+                    lastError = e.message;
                 }
-            }
-
-            // Strategy 4: Fallback bucket
-            if (!publicUrl) {
-                try {
-                    let fallbackData = null;
-                    if (Platform.OS === 'web' && img.uri) {
-                        const r = await fetch(img.uri);
-                        fallbackData = await r.blob();
-                    } else if (img.base64) {
-                        fallbackData = decode(img.base64);
-                    }
-                    if (fallbackData) {
-                        const { error } = await supabase.storage.from('banners')
-                            .upload(fname, fallbackData, { contentType: 'image/jpeg', upsert: true });
-                        if (!error) {
-                            publicUrl = supabase.storage.from('banners').getPublicUrl(fname).data.publicUrl;
-                        }
-                    }
-                } catch (_) {}
             }
 
             if (publicUrl) {
                 urls.push(publicUrl);
-            } else if (img.uri && img.uri.startsWith('http')) {
-                urls.push(img.uri);
+                updatedImages[i] = { ...img, status: 'success', url: publicUrl };
+            } else {
+                console.error(`Admin failed to upload image #${i + 1}:`, lastError);
+                throw new Error(`Failed to upload photo #${i + 1}: ${lastError || 'Storage network error'}. Please check your connection and try again.`);
             }
         }
+
+        setImages(updatedImages);
         return urls;
     };
 
