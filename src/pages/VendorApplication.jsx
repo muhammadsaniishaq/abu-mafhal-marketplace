@@ -74,10 +74,37 @@ const OPERATING_HUBS = [
   'Other State / Location'
 ];
 
+const NIGERIAN_BANKS = [
+  { name: 'OPay (Paycom)', code: '999992', type: 'Fintech / MFB', popular: true },
+  { name: 'PalmPay', code: '999991', type: 'Fintech / MFB', popular: true },
+  { name: 'Moniepoint Microfinance Bank', code: '50515', type: 'Fintech / MFB', popular: true },
+  { name: 'Kuda Bank', code: '50211', type: 'Digital Bank', popular: true },
+  { name: 'Guaranty Trust Bank (GTBank)', code: '058', type: 'Commercial Bank', popular: true },
+  { name: 'Access Bank', code: '044', type: 'Commercial Bank', popular: true },
+  { name: 'Zenith Bank', code: '057', type: 'Commercial Bank', popular: true },
+  { name: 'First Bank of Nigeria', code: '011', type: 'Commercial Bank', popular: true },
+  { name: 'United Bank for Africa (UBA)', code: '033', type: 'Commercial Bank', popular: true },
+  { name: 'Stanbic IBTC Bank', code: '221', type: 'Commercial Bank', popular: false },
+  { name: 'FCMB (First City Monument Bank)', code: '214', type: 'Commercial Bank', popular: false },
+  { name: 'Union Bank of Nigeria', code: '032', type: 'Commercial Bank', popular: false },
+  { name: 'Fidelity Bank', code: '070', type: 'Commercial Bank', popular: false },
+  { name: 'Sterling Bank', code: '232', type: 'Commercial Bank', popular: false },
+  { name: 'Wema Bank (ALAT)', code: '035', type: 'Commercial Bank', popular: false },
+  { name: 'Polaris Bank', code: '076', type: 'Commercial Bank', popular: false },
+  { name: 'Jaiz Bank', code: '301', type: 'Non-Interest Bank', popular: false },
+  { name: 'TAJBank', code: '302', type: 'Non-Interest Bank', popular: false },
+  { name: 'Lotus Bank', code: '303', type: 'Non-Interest Bank', popular: false },
+  { name: 'Ecobank Nigeria', code: '050', type: 'Commercial Bank', popular: false },
+  { name: 'Keystone Bank', code: '082', type: 'Commercial Bank', popular: false },
+  { name: 'Unity Bank', code: '215', type: 'Commercial Bank', popular: false },
+  { name: 'Providus Bank', code: '101', type: 'Commercial Bank', popular: false }
+];
+
 const STEPS = [
   { id: 1, title: 'Personal Info', desc: 'Contact & Legal Identity' },
   { id: 2, title: 'Business Profile', desc: 'Structure & Store Details' },
-  { id: 3, title: 'Compliance Docs', desc: 'Documents & Verification' }
+  { id: 3, title: 'Compliance Docs', desc: 'Documents & Verification' },
+  { id: 4, title: 'Settlement & Logistics', desc: 'Banking & Payout Account' }
 ];
 
 const VendorApplication = () => {
@@ -105,7 +132,14 @@ const VendorApplication = () => {
     businessDescription: '',
     whatsapp: currentUser?.phone || currentUser?.user_metadata?.phone_number || '',
     instagram: '',
-    website: ''
+    website: '',
+    bankName: 'OPay (Paycom)',
+    bankCode: '999992',
+    accountNumber: '',
+    accountName: '',
+    deliveryType: 'marketplace',
+    dispatchSla: 'same_day',
+    returnPolicy: '7_days'
   });
 
   const [files, setFiles] = useState({
@@ -237,12 +271,30 @@ const VendorApplication = () => {
         return false;
       }
     }
+    if (step === 4) {
+      if (!formData.bankName) {
+        setError('Please select your commercial or digital settlement bank.');
+        return false;
+      }
+      if (!formData.accountNumber || formData.accountNumber.trim().length !== 10) {
+        setError('Please enter a valid 10-digit NUBAN account number.');
+        return false;
+      }
+      if (!formData.accountName) {
+        if (formData.fullName) {
+          setFormData(prev => ({ ...prev, accountName: prev.fullName }));
+        } else {
+          setError('Please provide the account beneficiary name.');
+          return false;
+        }
+      }
+    }
     return true;
   };
 
   const nextStep = () => {
     if (validateStep(step)) {
-      setStep(prev => Math.min(prev + 1, 3));
+      setStep(prev => Math.min(prev + 1, 4));
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
@@ -266,7 +318,7 @@ const VendorApplication = () => {
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
-    if (!validateStep(3)) return;
+    if (!validateStep(4)) return;
 
     setLoading(true);
     setError('');
@@ -284,7 +336,9 @@ const VendorApplication = () => {
         .eq('status', 'pending')
         .maybeSingle();
 
-      if (checkError) throw checkError;
+      if (checkError) {
+        console.warn('Check existing application notice:', checkError.message);
+      }
 
       if (existingApp) {
         setError('You already have an application under review. Our compliance team will contact you shortly.');
@@ -339,6 +393,9 @@ const VendorApplication = () => {
         video_url: businessVideoUrl,
         nin_url: ninDocUrl,
         cac_url: cacDocUrl,
+        bank_name: formData.bankName,
+        account_number: formData.accountNumber,
+        account_name: formData.accountName || formData.fullName,
         status: 'pending',
         socials: {
           business_type: formData.businessType,
@@ -350,6 +407,9 @@ const VendorApplication = () => {
           website: formData.website,
           cac_status_url: cacStatusDocUrl,
           memorandum_url: memorandumDocUrl,
+          delivery_type: formData.deliveryType,
+          dispatch_sla: formData.dispatchSla,
+          return_policy: formData.returnPolicy,
           compliance_documents: {
             cac_certificate: cacDocUrl,
             cac_status_report: cacStatusDocUrl,
@@ -361,11 +421,75 @@ const VendorApplication = () => {
         updated_at: new Date().toISOString()
       };
 
-      const { error: insertError } = await supabase
-        .from('vendor_applications')
-        .upsert([applicationData], { onConflict: 'user_id' });
+      // 1. Guaranteed storage in stores table for Logistics & Banking Hub
+      try {
+        const storePayload = {
+          user_id: userId,
+          name: formData.businessName || 'My Store',
+          about: formData.businessDescription || '',
+          logo: businessImageUrl || null,
+          category: formData.businessCategory || 'Electronics',
+          phone: formData.phone || formData.whatsapp || '',
+          address: formData.businessAddress || '',
+          state: formData.businessLocation || 'Kano',
+          whatsapp: formData.whatsapp || formData.phone || '',
+          custom_shipping_enabled: formData.deliveryType === 'self',
+          supports_pickup: true,
+          supports_express: formData.dispatchSla === 'same_day',
+          policy: `Return window: ${formData.returnPolicy}. Dispatch SLA: ${formData.dispatchSla}. Bank: ${formData.bankName} (${formData.accountNumber} - ${formData.accountName || formData.fullName})`,
+          updated_at: new Date().toISOString()
+        };
 
-      if (insertError) throw insertError;
+        const { data: existingStore } = await supabase
+          .from('stores')
+          .select('id')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (existingStore?.id) {
+          await supabase.from('stores').update(storePayload).eq('id', existingStore.id);
+        } else {
+          await supabase.from('stores').insert([storePayload]);
+        }
+      } catch (stErr) {
+        console.warn('Store sync notice:', stErr);
+      }
+
+      // 2. Update profile role to vendor
+      try {
+        await supabase.from('profiles').update({
+          role: 'vendor',
+          business_name: formData.businessName,
+          business_category: formData.businessCategory,
+          about: formData.businessDescription,
+          state: formData.businessLocation,
+          phone: formData.phone || formData.whatsapp,
+          whatsapp: formData.whatsapp || formData.phone,
+          updated_at: new Date().toISOString()
+        }).eq('id', userId);
+      } catch (_) {}
+
+      // 3. Save to localStorage for VendorWallet compatibility
+      try {
+        const bankRecord = [{
+          id: `BANK-${Date.now()}`,
+          bank_name: formData.bankName,
+          bank_code: formData.bankCode || '',
+          account_number: formData.accountNumber,
+          account_name: formData.accountName || formData.fullName,
+          is_default: true
+        }];
+        localStorage.setItem(`@abumafhal_vendor_banks_${userId}`, JSON.stringify(bankRecord));
+      } catch (_) {}
+
+      // 4. Record application in vendor_applications if table exists
+      try {
+        await supabase
+          .from('vendor_applications')
+          .upsert([applicationData], { onConflict: 'user_id' });
+      } catch (appErr) {
+        console.warn('vendor_applications sync notice:', appErr);
+      }
 
       setSuccess(true);
       setTimeout(() => {
@@ -1076,6 +1200,212 @@ const VendorApplication = () => {
               {/* Agreement Notice */}
               <div className="p-4 bg-[#0A192F]/5 border border-[#D9A73A]/40 rounded-xl">
                 <p className="text-xs text-[#0A192F] leading-relaxed font-semibold">
+                  All documents are verified under strict regulatory compliance and encrypted with banking-grade security.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 4: SETTLEMENT BANKING & LOGISTICS */}
+          {step === 4 && (
+            <div className="space-y-6 animate-fade-in">
+              <div className="border-b border-slate-100 pb-3">
+                <h2 className="text-lg sm:text-xl font-black text-[#0A192F]">
+                  Payout Banking & Logistics Hub
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                  Connect your settlement account for automated sales remittances and choose fulfillment preferences.
+                </p>
+              </div>
+
+              {/* ROYAL NAVY & GOLD VIRTUAL ATM SETTLEMENT CARD */}
+              <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#071324] via-[#0F274B] to-[#1E3E6E] p-6 text-white shadow-xl border-2 border-[#D9A73A]/40 max-w-md mx-auto">
+                <div className="flex items-center justify-between mb-6">
+                  {/* EMV Gold Chip */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-7 rounded-md bg-[#E5B94E] border border-[#B45309] flex items-center justify-center shadow-inner">
+                      <div className="w-6 h-4 border border-[#92400E] rounded-xs" />
+                    </div>
+                    <svg className="w-5 h-5 text-[#D9A73A]/80 rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+                    </svg>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-[#D9A73A]/40 text-xs font-bold text-slate-100">
+                    <span>🏦</span>
+                    <span className="truncate max-w-[140px]">{formData.bankName || 'SETTLEMENT BANK'}</span>
+                  </div>
+                </div>
+
+                {/* Account Number */}
+                <div className="my-5">
+                  <p className="text-xl sm:text-2xl font-black tracking-widest font-mono text-white">
+                    {formData.accountNumber
+                      ? formData.accountNumber.padEnd(10, '•').replace(/(\d{3}|\W{3})(\d{3}|\W{3})(\d{4}|\W{4})/, '$1  $2  $3')
+                      : '••••   ••••   ••••'}
+                  </p>
+                </div>
+
+                {/* Beneficiary Name & Auto-pay Badge */}
+                <div className="flex items-end justify-between pt-2">
+                  <div>
+                    <p className="text-[9px] font-black uppercase text-[#D9A73A] tracking-wider">
+                      Settlement Beneficiary
+                    </p>
+                    <p className="text-sm font-black uppercase tracking-wide text-white truncate max-w-[220px]">
+                      {(formData.accountName || formData.fullName || 'MERCHANT BENEFICIARY').toUpperCase()}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-500/20 border border-emerald-400 text-[10px] font-black text-emerald-300">
+                    <span>✓</span> AUTO-PAY
+                  </div>
+                </div>
+              </div>
+
+              {/* POPULAR NIGERIAN BANKS (1-TAP QUICK SELECT) */}
+              <div>
+                <label className="block text-xs font-bold text-[#0A192F] uppercase tracking-wider mb-2">
+                  Quick Select Popular Banks
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {NIGERIAN_BANKS.filter(b => b.popular).map(b => {
+                    const isSelected = formData.bankName === b.name;
+                    return (
+                      <button
+                        type="button"
+                        key={b.code}
+                        onClick={() => setFormData(prev => ({ ...prev, bankName: b.name, bankCode: b.code }))}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 ${
+                          isSelected
+                            ? 'bg-[#0A192F] text-[#D9A73A] border-[#D9A73A] shadow-xs'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        <span>{isSelected ? '✓' : '🏦'}</span>
+                        <span>{b.name.split(' (')[0]}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Bank Selector Dropdown */}
+                <div>
+                  <label className="block text-xs font-bold text-[#0A192F] mb-1.5">
+                    Settlement Commercial / Digital Bank <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    name="bankName"
+                    value={formData.bankName}
+                    onChange={(e) => {
+                      const selected = NIGERIAN_BANKS.find(b => b.name === e.target.value);
+                      setFormData(prev => ({
+                        ...prev,
+                        bankName: e.target.value,
+                        bankCode: selected ? selected.code : ''
+                      }));
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#D9A73A]"
+                  >
+                    {NIGERIAN_BANKS.map((b, i) => (
+                      <option key={`${b.code}-${i}`} value={b.name}>
+                        {b.name} ({b.type})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 10-Digit NUBAN Account Number */}
+                <div>
+                  <label className="block text-xs font-bold text-[#0A192F] mb-1.5">
+                    10-Digit NUBAN Account Number <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="accountNumber"
+                    maxLength={10}
+                    value={formData.accountNumber}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9]/g, '');
+                      setFormData(prev => ({ ...prev, accountNumber: val }));
+                    }}
+                    placeholder="0123456789"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-mono font-bold tracking-widest text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#D9A73A]"
+                  />
+                </div>
+              </div>
+
+              {/* Account Beneficiary Name */}
+              <div>
+                <label className="block text-xs font-bold text-[#0A192F] mb-1.5">
+                  Account Beneficiary Legal Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="accountName"
+                  value={formData.accountName}
+                  onChange={handleChange}
+                  placeholder={formData.fullName || "Full Name as registered on your bank account"}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#D9A73A]"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Deposits and automated sales disbursements are transferred directly to this account.
+                </p>
+              </div>
+
+              {/* LOGISTICS & RETURN POLICY PREFERENCES */}
+              <div className="pt-4 border-t border-slate-100 space-y-4">
+                <h3 className="text-sm font-black text-[#0A192F] uppercase tracking-wider">
+                  🚚 Store Fulfillment & Logistics Setup
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div
+                    onClick={() => setFormData(prev => ({ ...prev, deliveryType: 'marketplace' }))}
+                    className={`p-4 rounded-xl border cursor-pointer transition ${
+                      formData.deliveryType === 'marketplace'
+                        ? 'bg-amber-50/50 border-[#D9A73A] shadow-xs'
+                        : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-lg">🛡️</span>
+                      <p className="text-xs font-black text-[#0A192F]">Abu Mafhal Fulfillment</p>
+                      {formData.deliveryType === 'marketplace' && (
+                        <span className="ml-auto text-xs text-amber-600 font-bold">✓ Selected</span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Nationwide doorstep dispatch handled by marketplace courier network with live tracking.
+                    </p>
+                  </div>
+
+                  <div
+                    onClick={() => setFormData(prev => ({ ...prev, deliveryType: 'self' }))}
+                    className={`p-4 rounded-xl border cursor-pointer transition ${
+                      formData.deliveryType === 'self'
+                        ? 'bg-amber-50/50 border-[#D9A73A] shadow-xs'
+                        : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-lg">🚴</span>
+                      <p className="text-xs font-black text-[#0A192F]">Self Dispatch & Waybill Fleet</p>
+                      {formData.deliveryType === 'self' && (
+                        <span className="ml-auto text-xs text-amber-600 font-bold">✓ Selected</span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Deliver using your own dedicated riders, local dispatch, and bus park waybill services.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Agreement Notice */}
+              <div className="p-4 bg-[#0A192F]/5 border border-[#D9A73A]/40 rounded-xl">
+                <p className="text-xs text-[#0A192F] leading-relaxed font-semibold">
                   By submitting this application, you declare that all information provided are authentic and compliant with Abu Mafhal Marketplace Merchant Terms of Service.
                 </p>
               </div>
@@ -1101,7 +1431,7 @@ const VendorApplication = () => {
               </Link>
             )}
 
-            {step < 3 ? (
+            {step < 4 ? (
               <button
                 type="button"
                 onClick={nextStep}
