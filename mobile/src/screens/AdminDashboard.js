@@ -4,6 +4,7 @@ import {
     ActivityIndicator, Image, StatusBar, Platform, RefreshControl, Dimensions, BackHandler 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -118,8 +119,50 @@ const MODULE_SECTIONS = [
     }
 ];
 
-export const AdminDashboard = ({ user, onLogout, navigation }) => {
-    const [activeTab, setActiveTab] = useState('overview');
+const getInitialAdminTab = (route) => {
+    try {
+        const paramTab = route?.params?.tab || route?.params?.screen;
+        if (paramTab) return paramTab;
+
+        if (typeof window !== 'undefined' && window.location) {
+            const hash = window.location.hash || '';
+            const match = hash.match(/[?&]tab=([a-zA-Z0-9_-]+)/);
+            if (match && match[1]) return match[1];
+
+            const subMatch = hash.match(/#admin\/([a-zA-Z0-9_-]+)/);
+            if (subMatch && subMatch[1]) return subMatch[1];
+
+            const saved = window.localStorage?.getItem('@abumafhal_admin_tab');
+            if (saved) return saved;
+        }
+    } catch (_) {}
+    return 'overview';
+};
+
+export const AdminDashboard = ({ user, onLogout, navigation, route }) => {
+    const [activeTab, _setActiveTab] = useState(() => getInitialAdminTab(route));
+
+    const setActiveTab = useCallback((tabName) => {
+        _setActiveTab(tabName);
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.setItem('@abumafhal_admin_tab', tabName);
+                const targetHash = tabName === 'overview' ? '#admin' : `#admin?tab=${tabName}`;
+                if (window.history && window.history.replaceState) {
+                    window.history.replaceState(null, '', '/mobile' + targetHash);
+                }
+            }
+            AsyncStorage.setItem('@abumafhal_admin_tab', tabName).catch(() => {});
+        } catch (_) {}
+    }, []);
+
+    // Sync external navigation route params to tab
+    useEffect(() => {
+        const paramTab = route?.params?.tab || route?.params?.screen;
+        if (paramTab && paramTab !== activeTab) {
+            setActiveTab(paramTab);
+        }
+    }, [route?.params?.tab, route?.params?.screen]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [showAiModal, setShowAiModal] = useState(false);
@@ -190,10 +233,15 @@ export const AdminDashboard = ({ user, onLogout, navigation }) => {
         try {
             if (typeof window !== 'undefined' && window.localStorage) {
                 window.localStorage.setItem('@abumafhal_last_screen', 'AdminDashboard');
-                if (window.location.hash !== '#admin') {
-                    window.location.hash = 'admin';
+                const curHash = window.location.hash || '';
+                if (!curHash.startsWith('#admin')) {
+                    const targetHash = activeTab === 'overview' ? '#admin' : `#admin?tab=${activeTab}`;
+                    if (window.history && window.history.replaceState) {
+                        window.history.replaceState(null, '', '/mobile' + targetHash);
+                    }
                 }
             }
+            AsyncStorage.setItem('@abumafhal_last_screen', 'AdminDashboard').catch(() => {});
         } catch (_) {}
     }, []);
 

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, TouchableOpacity, Text } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AppHome } from './AppHome';
@@ -27,16 +28,84 @@ import { WalletPage } from './WalletPage';
 import { CategoriesPage } from './CategoriesPage';
 import { StoresPage } from './StoresPage';
 
+const VALID_MAIN_TABS = [
+    'home', 'shop', 'cart', 'wishlist', 'profile', 'orders', 
+    'settings', 'editProfile', 'changePassword', 'address', 
+    'paymentMethods', 'notifications', 'referral', 'ReferAndEarn', 
+    'wallet', 'support', 'about', 'categories', 'stores'
+];
+
+const getInitialMainTab = (route) => {
+    try {
+        if (route?.params?.screen && VALID_MAIN_TABS.includes(route.params.screen)) {
+            return route.params.screen;
+        }
+
+        if (typeof window !== 'undefined' && window.location) {
+            const rawHash = (window.location.hash || '').replace('#', '').toLowerCase();
+            const [baseHash, queryHash] = rawHash.split('?');
+
+            if (queryHash) {
+                const match = queryHash.match(/tab=([a-zA-Z0-9_-]+)/);
+                if (match && match[1] && VALID_MAIN_TABS.includes(match[1])) return match[1];
+            }
+            if (baseHash && VALID_MAIN_TABS.includes(baseHash)) {
+                return baseHash;
+            }
+
+            const saved = window.localStorage?.getItem('@abumafhal_main_tab');
+            if (saved && VALID_MAIN_TABS.includes(saved)) {
+                return saved;
+            }
+        }
+    } catch (_) {}
+    return 'home';
+};
+
 export const MainApp = ({ route, navigation, user, onLogout, cartLines, onUpdateQty, onRemoveCart, onAddToCart, onClearCart, onOpenVendorRegister, onOpenAdmin, onOpenVendor, onUpdateUser }) => {
-    const [activeTab, setActiveTab] = useState('home');
+    const [activeTab, _setActiveTab] = useState(() => getInitialMainTab(route));
     const [showAI, setShowAI] = useState(false);
+
+    const setActiveTab = useCallback((tabName) => {
+        _setActiveTab(tabName);
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.setItem('@abumafhal_main_tab', tabName);
+                window.localStorage.setItem('@abumafhal_last_screen', 'Main');
+                const targetHash = tabName === 'home' ? '' : `#${tabName}`;
+                if (window.history && window.history.replaceState) {
+                    window.history.replaceState(null, '', '/mobile' + (targetHash ? targetHash : ''));
+                }
+            }
+            AsyncStorage.setItem('@abumafhal_main_tab', tabName).catch(() => {});
+            AsyncStorage.setItem('@abumafhal_last_screen', 'Main').catch(() => {});
+        } catch (_) {}
+    }, []);
 
     // Dynamic Tab Navigation from Route Params
     React.useEffect(() => {
-        if (route?.params?.screen) {
+        if (route?.params?.screen && VALID_MAIN_TABS.includes(route.params.screen) && route.params.screen !== activeTab) {
             setActiveTab(route.params.screen);
         }
     }, [route?.params?.screen]);
+
+    // Ensure @abumafhal_last_screen and hash are registered on mount
+    React.useEffect(() => {
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.setItem('@abumafhal_last_screen', 'Main');
+                const curHash = window.location.hash || '';
+                if (!curHash || curHash === '#main') {
+                    if (activeTab !== 'home') {
+                        if (window.history && window.history.replaceState) {
+                            window.history.replaceState(null, '', '/mobile#' + activeTab);
+                        }
+                    }
+                }
+            }
+            AsyncStorage.setItem('@abumafhal_last_screen', 'Main').catch(() => {});
+        } catch (_) {}
+    }, []);
 
     // [NEW] Refresh user profile on mount to catch role updates (e.g. after approval)
     // This fixes the issue where a user logs in as 'buyer' even after being approved as 'vendor'

@@ -16,6 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { resolveVendorOrStore } from '../services/vendorResolver';
 import { getVendorFollowersList } from '../services/vendorFollowerService';
@@ -42,11 +43,91 @@ const DARK_SURFACE = '#0E1A2E';
 const GOLD = '#D9A73A';
 const GOLD_LIGHT = '#FDE68A';
 
-export const VendorDashboard = ({ user, onLogout, navigation }) => {
+const VALID_VENDOR_TABS = [
+    'overview', 'analytics', 'products', 'orders', 'wallet', 
+    'shipping', 'qr_card', 'messages', 'store_profile', 'followers'
+];
+
+const getInitialVendorTab = (route) => {
+    try {
+        const paramTab = route?.params?.tab || route?.params?.screen;
+        if (paramTab) {
+            const clean = paramTab === 'store profile' ? 'store_profile' : paramTab;
+            if (VALID_VENDOR_TABS.includes(clean)) return clean;
+        }
+
+        if (typeof window !== 'undefined' && window.location) {
+            const hash = window.location.hash || '';
+            const match = hash.match(/[?&]tab=([a-zA-Z0-9_-]+)/);
+            if (match && match[1]) {
+                const clean = match[1] === 'store profile' ? 'store_profile' : match[1];
+                if (VALID_VENDOR_TABS.includes(clean)) return clean;
+            }
+
+            const subMatch = hash.match(/#vendor\/([a-zA-Z0-9_-]+)/);
+            if (subMatch && subMatch[1]) {
+                const clean = subMatch[1] === 'store profile' ? 'store_profile' : subMatch[1];
+                if (VALID_VENDOR_TABS.includes(clean)) return clean;
+            }
+
+            const saved = window.localStorage?.getItem('@abumafhal_vendor_tab');
+            if (saved) {
+                const clean = saved === 'store profile' ? 'store_profile' : saved;
+                if (VALID_VENDOR_TABS.includes(clean)) return clean;
+            }
+        }
+    } catch (_) {}
+    return 'overview';
+};
+
+export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
     const insets = useSafeAreaInsets();
 
-    // Tab & View State
-    const [activeTab, setActiveTab] = useState('overview'); // overview, products, orders, wallet, followers, store_profile
+    // Tab & View State (with persistence across refresh/reload)
+    const [activeTab, _setActiveTab] = useState(() => getInitialVendorTab(route));
+
+    const setActiveTab = useCallback((tabName) => {
+        const cleanTab = tabName === 'store profile' ? 'store_profile' : tabName;
+        _setActiveTab(cleanTab);
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.setItem('@abumafhal_vendor_tab', cleanTab);
+                const targetHash = cleanTab === 'overview' ? '#vendor' : `#vendor?tab=${cleanTab}`;
+                if (window.history && window.history.replaceState) {
+                    window.history.replaceState(null, '', '/mobile' + targetHash);
+                }
+            }
+            AsyncStorage.setItem('@abumafhal_vendor_tab', cleanTab).catch(() => {});
+        } catch (_) {}
+    }, []);
+
+    // Sync external navigation route params to tab
+    useEffect(() => {
+        const paramTab = route?.params?.tab || route?.params?.screen;
+        if (paramTab) {
+            const clean = paramTab === 'store profile' ? 'store_profile' : paramTab;
+            if (VALID_VENDOR_TABS.includes(clean) && clean !== activeTab) {
+                setActiveTab(clean);
+            }
+        }
+    }, [route?.params?.tab, route?.params?.screen]);
+
+    // Ensure @abumafhal_last_screen and URL hash are securely locked on mount
+    useEffect(() => {
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.setItem('@abumafhal_last_screen', 'VendorDashboard');
+                const curHash = window.location.hash || '';
+                if (!curHash.startsWith('#vendor')) {
+                    const targetHash = activeTab === 'overview' ? '#vendor' : `#vendor?tab=${activeTab}`;
+                    if (window.history && window.history.replaceState) {
+                        window.history.replaceState(null, '', '/mobile' + targetHash);
+                    }
+                }
+            }
+            AsyncStorage.setItem('@abumafhal_last_screen', 'VendorDashboard').catch(() => {});
+        } catch (_) {}
+    }, []);
     const [viewMode, setViewMode] = useState('list'); // list, add-product
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
@@ -110,10 +191,10 @@ export const VendorDashboard = ({ user, onLogout, navigation }) => {
         return () => backHandler.remove();
     }, [isDrawerOpen, viewMode, showCertificate, showRenewal, activeTab, navigation]);
 
-    // Initial Fetch
+    // Initial & Session-Ready Fetch
     useEffect(() => {
         fetchDashboardData();
-    }, []);
+    }, [user?.id]);
 
     // ─────────────────────────────────────────────────────────────
     // COMPREHENSIVE DATA RESOLUTION (100% RELIABLE)

@@ -10,9 +10,32 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(() => {
     try {
-      const cached = localStorage.getItem('auth_user');
-      return cached ? JSON.parse(cached) : null;
+      const cached = localStorage.getItem('auth_user') || localStorage.getItem('@abumafhal_user_v1');
+      if (cached) return JSON.parse(cached);
+
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith('sb-') || key.includes('auth-token') || key.includes('supabase'))) {
+          try {
+            const tokenRaw = localStorage.getItem(key);
+            if (tokenRaw) {
+              const tokenObj = JSON.parse(tokenRaw);
+              const u = tokenObj?.user || tokenObj?.currentSession?.user;
+              if (u && (u.id || u.email)) {
+                return {
+                  id: u.id,
+                  email: u.email,
+                  role: u.user_metadata?.role || 'buyer',
+                  full_name: u.user_metadata?.full_name || u.user_metadata?.name || (u.email ? u.email.split('@')[0] : 'User'),
+                  ...u.user_metadata
+                };
+              }
+            }
+          } catch (_) {}
+        }
+      }
     } catch { return null; }
+    return null;
   });
   const [userRole, setUserRole] = useState(() => {
     try {

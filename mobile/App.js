@@ -71,7 +71,7 @@ const linking = {
             AdminDashboard: 'admin',
             VendorDashboard: 'vendor',
             DriverDashboard: 'driver',
-            Main: '',
+            Main: 'main',
             Landing: 'landing',
             Auth: 'auth',
             ProductDetails: 'product/:id',
@@ -82,15 +82,87 @@ const linking = {
             AddressPage: 'address',
             ProductComparison: 'compare',
             PaySmallSmall: 'pay-small-small',
+            VendorRegister: 'vendor-register',
         },
     },
+    getStateFromPath(path, options) {
+        if (typeof window !== 'undefined' && window.location) {
+            let hash = window.location.hash || '';
+            if (hash.startsWith('#')) hash = hash.substring(1);
+            if (hash) {
+                const [routePart, queryPart] = hash.split('?');
+                const params = {};
+                if (queryPart) {
+                    const searchParams = new URLSearchParams(queryPart);
+                    for (const [k, v] of searchParams.entries()) {
+                        params[k] = v;
+                    }
+                }
+                const clean = (routePart || '').toLowerCase();
+                if (clean === 'admin') return { routes: [{ name: 'AdminDashboard', params }] };
+                if (clean === 'vendor') return { routes: [{ name: 'VendorDashboard', params }] };
+                if (clean === 'driver') return { routes: [{ name: 'DriverDashboard', params }] };
+                if (clean === 'landing') return { routes: [{ name: 'Landing', params }] };
+                if (clean === 'auth' || clean === 'login' || clean === 'register') return { routes: [{ name: 'Auth', params }] };
+                if (clean === 'checkout') return { routes: [{ name: 'CheckoutPage', params }] };
+                if (clean === 'track' || clean === 'orders') return { routes: [{ name: 'TrackOrder', params }] };
+                if (clean === 'invoice') return { routes: [{ name: 'Invoice', params }] };
+                if (clean === 'vendor-register' || clean === 'vendorregister') return { routes: [{ name: 'VendorRegister', params }] };
+                if (clean === 'compare') return { routes: [{ name: 'ProductComparison', params }] };
+                if (clean === 'pay-small-small') return { routes: [{ name: 'PaySmallSmall', params }] };
+                if (clean.startsWith('product/')) {
+                    const id = routePart.split('/')[1];
+                    return { routes: [{ name: 'ProductDetails', params: { id, ...params } }] };
+                }
+                if (['shop', 'cart', 'wishlist', 'profile', 'categories', 'stores', 'wallet', 'home', 'settings'].includes(clean)) {
+                    return { routes: [{ name: 'Main', params: { screen: clean, ...params } }] };
+                }
+                if (clean === 'main') return { routes: [{ name: 'Main', params }] };
+            }
+        }
+        return undefined;
+    }
 };
 
 const getStoredUserSync = () => {
     try {
         if (typeof window !== 'undefined' && window.localStorage) {
+            // 1. Primary mobile app cache
             const raw = window.localStorage.getItem('@abumafhal_user_v1');
-            if (raw) return JSON.parse(raw);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && (parsed.id || parsed.email)) return parsed;
+            }
+            // 2. Web auth user cache
+            const fallback = window.localStorage.getItem('auth_user');
+            if (fallback) {
+                const parsed = JSON.parse(fallback);
+                if (parsed && (parsed.id || parsed.email)) return parsed;
+            }
+            // 3. Supabase session token in localStorage
+            for (let i = 0; i < window.localStorage.length; i++) {
+                const key = window.localStorage.key(i);
+                if (key && (key.startsWith('sb-') || key.includes('auth-token') || key.includes('supabase'))) {
+                    try {
+                        const tokenRaw = window.localStorage.getItem(key);
+                        if (tokenRaw) {
+                            const tokenObj = JSON.parse(tokenRaw);
+                            const u = tokenObj?.user || tokenObj?.currentSession?.user;
+                            if (u && (u.id || u.email)) {
+                                return {
+                                    id: u.id,
+                                    email: u.email,
+                                    role: u.user_metadata?.role || 'buyer',
+                                    full_name: u.user_metadata?.full_name || u.user_metadata?.name || (u.email ? u.email.split('@')[0] : 'User'),
+                                    phone: u.user_metadata?.phone || u.user_metadata?.phone_number || '',
+                                    avatar_url: u.user_metadata?.avatar_url || null,
+                                    ...u.user_metadata
+                                };
+                            }
+                        }
+                    } catch (_) {}
+                }
+            }
         }
     } catch (_) {}
     return null;
@@ -109,6 +181,7 @@ const getStoredCartSync = () => {
 export default function App() {
     const [user, setUser] = useState(getStoredUserSync);
     const [loading, setLoading] = useState(() => !getStoredUserSync());
+    const [authInitialized, setAuthInitialized] = useState(false);
     const [cartLines, setCartLines] = useState(getStoredCartSync);
     const [lastHeartbeat, setLastHeartbeat] = useState(0);
     const [showSplash, setShowSplash] = useState(true);
@@ -234,13 +307,15 @@ export default function App() {
                     try { setCartLines(JSON.parse(savedCart)); } catch (_) {}
                 }
                 if (savedUser) {
-                    try { setUser(JSON.parse(savedUser)); } catch (_) {}
+                    try {
+                        const parsed = JSON.parse(savedUser);
+                        if (parsed && (parsed.id || parsed.email)) {
+                            setUser(prev => prev || parsed);
+                        }
+                    } catch (_) {}
                 }
             } catch (e) {
                 console.error('Error loading local cache:', e);
-            } finally {
-                // Instantly unblock UI so user never stares at a frozen screen
-                setLoading(false);
             }
 
             // 2. Background check: verify Supabase session without wiping cached user prematurely
@@ -251,6 +326,9 @@ export default function App() {
                 }
             } catch (authErr) {
                 console.log('Background session check note:', authErr?.message);
+            } finally {
+                setLoading(false);
+                setAuthInitialized(true);
             }
 
             logVisit(); // Async visit log
@@ -270,7 +348,14 @@ export default function App() {
                     try {
                         window.localStorage.removeItem(USER_STORAGE_KEY);
                         window.localStorage.setItem('@abumafhal_last_screen', 'Landing');
-                        window.location.hash = '';
+                        window.localStorage.removeItem('@abumafhal_vendor_tab');
+                        window.localStorage.removeItem('@abumafhal_admin_tab');
+                        window.localStorage.removeItem('@abumafhal_driver_tab');
+                        if (window.history && window.history.replaceState) {
+                            window.history.replaceState(null, '', '/mobile#landing');
+                        } else {
+                            window.location.hash = 'landing';
+                        }
                     } catch (_) {}
                 }
                 if (navigationRef.isReady()) {
@@ -414,24 +499,26 @@ export default function App() {
         }
     };
 
-    // Whenever user becomes null, protect admin/vendor/driver dashboards by redirecting to Landing
+    // Protected routes guard: only redirect if session initialization is complete and no stored credentials exist
     useEffect(() => {
-        if (!user && !loading) {
+        if (!authInitialized || loading) return;
+
+        if (!user) {
             const timer = setTimeout(() => {
                 if (navigationRef.isReady()) {
                     const currentRoute = navigationRef.getCurrentRoute();
                     const protectedRoutes = ['AdminDashboard', 'VendorDashboard', 'DriverDashboard'];
                     if (currentRoute?.name && protectedRoutes.includes(currentRoute.name)) {
-                        navigationRef.reset({
-                            index: 0,
-                            routes: [{ name: 'Landing' }],
-                        });
+                        const stored = getStoredUserSync();
+                        if (!stored) {
+                            navigationRef.navigate('Auth', { redirectTo: currentRoute.name });
+                        }
                     }
                 }
-            }, 100);
+            }, 300);
             return () => clearTimeout(timer);
         }
-    }, [user, loading]);
+    }, [user, loading, authInitialized]);
 
     const handleUpdateQty = (id, change) => {
         setCartLines(prev => prev.map(item => {
@@ -464,38 +551,36 @@ export default function App() {
                 return 'Auth';
             }
             if (hash.includes('admin') || path.includes('admin')) {
-                if (storedUser?.role === 'admin') return 'AdminDashboard';
-                return storedUser ? 'Main' : 'Auth';
+                return 'AdminDashboard';
             }
             if (hash.includes('vendor') || path.includes('vendor')) {
-                if (storedUser?.role === 'vendor') return 'VendorDashboard';
-                return storedUser ? 'Main' : 'Auth';
+                return 'VendorDashboard';
             }
             if (hash.includes('driver') || path.includes('driver')) {
-                if (storedUser?.role === 'driver') return 'DriverDashboard';
-                return storedUser ? 'Main' : 'Auth';
+                return 'DriverDashboard';
             }
-            if (hash.includes('checkout')) {
-                return 'CheckoutPage';
-            }
-            if (hash.includes('track') || hash.includes('order')) {
-                return 'TrackOrder';
-            }
-            if (hash.includes('invoice')) {
-                return 'Invoice';
-            }
-            if (hash.includes('product/')) {
-                return 'ProductDetails';
-            }
-            if (storedUser) {
-                if (storedUser.role === 'admin' && (last === 'AdminDashboard' || hash.includes('admin'))) return 'AdminDashboard';
-                if (storedUser.role === 'vendor' && (last === 'VendorDashboard' || hash.includes('vendor'))) return 'VendorDashboard';
-                if (storedUser.role === 'driver' && (last === 'DriverDashboard' || hash.includes('driver'))) return 'DriverDashboard';
-                if (last && ['AdminDashboard', 'VendorDashboard', 'DriverDashboard', 'Main', 'CheckoutPage', 'TrackOrder'].includes(last)) {
-                    return last;
-                }
+            if (hash.includes('checkout')) return 'CheckoutPage';
+            if (hash.includes('track') || hash.includes('order')) return 'TrackOrder';
+            if (hash.includes('invoice')) return 'Invoice';
+            if (hash.includes('product/')) return 'ProductDetails';
+            if (hash.includes('vendor-register') || hash.includes('vendorregister')) return 'VendorRegister';
+            if (hash.includes('compare')) return 'ProductComparison';
+            if (hash.includes('pay-small-small')) return 'PaySmallSmall';
+            if (['shop', 'cart', 'wishlist', 'profile', 'categories', 'stores', 'wallet', 'home', 'settings'].some(k => hash.includes(k))) {
                 return 'Main';
             }
+
+            if (last && ['AdminDashboard', 'VendorDashboard', 'DriverDashboard', 'Main', 'CheckoutPage', 'TrackOrder', 'ProductDetails', 'VendorRegister', 'PaySmallSmall'].includes(last)) {
+                return last;
+            }
+
+            if (storedUser) {
+                if (storedUser.role === 'admin') return 'AdminDashboard';
+                if (storedUser.role === 'vendor') return 'VendorDashboard';
+                if (storedUser.role === 'driver') return 'DriverDashboard';
+                return 'Main';
+            }
+
             if (last === 'Landing' || hash.includes('landing')) {
                 return 'Landing';
             }
@@ -529,15 +614,54 @@ export default function App() {
                                                     window.history.replaceState(null, '', '/mobile' + currentHash);
                                                 }
 
+                                                const curHash = window.location.hash || '';
                                                 if (currentRoute.name === 'AdminDashboard') {
-                                                    if (window.location.hash !== '#admin') window.location.hash = 'admin';
+                                                    if (!curHash.startsWith('#admin')) {
+                                                        const savedTab = window.localStorage.getItem('@abumafhal_admin_tab');
+                                                        const targetHash = (savedTab && savedTab !== 'overview') ? `#admin?tab=${savedTab}` : '#admin';
+                                                        if (window.history && window.history.replaceState) {
+                                                            window.history.replaceState(null, '', '/mobile' + targetHash);
+                                                        } else {
+                                                            window.location.hash = targetHash;
+                                                        }
+                                                    }
                                                 } else if (currentRoute.name === 'VendorDashboard') {
-                                                    if (window.location.hash !== '#vendor') window.location.hash = 'vendor';
+                                                    if (!curHash.startsWith('#vendor')) {
+                                                        const savedTab = window.localStorage.getItem('@abumafhal_vendor_tab');
+                                                        const targetHash = (savedTab && savedTab !== 'overview') ? `#vendor?tab=${savedTab}` : '#vendor';
+                                                        if (window.history && window.history.replaceState) {
+                                                            window.history.replaceState(null, '', '/mobile' + targetHash);
+                                                        } else {
+                                                            window.location.hash = targetHash;
+                                                        }
+                                                    }
                                                 } else if (currentRoute.name === 'DriverDashboard') {
-                                                    if (window.location.hash !== '#driver') window.location.hash = 'driver';
-                                                } else {
-                                                    if (window.location.hash === '#admin' || window.location.hash === '#vendor' || window.location.hash === '#driver') {
-                                                        window.location.hash = '';
+                                                    if (!curHash.startsWith('#driver')) {
+                                                        const savedTab = window.localStorage.getItem('@abumafhal_driver_tab');
+                                                        const targetHash = (savedTab && savedTab !== 'active') ? `#driver?tab=${savedTab}` : '#driver';
+                                                        if (window.history && window.history.replaceState) {
+                                                            window.history.replaceState(null, '', '/mobile' + targetHash);
+                                                        } else {
+                                                            window.location.hash = targetHash;
+                                                        }
+                                                    }
+                                                } else if (currentRoute.name === 'Main') {
+                                                    if (['#admin', '#vendor', '#driver', '#landing'].some(p => curHash.startsWith(p))) {
+                                                        const savedMainTab = window.localStorage.getItem('@abumafhal_main_tab') || 'home';
+                                                        const targetHash = savedMainTab === 'home' ? '' : `#${savedMainTab}`;
+                                                        if (window.history && window.history.replaceState) {
+                                                            window.history.replaceState(null, '', '/mobile' + (targetHash ? targetHash : ''));
+                                                        } else {
+                                                            window.location.hash = targetHash;
+                                                        }
+                                                    }
+                                                } else if (currentRoute.name === 'Landing') {
+                                                    if (['#admin', '#vendor', '#driver'].some(p => curHash.startsWith(p))) {
+                                                        if (window.history && window.history.replaceState) {
+                                                            window.history.replaceState(null, '', '/mobile#landing');
+                                                        } else {
+                                                            window.location.hash = 'landing';
+                                                        }
                                                     }
                                                 }
                                             }

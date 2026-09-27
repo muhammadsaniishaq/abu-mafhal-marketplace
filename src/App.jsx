@@ -134,8 +134,26 @@ function App() {
     if (isMobileDevice && !isForcedWeb && !isAlreadyMobile) {
       const currentPath = (window.location.pathname || '').toLowerCase();
       let targetHash = '';
-      if (currentPath.includes('admin')) targetHash = '#admin';
-      else if (currentPath.includes('vendor')) targetHash = '#vendor';
+      if (currentPath.includes('admin')) {
+        let sub = '';
+        if (currentPath.includes('product')) sub = '?tab=products';
+        else if (currentPath.includes('order')) sub = '?tab=orders';
+        else if (currentPath.includes('vendor')) sub = '?tab=vendors';
+        else if (currentPath.includes('user')) sub = '?tab=users';
+        else if (currentPath.includes('shipping')) sub = '?tab=shipping';
+        else if (currentPath.includes('setting')) sub = '?tab=settings';
+        else if (currentPath.includes('financial') || currentPath.includes('payout')) sub = '?tab=financials';
+        targetHash = '#admin' + sub;
+      }
+      else if (currentPath.includes('vendor')) {
+        let sub = '';
+        if (currentPath.includes('product')) sub = '?tab=products';
+        else if (currentPath.includes('order')) sub = '?tab=orders';
+        else if (currentPath.includes('shipping') || currentPath.includes('setting')) sub = '?tab=shipping';
+        else if (currentPath.includes('wallet')) sub = '?tab=wallet';
+        else if (currentPath.includes('analytic')) sub = '?tab=analytics';
+        targetHash = '#vendor' + sub;
+      }
       else if (currentPath.includes('driver')) targetHash = '#driver';
       else if (currentPath.includes('shop')) targetHash = '#shop';
       else if (currentPath.includes('cart')) targetHash = '#cart';

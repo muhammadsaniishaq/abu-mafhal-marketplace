@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert, Linking, ActivityIndicator, Modal, Image, Switch, Platform, ScrollView, TextInput, Animated, Easing } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { styles as themeStyles } from '../styles/theme';
 import { supabase } from '../lib/supabase';
@@ -15,7 +16,33 @@ const AMBER_COLOR = '#F59E0B';   // Gold/Coins
 // Max 10 streak base sequence
 const CHECKIN_REWARDS = [0, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10];
 
-export const DriverDashboard = ({ user, onLogout }) => {
+const VALID_DRIVER_TABS = ['pool', 'active', 'history', 'profile'];
+
+const getInitialDriverTab = (route) => {
+    try {
+        const paramTab = route?.params?.tab || route?.params?.screen;
+        if (paramTab && VALID_DRIVER_TABS.includes(paramTab)) return paramTab;
+
+        if (typeof window !== 'undefined' && window.location) {
+            const hash = window.location.hash || '';
+            const match = hash.match(/[?&]tab=([a-zA-Z0-9_-]+)/);
+            if (match && match[1] && VALID_DRIVER_TABS.includes(match[1])) {
+                return match[1];
+            }
+            const subMatch = hash.match(/#driver\/([a-zA-Z0-9_-]+)/);
+            if (subMatch && subMatch[1] && VALID_DRIVER_TABS.includes(subMatch[1])) {
+                return subMatch[1];
+            }
+            const saved = window.localStorage?.getItem('@abumafhal_driver_tab');
+            if (saved && VALID_DRIVER_TABS.includes(saved)) {
+                return saved;
+            }
+        }
+    } catch (_) {}
+    return 'active';
+};
+
+export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
     // Data State
     const [orders, setOrders] = useState([]);
     const [poolOrders, setPoolOrders] = useState([]);
@@ -25,10 +52,49 @@ export const DriverDashboard = ({ user, onLogout }) => {
     const [wallet, setWallet] = useState(null);
     const [withdrawals, setWithdrawals] = useState([]);
 
-    // UI State
+    // UI State (with persistence across refresh/reload)
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [activeTab, setActiveTab] = useState('active'); // 'pool', 'active', 'history', 'profile'
+    const [activeTab, _setActiveTab] = useState(() => getInitialDriverTab(route));
+
+    const setActiveTab = useCallback((tabName) => {
+        _setActiveTab(tabName);
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.setItem('@abumafhal_driver_tab', tabName);
+                const targetHash = tabName === 'active' ? '#driver' : `#driver?tab=${tabName}`;
+                if (window.history && window.history.replaceState) {
+                    window.history.replaceState(null, '', '/mobile' + targetHash);
+                }
+            }
+            AsyncStorage.setItem('@abumafhal_driver_tab', tabName).catch(() => {});
+        } catch (_) {}
+    }, []);
+
+    // Sync external navigation route params to tab
+    useEffect(() => {
+        const paramTab = route?.params?.tab || route?.params?.screen;
+        if (paramTab && VALID_DRIVER_TABS.includes(paramTab) && paramTab !== activeTab) {
+            setActiveTab(paramTab);
+        }
+    }, [route?.params?.tab, route?.params?.screen]);
+
+    // Ensure @abumafhal_last_screen and URL hash are securely locked on mount
+    useEffect(() => {
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.setItem('@abumafhal_last_screen', 'DriverDashboard');
+                const curHash = window.location.hash || '';
+                if (!curHash.startsWith('#driver')) {
+                    const targetHash = activeTab === 'active' ? '#driver' : `#driver?tab=${activeTab}`;
+                    if (window.history && window.history.replaceState) {
+                        window.history.replaceState(null, '', '/mobile' + targetHash);
+                    }
+                }
+            }
+            AsyncStorage.setItem('@abumafhal_last_screen', 'DriverDashboard').catch(() => {});
+        } catch (_) {}
+    }, []);
     const [selectedOrder, setSelectedOrder] = useState(null);
 
     // Gamification & Check-in
