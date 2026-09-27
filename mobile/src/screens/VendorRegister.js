@@ -23,6 +23,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
+import * as Clipboard from 'expo-clipboard';
 import { UploadService } from '../services/uploadService';
 import { PaymentGatewayService } from '../services/paymentGatewayService';
 import { WebView } from 'react-native-webview';
@@ -252,10 +253,20 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
     const [editingAppId, setEditingAppId] = useState(null);
     const [showCertificate, setShowCertificate] = useState(false);
 
-    // Paystack Integration State
+    // Paystack & Gateway Integration State
     const [showPaystackWebView, setShowPaystackWebView] = useState(false);
     const [currentRef, setCurrentRef] = useState(null);
     const [checkoutUrl, setCheckoutUrl] = useState(null);
+
+    // Multi-Payment System States
+    const [paymentMethod, setPaymentMethod] = useState('paystack'); // 'paystack' | 'flutterwave' | 'bank_transfer' | 'wallet'
+    const [walletBalance, setWalletBalance] = useState(0);
+    const [manualReceipt, setManualReceipt] = useState(null);
+    const [senderName, setSenderName] = useState(user?.user_metadata?.full_name || '');
+    const [senderBank, setSenderBank] = useState('');
+    const [manualReference, setManualReference] = useState(() => `AM-SUB-${Math.floor(100000 + Math.random() * 900000)}`);
+    const [copiedField, setCopiedField] = useState(null);
+    const [paymentNotice, setPaymentNotice] = useState(null);
 
     // Bank Account Resolution State
     const [bankCode, setBankCode] = useState(NIGERIAN_BANKS[0].code);
@@ -320,7 +331,102 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
     useEffect(() => {
         checkApplicationStatus();
         fetchBanks();
+        fetchWalletBalance();
+        checkPaymentReturn();
     }, []);
+
+    const fetchWalletBalance = async () => {
+        try {
+            if (!user?.id) return;
+            const { data } = await supabase.from('profiles').select('balance').eq('id', user.id).maybeSingle();
+            if (data?.balance !== undefined) {
+                setWalletBalance(Number(data.balance) || 0);
+            }
+        } catch (_) {}
+    };
+
+    const checkPaymentReturn = async () => {
+        try {
+            if (typeof window === 'undefined') return;
+            const hash = window.location.hash || '';
+            const search = window.location.search || '';
+            const fullQuery = (hash.includes('?') ? hash.split('?')[1] : '') + '&' + (search.startsWith('?') ? search.substring(1) : search);
+            const params = new URLSearchParams(fullQuery);
+            const refToVerify = params.get('paystack_ref') || params.get('reference') || params.get('trxref') || params.get('flutterwave_ref');
+            const statusParam = params.get('status') || params.get('payment_status');
+
+            if (refToVerify) {
+                setStep(6);
+                setLoading(true);
+                const res = await PaymentGatewayService.invokeEdgeFunction('verify-paystack-payment', {
+                    reference: refToVerify,
+                    action: 'vendor_registration',
+                    user_id: user?.id
+                });
+
+                if (res?.ok && (res?.data?.success || res?.data?.data?.status === 'success')) {
+                    setPaymentVerified(true);
+                    setPaidPlan(formData.selectedPlan);
+                    setSavedPaymentRef(refToVerify);
+                    Alert.alert('Payment Successful ✓', 'An tabbatar da biyan kudin shagonka!');
+                    handleActualSubmit(refToVerify, 'paystack');
+                } else {
+                    setPaymentNotice('Biyan kuɗi bai kammala ba ko an soke shi a Paystack. Zaka iya sake gwadawa ko zaɓar Manual Transfer ko Wallet.');
+                }
+
+                if (window.history && window.history.replaceState) {
+                    window.history.replaceState(null, '', '/mobile#vendor-register');
+                }
+            } else if (statusParam === 'cancelled' || statusParam === 'failed') {
+                setStep(6);
+                setPaymentNotice('An soke biyan kuɗi. Zaka iya zaɓar wata hanyar biya kamar Direct Bank Transfer ko Wallet.');
+                if (window.history && window.history.replaceState) {
+                    window.history.replaceState(null, '', '/mobile#vendor-register');
+                }
+            }
+        } catch (err) {
+            console.warn('Payment return check notice:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const copyToClipboard = async (text, fieldName) => {
+        try {
+            await Clipboard.setStringAsync(text);
+            setCopiedField(fieldName);
+            setTimeout(() => setCopiedField(null), 2500);
+        } catch (_) {
+            if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                navigator.clipboard.writeText(text);
+                setCopiedField(fieldName);
+                setTimeout(() => setCopiedField(null), 2500);
+            }
+        }
+    };
+
+    const handlePickReceipt = async () => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: ['image/*', 'application/pdf'],
+                copyToCacheDirectory: true
+            });
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                setManualReceipt(result.assets[0]);
+            }
+        } catch (err) {
+            console.warn('Receipt picker fallback to image picker:', err);
+            try {
+                const imgRes = await ImagePicker.launchImageLibraryAsync({
+                    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                    quality: 0.8
+                });
+                if (!imgRes.canceled && imgRes.assets && imgRes.assets.length > 0) {
+                    setManualReceipt(imgRes.assets[0]);
+                }
+            } catch (_) {}
+        }
+    };
 
     const checkApplicationStatus = async () => {
         try {
@@ -649,7 +755,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
         }
     };
 
-    const handleActualSubmit = async (paymentRef = null) => {
+    const handleActualSubmit = async (paymentRef = null, methodUsed = 'paystack', extraPaymentMeta = {}) => {
         setLoading(true);
         try {
             const plan = activeVendorPlans.find(p => p.id === formData.selectedPlan) || activeVendorPlans[0] || { id: 'fallback', label: 'Unavailable', price: 0 };
@@ -680,6 +786,20 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
             }
 
             const fileUrls = await uploadAllFiles();
+
+            const isPaid = Boolean(paymentRef && (methodUsed === 'paystack' || methodUsed === 'flutterwave' || methodUsed === 'wallet' || paymentVerified));
+            const isManual = methodUsed === 'bank_transfer' || methodUsed === 'manual_bank_transfer';
+            const isFree = plan.price === 0;
+
+            let paymentStatus = 'pending';
+            if (isPaid) paymentStatus = 'paid';
+            else if (isManual) paymentStatus = 'manual_pending_verification';
+            else if (isFree) paymentStatus = 'free_trial';
+
+            let appStatus = 'pending';
+            if (settings?.vendor_auto_approve === true && (isPaid || isFree)) {
+                appStatus = 'approved';
+            }
 
             const dbPayload = {
                 user_id: user.id,
@@ -712,20 +832,25 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                     whatsapp: formData.whatsapp,
                     instagram: formData.instagram,
                     website: formData.website,
+                    payment_method: methodUsed,
+                    manual_receipt_url: extraPaymentMeta.receiptUrl || null,
+                    sender_name: extraPaymentMeta.senderName || null,
+                    sender_bank: extraPaymentMeta.senderBank || null,
                     cac_status_url: fileUrls.cac_status_url || null,
                     memorandum_url: fileUrls.memorandum_url || null,
                     compliance_documents: {
                         cac_certificate: fileUrls.cac_url || null,
                         cac_status_report: fileUrls.cac_status_url || null,
                         memorandum_art: fileUrls.memorandum_url || null,
-                        nin_slip: fileUrls.nin_url || null
+                        nin_slip: fileUrls.nin_url || null,
+                        payment_receipt: extraPaymentMeta.receiptUrl || null
                     }
                 },
                 subscription_plan: plan.label,
                 subscription_fee: plan.price,
-                payment_status: (paymentRef || (paymentVerified && paidPlan === plan.id)) ? 'paid' : (plan.price === 0 ? 'free_trial' : 'pending'),
-                payment_reference: paymentRef || (paymentVerified && paidPlan === plan.id ? savedPaymentRef : ('REF-' + Date.now())),
-                status: (settings?.vendor_auto_approve === true && (paymentRef || (paymentVerified && paidPlan === plan.id) || plan.price === 0)) ? 'approved' : 'pending',
+                payment_status: paymentStatus,
+                payment_reference: paymentRef || savedPaymentRef || ('REF-' + Date.now()),
+                status: appStatus,
                 rejection_reason: null
             };
 
@@ -785,44 +910,49 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                 console.warn('Stores table sync notice:', storeErr?.message || storeErr);
             }
 
-            // 3. Update Profiles role & business info
+            // 3. Update Profiles business info (ONLY set role = 'vendor' IF appStatus === 'approved')
             try {
+                const profileUpdates = {
+                    business_name: dbPayload.business_name,
+                    business_category: dbPayload.business_category,
+                    about: dbPayload.business_description,
+                    state: formData.operatingHub || 'Kano',
+                    phone: formData.phone || formData.whatsapp,
+                    whatsapp: formData.whatsapp || formData.phone,
+                    updated_at: new Date().toISOString()
+                };
+                if (appStatus === 'approved') {
+                    profileUpdates.role = 'vendor';
+                }
                 await supabase
                     .from('profiles')
-                    .update({
-                        role: 'vendor',
-                        business_name: dbPayload.business_name,
-                        business_category: dbPayload.business_category,
-                        about: dbPayload.business_description,
-                        state: formData.operatingHub || 'Kano',
-                        phone: formData.phone || formData.whatsapp,
-                        whatsapp: formData.whatsapp || formData.phone,
-                        updated_at: new Date().toISOString()
-                    })
+                    .update(profileUpdates)
                     .eq('id', user.id);
             } catch (profErr) {
                 console.warn('Profile role update notice:', profErr?.message || profErr);
             }
 
-            // 4. Try vendors table if exists
-            try {
-                const vendorData = {
-                    id: user.id,
-                    user_id: user.id,
-                    store_name: dbPayload.business_name,
-                    store_description: dbPayload.business_description,
-                    business_category: dbPayload.business_category,
-                    logo_url: dbPayload.logo_url,
-                    contact_phone: formData.phone,
-                    contact_email: user.email,
-                    address: dbPayload.business_address,
-                    is_locked: false,
-                    vendor_status: 'active',
-                    subscription_plan: dbPayload.subscription_plan,
-                    last_payment_date: new Date().toISOString()
-                };
-                await supabase.from('vendors').upsert([vendorData]);
-            } catch (_) {}
+            // 4. Try vendors table ONLY IF approved
+            if (appStatus === 'approved') {
+                try {
+                    const vendorData = {
+                        id: user.id,
+                        user_id: user.id,
+                        store_name: dbPayload.business_name,
+                        store_description: dbPayload.business_description,
+                        business_category: dbPayload.business_category,
+                        logo_url: dbPayload.logo_url,
+                        contact_phone: formData.phone,
+                        contact_email: user.email,
+                        address: dbPayload.business_address,
+                        is_locked: false,
+                        vendor_status: 'active',
+                        subscription_plan: dbPayload.subscription_plan,
+                        last_payment_date: new Date().toISOString()
+                    };
+                    await supabase.from('vendors').upsert([vendorData]);
+                } catch (_) {}
+            }
 
             LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
             setIsSuccess(true);
@@ -832,6 +962,7 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
             Alert.alert('Submission Failed', error.message || 'An unexpected error occurred during submission.');
         } finally {
             setLoading(false);
+            setUploading(false);
         }
     };
 
@@ -911,46 +1042,189 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
 
     const needsPayment = !isPaymentValid();
 
-    const handleFinalAction = () => {
-        if (needsPayment) {
-            setLoading(true);
+    const handleFinalAction = async () => {
+        if (!needsPayment) {
+            handleActualSubmit(savedPaymentRef, 'verified');
+            return;
+        }
 
-            setTimeout(async () => {
+        // 1. FREE TRIAL
+        if (plan.price === 0) {
+            handleActualSubmit(null, 'free_trial');
+            return;
+        }
+
+        // 2. ABU MAFHAL IN-APP WALLET
+        if (paymentMethod === 'wallet') {
+            if (walletBalance < plan.price) {
+                Alert.alert(
+                    'Kudin Wallet Bai Isa Ba',
+                    `Kudin asusunka na yanzu (₦${walletBalance.toLocaleString()}) bai kai ₦${plan.price.toLocaleString()} ba. Da fatan za a zabi Paystack ko Manual Bank Transfer.`
+                );
+                return;
+            }
+
+            const executeWalletPay = async () => {
+                setLoading(true);
                 try {
-                    const fallbackEmail = user?.email || `user_${user?.id?.substring(0, 6) || Math.floor(Math.random() * 10000)}@abumafhal.com`;
-                    const ref = `RV-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+                    const newBalance = Math.max(0, walletBalance - plan.price);
+                    const { error: pErr } = await supabase
+                        .from('profiles')
+                        .update({ balance: newBalance, updated_at: new Date().toISOString() })
+                        .eq('id', user.id);
+                    if (pErr) throw pErr;
 
-                    const res = await PaymentGatewayService.invokeEdgeFunction('initiate-paystack-payment', {
+                    const txRef = `WLT-SUB-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+                    await supabase.from('transactions').insert([{
+                        user_id: user.id,
+                        type: 'wallet_payment',
                         amount: plan.price,
-                        email: fallbackEmail,
-                        reference: ref,
-                        callback_url: Platform.OS === 'web' ? window.location.href : 'https://standard.paystack.co/close'
-                    });
+                        status: 'completed',
+                        reference: txRef,
+                        description: `Vendor Subscription: ${plan.label}`,
+                        created_at: new Date().toISOString()
+                    }]);
 
-                    if (!res.ok) throw new Error(res.error || 'Failed to initialize payment');
-                    const data = res.data;
-                    if (!data?.success) throw new Error(data?.error || 'Failed to initialize payment');
+                    setWalletBalance(newBalance);
+                    setPaymentVerified(true);
+                    setPaidPlan(plan.id);
+                    setSavedPaymentRef(txRef);
 
-                    setCurrentRef(ref);
-                    setCheckoutUrl(data.authorization_url);
-
-                    if (Platform.OS === 'web') {
-                        Alert.alert('Redirecting...', 'Opening Paystack to complete your registration payment.');
-                        setTimeout(() => {
-                            window.location.href = data.authorization_url;
-                        }, 1000);
-                    } else {
-                        setShowPaystackWebView(true);
-                    }
-                } catch (err) {
-                    console.error('Init Payment Error:', err);
-                    Alert.alert('Payment Error', 'Could not initialize payment. Please try again.');
-                } finally {
+                    handleActualSubmit(txRef, 'wallet');
+                } catch (wErr) {
+                    console.error('Wallet Payment Error:', wErr);
+                    Alert.alert('Kuskure', 'An samu matsala wajen cire kudi daga wallet: ' + (wErr.message || 'Sake gwadawa'));
                     setLoading(false);
                 }
-            }, 200);
-        } else {
-            handleActualSubmit();
+            };
+
+            if (Platform.OS === 'web') {
+                if (window.confirm && window.confirm(`Kana so a cire ₦${plan.price.toLocaleString()} daga wallet dinka domin kunna ${plan.label}?`)) {
+                    executeWalletPay();
+                }
+            } else {
+                Alert.alert(
+                    'Tabbatar da Biyan Kuɗi',
+                    `Kana so a cire ₦${plan.price.toLocaleString()} daga wallet dinka domin kunna ${plan.label}?`,
+                    [
+                        { text: 'Soke', style: 'cancel' },
+                        { text: 'Biya Yanzu', onPress: executeWalletPay }
+                    ]
+                );
+            }
+            return;
+        }
+
+        // 3. DIRECT MANUAL BANK TRANSFER
+        if (paymentMethod === 'bank_transfer') {
+            if (!manualReceipt) {
+                Alert.alert(
+                    'Ana Bukatar Shedar Biya',
+                    'Da fatan za a loda hoton screenshot ko receipt na transfer da ka tura zuwa asusun Abu Mafhal kafin turawa.'
+                );
+                return;
+            }
+
+            setLoading(true);
+            setUploading(true);
+            try {
+                let receiptUrl = null;
+                if (manualReceipt?.uri) {
+                    receiptUrl = await UploadService.uploadSingleMedia(manualReceipt, 'vendor_receipts', 'receipt');
+                }
+
+                handleActualSubmit(manualReference, 'manual_bank_transfer', {
+                    receiptUrl,
+                    senderName,
+                    senderBank
+                });
+            } catch (upErr) {
+                console.error('Receipt Upload Error:', upErr);
+                Alert.alert('Upload Error', 'Ba a sami damar loda receipt ba: ' + upErr.message);
+                setLoading(false);
+                setUploading(false);
+            }
+            return;
+        }
+
+        // 4. FLUTTERWAVE
+        if (paymentMethod === 'flutterwave') {
+            setLoading(true);
+            try {
+                const fallbackEmail = user?.email || `user_${user?.id?.substring(0, 6) || Math.floor(Math.random() * 10000)}@abumafhal.com`;
+                const ref = `FLW-SUB-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+                const res = await PaymentGatewayService.invokeEdgeFunction('flutterwave-initiate', {
+                    amount: plan.price,
+                    email: fallbackEmail,
+                    reference: ref,
+                    customer_name: formData.fullName || formData.businessName,
+                    phone_number: formData.phone || formData.whatsapp,
+                    redirect_url: Platform.OS === 'web'
+                        ? `${window.location.origin}/mobile#vendor-register?flutterwave_ref=${ref}`
+                        : 'https://standard.paystack.co/close'
+                });
+
+                const fwUrl = res?.data?.link || res?.data?.authorization_url || res?.data?.data?.link;
+                if (!fwUrl) {
+                    throw new Error(res?.error || 'Could not get Flutterwave payment link. Please choose Paystack or Manual Transfer.');
+                }
+
+                setCurrentRef(ref);
+                setCheckoutUrl(fwUrl);
+
+                if (Platform.OS === 'web') {
+                    Alert.alert('Redirecting to Flutterwave...', 'Ana bude shafin biyan kudi na Flutterwave.');
+                    setTimeout(() => {
+                        window.location.href = fwUrl;
+                    }, 800);
+                } else {
+                    setShowPaystackWebView(true);
+                }
+            } catch (flwErr) {
+                console.error('Flutterwave Error:', flwErr);
+                Alert.alert('Payment Error', flwErr.message || 'Could not initialize Flutterwave payment. Please try Paystack or Manual Transfer.');
+            } finally {
+                setLoading(false);
+            }
+            return;
+        }
+
+        // 5. PAYSTACK (DEFAULT)
+        setLoading(true);
+        try {
+            const fallbackEmail = user?.email || `user_${user?.id?.substring(0, 6) || Math.floor(Math.random() * 10000)}@abumafhal.com`;
+            const ref = `RV-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+            const res = await PaymentGatewayService.invokeEdgeFunction('initiate-paystack-payment', {
+                amount: plan.price,
+                email: fallbackEmail,
+                reference: ref,
+                callback_url: Platform.OS === 'web'
+                    ? `${window.location.origin}/mobile#vendor-register?paystack_ref=${ref}`
+                    : 'https://standard.paystack.co/close'
+            });
+
+            if (!res.ok) throw new Error(res.error || 'Failed to initialize payment');
+            const data = res.data;
+            if (!data?.success) throw new Error(data?.error || 'Failed to initialize payment');
+
+            setCurrentRef(ref);
+            setCheckoutUrl(data.authorization_url);
+
+            if (Platform.OS === 'web') {
+                Alert.alert('Redirecting to Paystack...', 'Opening Paystack secured checkout.');
+                setTimeout(() => {
+                    window.location.href = data.authorization_url;
+                }, 800);
+            } else {
+                setShowPaystackWebView(true);
+            }
+        } catch (err) {
+            console.error('Init Payment Error:', err);
+            Alert.alert('Payment Error', 'Ba a sami damar bude Paystack ba. Zaka iya zabar Manual Bank Transfer ko Wallet.');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -1121,28 +1395,70 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
     }
 
     if (isSuccess) {
+        const isApprovedImmediately = mode === 'renew' || (paymentVerified && settings?.vendor_auto_approve === true) || (plan.price === 0 && settings?.vendor_auto_approve === true);
+        const isManualTransfer = paymentMethod === 'bank_transfer' || paymentMethod === 'manual_bank_transfer';
+
         return (
-            <SafeAreaView style={[localStyles.screenContainer, { justifyContent: 'center', alignItems: 'center', padding: 28 }]}>
+            <SafeAreaView style={[localStyles.screenContainer, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
                 <StatusBar barStyle="light-content" backgroundColor={NAVY_DARK} />
-                <View style={[localStyles.statusIconCircle, { backgroundColor: EMERALD_SURFACE, borderColor: EMERALD }]}>
-                    <Ionicons name="checkmark-circle" size={54} color={EMERALD} />
+                <View style={[
+                    localStyles.statusIconCircle,
+                    {
+                        backgroundColor: isApprovedImmediately ? EMERALD_SURFACE : GOLD_SURFACE,
+                        borderColor: isApprovedImmediately ? EMERALD : GOLD
+                    }
+                ]}>
+                    <Ionicons
+                        name={isApprovedImmediately ? "shield-checkmark" : (isManualTransfer ? "receipt" : "checkmark-circle")}
+                        size={52}
+                        color={isApprovedImmediately ? EMERALD : GOLD_DARK}
+                    />
                 </View>
                 <Text style={localStyles.statusTitle}>
-                    {mode === 'renew' ? 'Subscription Renewed!' : 'Application Submitted!'}
+                    {isApprovedImmediately ? 'Storefront Activated!' : (isManualTransfer ? 'An Karɓi Shedar Biya!' : 'Aikace-aikacenka na Kan Bita!')}
                 </Text>
                 <Text style={localStyles.statusSub}>
-                    {mode === 'renew' ?
-                        'Your storefront subscription has been renewed. Your products are active across the marketplace.' :
-                        'Your application has been received with priority status. Our compliance team will review your account within 24 hours.'}
+                    {isApprovedImmediately
+                        ? 'Congratulations! Your store is officially active. You can now manage products and process customer orders.'
+                        : isManualTransfer
+                        ? 'Mun karɓi bayanan canjin kuɗi da hoton receipt da ka loda. Tawagar Abu Mafhal zata tabbatar da kuɗin a banki kuma ta kunna shagonka cikin mintuna kaɗan.'
+                        : 'Mun karɓi bayanan shagonka da takardun da ka gabatar. Tawagar tabbatarwa na duba bayanan domin tabbatar da shagonka ya dace da ka\'idojin kasuwa (cikin sa\'o\'i 24 zuwa 48).'}
                 </Text>
-                <TouchableOpacity
-                    style={localStyles.primaryActionBtn}
-                    onPress={onSubmit || onBack}
-                    activeOpacity={0.85}
-                >
-                    <Text style={localStyles.primaryActionBtnText}>Continue to Dashboard</Text>
-                    <Ionicons name="arrow-forward" size={18} color={NAVY_DARK} />
-                </TouchableOpacity>
+
+                <View style={{ width: '100%', gap: 12, marginTop: 10 }}>
+                    {isApprovedImmediately ? (
+                        <TouchableOpacity
+                            style={[localStyles.primaryActionBtn, { width: '100%' }]}
+                            onPress={onSubmit || onBack}
+                            activeOpacity={0.85}
+                        >
+                            <Text style={localStyles.primaryActionBtnText}>Shiga Vendor Dashboard</Text>
+                            <Ionicons name="arrow-forward" size={18} color={NAVY_DARK} />
+                        </TouchableOpacity>
+                    ) : (
+                        <>
+                            <TouchableOpacity
+                                style={[localStyles.primaryActionBtn, { width: '100%' }]}
+                                onPress={onBack}
+                                activeOpacity={0.85}
+                            >
+                                <Ionicons name="home" size={18} color={NAVY_DARK} />
+                                <Text style={localStyles.primaryActionBtnText}>Koma Kasuwa (Back to Marketplace)</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[localStyles.secondaryActionBtn, { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }]}
+                                onPress={openWhatsAppHelp}
+                                activeOpacity={0.85}
+                            >
+                                <Ionicons name="logo-whatsapp" size={18} color="#22C55E" />
+                                <Text style={[localStyles.secondaryActionBtnText, { color: '#16A34A', fontWeight: '800' }]}>
+                                    Tuntubi Admin a WhatsApp
+                                </Text>
+                            </TouchableOpacity>
+                        </>
+                    )}
+                </View>
             </SafeAreaView>
         );
     }
@@ -2263,6 +2579,17 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                 {/* STEP 6: CHOOSE PLAN & CONFIRM */}
                 {step === 6 && (
                     <View style={localStyles.stepCard}>
+                        {/* Notice Banner (If user returned from Paystack/Flutterwave cancellation or issue) */}
+                        {paymentNotice && (
+                            <View style={localStyles.paymentNoticeBanner}>
+                                <Ionicons name="alert-circle" size={20} color="#D97706" />
+                                <Text style={localStyles.paymentNoticeText}>{paymentNotice}</Text>
+                                <TouchableOpacity onPress={() => setPaymentNotice(null)} style={{ padding: 4 }}>
+                                    <Ionicons name="close" size={18} color="#92400E" />
+                                </TouchableOpacity>
+                            </View>
+                        )}
+
                         <View style={localStyles.cardHeaderRow}>
                             <View style={localStyles.cardIconBox}>
                                 <Ionicons name="trophy" size={20} color={GOLD} />
@@ -2273,7 +2600,8 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                             </View>
                         </View>
 
-                        <View style={{ gap: 12, marginBottom: 18 }}>
+                        {/* Plans List */}
+                        <View style={{ gap: 12, marginBottom: 20 }}>
                             {activeVendorPlans.map(planItem => {
                                 const isSelected = formData.selectedPlan === planItem.id;
                                 return (
@@ -2310,6 +2638,349 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                             })}
                         </View>
 
+                        {/* PAYMENT METHODS SELECTOR (IF PLAN.PRICE > 0) */}
+                        {plan.price > 0 && (
+                            <View style={{ marginBottom: 20 }}>
+                                <View style={localStyles.methodSectionHeader}>
+                                    <Text style={localStyles.methodSectionTitle}>ZABI HANYAR BIYAN KUƊI (PAYMENT METHOD)</Text>
+                                    <Text style={localStyles.methodSectionSub}>Zaɓi hanyar da ta fi maka sauƙi wajen biyan kuɗin shago</Text>
+                                </View>
+
+                                <View style={localStyles.methodsGrid}>
+                                    {/* 1. Paystack */}
+                                    <TouchableOpacity
+                                        style={[
+                                            localStyles.methodCard,
+                                            paymentMethod === 'paystack' && localStyles.methodCardSelected
+                                        ]}
+                                        onPress={() => setPaymentMethod('paystack')}
+                                        activeOpacity={0.8}
+                                    >
+                                        <View style={[localStyles.methodCardIconBox, paymentMethod === 'paystack' && { backgroundColor: '#0EA5E920' }]}>
+                                            <Ionicons name="card" size={22} color={paymentMethod === 'paystack' ? '#0284C7' : TEXT_MUTED} />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                <Text style={localStyles.methodCardTitle}>Paystack Secure Checkout</Text>
+                                                <View style={{ backgroundColor: '#0284C718', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                    <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#0284C7' }}>AUTO-VERIFY</Text>
+                                                </View>
+                                            </View>
+                                            <Text style={localStyles.methodCardSub}>Cards, USSD, Bank Transfer, Apple Pay</Text>
+                                        </View>
+                                        <View style={[localStyles.radioCircle, paymentMethod === 'paystack' && localStyles.radioCircleActive]}>
+                                            {paymentMethod === 'paystack' && <View style={localStyles.radioDot} />}
+                                        </View>
+                                    </TouchableOpacity>
+
+                                    {/* 2. Flutterwave */}
+                                    <TouchableOpacity
+                                        style={[
+                                            localStyles.methodCard,
+                                            paymentMethod === 'flutterwave' && localStyles.methodCardSelected
+                                        ]}
+                                        onPress={() => setPaymentMethod('flutterwave')}
+                                        activeOpacity={0.8}
+                                    >
+                                        <View style={[localStyles.methodCardIconBox, paymentMethod === 'flutterwave' && { backgroundColor: '#F59E0B20' }]}>
+                                            <Ionicons name="globe" size={22} color={paymentMethod === 'flutterwave' ? '#D97706' : TEXT_MUTED} />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                <Text style={localStyles.methodCardTitle}>Flutterwave Africa</Text>
+                                                <View style={{ backgroundColor: '#F59E0B18', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                    <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#D97706' }}>CARDS & MOBILE</Text>
+                                                </View>
+                                            </View>
+                                            <Text style={localStyles.methodCardSub}>Mastercard, Visa, Mobile Money, Africa Payout</Text>
+                                        </View>
+                                        <View style={[localStyles.radioCircle, paymentMethod === 'flutterwave' && localStyles.radioCircleActive]}>
+                                            {paymentMethod === 'flutterwave' && <View style={localStyles.radioDot} />}
+                                        </View>
+                                    </TouchableOpacity>
+
+                                    {/* 3. Direct Manual Bank Transfer */}
+                                    <TouchableOpacity
+                                        style={[
+                                            localStyles.methodCard,
+                                            paymentMethod === 'bank_transfer' && localStyles.methodCardSelected
+                                        ]}
+                                        onPress={() => setPaymentMethod('bank_transfer')}
+                                        activeOpacity={0.8}
+                                    >
+                                        <View style={[localStyles.methodCardIconBox, paymentMethod === 'bank_transfer' && { backgroundColor: '#10B98120' }]}>
+                                            <Ionicons name="business" size={22} color={paymentMethod === 'bank_transfer' ? '#059669' : TEXT_MUTED} />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                <Text style={localStyles.methodCardTitle}>Direct Bank Transfer (Abu Mafhal)</Text>
+                                                <View style={{ backgroundColor: '#10B98118', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                    <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#059669' }}>MANUAL RECEIPT</Text>
+                                                </View>
+                                            </View>
+                                            <Text style={localStyles.methodCardSub}>Tura kudi kai tsaye zuwa asusun kasuwa tare da loda shaidar biya</Text>
+                                        </View>
+                                        <View style={[localStyles.radioCircle, paymentMethod === 'bank_transfer' && localStyles.radioCircleActive]}>
+                                            {paymentMethod === 'bank_transfer' && <View style={localStyles.radioDot} />}
+                                        </View>
+                                    </TouchableOpacity>
+
+                                    {/* 4. Abu Mafhal In-App Wallet */}
+                                    <TouchableOpacity
+                                        style={[
+                                            localStyles.methodCard,
+                                            paymentMethod === 'wallet' && localStyles.methodCardSelected
+                                        ]}
+                                        onPress={() => setPaymentMethod('wallet')}
+                                        activeOpacity={0.8}
+                                    >
+                                        <View style={[localStyles.methodCardIconBox, paymentMethod === 'wallet' && { backgroundColor: '#8B5CF620' }]}>
+                                            <Ionicons name="wallet" size={22} color={paymentMethod === 'wallet' ? '#7C3AED' : TEXT_MUTED} />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                <Text style={localStyles.methodCardTitle}>Abu Mafhal Wallet</Text>
+                                                <View style={{ backgroundColor: '#8B5CF618', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                                    <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#7C3AED' }}>INSTANT</Text>
+                                                </View>
+                                            </View>
+                                            <Text style={localStyles.methodCardSub}>Cire kudi kai tsaye daga walat dinka na ciki (₦{walletBalance.toLocaleString()})</Text>
+                                        </View>
+                                        <View style={[localStyles.radioCircle, paymentMethod === 'wallet' && localStyles.radioCircleActive]}>
+                                            {paymentMethod === 'wallet' && <View style={localStyles.radioDot} />}
+                                        </View>
+                                    </TouchableOpacity>
+                                </View>
+
+                                {/* PANEL 1: PAYSTACK DETAILS */}
+                                {paymentMethod === 'paystack' && (
+                                    <View style={localStyles.gatewaySecurityCard}>
+                                        <Ionicons name="shield-checkmark" size={24} color="#0284C7" />
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY_DARK }}>Biyan Kuɗi Cikin Sauƙi da Paystack</Text>
+                                            <Text style={{ fontSize: 11.5, color: TEXT_SECONDARY, marginTop: 2 }}>
+                                                Za a buɗe shafin Paystack mai cikakken tsaro. Zaka iya amfani da katin ATM, USSD, ko transfer. Idan ka kammala, za a tabbatar da shagonka nan take.
+                                            </Text>
+                                        </View>
+                                    </View>
+                                )}
+
+                                {/* PANEL 2: FLUTTERWAVE DETAILS */}
+                                {paymentMethod === 'flutterwave' && (
+                                    <View style={localStyles.gatewaySecurityCard}>
+                                        <Ionicons name="shield-checkmark" size={24} color="#D97706" />
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY_DARK }}>Biyan Kuɗi ta Flutterwave Africa</Text>
+                                            <Text style={{ fontSize: 11.5, color: TEXT_SECONDARY, marginTop: 2 }}>
+                                                Hanyar biyan kudi ta Flutterwave mai karbar katunan gida da na waje, tare da Mobile Money da sauran hanyoyi masu aminci.
+                                            </Text>
+                                        </View>
+                                    </View>
+                                )}
+
+                                {/* PANEL 3: DIRECT MANUAL BANK TRANSFER DETAILS */}
+                                {paymentMethod === 'bank_transfer' && (
+                                    <View>
+                                        <LinearGradient
+                                            colors={['#071324', '#0F274B', '#16335F']}
+                                            start={{ x: 0, y: 0 }}
+                                            end={{ x: 1, y: 1 }}
+                                            style={localStyles.officialBankCard}
+                                        >
+                                            <View style={localStyles.officialBankHeader}>
+                                                <View style={localStyles.cardIconBox}>
+                                                    <Ionicons name="business" size={18} color={GOLD} />
+                                                </View>
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={localStyles.officialBankTitle}>ASUSUN BANKIN ABU MAFHAL</Text>
+                                                    <Text style={localStyles.officialBankSub}>Tura ainihin adadin kuɗin da ke ƙasa zuwa wannan asusu</Text>
+                                                </View>
+                                            </View>
+
+                                            {/* Bank Name */}
+                                            <View style={localStyles.bankCopyRow}>
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={localStyles.bankCopyLabel}>Sunan Banki (Bank)</Text>
+                                                    <Text style={localStyles.bankCopyVal}>{settings?.official_bank_name || 'Moniepoint MFB'}</Text>
+                                                </View>
+                                                <TouchableOpacity
+                                                    style={[localStyles.copyActionBtn, copiedField === 'bank' && localStyles.copyActionBtnSuccess]}
+                                                    onPress={() => copyToClipboard(settings?.official_bank_name || 'Moniepoint MFB', 'bank')}
+                                                    activeOpacity={0.8}
+                                                >
+                                                    <Ionicons name={copiedField === 'bank' ? "checkmark-circle" : "copy-outline"} size={13} color={copiedField === 'bank' ? '#34D399' : GOLD} />
+                                                    <Text style={[localStyles.copyActionText, copiedField === 'bank' && localStyles.copyActionTextSuccess]}>
+                                                        {copiedField === 'bank' ? 'An Kwafa' : 'Kwafa'}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            </View>
+
+                                            {/* Account Number */}
+                                            <View style={localStyles.bankCopyRow}>
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={localStyles.bankCopyLabel}>Lambar Asusu (Account Number)</Text>
+                                                    <Text style={[localStyles.bankCopyVal, { letterSpacing: 1.5, color: '#FCD34D' }]}>
+                                                        {settings?.official_account_number || '5051567890'}
+                                                    </Text>
+                                                </View>
+                                                <TouchableOpacity
+                                                    style={[localStyles.copyActionBtn, copiedField === 'acc_num' && localStyles.copyActionBtnSuccess]}
+                                                    onPress={() => copyToClipboard(settings?.official_account_number || '5051567890', 'acc_num')}
+                                                    activeOpacity={0.8}
+                                                >
+                                                    <Ionicons name={copiedField === 'acc_num' ? "checkmark-circle" : "copy-outline"} size={13} color={copiedField === 'acc_num' ? '#34D399' : GOLD} />
+                                                    <Text style={[localStyles.copyActionText, copiedField === 'acc_num' && localStyles.copyActionTextSuccess]}>
+                                                        {copiedField === 'acc_num' ? 'An Kwafa' : 'Kwafa'}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            </View>
+
+                                            {/* Account Name */}
+                                            <View style={localStyles.bankCopyRow}>
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={localStyles.bankCopyLabel}>Sunan Mai Asusu (Beneficiary)</Text>
+                                                    <Text style={localStyles.bankCopyVal}>{settings?.official_account_name || 'Abu Mafhal Global Concept Ltd'}</Text>
+                                                </View>
+                                                <TouchableOpacity
+                                                    style={[localStyles.copyActionBtn, copiedField === 'acc_name' && localStyles.copyActionBtnSuccess]}
+                                                    onPress={() => copyToClipboard(settings?.official_account_name || 'Abu Mafhal Global Concept Ltd', 'acc_name')}
+                                                    activeOpacity={0.8}
+                                                >
+                                                    <Ionicons name={copiedField === 'acc_name' ? "checkmark-circle" : "copy-outline"} size={13} color={copiedField === 'acc_name' ? '#34D399' : GOLD} />
+                                                    <Text style={[localStyles.copyActionText, copiedField === 'acc_name' && localStyles.copyActionTextSuccess]}>
+                                                        {copiedField === 'acc_name' ? 'An Kwafa' : 'Kwafa'}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            </View>
+
+                                            {/* Amount to Send */}
+                                            <View style={localStyles.bankCopyRow}>
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={localStyles.bankCopyLabel}>Adadin Kuɗin da Zaka Tura</Text>
+                                                    <Text style={[localStyles.bankCopyVal, { color: '#34D399', fontSize: 16 }]}>
+                                                        ₦{plan.price.toLocaleString()}
+                                                    </Text>
+                                                </View>
+                                                <TouchableOpacity
+                                                    style={[localStyles.copyActionBtn, copiedField === 'amount' && localStyles.copyActionBtnSuccess]}
+                                                    onPress={() => copyToClipboard(plan.price.toString(), 'amount')}
+                                                    activeOpacity={0.8}
+                                                >
+                                                    <Ionicons name={copiedField === 'amount' ? "checkmark-circle" : "copy-outline"} size={13} color={copiedField === 'amount' ? '#34D399' : GOLD} />
+                                                    <Text style={[localStyles.copyActionText, copiedField === 'amount' && localStyles.copyActionTextSuccess]}>
+                                                        {copiedField === 'amount' ? 'An Kwafa' : 'Kwafa'}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            </View>
+
+                                            {/* Reference */}
+                                            <View style={[localStyles.bankCopyRow, { borderBottomWidth: 0 }]}>
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={localStyles.bankCopyLabel}>Payment Reference / Narration</Text>
+                                                    <Text style={[localStyles.bankCopyVal, { fontSize: 12, color: 'rgba(255,255,255,0.8)' }]}>
+                                                        {manualReference}
+                                                    </Text>
+                                                </View>
+                                                <TouchableOpacity
+                                                    style={[localStyles.copyActionBtn, copiedField === 'ref' && localStyles.copyActionBtnSuccess]}
+                                                    onPress={() => copyToClipboard(manualReference, 'ref')}
+                                                    activeOpacity={0.8}
+                                                >
+                                                    <Ionicons name={copiedField === 'ref' ? "checkmark-circle" : "copy-outline"} size={13} color={copiedField === 'ref' ? '#34D399' : GOLD} />
+                                                    <Text style={[localStyles.copyActionText, copiedField === 'ref' && localStyles.copyActionTextSuccess]}>
+                                                        {copiedField === 'ref' ? 'An Kwafa' : 'Kwafa'}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                        </LinearGradient>
+
+                                        {/* Sender Information Inputs */}
+                                        <View style={{ gap: 12, marginBottom: 14 }}>
+                                            <View>
+                                                <Text style={localStyles.inputLabel}>Sunan Mai Tura Kuɗin (Sender Name) *</Text>
+                                                <TextInput
+                                                    style={localStyles.textInput}
+                                                    value={senderName}
+                                                    onChangeText={setSenderName}
+                                                    placeholder="Sunan da ke jikin asusun da ka turo kudin..."
+                                                    placeholderTextColor={TEXT_MUTED}
+                                                />
+                                            </View>
+                                            <View>
+                                                <Text style={localStyles.inputLabel}>Sunan Bankin da Ka Turo Kuɗin (Sender Bank) *</Text>
+                                                <TextInput
+                                                    style={localStyles.textInput}
+                                                    value={senderBank}
+                                                    onChangeText={setSenderBank}
+                                                    placeholder="Misali: GTBank, Opay, Kuda, First Bank..."
+                                                    placeholderTextColor={TEXT_MUTED}
+                                                />
+                                            </View>
+                                        </View>
+
+                                        {/* Receipt Upload Button */}
+                                        <Text style={localStyles.inputLabel}>Shaidar Biyan Kuɗi (Receipt / Screenshot) *</Text>
+                                        <TouchableOpacity
+                                            style={[
+                                                localStyles.receiptUploadBox,
+                                                manualReceipt && localStyles.receiptUploadBoxActive
+                                            ]}
+                                            onPress={handlePickReceipt}
+                                            activeOpacity={0.8}
+                                        >
+                                            <Ionicons
+                                                name={manualReceipt ? "checkmark-circle" : "cloud-upload-outline"}
+                                                size={32}
+                                                color={manualReceipt ? EMERALD : GOLD_DARK}
+                                            />
+                                            <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY_DARK, marginTop: 6 }}>
+                                                {manualReceipt ? (manualReceipt.name || 'Receipt An Zaba ✅') : 'Danna Nan Domin Loda Hoton Receipt'}
+                                            </Text>
+                                            <Text style={{ fontSize: 11, color: TEXT_MUTED, marginTop: 2 }}>
+                                                {manualReceipt ? 'Danna domin canza hoton idan kana bukata' : 'Loda hoton screenshot ko PDF na shaidar biya'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
+
+                                {/* PANEL 4: ABU MAFHAL WALLET DETAILS */}
+                                {paymentMethod === 'wallet' && (
+                                    <View style={localStyles.walletStatusCard}>
+                                        <View style={localStyles.walletBalanceDisplay}>
+                                            <View>
+                                                <Text style={{ fontSize: 11, fontWeight: '800', color: TEXT_MUTED, textTransform: 'uppercase' }}>
+                                                    KUDIN ASUSUN WALAT DINKA
+                                                </Text>
+                                                <Text style={localStyles.walletBalanceVal}>
+                                                    ₦{walletBalance.toLocaleString()}
+                                                </Text>
+                                            </View>
+                                            <View style={walletBalance >= plan.price ? localStyles.walletBadgeSufficient : localStyles.walletBadgeInsufficient}>
+                                                <Ionicons
+                                                    name={walletBalance >= plan.price ? "checkmark-circle" : "alert-circle"}
+                                                    size={14}
+                                                    color={walletBalance >= plan.price ? EMERALD : '#EF4444'}
+                                                />
+                                                <Text style={{ fontSize: 11, fontWeight: '800', color: walletBalance >= plan.price ? EMERALD : '#EF4444' }}>
+                                                    {walletBalance >= plan.price ? 'Isasshen Kuɗi' : 'Bai Isa Ba'}
+                                                </Text>
+                                            </View>
+                                        </View>
+
+                                        {walletBalance >= plan.price ? (
+                                            <Text style={{ fontSize: 12, color: '#047857', lineHeight: 18 }}>
+                                                Za a cire ₦{plan.price.toLocaleString()} kai tsaye daga walat dinka domin kunna wannan kunshin biyan kudi ba tare da jinkiri ba.
+                                            </Text>
+                                        ) : (
+                                            <Text style={{ fontSize: 12, color: '#B91C1C', lineHeight: 18 }}>
+                                                Kudin walat dinka (₦{walletBalance.toLocaleString()}) bai kai ₦{plan.price.toLocaleString()} ba. Da fatan za a zabi Paystack ko Direct Bank Transfer a sama.
+                                            </Text>
+                                        )}
+                                    </View>
+                                )}
+                            </View>
+                        )}
+
                         {/* Summary Card */}
                         <View style={localStyles.summaryBox}>
                             <Text style={localStyles.summaryTitle}>APPLICATION SUMMARY</Text>
@@ -2337,6 +3008,20 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                                 <Text style={localStyles.summaryLabel}>Beneficiary Name</Text>
                                 <Text style={localStyles.summaryVal} numberOfLines={1}>{formData.accountName || '—'}</Text>
                             </View>
+                            {plan.price > 0 && (
+                                <View style={localStyles.summaryRow}>
+                                    <Text style={localStyles.summaryLabel}>Payment Method</Text>
+                                    <Text style={[localStyles.summaryVal, { fontWeight: '800', color: NAVY_DARK }]}>
+                                        {paymentMethod === 'bank_transfer'
+                                            ? 'Direct Bank Transfer'
+                                            : paymentMethod === 'wallet'
+                                                ? 'Abu Mafhal Wallet'
+                                                : paymentMethod === 'flutterwave'
+                                                    ? 'Flutterwave'
+                                                    : 'Paystack Checkout'}
+                                    </Text>
+                                </View>
+                            )}
                             <View style={[localStyles.summaryRow, { borderBottomWidth: 0, paddingTop: 10 }]}>
                                 <Text style={[localStyles.summaryLabel, { color: NAVY_DARK, fontWeight: '900' }]}>Total Subscription Fee</Text>
                                 <Text style={localStyles.summaryFee}>₦{plan.price.toLocaleString()}</Text>
@@ -2397,12 +3082,30 @@ const VendorRegisterInner = ({ user, onBack = () => { }, onSubmit, mode = 'regis
                         ) : (
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                 <Ionicons
-                                    name={needsPayment ? "card" : "checkmark-circle"}
+                                    name={
+                                        plan.price === 0
+                                            ? "flash"
+                                            : paymentMethod === 'wallet'
+                                                ? "wallet"
+                                                : paymentMethod === 'bank_transfer'
+                                                    ? "cloud-upload"
+                                                    : paymentMethod === 'flutterwave'
+                                                        ? "globe"
+                                                        : "shield-checkmark"
+                                    }
                                     size={18}
                                     color={NAVY_DARK}
                                 />
                                 <Text style={localStyles.nextStepBtnText}>
-                                    {needsPayment ? `Pay ₦${plan.price.toLocaleString()} & Activate` : 'Submit Application'}
+                                    {plan.price === 0
+                                        ? 'Fara Gwajin Kyauta (Start Free Trial)'
+                                        : paymentMethod === 'wallet'
+                                            ? `Biya ₦${plan.price.toLocaleString()} Daga Wallet`
+                                            : paymentMethod === 'bank_transfer'
+                                                ? 'Aika da Shaidar Biya & Shago'
+                                                : paymentMethod === 'flutterwave'
+                                                    ? `Biya ₦${plan.price.toLocaleString()} da Flutterwave`
+                                                    : `Biya ₦${plan.price.toLocaleString()} da Paystack`}
                                 </Text>
                             </View>
                         )}
@@ -3841,5 +4544,219 @@ const localStyles = StyleSheet.create({
     popularBankPillTextActive: {
         color: NAVY_DARK,
         fontWeight: '900'
+    },
+
+    // PAYMENT METHOD SELECTION & OFFICIAL BANK STYLES
+    paymentNoticeBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        backgroundColor: '#FEF3C7',
+        borderWidth: 1,
+        borderColor: '#F59E0B',
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 16
+    },
+    paymentNoticeText: {
+        flex: 1,
+        fontSize: 12.5,
+        color: '#92400E',
+        fontWeight: '700',
+        lineHeight: 18
+    },
+    methodSectionHeader: {
+        marginTop: 6,
+        marginBottom: 12
+    },
+    methodSectionTitle: {
+        fontSize: 13,
+        fontWeight: '900',
+        color: NAVY_DARK,
+        letterSpacing: 0.3
+    },
+    methodSectionSub: {
+        fontSize: 11.5,
+        color: TEXT_MUTED,
+        marginTop: 2
+    },
+    methodsGrid: {
+        gap: 10,
+        marginBottom: 16
+    },
+    methodCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 14,
+        borderRadius: 14,
+        backgroundColor: '#FFFFFF',
+        borderWidth: 1.5,
+        borderColor: BORDER_COLOR,
+        gap: 12
+    },
+    methodCardSelected: {
+        borderColor: GOLD,
+        backgroundColor: '#FFFDF5',
+        shadowColor: GOLD,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 6,
+        elevation: 2
+    },
+    methodCardIconBox: {
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        backgroundColor: '#F1F5F9',
+        justifyContent: 'center',
+        alignItems: 'center'
+    },
+    methodCardTitle: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: NAVY_DARK
+    },
+    methodCardSub: {
+        fontSize: 11.5,
+        color: TEXT_SECONDARY,
+        marginTop: 2
+    },
+    officialBankCard: {
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(217, 167, 58, 0.4)'
+    },
+    officialBankHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingBottom: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255, 255, 255, 0.12)',
+        marginBottom: 12
+    },
+    officialBankTitle: {
+        fontSize: 13,
+        fontWeight: '900',
+        color: '#FFFFFF'
+    },
+    officialBankSub: {
+        fontSize: 10.5,
+        color: 'rgba(217, 167, 58, 0.95)'
+    },
+    bankCopyRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255, 255, 255, 0.08)'
+    },
+    bankCopyLabel: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: 'rgba(255, 255, 255, 0.65)',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5
+    },
+    bankCopyVal: {
+        fontSize: 13.5,
+        fontWeight: '900',
+        color: '#FFFFFF',
+        marginTop: 2
+    },
+    copyActionBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: 'rgba(217, 167, 58, 0.2)',
+        borderWidth: 1,
+        borderColor: GOLD,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 8
+    },
+    copyActionBtnSuccess: {
+        backgroundColor: 'rgba(16, 185, 129, 0.25)',
+        borderColor: EMERALD
+    },
+    copyActionText: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: GOLD
+    },
+    copyActionTextSuccess: {
+        color: '#34D399'
+    },
+    receiptUploadBox: {
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1.5,
+        borderColor: BORDER_COLOR,
+        borderStyle: 'dashed',
+        borderRadius: 14,
+        padding: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 12,
+        marginBottom: 16
+    },
+    receiptUploadBoxActive: {
+        borderColor: EMERALD,
+        backgroundColor: EMERALD_SURFACE,
+        borderStyle: 'solid'
+    },
+    walletStatusCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 14,
+        padding: 16,
+        borderWidth: 1.5,
+        borderColor: BORDER_COLOR,
+        marginBottom: 16
+    },
+    walletBalanceDisplay: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 10
+    },
+    walletBalanceVal: {
+        fontSize: 20,
+        fontWeight: '900',
+        color: NAVY_DARK
+    },
+    walletBadgeSufficient: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        backgroundColor: EMERALD_SURFACE,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: EMERALD
+    },
+    walletBadgeInsufficient: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        backgroundColor: '#FEE2E2',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#EF4444'
+    },
+    gatewaySecurityCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        backgroundColor: '#F1F5F9',
+        borderRadius: 12,
+        padding: 14,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: BORDER_COLOR
     }
 });

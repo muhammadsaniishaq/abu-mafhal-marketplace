@@ -99,6 +99,7 @@ const linking = {
                     }
                 }
                 const clean = (routePart || '').toLowerCase();
+                if (clean === 'vendor-register' || clean === 'vendorregister' || clean === 'vendor-application') return { routes: [{ name: 'VendorRegister', params }] };
                 if (clean === 'admin') return { routes: [{ name: 'AdminDashboard', params }] };
                 if (clean === 'vendor') return { routes: [{ name: 'VendorDashboard', params }] };
                 if (clean === 'driver') return { routes: [{ name: 'DriverDashboard', params }] };
@@ -107,7 +108,6 @@ const linking = {
                 if (clean === 'checkout') return { routes: [{ name: 'CheckoutPage', params }] };
                 if (clean === 'track' || clean === 'orders') return { routes: [{ name: 'TrackOrder', params }] };
                 if (clean === 'invoice') return { routes: [{ name: 'Invoice', params }] };
-                if (clean === 'vendor-register' || clean === 'vendorregister') return { routes: [{ name: 'VendorRegister', params }] };
                 if (clean === 'compare') return { routes: [{ name: 'ProductComparison', params }] };
                 if (clean === 'pay-small-small') return { routes: [{ name: 'PaySmallSmall', params }] };
                 if (clean.startsWith('product/')) {
@@ -547,25 +547,39 @@ export default function App() {
             const last = typeof window !== 'undefined' ? window.localStorage?.getItem('@abumafhal_last_screen') : null;
             const storedUser = user || getStoredUserSync();
 
-            if (hash.includes('auth') || hash.includes('login') || hash.includes('register')) {
-                return 'Auth';
-            }
-            if (hash.includes('admin') || path.includes('admin')) {
-                return 'AdminDashboard';
-            }
-            if (hash.includes('vendor') || path.includes('vendor')) {
-                return 'VendorDashboard';
-            }
-            if (hash.includes('driver') || path.includes('driver')) {
-                return 'DriverDashboard';
+            // 1. SPECIFIC MULTI-PART ROUTES MUST MATCH FIRST (Never let generic 'vendor' or 'register' shadow these!)
+            if (hash.includes('vendor-register') || hash.includes('vendorregister') || hash.includes('vendor-application') || path.includes('vendor-register') || path.includes('vendor-application')) {
+                return 'VendorRegister';
             }
             if (hash.includes('checkout')) return 'CheckoutPage';
             if (hash.includes('track') || hash.includes('order')) return 'TrackOrder';
             if (hash.includes('invoice')) return 'Invoice';
             if (hash.includes('product/')) return 'ProductDetails';
-            if (hash.includes('vendor-register') || hash.includes('vendorregister')) return 'VendorRegister';
             if (hash.includes('compare')) return 'ProductComparison';
             if (hash.includes('pay-small-small')) return 'PaySmallSmall';
+
+            // 2. STRICT AUTH CHECKS (Does not collide with vendor-register)
+            const isAuthHash = ['#auth', '#login', '#register', '#signin', '#signup'].some(k => hash === k || hash.startsWith(k + '?') || hash.startsWith(k + '/'));
+            if (isAuthHash) {
+                return 'Auth';
+            }
+
+            // 3. STRICT DASHBOARD CHECKS (Must NOT match substrings like vendor-register)
+            const isStrictAdmin = hash === '#admin' || hash.startsWith('#admin?') || hash.startsWith('#admin/') || (path === '/admin' || path === '/admin/');
+            if (isStrictAdmin) {
+                return 'AdminDashboard';
+            }
+
+            const isStrictVendor = (hash === '#vendor' || hash.startsWith('#vendor?') || hash.startsWith('#vendor/') || path === '/vendor' || path === '/vendor/') && !hash.includes('vendor-register');
+            if (isStrictVendor) {
+                return 'VendorDashboard';
+            }
+
+            const isStrictDriver = hash === '#driver' || hash.startsWith('#driver?') || hash.startsWith('#driver/') || path === '/driver' || path === '/driver/';
+            if (isStrictDriver) {
+                return 'DriverDashboard';
+            }
+
             if (['shop', 'cart', 'wishlist', 'profile', 'categories', 'stores', 'wallet', 'home', 'settings'].some(k => hash.includes(k))) {
                 return 'Main';
             }
@@ -626,9 +640,18 @@ export default function App() {
                                                         }
                                                     }
                                                 } else if (currentRoute.name === 'VendorDashboard') {
-                                                    if (!curHash.startsWith('#vendor')) {
+                                                    if (!curHash.startsWith('#vendor') || curHash.includes('vendor-register')) {
                                                         const savedTab = window.localStorage.getItem('@abumafhal_vendor_tab');
                                                         const targetHash = (savedTab && savedTab !== 'overview') ? `#vendor?tab=${savedTab}` : '#vendor';
+                                                        if (window.history && window.history.replaceState) {
+                                                            window.history.replaceState(null, '', '/mobile' + targetHash);
+                                                        } else {
+                                                            window.location.hash = targetHash;
+                                                        }
+                                                    }
+                                                } else if (currentRoute.name === 'VendorRegister') {
+                                                    if (!curHash.startsWith('#vendor-register')) {
+                                                        const targetHash = '#vendor-register';
                                                         if (window.history && window.history.replaceState) {
                                                             window.history.replaceState(null, '', '/mobile' + targetHash);
                                                         } else {

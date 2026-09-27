@@ -440,6 +440,11 @@ export const AdminSettings = ({ navigation }) => {
     const [maxProductImages,   setMaxProductImages]   = useState(settings?.max_product_images?.toString() || '6');
     const [vendorAutoApprove,  setVendorAutoApprove]  = useState(settings?.vendor_auto_approve  || false);
 
+    // ── Official Abu Mafhal Bank Account for Manual Subscriptions ──
+    const [officialBankName,       setOfficialBankName]       = useState(settings?.official_bank_name || 'Moniepoint MFB');
+    const [officialAccountNumber,  setOfficialAccountNumber]  = useState(settings?.official_account_number || '5051567890');
+    const [officialAccountName,    setOfficialAccountName]    = useState(settings?.official_account_name || 'Abu Mafhal Global Concept Ltd');
+
     // ── NEW Features: Branding, Trust & Slogan ─────────────────
     const [tagline,            setTagline]            = useState(settings?.tagline || 'Quality Products | Trusted Sellers | Fast Delivery');
     const [showVerifiedBadge,  setShowVerifiedBadge]  = useState(settings?.show_verified_badge !== false);
@@ -536,6 +541,9 @@ export const AdminSettings = ({ navigation }) => {
             if (settings.update_title !== undefined) setUpdateTitle(settings.update_title || '');
             if (settings.update_message !== undefined) setUpdateMessage(settings.update_message || '');
             if (settings.update_release_notes !== undefined) setUpdateReleaseNotes(settings.update_release_notes || '');
+            if (settings.official_bank_name !== undefined) setOfficialBankName(settings.official_bank_name || 'Moniepoint MFB');
+            if (settings.official_account_number !== undefined) setOfficialAccountNumber(settings.official_account_number || '5051567890');
+            if (settings.official_account_name !== undefined) setOfficialAccountName(settings.official_account_name || 'Abu Mafhal Global Concept Ltd');
         }
     }, [settings]);
 
@@ -813,6 +821,9 @@ export const AdminSettings = ({ navigation }) => {
             gemini_api_key: geminiApiKey, openai_api_key: openaiApiKey,
             resend_api_key: resendApiKey,
             features, vendor_plans: vendorPlans,
+            official_bank_name: officialBankName,
+            official_account_number: officialAccountNumber,
+            official_account_name: officialAccountName,
             currency, commission_rate: parseFloat(commissionRate) || 5,
             min_order_amount: parseFloat(minOrderAmount) || 500,
             free_shipping_min: parseFloat(freeShippingMin) || 5000,
@@ -932,8 +943,46 @@ export const AdminSettings = ({ navigation }) => {
     const toggleFeature = f => { setFeatures(p => ({ ...p, [f]: !p[f] })); setUnsaved(true); };
     const updateVendorPlan = (i, field, val) => {
         const np = [...vendorPlans];
-        np[i][field] = field === 'price' ? parseInt(val) || 0 : val;
-        setVendorPlans(np); setUnsaved(true);
+        np[i] = {
+            ...np[i],
+            [field]: field === 'price' ? (parseInt(val, 10) || 0) : val
+        };
+        setVendorPlans(np);
+        setUnsaved(true);
+    };
+
+    const addVendorPlan = () => {
+        const planId = `plan_${Date.now()}`;
+        setVendorPlans(prev => [
+            ...prev,
+            { id: planId, label: 'Sabuwar Kunshin Biyan Kuɗi', price: 5000, duration_months: 1, is_active: true, badge: 'New' }
+        ]);
+        setUnsaved(true);
+        Alert.alert('Plan Added', 'Sabon kunshin biyan kudi ya shiga. Zaka iya canza sunansa da farashinsa sannan ka danna Deploy.');
+    };
+
+    const removeVendorPlan = (idx) => {
+        if (vendorPlans.length <= 1) {
+            Alert.alert('Cannot Remove', 'Dole ne a bar akalla kunshin biyan kudi guda daya.');
+            return;
+        }
+        const planToRemove = vendorPlans[idx];
+        Alert.alert(
+            'Goge Kunshin Biyan Kudi?',
+            `Kana son goge "${planToRemove?.label || 'Wannan Plan'}"?`,
+            [
+                { text: 'A\'a (Cancel)', style: 'cancel' },
+                {
+                    text: 'Goge (Delete)',
+                    style: 'destructive',
+                    onPress: () => {
+                        const np = vendorPlans.filter((_, i) => i !== idx);
+                        setVendorPlans(np);
+                        setUnsaved(true);
+                    }
+                }
+            ]
+        );
     };
 
     // ── Tab Renderers ──────────────────────────────────────────
@@ -2032,31 +2081,120 @@ export const AdminSettings = ({ navigation }) => {
 
     const renderVendors = () => (
         <View style={S.section}>
-            <Sect title="Subscription Plans" icon="ribbon">
+            {/* 1. Official Store Subscription Bank Account */}
+            <Sect title="Official Subscription Bank Account" subtitle="Asusun da yan kasuwa za su tura kudin subscription idan sun zabi Direct Bank Transfer" icon="business">
+                <Card>
+                    <Inp
+                        label="Bank Name (Sunan Bankin Abu Mafhal)"
+                        value={officialBankName}
+                        onChange={v => { setOfficialBankName(v); setUnsaved(true); }}
+                        icon="business"
+                        placeholder="Moniepoint MFB / Opay / Zenith"
+                        color="#D9A73A"
+                    />
+                    <Inp
+                        label="Account Number (Lambar Asusu)"
+                        value={officialAccountNumber}
+                        onChange={v => { setOfficialAccountNumber(v); setUnsaved(true); }}
+                        icon="card"
+                        placeholder="5051567890"
+                        keyboard="numeric"
+                        color="#3B82F6"
+                    />
+                    <Inp
+                        label="Account Beneficiary Name (Sunan Mai Asusu)"
+                        value={officialAccountName}
+                        onChange={v => { setOfficialAccountName(v); setUnsaved(true); }}
+                        icon="person"
+                        placeholder="Abu Mafhal Global Concept Ltd"
+                        color="#10B981"
+                    />
+                    <View style={[S.infoBox, { backgroundColor: darkMode ? '#1E3A5F' : '#EFF6FF' }]}>
+                        <Ionicons name="information-circle" size={15} color="#3B82F6" />
+                        <Text style={{ fontSize: 12, color: darkMode ? '#93C5FD' : '#1E40AF', flex: 1 }}>
+                            Wadannan bayanan banki sune za su fito ga duk mai neman shiga kasuwa a shafin Vendor Register idan ya zabi "Direct Bank Transfer" tare da madannin kwafa (Copy) mai sauki.
+                        </Text>
+                    </View>
+                </Card>
+            </Sect>
+
+            {/* 2. Dynamic Subscription Plans */}
+            <Sect title="Storefront Subscription Plans" subtitle="Kunshin biyan kudi na yan kasuwa (ana iya sauyawa ko kara sabo a kowane lokaci)" icon="ribbon">
                 {vendorPlans.map((plan, idx) => (
                     <Card key={plan.id}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
                                 <View style={[S.planBadge, { backgroundColor: plan.is_active !== false ? '#D1FAE5' : '#FEE2E2' }]}>
                                     <Ionicons name="ribbon" size={19} color={plan.is_active !== false ? '#10B981' : '#EF4444'} />
                                 </View>
-                                <View>
+                                <View style={{ flex: 1, paddingRight: 8 }}>
                                     <Text style={[S.togLabel, { color: T.text }]}>{plan.label}</Text>
                                     <Text style={[S.togDesc, { color: T.muted }]}>ID: {plan.id}</Text>
                                 </View>
                             </View>
-                            <Switch value={plan.is_active !== false}
-                                onValueChange={val => updateVendorPlan(idx, 'is_active', val)}
-                                trackColor={{ false: T.border, true: '#10B981' }} thumbColor="white" />
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                <Switch
+                                    value={plan.is_active !== false}
+                                    onValueChange={val => updateVendorPlan(idx, 'is_active', val)}
+                                    trackColor={{ false: T.border, true: '#10B981' }}
+                                    thumbColor="white"
+                                />
+                                {vendorPlans.length > 1 && (
+                                    <TouchableOpacity
+                                        onPress={() => removeVendorPlan(idx)}
+                                        style={{ padding: 4 }}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
                         </View>
+
                         {plan.is_active !== false && (
-                            <View style={{ marginTop: 14 }}>
-                                <Inp label={`Price (${selectedCurrency.symbol})`} value={plan.price.toString()}
-                                    onChange={val => updateVendorPlan(idx, 'price', val)} icon="cash" keyboard="numeric" hint="Set 0 for unlimited free trial" />
+                            <View style={{ marginTop: 14, gap: 10 }}>
+                                <Inp
+                                    label="Plan Title (Sunan Kunshi)"
+                                    value={plan.label}
+                                    onChange={val => updateVendorPlan(idx, 'label', val)}
+                                    icon="pricetag"
+                                    placeholder="e.g. 1 Wata (1 Month Storefront)"
+                                />
+                                <Inp
+                                    label={`Price (${selectedCurrency.symbol})`}
+                                    value={plan.price?.toString() || '0'}
+                                    onChange={val => updateVendorPlan(idx, 'price', val)}
+                                    icon="cash"
+                                    keyboard="numeric"
+                                    hint="Sanya 0 idan gwajin kyauta ne (Free Trial)"
+                                />
                             </View>
                         )}
                     </Card>
                 ))}
+
+                <TouchableOpacity
+                    onPress={addVendorPlan}
+                    style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 8,
+                        backgroundColor: '#10B98115',
+                        borderWidth: 1.5,
+                        borderColor: '#10B981',
+                        borderStyle: 'dashed',
+                        borderRadius: 14,
+                        paddingVertical: 14,
+                        marginBottom: 16
+                    }}
+                    activeOpacity={0.8}
+                >
+                    <Ionicons name="add-circle" size={20} color="#10B981" />
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#10B981' }}>
+                        + Kara Sabon Kunshin Biyan Kudi (Add Plan)
+                    </Text>
+                </TouchableOpacity>
             </Sect>
 
             {/* Vendor Listing Limits & Vacation Policy */}

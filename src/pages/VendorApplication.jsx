@@ -455,10 +455,9 @@ const VendorApplication = () => {
         console.warn('Store sync notice:', stErr);
       }
 
-      // 2. Update profile role to vendor
+      // 2. Update profile business info (preserve current role until approved)
       try {
         await supabase.from('profiles').update({
-          role: 'vendor',
           business_name: formData.businessName,
           business_category: formData.businessCategory,
           about: formData.businessDescription,

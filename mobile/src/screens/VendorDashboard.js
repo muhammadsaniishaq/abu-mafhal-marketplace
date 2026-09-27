@@ -11,7 +11,8 @@ import {
     Alert,
     RefreshControl,
     Platform,
-    StatusBar
+    StatusBar,
+    Linking
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -138,6 +139,10 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
     const [wallet, setWallet] = useState({ balance: 0, pending_balance: 0, total_sales: 0 });
     const [stats, setStats] = useState({ earnings: 0, orders: 0, products: 0, followers: 0 });
 
+    // Access Control & Vendor Application Status
+    const [vendorAccessStatus, setVendorAccessStatus] = useState('checking'); // 'checking' | 'authorized' | 'pending' | 'unpaid' | 'rejected' | 'not_applied'
+    const [applicationData, setApplicationData] = useState(null);
+
     // UI & Modal State
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -197,13 +202,74 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
     }, [user?.id]);
 
     // ─────────────────────────────────────────────────────────────
-    // COMPREHENSIVE DATA RESOLUTION (100% RELIABLE)
+    // COMPREHENSIVE DATA RESOLUTION WITH STRICT ACCESS CONTROL
     // ─────────────────────────────────────────────────────────────
     const fetchDashboardData = async () => {
         try {
             setLoading(true);
             const activeId = user?.id;
-            if (!activeId) return;
+            if (!activeId) {
+                setLoading(false);
+                return;
+            }
+
+            // 0. Strict Access & Privilege Control
+            const isUserAdmin = user?.role === 'admin' || user?.user_metadata?.role === 'admin';
+            let isAuthorized = isUserAdmin;
+            let currentApp = null;
+
+            if (!isUserAdmin) {
+                // Fetch the latest vendor application for this user
+                const { data: appRow } = await supabase
+                    .from('vendor_applications')
+                    .select('*')
+                    .eq('user_id', activeId)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                currentApp = appRow;
+                setApplicationData(appRow);
+
+                const { data: vendorRow } = await supabase
+                    .from('vendors')
+                    .select('vendor_status, is_locked')
+                    .eq('id', activeId)
+                    .maybeSingle();
+
+                const isProfileVendor = user?.role === 'vendor' || user?.user_metadata?.role === 'vendor';
+
+                if (appRow?.status === 'approved' || vendorRow?.vendor_status === 'active' || (isProfileVendor && appRow?.payment_status === 'paid')) {
+                    isAuthorized = true;
+                    setVendorAccessStatus('authorized');
+                } else if (appRow) {
+                    if (appRow.status === 'rejected') {
+                        setVendorAccessStatus('rejected');
+                        setLoading(false);
+                        return;
+                    } else if (appRow.payment_status === 'unpaid' && (appRow.subscription_fee > 0 || appRow.subscription_fee === undefined)) {
+                        setVendorAccessStatus('unpaid');
+                        setLoading(false);
+                        return;
+                    } else {
+                        // Pending admin review or manual payment verification
+                        setVendorAccessStatus('pending');
+                        setLoading(false);
+                        return;
+                    }
+                } else if (isProfileVendor) {
+                    // Legacy vendor profile without application record
+                    isAuthorized = true;
+                    setVendorAccessStatus('authorized');
+                } else {
+                    // No vendor record or application found at all
+                    setVendorAccessStatus('not_applied');
+                    setLoading(false);
+                    return;
+                }
+            } else {
+                setVendorAccessStatus('authorized');
+            }
 
             // 1. Resolve unified store profile (stores + profiles + vendors)
             const resolved = await resolveVendorOrStore(activeId, true);
@@ -215,17 +281,15 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
                 .eq('user_id', activeId)
                 .maybeSingle();
 
-            const isUserAdmin = user?.role === 'admin' || user?.user_metadata?.role === 'admin' || resolved?.role === 'admin' || true;
-
             const mergedVendor = {
                 ...resolved,
                 ...(storeRow || {}),
-                business_name: storeRow?.name || resolved?.name || resolved?.business_name || 'My Store',
+                business_name: storeRow?.name || resolved?.name || resolved?.business_name || currentApp?.business_name || 'My Store',
                 logo_url: storeRow?.logo || resolved?.logo || resolved?.avatar,
                 delivery_type: storeRow?.custom_shipping_enabled ? 'self' : 'marketplace',
                 is_locked: false,
-                role: 'admin',
-                is_admin: true,
+                role: isUserAdmin ? 'admin' : 'vendor',
+                is_admin: isUserAdmin,
                 is_verified: true,
                 status: 'approved'
             };
@@ -526,6 +590,289 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
                     fetchDashboardData();
                 }}
             />
+        );
+    }
+
+    if (loading) {
+        return (
+            <SafeAreaView style={{ flex: 1, backgroundColor: NAVY, justifyContent: 'center', alignItems: 'center' }}>
+                <StatusBar barStyle="light-content" backgroundColor={NAVY} />
+                <ActivityIndicator size="large" color={GOLD} />
+                <Text style={{ marginTop: 14, color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>
+                    Tabbatar da Shagonka / Loading Store...
+                </Text>
+            </SafeAreaView>
+        );
+    }
+
+    if (vendorAccessStatus !== 'authorized') {
+        const handleOpenRegister = () => {
+            if (navigation && typeof navigation.navigate === 'function') {
+                navigation.navigate('VendorRegister');
+            } else if (typeof window !== 'undefined') {
+                window.location.hash = '#vendor-register';
+            }
+        };
+
+        const handleReturnToMarketplace = () => {
+            if (navigation && typeof navigation.navigate === 'function') {
+                navigation.navigate('Main', { screen: 'home' });
+            } else if (typeof window !== 'undefined') {
+                window.location.hash = '';
+            }
+        };
+
+        const handleOpenSupport = () => {
+            const phone = '2348000000000';
+            const msg = encodeURIComponent(`Barka dai Abu Mafhal, ina son neman karin haske akan rajistar shagona (${applicationData?.business_name || user?.email}).`);
+            Linking.openURL(`https://wa.me/${phone}?text=${msg}`);
+        };
+
+        return (
+            <SafeAreaView style={{ flex: 1, backgroundColor: NAVY }}>
+                <StatusBar barStyle="light-content" backgroundColor={NAVY} />
+                
+                {/* Header */}
+                <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingHorizontal: 20,
+                    paddingTop: Math.max(insets.top, 14),
+                    paddingBottom: 14,
+                    borderBottomWidth: 1,
+                    borderBottomColor: 'rgba(217, 167, 58, 0.25)',
+                    backgroundColor: DARK_SURFACE
+                }}>
+                    <TouchableOpacity
+                        onPress={handleReturnToMarketplace}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                        activeOpacity={0.8}
+                    >
+                        <Ionicons name="arrow-back" size={20} color={GOLD} />
+                        <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>Koma Kasuwa</Text>
+                    </TouchableOpacity>
+
+                    <Text style={{ color: GOLD, fontWeight: '900', fontSize: 14, letterSpacing: 0.5 }}>
+                        ABU MAFHAL MERCHANT
+                    </Text>
+
+                    <TouchableOpacity onPress={handleOpenSupport} style={{ padding: 4 }}>
+                        <Ionicons name="logo-whatsapp" size={20} color="#22C55E" />
+                    </TouchableOpacity>
+                </View>
+
+                <ScrollView contentContainerStyle={{ padding: 20, alignItems: 'center' }}>
+                    {/* Status Badge & Icon */}
+                    <View style={{
+                        width: 80,
+                        height: 80,
+                        borderRadius: 40,
+                        backgroundColor: vendorAccessStatus === 'rejected' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(217, 167, 58, 0.15)',
+                        borderWidth: 2,
+                        borderColor: vendorAccessStatus === 'rejected' ? '#EF4444' : GOLD,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginTop: 20,
+                        marginBottom: 16
+                    }}>
+                        <Ionicons
+                            name={
+                                vendorAccessStatus === 'pending' ? 'time' :
+                                vendorAccessStatus === 'unpaid' ? 'card' :
+                                vendorAccessStatus === 'rejected' ? 'close-circle' :
+                                'storefront'
+                            }
+                            size={42}
+                            color={vendorAccessStatus === 'rejected' ? '#EF4444' : GOLD}
+                        />
+                    </View>
+
+                    {/* Titles */}
+                    <Text style={{ fontSize: 20, fontWeight: '900', color: '#FFFFFF', textAlign: 'center', marginBottom: 8 }}>
+                        {vendorAccessStatus === 'pending' && 'Aikace-aikacenka na Karkashin Bita'}
+                        {vendorAccessStatus === 'unpaid' && 'Ana Bukatar Biyan Kudin Subscription'}
+                        {vendorAccessStatus === 'rejected' && 'Aikace-aikacenka Yana Bukatar Gyara'}
+                        {vendorAccessStatus === 'not_applied' && 'Baka Da Rajistar Shago Tukuna'}
+                    </Text>
+
+                    <Text style={{ fontSize: 13, color: '#94A3B8', textAlign: 'center', lineHeight: 20, marginBottom: 20, paddingHorizontal: 10 }}>
+                        {vendorAccessStatus === 'pending' && 'Mun karbi bayanan shagonka da takardun da ka gabatar. Tawagar tabbatarwa na Abu Mafhal na duba bayanan domin tabbatar da shagonka ya dace da ka\'idojin kasuwa. Za a kammala bitar cikin sa\'o\'i 24 zuwa 48.'}
+                        {vendorAccessStatus === 'unpaid' && 'Don kunna shagonka domin fara loda kayayyaki da karbar odar kwastomomi, ana bukatar biyan kudin membership package din da ka zaba.'}
+                        {vendorAccessStatus === 'rejected' && (applicationData?.rejection_reason || 'Takardu ko bayanan shago suna bukatar karin haske kafin a amince da shagon.')}
+                        {vendorAccessStatus === 'not_applied' && 'Wannan sashin na \'yan kasuwa ne masu rijista a Abu Mafhal. Kuna so ku sayar da kayayyaki ga dubban kwastomomi a fadin Najeriya?'}
+                    </Text>
+
+                    {/* Application Details Card if available */}
+                    {applicationData && (
+                        <View style={{
+                            width: '100%',
+                            backgroundColor: DARK_SURFACE,
+                            borderRadius: 16,
+                            padding: 16,
+                            borderWidth: 1,
+                            borderColor: 'rgba(217, 167, 58, 0.25)',
+                            marginBottom: 24
+                        }}>
+                            <Text style={{ fontSize: 11, fontWeight: '900', color: GOLD, letterSpacing: 1, marginBottom: 12 }}>
+                                BAYANAN SHAGONKA / STORE DETAILS
+                            </Text>
+
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' }}>
+                                <Text style={{ fontSize: 13, color: '#94A3B8' }}>Sunan Shago</Text>
+                                <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>{applicationData.business_name || '—'}</Text>
+                            </View>
+
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' }}>
+                                <Text style={{ fontSize: 13, color: '#94A3B8' }}>Nau\'in Kaya</Text>
+                                <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF' }}>{applicationData.business_category || 'General'}</Text>
+                            </View>
+
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' }}>
+                                <Text style={{ fontSize: 13, color: '#94A3B8' }}>Package da Aka Zaba</Text>
+                                <Text style={{ fontSize: 13, fontWeight: '800', color: GOLD }}>{applicationData.subscription_plan || 'Standard'}</Text>
+                            </View>
+
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 }}>
+                                <Text style={{ fontSize: 13, color: '#94A3B8' }}>Halin Biyan Kudi</Text>
+                                <Text style={{
+                                    fontSize: 12,
+                                    fontWeight: '900',
+                                    color: applicationData.payment_status === 'paid' ? '#10B981' : (applicationData.payment_status === 'manual_pending_verification' ? '#F59E0B' : '#EF4444')
+                                }}>
+                                    {applicationData.payment_status === 'paid' ? 'An Tabbatar da Biyan Kudi ✓' :
+                                     applicationData.payment_status === 'manual_pending_verification' ? 'Transfer Yana Kan Bita ⌛' :
+                                     applicationData.subscription_fee === 0 ? 'Free Trial Active ✓' : 'Ba a Biya Ba / Unpaid'}
+                                </Text>
+                            </View>
+                        </View>
+                    )}
+
+                    {/* Action Buttons */}
+                    <View style={{ width: '100%', gap: 12 }}>
+                        {vendorAccessStatus === 'unpaid' && (
+                            <TouchableOpacity
+                                onPress={handleOpenRegister}
+                                style={{
+                                    backgroundColor: GOLD,
+                                    paddingVertical: 14,
+                                    borderRadius: 12,
+                                    alignItems: 'center',
+                                    flexDirection: 'row',
+                                    justifyContent: 'center',
+                                    gap: 8
+                                }}
+                                activeOpacity={0.85}
+                            >
+                                <Ionicons name="card" size={18} color="#0A192F" />
+                                <Text style={{ color: '#0A192F', fontWeight: '900', fontSize: 14 }}>
+                                    Biya Kudin Subscription Yanzu
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+
+                        {vendorAccessStatus === 'rejected' && (
+                            <TouchableOpacity
+                                onPress={handleOpenRegister}
+                                style={{
+                                    backgroundColor: GOLD,
+                                    paddingVertical: 14,
+                                    borderRadius: 12,
+                                    alignItems: 'center',
+                                    flexDirection: 'row',
+                                    justifyContent: 'center',
+                                    gap: 8
+                                }}
+                                activeOpacity={0.85}
+                            >
+                                <Ionicons name="refresh" size={18} color="#0A192F" />
+                                <Text style={{ color: '#0A192F', fontWeight: '900', fontSize: 14 }}>
+                                    Gyara Bayanai & Sake Aikawa
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+
+                        {vendorAccessStatus === 'pending' && (
+                            <TouchableOpacity
+                                onPress={handleOpenRegister}
+                                style={{
+                                    backgroundColor: 'rgba(217, 167, 58, 0.15)',
+                                    borderWidth: 1,
+                                    borderColor: GOLD,
+                                    paddingVertical: 14,
+                                    borderRadius: 12,
+                                    alignItems: 'center',
+                                    flexDirection: 'row',
+                                    justifyContent: 'center',
+                                    gap: 8
+                                }}
+                                activeOpacity={0.85}
+                            >
+                                <Ionicons name="document-text" size={18} color={GOLD} />
+                                <Text style={{ color: GOLD, fontWeight: '900', fontSize: 14 }}>
+                                    Duba / Sabunta Aikace-aikace
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+
+                        {vendorAccessStatus === 'not_applied' && (
+                            <TouchableOpacity
+                                onPress={handleOpenRegister}
+                                style={{
+                                    backgroundColor: GOLD,
+                                    paddingVertical: 14,
+                                    borderRadius: 12,
+                                    alignItems: 'center',
+                                    flexDirection: 'row',
+                                    justifyContent: 'center',
+                                    gap: 8
+                                }}
+                                activeOpacity={0.85}
+                            >
+                                <Ionicons name="storefront" size={18} color="#0A192F" />
+                                <Text style={{ color: '#0A192F', fontWeight: '900', fontSize: 14 }}>
+                                    Bude Shago a Abu Mafhal
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+
+                        <TouchableOpacity
+                            onPress={handleOpenSupport}
+                            style={{
+                                backgroundColor: 'rgba(34, 197, 94, 0.12)',
+                                borderWidth: 1,
+                                borderColor: 'rgba(34, 197, 94, 0.4)',
+                                paddingVertical: 14,
+                                borderRadius: 12,
+                                alignItems: 'center',
+                                flexDirection: 'row',
+                                justifyContent: 'center',
+                                gap: 8
+                            }}
+                            activeOpacity={0.85}
+                        >
+                            <Ionicons name="logo-whatsapp" size={18} color="#22C55E" />
+                            <Text style={{ color: '#22C55E', fontWeight: '800', fontSize: 13 }}>
+                                Tuntubi Admin a WhatsApp
+                            </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            onPress={handleReturnToMarketplace}
+                            style={{
+                                paddingVertical: 12,
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                            }}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={{ color: '#94A3B8', fontWeight: '700', fontSize: 13 }}>
+                                Koma Kasuwa (Return to Marketplace)
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                </ScrollView>
+            </SafeAreaView>
         );
     }
 
