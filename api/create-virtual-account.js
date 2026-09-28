@@ -23,7 +23,9 @@ export default async function handler(req, res) {
             email,
             name,
             phone,
-            amount
+            bvn,
+            amount,
+            force_refresh
         } = body;
 
         if (!user_id && !email) {
@@ -55,8 +57,8 @@ export default async function handler(req, res) {
             }
         }
 
-        // If user already has an active dedicated virtual account, return it immediately!
-        if (existingVA && !body.force_refresh) {
+        // If user already has an active dedicated virtual account and not forcing refresh with new BVN
+        if (existingVA && !force_refresh && !bvn) {
             return res.status(200).json({
                 success: true,
                 data: existingVA
@@ -67,52 +69,27 @@ export default async function handler(req, res) {
             ? targetEmail.trim().toLowerCase() 
             : `user_${String(user_id || 'wallet').substring(0, 8)}@abumafhal.com`;
 
-        const FOUNDER_EMAILS = [
-            'sale.abumafhal@gmail.com',
-            'muhammadsanishaq@gmail.com',
-            'abumafhalhub@gmail.com',
-            'muhammadsanish0@gmail.com',
-            'ceo@abumafhal.com',
-            'muhammadsaniisyaku3@gmail.com'
-        ];
-
-        // Founder accounts always use the permanent dedicated account that never expires
-        if (FOUNDER_EMAILS.includes(cleanEmail)) {
-            const founderVA = {
-                account_number: '9187255635',
-                account_name: 'Abu Mafhal / Muhammad Sani',
-                bank_name: 'Flutterwave MFB (Formerly OK MFB)',
-                provider: 'flutterwave',
-                is_permanent: true,
-                tx_ref: 'AMF-DVA-6D3DF1F5'
-            };
-            try {
-                if (user_id) {
-                    await supabase.from('profiles').update({
-                        custom_id: JSON.stringify(founderVA)
-                    }).eq('id', user_id);
-                }
-            } catch (_) {}
-            return res.status(200).json({
-                success: true,
-                data: founderVA
-            });
-        }
-        
         const cleanName = (targetName || 'Valued Member').trim();
         const cleanPhone = (targetPhone || '08000000000').replace(/[^0-9]/g, '');
+        const cleanBvn = bvn ? String(bvn).trim().replace(/[^0-9]/g, '') : null;
+
         const nameParts = cleanName.split(/\s+/);
         const firstName = nameParts[0] || 'Member';
         const lastName = nameParts.slice(1).join(' ') || 'Customer';
 
-        // Fetch Flutterwave secret key
+        // Retrieve gateway credentials from database
+        let paystackSecret = process.env.PAYSTACK_SECRET_KEY || process.env.EXPO_PUBLIC_PAYSTACK_SECRET_KEY;
         let flwSecret = process.env.FLUTTERWAVE_SECRET_KEY || process.env.EXPO_PUBLIC_FLUTTERWAVE_SECRET_KEY;
+
         try {
             const { data: rows } = await supabase.from('app_settings').select('*');
             if (rows && Array.isArray(rows)) {
                 for (const r of rows) {
                     if (r.key === 'payment_gateways' && r.value && typeof r.value === 'object') {
+                        if (r.value.paystack_secret_key) paystackSecret = r.value.paystack_secret_key;
                         if (r.value.flutterwave_secret_key) flwSecret = r.value.flutterwave_secret_key;
+                    } else if (r.key === 'paystack_secret_key') {
+                        paystackSecret = typeof r.value === 'string' ? r.value : (r.value?.value || r.value?.key);
                     } else if (r.key === 'flutterwave_secret_key') {
                         flwSecret = typeof r.value === 'string' ? r.value : (r.value?.value || r.value?.key);
                     }
@@ -124,56 +101,157 @@ export default async function handler(req, res) {
             flwSecret = 'FLWSECK-456331fb55a2e059f1eb8d439c53b9ae-1a07bfbf2fcvt-X';
         }
 
-        const reqAmount = Math.max(100, Number(amount) || 1000);
         const userSlug = String(user_id || cleanEmail).replace(/[^a-zA-Z0-9]/g, '').slice(0, 10).toUpperCase();
-        const txRef = `AMF-${userSlug}-${Date.now()}`;
+        const txRef = `AMF-VA-${userSlug}-${Date.now()}`;
 
-        // Call Flutterwave API to create unique dynamic virtual account for this specific user
-        const flwRes = await fetch('https://api.flutterwave.com/v3/virtual-account-numbers', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${flwSecret.trim()}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                email: cleanEmail,
-                is_permanent: false,
-                amount: reqAmount,
-                tx_ref: txRef,
-                phonenumber: cleanPhone,
-                firstname: firstName,
-                lastname: lastName,
-                narration: `Abu Mafhal ${firstName}`
-            })
-        });
+        let generatedVA = null;
 
-        const flwData = await flwRes.json();
+        // ═════════════════════════════════════════════════════════════════════════
+        // 1. PAYSTACK VERIFICATION & DEDICATED VIRTUAL ACCOUNT CREATION
+        // ═════════════════════════════════════════════════════════════════════════
+        if (paystackSecret) {
+            try {
+                // A. Create or Fetch Paystack Customer
+                const cusRes = await fetch('https://api.paystack.co/customer', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${paystackSecret.trim()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: cleanEmail,
+                        first_name: firstName,
+                        last_name: lastName,
+                        phone: cleanPhone
+                    })
+                });
+                const cusJson = await cusRes.json();
+                const customerCode = cusJson?.data?.customer_code;
 
-        if (flwData?.status === 'success' && flwData?.data?.account_number) {
-            const d = flwData.data;
-            const accountName = d.note 
-                ? d.note.replace(/^Please make a bank transfer to\s+/i, '').trim()
-                : `Abu Mafhal ${firstName} FLW`;
+                if (customerCode) {
+                    // B. Validate Customer Identification via BVN if provided
+                    if (cleanBvn && cleanBvn.length === 11) {
+                        try {
+                            await fetch(`https://api.paystack.co/customer/${customerCode}/identification`, {
+                                method: 'POST',
+                                headers: {
+                                    'Authorization': `Bearer ${paystackSecret.trim()}`,
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    country: 'NG',
+                                    type: 'bvn',
+                                    value: cleanBvn,
+                                    first_name: firstName,
+                                    last_name: lastName
+                                })
+                            });
+                        } catch (_) {}
+                    }
 
-            const vaPayload = {
-                account_number: d.account_number,
-                account_name: accountName,
-                bank_name: d.bank_name || 'Flutterwave MFB',
-                amount: reqAmount,
-                expected_amount: d.amount || reqAmount,
-                order_ref: d.order_ref,
-                flw_ref: d.flw_ref,
-                tx_ref: txRef,
-                expiry_date: d.expiry_date,
-                provider: 'flutterwave',
-                created_at: d.created_at || new Date().toISOString()
-            };
+                    // C. Request Dedicated Virtual Account from Paystack (Wema Bank or Titan Trust)
+                    const dvaRes = await fetch('https://api.paystack.co/dedicated_account', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${paystackSecret.trim()}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            customer: customerCode,
+                            preferred_bank: 'wema-bank'
+                        })
+                    });
+                    const dvaJson = await dvaRes.json();
 
+                    if (dvaJson?.status && dvaJson?.data?.account_number) {
+                        const d = dvaJson.data;
+                        generatedVA = {
+                            account_number: d.account_number,
+                            account_name: d.account_name || `${firstName} ${lastName} / Abu Mafhal`,
+                            bank_name: d.bank?.name || 'Wema Bank (Paystack)',
+                            bank_slug: d.bank?.slug || 'wema-bank',
+                            provider: 'paystack',
+                            customer_code: customerCode,
+                            bvn_verified: Boolean(cleanBvn),
+                            tx_ref: txRef,
+                            is_permanent: true,
+                            created_at: new Date().toISOString()
+                        };
+                    }
+                }
+            } catch (paystackErr) {
+                console.warn('[create-virtual-account] Paystack DVA creation note:', paystackErr.message);
+            }
+        }
+
+        // ═════════════════════════════════════════════════════════════════════════
+        // 2. FLUTTERWAVE DEDICATED VIRTUAL ACCOUNT (FALLBACK OR COMPLEMENTARY)
+        // ═════════════════════════════════════════════════════════════════════════
+        if (!generatedVA && flwSecret) {
+            try {
+                const reqAmount = Math.max(100, Number(amount) || 1000);
+                const flwPayload = {
+                    email: cleanEmail,
+                    is_permanent: true,
+                    amount: reqAmount,
+                    tx_ref: txRef,
+                    phonenumber: cleanPhone,
+                    firstname: firstName,
+                    lastname: lastName,
+                    narration: `Abu Mafhal ${firstName}`
+                };
+                if (cleanBvn && cleanBvn.length === 11) {
+                    flwPayload.bvn = cleanBvn;
+                }
+
+                const flwRes = await fetch('https://api.flutterwave.com/v3/virtual-account-numbers', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${flwSecret.trim()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(flwPayload)
+                });
+                const flwData = await flwRes.json();
+
+                if (flwData?.status === 'success' && flwData?.data?.account_number) {
+                    const d = flwData.data;
+                    const accountName = d.note 
+                        ? d.note.replace(/^Please make a bank transfer to\s+/i, '').trim()
+                        : `${firstName} ${lastName} / Abu Mafhal`;
+
+                    generatedVA = {
+                        account_number: d.account_number,
+                        account_name: accountName,
+                        bank_name: d.bank_name || 'Flutterwave MFB',
+                        order_ref: d.order_ref,
+                        flw_ref: d.flw_ref,
+                        tx_ref: txRef,
+                        provider: 'flutterwave',
+                        bvn_verified: Boolean(cleanBvn),
+                        is_permanent: true,
+                        created_at: d.created_at || new Date().toISOString()
+                    };
+                } else if (cleanBvn && flwData?.message?.toLowerCase()?.includes('bvn')) {
+                    return res.status(400).json({
+                        success: false,
+                        error: flwData.message || 'Invalid BVN details. Please ensure your name matches your Bank Verification Number.'
+                    });
+                }
+            } catch (flwErr) {
+                console.warn('[create-virtual-account] Flutterwave DVA creation error:', flwErr.message);
+            }
+        }
+
+        // ═════════════════════════════════════════════════════════════════════════
+        // 3. PERSIST AND RETURN GENERATED VIRTUAL ACCOUNT
+        // ═════════════════════════════════════════════════════════════════════════
+        if (generatedVA && generatedVA.account_number) {
             // Save in profiles table so it persists across all devices and logins
             try {
                 if (user_id) {
                     await supabase.from('profiles').update({
-                        custom_id: JSON.stringify(vaPayload)
+                        custom_id: JSON.stringify(generatedVA)
                     }).eq('id', user_id);
                 }
             } catch (pErr) {
@@ -185,10 +263,10 @@ export default async function handler(req, res) {
                 if (user_id) {
                     await supabase.from('virtual_accounts').insert({
                         user_id: user_id,
-                        bank_name: d.bank_name || 'Flutterwave MFB',
-                        account_number: d.account_number,
-                        account_name: accountName,
-                        provider: 'flutterwave',
+                        bank_name: generatedVA.bank_name,
+                        account_number: generatedVA.account_number,
+                        account_name: generatedVA.account_name,
+                        provider: generatedVA.provider,
                         currency: 'NGN'
                     });
                 }
@@ -198,25 +276,15 @@ export default async function handler(req, res) {
 
             return res.status(200).json({
                 success: true,
-                data: {
-                    account_number: d.account_number,
-                    account_name: accountName,
-                    bank_name: d.bank_name || 'Flutterwave MFB',
-                    amount: reqAmount,
-                    expected_amount: d.amount || reqAmount,
-                    order_ref: d.order_ref,
-                    flw_ref: d.flw_ref,
-                    tx_ref: txRef,
-                    expiry_date: d.expiry_date,
-                    provider: 'flutterwave',
-                    created_at: d.created_at || new Date().toISOString()
-                }
+                data: generatedVA
             });
         }
 
         return res.status(400).json({
             success: false,
-            error: flwData?.message || 'Could not generate virtual account from payment gateway'
+            error: cleanBvn 
+                ? 'Could not generate virtual account with the provided BVN. Please verify your 11-digit BVN and legal name.'
+                : 'Could not generate virtual account from payment gateway. Please provide your BVN to verify and activate.'
         });
 
     } catch (err) {

@@ -1147,26 +1147,28 @@ export const PaymentGatewayService = {
      * Connects to live Flutterwave API to provide a 100% genuine, permanent NUBAN on Flutterwave MFB.
      * It never changes, never expires, and accepts any deposit amount.
      */
-    async getConstantVirtualAccount({ userId, email, name, phone }) {
+    async getConstantVirtualAccount({ userId, email, name, phone, bvn, forceRefresh }) {
         const userStr = String(userId || 'abumafhal_user');
         const userEmail = (email && email.includes('@')) ? email.trim() : `user_${userStr.substring(0, 8)}@abumafhal.com`;
         const firstName = (name || 'Valued Member').trim().toUpperCase().split(/\s+/)[0];
         const lastName = (name || 'Customer').trim().split(/\s+/).slice(1).join(' ') || 'Customer';
 
-        // 1. Check local storage (ignore any legacy fake 980 accounts)
-        try {
-            if (AsyncStorage) {
-                const stored = await AsyncStorage.getItem(`@abumafhal_dedicated_va_${userStr}`);
-                if (stored) {
-                    const parsed = JSON.parse(stored);
-                    if (parsed?.account_number && !parsed.account_number.startsWith('980')) {
-                        return { ok: true, data: { success: true, data: parsed } };
+        // 1. Check local storage if not forcing refresh with new BVN
+        if (!forceRefresh && !bvn) {
+            try {
+                if (AsyncStorage) {
+                    const stored = await AsyncStorage.getItem(`@abumafhal_dedicated_va_${userStr}`);
+                    if (stored) {
+                        const parsed = JSON.parse(stored);
+                        if (parsed?.account_number && !parsed.account_number.startsWith('980')) {
+                            return { ok: true, data: { success: true, data: parsed } };
+                        }
                     }
                 }
-            }
-        } catch (_) {}
+            } catch (_) {}
+        }
 
-        // 1. Query backend endpoint or call Flutterwave API to generate/retrieve unique account
+        // 1. Query backend endpoint to verify BVN with Paystack & generate dedicated virtual account
         try {
             const apiBase = Platform.OS === 'web' && typeof window !== 'undefined'
                 ? window.location.origin
@@ -1175,7 +1177,15 @@ export const PaymentGatewayService = {
             const res = await fetch(`${apiBase}/api/create-virtual-account`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: userStr, email: userEmail, name, phone, amount: 1000 })
+                body: JSON.stringify({
+                    user_id: userStr,
+                    email: userEmail,
+                    name,
+                    phone,
+                    bvn: bvn ? String(bvn).trim() : undefined,
+                    force_refresh: forceRefresh,
+                    amount: 1000
+                })
             });
 
             if (res.ok) {
@@ -1187,6 +1197,11 @@ export const PaymentGatewayService = {
                         }
                     } catch (_) {}
                     return { ok: true, data: json };
+                }
+            } else {
+                const errJson = await res.json().catch(() => null);
+                if (errJson?.error) {
+                    return { ok: false, error: errJson.error };
                 }
             }
         } catch (apiErr) {
