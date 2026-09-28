@@ -13,7 +13,8 @@ import {
     Animated,
     Easing,
     Platform,
-    Share
+    Share,
+    Image
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +23,65 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
+import { PaymentGatewayService } from '../services/paymentGatewayService';
+
+const USD_RATE = 1500;
+
+const GATEWAYS = [
+    {
+        id: 'paystack',
+        name: 'Paystack Checkout',
+        subtitle: 'Debit/Credit Cards · USSD · Bank Transfer · Apple Pay',
+        badge: 'AUTO-VERIFY',
+        badgeColor: '#0284C7',
+        badgeBg: '#F0F9FF',
+        badgeBorder: '#BAE6FD',
+        color: '#0284C7',
+        speed: 'Instant (10-30s)',
+        logo: { uri: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSzFzmpCa0Tav9NttiYF10t9wftJPQ0XYPBkA&s' },
+        channels: ['Debit Card', 'USSD', 'Bank', 'Apple Pay']
+    },
+    {
+        id: 'flutterwave',
+        name: 'Flutterwave Africa',
+        subtitle: 'Cards · Direct Bank · Mobile Money · Pan-Africa',
+        badge: 'PAN-AFRICA',
+        badgeColor: '#D97706',
+        badgeBg: '#FFFBEB',
+        badgeBorder: '#FDE68A',
+        color: '#D97706',
+        speed: 'Instant (15-45s)',
+        logo: { uri: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-W6MLvD_saE20EDSZzVPspKqcKxZ89rW8uw&s' },
+        channels: ['Mastercard', 'Visa', 'Mobile Money', 'Bank']
+    },
+    {
+        id: 'nowpayments',
+        name: 'NOWPayments Crypto',
+        subtitle: 'USDT · BTC · ETH · SOL · BNB · 150+ Cryptos',
+        badge: 'WEB3 CRYPTO',
+        badgeColor: '#2563EB',
+        badgeBg: '#EFF6FF',
+        badgeBorder: '#BFDBFE',
+        color: '#2563EB',
+        isCrypto: true,
+        speed: '1-3 Confirmations',
+        logo: { uri: 'https://cdn.brandfetch.io/id_rL36n5a/w/400/h/400/logo.png' },
+        channels: ['USDT (TRC20)', 'Bitcoin', 'Ethereum', 'Solana', 'BNB']
+    },
+    {
+        id: 'bank_transfer',
+        name: 'Dedicated Bank Account',
+        subtitle: 'Permanent Personal NUBAN · Paystack / Wema Verified',
+        badge: '0% FEE · NUBAN',
+        badgeColor: '#059669',
+        badgeBg: '#ECFDF5',
+        badgeBorder: '#A7F3D0',
+        color: '#059669',
+        speed: 'Auto-Credit in 30-60s',
+        logo: { uri: 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png' },
+        channels: ['OPay', 'Kuda', 'PalmPay', 'GTBank', 'Zenith', 'Access']
+    }
+];
 
 const POPULAR_NIGERIAN_BANKS = [
     { name: 'OPay Digital Services', code: '999992' },
@@ -43,8 +103,6 @@ const POPULAR_NIGERIAN_BANKS = [
     { name: 'TAJ Bank', code: '302' },
     { name: 'Lotus Bank', code: '303' }
 ];
-
-const PRESET_AMOUNTS = [5000, 10000, 25000, 50000, 100000];
 
 export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
     const navigation = useNavigation();
@@ -105,6 +163,24 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
     const [txFilter, setTxFilter] = useState('all'); // 'all' | 'credit' | 'debit' | 'pending'
     const [txSearchQuery, setTxSearchQuery] = useState('');
 
+    // Virtual Dedicated Account & BVN state (Paystack Verified)
+    const [virtualAcc, setVirtualAcc] = useState(null);
+    const [vaLoading, setVaLoading] = useState(false);
+    const [vaError, setVaError] = useState(null);
+    const [showBvnForm, setShowBvnForm] = useState(false);
+    const [bvnInput, setBvnInput] = useState('');
+    const [bvnLegalName, setBvnLegalName] = useState('');
+    const [bvnPhone, setBvnPhone] = useState('');
+    const [bvnVerifying, setBvnVerifying] = useState(false);
+
+    // Top-Up / Fund Store Modal State
+    const [showTopUpModal, setShowTopUpModal] = useState(false);
+    const [topUpGateway, setTopUpGateway] = useState('paystack');
+    const [topUpAmountNgn, setTopUpAmountNgn] = useState('');
+    const [topUpAmountUsd, setTopUpAmountUsd] = useState('');
+    const [topUpPending, setTopUpPending] = useState(false);
+    const [activeRef, setActiveRef] = useState('');
+
     // Animations
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideAnim = useRef(new Animated.Value(15)).current;
@@ -127,6 +203,20 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
         loadSavedBanks();
         fetchBanksList();
         fetchAllWalletData();
+        loadVirtualAccount();
+
+        // Web: check return from gateway redirect
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            try {
+                const sp = new URLSearchParams(window.location.search);
+                const ref = sp.get('reference') || sp.get('trxref') || sp.get('tx_ref');
+                const status = sp.get('status');
+                if (ref || status === 'successful') {
+                    window.history.replaceState({}, '', window.location.origin + window.location.pathname);
+                    fetchAllWalletData();
+                }
+            } catch (_) {}
+        }
     }, [user?.id]);
 
     useFocusEffect(
@@ -615,6 +705,233 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
     };
 
     // -------------------------------------------------------------
+    // 5B. DEDICATED VIRTUAL ACCOUNT & PAYSTACK BVN VERIFICATION
+    // -------------------------------------------------------------
+    const loadVirtualAccount = useCallback(async () => {
+        if (!user?.id) return;
+        try {
+            const cacheKey = `@abumafhal_dedicated_va_${user.id}`;
+            const cached = await AsyncStorage.getItem(cacheKey);
+            if (cached) {
+                const p = JSON.parse(cached);
+                if (p?.account_number && !p.account_number.startsWith('980')) {
+                    setVirtualAcc(p);
+                    return;
+                }
+            }
+        } catch (_) {}
+
+        setVaLoading(true);
+        setVaError(null);
+        try {
+            const email = user?.email || `vendor_${user?.id?.substring(0, 6)}@abumafhal.com`;
+            const fullName = user?.user_metadata?.first_name 
+                ? `${user.user_metadata.first_name} ${user.user_metadata.last_name || ''}`.trim()
+                : user?.user_metadata?.full_name || user?.user_metadata?.business_name || 'Verified Merchant';
+            const phone = user?.phone || user?.user_metadata?.phone_number || '';
+
+            const res = await PaymentGatewayService.getPermanentVirtualAccount({
+                userId: user.id,
+                email,
+                name: fullName,
+                phone
+            });
+
+            if (res?.ok && res?.data?.success && res?.data?.data?.account_number) {
+                const va = res.data.data;
+                setVirtualAcc(va);
+                AsyncStorage.setItem(`@abumafhal_dedicated_va_${user.id}`, JSON.stringify(va)).catch(() => {});
+            }
+        } catch (e) {
+            console.log('Error loading virtual account:', e);
+        } finally {
+            setVaLoading(false);
+        }
+    }, [user]);
+
+    const handleVerifyBvnAndGenerateAccount = async () => {
+        const cleanBvn = String(bvnInput || '').trim().replace(/[^0-9]/g, '');
+        if (cleanBvn.length !== 11) {
+            Alert.alert('Invalid BVN', 'Please enter your 11-digit Bank Verification Number.');
+            return;
+        }
+        const nameToUse = (bvnLegalName.trim() || user?.user_metadata?.business_name || user?.user_metadata?.first_name || user?.user_metadata?.full_name || '').trim();
+        if (!nameToUse) {
+            Alert.alert('Legal Name Required', 'Please enter your registered legal or business name.');
+            return;
+        }
+
+        setBvnVerifying(true);
+        setVaError(null);
+        try {
+            const email = user?.email || `vendor_${user?.id?.substring(0, 6)}@abumafhal.com`;
+            const phone = bvnPhone.trim() || user?.phone || user?.user_metadata?.phone_number || '';
+
+            const res = await PaymentGatewayService.getPermanentVirtualAccount({
+                userId: user?.id,
+                email,
+                name: nameToUse,
+                phone,
+                bvn: cleanBvn,
+                forceRefresh: true
+            });
+
+            if (res?.ok && res?.data?.success && res?.data?.data?.account_number) {
+                const va = res.data.data;
+                setVirtualAcc(va);
+                setShowBvnForm(false);
+                if (user?.id) AsyncStorage.setItem(`@abumafhal_dedicated_va_${user.id}`, JSON.stringify(va)).catch(() => {});
+                Alert.alert(
+                    'Virtual Account Activated! 🎉',
+                    `Your Paystack-verified dedicated NUBAN account is live!\n\nBank: ${va.bank_name}\nAccount: ${va.account_number}\nName: ${va.account_name}`
+                );
+            } else {
+                const errMsg = res?.data?.error || res?.error || 'Verification failed. Please verify your BVN and name.';
+                setVaError(errMsg);
+                Alert.alert('Verification Notice', errMsg);
+            }
+        } catch (err) {
+            setVaError(err?.message || 'Error communicating with verification service');
+            Alert.alert('Error', err?.message || 'Verification could not be completed.');
+        } finally {
+            setBvnVerifying(false);
+        }
+    };
+
+    // -------------------------------------------------------------
+    // 5C. VENDOR TREASURY TOP-UP / STORE FUNDING
+    // -------------------------------------------------------------
+    const handleExecuteTopUp = async () => {
+        if (topUpGateway === 'bank_transfer') {
+            if (virtualAcc?.account_number && !virtualAcc.account_number.startsWith('980')) {
+                const details = `Bank: ${virtualAcc.bank_name}\nAccount: ${virtualAcc.account_number}\nName: ${virtualAcc.account_name}`;
+                try {
+                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                        navigator.clipboard.writeText(virtualAcc.account_number);
+                    }
+                } catch (_) {}
+                Alert.alert(
+                    'Dedicated Bank Details Copied! 📋',
+                    `${details}\n\nTransfer from any Nigerian banking app. Your vendor balance will credit automatically within seconds!`
+                );
+                setShowTopUpModal(false);
+            } else {
+                setShowTopUpModal(false);
+                setShowBvnForm(true);
+            }
+            return;
+        }
+
+        let numAmount = 0;
+        if (topUpGateway === 'nowpayments') {
+            const usd = parseFloat(String(topUpAmountUsd || '').replace(/[^0-9.]/g, ''));
+            if (isNaN(usd) || usd < 2) {
+                Alert.alert('Minimum Amount', 'Minimum top-up for crypto is $2.00 USD.');
+                return;
+            }
+            numAmount = Math.round(usd * USD_RATE);
+        } else {
+            numAmount = parseFloat(String(topUpAmountNgn || '').replace(/[^0-9.]/g, ''));
+            if (isNaN(numAmount) || numAmount < 100) {
+                Alert.alert('Minimum Amount', 'Minimum top-up is ₦100.');
+                return;
+            }
+        }
+
+        setTopUpPending(true);
+        try {
+            const fallbackEmail = user?.email || `vendor_${user?.id?.substring(0, 6)}@abumafhal.com`;
+            const ref = `VND-TOP-${Date.now()}`;
+            setActiveRef(ref);
+
+            let res;
+            if (topUpGateway === 'nowpayments') {
+                res = await PaymentGatewayService.initiateNowPayments({
+                    amount: parseFloat(topUpAmountUsd),
+                    currency: 'usd',
+                    email: fallbackEmail,
+                    reference: ref,
+                    metadata: { action: 'vendor_topup', vendor_id: user?.id, credited_ngn: numAmount }
+                });
+            } else if (topUpGateway === 'flutterwave') {
+                res = await PaymentGatewayService.initiateFlutterwave({
+                    amount: numAmount,
+                    email: fallbackEmail,
+                    reference: ref,
+                    name: user?.user_metadata?.first_name || 'Vendor Merchant',
+                    callback_url: Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.href : 'https://standard.paystack.co/close',
+                    metadata: { action: 'vendor_topup', vendor_id: user?.id }
+                });
+            } else {
+                res = await PaymentGatewayService.initiatePaystack({
+                    amount: numAmount,
+                    email: fallbackEmail,
+                    reference: ref,
+                    callback_url: Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.href : 'https://standard.paystack.co/close'
+                });
+            }
+
+            if (res?.type === 'inline_web' && typeof res?.openInline === 'function') {
+                setTopUpPending(false);
+                setShowTopUpModal(false);
+                res.openInline(
+                    async () => {
+                        await finalizeTopUpSuccess(numAmount, ref, 'Paystack');
+                    },
+                    () => {
+                        Alert.alert('Top Up Cancelled', 'Payment window was closed.');
+                    }
+                );
+                return;
+            }
+
+            if (res?.url) {
+                setTopUpPending(false);
+                setShowTopUpModal(false);
+                if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                    window.location.href = res.url;
+                } else {
+                    navigation.navigate('PaymentWebView', {
+                        url: res.url,
+                        reference: ref,
+                        onSuccess: () => finalizeTopUpSuccess(numAmount, ref, topUpGateway)
+                    });
+                }
+                return;
+            }
+
+            throw new Error(res?.error || 'Unable to open gateway checkout');
+        } catch (err) {
+            Alert.alert('Top Up Failed', err.message || 'Payment initiation error.');
+        } finally {
+            setTopUpPending(false);
+        }
+    };
+
+    const finalizeTopUpSuccess = async (amt, ref, gw) => {
+        try {
+            const newBal = localWallet.balance + amt;
+            await supabase.from('profiles').update({ balance: newBal }).eq('id', user.id);
+            await supabase.from('transactions').insert([
+                {
+                    user_id: user.id,
+                    type: 'topup',
+                    amount: amt,
+                    status: 'completed',
+                    reference: ref,
+                    description: `Vendor Treasury Recharge via ${gw} (Ref: ${ref})`
+                }
+            ]);
+            setLocalWallet(prev => ({ ...prev, balance: newBal }));
+            Alert.alert('Funding Successful! 🎉', `₦${amt.toLocaleString()} has been added to your available vendor balance.`);
+            fetchAllWalletData();
+        } catch (e) {
+            console.log('Error crediting vendor balance:', e);
+            fetchAllWalletData();
+        }
+    };
+
+    // -------------------------------------------------------------
     // 6. STATEMENT GENERATION (PDF & SHARING)
     // -------------------------------------------------------------
     const handleExportFinancialStatement = async () => {
@@ -881,6 +1198,15 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                 {/* 3. QUICK ACTION BUTTONS */}
                 <View style={localStyles.quickActionsRow}>
                     <TouchableOpacity
+                        style={[localStyles.quickActionBtn, { backgroundColor: '#10B981' }]}
+                        onPress={() => setShowTopUpModal(true)}
+                        activeOpacity={0.85}
+                    >
+                        <Ionicons name="add-circle" size={20} color="#FFFFFF" />
+                        <Text style={[localStyles.quickActionText, { color: '#FFFFFF' }]}>Top Up</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
                         style={[localStyles.quickActionBtn, { backgroundColor: '#D9A73A' }]}
                         onPress={() => setShowWithdrawModal(true)}
                         activeOpacity={0.85}
@@ -952,6 +1278,183 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                 {/* 5. TAB CONTENT: OVERVIEW */}
                 {activeTab === 'overview' && (
                     <View style={{ marginTop: 16 }}>
+                        {/* DEDICATED VIRTUAL ACCOUNT CARD (PAYSTACK VERIFIED) */}
+                        <LinearGradient
+                            colors={['#0F1D33', '#162C4E', '#0B1526']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={localStyles.dvaContainer}
+                        >
+                            <View style={localStyles.dvaHeaderRow}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                    <View style={localStyles.dvaBankIconCircle}>
+                                        <Ionicons name="business" size={16} color="#D9A73A" />
+                                    </View>
+                                    <View>
+                                        <Text style={localStyles.dvaBankTitle}>
+                                            {virtualAcc?.bank_name || 'Dedicated Business Account'}
+                                        </Text>
+                                        <Text style={localStyles.dvaBankSubtitle}>
+                                            Permanent Paystack / Wema NUBAN
+                                        </Text>
+                                    </View>
+                                </View>
+                                <View style={localStyles.dvaBadge}>
+                                    <Ionicons name="shield-checkmark" size={11} color="#10B981" />
+                                    <Text style={localStyles.dvaBadgeText}>PAYSTACK VERIFIED</Text>
+                                </View>
+                            </View>
+
+                            {vaLoading ? (
+                                <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                                    <ActivityIndicator size="small" color="#D9A73A" />
+                                    <Text style={{ color: '#94A3B8', fontSize: 12, marginTop: 8 }}>
+                                        Connecting to Paystack banking network...
+                                    </Text>
+                                </View>
+                            ) : virtualAcc?.account_number && !virtualAcc.account_number.startsWith('980') ? (
+                                <View style={localStyles.dvaActiveBody}>
+                                    <View style={localStyles.dvaNumberRow}>
+                                        <View>
+                                            <Text style={localStyles.dvaMetaLabel}>ACCOUNT NUMBER</Text>
+                                            <Text style={localStyles.dvaAccNumberText} selectable={true}>
+                                                {virtualAcc.account_number}
+                                            </Text>
+                                        </View>
+                                        <TouchableOpacity
+                                            style={localStyles.dvaCopyBtn}
+                                            onPress={() => {
+                                                try {
+                                                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                                                        navigator.clipboard.writeText(virtualAcc.account_number);
+                                                    }
+                                                } catch (_) {}
+                                                Alert.alert('Account Copied! 📋', `${virtualAcc.account_number} (${virtualAcc.bank_name}) has been copied to your clipboard.`);
+                                            }}
+                                            activeOpacity={0.8}
+                                        >
+                                            <Ionicons name="copy-outline" size={15} color="#070D1B" />
+                                            <Text style={localStyles.dvaCopyBtnText}>Copy</Text>
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    <View style={localStyles.dvaMetaRow}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={localStyles.dvaMetaLabel}>ACCOUNT HOLDER</Text>
+                                            <Text style={localStyles.dvaMetaVal} numberOfLines={1}>
+                                                {virtualAcc.account_name || user?.user_metadata?.first_name || 'Vendor Merchant'}
+                                            </Text>
+                                        </View>
+                                        <View style={{ alignItems: 'flex-end' }}>
+                                            <Text style={localStyles.dvaMetaLabel}>SETTLEMENT SPEED</Text>
+                                            <Text style={[localStyles.dvaMetaVal, { color: '#10B981' }]}>Instant (30s)</Text>
+                                        </View>
+                                    </View>
+
+                                    <View style={localStyles.dvaFooterNote}>
+                                        <Ionicons name="flash" size={13} color="#D9A73A" />
+                                        <Text style={localStyles.dvaFooterNoteText}>
+                                            0% Deposit Fee · Auto-credits to Available Payout Balance instantly from any bank app.
+                                        </Text>
+                                    </View>
+                                </View>
+                            ) : (
+                                <View style={localStyles.dvaInactiveBody}>
+                                    <Text style={localStyles.dvaInactiveDesc}>
+                                        Generate a permanent Paystack-verified Nigerian bank account in your business name for instant auto-credited deposits and zero payment fees.
+                                    </Text>
+                                    <TouchableOpacity
+                                        style={localStyles.dvaActivateBtn}
+                                        onPress={() => setShowBvnForm(!showBvnForm)}
+                                        activeOpacity={0.85}
+                                    >
+                                        <Ionicons name="key-outline" size={16} color="#070D1B" />
+                                        <Text style={localStyles.dvaActivateBtnText}>
+                                            {showBvnForm ? 'Hide BVN Form' : 'Verify BVN & Activate NUBAN'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+
+                            {/* BVN VERIFICATION EXPANDED CARD */}
+                            {showBvnForm && (
+                                <View style={localStyles.bvnFormWrap}>
+                                    <View style={localStyles.bvnHeaderRow}>
+                                        <Ionicons name="shield-checkmark" size={16} color="#D9A73A" />
+                                        <Text style={localStyles.bvnFormTitle}>Paystack BVN Verification</Text>
+                                    </View>
+                                    <Text style={localStyles.bvnFormSub}>
+                                        In compliance with CBN regulations, verify your 11-digit BVN once to issue your dedicated virtual account. Your BVN cannot be used to debit your account.
+                                    </Text>
+
+                                    <View style={localStyles.bvnTipRow}>
+                                        <Ionicons name="call-outline" size={13} color="#38BDF8" />
+                                        <Text style={localStyles.bvnTipText}>Dial *565*0# on your registered phone to check your BVN.</Text>
+                                    </View>
+
+                                    <Text style={localStyles.bvnInputLabel}>11-Digit BVN Number</Text>
+                                    <TextInput
+                                        style={localStyles.bvnInput}
+                                        placeholder="e.g. 22234567890"
+                                        placeholderTextColor="#64748B"
+                                        keyboardType="numeric"
+                                        maxLength={11}
+                                        value={bvnInput}
+                                        onChangeText={setBvnInput}
+                                    />
+
+                                    <Text style={localStyles.bvnInputLabel}>Full Legal / Business Name (as on BVN)</Text>
+                                    <TextInput
+                                        style={localStyles.bvnInput}
+                                        placeholder="e.g. Muhammad Sani Ishaq"
+                                        placeholderTextColor="#64748B"
+                                        value={bvnLegalName}
+                                        onChangeText={setBvnLegalName}
+                                    />
+
+                                    <Text style={localStyles.bvnInputLabel}>Registered Phone Number</Text>
+                                    <TextInput
+                                        style={localStyles.bvnInput}
+                                        placeholder="e.g. 08012345678"
+                                        placeholderTextColor="#64748B"
+                                        keyboardType="phone-pad"
+                                        value={bvnPhone}
+                                        onChangeText={setBvnPhone}
+                                    />
+
+                                    {vaError ? (
+                                        <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 4, marginBottom: 8 }}>
+                                            {vaError}
+                                        </Text>
+                                    ) : null}
+
+                                    <View style={localStyles.bvnSecureBadge}>
+                                        <Ionicons name="lock-closed" size={13} color="#10B981" />
+                                        <Text style={localStyles.bvnSecureBadgeText}>
+                                            Bank-Grade 256-Bit SSL Encryption · Direct Paystack API Verification
+                                        </Text>
+                                    </View>
+
+                                    <TouchableOpacity
+                                        style={[
+                                            localStyles.bvnVerifyBtn,
+                                            (bvnVerifying || bvnInput.trim().length !== 11) && { opacity: 0.5 }
+                                        ]}
+                                        onPress={handleVerifyBvnAndGenerateAccount}
+                                        disabled={bvnVerifying || bvnInput.trim().length !== 11}
+                                        activeOpacity={0.85}
+                                    >
+                                        {bvnVerifying ? (
+                                            <ActivityIndicator size="small" color="#070D1B" />
+                                        ) : (
+                                            <Text style={localStyles.bvnVerifyBtnText}>
+                                                Verify with Paystack & Issue Account
+                                            </Text>
+                                        )}
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+                        </LinearGradient>
                         {/* PENDING ESCROW NOTICE BANNER */}
                         {localWallet.pending_balance > 0 && (
                             <TouchableOpacity
@@ -1271,6 +1774,145 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
             </Animated.View>
 
             {/* ============================================================== */}
+            {/* TOP UP / FUND STORE MODAL */}
+            {/* ============================================================== */}
+            <Modal visible={showTopUpModal} animationType="slide" transparent={true}>
+                <View style={localStyles.modalOverlay}>
+                    <View style={[localStyles.modalSheet, { maxHeight: '90%' }]}>
+                        <View style={localStyles.modalDragHandle} />
+
+                        <View style={localStyles.modalTopHeader}>
+                            <View>
+                                <Text style={localStyles.modalSheetTitle}>Fund Vendor Treasury</Text>
+                                <Text style={{ color: '#94A3B8', fontSize: 12, marginTop: 2 }}>
+                                    Instant balance top-up for ads, logistics, and store operations
+                                </Text>
+                            </View>
+                            <TouchableOpacity
+                                onPress={() => setShowTopUpModal(false)}
+                                style={localStyles.modalCloseCircle}
+                            >
+                                <Ionicons name="close" size={18} color="#94A3B8" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+                            {/* GATEWAY SELECTOR WITH OFFICIAL LOGOS */}
+                            <Text style={localStyles.inputLabel}>Select Payment Gateway</Text>
+                            <View style={{ gap: 10, marginBottom: 16 }}>
+                                {GATEWAYS.map(gw => {
+                                    const isSel = topUpGateway === gw.id;
+                                    return (
+                                        <TouchableOpacity
+                                            key={gw.id}
+                                            style={[
+                                                localStyles.gwCard,
+                                                isSel && { borderColor: gw.color, backgroundColor: 'rgba(217, 167, 58, 0.06)' }
+                                            ]}
+                                            onPress={() => setTopUpGateway(gw.id)}
+                                            activeOpacity={0.8}
+                                        >
+                                            <View style={localStyles.gwLogoWrap}>
+                                                <Image source={gw.logo} style={localStyles.gwLogo} resizeMode="contain" />
+                                            </View>
+                                            <View style={{ flex: 1, marginLeft: 12 }}>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                    <Text style={localStyles.gwName}>{gw.name}</Text>
+                                                    <View style={[localStyles.gwBadge, { backgroundColor: gw.badgeBg, borderColor: gw.badgeBorder }]}>
+                                                        <Text style={[localStyles.gwBadgeText, { color: gw.badgeColor }]}>{gw.badge}</Text>
+                                                    </View>
+                                                </View>
+                                                <Text style={localStyles.gwSub} numberOfLines={1}>{gw.subtitle}</Text>
+                                                <Text style={{ color: '#10B981', fontSize: 11, fontWeight: '700', marginTop: 2 }}>
+                                                    ⚡ {gw.speed}
+                                                </Text>
+                                            </View>
+                                            <View style={[localStyles.gwRadio, isSel && { borderColor: gw.color }]}>
+                                                {isSel && <View style={[localStyles.gwRadioInner, { backgroundColor: gw.color }]} />}
+                                            </View>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+
+                            {/* AMOUNT INPUT (IF NOT DEDICATED BANK TRANSFER) */}
+                            {topUpGateway !== 'bank_transfer' ? (
+                                <View style={{ marginBottom: 16 }}>
+                                    {topUpGateway === 'nowpayments' ? (
+                                        <>
+                                            <Text style={localStyles.inputLabel}>Amount (USD $)</Text>
+                                            <TextInput
+                                                style={localStyles.textInputField}
+                                                placeholder="e.g. 25.00"
+                                                placeholderTextColor="#64748B"
+                                                keyboardType="numeric"
+                                                value={topUpAmountUsd}
+                                                onChangeText={(val) => {
+                                                    setTopUpAmountUsd(val);
+                                                    const u = parseFloat(val) || 0;
+                                                    setTopUpAmountNgn(String(Math.round(u * USD_RATE)));
+                                                }}
+                                            />
+                                            {parseFloat(topUpAmountUsd) > 0 && (
+                                                <Text style={{ color: '#94A3B8', fontSize: 12, marginTop: 4 }}>
+                                                    ≈ ₦{(parseFloat(topUpAmountUsd) * USD_RATE).toLocaleString()} NGN (@ ₦{USD_RATE}/$)
+                                                </Text>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Text style={localStyles.inputLabel}>Deposit Amount (₦)</Text>
+                                            <TextInput
+                                                style={localStyles.textInputField}
+                                                placeholder="e.g. 10000"
+                                                placeholderTextColor="#64748B"
+                                                keyboardType="numeric"
+                                                value={topUpAmountNgn}
+                                                onChangeText={setTopUpAmountNgn}
+                                            />
+                                        </>
+                                    )}
+                                </View>
+                            ) : (
+                                <View style={localStyles.dvaInfoBox}>
+                                    <Ionicons name="information-circle" size={20} color="#10B981" />
+                                    <Text style={{ color: '#E2E8F0', fontSize: 13, flex: 1, lineHeight: 18 }}>
+                                        {virtualAcc?.account_number
+                                            ? `Transfer any amount from your Nigerian bank app to your dedicated ${virtualAcc.bank_name} account (${virtualAcc.account_number}). Funds credit automatically with 0% fee.`
+                                            : `Generate your Paystack-verified dedicated bank account to get permanent personal bank details for 0% fee instant deposits.`
+                                        }
+                                    </Text>
+                                </View>
+                            )}
+
+                            {/* SUBMIT BUTTON */}
+                            <TouchableOpacity
+                                style={[
+                                    localStyles.submitPayoutBtn,
+                                    { backgroundColor: '#10B981' },
+                                    topUpPending && { opacity: 0.6 }
+                                ]}
+                                onPress={handleExecuteTopUp}
+                                disabled={topUpPending}
+                                activeOpacity={0.85}
+                            >
+                                {topUpPending ? (
+                                    <ActivityIndicator color="#FFFFFF" />
+                                ) : (
+                                    <Text style={[localStyles.submitPayoutBtnText, { color: '#FFFFFF' }]}>
+                                        {topUpGateway === 'bank_transfer'
+                                            ? (virtualAcc?.account_number ? 'Copy Dedicated Bank Details 📋' : 'Activate Dedicated Account 🚀')
+                                            : `Proceed with ${GATEWAYS.find(g => g.id === topUpGateway)?.name || 'Gateway'}`
+                                        }
+                                    </Text>
+                                )}
+                            </TouchableOpacity>
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ============================================================== */}
             {/* WITHDRAWAL MODAL */}
             {/* ============================================================== */}
             <Modal visible={showWithdrawModal} animationType="slide" transparent={true}>
@@ -1297,35 +1939,30 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                                 </Text>
                             </View>
 
-                            {/* AMOUNT DISPLAY */}
-                            <View style={{ alignItems: 'center', marginVertical: 14 }}>
-                                <Text style={localStyles.amountTitle}>Enter Payout Amount</Text>
-                                <Text style={[localStyles.largeAmountText, isOverBalance && { color: '#EF4444' }]}>
-                                    ₦{withdrawAmount ? parseFloat(withdrawAmount).toLocaleString() : '0'}
-                                </Text>
-                                {isOverBalance && (
-                                    <Text style={localStyles.overBalWarning}>Amount exceeds available balance</Text>
-                                )}
-                            </View>
-
-                            {/* QUICK PRESETS */}
-                            <View style={localStyles.presetsRow}>
-                                {PRESET_AMOUNTS.map(p => (
-                                    <TouchableOpacity
-                                        key={p}
-                                        style={localStyles.presetChip}
-                                        onPress={() => setWithdrawAmount(String(p))}
-                                    >
-                                        <Text style={localStyles.presetChipText}>₦{p / 1000}k</Text>
-                                    </TouchableOpacity>
-                                ))}
+                            {/* AMOUNT INPUT */}
+                            <Text style={localStyles.inputLabel}>Withdrawal Amount (₦)</Text>
+                            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+                                <TextInput
+                                    style={[localStyles.textInputField, { flex: 1, marginBottom: 0 }]}
+                                    placeholder="Enter amount (min ₦1,000)"
+                                    placeholderTextColor="#64748B"
+                                    keyboardType="numeric"
+                                    value={withdrawAmount}
+                                    onChangeText={setWithdrawAmount}
+                                />
                                 <TouchableOpacity
-                                    style={[localStyles.presetChip, { borderColor: '#D9A73A' }]}
+                                    style={localStyles.maxBalBtn}
                                     onPress={() => setWithdrawAmount(String(localWallet.balance))}
+                                    activeOpacity={0.8}
                                 >
-                                    <Text style={[localStyles.presetChipText, { color: '#D9A73A' }]}>Max</Text>
+                                    <Text style={localStyles.maxBalBtnText}>Withdraw All</Text>
                                 </TouchableOpacity>
                             </View>
+                            {isOverBalance && (
+                                <Text style={[localStyles.overBalWarning, { marginTop: -6, marginBottom: 10 }]}>
+                                    Amount exceeds available balance of ₦{localWallet.balance.toLocaleString()}
+                                </Text>
+                            )}
 
                             {/* BANK SELECTION */}
                             <Text style={localStyles.inputLabel}>Destination Bank</Text>
@@ -2486,5 +3123,319 @@ const localStyles = StyleSheet.create({
         color: '#D9A73A',
         fontSize: 12,
         fontWeight: '700'
+    },
+    maxBalBtn: {
+        backgroundColor: 'rgba(217, 167, 58, 0.15)',
+        borderWidth: 1,
+        borderColor: '#D9A73A',
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 12,
+        justifyContent: 'center',
+        alignItems: 'center'
+    },
+    maxBalBtnText: {
+        color: '#D9A73A',
+        fontSize: 12,
+        fontWeight: '800'
+    },
+    gwCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+        borderRadius: 14,
+        padding: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.08)'
+    },
+    gwLogoWrap: {
+        width: 44,
+        height: 44,
+        borderRadius: 10,
+        backgroundColor: '#FFFFFF',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 4
+    },
+    gwLogo: {
+        width: 36,
+        height: 36
+    },
+    gwName: {
+        color: '#FFFFFF',
+        fontSize: 14,
+        fontWeight: '800'
+    },
+    gwBadge: {
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6,
+        borderWidth: 1
+    },
+    gwBadgeText: {
+        fontSize: 9,
+        fontWeight: '900',
+        letterSpacing: 0.4
+    },
+    gwSub: {
+        color: '#94A3B8',
+        fontSize: 11,
+        marginTop: 2
+    },
+    gwRadio: {
+        width: 18,
+        height: 18,
+        borderRadius: 9,
+        borderWidth: 2,
+        borderColor: '#64748B',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginLeft: 8
+    },
+    gwRadioInner: {
+        width: 8,
+        height: 8,
+        borderRadius: 4
+    },
+    dvaInfoBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        backgroundColor: 'rgba(16, 185, 129, 0.08)',
+        borderWidth: 1,
+        borderColor: 'rgba(16, 185, 129, 0.25)',
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 16
+    },
+    dvaContainer: {
+        borderRadius: 20,
+        padding: 18,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(217, 167, 58, 0.3)',
+        overflow: 'hidden'
+    },
+    dvaHeaderRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingBottom: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255, 255, 255, 0.08)'
+    },
+    dvaBankIconCircle: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: 'rgba(217, 167, 58, 0.15)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(217, 167, 58, 0.3)'
+    },
+    dvaBankTitle: {
+        color: '#FFFFFF',
+        fontSize: 14,
+        fontWeight: '800'
+    },
+    dvaBankSubtitle: {
+        color: '#94A3B8',
+        fontSize: 11,
+        marginTop: 1
+    },
+    dvaBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: 'rgba(16, 185, 129, 0.12)',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: 'rgba(16, 185, 129, 0.3)'
+    },
+    dvaBadgeText: {
+        color: '#10B981',
+        fontSize: 10,
+        fontWeight: '900',
+        letterSpacing: 0.5
+    },
+    dvaActiveBody: {
+        marginTop: 14
+    },
+    dvaNumberRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.35)',
+        padding: 12,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: 'rgba(217, 167, 58, 0.25)'
+    },
+    dvaAccNumberText: {
+        color: '#FCD34D',
+        fontSize: 22,
+        fontWeight: '900',
+        letterSpacing: 2,
+        fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+        marginTop: 2
+    },
+    dvaCopyBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#D9A73A',
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 10
+    },
+    dvaCopyBtnText: {
+        color: '#070D1B',
+        fontSize: 12,
+        fontWeight: '900'
+    },
+    dvaMetaRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 12,
+        paddingHorizontal: 4
+    },
+    dvaMetaLabel: {
+        color: '#64748B',
+        fontSize: 10,
+        fontWeight: '800',
+        letterSpacing: 0.5
+    },
+    dvaMetaVal: {
+        color: '#FFFFFF',
+        fontSize: 13,
+        fontWeight: '700',
+        marginTop: 2
+    },
+    dvaFooterNote: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginTop: 12,
+        backgroundColor: 'rgba(255, 255, 255, 0.04)',
+        padding: 8,
+        borderRadius: 8
+    },
+    dvaFooterNoteText: {
+        color: '#94A3B8',
+        fontSize: 11,
+        flex: 1,
+        lineHeight: 15
+    },
+    dvaInactiveBody: {
+        marginTop: 12
+    },
+    dvaInactiveDesc: {
+        color: '#94A3B8',
+        fontSize: 12,
+        lineHeight: 18,
+        marginBottom: 12
+    },
+    dvaActivateBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        backgroundColor: '#D9A73A',
+        paddingVertical: 11,
+        borderRadius: 12
+    },
+    dvaActivateBtnText: {
+        color: '#070D1B',
+        fontSize: 13,
+        fontWeight: '900'
+    },
+    bvnFormWrap: {
+        marginTop: 16,
+        paddingTop: 16,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255, 255, 255, 0.1)'
+    },
+    bvnHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: 6
+    },
+    bvnFormTitle: {
+        color: '#FFFFFF',
+        fontSize: 14,
+        fontWeight: '900'
+    },
+    bvnFormSub: {
+        color: '#94A3B8',
+        fontSize: 12,
+        lineHeight: 17,
+        marginBottom: 10
+    },
+    bvnTipRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: 'rgba(56, 189, 248, 0.1)',
+        padding: 8,
+        borderRadius: 8,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(56, 189, 248, 0.2)'
+    },
+    bvnTipText: {
+        color: '#38BDF8',
+        fontSize: 11,
+        fontWeight: '700'
+    },
+    bvnInputLabel: {
+        color: '#CBD5E1',
+        fontSize: 11,
+        fontWeight: '700',
+        marginBottom: 4,
+        marginTop: 8
+    },
+    bvnInput: {
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        color: '#FFFFFF',
+        fontSize: 14,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)'
+    },
+    bvnSecureBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: 'rgba(16, 185, 129, 0.08)',
+        padding: 8,
+        borderRadius: 8,
+        marginTop: 12,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(16, 185, 129, 0.2)'
+    },
+    bvnSecureBadgeText: {
+        color: '#10B981',
+        fontSize: 10,
+        fontWeight: '700',
+        flex: 1
+    },
+    bvnVerifyBtn: {
+        backgroundColor: '#D9A73A',
+        paddingVertical: 12,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    bvnVerifyBtnText: {
+        color: '#070D1B',
+        fontSize: 13,
+        fontWeight: '900'
     }
 });
