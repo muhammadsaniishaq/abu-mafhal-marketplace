@@ -222,17 +222,19 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
     useFocusEffect(
         useCallback(() => {
             fetchAllWalletData();
-        }, [user?.id])
+            loadVirtualAccount();
+        }, [user?.id, loadVirtualAccount])
     );
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
         await Promise.allSettled([
             fetchAllWalletData(),
+            loadVirtualAccount(),
             fetchDashboardData ? fetchDashboardData() : Promise.resolve()
         ]);
         setRefreshing(false);
-    }, [user?.id, fetchDashboardData]);
+    }, [user?.id, fetchDashboardData, loadVirtualAccount]);
 
     // -------------------------------------------------------------
     // 1. DATA FETCHING: BALANCE, ESCROW, TRANSACTIONS & SALES
@@ -1395,7 +1397,7 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                                     <Text style={localStyles.bvnInputLabel}>11-Digit BVN Number</Text>
                                     <TextInput
                                         style={localStyles.bvnInput}
-                                        placeholder="e.g. 22234567890"
+                                        placeholder="11-digit BVN"
                                         placeholderTextColor="#64748B"
                                         keyboardType="numeric"
                                         maxLength={11}
@@ -1406,7 +1408,7 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                                     <Text style={localStyles.bvnInputLabel}>Full Legal / Business Name (as on BVN)</Text>
                                     <TextInput
                                         style={localStyles.bvnInput}
-                                        placeholder="e.g. Muhammad Sani Ishaq"
+                                        placeholder="Legal full name"
                                         placeholderTextColor="#64748B"
                                         value={bvnLegalName}
                                         onChangeText={setBvnLegalName}
@@ -1415,7 +1417,7 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                                     <Text style={localStyles.bvnInputLabel}>Registered Phone Number</Text>
                                     <TextInput
                                         style={localStyles.bvnInput}
-                                        placeholder="e.g. 08012345678"
+                                        placeholder="Phone number"
                                         placeholderTextColor="#64748B"
                                         keyboardType="phone-pad"
                                         value={bvnPhone}
@@ -1455,6 +1457,94 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                                 </View>
                             )}
                         </LinearGradient>
+
+                        {/* OFFICIAL PAYMENT & TOP-UP GATEWAYS SHOWCASE */}
+                        <View style={{ marginTop: 16, marginBottom: 8 }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <Ionicons name="card" size={18} color="#D9A73A" />
+                                    <Text style={{ fontSize: 16, fontWeight: '800', color: '#FFFFFF' }}>Supported Gateways</Text>
+                                </View>
+                                <View style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(59, 130, 246, 0.3)' }}>
+                                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#60A5FA' }}>4 CHANNELS</Text>
+                                </View>
+                            </View>
+
+                            <View style={{ gap: 10 }}>
+                                {GATEWAYS.map(gw => (
+                                    <TouchableOpacity
+                                        key={gw.id}
+                                        onPress={() => {
+                                            if (gw.id === 'bank_transfer') {
+                                                if (!virtualAcc?.account_number) {
+                                                    setShowBvnForm(true);
+                                                } else {
+                                                    try {
+                                                        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                                                            navigator.clipboard.writeText(virtualAcc.account_number);
+                                                        }
+                                                    } catch (_) {}
+                                                    Alert.alert('Account Copied! 📋', `${virtualAcc.account_number} (${virtualAcc.bank_name}) has been copied to your clipboard.`);
+                                                }
+                                            } else {
+                                                setTopUpGateway(gw.id);
+                                                setShowTopUpModal(true);
+                                            }
+                                        }}
+                                        style={{
+                                            backgroundColor: '#0F1D33',
+                                            borderRadius: 14,
+                                            padding: 12,
+                                            borderWidth: 1,
+                                            borderColor: 'rgba(255, 255, 255, 0.08)',
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between'
+                                        }}
+                                        activeOpacity={0.8}
+                                    >
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                                            <View style={{
+                                                width: 44,
+                                                height: 44,
+                                                borderRadius: 10,
+                                                backgroundColor: '#FFFFFF',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                padding: 5
+                                            }}>
+                                                <Image
+                                                    source={gw.logo}
+                                                    style={{ width: '100%', height: '100%' }}
+                                                    resizeMode="contain"
+                                                />
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>{gw.name}</Text>
+                                                    <View style={{ backgroundColor: gw.badgeBg, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, borderWidth: 1, borderColor: gw.badgeBorder }}>
+                                                        <Text style={{ fontSize: 9, fontWeight: '800', color: gw.badgeColor }}>{gw.badge}</Text>
+                                                    </View>
+                                                </View>
+                                                <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }} numberOfLines={1}>{gw.subtitle}</Text>
+                                                <View style={{ flexDirection: 'row', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
+                                                    {gw.channels.slice(0, 3).map((ch, idx) => (
+                                                        <View key={idx} style={{ backgroundColor: 'rgba(255, 255, 255, 0.06)', paddingHorizontal: 5, paddingVertical: 1.5, borderRadius: 4 }}>
+                                                            <Text style={{ fontSize: 9, color: '#CBD5E1', fontWeight: '600' }}>{ch}</Text>
+                                                        </View>
+                                                    ))}
+                                                </View>
+                                            </View>
+                                        </View>
+                                        <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
+                                            <Ionicons name="chevron-forward" size={16} color="#64748B" />
+                                            <Text style={{ fontSize: 9, color: '#10B981', fontWeight: '700', marginTop: 4 }}>⚡ Instant</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        </View>
+
                         {/* PENDING ESCROW NOTICE BANNER */}
                         {localWallet.pending_balance > 0 && (
                             <TouchableOpacity
@@ -1843,7 +1933,7 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                                             <Text style={localStyles.inputLabel}>Amount (USD $)</Text>
                                             <TextInput
                                                 style={localStyles.textInputField}
-                                                placeholder="e.g. 25.00"
+                                                placeholder="0.00"
                                                 placeholderTextColor="#64748B"
                                                 keyboardType="numeric"
                                                 value={topUpAmountUsd}
@@ -1864,7 +1954,7 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                                             <Text style={localStyles.inputLabel}>Deposit Amount (₦)</Text>
                                             <TextInput
                                                 style={localStyles.textInputField}
-                                                placeholder="e.g. 10000"
+                                                placeholder="0.00"
                                                 placeholderTextColor="#64748B"
                                                 keyboardType="numeric"
                                                 value={topUpAmountNgn}
@@ -1944,7 +2034,7 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                             <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginBottom: 12 }}>
                                 <TextInput
                                     style={[localStyles.textInputField, { flex: 1, marginBottom: 0 }]}
-                                    placeholder="Enter amount (min ₦1,000)"
+                                    placeholder="0.00"
                                     placeholderTextColor="#64748B"
                                     keyboardType="numeric"
                                     value={withdrawAmount}
@@ -2008,7 +2098,7 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                             <Text style={localStyles.inputLabel}>10-Digit Account Number</Text>
                             <TextInput
                                 style={localStyles.textInputField}
-                                placeholder="e.g. 0123456789"
+                                placeholder="10-digit account number"
                                 placeholderTextColor="#64748B"
                                 keyboardType="numeric"
                                 maxLength={10}
@@ -2221,7 +2311,7 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                         <Text style={localStyles.inputLabel}>Transfer Amount (₦)</Text>
                         <TextInput
                             style={localStyles.textInputField}
-                            placeholder="e.g. 5000"
+                            placeholder="0.00"
                             placeholderTextColor="#64748B"
                             keyboardType="numeric"
                             value={transferAmount}

@@ -24,7 +24,48 @@ const POPULAR_NIGERIAN_BANKS = [
   { name: 'Lotus Bank', code: '303' }
 ];
 
-const PRESETS = [5000, 10000, 25000, 50000, 100000];
+const GATEWAYS = [
+  {
+    id: 'paystack',
+    name: 'Paystack Checkout',
+    subtitle: 'Debit/Credit Cards · USSD · Bank Transfer · Apple Pay',
+    badge: 'AUTO-VERIFY',
+    badgeColor: 'text-sky-400 bg-sky-500/10 border-sky-500/30',
+    speed: 'Instant (10-30s)',
+    logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSzFzmpCa0Tav9NttiYF10t9wftJPQ0XYPBkA&s',
+    channels: ['Debit Card', 'USSD', 'Bank', 'Apple Pay']
+  },
+  {
+    id: 'flutterwave',
+    name: 'Flutterwave Africa',
+    subtitle: 'Cards · Direct Bank · Mobile Money · Pan-Africa',
+    badge: 'PAN-AFRICA',
+    badgeColor: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
+    speed: 'Instant (15-45s)',
+    logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-W6MLvD_saE20EDSZzVPspKqcKxZ89rW8uw&s',
+    channels: ['Mastercard', 'Visa', 'Mobile Money', 'Bank']
+  },
+  {
+    id: 'nowpayments',
+    name: 'NOWPayments Crypto',
+    subtitle: 'USDT · BTC · ETH · SOL · BNB · 150+ Cryptos',
+    badge: 'WEB3 CRYPTO',
+    badgeColor: 'text-blue-400 bg-blue-500/10 border-blue-500/30',
+    speed: '1-3 Confirmations',
+    logo: 'https://cdn.brandfetch.io/id_rL36n5a/w/400/h/400/logo.png',
+    channels: ['USDT (TRC20)', 'Bitcoin', 'Ethereum', 'Solana', 'BNB']
+  },
+  {
+    id: 'bank_transfer',
+    name: 'Dedicated Bank Account',
+    subtitle: 'Permanent Personal NUBAN · Paystack / Wema Verified',
+    badge: '0% FEE · NUBAN',
+    badgeColor: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
+    speed: 'Auto-Credit in 30-60s',
+    logo: 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png',
+    channels: ['OPay', 'Kuda', 'PalmPay', 'GTBank', 'Zenith', 'Access']
+  }
+];
 
 const VendorWallet = () => {
   const { currentUser } = useAuth();
@@ -38,6 +79,25 @@ const VendorWallet = () => {
   const [transactions, setTransactions] = useState([]);
   const [payouts, setPayouts] = useState([]);
   const [earningsData, setEarningsData] = useState([]);
+
+  // Dedicated Virtual Account & BVN state
+  const [virtualAccount, setVirtualAccount] = useState(null);
+  const [vaLoading, setVaLoading] = useState(false);
+  const [vaError, setVaError] = useState('');
+  const [showBvnModal, setShowBvnModal] = useState(false);
+  const [bvnInput, setBvnInput] = useState('');
+  const [bvnLegalName, setBvnLegalName] = useState('');
+  const [bvnPhone, setBvnPhone] = useState('');
+  const [bvnVerifying, setBvnVerifying] = useState(false);
+  const [copiedVa, setCopiedVa] = useState(false);
+
+  // Top Up Modal State
+  const [showTopUpModal, setShowTopUpModal] = useState(false);
+  const [topUpGateway, setTopUpGateway] = useState('paystack');
+  const [topUpAmount, setTopUpAmount] = useState('');
+  const [topUpAmountUsd, setTopUpAmountUsd] = useState('');
+  const [topUpLoading, setTopUpLoading] = useState(false);
+  const [topUpError, setTopUpError] = useState('');
 
   // Withdrawal Modal State
   const [showPayoutModal, setShowPayoutModal] = useState(false);
@@ -63,6 +123,7 @@ const VendorWallet = () => {
   useEffect(() => {
     fetchWalletData();
     loadSavedBanks();
+    loadVirtualAccount();
   }, [currentUser]);
 
   // Load saved banks from localStorage
@@ -96,6 +157,154 @@ const VendorWallet = () => {
       setSavedBanks(newBanks);
       localStorage.setItem(`@abumafhal_vendor_banks_${vendorId}`, JSON.stringify(newBanks));
     } catch (_) {}
+  };
+
+  const loadVirtualAccount = async () => {
+    const vendorId = currentUser?.id || currentUser?.uid;
+    if (!vendorId) return;
+    try {
+      const cached = localStorage.getItem(`@abumafhal_dedicated_va_${vendorId}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed?.account_number && !parsed.account_number.startsWith('980')) {
+          setVirtualAccount(parsed);
+          return;
+        }
+      }
+    } catch (_) {}
+
+    setVaLoading(true);
+    try {
+      const email = currentUser?.email || `vendor_${String(vendorId).substring(0, 6)}@abumafhal.com`;
+      const res = await fetch('/api/create-virtual-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: vendorId,
+          email,
+          name: currentUser?.name || currentUser?.full_name || 'Vendor Merchant',
+          phone: currentUser?.phone || ''
+        })
+      });
+      const json = await res.json();
+      if (json?.success && json?.data?.account_number) {
+        setVirtualAccount(json.data);
+        localStorage.setItem(`@abumafhal_dedicated_va_${vendorId}`, JSON.stringify(json.data));
+      }
+    } catch (e) {
+      console.log('Error loading virtual account:', e);
+    } finally {
+      setVaLoading(false);
+    }
+  };
+
+  const handleVerifyBvn = async (e) => {
+    e.preventDefault();
+    const vendorId = currentUser?.id || currentUser?.uid;
+    const cleanBvn = String(bvnInput || '').trim().replace(/[^0-9]/g, '');
+    if (cleanBvn.length !== 11) {
+      setVaError('Please enter a valid 11-digit BVN');
+      return;
+    }
+    if (!bvnLegalName.trim()) {
+      setVaError('Please enter your full legal name as registered on BVN');
+      return;
+    }
+    setBvnVerifying(true);
+    setVaError('');
+    try {
+      const email = currentUser?.email || `vendor_${String(vendorId).substring(0, 6)}@abumafhal.com`;
+      const res = await fetch('/api/create-virtual-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: vendorId,
+          email,
+          name: bvnLegalName.trim(),
+          phone: bvnPhone.trim() || currentUser?.phone || '',
+          bvn: cleanBvn,
+          force_refresh: true
+        })
+      });
+      const json = await res.json();
+      if (json?.success && json?.data?.account_number) {
+        setVirtualAccount(json.data);
+        localStorage.setItem(`@abumafhal_dedicated_va_${vendorId}`, JSON.stringify(json.data));
+        setShowBvnModal(false);
+      } else {
+        setVaError(json?.error || 'Verification failed. Please verify your 11-digit BVN.');
+      }
+    } catch (err) {
+      setVaError(err.message || 'Network error verifying BVN.');
+    } finally {
+      setBvnVerifying(false);
+    }
+  };
+
+  const handleTopUpSubmit = async (e) => {
+    e.preventDefault();
+    const vendorId = currentUser?.id || currentUser?.uid;
+    const amt = parseFloat(topUpAmount);
+    if (topUpGateway === 'bank_transfer') {
+      if (!virtualAccount?.account_number) {
+        setShowTopUpModal(false);
+        setShowBvnModal(true);
+      }
+      return;
+    }
+    if (isNaN(amt) || amt <= 0) {
+      setTopUpError('Please enter a valid deposit amount');
+      return;
+    }
+    setTopUpLoading(true);
+    setTopUpError('');
+    try {
+      const email = currentUser?.email || `vendor_${String(vendorId).substring(0, 6)}@abumafhal.com`;
+      const ref = `VND-TOP-${Date.now()}`;
+      if (topUpGateway === 'paystack') {
+        const res = await fetch('/api/initiate-paystack', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: amt,
+            email,
+            reference: ref,
+            callback_url: window.location.href
+          })
+        });
+        const data = await res.json();
+        if (data?.success && data?.authorization_url) {
+          window.location.href = data.authorization_url;
+          return;
+        } else {
+          setTopUpError(data?.error || 'Could not initiate Paystack payment');
+        }
+      } else if (topUpGateway === 'flutterwave') {
+        const res = await fetch('/api/initiate-flutterwave', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: amt,
+            email,
+            reference: ref,
+            tx_ref: ref,
+            name: currentUser?.name || 'Vendor Merchant',
+            callback_url: window.location.href
+          })
+        });
+        const data = await res.json();
+        if (data?.success && (data?.checkout_url || data?.payment_link)) {
+          window.location.href = data.checkout_url || data.payment_link;
+          return;
+        } else {
+          setTopUpError(data?.error || 'Could not initiate Flutterwave payment');
+        }
+      }
+    } catch (err) {
+      setTopUpError(err.message || 'Payment initiation failed');
+    } finally {
+      setTopUpLoading(false);
+    }
   };
 
   const fetchWalletData = async () => {
@@ -391,6 +600,16 @@ const VendorWallet = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={() => {
+              setTopUpError('');
+              setShowTopUpModal(true);
+            }}
+            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-amber-500/40 font-bold px-4 py-2.5 rounded-xl transition transform active:scale-95"
+          >
+            <span>💳</span>
+            Add Funds
+          </button>
+          <button
+            onClick={() => {
               setPayoutSuccessData(null);
               setShowPayoutModal(true);
             }}
@@ -471,6 +690,158 @@ const VendorWallet = () => {
       {/* TAB 1: OVERVIEW & CHART */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
+          {/* DEDICATED VIRTUAL BANK ACCOUNT CARD */}
+          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border border-amber-500/30 p-6 shadow-2xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-2xl">
+                  🏦
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-white flex items-center gap-2">
+                    {virtualAccount?.bank_name || 'Dedicated Business Account'}
+                    <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 px-2 py-0.5 rounded-full font-black uppercase">
+                      Paystack Verified
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">Permanent Personal NUBAN · Auto-credits to Available Payout</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/30 px-3 py-1 rounded-full font-bold">
+                  ⚡ 0% Deposit Fee
+                </span>
+              </div>
+            </div>
+
+            {vaLoading ? (
+              <div className="py-8 text-center text-slate-400 text-sm">
+                <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                Connecting to Paystack banking network...
+              </div>
+            ) : virtualAccount?.account_number && !virtualAccount.account_number.startsWith('980') ? (
+              <div className="bg-slate-900/90 rounded-2xl border border-slate-800 p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Account Number</span>
+                    <div className="text-2xl sm:text-3xl font-mono font-black text-amber-400 tracking-wider">
+                      {virtualAccount.account_number}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(virtualAccount.account_number);
+                      setCopiedVa(true);
+                      setTimeout(() => setCopiedVa(false), 2500);
+                    }}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition transform active:scale-95 ${
+                      copiedVa 
+                        ? 'bg-emerald-500 text-slate-950 font-black' 
+                        : 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-black shadow-lg shadow-amber-500/20'
+                    }`}
+                  >
+                    <span>{copiedVa ? '✓' : '📋'}</span>
+                    {copiedVa ? 'Copied to Clipboard!' : 'Copy Account Number'}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <span className="text-slate-400 block font-semibold">Account Holder:</span>
+                    <span className="text-white font-bold">{virtualAccount.account_name || currentUser?.name || 'Verified Merchant'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block font-semibold">Bank Name:</span>
+                    <span className="text-white font-bold">{virtualAccount.bank_name || 'Wema Bank (Paystack)'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block font-semibold">Settlement Speed:</span>
+                    <span className="text-emerald-400 font-bold">Instant (30–60 Seconds)</span>
+                  </div>
+                </div>
+
+                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 flex items-center gap-3 text-xs text-emerald-300">
+                  <span className="text-base">💡</span>
+                  <span>Transfer any amount from any Nigerian bank app (OPay, Kuda, PalmPay, GTBank, Zenith, Access). Your wallet credits automatically in 30–60 seconds.</span>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5 text-center sm:text-left sm:flex items-center justify-between gap-4">
+                <div>
+                  <h4 className="text-white font-bold text-sm mb-1">Activate Your Dedicated NUBAN Account</h4>
+                  <p className="text-xs text-slate-400">
+                    Verify your 11-digit BVN once to receive a permanent Paystack/Wema Bank account for 0% fee instant deposits.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowBvnModal(true)}
+                  className="mt-3 sm:mt-0 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-slate-950 font-black rounded-xl text-xs sm:text-sm whitespace-nowrap shadow-lg shadow-amber-500/20 transition transform active:scale-95"
+                >
+                  Verify BVN & Issue Account 🚀
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* SUPPORTED GATEWAYS SHOWCASE */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">💳</span>
+                <h3 className="text-base font-black text-white">Supported Payment & Top-Up Gateways</h3>
+              </div>
+              <span className="text-xs font-bold text-sky-400 bg-sky-500/10 px-2.5 py-1 rounded-full border border-sky-500/20">
+                4 CHANNELS
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {GATEWAYS.map(gw => (
+                <div
+                  key={gw.id}
+                  onClick={() => {
+                    if (gw.id === 'bank_transfer') {
+                      if (!virtualAccount?.account_number) {
+                        setShowBvnModal(true);
+                      } else {
+                        navigator.clipboard.writeText(virtualAccount.account_number);
+                        setCopiedVa(true);
+                        setTimeout(() => setCopiedVa(false), 2500);
+                      }
+                    } else {
+                      setTopUpGateway(gw.id);
+                      setShowTopUpModal(true);
+                    }
+                  }}
+                  className="cursor-pointer bg-slate-800/60 hover:bg-slate-800 border border-slate-700/80 hover:border-amber-500/40 rounded-xl p-3.5 flex items-center justify-between gap-3 transition group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-white p-1 flex items-center justify-center shrink-0">
+                      <img src={gw.logo} alt={gw.name} className="w-full h-full object-contain" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-white group-hover:text-amber-400 transition">{gw.name}</span>
+                        <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded border ${gw.badgeColor}`}>
+                          {gw.badge}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 line-clamp-1">{gw.subtitle}</p>
+                      <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                        {gw.channels.slice(0, 3).map((ch, idx) => (
+                          <span key={idx} className="text-[10px] bg-slate-900/80 text-slate-300 px-1.5 py-0.5 rounded font-medium">
+                            {ch}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-slate-500 group-hover:text-amber-400 text-sm font-bold transition">→</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-black text-white">Earnings Trend (Recent Days)</h2>
@@ -732,24 +1103,14 @@ const VendorWallet = () => {
                       <p className="text-rose-400 text-xs mt-1 font-semibold">Amount exceeds available balance.</p>
                     )}
 
-                    {/* Quick Presets */}
-                    <div className="flex gap-2 mt-2.5">
-                      {PRESETS.map(p => (
-                        <button
-                          key={p}
-                          type="button"
-                          onClick={() => setPayoutAmount(String(p))}
-                          className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold py-1.5 rounded-lg border border-slate-700/80 transition"
-                        >
-                          ₦{p / 1000}k
-                        </button>
-                      ))}
+                    {/* Balance Shortcut */}
+                    <div className="flex justify-end mt-2">
                       <button
                         type="button"
                         onClick={() => setPayoutAmount(String(wallet.balance))}
-                        className="flex-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs font-black py-1.5 rounded-lg border border-amber-500/30 transition"
+                        className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs font-black py-1.5 px-3 rounded-lg border border-amber-500/30 transition"
                       >
-                        Max
+                        Withdraw Max (₦{wallet.balance?.toLocaleString()})
                       </button>
                     </div>
                   </div>
@@ -810,7 +1171,7 @@ const VendorWallet = () => {
                       maxLength={10}
                       value={bankDetails.accountNumber}
                       onChange={(e) => setBankDetails({ ...bankDetails, accountNumber: e.target.value.replace(/\D/g, '') })}
-                      placeholder="e.g. 0123456789"
+                      placeholder="10-digit account number"
                       required
                       className="w-full bg-slate-800/80 border border-slate-700 focus:border-amber-400 rounded-xl py-2.5 px-3 text-white text-sm font-bold font-mono tracking-wider focus:outline-none"
                     />
@@ -878,6 +1239,185 @@ const VendorWallet = () => {
                 </form>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* BVN VERIFICATION MODAL */}
+      {showBvnModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl relative">
+            <button
+              onClick={() => setShowBvnModal(false)}
+              className="absolute top-5 right-5 text-slate-400 hover:text-white text-lg"
+            >
+              ✕
+            </button>
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-2xl">🛡️</span>
+              <div>
+                <h3 className="text-lg font-black text-white">Paystack BVN Verification</h3>
+                <p className="text-xs text-slate-400">Generate your permanent personal NUBAN account</p>
+              </div>
+            </div>
+
+            {vaError && (
+              <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-400">
+                {vaError}
+              </div>
+            )}
+
+            <form onSubmit={handleVerifyBvn} className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-300 mb-1 block">Full Legal Name (as on BVN)</label>
+                <input
+                  type="text"
+                  value={bvnLegalName}
+                  onChange={(e) => setBvnLegalName(e.target.value)}
+                  placeholder="Legal full name"
+                  required
+                  className="w-full bg-slate-800 border border-slate-700 focus:border-amber-400 rounded-xl py-2.5 px-3 text-white text-sm focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-xs font-bold text-slate-300">11-Digit BVN Number</label>
+                  <span className="text-[10px] text-sky-400 font-bold">Dial *565*0# to check</span>
+                </div>
+                <input
+                  type="text"
+                  maxLength={11}
+                  value={bvnInput}
+                  onChange={(e) => setBvnInput(e.target.value.replace(/\D/g, ''))}
+                  placeholder="11-digit BVN"
+                  required
+                  className="w-full bg-slate-800 border border-slate-700 focus:border-amber-400 rounded-xl py-2.5 px-3 text-white text-sm font-mono tracking-wider focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-300 mb-1 block">Registered Phone Number</label>
+                <input
+                  type="tel"
+                  value={bvnPhone}
+                  onChange={(e) => setBvnPhone(e.target.value)}
+                  placeholder="Phone number"
+                  className="w-full bg-slate-800 border border-slate-700 focus:border-amber-400 rounded-xl py-2.5 px-3 text-white text-sm focus:outline-none"
+                />
+              </div>
+
+              <div className="bg-slate-800/60 p-3 rounded-xl border border-slate-700 text-[11px] text-slate-400 flex items-center gap-2">
+                <span>🔒</span>
+                <span>Bank-grade 256-bit SSL encryption · Direct Paystack API verification.</span>
+              </div>
+
+              <button
+                type="submit"
+                disabled={bvnVerifying}
+                className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 text-slate-950 font-black py-3 rounded-xl shadow-lg shadow-emerald-500/20 disabled:opacity-50 transition transform active:scale-98"
+              >
+                {bvnVerifying ? 'Verifying with Paystack...' : 'Verify BVN & Issue NUBAN'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* TOP-UP MODAL */}
+      {showTopUpModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl relative">
+            <button
+              onClick={() => setShowTopUpModal(false)}
+              className="absolute top-5 right-5 text-slate-400 hover:text-white text-lg"
+            >
+              ✕
+            </button>
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-2xl">💳</span>
+              <div>
+                <h3 className="text-lg font-black text-white">Add Funds / Top-Up</h3>
+                <p className="text-xs text-slate-400">Choose a gateway to deposit funds to your balance</p>
+              </div>
+            </div>
+
+            {topUpError && (
+              <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-400">
+                {topUpError}
+              </div>
+            )}
+
+            <form onSubmit={handleTopUpSubmit} className="space-y-4">
+              {/* Gateway selector */}
+              <div>
+                <label className="text-xs font-bold text-slate-300 mb-2 block">Select Payment Channel</label>
+                <div className="space-y-2">
+                  {GATEWAYS.map(gw => (
+                    <div
+                      key={gw.id}
+                      onClick={() => setTopUpGateway(gw.id)}
+                      className={`cursor-pointer rounded-xl p-3 border flex items-center justify-between transition ${
+                        topUpGateway === gw.id 
+                          ? 'border-amber-400 bg-amber-500/10' 
+                          : 'border-slate-800 bg-slate-800/40 hover:bg-slate-800'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-white p-1 flex items-center justify-center shrink-0">
+                          <img src={gw.logo} alt={gw.name} className="w-full h-full object-contain" />
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-white">{gw.name}</div>
+                          <div className="text-[10px] text-slate-400">{gw.speed}</div>
+                        </div>
+                      </div>
+                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                        topUpGateway === gw.id ? 'border-amber-400 bg-amber-400' : 'border-slate-600'
+                      }`}>
+                        {topUpGateway === gw.id && <div className="w-1.5 h-1.5 rounded-full bg-slate-950" />}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {topUpGateway !== 'bank_transfer' ? (
+                <div>
+                  <label className="text-xs font-bold text-slate-300 mb-1.5 block">Deposit Amount (₦)</label>
+                  <input
+                    type="number"
+                    value={topUpAmount}
+                    onChange={(e) => setTopUpAmount(e.target.value)}
+                    placeholder="0.00"
+                    required
+                    min="100"
+                    className="w-full bg-slate-800 border border-slate-700 focus:border-amber-400 rounded-xl py-3 px-4 text-white font-extrabold text-lg focus:outline-none"
+                  />
+                </div>
+              ) : (
+                <div className="bg-slate-800/80 p-4 rounded-2xl border border-slate-700 text-xs text-slate-300 space-y-2">
+                  <p className="font-bold text-amber-400">Dedicated Bank Transfer Instructions:</p>
+                  <p>
+                    {virtualAccount?.account_number
+                      ? `Transfer any amount from your Nigerian banking app to ${virtualAccount.bank_name} (${virtualAccount.account_number}). Funds credit automatically with 0% fee.`
+                      : 'Please verify your BVN to activate your permanent dedicated bank account.'}
+                  </p>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={topUpLoading}
+                className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-slate-950 font-black py-3.5 rounded-xl shadow-lg shadow-amber-500/20 disabled:opacity-50 transition transform active:scale-98"
+              >
+                {topUpLoading 
+                  ? 'Initiating...' 
+                  : topUpGateway === 'bank_transfer' 
+                    ? (virtualAccount?.account_number ? 'Copy Dedicated Account Details 📋' : 'Activate Dedicated Account 🚀')
+                    : 'Proceed to Secure Checkout'}
+              </button>
+            </form>
           </div>
         </div>
       )}

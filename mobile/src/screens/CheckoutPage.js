@@ -3054,7 +3054,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                             <Ionicons name="call-outline" size={14} color={giftRecipientPhone ? '#D97706' : SLATE} style={{ marginRight: 7 }} />
                                             <TextInput
                                                 style={s.giftTextInput}
-                                                placeholder="e.g. 08012345678"
+                                                placeholder="Phone number"
                                                 placeholderTextColor="#94A3B8"
                                                 value={giftRecipientPhone}
                                                 onChangeText={setGiftRecipientPhone}
@@ -4647,7 +4647,7 @@ export const CheckoutPageInner = ({ navigation, route, onClearCart, cartLines: p
                                 <Text style={s.formFieldLabel}>Phone Number *</Text>
                                 <TextInput
                                     style={s.formTextInput}
-                                    placeholder="e.g. 08012345678"
+                                    placeholder="Phone number"
                                     placeholderTextColor="#94A3B8"
                                     keyboardType="phone-pad"
                                     value={modalPhone}

@@ -1656,7 +1656,7 @@ const Wallet = () => {
                       type="text"
                       value={bvnLegalName}
                       onChange={(e) => setBvnLegalName(e.target.value)}
-                      placeholder="e.g. Muhammad Sani Abubakar"
+                      placeholder="Legal full name"
                       className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                       required
                     />
@@ -1761,7 +1761,7 @@ const Wallet = () => {
                     type="text"
                     value={manualRefInput}
                     onChange={(e) => setManualRefInput(e.target.value)}
-                    placeholder="e.g. WLT-PAY-123456789 or FLW-123456"
+                    placeholder="Transaction reference or session ID"
                     className="w-full bg-transparent text-sm font-mono font-bold text-slate-900 dark:text-white focus:outline-none"
                     required
                   />
