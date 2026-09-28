@@ -1183,8 +1183,7 @@ export const PaymentGatewayService = {
                     name,
                     phone,
                     bvn: bvn ? String(bvn).trim() : undefined,
-                    force_refresh: forceRefresh,
-                    amount: 1000
+                    force_refresh: forceRefresh
                 })
             });
 
@@ -1213,22 +1212,26 @@ export const PaymentGatewayService = {
             const flwSecret = 'FLWSECK-456331fb55a2e059f1eb8d439c53b9ae-1a07bfbf2fcvt-X';
             const userSlug = userStr.replace(/[^a-zA-Z0-9]/g, '').slice(0, 10).toUpperCase();
             const txRef = `AMF-${userSlug}-${Date.now()}`;
+            const flwPayload = {
+                email: userEmail,
+                is_permanent: true,
+                tx_ref: txRef,
+                phonenumber: phone || '08000000000',
+                firstname: firstName,
+                lastname: lastName,
+                narration: `Abu Mafhal ${firstName}`
+            };
+            if (bvn && String(bvn).trim().length === 11) {
+                flwPayload.bvn = String(bvn).trim();
+            }
+
             const flwRes = await fetch('https://api.flutterwave.com/v3/virtual-account-numbers', {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${flwSecret}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    email: userEmail,
-                    is_permanent: false,
-                    amount: 1000,
-                    tx_ref: txRef,
-                    phonenumber: phone || '08000000000',
-                    firstname: firstName,
-                    lastname: lastName,
-                    narration: `Abu Mafhal ${firstName}`
-                })
+                body: JSON.stringify(flwPayload)
             });
 
             if (flwRes.ok) {

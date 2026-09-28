@@ -173,8 +173,7 @@ const Wallet = () => {
           user_id: activeUserId,
           email: currentUser?.email,
           name: currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0],
-          phone: currentUser?.phone,
-          amount: 1000
+          phone: currentUser?.phone
         })
       });
       const json = await res.json();
@@ -941,7 +940,7 @@ const Wallet = () => {
                         maxLength={11}
                         value={bvnInput}
                         onChange={(e) => setBvnInput(e.target.value.replace(/[^0-9]/g, ''))}
-                        placeholder="e.g. 22234567890"
+                        placeholder="11-digit BVN"
                         className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
                         required
                       />
@@ -956,7 +955,7 @@ const Wallet = () => {
                         type="text"
                         value={bvnLegalName}
                         onChange={(e) => setBvnLegalName(e.target.value)}
-                        placeholder="e.g. Muhammad Sani Ishaq"
+                        placeholder="Legal full name"
                         className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                         required
                       />
@@ -970,7 +969,7 @@ const Wallet = () => {
                         type="text"
                         value={bvnPhone}
                         onChange={(e) => setBvnPhone(e.target.value)}
-                        placeholder="e.g. 08012345678"
+                        placeholder="Phone number"
                         className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
@@ -1027,6 +1026,86 @@ const Wallet = () => {
               {userAccountNum ? 'View Instructions ➔' : 'Activate Account ➔'}
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* ── OFFICIAL PAYMENT GATEWAYS SHOWCASE ── */}
+      <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-5">
+          <div>
+            <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-emerald-600" />
+              Supported Payment & Top-Up Gateways
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Zero hidden fees, instant auto-recharge, and bank-grade encryption
+            </p>
+          </div>
+          <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-3 py-1 rounded-full border border-emerald-200 dark:border-emerald-800 self-start sm:self-auto">
+            4 Live Payment Channels
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {GATEWAYS.map((gw) => (
+            <div
+              key={gw.id}
+              onClick={() => {
+                setTopUpGateway(gw.id);
+                if (gw.id === 'bank_transfer') {
+                  if (userAccountNum) {
+                    setShowBankTransferModal(true);
+                  } else {
+                    setShowBvnForm(true);
+                  }
+                } else {
+                  setShowTopUpModal(true);
+                }
+              }}
+              className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 hover:shadow-lg transition-all cursor-pointer bg-slate-50/50 dark:bg-slate-850/50 group flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <img
+                    src={gw.logo}
+                    alt={gw.name}
+                    className="w-9 h-9 rounded-xl object-contain bg-white dark:bg-slate-800 p-1 border border-slate-200 dark:border-slate-700 shadow-sm"
+                  />
+                  <span
+                    style={{ color: gw.badgeColor, backgroundColor: gw.badgeBg, borderColor: gw.badgeBorder }}
+                    className="text-[9px] font-black px-2 py-0.5 rounded-full border"
+                  >
+                    {gw.badge}
+                  </span>
+                </div>
+
+                <h4 className="text-sm font-black text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                  {gw.name}
+                </h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
+                  {gw.subtitle}
+                </p>
+
+                <div className="flex flex-wrap gap-1 mt-3">
+                  {gw.channels.slice(0, 3).map((ch, idx) => (
+                    <span
+                      key={idx}
+                      className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
+                    >
+                      {ch}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-slate-200/80 dark:border-slate-800 flex items-center justify-between">
+                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500">{gw.speed}</span>
+                <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+                  Pay Now ➔
+                </span>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -1348,7 +1427,7 @@ const Wallet = () => {
                         min="2"
                         value={topUpAmountUsd}
                         onChange={(e) => setTopUpAmountUsd(e.target.value)}
-                        placeholder="e.g. 25"
+                        placeholder="0.00"
                         className="w-full bg-transparent text-2xl font-black font-mono text-slate-900 dark:text-white focus:outline-none"
                         required
                       />
@@ -1382,7 +1461,7 @@ const Wallet = () => {
                         type="number"
                         value={topUpAmount}
                         onChange={(e) => setTopUpAmount(e.target.value)}
-                        placeholder="e.g. 10000"
+                        placeholder="0.00"
                         min="100"
                         className="w-full bg-transparent text-2xl font-black font-mono text-slate-900 dark:text-white focus:outline-none"
                         required

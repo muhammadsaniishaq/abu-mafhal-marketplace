@@ -189,17 +189,18 @@ export default async function handler(req, res) {
         // ═════════════════════════════════════════════════════════════════════════
         if (!generatedVA && flwSecret) {
             try {
-                const reqAmount = Math.max(100, Number(amount) || 1000);
                 const flwPayload = {
                     email: cleanEmail,
                     is_permanent: true,
-                    amount: reqAmount,
                     tx_ref: txRef,
                     phonenumber: cleanPhone,
                     firstname: firstName,
                     lastname: lastName,
                     narration: `Abu Mafhal ${firstName}`
                 };
+                if (amount && Number(amount) > 0) {
+                    flwPayload.amount = Number(amount);
+                }
                 if (cleanBvn && cleanBvn.length === 11) {
                     flwPayload.bvn = cleanBvn;
                 }
