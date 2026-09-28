@@ -112,8 +112,6 @@ const NIGERIAN_BANKS = [
     'Stanbic IBTC', 'Union Bank', 'Sterling Bank', 'Wema Bank (ALAT)'
 ];
 
-const QUICK_AMOUNTS = [1000, 2000, 5000, 10000, 20000, 50000];
-
 // ─── Sub-components ───────────────────────────────────────────────────────────
 const Row = ({ children, style }) => (
     <View style={[{ flexDirection: 'row', alignItems: 'center' }, style]}>{children}</View>
@@ -1172,21 +1170,9 @@ const WalletPageInner = ({ user, onBack }) => {
                                             value={amountNgn}
                                             onChangeText={setAmountNgn}
                                             keyboardType="numeric"
-                                            placeholder="e.g. 5,000"
+                                            placeholder="e.g. 10,000"
                                             placeholderTextColor="#94A3B8"
                                         />
-                                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
-                                            <Row style={{ gap: 8 }}>
-                                                {QUICK_AMOUNTS.map(q => (
-                                                    <TouchableOpacity key={q} onPress={() => setAmountNgn(String(q))}
-                                                        style={[S.quickBtn, amountNgn === String(q) && { backgroundColor: '#0F172A', borderColor: '#0F172A' }]}>
-                                                        <Text style={[S.quickBtnTxt, amountNgn === String(q) && { color: 'white' }]}>
-                                                            {q >= 1000 ? `₦${q / 1000}k` : `₦${q}`}
-                                                        </Text>
-                                                    </TouchableOpacity>
-                                                ))}
-                                            </Row>
-                                        </ScrollView>
                                     </>
                                 )}
                             </View>
