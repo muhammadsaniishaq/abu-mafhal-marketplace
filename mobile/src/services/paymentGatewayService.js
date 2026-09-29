@@ -1253,26 +1253,74 @@ export const PaymentGatewayService = {
 
             const userPrefix = userStr.substring(0, 8).toUpperCase();
 
-            // Load already credited transaction IDs
-            let creditedTxs = [];
+            // Load already credited transaction IDs from Supabase database
+            const creditedTxs = new Set();
+            try {
+                if (userStr) {
+                    const { data: dbTxs } = await supabase
+                        .from('transactions')
+                        .select('reference')
+                        .eq('user_id', userStr);
+                    if (dbTxs) {
+                        dbTxs.forEach(row => {
+                            if (row.reference) {
+                                creditedTxs.add(String(row.reference).trim());
+                                const m = String(row.reference).match(/^FLW-(\d+)/);
+                                if (m) creditedTxs.add(Number(m[1]));
+                            }
+                        });
+                    }
+                }
+            } catch (_) {}
+
+            // Also check local storage cache
             try {
                 if (AsyncStorage) {
                     const raw = await AsyncStorage.getItem(`@abumafhal_credited_flw_${userStr}`);
-                    if (raw) creditedTxs = JSON.parse(raw);
+                    if (raw) {
+                        const arr = JSON.parse(raw);
+                        if (Array.isArray(arr)) arr.forEach(id => creditedTxs.add(id));
+                    }
+                }
+            } catch (_) {}
+
+            // Get user's dedicated account number if available
+            let userAccountNum = '';
+            try {
+                const { data: p } = await supabase.from('profiles').select('custom_id').eq('id', userStr).maybeSingle();
+                if (p?.custom_id) {
+                    const parsed = typeof p.custom_id === 'string' ? JSON.parse(p.custom_id) : p.custom_id;
+                    if (parsed?.account_number) userAccountNum = String(parsed.account_number).trim();
                 }
             } catch (_) {}
 
             const uncredited = txList.filter(t => {
-                if (creditedTxs.includes(t.id)) return false;
+                const flwRefCode = `FLW-${t.id}`;
+                if (creditedTxs.has(t.id) || creditedTxs.has(flwRefCode) || (t.tx_ref && creditedTxs.has(String(t.tx_ref)))) {
+                    return false;
+                }
                 const txRef = String(t.tx_ref || '').toUpperCase();
                 const custEmail = String(t.customer?.email || '').trim().toLowerCase();
                 const custPhone = String(t.customer?.phone_number || '').replace(/[^0-9]/g, '');
+                const destAcc = String(
+                    t.meta?.virtualaccountnumber ||
+                    t.meta?.virtual_account_number ||
+                    t.virtual_account_number ||
+                    t.meta?.destination_account_number ||
+                    t.meta?.account_number ||
+                    t.account_number ||
+                    ''
+                ).trim();
+                const narration = String(t.narration || '');
 
+                const matchAccount = userAccountNum && userAccountNum.length >= 10 && (
+                    destAcc === userAccountNum || narration.includes(userAccountNum)
+                );
                 const matchRef = userPrefix && userPrefix.length >= 6 && txRef.includes(userPrefix);
                 const matchEmail = cleanEmail && cleanEmail.includes('@') && custEmail === cleanEmail;
-                const matchPhone = cleanPhone && cleanPhone.length >= 10 && (custPhone === cleanPhone || custPhone.endsWith(cleanPhone.slice(-10)));
+                const matchPhone = cleanPhone && cleanPhone.length >= 10 && custPhone && (custPhone === cleanPhone || custPhone.endsWith(cleanPhone.slice(-10)));
 
-                return (matchRef || matchEmail || matchPhone) && t.status === 'successful';
+                return (matchAccount || matchRef || matchEmail || matchPhone) && t.status === 'successful';
             });
 
             if (uncredited.length === 0) {
@@ -1281,6 +1329,38 @@ export const PaymentGatewayService = {
 
             const totalNewAmount = uncredited.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
             const newTxIds = uncredited.map(t => t.id);
+
+            // Persist newly credited transactions to Supabase to prevent loss on refresh
+            for (const t of uncredited) {
+                const amt = Number(t.amount || 0);
+                const refCode = `FLW-${t.id}`;
+                if (amt > 0 && userStr) {
+                    try {
+                        await supabase.from('transactions').insert({
+                            user_id: userStr,
+                            type: 'topup',
+                            amount: amt,
+                            status: 'completed',
+                            reference: refCode,
+                            description: `Bank Deposit of ₦${amt.toLocaleString()} via Flutterwave MFB (Ref: ${t.tx_ref || refCode})`,
+                            created_at: t.created_at || new Date().toISOString()
+                        });
+                        const { data: curP } = await supabase.from('profiles').select('balance').eq('id', userStr).maybeSingle();
+                        const nextBal = (Number(curP?.balance) || 0) + amt;
+                        await supabase.from('profiles').update({ balance: nextBal }).eq('id', userStr);
+                    } catch (dbErr) {
+                        console.warn('[syncFlutterwaveDeposits] Fallback DB persist notice:', dbErr.message);
+                    }
+                }
+            }
+
+            // Update local storage cache
+            try {
+                if (AsyncStorage) {
+                    const updated = Array.from(new Set([...Array.from(creditedTxs), ...newTxIds]));
+                    await AsyncStorage.setItem(`@abumafhal_credited_flw_${userStr}`, JSON.stringify(updated));
+                }
+            } catch (_) {}
 
             return {
                 success: true,

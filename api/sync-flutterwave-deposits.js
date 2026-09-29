@@ -169,8 +169,16 @@ export default async function handler(req, res) {
             if (t.status !== 'successful') return false;
             const txRef = String(t.tx_ref || '').toUpperCase();
             const custEmail = String(t.customer?.email || '').trim().toLowerCase();
+            const destAcc = String(
+                t.meta?.virtualaccountnumber ||
+                t.meta?.virtual_account_number ||
+                t.virtual_account_number ||
+                t.meta?.destination_account_number ||
+                t.meta?.account_number ||
+                t.account_number ||
+                ''
+            ).trim();
             const custPhone = String(t.customer?.phone_number || '').replace(/[^0-9]/g, '');
-            const destAcc = String(t.meta?.destination_account_number || t.meta?.account_number || t.account_number || '').trim();
             const narration = String(t.narration || '');
 
             const matchAccount = userDedicatedAccount && userDedicatedAccount.length >= 10 && (
@@ -178,7 +186,7 @@ export default async function handler(req, res) {
             );
             const matchRef = userSlug && userSlug.length >= 6 && txRef.includes(userSlug);
             const matchEmail = cleanEmail && cleanEmail.includes('@') && custEmail === cleanEmail;
-            const matchPhone = cleanPhone && cleanPhone.length >= 10 && (custPhone === cleanPhone || custPhone.endsWith(cleanPhone.slice(-10)));
+            const matchPhone = cleanPhone && cleanPhone.length >= 10 && custPhone && (custPhone === cleanPhone || custPhone.endsWith(cleanPhone.slice(-10)));
 
             return matchAccount || matchRef || matchEmail || matchPhone;
         });

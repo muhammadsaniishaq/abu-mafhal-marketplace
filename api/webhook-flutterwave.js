@@ -56,8 +56,15 @@ export default async function handler(req, res) {
             }
 
             const custEmail    = (data?.customer?.email || '').trim().toLowerCase();
-            const custPhone    = (data?.customer?.phone_number || '').replace(/[^0-9]/g, '');
-            const destAccount  = (data?.meta?.destination_account_number || data?.account_number || '').trim();
+            const custPhone    = String(data?.customer?.phone_number || '').replace(/[^0-9]/g, '');
+            const destAccount  = (
+                data?.meta?.virtualaccountnumber ||
+                data?.meta?.virtual_account_number ||
+                data?.virtual_account_number ||
+                data?.meta?.destination_account_number ||
+                data?.account_number ||
+                ''
+            ).trim();
 
             let targetUser = null;
 
