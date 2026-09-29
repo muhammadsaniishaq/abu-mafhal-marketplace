@@ -2,6 +2,18 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 
+// ─── Blocked/dummy account numbers — reject these everywhere ────────────────
+const BLOCKED_ACCOUNTS = new Set(['9187255635', '9282617835', '0000000000', '1111111111']);
+const isValidVirtualAccount = (acc) => {
+    if (!acc) return false;
+    const s = String(acc).trim();
+    if (s.length < 10) return false;
+    if (BLOCKED_ACCOUNTS.has(s)) return false;
+    if (/^(\d)\1{9,}$/.test(s)) return false;
+    if (s.startsWith('980')) return false;
+    return true;
+};
+
 // In-memory cache for dynamic gateway settings loaded from Supabase backend
 let _gatewayConfigCache = null;
 let _gatewayConfigCacheTime = 0;
@@ -1037,7 +1049,7 @@ export const PaymentGatewayService = {
                     const stored = await AsyncStorage.getItem(`@abumafhal_dedicated_va_${userStr}`);
                     if (stored) {
                         const parsed = JSON.parse(stored);
-                        if (parsed?.account_number && !parsed.account_number.startsWith('980') && parsed.account_number !== '9187255635') {
+                        if (parsed?.account_number && isValidVirtualAccount(parsed.account_number)) {
                             return { ok: true, data: { success: true, data: parsed } };
                         } else {
                             await AsyncStorage.removeItem(`@abumafhal_dedicated_va_${userStr}`).catch(() => {});
@@ -1047,11 +1059,14 @@ export const PaymentGatewayService = {
                 const { data: p } = await supabase.from('profiles').select('custom_id').eq('id', userStr).maybeSingle();
                 if (p?.custom_id) {
                     const parsed = typeof p.custom_id === 'string' ? JSON.parse(p.custom_id) : p.custom_id;
-                    if (parsed?.account_number && !parsed.account_number.startsWith('980') && parsed.account_number !== '9187255635') {
+                    if (parsed?.account_number && isValidVirtualAccount(parsed.account_number)) {
                         if (AsyncStorage) {
                             await AsyncStorage.setItem(`@abumafhal_dedicated_va_${userStr}`, JSON.stringify(parsed)).catch(() => {});
                         }
                         return { ok: true, data: { success: true, data: parsed } };
+                    } else if (parsed?.account_number) {
+                        // Wipe dummy/shared account from DB immediately
+                        await supabase.from('profiles').update({ custom_id: null }).eq('id', userStr).catch(() => {});
                     }
                 }
             } catch (_) {}
@@ -1090,7 +1105,7 @@ export const PaymentGatewayService = {
 
             if (res.ok) {
                 const json = await res.json();
-                if (json?.success && json?.data?.account_number && !json.data.account_number.startsWith('980')) {
+                if (json?.success && json?.data?.account_number && isValidVirtualAccount(json.data.account_number)) {
                     try {
                         if (AsyncStorage) {
                             await AsyncStorage.setItem(`@abumafhal_dedicated_va_${userStr}`, JSON.stringify(json.data));
@@ -1139,7 +1154,7 @@ export const PaymentGatewayService = {
 
                 if (flwRes.ok) {
                     const flwData = await flwRes.json();
-                    if (flwData?.status === 'success' && flwData?.data?.account_number) {
+                    if (flwData?.status === 'success' && flwData?.data?.account_number && isValidVirtualAccount(flwData.data.account_number)) {
                         const d = flwData.data;
                         const cleanedName = d.note 
                             ? d.note.replace(/^Please make a bank transfer to\s+/i, '').trim()

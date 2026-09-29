@@ -41,6 +41,18 @@ const copyText = (text, label = 'Info') => {
     Alert.alert('Copied! 📋', `${label} copied to clipboard.`);
 };
 
+// ─── Blocked/dummy account numbers — never show these to any user ────────────
+const BLOCKED_ACCOUNTS = new Set(['9187255635', '9282617835', '0000000000']);
+const isValidVirtualAccount = (acc) => {
+    if (!acc) return false;
+    const s = String(acc).trim();
+    if (s.length < 10) return false;
+    if (BLOCKED_ACCOUNTS.has(s)) return false;
+    if (/^(\d)\1{9,}$/.test(s)) return false; // all same digit
+    if (s.startsWith('980')) return false;       // test prefix
+    return true;
+};
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 const CARD_THEMES = {
     midnight: { gradient: ['#0B1120', '#1E293B', '#0F172A'], accent: '#D9A73A' },
@@ -366,14 +378,17 @@ const WalletPageInner = ({ user, onBack }) => {
             if (pData?.custom_id) {
                 try {
                     const parsed = typeof pData.custom_id === 'string' ? JSON.parse(pData.custom_id) : pData.custom_id;
-                    if (parsed?.account_number && !parsed.account_number.startsWith('980') && parsed.account_number !== '9187255635') {
+                    if (parsed?.account_number && isValidVirtualAccount(parsed.account_number)) {
                         setVirtualAcc(parsed);
                         setShowBvnForm(false);
                         AsyncStorage.setItem(`@amf_va_${uid}`, JSON.stringify(parsed)).catch(() => {});
                     } else {
+                        // Wipe invalid/shared account from local state and storage
                         setVirtualAcc(null);
                         setShowBvnForm(true);
                         AsyncStorage.removeItem(`@amf_va_${uid}`).catch(() => {});
+                        // Also wipe from Supabase so it doesn't persist
+                        supabase.from('profiles').update({ custom_id: null }).eq('id', uid).catch(() => {});
                     }
                 } catch (_) {
                     setVirtualAcc(null);
@@ -467,7 +482,7 @@ const WalletPageInner = ({ user, onBack }) => {
             const cached = await AsyncStorage.getItem(cacheKey);
             if (cached) {
                 const p = JSON.parse(cached);
-                if (p?.account_number && !p.account_number.startsWith('980') && p.account_number !== '9187255635') {
+                if (p?.account_number && isValidVirtualAccount(p.account_number)) {
                     setVirtualAcc(p);
                     setShowBvnForm(false);
                     return;
@@ -483,11 +498,14 @@ const WalletPageInner = ({ user, onBack }) => {
             const { data: p } = await supabase.from('profiles').select('custom_id').eq('id', uid).maybeSingle();
             if (p?.custom_id) {
                 const parsed = typeof p.custom_id === 'string' ? JSON.parse(p.custom_id) : p.custom_id;
-                if (parsed?.account_number && !parsed.account_number.startsWith('980') && parsed.account_number !== '9187255635') {
+                if (parsed?.account_number && isValidVirtualAccount(parsed.account_number)) {
                     setVirtualAcc(parsed);
                     setShowBvnForm(false);
                     AsyncStorage.setItem(`@amf_va_${uid}`, JSON.stringify(parsed)).catch(() => {});
                     return;
+                } else if (parsed?.account_number) {
+                    // Wipe dummy/shared account from Supabase immediately
+                    supabase.from('profiles').update({ custom_id: null }).eq('id', uid).catch(() => {});
                 }
             }
         } catch (e) {
@@ -597,7 +615,7 @@ const WalletPageInner = ({ user, onBack }) => {
     const handleTopUp = async () => {
         // Bank transfer: copy account details or open BVN form
         if (gateway === 'bank_transfer') {
-            if (virtualAcc?.account_number && !virtualAcc.account_number.startsWith('980')) {
+            if (isValidVirtualAccount(virtualAcc?.account_number)) {
                 const details = `Bank: ${virtualAcc.bank_name}\nAccount: ${virtualAcc.account_number}\nName: ${virtualAcc.account_name}`;
                 copyText(details, 'Bank Details');
                 Alert.alert('Transfer Details Copied 📋', `${details}\n\nTransfer from any Nigerian bank (OPay, Kuda, PalmPay, GTBank, Zenith, Access). Your wallet credits automatically in 30–60 seconds.`);
@@ -1011,7 +1029,7 @@ const WalletPageInner = ({ user, onBack }) => {
                             <ActivityIndicator color="#059669" size="small" />
                             <Text style={S.vaLoadingTxt}>Retrieving your dedicated personal NUBAN…</Text>
                         </View>
-                    ) : virtualAcc?.account_number && !showBvnForm ? (
+                    ) : isValidVirtualAccount(virtualAcc?.account_number) ? (
                         <View>
                             <LinearGradient
                                 colors={['#071324', '#0F274B', '#1E3E6E']}
@@ -1161,44 +1179,6 @@ const WalletPageInner = ({ user, onBack }) => {
                                     </>
                                 )}
                             </TouchableOpacity>
-
-                            {/* Alternative Direct Transfer (No BVN Required) */}
-                            <View style={S.directBankWrap}>
-                                <Row style={{ justifyContent: 'space-between', marginBottom: 6 }}>
-                                    <Row style={{ gap: 6 }}>
-                                        <Ionicons name="business" size={14} color="#0284C7" />
-                                        <Text style={S.directBankTitle}>Direct Bank Deposit (No BVN Required)</Text>
-                                    </Row>
-                                    <Pill label="MANUAL TRANSFER" color="#0284C7" bg="#F0F9FF" />
-                                </Row>
-                                <Text style={S.directBankSub}>Transfer to Abu Mafhal corporate account and send receipt for instant crediting:</Text>
-                                <View style={S.directBankDetailsBox}>
-                                    <View style={S.directBankRow}>
-                                        <Text style={S.directBankLabel}>Bank:</Text>
-                                        <Text style={S.directBankVal}>Moniepoint MFB</Text>
-                                    </View>
-                                    <View style={S.directBankRow}>
-                                        <Text style={S.directBankLabel}>Account No:</Text>
-                                        <Row style={{ gap: 8 }}>
-                                            <Text style={[S.directBankVal, { fontSize: 16, fontWeight: '900', letterSpacing: 1 }]}>8148810243</Text>
-                                            <TouchableOpacity onPress={() => copyText('8148810243', 'Moniepoint Account')} style={S.miniCopyBtn}>
-                                                <Ionicons name="copy-outline" size={12} color="#0284C7" />
-                                                <Text style={{ fontSize: 10, fontWeight: '800', color: '#0284C7' }}>Copy</Text>
-                                            </TouchableOpacity>
-                                        </Row>
-                                    </View>
-                                    <View style={S.directBankRow}>
-                                        <Text style={S.directBankLabel}>Account Name:</Text>
-                                        <Text style={S.directBankVal}>Abu Mafhal Marketplace</Text>
-                                    </View>
-                                </View>
-                            </View>
-
-                            {virtualAcc?.account_number && (
-                                <TouchableOpacity onPress={() => setShowBvnForm(false)} style={{ marginTop: 10, alignItems: 'center', padding: 6 }}>
-                                    <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '700' }}>Cancel and view existing account</Text>
-                                </TouchableOpacity>
-                            )}
                         </View>
                     )}
                 </View>
@@ -1220,7 +1200,7 @@ const WalletPageInner = ({ user, onBack }) => {
                                 onPress={() => {
                                     setGateway(gw.id);
                                     if (gw.id === 'bank_transfer') {
-                                        if (virtualAcc?.account_number) {
+                                        if (isValidVirtualAccount(virtualAcc?.account_number)) {
                                             setShowTopUp(true);
                                         } else {
                                             setShowBvnForm(true);
@@ -1537,7 +1517,7 @@ const WalletPageInner = ({ user, onBack }) => {
                                         <ActivityIndicator color="#059669" size="large" />
                                         <Text style={S.vaLoadingTxt}>Checking your dedicated virtual account…</Text>
                                     </View>
-                                ) : virtualAcc?.account_number && !showBvnForm ? (
+                                ) : isValidVirtualAccount(virtualAcc?.account_number) ? (
                                     /* LUXURY ATM CARD FOR ACTIVE DEDICATED ACCOUNT */
                                     <View>
                                         <LinearGradient
@@ -1691,12 +1671,6 @@ const WalletPageInner = ({ user, onBack }) => {
                                                 </>
                                             )}
                                         </TouchableOpacity>
-
-                                        {virtualAcc && (
-                                            <TouchableOpacity onPress={() => setShowBvnForm(false)} style={{ marginTop: 10, alignItems: 'center', padding: 6 }}>
-                                                <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '700' }}>Cancel and view existing account</Text>
-                                            </TouchableOpacity>
-                                        )}
                                     </View>
                                 )}
                             </View>

@@ -33,6 +33,18 @@ import {
 
 const USD_RATE = 1500; // Benchmark ₦1,500 = $1.00 USD
 
+// ─── Blocked/dummy account numbers — reject these everywhere ────────────────
+const BLOCKED_ACCOUNTS = new Set(['9187255635', '9282617835', '0000000000', '1111111111']);
+const isValidVirtualAccount = (acc) => {
+  if (!acc) return false;
+  const s = String(acc).trim();
+  if (s.length < 10) return false;
+  if (BLOCKED_ACCOUNTS.has(s)) return false;
+  if (/^(\d)\1{9,}$/.test(s)) return false;
+  if (s.startsWith('980')) return false;
+  return true;
+};
+
 const GATEWAYS = [
   {
     id: 'paystack',
@@ -146,7 +158,7 @@ const Wallet = () => {
         const cached = localStorage.getItem(`@abumafhal_va_${activeUserId}`);
         if (cached) {
           const parsed = JSON.parse(cached);
-          if (parsed?.account_number && !parsed.account_number.startsWith('980') && parsed.account_number !== '9187255635') {
+          if (parsed?.account_number && isValidVirtualAccount(parsed.account_number)) {
             setUserVirtualAccount(parsed);
           } else {
             localStorage.removeItem(`@abumafhal_va_${activeUserId}`);
@@ -179,7 +191,7 @@ const Wallet = () => {
         })
       });
       const json = await res.json();
-      if (json?.success && json?.data?.account_number && !json.data.account_number.startsWith('980') && json.data.account_number !== '9187255635') {
+      if (json?.success && json?.data?.account_number && isValidVirtualAccount(json.data.account_number)) {
         setUserVirtualAccount(json.data);
         if (typeof window !== 'undefined') {
           localStorage.setItem(`@abumafhal_va_${activeUserId}`, JSON.stringify(json.data));
@@ -231,7 +243,7 @@ const Wallet = () => {
       });
 
       const json = await res.json();
-      if (json?.success && json?.data?.account_number && json.data.account_number !== '9187255635') {
+      if (json?.success && json?.data?.account_number && isValidVirtualAccount(json.data.account_number)) {
         setUserVirtualAccount(json.data);
         setShowBvnForm(false);
         if (typeof window !== 'undefined') {
@@ -710,7 +722,7 @@ const Wallet = () => {
     );
   }
 
-  const userAccountNum = userVirtualAccount?.account_number;
+  const userAccountNum = isValidVirtualAccount(userVirtualAccount?.account_number) ? userVirtualAccount.account_number : null;
   const userBankName = userVirtualAccount?.bank_name;
   const userAccountName = userVirtualAccount?.account_name;
 
@@ -857,7 +869,7 @@ const Wallet = () => {
               </span>
             </div>
 
-            {userAccountNum && !userAccountNum.startsWith('980') ? (
+            {userAccountNum ? (
               <>
                 <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
                   {userBankName || 'Wema Bank (ALAT) / Dedicated NUBAN'}
@@ -1320,7 +1332,7 @@ const Wallet = () => {
             {/* Gateway Specific Input & Action */}
             {topUpGateway === 'bank_transfer' ? (
               <div className="space-y-4">
-                {userAccountNum && !userAccountNum.startsWith('980') ? (
+                {userAccountNum ? (
                   <div className="rounded-2xl p-4 bg-gradient-to-br from-slate-900 to-slate-950 text-white border border-slate-800 shadow-lg">
                     <div className="flex items-center justify-between text-xs mb-3">
                       <span className="font-bold text-slate-300 uppercase tracking-wider text-[10px]">
@@ -1518,7 +1530,7 @@ const Wallet = () => {
               </p>
             </div>
 
-            {userAccountNum && !userAccountNum.startsWith('980') ? (
+            {userAccountNum ? (
               <div className="space-y-4">
                 <div className="rounded-2xl p-5 bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950 text-white border border-slate-800 shadow-xl">
                   <div className="flex items-center justify-between">

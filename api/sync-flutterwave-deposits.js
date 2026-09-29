@@ -125,40 +125,63 @@ export default async function handler(req, res) {
         const cleanEmail = String(email || '').trim().toLowerCase();
         const cleanPhone = String(phone || '').replace(/[^0-9]/g, '');
 
-        // 3. Match only real transactions legitimately belonging to this user
-        const matched = txList.filter(t => {
-            if (t.status !== 'successful') return false;
-            const txRef = String(t.tx_ref || '').toUpperCase();
-            const custEmail = String(t.customer?.email || '').trim().toLowerCase();
-            const custPhone = String(t.customer?.phone_number || '').replace(/[^0-9]/g, '');
-
-            const matchRef = userSlug && userSlug.length >= 6 && txRef.includes(userSlug);
-            const matchEmail = cleanEmail && cleanEmail.includes('@') && custEmail === cleanEmail;
-            const matchPhone = cleanPhone && cleanPhone.length >= 10 && (custPhone === cleanPhone || custPhone.endsWith(cleanPhone.slice(-10)));
-
-            return matchRef || matchEmail || matchPhone;
-        });
-
-        // 4. Fetch current user profile
+        // 3. Fetch current user profile first
         let activeUserId = user_id;
         let currentBalance = 0;
+        let userProfile = null;
 
         if (activeUserId) {
-            const { data: p } = await supabase.from('profiles').select('id, balance').eq('id', activeUserId).maybeSingle();
+            const { data: p } = await supabase.from('profiles').select('id, balance, email, phone, custom_id').eq('id', activeUserId).maybeSingle();
             if (p) {
+                userProfile = p;
                 currentBalance = Number(p.balance || 0);
             }
         } else if (cleanEmail) {
-            const { data: p } = await supabase.from('profiles').select('id, balance').eq('email', cleanEmail).maybeSingle();
+            const { data: p } = await supabase.from('profiles').select('id, balance, email, phone, custom_id').eq('email', cleanEmail).maybeSingle();
             if (p) {
+                userProfile = p;
                 activeUserId = p.id;
                 currentBalance = Number(p.balance || 0);
             }
         }
 
         if (!activeUserId) {
-            return res.status(200).json({ success: false, error: 'User not found', matched_count: matched.length });
+            return res.status(200).json({ success: false, error: 'User not found' });
         }
+
+        // Extract dedicated account number for matching incoming bank transfers
+        let userDedicatedAccount = null;
+        if (userProfile?.custom_id) {
+            try {
+                const parsed = typeof userProfile.custom_id === 'string' ? JSON.parse(userProfile.custom_id) : userProfile.custom_id;
+                if (parsed?.account_number) userDedicatedAccount = String(parsed.account_number).trim();
+            } catch (_) {}
+        }
+        if (!userDedicatedAccount && activeUserId) {
+            try {
+                const { data: va } = await supabase.from('virtual_accounts').select('account_number').eq('user_id', activeUserId).maybeSingle();
+                if (va?.account_number) userDedicatedAccount = String(va.account_number).trim();
+            } catch (_) {}
+        }
+
+        // 4. Match transactions legitimately belonging to this user
+        const matched = txList.filter(t => {
+            if (t.status !== 'successful') return false;
+            const txRef = String(t.tx_ref || '').toUpperCase();
+            const custEmail = String(t.customer?.email || '').trim().toLowerCase();
+            const custPhone = String(t.customer?.phone_number || '').replace(/[^0-9]/g, '');
+            const destAcc = String(t.meta?.destination_account_number || t.meta?.account_number || t.account_number || '').trim();
+            const narration = String(t.narration || '');
+
+            const matchAccount = userDedicatedAccount && userDedicatedAccount.length >= 10 && (
+                destAcc === userDedicatedAccount || narration.includes(userDedicatedAccount)
+            );
+            const matchRef = userSlug && userSlug.length >= 6 && txRef.includes(userSlug);
+            const matchEmail = cleanEmail && cleanEmail.includes('@') && custEmail === cleanEmail;
+            const matchPhone = cleanPhone && cleanPhone.length >= 10 && (custPhone === cleanPhone || custPhone.endsWith(cleanPhone.slice(-10)));
+
+            return matchAccount || matchRef || matchEmail || matchPhone;
+        });
 
         // 5. Fetch existing recorded transactions to prevent double crediting
         const { data: userExistingTxs } = await supabase
