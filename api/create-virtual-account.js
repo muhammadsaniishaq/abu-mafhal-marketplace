@@ -49,7 +49,7 @@ export default async function handler(req, res) {
                 if (p.custom_id) {
                     try {
                         const parsed = JSON.parse(p.custom_id);
-                        if (parsed && parsed.account_number && !parsed.account_number.startsWith('980')) {
+                        if (parsed && parsed.account_number && !parsed.account_number.startsWith('980') && parsed.account_number !== '9187255635') {
                             existingVA = parsed;
                         }
                     } catch (_) {}
@@ -101,12 +101,13 @@ export default async function handler(req, res) {
             flwSecret = 'FLWSECK-456331fb55a2e059f1eb8d439c53b9ae-1a07bfbf2fcvt-X';
         }
 
-        // Dedicated NUBAN strictly requires BVN per CBN rules
-        if (!cleanBvn && !existingVA) {
+        // Dedicated NUBAN strictly requires valid 11-digit BVN per CBN rules
+        const isValidBvn = cleanBvn && cleanBvn.length === 11 && !/^(\d)\1{10}$/.test(cleanBvn);
+        if (!isValidBvn && !existingVA) {
             return res.status(400).json({
                 success: false,
                 requires_bvn: true,
-                error: 'Ana bukatar lambar BVN domin kirkirar asusunka na kanka (dedicated virtual account).'
+                error: 'Ana bukatar ingantacciyar lambar BVN mai lamba 11 domin samar da asusunka na kanka (dedicated virtual account).'
             });
         }
 

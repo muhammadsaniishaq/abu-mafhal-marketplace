@@ -1037,15 +1037,17 @@ export const PaymentGatewayService = {
                     const stored = await AsyncStorage.getItem(`@abumafhal_dedicated_va_${userStr}`);
                     if (stored) {
                         const parsed = JSON.parse(stored);
-                        if (parsed?.account_number && !parsed.account_number.startsWith('980')) {
+                        if (parsed?.account_number && !parsed.account_number.startsWith('980') && parsed.account_number !== '9187255635') {
                             return { ok: true, data: { success: true, data: parsed } };
+                        } else {
+                            await AsyncStorage.removeItem(`@abumafhal_dedicated_va_${userStr}`).catch(() => {});
                         }
                     }
                 }
                 const { data: p } = await supabase.from('profiles').select('custom_id').eq('id', userStr).maybeSingle();
                 if (p?.custom_id) {
                     const parsed = typeof p.custom_id === 'string' ? JSON.parse(p.custom_id) : p.custom_id;
-                    if (parsed?.account_number && !parsed.account_number.startsWith('980')) {
+                    if (parsed?.account_number && !parsed.account_number.startsWith('980') && parsed.account_number !== '9187255635') {
                         if (AsyncStorage) {
                             await AsyncStorage.setItem(`@abumafhal_dedicated_va_${userStr}`, JSON.stringify(parsed)).catch(() => {});
                         }
@@ -1054,11 +1056,11 @@ export const PaymentGatewayService = {
                 }
             } catch (_) {}
 
-            // Strictly require BVN before generating an account
+            // Strictly require valid BVN before generating an account
             return {
                 ok: false,
                 requires_bvn: true,
-                error: 'Ana bukatar lambar BVN domin kirkirar asusunka na kanka (dedicated virtual account).'
+                error: 'Ana bukatar ingantacciyar lambar BVN mai lamba 11 domin samar da asusunka na kanka (dedicated virtual account).'
             };
         }
 

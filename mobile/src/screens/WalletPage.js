@@ -366,12 +366,23 @@ const WalletPageInner = ({ user, onBack }) => {
             if (pData?.custom_id) {
                 try {
                     const parsed = typeof pData.custom_id === 'string' ? JSON.parse(pData.custom_id) : pData.custom_id;
-                    if (parsed?.account_number && !parsed.account_number.startsWith('980')) {
+                    if (parsed?.account_number && !parsed.account_number.startsWith('980') && parsed.account_number !== '9187255635') {
                         setVirtualAcc(parsed);
                         setShowBvnForm(false);
                         AsyncStorage.setItem(`@amf_va_${uid}`, JSON.stringify(parsed)).catch(() => {});
+                    } else {
+                        setVirtualAcc(null);
+                        setShowBvnForm(true);
+                        AsyncStorage.removeItem(`@amf_va_${uid}`).catch(() => {});
                     }
-                } catch (_) {}
+                } catch (_) {
+                    setVirtualAcc(null);
+                    setShowBvnForm(true);
+                }
+            } else {
+                setVirtualAcc(null);
+                setShowBvnForm(true);
+                AsyncStorage.removeItem(`@amf_va_${uid}`).catch(() => {});
             }
 
             // Cache clean wallet state
@@ -456,10 +467,12 @@ const WalletPageInner = ({ user, onBack }) => {
             const cached = await AsyncStorage.getItem(cacheKey);
             if (cached) {
                 const p = JSON.parse(cached);
-                if (p?.account_number && !p.account_number.startsWith('980')) {
+                if (p?.account_number && !p.account_number.startsWith('980') && p.account_number !== '9187255635') {
                     setVirtualAcc(p);
                     setShowBvnForm(false);
                     return;
+                } else {
+                    await AsyncStorage.removeItem(cacheKey).catch(() => {});
                 }
             }
         } catch (_) {}
@@ -470,7 +483,7 @@ const WalletPageInner = ({ user, onBack }) => {
             const { data: p } = await supabase.from('profiles').select('custom_id').eq('id', uid).maybeSingle();
             if (p?.custom_id) {
                 const parsed = typeof p.custom_id === 'string' ? JSON.parse(p.custom_id) : p.custom_id;
-                if (parsed?.account_number && !parsed.account_number.startsWith('980')) {
+                if (parsed?.account_number && !parsed.account_number.startsWith('980') && parsed.account_number !== '9187255635') {
                     setVirtualAcc(parsed);
                     setShowBvnForm(false);
                     AsyncStorage.setItem(`@amf_va_${uid}`, JSON.stringify(parsed)).catch(() => {});
@@ -482,6 +495,10 @@ const WalletPageInner = ({ user, onBack }) => {
         } finally {
             setVaLoading(false);
         }
+
+        // Strictly wait for valid BVN verification before showing any virtual account
+        setVirtualAcc(null);
+        setShowBvnForm(true);
     }, [resolveUserId]);
 
     useEffect(() => {
@@ -527,13 +544,13 @@ const WalletPageInner = ({ user, onBack }) => {
     // ── Paystack BVN Verification & Dedicated Account Generation ─────────────
     const handleVerifyBvnAndGenerateAccount = async () => {
         const cleanBvn = String(bvnInput || '').trim().replace(/[^0-9]/g, '');
-        if (cleanBvn.length !== 11) {
-            Alert.alert('Invalid BVN', 'Please enter your 11-digit Bank Verification Number.');
+        if (cleanBvn.length !== 11 || /^(\d)\1{10}$/.test(cleanBvn)) {
+            Alert.alert('Invalid BVN', 'Da fatan a shigar da ingantacciyar lambar BVN mai lamba 11 daidai.');
             return;
         }
         const nameToUse = (bvnLegalName.trim() || [user?.user_metadata?.first_name, user?.user_metadata?.last_name].filter(Boolean).join(' ') || user?.user_metadata?.full_name || '').trim();
         if (!nameToUse) {
-            Alert.alert('Legal Name Required', 'Please enter your full legal name as registered on your BVN.');
+            Alert.alert('Legal Name Required', 'Da fatan a sanya cikakken sunanka kamar yadda yake a jikin BVN.');
             return;
         }
 

@@ -146,15 +146,17 @@ const Wallet = () => {
         const cached = localStorage.getItem(`@abumafhal_va_${activeUserId}`);
         if (cached) {
           const parsed = JSON.parse(cached);
-          if (parsed?.account_number && !parsed.account_number.startsWith('980')) {
+          if (parsed?.account_number && !parsed.account_number.startsWith('980') && parsed.account_number !== '9187255635') {
             setUserVirtualAccount(parsed);
+          } else {
+            localStorage.removeItem(`@abumafhal_va_${activeUserId}`);
           }
         }
       } catch (_) {}
     }
   }, [activeUserId]);
 
-  // Auto-fetch dedicated virtual account if exists in DB or generate
+  // Auto-fetch dedicated virtual account only if existing in DB
   useEffect(() => {
     if (activeUserId && !userVirtualAccount && !isGeneratingVa) {
       handleFetchExistingAccount();
@@ -177,10 +179,15 @@ const Wallet = () => {
         })
       });
       const json = await res.json();
-      if (json?.success && json?.data?.account_number && !json.data.account_number.startsWith('980')) {
+      if (json?.success && json?.data?.account_number && !json.data.account_number.startsWith('980') && json.data.account_number !== '9187255635') {
         setUserVirtualAccount(json.data);
         if (typeof window !== 'undefined') {
           localStorage.setItem(`@abumafhal_va_${activeUserId}`, JSON.stringify(json.data));
+        }
+      } else {
+        setUserVirtualAccount(null);
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem(`@abumafhal_va_${activeUserId}`);
         }
       }
     } catch (err) {
@@ -190,17 +197,17 @@ const Wallet = () => {
     }
   };
 
-  // Paystack BVN Verification and Dedicated Account Generation
+  // Dedicated Account Generation with Valid BVN
   const handleVerifyBvnAndGenerateAccount = async (e) => {
     if (e) e.preventDefault();
     const cleanBvn = String(bvnInput || '').trim().replace(/[^0-9]/g, '');
-    if (cleanBvn.length !== 11) {
-      setVaError('Please enter your valid 11-digit Bank Verification Number.');
+    if (cleanBvn.length !== 11 || /^(\d)\1{10}$/.test(cleanBvn)) {
+      setVaError('Da fatan a shigar da ingantacciyar lambar BVN mai lamba 11.');
       return;
     }
     const nameToUse = (bvnLegalName.trim() || currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0] || '').trim();
     if (!nameToUse) {
-      setVaError('Please enter your full legal name as registered on your BVN.');
+      setVaError('Da fatan a sanya cikakken sunanka kamar yadda yake a jikin BVN.');
       return;
     }
 
@@ -224,15 +231,15 @@ const Wallet = () => {
       });
 
       const json = await res.json();
-      if (json?.success && json?.data?.account_number) {
+      if (json?.success && json?.data?.account_number && json.data.account_number !== '9187255635') {
         setUserVirtualAccount(json.data);
         setShowBvnForm(false);
         if (typeof window !== 'undefined') {
           localStorage.setItem(`@abumafhal_va_${activeUserId}`, JSON.stringify(json.data));
         }
-        setVaVerifyStatus(`🎉 Permanent Paystack-verified dedicated account activated at ${json.data.bank_name}!`);
+        setVaVerifyStatus(`🎉 An kafa asusunka na din-din-din a ${json.data.bank_name}!`);
       } else {
-        setVaError(json?.error || 'Verification failed. Please verify your BVN and name.');
+        setVaError(json?.error || 'Ba a samu nasarar tantance BVN ba. Da fatan a sake duba lambar BVN da sunanka.');
       }
     } catch (err) {
       setVaError(err.message || 'Error communicating with verification service');
