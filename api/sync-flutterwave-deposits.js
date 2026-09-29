@@ -249,7 +249,7 @@ export default async function handler(req, res) {
             .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
         const verifiedLedgerBalance = Math.max(0, totalLedgerCredits - totalLedgerDebits);
-        const correctBalance = Math.max(currentBalance + totalNewAmount, verifiedLedgerBalance);
+        const correctBalance = (allUserTxs && allUserTxs.length > 0) ? verifiedLedgerBalance : Math.max(0, currentBalance + totalNewAmount);
 
         if (correctBalance !== currentBalance || totalNewAmount > 0) {
             await supabase.from('profiles').update({ balance: correctBalance }).eq('id', activeUserId);

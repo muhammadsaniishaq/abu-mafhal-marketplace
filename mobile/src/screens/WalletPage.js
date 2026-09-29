@@ -1,13 +1,13 @@
 /**
  * WalletPage.js — Abu Mafhal Marketplace
- * Ultra-Modern, Clean & Smooth Luxury Wallet
- * No clutter, fast performance, rock-solid database syncing
+ * Ultra-Modern Luxury VIP Wallet in Deep Navy & Metallic Gold
+ * Seamless performance, rock-solid database ledger, complete transaction receipt details
  */
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     View, Text, TouchableOpacity, ScrollView, TextInput,
     ActivityIndicator, Alert, RefreshControl, StyleSheet,
-    Modal, Platform, Dimensions, Animated, StatusBar
+    Modal, Platform, Dimensions, StatusBar
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -57,44 +57,44 @@ const GATEWAYS = [
         name: 'Dedicated Bank Transfer',
         subtitle: 'Direct NUBAN Transfer · Instant Auto-Credit',
         badge: '0% FEE · INSTANT',
-        badgeColor: '#059669',
-        badgeBg: '#ECFDF5',
+        badgeColor: '#D4AF37',
+        badgeBg: 'rgba(212, 175, 55, 0.12)',
         icon: 'business-outline',
-        iconColor: '#059669',
-        iconBg: '#ECFDF5',
+        iconColor: '#D4AF37',
+        iconBg: 'rgba(212, 175, 55, 0.15)',
     },
     {
         id: 'paystack',
         name: 'Paystack Checkout',
         subtitle: 'Cards · Bank Transfer · USSD · Apple Pay',
         badge: 'AUTO-VERIFY',
-        badgeColor: '#0284C7',
-        badgeBg: '#F0F9FF',
+        badgeColor: '#38BDF8',
+        badgeBg: 'rgba(56, 189, 248, 0.12)',
         icon: 'card-outline',
-        iconColor: '#0284C7',
-        iconBg: '#F0F9FF',
+        iconColor: '#38BDF8',
+        iconBg: 'rgba(56, 189, 248, 0.15)',
     },
     {
         id: 'flutterwave',
         name: 'Flutterwave Africa',
         subtitle: 'Cards · Direct Bank · Mobile Money',
         badge: 'PAN-AFRICA',
-        badgeColor: '#D97706',
-        badgeBg: '#FFFBEB',
+        badgeColor: '#F59E0B',
+        badgeBg: 'rgba(245, 158, 11, 0.12)',
         icon: 'flash-outline',
-        iconColor: '#D97706',
-        iconBg: '#FFFBEB',
+        iconColor: '#F59E0B',
+        iconBg: 'rgba(245, 158, 11, 0.15)',
     },
     {
         id: 'nowpayments',
         name: 'Crypto Top-Up',
         subtitle: 'USDT (TRC20) · BTC · ETH · SOL · BNB',
         badge: 'WEB3 CRYPTO',
-        badgeColor: '#8B5CF6',
-        badgeBg: '#F5F3FF',
+        badgeColor: '#A855F7',
+        badgeBg: 'rgba(168, 85, 247, 0.12)',
         icon: 'logo-bitcoin',
-        iconColor: '#8B5CF6',
-        iconBg: '#F5F3FF',
+        iconColor: '#A855F7',
+        iconBg: 'rgba(168, 85, 247, 0.15)',
     },
 ];
 
@@ -102,11 +102,11 @@ const GATEWAYS = [
 const TxIcon = ({ type }) => {
     const isCredit = type === 'topup' || type === 'credit' || type === 'deposit';
     return (
-        <View style={[S.txIconCircle, { backgroundColor: isCredit ? '#ECFDF5' : '#FEF2F2' }]}>
+        <View style={[S.txIconCircle, { backgroundColor: isCredit ? 'rgba(212, 175, 55, 0.15)' : 'rgba(239, 68, 68, 0.15)' }]}>
             <Ionicons
                 name={isCredit ? 'arrow-down-left' : 'arrow-up-right'}
                 size={18}
-                color={isCredit ? '#059669' : '#DC2626'}
+                color={isCredit ? '#D4AF37' : '#EF4444'}
             />
         </View>
     );
@@ -123,7 +123,6 @@ export const WalletPage = ({ user, onBack }) => {
 
     // Dedicated Virtual Account state
     const [virtualAcc, setVirtualAcc] = useState(null);
-    const [vaLoading, setVaLoading] = useState(false);
 
     // BVN Form state (only shown if user has no account yet)
     const [bvnInput, setBvnInput] = useState('');
@@ -136,7 +135,6 @@ export const WalletPage = ({ user, onBack }) => {
     const [showTopUp, setShowTopUp] = useState(false);
     const [gateway, setGateway] = useState('bank_transfer');
     const [amountNgn, setAmountNgn] = useState('');
-    const [amountUsd, setAmountUsd] = useState('');
     const [topUpPending, setTopUpPending] = useState(false);
 
     // WebView for external payment (mobile)
@@ -146,6 +144,9 @@ export const WalletPage = ({ user, onBack }) => {
 
     // Filter for transaction list
     const [txFilter, setTxFilter] = useState('all'); // 'all' | 'credit' | 'debit'
+
+    // Selected Transaction for Full Details Modal
+    const [selectedTx, setSelectedTx] = useState(null);
 
     // Success popup modal
     const [showSuccess, setShowSuccess] = useState(false);
@@ -168,7 +169,7 @@ export const WalletPage = ({ user, onBack }) => {
         return null;
     }, [user?.id]);
 
-    // ── Fetch Wallet Data (Guaranteed valid columns only) ───────────────────────
+    // ── Fetch Wallet Data (Guaranteed instant cache & valid columns) ───────────
     const fetchWallet = useCallback(async () => {
         try {
             const uid = await resolveUserId();
@@ -177,13 +178,14 @@ export const WalletPage = ({ user, onBack }) => {
                 return;
             }
 
-            // Load local cache first for instant smooth display
+            // Load local cache first for instant smooth display (prevents 0 flash on refresh)
             try {
                 const cached = await AsyncStorage.getItem(`@amf_wallet_${uid}`);
                 if (cached) {
                     const c = JSON.parse(cached);
                     if (c?.wallet) setWallet(c.wallet);
                     if (Array.isArray(c?.transactions)) setTransactions(c.transactions);
+                    if (c?.virtualAcc) setVirtualAcc(c.virtualAcc);
                 }
             } catch (_) {}
 
@@ -197,7 +199,7 @@ export const WalletPage = ({ user, onBack }) => {
                     .select('*')
                     .eq('user_id', uid)
                     .order('created_at', { ascending: false })
-                    .limit(50)
+                    .limit(60)
             ]);
 
             const pData = pRes.status === 'fulfilled' ? pRes.value?.data : null;
@@ -207,39 +209,50 @@ export const WalletPage = ({ user, onBack }) => {
 
             if (pData) {
                 const dbBal = Number(pData.balance || 0);
-                const updatedWallet = { balance: dbBal };
+
+                // Reconcile with verified ledger balance
+                const credits = txData
+                    .filter(t => (t.type === 'topup' || t.type === 'credit' || t.type === 'deposit') && (t.status === 'completed' || t.status === 'successful'))
+                    .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
+                const debits = txData
+                    .filter(t => (t.type === 'withdrawal' || t.type === 'debit' || t.type === 'wallet_payment' || t.type === 'wallet_purchase') && (t.status === 'completed' || t.status === 'successful'))
+                    .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
+                const ledgerBal = Math.max(0, credits - debits);
+                const finalBal = Math.max(dbBal, ledgerBal);
+                const updatedWallet = { balance: finalBal };
+
                 setWallet(updatedWallet);
                 setTransactions(txData);
 
-                // Update persistent local cache
-                AsyncStorage.setItem(`@amf_wallet_${uid}`, JSON.stringify({
-                    wallet: updatedWallet,
-                    transactions: txData,
-                    at: Date.now()
-                })).catch(() => {});
-
-                // Parse dedicated virtual account
+                // Dedicated virtual account
+                let currentVa = null;
                 if (pData.custom_id) {
                     try {
                         const parsed = typeof pData.custom_id === 'string'
                             ? JSON.parse(pData.custom_id)
                             : pData.custom_id;
                         if (parsed?.account_number && isValidVirtualAccount(parsed.account_number)) {
+                            currentVa = parsed;
                             setVirtualAcc(parsed);
-                            AsyncStorage.setItem(`@amf_va_${uid}`, JSON.stringify(parsed)).catch(() => {});
                         } else {
-                            // Invalid or dummy account: wipe cleanly
                             setVirtualAcc(null);
-                            AsyncStorage.removeItem(`@amf_va_${uid}`).catch(() => {});
-                            supabase.from('profiles').update({ custom_id: null }).eq('id', uid).catch(() => {});
                         }
                     } catch (_) {
                         setVirtualAcc(null);
                     }
                 } else {
                     setVirtualAcc(null);
-                    AsyncStorage.removeItem(`@amf_va_${uid}`).catch(() => {});
                 }
+
+                // Update persistent local cache
+                AsyncStorage.setItem(`@amf_wallet_${uid}`, JSON.stringify({
+                    wallet: updatedWallet,
+                    transactions: txData,
+                    virtualAcc: currentVa,
+                    at: Date.now()
+                })).catch(() => {});
             }
         } catch (err) {
             console.warn('[Wallet] fetch error:', err);
@@ -316,7 +329,7 @@ export const WalletPage = ({ user, onBack }) => {
         }
     };
 
-    // ── Check & Sync Bank Deposits ─────────────────────────────────────────────
+    // ── Check & Sync Bank Deposits (Strict Deduplication, Zero Phantom Additions) ─
     const handleBankSync = async () => {
         setSyncing(true);
         try {
@@ -327,10 +340,10 @@ export const WalletPage = ({ user, onBack }) => {
                 phone: user?.phone || user?.user_metadata?.phone_number
             });
 
-            if (sync?.success && sync?.totalNewAmount > 0) {
+            if (sync?.success && sync?.totalNewAmount > 0 && Array.isArray(sync?.newTxIds) && sync.newTxIds.length > 0) {
                 setSuccessDetails({
                     amount: sync.totalNewAmount,
-                    reference: sync.uncreditedTxs?.[0]?.flw_ref || `FLW-${Date.now()}`,
+                    reference: sync.uncreditedTxs?.[0]?.flw_ref || `FLW-${sync.newTxIds[0]}`,
                     gateway: 'Flutterwave MFB'
                 });
                 setShowSuccess(true);
@@ -412,7 +425,7 @@ export const WalletPage = ({ user, onBack }) => {
             return transactions.filter(t => t.type === 'topup' || t.type === 'credit' || t.type === 'deposit');
         }
         if (txFilter === 'debit') {
-            return transactions.filter(t => t.type === 'withdrawal' || t.type === 'debit' || t.type === 'wallet_payment');
+            return transactions.filter(t => t.type === 'withdrawal' || t.type === 'debit' || t.type === 'wallet_payment' || t.type === 'wallet_purchase');
         }
         return transactions;
     }, [transactions, txFilter]);
@@ -428,14 +441,14 @@ export const WalletPage = ({ user, onBack }) => {
                     style={S.backBtn}
                     activeOpacity={0.7}
                 >
-                    <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
+                    <Ionicons name="arrow-back" size={20} color="#D4AF37" />
                 </TouchableOpacity>
 
                 <View style={{ alignItems: 'center' }}>
                     <Text style={S.topBarTitle}>My Wallet</Text>
                     <View style={S.liveBadge}>
                         <View style={S.liveDot} />
-                        <Text style={S.liveText}>SECURE LEDGER</Text>
+                        <Text style={S.liveText}>SECURE ESCROW LEDGER</Text>
                     </View>
                 </View>
 
@@ -448,7 +461,7 @@ export const WalletPage = ({ user, onBack }) => {
                     <Ionicons
                         name="sync"
                         size={18}
-                        color="#10B981"
+                        color="#D4AF37"
                         style={syncing ? { transform: [{ rotate: '45deg' }] } : {}}
                     />
                 </TouchableOpacity>
@@ -461,32 +474,33 @@ export const WalletPage = ({ user, onBack }) => {
                     <RefreshControl
                         refreshing={refreshing}
                         onRefresh={onRefresh}
-                        colors={['#10B981']}
-                        tintColor="#10B981"
+                        colors={['#D4AF37']}
+                        tintColor="#D4AF37"
                     />
                 }
                 showsVerticalScrollIndicator={false}
             >
-                {/* ─── Hero Balance Card ────────────────────────────────────── */}
+                {/* ─── Hero Balance Card (Navy & Gold VIP) ───────────────────── */}
                 <LinearGradient
-                    colors={['#071324', '#0F274B', '#1E3E6E']}
+                    colors={['#0A192F', '#0F274B', '#162E56']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={S.heroCard}
                 >
                     <View style={S.heroTopRow}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Ionicons name="wallet-outline" size={16} color="#94A3B8" />
+                        <View style={S.heroBadgeWrap}>
+                            <Ionicons name="wallet-outline" size={14} color="#D4AF37" />
                             <Text style={S.heroLabel}>AVAILABLE BALANCE</Text>
                         </View>
                         <TouchableOpacity
                             onPress={() => setHideBalance(!hideBalance)}
                             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            style={S.eyeBtn}
                         >
                             <Ionicons
                                 name={hideBalance ? 'eye-off-outline' : 'eye-outline'}
                                 size={18}
-                                color="#94A3B8"
+                                color="#D4AF37"
                             />
                         </TouchableOpacity>
                     </View>
@@ -512,10 +526,10 @@ export const WalletPage = ({ user, onBack }) => {
                             activeOpacity={0.85}
                         >
                             {syncing ? (
-                                <ActivityIndicator size="small" color="#FFFFFF" />
+                                <ActivityIndicator size="small" color="#D4AF37" />
                             ) : (
                                 <>
-                                    <Ionicons name="refresh" size={16} color="#FFFFFF" />
+                                    <Ionicons name="refresh" size={16} color="#D4AF37" />
                                     <Text style={S.syncFrostedBtnTxt}>Sync Deposit</Text>
                                 </>
                             )}
@@ -525,12 +539,18 @@ export const WalletPage = ({ user, onBack }) => {
 
                 {/* ─── Dedicated Bank Card (Virtual Account) ──────────────────── */}
                 <View style={S.section}>
-                    <Text style={S.sectionTitle}>Permanent Dedicated NUBAN</Text>
+                    <View style={S.sectionHeaderRow}>
+                        <Text style={S.sectionTitle}>Permanent Dedicated NUBAN</Text>
+                        <View style={S.goldTag}>
+                            <Ionicons name="shield-checkmark" size={11} color="#D4AF37" />
+                            <Text style={S.goldTagTxt}>VERIFIED DEDICATED</Text>
+                        </View>
+                    </View>
 
                     {isValidVirtualAccount(virtualAcc?.account_number) ? (
-                        /* LUXURY ATM CARD VIEW */
+                        /* LUXURY ATM CARD VIEW IN NAVY & GOLD */
                         <LinearGradient
-                            colors={['#0F172A', '#1E293B', '#334155']}
+                            colors={['#081426', '#0E223D', '#163156']}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 1 }}
                             style={S.atmCard}
@@ -538,13 +558,13 @@ export const WalletPage = ({ user, onBack }) => {
                             <View style={S.atmTop}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                     <View style={S.atmChip} />
-                                    <Ionicons name="wifi" size={16} color="#94A3B8" style={{ transform: [{ rotate: '90deg' }] }} />
+                                    <Ionicons name="wifi" size={16} color="#D4AF37" style={{ transform: [{ rotate: '90deg' }] }} />
                                 </View>
                                 <View style={{ alignItems: 'flex-end' }}>
                                     <Text style={S.atmBankName}>{virtualAcc.bank_name || 'Flutterwave MFB'}</Text>
                                     <View style={S.atmVerifiedBadge}>
-                                        <Ionicons name="checkmark-circle" size={11} color="#10B981" />
-                                        <Text style={S.atmVerifiedTxt}>VERIFIED DEDICATED</Text>
+                                        <Ionicons name="checkmark-circle" size={11} color="#D4AF37" />
+                                        <Text style={S.atmVerifiedTxt}>0% FEE · INSTANT AUTO-CREDIT</Text>
                                     </View>
                                 </View>
                             </View>
@@ -558,30 +578,30 @@ export const WalletPage = ({ user, onBack }) => {
                                     style={S.atmCopyBtn}
                                     activeOpacity={0.7}
                                 >
-                                    <Ionicons name="copy-outline" size={14} color="#0F172A" />
+                                    <Ionicons name="copy-outline" size={14} color="#071324" />
                                     <Text style={S.atmCopyBtnTxt}>Copy</Text>
                                 </TouchableOpacity>
                             </View>
 
                             <View style={S.atmBottom}>
-                                <View>
+                                <View style={{ flex: 1 }}>
                                     <Text style={S.atmHolderLabel}>ACCOUNT HOLDER</Text>
                                     <Text style={S.atmHolderName} numberOfLines={1}>
                                         {virtualAcc.account_name || user?.user_metadata?.full_name || 'Verified Member'}
                                     </Text>
                                 </View>
                                 <View style={S.atmAutoBadge}>
-                                    <Ionicons name="flash" size={12} color="#10B981" />
-                                    <Text style={S.atmAutoTxt}>0% Fee · Instant</Text>
+                                    <Ionicons name="flash" size={12} color="#D4AF37" />
+                                    <Text style={S.atmAutoTxt}>Instant Credit</Text>
                                 </View>
                             </View>
                         </LinearGradient>
                     ) : (
-                        /* ONE-TIME BVN ACTIVATION CARD */
+                        /* ONE-TIME BVN ACTIVATION CARD IN NAVY & GOLD */
                         <View style={S.bvnCard}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                                 <View style={S.bvnIconWrap}>
-                                    <Ionicons name="shield-checkmark" size={20} color="#059669" />
+                                    <Ionicons name="shield-checkmark" size={20} color="#D4AF37" />
                                 </View>
                                 <View style={{ flex: 1 }}>
                                     <Text style={S.bvnCardTitle}>Activate Dedicated Bank Account</Text>
@@ -590,7 +610,7 @@ export const WalletPage = ({ user, onBack }) => {
                             </View>
 
                             <View style={S.bvnNotice}>
-                                <Ionicons name="information-circle" size={15} color="#0284C7" />
+                                <Ionicons name="information-circle" size={15} color="#D4AF37" />
                                 <Text style={S.bvnNoticeTxt}>
                                     Per CBN regulations, BVN verification is required once to generate your dedicated Wema / Flutterwave account with automatic instant crediting.
                                 </Text>
@@ -598,7 +618,7 @@ export const WalletPage = ({ user, onBack }) => {
 
                             {vaError ? (
                                 <View style={S.errorBox}>
-                                    <Ionicons name="alert-circle" size={15} color="#DC2626" />
+                                    <Ionicons name="alert-circle" size={15} color="#EF4444" />
                                     <Text style={S.errorTxt}>{vaError}</Text>
                                 </View>
                             ) : null}
@@ -608,7 +628,7 @@ export const WalletPage = ({ user, onBack }) => {
                                 <TextInput
                                     style={S.modernInput}
                                     placeholder="Enter your registered legal full name"
-                                    placeholderTextColor="#94A3B8"
+                                    placeholderTextColor="#64748B"
                                     value={bvnLegalName}
                                     onChangeText={setBvnLegalName}
                                 />
@@ -620,7 +640,7 @@ export const WalletPage = ({ user, onBack }) => {
                                 <TextInput
                                     style={[S.modernInput, { letterSpacing: 2, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }]}
                                     placeholder="11-digit BVN"
-                                    placeholderTextColor="#94A3B8"
+                                    placeholderTextColor="#64748B"
                                     keyboardType="numeric"
                                     maxLength={11}
                                     value={bvnInput}
@@ -631,7 +651,7 @@ export const WalletPage = ({ user, onBack }) => {
                                 <TextInput
                                     style={S.modernInput}
                                     placeholder={user?.phone || '08012345678'}
-                                    placeholderTextColor="#94A3B8"
+                                    placeholderTextColor="#64748B"
                                     keyboardType="phone-pad"
                                     value={bvnPhone}
                                     onChangeText={setBvnPhone}
@@ -644,10 +664,10 @@ export const WalletPage = ({ user, onBack }) => {
                                     activeOpacity={0.85}
                                 >
                                     {bvnVerifying ? (
-                                        <ActivityIndicator color="#FFFFFF" size="small" />
+                                        <ActivityIndicator color="#071324" size="small" />
                                     ) : (
                                         <>
-                                            <Ionicons name="shield-checkmark" size={17} color="#FFFFFF" />
+                                            <Ionicons name="shield-checkmark" size={17} color="#071324" />
                                             <Text style={S.activateBtnTxt}>Verify BVN & Generate Account</Text>
                                         </>
                                     )}
@@ -682,11 +702,16 @@ export const WalletPage = ({ user, onBack }) => {
                                 const isCredit = tx.type === 'topup' || tx.type === 'credit' || tx.type === 'deposit';
                                 const isLast = idx === filteredTransactions.length - 1;
                                 return (
-                                    <View key={tx.id || idx} style={[S.txRow, !isLast && S.txRowBorder]}>
+                                    <TouchableOpacity
+                                        key={tx.id || idx}
+                                        onPress={() => setSelectedTx(tx)}
+                                        activeOpacity={0.7}
+                                        style={[S.txRow, !isLast && S.txRowBorder]}
+                                    >
                                         <TxIcon type={tx.type} />
                                         <View style={S.txInfo}>
                                             <Text style={S.txTitle} numberOfLines={1}>
-                                                {tx.description || (isCredit ? 'Bank Deposit' : 'Payment')}
+                                                {tx.description || (isCredit ? 'Bank Deposit' : 'Order Payment')}
                                             </Text>
                                             <Text style={S.txDate}>
                                                 {tx.created_at ? new Date(tx.created_at).toLocaleDateString('en-GB', {
@@ -695,28 +720,152 @@ export const WalletPage = ({ user, onBack }) => {
                                             </Text>
                                         </View>
                                         <View style={{ alignItems: 'flex-end' }}>
-                                            <Text style={[S.txAmount, { color: isCredit ? '#059669' : '#0F172A' }]}>
+                                            <Text style={[S.txAmount, { color: isCredit ? '#D4AF37' : '#F1F5F9' }]}>
                                                 {isCredit ? '+' : '-'}{fmt(tx.amount)}
                                             </Text>
-                                            <View style={[S.statusPill, { backgroundColor: tx.status === 'completed' ? '#ECFDF5' : '#FFFBEB' }]}>
-                                                <Text style={[S.statusTxt, { color: tx.status === 'completed' ? '#059669' : '#D97706' }]}>
+                                            <View style={[S.statusPill, { backgroundColor: tx.status === 'completed' ? 'rgba(212, 175, 55, 0.15)' : 'rgba(245, 158, 11, 0.15)' }]}>
+                                                <Text style={[S.statusTxt, { color: tx.status === 'completed' ? '#D4AF37' : '#F59E0B' }]}>
                                                     {tx.status || 'completed'}
                                                 </Text>
                                             </View>
                                         </View>
-                                    </View>
+                                        <Ionicons name="chevron-forward" size={16} color="#64748B" style={{ marginLeft: 4 }} />
+                                    </TouchableOpacity>
                                 );
                             })}
                         </View>
                     ) : (
                         <View style={S.emptyTxCard}>
-                            <Ionicons name="receipt-outline" size={36} color="#CBD5E1" />
+                            <Ionicons name="receipt-outline" size={36} color="#64748B" />
                             <Text style={S.emptyTxTitle}>No transactions yet</Text>
                             <Text style={S.emptyTxSub}>Your deposits and payment receipts will show here.</Text>
                         </View>
                     )}
                 </View>
             </ScrollView>
+
+            {/* ─── FULL TRANSACTION DETAILS / RECEIPT MODAL (NAVY & GOLD) ───── */}
+            <Modal
+                visible={!!selectedTx}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setSelectedTx(null)}
+            >
+                <View style={S.modalOverlay}>
+                    <View style={S.receiptModalCard}>
+                        {/* Receipt Top Header */}
+                        <View style={S.receiptHeader}>
+                            <View style={S.receiptIconCircle}>
+                                <Ionicons
+                                    name={selectedTx?.type === 'topup' || selectedTx?.type === 'credit' || selectedTx?.type === 'deposit' ? 'checkmark-circle' : 'receipt'}
+                                    size={36}
+                                    color="#D4AF37"
+                                />
+                            </View>
+                            <Text style={S.receiptTitle}>Transaction Receipt</Text>
+                            <Text style={S.receiptSub}>Cikakken Bayanin Ma'amala</Text>
+
+                            <Text style={[S.receiptAmount, { color: (selectedTx?.type === 'topup' || selectedTx?.type === 'credit' || selectedTx?.type === 'deposit') ? '#D4AF37' : '#F1F5F9' }]}>
+                                {(selectedTx?.type === 'topup' || selectedTx?.type === 'credit' || selectedTx?.type === 'deposit') ? '+' : '-'}{fmt(selectedTx?.amount || 0)}
+                            </Text>
+
+                            <View style={S.receiptStatusBadge}>
+                                <View style={S.receiptStatusDot} />
+                                <Text style={S.receiptStatusTxt}>
+                                    {(selectedTx?.status || 'COMPLETED').toUpperCase()}
+                                </Text>
+                            </View>
+                        </View>
+
+                        {/* Receipt Detail Rows */}
+                        <View style={S.receiptDetailsBox}>
+                            <View style={S.receiptRow}>
+                                <Text style={S.receiptLabel}>Reference ID</Text>
+                                <TouchableOpacity
+                                    onPress={() => copyText(selectedTx?.reference || selectedTx?.id || '', 'Reference')}
+                                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                                >
+                                    <Text style={S.receiptValGold} numberOfLines={1}>
+                                        {selectedTx?.reference || selectedTx?.id || 'N/A'}
+                                    </Text>
+                                    <Ionicons name="copy-outline" size={13} color="#D4AF37" />
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={S.receiptRow}>
+                                <Text style={S.receiptLabel}>Transaction Type</Text>
+                                <Text style={S.receiptVal}>
+                                    {selectedTx?.type === 'topup' || selectedTx?.type === 'deposit' || selectedTx?.type === 'credit'
+                                        ? 'Dedicated Bank Deposit'
+                                        : selectedTx?.type === 'wallet_payment'
+                                        ? 'Order Escrow Payment'
+                                        : (selectedTx?.type || 'Transfer')}
+                                </Text>
+                            </View>
+
+                            <View style={S.receiptRow}>
+                                <Text style={S.receiptLabel}>Channel / Gateway</Text>
+                                <Text style={S.receiptVal}>
+                                    {selectedTx?.reference?.startsWith('FLW')
+                                        ? 'Flutterwave MFB'
+                                        : selectedTx?.reference?.startsWith('ORD')
+                                        ? 'Escrow Purchase'
+                                        : 'Abu Mafhal Wallet'}
+                                </Text>
+                            </View>
+
+                            <View style={S.receiptRow}>
+                                <Text style={S.receiptLabel}>Date & Time</Text>
+                                <Text style={S.receiptVal}>
+                                    {selectedTx?.created_at
+                                        ? new Date(selectedTx.created_at).toLocaleString('en-GB', {
+                                            day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'
+                                        })
+                                        : 'Recent'}
+                                </Text>
+                            </View>
+
+                            <View style={[S.receiptRow, { borderBottomWidth: 0 }]}>
+                                <Text style={S.receiptLabel}>Narration</Text>
+                                <Text style={[S.receiptVal, { flex: 1.5, textAlign: 'right' }]} numberOfLines={2}>
+                                    {selectedTx?.description || 'Abu Mafhal Wallet Transaction'}
+                                </Text>
+                            </View>
+                        </View>
+
+                        {/* Security Footer Note */}
+                        <View style={S.receiptSecBox}>
+                            <Ionicons name="shield-checkmark" size={14} color="#D4AF37" />
+                            <Text style={S.receiptSecTxt}>
+                                Verified ledger transaction secured with 256-bit bank-grade encryption.
+                            </Text>
+                        </View>
+
+                        {/* Action Buttons */}
+                        <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+                            <TouchableOpacity
+                                onPress={() => copyText(
+                                    `Transaction Receipt\nAmount: ${fmt(selectedTx?.amount)}\nRef: ${selectedTx?.reference}\nDate: ${selectedTx?.created_at}\nStatus: ${selectedTx?.status}`,
+                                    'Receipt'
+                                )}
+                                style={S.receiptSecBtn}
+                                activeOpacity={0.8}
+                            >
+                                <Ionicons name="copy-outline" size={15} color="#D4AF37" />
+                                <Text style={S.receiptSecBtnTxt}>Copy Details</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                onPress={() => setSelectedTx(null)}
+                                style={S.receiptCloseBtn}
+                                activeOpacity={0.85}
+                            >
+                                <Text style={S.receiptCloseBtnTxt}>Close</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
 
             {/* ─── Top-Up Modal (Bottom Sheet Style) ───────────────────────── */}
             <Modal
@@ -730,16 +879,16 @@ export const WalletPage = ({ user, onBack }) => {
                         <View style={S.modalHeader}>
                             <Text style={S.modalTitle}>Add Money to Wallet</Text>
                             <TouchableOpacity onPress={() => setShowTopUp(false)} style={S.modalCloseBtn}>
-                                <Ionicons name="close" size={20} color="#64748B" />
+                                <Ionicons name="close" size={20} color="#D4AF37" />
                             </TouchableOpacity>
                         </View>
 
                         {/* Amount Input */}
                         <Text style={S.inputHeader}>Enter Amount (₦)</Text>
                         <TextInput
-                            style={[S.modernInput, { fontSize: 20, fontWeight: '800', color: '#0F172A' }]}
+                            style={[S.modernInput, { fontSize: 20, fontWeight: '800', color: '#D4AF37' }]}
                             placeholder="₦0.00"
-                            placeholderTextColor="#94A3B8"
+                            placeholderTextColor="#64748B"
                             keyboardType="numeric"
                             value={amountNgn}
                             onChangeText={setAmountNgn}
@@ -789,7 +938,7 @@ export const WalletPage = ({ user, onBack }) => {
                             activeOpacity={0.85}
                         >
                             {topUpPending ? (
-                                <ActivityIndicator color="#FFFFFF" size="small" />
+                                <ActivityIndicator color="#071324" size="small" />
                             ) : (
                                 <Text style={S.modalPayBtnTxt}>
                                     {gateway === 'bank_transfer'
@@ -802,7 +951,7 @@ export const WalletPage = ({ user, onBack }) => {
                 </View>
             </Modal>
 
-            {/* ─── Success Deposit Modal ───────────────────────────────────── */}
+            {/* ─── Success Deposit Modal (Navy & Gold VIP) ─────────────────── */}
             <Modal
                 visible={showSuccess}
                 transparent
@@ -812,7 +961,7 @@ export const WalletPage = ({ user, onBack }) => {
                 <View style={S.modalOverlay}>
                     <View style={[S.modalCard, { alignItems: 'center', paddingVertical: 28 }]}>
                         <View style={S.successIconWrap}>
-                            <Ionicons name="checkmark-circle" size={54} color="#059669" />
+                            <Ionicons name="checkmark-circle" size={56} color="#D4AF37" />
                         </View>
                         <Text style={S.successTitle}>Deposit Successful!</Text>
                         <Text style={S.successAmount}>{fmt(successDetails?.amount || 0)}</Text>
@@ -835,9 +984,9 @@ export const WalletPage = ({ user, onBack }) => {
                     <View style={{ flex: 1, backgroundColor: '#071324' }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14, paddingTop: 45, gap: 12 }}>
                             <TouchableOpacity onPress={() => setShowWebView(false)} style={{ padding: 6 }}>
-                                <Ionicons name="close" size={24} color="#FFFFFF" />
+                                <Ionicons name="close" size={24} color="#D4AF37" />
                             </TouchableOpacity>
-                            <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 16, flex: 1 }}>{activeGwName} Checkout</Text>
+                            <Text style={{ color: '#D4AF37', fontWeight: '800', fontSize: 16, flex: 1 }}>{activeGwName} Checkout</Text>
                         </View>
                         {checkoutUrl ? (
                             <WebView
@@ -859,11 +1008,11 @@ export const WalletPage = ({ user, onBack }) => {
     );
 };
 
-// ─── Stylesheet ───────────────────────────────────────────────────────────────
+// ─── Stylesheet (Royal Midnight Navy & Luxury Metallic Gold) ──────────────────
 const S = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F8FAFC',
+        backgroundColor: '#071324',
     },
     topBar: {
         flexDirection: 'row',
@@ -873,17 +1022,21 @@ const S = StyleSheet.create({
         paddingTop: Platform.OS === 'ios' ? 50 : 16,
         paddingBottom: 16,
         backgroundColor: '#071324',
+        borderBottomWidth: 1,
+        borderColor: 'rgba(212, 175, 55, 0.15)',
     },
     backBtn: {
         width: 38,
         height: 38,
         borderRadius: 12,
-        backgroundColor: 'rgba(255,255,255,0.1)',
+        backgroundColor: 'rgba(212, 175, 55, 0.1)',
+        borderWidth: 1,
+        borderColor: 'rgba(212, 175, 55, 0.25)',
         alignItems: 'center',
         justifyContent: 'center',
     },
     topBarTitle: {
-        fontSize: 16,
+        fontSize: 17,
         fontWeight: '900',
         color: '#FFFFFF',
         letterSpacing: 0.3,
@@ -898,19 +1051,21 @@ const S = StyleSheet.create({
         width: 6,
         height: 6,
         borderRadius: 3,
-        backgroundColor: '#10B981',
+        backgroundColor: '#D4AF37',
     },
     liveText: {
-        fontSize: 9,
+        fontSize: 8.5,
         fontWeight: '800',
-        color: '#94A3B8',
+        color: '#D4AF37',
         letterSpacing: 0.8,
     },
     syncIconBtn: {
         width: 38,
         height: 38,
         borderRadius: 12,
-        backgroundColor: 'rgba(16,185,129,0.15)',
+        backgroundColor: 'rgba(212, 175, 55, 0.12)',
+        borderWidth: 1,
+        borderColor: 'rgba(212, 175, 55, 0.3)',
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -921,34 +1076,53 @@ const S = StyleSheet.create({
         padding: 16,
     },
 
-    // Hero Card
+    // Hero Balance Card
     heroCard: {
         borderRadius: 24,
-        padding: 20,
-        marginBottom: 18,
-        shadowColor: '#071324',
+        padding: 22,
+        marginBottom: 20,
+        borderWidth: 1.5,
+        borderColor: 'rgba(212, 175, 55, 0.45)',
+        shadowColor: '#D4AF37',
         shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.25,
-        shadowRadius: 14,
-        elevation: 6,
+        shadowOpacity: 0.2,
+        shadowRadius: 16,
+        elevation: 8,
     },
     heroTopRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
     },
+    heroBadgeWrap: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: 'rgba(212, 175, 55, 0.12)',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(212, 175, 55, 0.25)',
+    },
     heroLabel: {
-        fontSize: 11,
-        fontWeight: '800',
-        color: '#94A3B8',
+        fontSize: 10,
+        fontWeight: '900',
+        color: '#D4AF37',
         letterSpacing: 1,
     },
+    eyeBtn: {
+        padding: 6,
+        borderRadius: 8,
+        backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    },
     heroBalanceText: {
-        fontSize: 34,
+        fontSize: 36,
         fontWeight: '900',
         color: '#FFFFFF',
         letterSpacing: 0.5,
         marginVertical: 14,
+        fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     },
     heroActionsRow: {
         flexDirection: 'row',
@@ -961,12 +1135,16 @@ const S = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         gap: 6,
-        paddingVertical: 12,
+        paddingVertical: 13,
         borderRadius: 14,
-        backgroundColor: '#10B981',
+        backgroundColor: '#D4AF37',
+        shadowColor: '#D4AF37',
+        shadowOpacity: 0.35,
+        shadowRadius: 8,
+        elevation: 4,
     },
     topUpPrimaryBtnTxt: {
-        fontSize: 13,
+        fontSize: 13.5,
         fontWeight: '900',
         color: '#071324',
     },
@@ -976,39 +1154,63 @@ const S = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         gap: 6,
-        paddingVertical: 12,
+        paddingVertical: 13,
         borderRadius: 14,
-        backgroundColor: 'rgba(255,255,255,0.12)',
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.15)',
+        backgroundColor: 'rgba(212, 175, 55, 0.1)',
+        borderWidth: 1.5,
+        borderColor: 'rgba(212, 175, 55, 0.4)',
     },
     syncFrostedBtnTxt: {
         fontSize: 13,
         fontWeight: '800',
-        color: '#FFFFFF',
+        color: '#D4AF37',
     },
 
     // Section
     section: {
-        marginBottom: 20,
+        marginBottom: 22,
+    },
+    sectionHeaderRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 10,
     },
     sectionTitle: {
         fontSize: 14,
         fontWeight: '900',
-        color: '#0F172A',
-        marginBottom: 10,
+        color: '#FFFFFF',
         letterSpacing: 0.2,
+    },
+    goldTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: 'rgba(212, 175, 55, 0.12)',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: 'rgba(212, 175, 55, 0.25)',
+    },
+    goldTagTxt: {
+        fontSize: 8.5,
+        fontWeight: '900',
+        color: '#D4AF37',
+        letterSpacing: 0.5,
     },
 
     // ATM Card
     atmCard: {
-        borderRadius: 20,
+        borderRadius: 22,
         padding: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 10,
-        elevation: 4,
+        borderWidth: 1.5,
+        borderColor: '#D4AF37',
+        shadowColor: '#D4AF37',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.25,
+        shadowRadius: 12,
+        elevation: 6,
     },
     atmTop: {
         flexDirection: 'row',
@@ -1017,15 +1219,18 @@ const S = StyleSheet.create({
         marginBottom: 16,
     },
     atmChip: {
-        width: 32,
-        height: 24,
-        borderRadius: 5,
-        backgroundColor: '#FCD34D',
+        width: 34,
+        height: 25,
+        borderRadius: 6,
+        backgroundColor: '#D4AF37',
+        borderWidth: 1,
+        borderColor: '#FEF3C7',
     },
     atmBankName: {
-        fontSize: 13,
+        fontSize: 13.5,
         fontWeight: '900',
-        color: '#FFFFFF',
+        color: '#D4AF37',
+        letterSpacing: 0.5,
     },
     atmVerifiedBadge: {
         flexDirection: 'row',
@@ -1034,9 +1239,9 @@ const S = StyleSheet.create({
         marginTop: 2,
     },
     atmVerifiedTxt: {
-        fontSize: 9,
+        fontSize: 8.5,
         fontWeight: '800',
-        color: '#10B981',
+        color: '#FCD34D',
         letterSpacing: 0.5,
     },
     atmMiddle: {
@@ -1056,15 +1261,15 @@ const S = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: '#D4AF37',
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 10,
     },
     atmCopyBtnTxt: {
         fontSize: 11,
-        fontWeight: '800',
-        color: '#0F172A',
+        fontWeight: '900',
+        color: '#071324',
     },
     atmBottom: {
         flexDirection: 'row',
@@ -1073,79 +1278,78 @@ const S = StyleSheet.create({
         marginTop: 14,
         paddingTop: 12,
         borderTopWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)',
+        borderColor: 'rgba(212, 175, 55, 0.2)',
     },
     atmHolderLabel: {
-        fontSize: 9,
+        fontSize: 8.5,
         fontWeight: '800',
         color: '#94A3B8',
         letterSpacing: 0.8,
     },
     atmHolderName: {
         fontSize: 13,
-        fontWeight: '800',
+        fontWeight: '900',
         color: '#FFFFFF',
         marginTop: 2,
-        maxWidth: W * 0.5,
     },
     atmAutoBadge: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
-        backgroundColor: 'rgba(16,185,129,0.15)',
+        backgroundColor: 'rgba(212, 175, 55, 0.15)',
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(212, 175, 55, 0.3)',
     },
     atmAutoTxt: {
-        fontSize: 10,
-        fontWeight: '800',
-        color: '#10B981',
+        fontSize: 9.5,
+        fontWeight: '900',
+        color: '#D4AF37',
     },
 
     // BVN Card
     bvnCard: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 20,
-        padding: 18,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        shadowColor: '#000',
-        shadowOpacity: 0.04,
-        shadowRadius: 8,
-        elevation: 2,
+        backgroundColor: '#0A192F',
+        borderRadius: 22,
+        padding: 20,
+        borderWidth: 1.5,
+        borderColor: 'rgba(212, 175, 55, 0.3)',
     },
     bvnIconWrap: {
-        width: 36,
-        height: 36,
+        width: 38,
+        height: 38,
         borderRadius: 12,
-        backgroundColor: '#ECFDF5',
+        backgroundColor: 'rgba(212, 175, 55, 0.12)',
         alignItems: 'center',
         justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(212, 175, 55, 0.3)',
     },
     bvnCardTitle: {
         fontSize: 14,
         fontWeight: '900',
-        color: '#0F172A',
+        color: '#FFFFFF',
     },
     bvnCardSub: {
         fontSize: 11,
-        color: '#64748B',
+        color: '#94A3B8',
         marginTop: 1,
     },
     bvnNotice: {
         flexDirection: 'row',
         gap: 8,
-        backgroundColor: '#F0F9FF',
-        padding: 10,
+        backgroundColor: 'rgba(212, 175, 55, 0.08)',
+        padding: 12,
         borderRadius: 12,
-        marginTop: 8,
+        marginTop: 10,
         borderWidth: 1,
-        borderColor: '#BAE6FD',
+        borderColor: 'rgba(212, 175, 55, 0.25)',
     },
     bvnNoticeTxt: {
         fontSize: 11,
-        color: '#0369A1',
+        color: '#FCD34D',
         lineHeight: 16,
         flex: 1,
         fontWeight: '500',
@@ -1153,47 +1357,47 @@ const S = StyleSheet.create({
     errorBox: {
         flexDirection: 'row',
         gap: 6,
-        backgroundColor: '#FEF2F2',
+        backgroundColor: 'rgba(239, 68, 68, 0.1)',
         padding: 10,
         borderRadius: 12,
         marginTop: 8,
         borderWidth: 1,
-        borderColor: '#FECACA',
+        borderColor: 'rgba(239, 68, 68, 0.3)',
     },
     errorTxt: {
         fontSize: 11.5,
-        color: '#B91C1C',
+        color: '#EF4444',
         flex: 1,
         fontWeight: '600',
     },
     inputHeader: {
-        fontSize: 11,
+        fontSize: 10.5,
         fontWeight: '800',
-        color: '#475569',
+        color: '#D4AF37',
         marginBottom: 4,
         textTransform: 'uppercase',
     },
     dialTip: {
         fontSize: 11,
         fontWeight: '800',
-        color: '#0284C7',
+        color: '#F59E0B',
     },
     modernInput: {
-        backgroundColor: '#F8FAFC',
+        backgroundColor: '#071324',
         borderWidth: 1.5,
-        borderColor: '#E2E8F0',
+        borderColor: 'rgba(212, 175, 55, 0.3)',
         borderRadius: 12,
         paddingHorizontal: 14,
         paddingVertical: 10,
         fontSize: 13,
-        color: '#0F172A',
+        color: '#FFFFFF',
     },
     activateBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 8,
-        backgroundColor: '#059669',
+        backgroundColor: '#D4AF37',
         paddingVertical: 13,
         borderRadius: 14,
         marginTop: 14,
@@ -1201,10 +1405,10 @@ const S = StyleSheet.create({
     activateBtnTxt: {
         fontSize: 13,
         fontWeight: '900',
-        color: '#FFFFFF',
+        color: '#071324',
     },
 
-    // Transactions
+    // Transactions Section
     txHeaderRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -1213,9 +1417,11 @@ const S = StyleSheet.create({
     },
     filterTabs: {
         flexDirection: 'row',
-        backgroundColor: '#F1F5F9',
+        backgroundColor: '#0A192F',
         padding: 3,
         borderRadius: 10,
+        borderWidth: 1,
+        borderColor: 'rgba(212, 175, 55, 0.2)',
     },
     filterTab: {
         paddingHorizontal: 10,
@@ -1223,28 +1429,24 @@ const S = StyleSheet.create({
         borderRadius: 8,
     },
     filterTabActive: {
-        backgroundColor: '#FFFFFF',
-        shadowColor: '#000',
-        shadowOpacity: 0.05,
-        shadowRadius: 3,
-        elevation: 1,
+        backgroundColor: '#D4AF37',
     },
     filterTabTxt: {
         fontSize: 11,
         fontWeight: '700',
-        color: '#64748B',
+        color: '#94A3B8',
     },
     filterTabTxtActive: {
-        color: '#0F172A',
+        color: '#071324',
         fontWeight: '900',
     },
     txListCard: {
-        backgroundColor: '#FFFFFF',
+        backgroundColor: '#0A192F',
         borderRadius: 20,
-        paddingHorizontal: 16,
+        paddingHorizontal: 14,
         paddingVertical: 6,
         borderWidth: 1,
-        borderColor: '#E2E8F0',
+        borderColor: 'rgba(212, 175, 55, 0.25)',
     },
     txRow: {
         flexDirection: 'row',
@@ -1254,7 +1456,7 @@ const S = StyleSheet.create({
     },
     txRowBorder: {
         borderBottomWidth: 1,
-        borderColor: '#F1F5F9',
+        borderColor: 'rgba(255, 255, 255, 0.08)',
     },
     txIconCircle: {
         width: 36,
@@ -1269,7 +1471,7 @@ const S = StyleSheet.create({
     txTitle: {
         fontSize: 13,
         fontWeight: '800',
-        color: '#0F172A',
+        color: '#FFFFFF',
     },
     txDate: {
         fontSize: 11,
@@ -1279,6 +1481,7 @@ const S = StyleSheet.create({
     txAmount: {
         fontSize: 13.5,
         fontWeight: '900',
+        fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     },
     statusPill: {
         paddingHorizontal: 6,
@@ -1292,38 +1495,40 @@ const S = StyleSheet.create({
         textTransform: 'uppercase',
     },
     emptyTxCard: {
-        backgroundColor: '#FFFFFF',
+        backgroundColor: '#0A192F',
         borderRadius: 20,
         padding: 32,
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: '#E2E8F0',
+        borderColor: 'rgba(212, 175, 55, 0.2)',
     },
     emptyTxTitle: {
         fontSize: 14,
         fontWeight: '800',
-        color: '#475569',
+        color: '#FFFFFF',
         marginTop: 8,
     },
     emptyTxSub: {
         fontSize: 12,
-        color: '#94A3B8',
+        color: '#64748B',
         textAlign: 'center',
         marginTop: 4,
     },
 
-    // Modal
+    // Modal Overlays
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(15,23,42,0.7)',
+        backgroundColor: 'rgba(3, 7, 18, 0.85)',
         justifyContent: 'flex-end',
     },
     modalCard: {
-        backgroundColor: '#FFFFFF',
+        backgroundColor: '#0A192F',
         borderTopLeftRadius: 28,
         borderTopRightRadius: 28,
         padding: 22,
         maxHeight: '90%',
+        borderWidth: 1,
+        borderColor: 'rgba(212, 175, 55, 0.35)',
     },
     modalHeader: {
         flexDirection: 'row',
@@ -1334,7 +1539,7 @@ const S = StyleSheet.create({
     modalTitle: {
         fontSize: 17,
         fontWeight: '900',
-        color: '#0F172A',
+        color: '#FFFFFF',
     },
     modalCloseBtn: {
         padding: 4,
@@ -1346,7 +1551,9 @@ const S = StyleSheet.create({
         marginTop: 8,
     },
     presetChip: {
-        backgroundColor: '#F1F5F9',
+        backgroundColor: 'rgba(212, 175, 55, 0.1)',
+        borderWidth: 1,
+        borderColor: 'rgba(212, 175, 55, 0.3)',
         paddingHorizontal: 10,
         paddingVertical: 6,
         borderRadius: 8,
@@ -1354,7 +1561,7 @@ const S = StyleSheet.create({
     presetChipTxt: {
         fontSize: 11,
         fontWeight: '800',
-        color: '#334155',
+        color: '#D4AF37',
     },
     gwItem: {
         flexDirection: 'row',
@@ -1363,12 +1570,12 @@ const S = StyleSheet.create({
         padding: 12,
         borderRadius: 14,
         borderWidth: 1.5,
-        borderColor: '#E2E8F0',
-        backgroundColor: '#FFFFFF',
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        backgroundColor: '#071324',
     },
     gwItemActive: {
-        borderColor: '#10B981',
-        backgroundColor: '#F0FDF4',
+        borderColor: '#D4AF37',
+        backgroundColor: 'rgba(212, 175, 55, 0.08)',
     },
     gwItemIcon: {
         width: 38,
@@ -1380,11 +1587,11 @@ const S = StyleSheet.create({
     gwItemName: {
         fontSize: 13,
         fontWeight: '900',
-        color: '#0F172A',
+        color: '#FFFFFF',
     },
     gwItemSub: {
         fontSize: 11,
-        color: '#64748B',
+        color: '#94A3B8',
         marginTop: 1,
     },
     radioCircle: {
@@ -1392,21 +1599,21 @@ const S = StyleSheet.create({
         height: 18,
         borderRadius: 9,
         borderWidth: 2,
-        borderColor: '#CBD5E1',
+        borderColor: '#64748B',
         alignItems: 'center',
         justifyContent: 'center',
     },
     radioCircleActive: {
-        borderColor: '#10B981',
+        borderColor: '#D4AF37',
     },
     radioInner: {
         width: 9,
         height: 9,
         borderRadius: 4.5,
-        backgroundColor: '#10B981',
+        backgroundColor: '#D4AF37',
     },
     modalPayBtn: {
-        backgroundColor: '#10B981',
+        backgroundColor: '#D4AF37',
         paddingVertical: 14,
         borderRadius: 14,
         alignItems: 'center',
@@ -1426,19 +1633,168 @@ const S = StyleSheet.create({
     successTitle: {
         fontSize: 20,
         fontWeight: '900',
-        color: '#0F172A',
+        color: '#FFFFFF',
     },
     successAmount: {
         fontSize: 28,
         fontWeight: '900',
-        color: '#059669',
+        color: '#D4AF37',
         marginVertical: 8,
+        fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     },
     successSub: {
         fontSize: 13,
-        color: '#64748B',
+        color: '#94A3B8',
         textAlign: 'center',
         paddingHorizontal: 20,
+    },
+
+    // ── Receipt Modal Styles (Navy & Gold VIP) ───────────────────────────────
+    receiptModalCard: {
+        backgroundColor: '#0A192F',
+        borderTopLeftRadius: 28,
+        borderTopRightRadius: 28,
+        padding: 22,
+        borderWidth: 1.5,
+        borderColor: '#D4AF37',
+        maxHeight: '92%',
+    },
+    receiptHeader: {
+        alignItems: 'center',
+        paddingBottom: 16,
+        borderBottomWidth: 1,
+        borderColor: 'rgba(212, 175, 55, 0.2)',
+    },
+    receiptIconCircle: {
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        backgroundColor: 'rgba(212, 175, 55, 0.12)',
+        borderWidth: 1.5,
+        borderColor: '#D4AF37',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 8,
+    },
+    receiptTitle: {
+        fontSize: 18,
+        fontWeight: '900',
+        color: '#FFFFFF',
+    },
+    receiptSub: {
+        fontSize: 11,
+        color: '#94A3B8',
+        marginTop: 1,
+    },
+    receiptAmount: {
+        fontSize: 32,
+        fontWeight: '900',
+        marginVertical: 8,
+        fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    },
+    receiptStatusBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        backgroundColor: 'rgba(212, 175, 55, 0.12)',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(212, 175, 55, 0.3)',
+    },
+    receiptStatusDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: '#D4AF37',
+    },
+    receiptStatusTxt: {
+        fontSize: 10,
+        fontWeight: '900',
+        color: '#D4AF37',
+        letterSpacing: 0.8,
+    },
+    receiptDetailsBox: {
+        backgroundColor: '#071324',
+        borderRadius: 16,
+        paddingHorizontal: 14,
+        paddingVertical: 4,
+        marginTop: 14,
+        borderWidth: 1,
+        borderColor: 'rgba(212, 175, 55, 0.2)',
+    },
+    receiptRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 11,
+        borderBottomWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.06)',
+    },
+    receiptLabel: {
+        fontSize: 12,
+        color: '#94A3B8',
+        fontWeight: '600',
+    },
+    receiptVal: {
+        fontSize: 12.5,
+        color: '#FFFFFF',
+        fontWeight: '700',
+    },
+    receiptValGold: {
+        fontSize: 12.5,
+        color: '#D4AF37',
+        fontWeight: '900',
+        maxWidth: W * 0.45,
+    },
+    receiptSecBox: {
+        flexDirection: 'row',
+        gap: 8,
+        alignItems: 'center',
+        backgroundColor: 'rgba(212, 175, 55, 0.08)',
+        padding: 10,
+        borderRadius: 10,
+        marginTop: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(212, 175, 55, 0.2)',
+    },
+    receiptSecTxt: {
+        fontSize: 11,
+        color: '#FCD34D',
+        flex: 1,
+        lineHeight: 15,
+        fontWeight: '500',
+    },
+    receiptSecBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        paddingVertical: 12,
+        borderRadius: 12,
+        backgroundColor: 'rgba(212, 175, 55, 0.1)',
+        borderWidth: 1.5,
+        borderColor: '#D4AF37',
+    },
+    receiptSecBtnTxt: {
+        fontSize: 12.5,
+        fontWeight: '900',
+        color: '#D4AF37',
+    },
+    receiptCloseBtn: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        borderRadius: 12,
+        backgroundColor: '#D4AF37',
+    },
+    receiptCloseBtnTxt: {
+        fontSize: 13,
+        fontWeight: '900',
+        color: '#071324',
     },
 });
 

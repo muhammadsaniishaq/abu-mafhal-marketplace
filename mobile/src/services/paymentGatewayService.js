@@ -1336,18 +1336,40 @@ export const PaymentGatewayService = {
                 const refCode = `FLW-${t.id}`;
                 if (amt > 0 && userStr) {
                     try {
-                        await supabase.from('transactions').insert({
-                            user_id: userStr,
-                            type: 'topup',
-                            amount: amt,
-                            status: 'completed',
-                            reference: refCode,
-                            description: `Bank Deposit of ₦${amt.toLocaleString()} via Flutterwave MFB (Ref: ${t.tx_ref || refCode})`,
-                            created_at: t.created_at || new Date().toISOString()
-                        });
-                        const { data: curP } = await supabase.from('profiles').select('balance').eq('id', userStr).maybeSingle();
-                        const nextBal = (Number(curP?.balance) || 0) + amt;
-                        await supabase.from('profiles').update({ balance: nextBal }).eq('id', userStr);
+                        // Check if already recorded in transactions table
+                        const { data: ex } = await supabase
+                            .from('transactions')
+                            .select('id')
+                            .eq('reference', refCode)
+                            .maybeSingle();
+
+                        if (!ex) {
+                            const { error: insErr } = await supabase.from('transactions').insert({
+                                user_id: userStr,
+                                type: 'topup',
+                                amount: amt,
+                                status: 'completed',
+                                reference: refCode,
+                                description: `Bank Deposit of ₦${amt.toLocaleString()} via Flutterwave MFB (Ref: ${t.tx_ref || refCode})`,
+                                created_at: t.created_at || new Date().toISOString()
+                            });
+
+                            if (!insErr) {
+                                // Reconcile ledger accurately without phantom additions
+                                const { data: allTxs } = await supabase
+                                    .from('transactions')
+                                    .select('amount, type, status')
+                                    .eq('user_id', userStr);
+                                const credits = (allTxs || [])
+                                    .filter(x => (x.type === 'topup' || x.type === 'credit' || x.type === 'deposit') && x.status === 'completed')
+                                    .reduce((sum, x) => sum + (Number(x.amount) || 0), 0);
+                                const debits = (allTxs || [])
+                                    .filter(x => (x.type === 'withdrawal' || x.type === 'debit' || x.type === 'wallet_payment' || x.type === 'wallet_purchase') && x.status === 'completed')
+                                    .reduce((sum, x) => sum + (Number(x.amount) || 0), 0);
+                                const finalBal = Math.max(0, credits - debits);
+                                await supabase.from('profiles').update({ balance: finalBal }).eq('id', userStr);
+                            }
+                        }
                     } catch (dbErr) {
                         console.warn('[syncFlutterwaveDeposits] Fallback DB persist notice:', dbErr.message);
                     }
