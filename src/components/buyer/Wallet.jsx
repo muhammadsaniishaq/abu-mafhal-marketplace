@@ -48,39 +48,39 @@ const GATEWAYS = [
     subtitle: 'Direct NUBAN Transfer · Instant Auto-Credit',
     badge: '0% FEE · INSTANT',
     badgeColor: '#D4AF37',
-    badgeBg: 'rgba(212, 175, 55, 0.15)',
+    badgeBg: '#FEF3C7',
     icon: Building2,
-    iconColor: '#D4AF37',
+    iconColor: '#B45309',
   },
   {
     id: 'paystack',
     name: 'Paystack Checkout',
     subtitle: 'Cards · USSD · Bank Transfer · Apple Pay',
     badge: 'AUTO-VERIFY',
-    badgeColor: '#38BDF8',
-    badgeBg: 'rgba(56, 189, 248, 0.15)',
+    badgeColor: '#0284C7',
+    badgeBg: '#E0F2FE',
     icon: CreditCard,
-    iconColor: '#38BDF8',
+    iconColor: '#0284C7',
   },
   {
     id: 'flutterwave',
     name: 'Flutterwave Africa',
     subtitle: 'Cards · Direct Bank · Mobile Money',
     badge: 'PAN-AFRICA',
-    badgeColor: '#F59E0B',
-    badgeBg: 'rgba(245, 158, 11, 0.15)',
+    badgeColor: '#D97706',
+    badgeBg: '#FEF3C7',
     icon: Zap,
-    iconColor: '#F59E0B',
+    iconColor: '#D97706',
   },
   {
     id: 'nowpayments',
     name: 'NOWPayments Crypto',
     subtitle: 'USDT (TRC20) · BTC · ETH · SOL · BNB',
     badge: 'WEB3 CRYPTO',
-    badgeColor: '#A855F7',
-    badgeBg: 'rgba(168, 85, 247, 0.15)',
+    badgeColor: '#7C3AED',
+    badgeBg: '#EDE9FE',
     icon: WalletIcon,
-    iconColor: '#A855F7',
+    iconColor: '#7C3AED',
   }
 ];
 
@@ -258,7 +258,7 @@ export const Wallet = () => {
   // Check & Sync Bank Deposits (Strictly Idempotent)
   const handleBankSync = async () => {
     setRefreshing(true);
-    setSyncStatusMsg('Tabbatarwa tare da binciken canjin kudi daga Flutterwave...');
+    setSyncStatusMsg('Checking Flutterwave for incoming bank transfers...');
     try {
       const uid = await resolveUid();
       const res = await fetch('/api/sync-flutterwave-deposits', {
@@ -278,15 +278,15 @@ export const Wallet = () => {
           reference: json.newly_credited?.[0]?.reference || `FLW-${Date.now()}`,
           gateway: 'Dedicated Bank Transfer (Flutterwave MFB)'
         });
-        setSyncStatusMsg(`🎉 ₦${json.total_credited.toLocaleString()} an sanya su cikin asusunka cikin nasara!`);
+        setSyncStatusMsg(`🎉 ₦${json.total_credited.toLocaleString()} credited to your wallet successfully!`);
         await fetchWalletData(true);
       } else {
-        setSyncStatusMsg('Babu sabon transfer da ya shigo a yanzu. Idan yanzu ka tura kudin, da fatan a jira dakika 30-60 kafin banki ya kammala aikawa.');
+        setSyncStatusMsg('No new incoming transfer detected. If you just sent money, please allow 30–60 seconds for interbank settlement.');
         await fetchWalletData(true);
         setTimeout(() => setSyncStatusMsg(''), 7000);
       }
     } catch (e) {
-      setSyncStatusMsg('An samu matsalar sadarwa. Da fatan a sake gwadawa.');
+      setSyncStatusMsg('Network connection error. Please check your internet connection.');
       setTimeout(() => setSyncStatusMsg(''), 5000);
     } finally {
       setRefreshing(false);
@@ -298,13 +298,13 @@ export const Wallet = () => {
     if (e) e.preventDefault();
     const cleanBvn = String(bvnInput || '').trim().replace(/[^0-9]/g, '');
     if (cleanBvn.length !== 11 || /^(\d)\1{10}$/.test(cleanBvn)) {
-      setVaError('Da fatan a shigar da ingantacciyar lambar BVN mai lamba 11 daidai.');
+      setVaError('Please enter a valid 11-digit BVN.');
       return;
     }
 
     const nameToUse = (bvnLegalName.trim() || currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0] || '').trim();
     if (!nameToUse) {
-      setVaError('Da fatan a sanya cikakken sunanka kamar yadda yake a jikin BVN.');
+      setVaError('Please enter your legal full name as registered on your BVN.');
       return;
     }
 
@@ -337,7 +337,7 @@ export const Wallet = () => {
           localStorage.setItem(`@amf_va_${uid}`, JSON.stringify(json.data));
           await supabase.from('profiles').update({ custom_id: JSON.stringify(json.data) }).eq('id', uid);
         }
-        setSyncStatusMsg(`🎉 An kafa asusunka na din-din-din a ${json.data.bank_name}!`);
+        setSyncStatusMsg(`🎉 Your dedicated account at ${json.data.bank_name} has been activated successfully!`);
         await fetchWalletData(true);
       } else {
         setVaError(json?.error || 'Verification failed. Please check your BVN and legal name.');
@@ -409,636 +409,638 @@ export const Wallet = () => {
   }, [transactions, filterType]);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 font-sans">
-      
-      {/* ── Status Notification Banner (Navy & Gold Frosted) ── */}
-      {syncStatusMsg && (
-        <div className="mb-6 rounded-2xl p-4 bg-[#0A192F]/90 backdrop-blur-md border border-[#D4AF37]/40 flex items-center justify-between gap-3 text-white text-xs sm:text-sm font-semibold shadow-lg shadow-[#071324]/50 transition-all animate-fadeIn">
-          <div className="flex items-center gap-2.5">
-            <RefreshCw className={`w-4 h-4 text-[#D4AF37] ${refreshing ? 'animate-spin' : ''}`} />
-            <span className="text-[#FDE68A]">{syncStatusMsg}</span>
-          </div>
-          <button 
-            onClick={() => setSyncStatusMsg('')} 
-            className="p-1 hover:bg-[#D4AF37]/20 rounded-lg text-[#D4AF37] transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
-      {/* ── Luxury Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-        <div>
-          <div className="flex items-center gap-2.5 mb-1">
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
-              My Wallet
-            </h1>
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#D4AF37]/15 text-[#D4AF37] border border-[#D4AF37]/30">
-              <Sparkles className="w-3 h-3 text-[#D4AF37]" />
-              VIP ESCROW
-            </span>
-          </div>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-            Verified Escrow Ledger · Instant NUBAN Deposit
-          </p>
-        </div>
-
-        <button
-          onClick={handleBankSync}
-          disabled={refreshing}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-black rounded-xl bg-gradient-to-r from-[#0A192F] to-[#122A4E] hover:from-[#0E223D] hover:to-[#173562] text-[#D4AF37] border border-[#D4AF37]/40 transition-all cursor-pointer shadow-md hover:shadow-[#D4AF37]/10 active:scale-95 disabled:opacity-50"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 text-[#D4AF37] ${refreshing ? 'animate-spin' : ''}`} />
-          <span>{refreshing ? 'Binciken Deposit...' : 'Check & Sync Deposits'}</span>
-        </button>
-      </div>
-
-      {/* ── Main Cards Grid (Navy & Gold Theme) ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-8">
+    <div className="min-h-screen bg-slate-50 text-slate-900 py-8 px-4 sm:px-6 font-sans">
+      <div className="max-w-6xl mx-auto">
         
-        {/* 1. Hero Balance Card (3 cols) */}
-        <div className="lg:col-span-3 rounded-3xl bg-gradient-to-br from-[#071324] via-[#0A192F] to-[#122A4E] text-white p-6 sm:p-8 shadow-2xl border border-[#D4AF37]/30 flex flex-col justify-between relative overflow-hidden">
-          {/* Subtle gold ambient glow */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-[#D4AF37]/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
-          <div className="absolute bottom-0 left-0 w-48 h-48 bg-[#38BDF8]/10 rounded-full blur-3xl pointer-events-none -ml-10 -mb-10" />
-
-          <div className="relative z-10">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-widest text-[#D4AF37] flex items-center gap-2">
-                <WalletIcon className="w-4 h-4 text-[#D4AF37]" />
-                Available Balance
-              </span>
-              <button
-                onClick={() => setHideBalance(!hideBalance)}
-                className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-[#D4AF37] transition-colors border border-[#D4AF37]/20"
-                title={hideBalance ? "Nuna kudi" : "Boye kudi"}
-              >
-                {hideBalance ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
+        {/* ── Status Notification Banner (Crisp Modern Alert) ── */}
+        {syncStatusMsg && (
+          <div className="mb-6 rounded-2xl p-4 bg-white border border-amber-300 shadow-sm flex items-center justify-between gap-3 text-slate-800 text-xs sm:text-sm font-semibold transition-all">
+            <div className="flex items-center gap-3">
+              <RefreshCw className={`w-4 h-4 text-amber-600 ${refreshing ? 'animate-spin' : ''}`} />
+              <span className="text-slate-800">{syncStatusMsg}</span>
             </div>
-
-            <div className="my-6">
-              <p className="text-3xl sm:text-5xl font-black tracking-tight font-mono text-white">
-                {hideBalance ? '••••••••' : formatCurrency(balance)}
-              </p>
-              <div className="flex items-center gap-2 mt-3 flex-wrap">
-                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#D4AF37] bg-[#D4AF37]/10 px-3 py-1 rounded-full border border-[#D4AF37]/30">
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#D4AF37]" />
-                  100% Escrow Protected
-                </span>
-                <span className="text-[11px] font-semibold text-slate-300">
-                  Zero Transfer Fees
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="relative z-10 pt-2 grid grid-cols-2 gap-3.5">
-            <button
-              onClick={() => setShowTopUpModal(true)}
-              className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-[#D4AF37] via-[#F59E0B] to-[#D4AF37] hover:brightness-110 text-[#071324] font-black text-xs sm:text-sm shadow-lg shadow-[#D4AF37]/25 transition-all active:scale-95 cursor-pointer"
+            <button 
+              onClick={() => setSyncStatusMsg('')} 
+              className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors"
             >
-              <PlusCircle className="w-4 h-4 text-[#071324]" />
-              <span>Add Money</span>
+              <X className="w-4 h-4" />
             </button>
-
-            <button
-              onClick={handleBankSync}
-              disabled={refreshing}
-              className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-[#0A192F]/80 hover:bg-[#122A4E] text-[#D4AF37] font-bold text-xs sm:text-sm border border-[#D4AF37]/40 backdrop-blur-sm transition-all active:scale-95 cursor-pointer disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 text-[#D4AF37] ${refreshing ? 'animate-spin' : ''}`} />
-              <span>Sync Deposit</span>
-            </button>
-          </div>
-        </div>
-
-        {/* 2. Permanent Dedicated NUBAN Card (2 cols) */}
-        <div className="lg:col-span-2 rounded-3xl bg-[#0A192F] p-6 shadow-xl border border-[#D4AF37]/30 flex flex-col justify-between text-white relative overflow-hidden">
-          <div className="relative z-10">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-xs font-black uppercase tracking-wider text-[#D4AF37] flex items-center gap-1.5">
-                <Building2 className="w-3.5 h-3.5 text-[#D4AF37]" />
-                Permanent NUBAN
-              </span>
-              <span className="text-[10px] bg-[#D4AF37]/15 text-[#D4AF37] px-2.5 py-0.5 rounded-full font-bold border border-[#D4AF37]/30 flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3 text-[#D4AF37]" />
-                VERIFIED DEDICATED
-              </span>
-            </div>
-
-            {isValidVirtualAccount(virtualAcc?.account_number) ? (
-              <div className="space-y-4">
-                {/* Luxury Navy & Gold ATM Card */}
-                <div className="rounded-2xl p-5 bg-gradient-to-br from-[#081426] via-[#0E223D] to-[#163156] border border-[#D4AF37]/40 shadow-xl relative overflow-hidden">
-                  {/* EMV Chip and Bank Info */}
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-9 h-7 rounded bg-gradient-to-br from-[#D4AF37] to-[#B38728] border border-[#FDE68A]/60 flex items-center justify-center shadow-sm">
-                        <div className="w-6 h-4 border border-[#071324]/40 rounded-sm grid grid-cols-2 gap-0.5 p-0.5">
-                          <div className="bg-[#071324]/20 rounded-xs" />
-                          <div className="bg-[#071324]/20 rounded-xs" />
-                          <div className="bg-[#071324]/20 rounded-xs" />
-                          <div className="bg-[#071324]/20 rounded-xs" />
-                        </div>
-                      </div>
-                      <Wifi className="w-4 h-4 text-[#D4AF37] rotate-90" />
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs font-black tracking-wide text-[#D4AF37] uppercase">
-                        {virtualAcc.bank_name || 'Flutterwave MFB'}
-                      </p>
-                      <p className="text-[9px] font-bold text-slate-400">0% FEE · INSTANT AUTO-CREDIT</p>
-                    </div>
-                  </div>
-
-                  {/* Formatted Account Number */}
-                  <div className="my-3">
-                    <p className="text-2xl font-black font-mono tracking-widest text-white">
-                      {String(virtualAcc.account_number).replace(/(\d{4})(\d{3})(\d{3})/, '$1  $2  $3')}
-                    </p>
-                  </div>
-
-                  {/* Account Name and Copy Button */}
-                  <div className="flex items-center justify-between pt-3 border-t border-[#D4AF37]/20">
-                    <div className="truncate pr-3">
-                      <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider">Account Holder</p>
-                      <p className="text-xs font-black text-slate-100 truncate">
-                        {virtualAcc.account_name || currentUser?.user_metadata?.full_name || 'Verified Member'}
-                      </p>
-                    </div>
-
-                    <button
-                      onClick={() => handleCopy(virtualAcc.account_number, false)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#D4AF37] hover:bg-[#F59E0B] text-[#071324] font-black text-xs transition-colors cursor-pointer shadow-sm active:scale-95"
-                    >
-                      {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copied ? 'An Kwafa' : 'Kwafa'}</span>
-                    </button>
-                  </div>
-                </div>
-
-                <p className="text-[11px] text-slate-300 leading-relaxed">
-                  💡 Tura kudi daga kowane banki (OPay, Kuda, PalmPay, GTBank, Zenith, Access). Kudinka zai shiga asusunka kai tsaye cikin dakika 30–60.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  Bisa ka'idar CBN, ana bukatar lambar BVN sau daya kacal don samar maka da asusun banki na musamman mai shigar da kudi kai-tsaye ba tare da bata lokaci ba.
-                </p>
-
-                {vaError && (
-                  <div className="p-2.5 rounded-xl bg-red-950/60 border border-red-500/50 flex items-center gap-2 text-red-300 text-xs">
-                    <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-400" />
-                    <span>{vaError}</span>
-                  </div>
-                )}
-
-                <button
-                  onClick={() => setShowBvnForm(!showBvnForm)}
-                  className="w-full py-2.5 px-4 rounded-xl bg-[#D4AF37] hover:bg-[#F59E0B] text-[#071324] font-black text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
-                >
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>{showBvnForm ? 'Boye Fom' : 'Tabbatar da BVN & Samu Asusu'}</span>
-                </button>
-
-                {showBvnForm && (
-                  <form onSubmit={handleVerifyBvnAndGenerate} className="mt-3 space-y-2.5 p-3 rounded-2xl bg-[#071324]/80 border border-[#D4AF37]/30">
-                    <div>
-                      <label className="block text-[10px] font-bold text-[#D4AF37] uppercase mb-1">
-                        Cikakken Suna Kamar Yadda Yake a BVN
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={bvnLegalName}
-                        onChange={(e) => setBvnLegalName(e.target.value)}
-                        placeholder="Sunanka na shari'a"
-                        className="w-full px-3 py-2 text-xs rounded-lg border border-[#D4AF37]/30 bg-[#0A192F] text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-                      />
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between items-center mb-1">
-                        <label className="block text-[10px] font-bold text-[#D4AF37] uppercase">
-                          Lambar BVN (Lamba 11)
-                        </label>
-                        <span className="text-[10px] text-[#FDE68A] font-bold">Danna *565*0#</span>
-                      </div>
-                      <input
-                        type="text"
-                        required
-                        maxLength={11}
-                        value={bvnInput}
-                        onChange={(e) => setBvnInput(e.target.value.replace(/[^0-9]/g, ''))}
-                        placeholder="11-digit BVN"
-                        className="w-full px-3 py-2 text-xs rounded-lg border border-[#D4AF37]/30 bg-[#0A192F] text-white font-mono tracking-widest placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-[#D4AF37] uppercase mb-1">
-                        Lambar Waya
-                      </label>
-                      <input
-                        type="text"
-                        value={bvnPhone}
-                        onChange={(e) => setBvnPhone(e.target.value)}
-                        placeholder={currentUser?.phone || '08012345678'}
-                        className="w-full px-3 py-2 text-xs rounded-lg border border-[#D4AF37]/30 bg-[#0A192F] text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-                      />
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={bvnVerifying || bvnInput.length !== 11}
-                      className="w-full py-2.5 rounded-lg bg-[#D4AF37] hover:bg-[#F59E0B] text-[#071324] font-black text-xs shadow disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5 cursor-pointer mt-2"
-                    >
-                      {bvnVerifying ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          <span>Ana Tabbatarwa...</span>
-                        </>
-                      ) : (
-                        <span>Tabbatar da BVN & Samu Asusu</span>
-                      )}
-                    </button>
-                  </form>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Transaction History (Navy & Gold VIP Style) ── */}
-      <div className="bg-[#0A192F] rounded-3xl shadow-xl border border-[#D4AF37]/30 overflow-hidden mb-12">
-        <div className="p-5 sm:p-6 border-b border-[#D4AF37]/20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h2 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
-              <Receipt className="w-4 h-4 text-[#D4AF37]" />
-              Recent Transactions
-            </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Danna kowace ma'amala don ganin cikakken bayani da risiti (receipt)
-            </p>
-          </div>
-
-          <div className="inline-flex rounded-xl bg-[#071324] p-1 border border-[#D4AF37]/30 self-start sm:self-auto">
-            {['all', 'credit', 'debit'].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setFilterType(tab)}
-                className={`px-3.5 py-1.5 text-xs font-black rounded-lg transition-all cursor-pointer ${
-                  filterType === tab
-                    ? 'bg-[#D4AF37] text-[#071324] shadow-md'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                {tab === 'all' ? 'Duka' : tab === 'credit' ? 'Deposits (+)' : 'Debits (-)'}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {filteredTransactions.length > 0 ? (
-          <div className="divide-y divide-[#D4AF37]/10">
-            {filteredTransactions.map((tx) => {
-              const isCredit = tx.type === 'topup' || tx.type === 'credit' || tx.type === 'deposit';
-              return (
-                <div 
-                  key={tx.id} 
-                  onClick={() => setSelectedTx(tx)}
-                  className="p-4 sm:p-5 flex items-center justify-between hover:bg-[#122A4E]/50 transition-colors cursor-pointer group"
-                >
-                  <div className="flex items-center gap-3.5 min-w-0 pr-3">
-                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                      isCredit ? 'bg-[#D4AF37]/15 text-[#D4AF37] border border-[#D4AF37]/30' : 'bg-red-500/15 text-red-400 border border-red-500/30'
-                    }`}>
-                      {isCredit ? <ArrowDownLeft className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-bold text-sm text-white truncate group-hover:text-[#D4AF37] transition-colors">
-                        {tx.description || (isCredit ? 'Bank Deposit' : 'Marketplace Payment')}
-                      </p>
-                      <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
-                        <Clock className="w-3 h-3 text-slate-500" />
-                        {tx.created_at ? new Date(tx.created_at).toLocaleDateString('en-GB', {
-                          day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                        }) : 'Recent'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <div className="text-right">
-                      <p className={`text-sm sm:text-base font-black font-mono ${isCredit ? 'text-[#D4AF37]' : 'text-slate-100'}`}>
-                        {isCredit ? '+' : '-'}{formatCurrency(tx.amount)}
-                      </p>
-                      <span className={`inline-block mt-0.5 text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
-                        tx.status === 'completed' || tx.status === 'successful'
-                          ? 'bg-[#D4AF37]/15 text-[#D4AF37] border border-[#D4AF37]/30'
-                          : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-                      }`}>
-                        {tx.status || 'completed'}
-                      </span>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-[#D4AF37] group-hover:translate-x-0.5 transition-all" />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="py-16 px-4 text-center">
-            <div className="w-12 h-12 mx-auto rounded-2xl bg-[#071324] flex items-center justify-center text-slate-500 mb-3 border border-[#D4AF37]/20">
-              <Clock className="w-6 h-6 text-[#D4AF37]" />
-            </div>
-            <p className="text-sm font-bold text-slate-200">Babu ma'amala da aka yi a yanzu</p>
-            <p className="text-xs text-slate-400 mt-1">
-              Kowane deposit ko siyan kaya zai bayyana a nan tare da cikakken risiti.
-            </p>
           </div>
         )}
-      </div>
 
-      {/* ── FULL TRANSACTION DETAILS / RECEIPT MODAL (Navy & Gold) ── */}
-      {selectedTx && (
-        <div className="fixed inset-0 z-50 bg-[#071324]/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-[#0A192F] rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-[#D4AF37]/40 relative text-white">
-            {/* Close Button */}
-            <button
-              onClick={() => setSelectedTx(null)}
-              className="absolute top-5 right-5 p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            {/* Receipt Header */}
-            <div className="text-center pt-2 pb-5 border-b border-[#D4AF37]/20">
-              <div className="w-16 h-16 mx-auto rounded-full bg-[#D4AF37]/15 border border-[#D4AF37]/30 flex items-center justify-center text-[#D4AF37] mb-3">
-                {selectedTx.type === 'topup' || selectedTx.type === 'credit' || selectedTx.type === 'deposit' ? (
-                  <CheckCircle2 className="w-8 h-8 text-[#D4AF37]" />
-                ) : (
-                  <Receipt className="w-8 h-8 text-[#D4AF37]" />
-                )}
-              </div>
-              <h3 className="text-xl font-black text-white">
-                Transaction Receipt
-              </h3>
-              <p className="text-xs text-[#D4AF37] font-semibold mt-0.5">
-                Cikakken Bayanin Ma'amala
-              </p>
-
-              <p className={`text-3xl sm:text-4xl font-black font-mono mt-3 ${
-                (selectedTx.type === 'topup' || selectedTx.type === 'credit' || selectedTx.type === 'deposit')
-                  ? 'text-[#D4AF37]'
-                  : 'text-white'
-              }`}>
-                {(selectedTx.type === 'topup' || selectedTx.type === 'credit' || selectedTx.type === 'deposit') ? '+' : '-'}
-                {formatCurrency(selectedTx.amount || 0)}
-              </p>
-
-              <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#D4AF37]/15 text-[#D4AF37] border border-[#D4AF37]/30">
-                <span className="w-2 h-2 rounded-full bg-[#D4AF37] animate-pulse" />
-                <span>{(selectedTx.status || 'COMPLETED').toUpperCase()}</span>
-              </div>
+        {/* ── Top Header ── */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+          <div>
+            <div className="flex items-center gap-2.5 mb-1">
+              <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                My Wallet
+              </h1>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-300">
+                <Sparkles className="w-3 h-3 text-amber-600" />
+                VIP ESCROW
+              </span>
             </div>
+            <p className="text-xs sm:text-sm text-slate-500">
+              Verified Escrow Ledger · Instant NUBAN Deposit
+            </p>
+          </div>
 
-            {/* Receipt Detail Rows */}
-            <div className="py-5 space-y-3.5 text-xs sm:text-sm">
+          <button
+            onClick={handleBankSync}
+            disabled={refreshing}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-black rounded-xl bg-white hover:bg-slate-50 text-[#071324] border border-slate-300 shadow-sm transition-all cursor-pointer hover:border-amber-400 active:scale-95 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-amber-600 ${refreshing ? 'animate-spin' : ''}`} />
+            <span>{refreshing ? 'Checking Deposits...' : 'Check & Sync Deposits'}</span>
+          </button>
+        </div>
+
+        {/* ── Main Cards Grid (Navy & Gold VIP Styling on Clean Canvas) ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-8">
+          
+          {/* 1. Hero Balance Card (3 cols) */}
+          <div className="lg:col-span-3 rounded-3xl bg-gradient-to-br from-[#071324] via-[#0A192F] to-[#122A4E] text-white p-6 sm:p-8 shadow-xl border border-slate-800 flex flex-col justify-between relative overflow-hidden">
+            {/* Subtle gold ambient glow */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-[#D4AF37]/15 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
+            <div className="absolute bottom-0 left-0 w-48 h-48 bg-[#38BDF8]/10 rounded-full blur-3xl pointer-events-none -ml-10 -mb-10" />
+
+            <div className="relative z-10">
               <div className="flex items-center justify-between">
-                <span className="text-slate-400 flex items-center gap-1.5">
-                  <Hash className="w-3.5 h-3.5 text-[#D4AF37]" />
-                  Reference ID
+                <span className="text-xs font-bold uppercase tracking-widest text-[#D4AF37] flex items-center gap-2">
+                  <WalletIcon className="w-4 h-4 text-[#D4AF37]" />
+                  Available Balance
                 </span>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono font-bold text-[#D4AF37] text-xs">
-                    {selectedTx.reference || selectedTx.id || 'N/A'}
+                <button
+                  onClick={() => setHideBalance(!hideBalance)}
+                  className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-[#D4AF37] transition-colors border border-[#D4AF37]/20"
+                  title={hideBalance ? "Show balance" : "Hide balance"}
+                >
+                  {hideBalance ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+
+              <div className="my-6">
+                <p className="text-3xl sm:text-5xl font-black tracking-tight font-mono text-white">
+                  {hideBalance ? '••••••••' : formatCurrency(balance)}
+                </p>
+                <div className="flex items-center gap-2 mt-3 flex-wrap">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#D4AF37] bg-[#D4AF37]/10 px-3 py-1 rounded-full border border-[#D4AF37]/30">
+                    <ShieldCheck className="w-3.5 h-3.5 text-[#D4AF37]" />
+                    100% Escrow Protected
                   </span>
-                  <button
-                    onClick={() => handleCopy(selectedTx.reference || selectedTx.id, true)}
-                    className="p-1 rounded bg-[#071324] hover:bg-[#122A4E] text-[#D4AF37] border border-[#D4AF37]/30 transition-colors"
-                    title="Kwafi Reference"
-                  >
-                    {modalCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
+                  <span className="text-[11px] font-semibold text-slate-300">
+                    Zero Transfer Fees
+                  </span>
                 </div>
               </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-slate-400">Transaction Type</span>
-                <span className="font-bold text-white">
-                  {selectedTx.type === 'topup' || selectedTx.type === 'deposit' || selectedTx.type === 'credit'
-                    ? 'Dedicated Bank Deposit'
-                    : selectedTx.type === 'wallet_payment'
-                    ? 'Marketplace Order Payment'
-                    : selectedTx.type === 'pss_down_payment'
-                    ? 'Pay Small Small Down Payment'
-                    : selectedTx.type || 'Transfer'}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-slate-400">Payment Channel</span>
-                <span className="font-bold text-[#FDE68A]">
-                  {selectedTx.reference?.startsWith('FLW')
-                    ? 'Flutterwave MFB Transfer'
-                    : selectedTx.reference?.startsWith('ORD')
-                    ? 'Abu Mafhal Escrow Checkout'
-                    : 'Instant Electronic Transfer'}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-slate-400 flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-[#D4AF37]" />
-                  Date & Time
-                </span>
-                <span className="font-bold text-slate-200">
-                  {selectedTx.created_at ? new Date(selectedTx.created_at).toLocaleDateString('en-GB', {
-                    day: 'numeric',
-                    month: 'short',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  }) : 'N/A'}
-                </span>
-              </div>
-
-              <div className="pt-2 border-t border-[#D4AF37]/15">
-                <p className="text-slate-400 text-xs mb-1">Narration / Description</p>
-                <p className="text-xs text-slate-200 bg-[#071324] p-3 rounded-xl border border-[#D4AF37]/20 leading-relaxed">
-                  {selectedTx.description || 'Verified Abu Mafhal Marketplace transaction.'}
-                </p>
-              </div>
-
-              <div className="flex items-center justify-between pt-1">
-                <span className="text-slate-400">Balance Impact</span>
-                <span className={`font-bold font-mono ${
-                  (selectedTx.type === 'topup' || selectedTx.type === 'credit' || selectedTx.type === 'deposit')
-                    ? 'text-[#D4AF37]'
-                    : 'text-red-400'
-                }`}>
-                  {(selectedTx.type === 'topup' || selectedTx.type === 'credit' || selectedTx.type === 'deposit')
-                    ? `+${formatCurrency(selectedTx.amount)} (Added to Balance)`
-                    : `-${formatCurrency(selectedTx.amount)} (Deducted from Balance)`}
-                </span>
-              </div>
             </div>
 
-            {/* Done Action */}
-            <div className="pt-3 border-t border-[#D4AF37]/20">
+            <div className="relative z-10 pt-2 grid grid-cols-2 gap-3.5">
               <button
-                onClick={() => setSelectedTx(null)}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-[#D4AF37] via-[#F59E0B] to-[#D4AF37] text-[#071324] font-black text-sm shadow-lg shadow-[#D4AF37]/20 transition-all cursor-pointer active:scale-95"
+                onClick={() => setShowTopUpModal(true)}
+                className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-[#D4AF37] via-[#F59E0B] to-[#D4AF37] hover:brightness-110 text-[#071324] font-black text-xs sm:text-sm shadow-lg shadow-[#D4AF37]/25 transition-all active:scale-95 cursor-pointer"
               >
-                Kammala (Done)
+                <PlusCircle className="w-4 h-4 text-[#071324]" />
+                <span>Add Money</span>
+              </button>
+
+              <button
+                onClick={handleBankSync}
+                disabled={refreshing}
+                className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-[#0A192F]/80 hover:bg-[#122A4E] text-[#D4AF37] font-bold text-xs sm:text-sm border border-[#D4AF37]/40 backdrop-blur-sm transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-[#D4AF37] ${refreshing ? 'animate-spin' : ''}`} />
+                <span>Sync Deposit</span>
               </button>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* ── Add Money Modal (Bottom Sheet / Modal in Navy & Gold) ── */}
-      {showTopUpModal && (
-        <div className="fixed inset-0 z-50 bg-[#071324]/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-[#0A192F] rounded-3xl max-w-md w-full p-6 shadow-2xl border border-[#D4AF37]/40 relative text-white">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg font-black text-white flex items-center gap-2">
-                <PlusCircle className="w-5 h-5 text-[#D4AF37]" />
-                Add Cash to Wallet
-              </h3>
+          {/* 2. Permanent Dedicated NUBAN Card (2 cols) */}
+          <div className="lg:col-span-2 rounded-3xl bg-white p-6 shadow-md border border-slate-200 flex flex-col justify-between relative overflow-hidden">
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-xs font-black uppercase tracking-wider text-[#071324] flex items-center gap-1.5">
+                  <Building2 className="w-4 h-4 text-amber-600" />
+                  Permanent NUBAN
+                </span>
+                <span className="text-[10px] bg-amber-50 text-amber-800 px-2.5 py-0.5 rounded-full font-bold border border-amber-200 flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3 text-amber-600" />
+                  VERIFIED DEDICATED
+                </span>
+              </div>
+
+              {isValidVirtualAccount(virtualAcc?.account_number) ? (
+                <div className="space-y-4">
+                  {/* Luxury Navy & Gold ATM Card */}
+                  <div className="rounded-2xl p-5 bg-gradient-to-br from-[#081426] via-[#0E223D] to-[#163156] border border-[#D4AF37]/40 shadow-xl relative overflow-hidden text-white">
+                    {/* EMV Chip and Bank Info */}
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-9 h-7 rounded bg-gradient-to-br from-[#D4AF37] to-[#B38728] border border-[#FDE68A]/60 flex items-center justify-center shadow-sm">
+                          <div className="w-6 h-4 border border-[#071324]/40 rounded-sm grid grid-cols-2 gap-0.5 p-0.5">
+                            <div className="bg-[#071324]/20 rounded-xs" />
+                            <div className="bg-[#071324]/20 rounded-xs" />
+                            <div className="bg-[#071324]/20 rounded-xs" />
+                            <div className="bg-[#071324]/20 rounded-xs" />
+                          </div>
+                        </div>
+                        <Wifi className="w-4 h-4 text-[#D4AF37] rotate-90" />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-black tracking-wide text-[#D4AF37] uppercase">
+                          {virtualAcc.bank_name || 'Flutterwave MFB'}
+                        </p>
+                        <p className="text-[9px] font-bold text-slate-300">0% FEE · INSTANT AUTO-CREDIT</p>
+                      </div>
+                    </div>
+
+                    {/* Formatted Account Number */}
+                    <div className="my-3">
+                      <p className="text-2xl font-black font-mono tracking-widest text-white">
+                        {String(virtualAcc.account_number).replace(/(\d{4})(\d{3})(\d{3})/, '$1  $2  $3')}
+                      </p>
+                    </div>
+
+                    {/* Account Name and Copy Button */}
+                    <div className="flex items-center justify-between pt-3 border-t border-[#D4AF37]/20">
+                      <div className="truncate pr-3">
+                        <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider">Account Holder</p>
+                        <p className="text-xs font-black text-slate-100 truncate">
+                          {virtualAcc.account_name || currentUser?.user_metadata?.full_name || 'Verified Member'}
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={() => handleCopy(virtualAcc.account_number, false)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#D4AF37] hover:bg-[#F59E0B] text-[#071324] font-black text-xs transition-colors cursor-pointer shadow-sm active:scale-95"
+                      >
+                        {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copied ? 'Copied' : 'Copy'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    💡 Transfer from any Nigerian bank (OPay, Kuda, PalmPay, GTBank, Zenith, Access). Your wallet credits automatically in 30–60 seconds.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Per CBN regulations, BVN verification is required once to generate your dedicated bank account with automatic instant crediting.
+                  </p>
+
+                  {vaError && (
+                    <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 flex items-center gap-2 text-red-600 text-xs">
+                      <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-500" />
+                      <span>{vaError}</span>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => setShowBvnForm(!showBvnForm)}
+                    className="w-full py-2.5 px-4 rounded-xl bg-[#071324] hover:bg-[#0A192F] text-[#D4AF37] border border-[#D4AF37]/40 font-black text-xs shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>{showBvnForm ? 'Hide Form' : 'Verify BVN & Generate Account'}</span>
+                  </button>
+
+                  {showBvnForm && (
+                    <form onSubmit={handleVerifyBvnAndGenerate} className="mt-3 space-y-2.5 p-3 rounded-2xl bg-slate-50 border border-slate-200">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">
+                          Legal Full Name (as on BVN)
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={bvnLegalName}
+                          onChange={(e) => setBvnLegalName(e.target.value)}
+                          placeholder="Your legal full name"
+                          className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="block text-[10px] font-bold text-slate-700 uppercase">
+                            11-Digit BVN
+                          </label>
+                          <span className="text-[10px] text-amber-700 font-bold">Dial *565*0#</span>
+                        </div>
+                        <input
+                          type="text"
+                          required
+                          maxLength={11}
+                          value={bvnInput}
+                          onChange={(e) => setBvnInput(e.target.value.replace(/[^0-9]/g, ''))}
+                          placeholder="11-digit BVN"
+                          className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white text-slate-900 font-mono tracking-widest placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">
+                          Phone Number
+                        </label>
+                        <input
+                          type="text"
+                          value={bvnPhone}
+                          onChange={(e) => setBvnPhone(e.target.value)}
+                          placeholder={currentUser?.phone || '08012345678'}
+                          className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={bvnVerifying || bvnInput.length !== 11}
+                        className="w-full py-2.5 rounded-lg bg-gradient-to-r from-[#071324] to-[#122A4E] text-[#D4AF37] border border-[#D4AF37]/40 font-black text-xs shadow disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5 cursor-pointer mt-2"
+                      >
+                        {bvnVerifying ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Verifying BVN...</span>
+                          </>
+                        ) : (
+                          <span>Verify BVN & Issue Account</span>
+                        )}
+                      </button>
+                    </form>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Transaction History (Crisp White Card with Clean Slate Rows) ── */}
+        <div className="bg-white rounded-3xl shadow-md border border-slate-200 overflow-hidden mb-12">
+          <div className="p-5 sm:p-6 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h2 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
+                <Receipt className="w-4 h-4 text-amber-600" />
+                Recent Transactions
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Click any transaction to view full receipt and details
+              </p>
+            </div>
+
+            <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200 self-start sm:self-auto">
+              {['all', 'credit', 'debit'].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setFilterType(tab)}
+                  className={`px-3.5 py-1.5 text-xs font-black rounded-lg transition-all cursor-pointer ${
+                    filterType === tab
+                      ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  {tab === 'all' ? 'All' : tab === 'credit' ? 'Deposits (+)' : 'Debits (-)'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {filteredTransactions.length > 0 ? (
+            <div className="divide-y divide-slate-100">
+              {filteredTransactions.map((tx) => {
+                const isCredit = tx.type === 'topup' || tx.type === 'credit' || tx.type === 'deposit';
+                return (
+                  <div 
+                    key={tx.id} 
+                    onClick={() => setSelectedTx(tx)}
+                    className="p-4 sm:p-5 flex items-center justify-between hover:bg-slate-50/80 transition-colors cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-3.5 min-w-0 pr-3">
+                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                        isCredit ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-rose-50 text-rose-600 border border-rose-200'
+                      }`}>
+                        {isCredit ? <ArrowDownLeft className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-bold text-sm text-slate-900 truncate group-hover:text-amber-700 transition-colors">
+                          {tx.description || (isCredit ? 'Bank Deposit' : 'Marketplace Payment')}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
+                          <Clock className="w-3 h-3 text-slate-400" />
+                          {tx.created_at ? new Date(tx.created_at).toLocaleDateString('en-GB', {
+                            day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                          }) : 'Recent'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <div className="text-right">
+                        <p className={`text-sm sm:text-base font-black font-mono ${isCredit ? 'text-amber-700' : 'text-slate-900'}`}>
+                          {isCredit ? '+' : '-'}{formatCurrency(tx.amount)}
+                        </p>
+                        <span className={`inline-block mt-0.5 text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                          tx.status === 'completed' || tx.status === 'successful'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : 'bg-amber-50 text-amber-700 border border-amber-200'
+                        }`}>
+                          {tx.status || 'completed'}
+                        </span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-amber-600 group-hover:translate-x-0.5 transition-all" />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="py-16 px-4 text-center">
+              <div className="w-12 h-12 mx-auto rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mb-3 border border-slate-200">
+                <Clock className="w-6 h-6 text-slate-400" />
+              </div>
+              <p className="text-sm font-bold text-slate-800">No transactions recorded yet</p>
+              <p className="text-xs text-slate-500 mt-1">
+                Your incoming deposits and order payment receipts will show here automatically.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* ── FULL TRANSACTION DETAILS / RECEIPT MODAL (Crisp Light Modal with Navy & Gold Accents) ── */}
+        {selectedTx && (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-slate-200 relative text-slate-900">
+              {/* Close Button */}
               <button
-                onClick={() => setShowTopUpModal(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white"
+                onClick={() => setSelectedTx(null)}
+                className="absolute top-5 right-5 p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
-            </div>
 
-            <form onSubmit={handleTopUpSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-[#D4AF37] uppercase mb-1">
-                  Amount to Fund (₦)
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={topUpAmount}
-                  onChange={(e) => setTopUpAmount(e.target.value.replace(/[^0-9]/g, ''))}
-                  placeholder="₦0.00"
-                  className="w-full px-4 py-3 text-xl font-black font-mono rounded-xl border border-[#D4AF37]/40 bg-[#071324] text-white focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-                />
+              {/* Receipt Header */}
+              <div className="text-center pt-2 pb-5 border-b border-slate-200">
+                <div className="w-16 h-16 mx-auto rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 mb-3">
+                  {selectedTx.type === 'topup' || selectedTx.type === 'credit' || selectedTx.type === 'deposit' ? (
+                    <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+                  ) : (
+                    <Receipt className="w-8 h-8 text-amber-600" />
+                  )}
+                </div>
+                <h3 className="text-xl font-black text-slate-900">
+                  Transaction Receipt
+                </h3>
+                <p className="text-xs text-slate-500 font-semibold mt-0.5">
+                  Official Ledger Audit Details
+                </p>
 
-                <div className="flex flex-wrap gap-2 mt-2.5">
-                  {[1000, 2000, 5000, 10000, 20000].map(v => (
-                    <button
-                      type="button"
-                      key={v}
-                      onClick={() => setTopUpAmount(String(v))}
-                      className="px-2.5 py-1 text-xs font-bold rounded-lg bg-[#122A4E] hover:bg-[#193A6C] text-[#D4AF37] border border-[#D4AF37]/30 transition-colors"
-                    >
-                      +{formatCurrency(v)}
-                    </button>
-                  ))}
+                <p className={`text-3xl sm:text-4xl font-black font-mono mt-3 ${
+                  (selectedTx.type === 'topup' || selectedTx.type === 'credit' || selectedTx.type === 'deposit')
+                    ? 'text-amber-700'
+                    : 'text-slate-900'
+                }`}>
+                  {(selectedTx.type === 'topup' || selectedTx.type === 'credit' || selectedTx.type === 'deposit') ? '+' : '-'}
+                  {formatCurrency(selectedTx.amount || 0)}
+                </p>
+
+                <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200">
+                  <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
+                  <span>{(selectedTx.status || 'COMPLETED').toUpperCase()}</span>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-[#D4AF37] uppercase mb-2">
-                  Select Gateway Channel
-                </label>
-                <div className="space-y-2">
-                  {GATEWAYS.map(gw => {
-                    const IconComp = gw.icon;
-                    const isSelected = topUpGateway === gw.id;
-                    return (
-                      <div
-                        key={gw.id}
-                        onClick={() => setTopUpGateway(gw.id)}
-                        className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
-                          isSelected 
-                            ? 'border-[#D4AF37] bg-[#122A4E]' 
-                            : 'border-[#D4AF37]/20 hover:border-[#D4AF37]/40 bg-[#071324]'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-[#D4AF37]/15">
-                            <IconComp className="w-5 h-5 text-[#D4AF37]" />
-                          </div>
-                          <div>
-                            <p className="text-xs font-black text-white">{gw.name}</p>
-                            <p className="text-[10px] text-slate-400">{gw.subtitle}</p>
-                          </div>
-                        </div>
-
-                        <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                          isSelected ? 'border-[#D4AF37] bg-[#D4AF37]' : 'border-slate-500'
-                        }`}>
-                          {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-[#071324]" />}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {topUpError && (
-                <p className="text-xs font-bold text-red-400">{topUpError}</p>
-              )}
-
-              <button
-                type="submit"
-                disabled={topUpLoading}
-                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#D4AF37] via-[#F59E0B] to-[#D4AF37] text-[#071324] font-black text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-95"
-              >
-                {topUpLoading ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin text-[#071324]" />
-                    <span>Connecting Gateway...</span>
-                  </>
-                ) : (
-                  <span>
-                    {topUpGateway === 'bank_transfer'
-                      ? 'Duba Dedicated NUBAN'
-                      : `Pay ${topUpAmount ? formatCurrency(Number(topUpAmount)) : ''}`}
+              {/* Receipt Detail Rows */}
+              <div className="py-5 space-y-3.5 text-xs sm:text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 flex items-center gap-1.5">
+                    <Hash className="w-3.5 h-3.5 text-amber-600" />
+                    Reference ID
                   </span>
-                )}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-bold text-slate-800 text-xs">
+                      {selectedTx.reference || selectedTx.id || 'N/A'}
+                    </span>
+                    <button
+                      onClick={() => handleCopy(selectedTx.reference || selectedTx.id, true)}
+                      className="p-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition-colors"
+                      title="Copy Reference"
+                    >
+                      {modalCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
 
-      {/* ── Celebration Modal for incoming deposits ── */}
-      {celebrationData && (
-        <div className="fixed inset-0 z-50 bg-[#071324]/85 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-[#0A192F] rounded-3xl max-w-sm w-full p-6 text-center shadow-2xl border border-[#D4AF37]/40 text-white">
-            <div className="w-16 h-16 mx-auto rounded-full bg-[#D4AF37]/15 border border-[#D4AF37]/30 flex items-center justify-center text-[#D4AF37] mb-4">
-              <CheckCircle2 className="w-8 h-8 text-[#D4AF37]" />
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Transaction Type</span>
+                  <span className="font-bold text-slate-900">
+                    {selectedTx.type === 'topup' || selectedTx.type === 'deposit' || selectedTx.type === 'credit'
+                      ? 'Dedicated Bank Deposit'
+                      : selectedTx.type === 'wallet_payment'
+                      ? 'Marketplace Order Payment'
+                      : selectedTx.type === 'pss_down_payment'
+                      ? 'Pay Small Small Down Payment'
+                      : selectedTx.type || 'Transfer'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Payment Channel</span>
+                  <span className="font-bold text-amber-800">
+                    {selectedTx.reference?.startsWith('FLW')
+                      ? 'Flutterwave MFB Transfer'
+                      : selectedTx.reference?.startsWith('ORD')
+                      ? 'Abu Mafhal Escrow Checkout'
+                      : 'Instant Electronic Transfer'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-amber-600" />
+                    Date & Time
+                  </span>
+                  <span className="font-bold text-slate-800">
+                    {selectedTx.created_at ? new Date(selectedTx.created_at).toLocaleDateString('en-GB', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    }) : 'N/A'}
+                  </span>
+                </div>
+
+                <div className="pt-2 border-t border-slate-200">
+                  <p className="text-slate-500 text-xs mb-1">Narration / Description</p>
+                  <p className="text-xs text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-200 leading-relaxed">
+                    {selectedTx.description || 'Verified Abu Mafhal Marketplace transaction.'}
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-slate-500">Balance Impact</span>
+                  <span className={`font-bold font-mono ${
+                    (selectedTx.type === 'topup' || selectedTx.type === 'credit' || selectedTx.type === 'deposit')
+                      ? 'text-emerald-700'
+                      : 'text-rose-600'
+                  }`}>
+                    {(selectedTx.type === 'topup' || selectedTx.type === 'credit' || selectedTx.type === 'deposit')
+                      ? `+${formatCurrency(selectedTx.amount)} (Added to Balance)`
+                      : `-${formatCurrency(selectedTx.amount)} (Deducted from Balance)`}
+                  </span>
+                </div>
+              </div>
+
+              {/* Done Action */}
+              <div className="pt-3 border-t border-slate-200">
+                <button
+                  onClick={() => setSelectedTx(null)}
+                  className="w-full py-3 rounded-xl bg-[#071324] hover:bg-[#0A192F] text-[#D4AF37] font-black text-sm shadow-md transition-all cursor-pointer active:scale-95"
+                >
+                  Done
+                </button>
+              </div>
             </div>
-            <h3 className="text-xl font-black text-white">
-              An Sanya Deposit!
-            </h3>
-            <p className="text-3xl font-black font-mono text-[#D4AF37] my-2">
-              {formatCurrency(celebrationData.amount)}
-            </p>
-            <p className="text-xs text-slate-300 mb-6">
-              Kudinka sun shiga asusunka na Abu Mafhal cikin nasara ba tare da ko sisi da aka cire ba.
-            </p>
-            <button
-              onClick={() => setCelebrationData(null)}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-[#D4AF37] via-[#F59E0B] to-[#D4AF37] text-[#071324] font-black text-sm shadow transition-all cursor-pointer active:scale-95"
-            >
-              Kammala
-            </button>
           </div>
-        </div>
-      )}
+        )}
 
+        {/* ── Add Money Modal ── */}
+        {showTopUpModal && (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 relative text-slate-900">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                  <PlusCircle className="w-5 h-5 text-amber-600" />
+                  Add Cash to Wallet
+                </h3>
+                <button
+                  onClick={() => setShowTopUpModal(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-700"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleTopUpSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Amount to Fund (₦)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={topUpAmount}
+                    onChange={(e) => setTopUpAmount(e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="₦0.00"
+                    className="w-full px-4 py-3 text-xl font-black font-mono rounded-xl border border-slate-300 bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+
+                  <div className="flex flex-wrap gap-2 mt-2.5">
+                    {[1000, 2000, 5000, 10000, 20000].map(v => (
+                      <button
+                        type="button"
+                        key={v}
+                        onClick={() => setTopUpAmount(String(v))}
+                        className="px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors"
+                      >
+                        +{formatCurrency(v)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
+                    Select Gateway Channel
+                  </label>
+                  <div className="space-y-2">
+                    {GATEWAYS.map(gw => {
+                      const IconComp = gw.icon;
+                      const isSelected = topUpGateway === gw.id;
+                      return (
+                        <div
+                          key={gw.id}
+                          onClick={() => setTopUpGateway(gw.id)}
+                          className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
+                            isSelected 
+                              ? 'border-amber-500 bg-amber-50/50' 
+                              : 'border-slate-200 hover:border-slate-300 bg-white'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: gw.badgeBg }}>
+                              <IconComp className="w-5 h-5" style={{ color: gw.iconColor }} />
+                            </div>
+                            <div>
+                              <p className="text-xs font-black text-slate-900">{gw.name}</p>
+                              <p className="text-[10px] text-slate-500">{gw.subtitle}</p>
+                            </div>
+                          </div>
+
+                          <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                            isSelected ? 'border-amber-600 bg-amber-600' : 'border-slate-300'
+                          }`}>
+                            {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {topUpError && (
+                  <p className="text-xs font-bold text-red-600">{topUpError}</p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={topUpLoading}
+                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#071324] via-[#0F274B] to-[#071324] text-[#D4AF37] font-black text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-95"
+                >
+                  {topUpLoading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin text-[#D4AF37]" />
+                      <span>Connecting Gateway...</span>
+                    </>
+                  ) : (
+                    <span>
+                      {topUpGateway === 'bank_transfer'
+                        ? 'View Dedicated NUBAN'
+                        : `Pay ${topUpAmount ? formatCurrency(Number(topUpAmount)) : ''}`}
+                    </span>
+                  )}
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ── Celebration Modal for incoming deposits ── */}
+        {celebrationData && (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-sm w-full p-6 text-center shadow-2xl border border-slate-200 text-slate-900">
+              <div className="w-16 h-16 mx-auto rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 mb-4">
+                <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+              </div>
+              <h3 className="text-xl font-black text-slate-900">
+                Deposit Credited!
+              </h3>
+              <p className="text-3xl font-black font-mono text-emerald-600 my-2">
+                {formatCurrency(celebrationData.amount)}
+              </p>
+              <p className="text-xs text-slate-500 mb-6">
+                Funds have been securely added to your Abu Mafhal wallet balance with 0% fee.
+              </p>
+              <button
+                onClick={() => setCelebrationData(null)}
+                className="w-full py-3 rounded-xl bg-[#071324] hover:bg-[#0A192F] text-[#D4AF37] font-black text-sm shadow transition-all cursor-pointer active:scale-95"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        )}
+
+      </div>
     </div>
   );
 };

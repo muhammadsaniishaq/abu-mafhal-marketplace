@@ -277,13 +277,13 @@ export const WalletPage = ({ user, onBack }) => {
     const handleVerifyBvnAndGenerate = async () => {
         const cleanBvn = String(bvnInput || '').trim().replace(/[^0-9]/g, '');
         if (cleanBvn.length !== 11 || /^(\d)\1{10}$/.test(cleanBvn)) {
-            Alert.alert('Invalid BVN', 'Da fatan a shigar da ingantacciyar lambar BVN mai lamba 11 daidai.');
+            Alert.alert('Invalid BVN', 'Please enter a valid 11-digit BVN number.');
             return;
         }
 
         const nameToUse = (bvnLegalName.trim() || user?.user_metadata?.full_name || user?.email?.split('@')[0] || '').trim();
         if (!nameToUse) {
-            Alert.alert('Legal Name Required', 'Da fatan a sanya cikakken sunanka kamar yadda yake a jikin BVN.');
+            Alert.alert('Legal Name Required', 'Please enter your full legal name exactly as it appears on your BVN.');
             return;
         }
 
@@ -312,8 +312,8 @@ export const WalletPage = ({ user, onBack }) => {
                     await supabase.from('profiles').update({ custom_id: JSON.stringify(va) }).eq('id', uid).catch(() => {});
                 }
                 Alert.alert(
-                    'An Kafa Asusunka! 🎉',
-                    `An kafa asusunka na din-din-din a ${va.bank_name}!\n\nLambar Asusu: ${va.account_number}\nSunan Asusu: ${va.account_name}\n\nKowanne kudi da ka tura wannan asusun zai shiga wallet dinka nan take.`
+                    'Account Activated! 🎉',
+                    `Your dedicated account at ${va.bank_name} is ready!\n\nAccount Number: ${va.account_number}\nAccount Name: ${va.account_name}\n\nAny funds transferred to this account will credit your wallet instantly.`
                 );
                 await fetchWallet();
             } else {
@@ -352,7 +352,7 @@ export const WalletPage = ({ user, onBack }) => {
                 await fetchWallet();
                 Alert.alert(
                     'Deposit Check Complete',
-                    'Babu sabon transfer da ya shigo a yanzu. Idan yanzu ka tura kudin, da fatan a jira dakika 30-60 kafin banki ya kammala aikawa.'
+                    'No new incoming transfer detected. If you just sent money, please allow 30–60 seconds for interbank settlement.'
                 );
             }
         } catch (e) {
@@ -597,7 +597,7 @@ export const WalletPage = ({ user, onBack }) => {
                             </View>
                         </LinearGradient>
                     ) : (
-                        /* ONE-TIME BVN ACTIVATION CARD IN NAVY & GOLD */
+                        /* ONE-TIME BVN ACTIVATION CARD */
                         <View style={S.bvnCard}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                                 <View style={S.bvnIconWrap}>
@@ -627,8 +627,8 @@ export const WalletPage = ({ user, onBack }) => {
                                 <Text style={S.inputHeader}>Full Legal Name (as on BVN)</Text>
                                 <TextInput
                                     style={S.modernInput}
-                                    placeholder="Enter your registered legal full name"
-                                    placeholderTextColor="#64748B"
+                                    placeholder="Enter your full legal name"
+                                    placeholderTextColor="#94A3B8"
                                     value={bvnLegalName}
                                     onChangeText={setBvnLegalName}
                                 />
@@ -651,7 +651,7 @@ export const WalletPage = ({ user, onBack }) => {
                                 <TextInput
                                     style={S.modernInput}
                                     placeholder={user?.phone || '08012345678'}
-                                    placeholderTextColor="#64748B"
+                                    placeholderTextColor="#94A3B8"
                                     keyboardType="phone-pad"
                                     value={bvnPhone}
                                     onChangeText={setBvnPhone}
@@ -668,7 +668,7 @@ export const WalletPage = ({ user, onBack }) => {
                                     ) : (
                                         <>
                                             <Ionicons name="shield-checkmark" size={17} color="#071324" />
-                                            <Text style={S.activateBtnTxt}>Verify BVN & Generate Account</Text>
+                                            <Text style={S.activateBtnTxt}>Verify BVN & Issue Account</Text>
                                         </>
                                     )}
                                 </TouchableOpacity>
@@ -736,9 +736,9 @@ export const WalletPage = ({ user, onBack }) => {
                         </View>
                     ) : (
                         <View style={S.emptyTxCard}>
-                            <Ionicons name="receipt-outline" size={36} color="#64748B" />
+                            <Ionicons name="receipt-outline" size={36} color="#94A3B8" />
                             <Text style={S.emptyTxTitle}>No transactions yet</Text>
-                            <Text style={S.emptyTxSub}>Your deposits and payment receipts will show here.</Text>
+                            <Text style={S.emptyTxSub}>Your incoming deposits and order receipts will appear here automatically.</Text>
                         </View>
                     )}
                 </View>
@@ -763,7 +763,7 @@ export const WalletPage = ({ user, onBack }) => {
                                 />
                             </View>
                             <Text style={S.receiptTitle}>Transaction Receipt</Text>
-                            <Text style={S.receiptSub}>Cikakken Bayanin Ma'amala</Text>
+                            <Text style={S.receiptSub}>Official Ledger Audit Details</Text>
 
                             <Text style={[S.receiptAmount, { color: (selectedTx?.type === 'topup' || selectedTx?.type === 'credit' || selectedTx?.type === 'deposit') ? '#D4AF37' : '#F1F5F9' }]}>
                                 {(selectedTx?.type === 'topup' || selectedTx?.type === 'credit' || selectedTx?.type === 'deposit') ? '+' : '-'}{fmt(selectedTx?.amount || 0)}
@@ -1012,7 +1012,7 @@ export const WalletPage = ({ user, onBack }) => {
 const S = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#071324',
+        backgroundColor: '#F8FAFC',
     },
     topBar: {
         flexDirection: 'row',
@@ -1021,9 +1021,9 @@ const S = StyleSheet.create({
         paddingHorizontal: 16,
         paddingTop: Platform.OS === 'ios' ? 50 : 16,
         paddingBottom: 16,
-        backgroundColor: '#071324',
+        backgroundColor: '#FFFFFF',
         borderBottomWidth: 1,
-        borderColor: 'rgba(212, 175, 55, 0.15)',
+        borderColor: '#E2E8F0',
     },
     backBtn: {
         width: 38,
@@ -1038,7 +1038,7 @@ const S = StyleSheet.create({
     topBarTitle: {
         fontSize: 17,
         fontWeight: '900',
-        color: '#FFFFFF',
+        color: '#0F172A',
         letterSpacing: 0.3,
     },
     liveBadge: {
@@ -1071,9 +1071,11 @@ const S = StyleSheet.create({
     },
     scroll: {
         flex: 1,
+        backgroundColor: '#F8FAFC',
     },
     scrollContent: {
         padding: 16,
+        paddingBottom: 40,
     },
 
     // Hero Balance Card
@@ -1179,7 +1181,7 @@ const S = StyleSheet.create({
     sectionTitle: {
         fontSize: 14,
         fontWeight: '900',
-        color: '#FFFFFF',
+        color: '#0F172A',
         letterSpacing: 0.2,
     },
     goldTag: {
@@ -1311,11 +1313,16 @@ const S = StyleSheet.create({
 
     // BVN Card
     bvnCard: {
-        backgroundColor: '#0A192F',
+        backgroundColor: '#FFFFFF',
         borderRadius: 22,
         padding: 20,
         borderWidth: 1.5,
-        borderColor: 'rgba(212, 175, 55, 0.3)',
+        borderColor: '#E2E8F0',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 6,
+        elevation: 2,
     },
     bvnIconWrap: {
         width: 38,
@@ -1330,11 +1337,11 @@ const S = StyleSheet.create({
     bvnCardTitle: {
         fontSize: 14,
         fontWeight: '900',
-        color: '#FFFFFF',
+        color: '#0F172A',
     },
     bvnCardSub: {
         fontSize: 11,
-        color: '#94A3B8',
+        color: '#64748B',
         marginTop: 1,
     },
     bvnNotice: {
@@ -1383,14 +1390,14 @@ const S = StyleSheet.create({
         color: '#F59E0B',
     },
     modernInput: {
-        backgroundColor: '#071324',
+        backgroundColor: '#F8FAFC',
         borderWidth: 1.5,
-        borderColor: 'rgba(212, 175, 55, 0.3)',
+        borderColor: '#E2E8F0',
         borderRadius: 12,
         paddingHorizontal: 14,
         paddingVertical: 10,
         fontSize: 13,
-        color: '#FFFFFF',
+        color: '#0F172A',
     },
     activateBtn: {
         flexDirection: 'row',
@@ -1417,11 +1424,11 @@ const S = StyleSheet.create({
     },
     filterTabs: {
         flexDirection: 'row',
-        backgroundColor: '#0A192F',
+        backgroundColor: '#F1F5F9',
         padding: 3,
         borderRadius: 10,
         borderWidth: 1,
-        borderColor: 'rgba(212, 175, 55, 0.2)',
+        borderColor: '#E2E8F0',
     },
     filterTab: {
         paddingHorizontal: 10,
@@ -1429,24 +1436,33 @@ const S = StyleSheet.create({
         borderRadius: 8,
     },
     filterTabActive: {
-        backgroundColor: '#D4AF37',
+        backgroundColor: '#FFFFFF',
+        shadowColor: '#000',
+        shadowOpacity: 0.06,
+        shadowRadius: 4,
+        elevation: 2,
     },
     filterTabTxt: {
         fontSize: 11,
         fontWeight: '700',
-        color: '#94A3B8',
+        color: '#64748B',
     },
     filterTabTxtActive: {
-        color: '#071324',
+        color: '#0F172A',
         fontWeight: '900',
     },
     txListCard: {
-        backgroundColor: '#0A192F',
+        backgroundColor: '#FFFFFF',
         borderRadius: 20,
         paddingHorizontal: 14,
         paddingVertical: 6,
         borderWidth: 1,
-        borderColor: 'rgba(212, 175, 55, 0.25)',
+        borderColor: '#E2E8F0',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 2,
     },
     txRow: {
         flexDirection: 'row',
@@ -1456,7 +1472,7 @@ const S = StyleSheet.create({
     },
     txRowBorder: {
         borderBottomWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.08)',
+        borderColor: '#F1F5F9',
     },
     txIconCircle: {
         width: 36,
@@ -1471,11 +1487,11 @@ const S = StyleSheet.create({
     txTitle: {
         fontSize: 13,
         fontWeight: '800',
-        color: '#FFFFFF',
+        color: '#0F172A',
     },
     txDate: {
         fontSize: 11,
-        color: '#94A3B8',
+        color: '#64748B',
         marginTop: 2,
     },
     txAmount: {
@@ -1495,17 +1511,17 @@ const S = StyleSheet.create({
         textTransform: 'uppercase',
     },
     emptyTxCard: {
-        backgroundColor: '#0A192F',
+        backgroundColor: '#FFFFFF',
         borderRadius: 20,
         padding: 32,
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: 'rgba(212, 175, 55, 0.2)',
+        borderColor: '#E2E8F0',
     },
     emptyTxTitle: {
         fontSize: 14,
         fontWeight: '800',
-        color: '#FFFFFF',
+        color: '#0F172A',
         marginTop: 8,
     },
     emptyTxSub: {
@@ -1518,17 +1534,17 @@ const S = StyleSheet.create({
     // Modal Overlays
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(3, 7, 18, 0.85)',
+        backgroundColor: 'rgba(15, 23, 42, 0.65)',
         justifyContent: 'flex-end',
     },
     modalCard: {
-        backgroundColor: '#0A192F',
+        backgroundColor: '#FFFFFF',
         borderTopLeftRadius: 28,
         borderTopRightRadius: 28,
         padding: 22,
         maxHeight: '90%',
         borderWidth: 1,
-        borderColor: 'rgba(212, 175, 55, 0.35)',
+        borderColor: '#E2E8F0',
     },
     modalHeader: {
         flexDirection: 'row',
@@ -1539,7 +1555,7 @@ const S = StyleSheet.create({
     modalTitle: {
         fontSize: 17,
         fontWeight: '900',
-        color: '#FFFFFF',
+        color: '#0F172A',
     },
     modalCloseBtn: {
         padding: 4,
@@ -1551,9 +1567,9 @@ const S = StyleSheet.create({
         marginTop: 8,
     },
     presetChip: {
-        backgroundColor: 'rgba(212, 175, 55, 0.1)',
+        backgroundColor: '#F1F5F9',
         borderWidth: 1,
-        borderColor: 'rgba(212, 175, 55, 0.3)',
+        borderColor: '#E2E8F0',
         paddingHorizontal: 10,
         paddingVertical: 6,
         borderRadius: 8,
@@ -1561,7 +1577,7 @@ const S = StyleSheet.create({
     presetChipTxt: {
         fontSize: 11,
         fontWeight: '800',
-        color: '#D4AF37',
+        color: '#475569',
     },
     gwItem: {
         flexDirection: 'row',
@@ -1570,12 +1586,12 @@ const S = StyleSheet.create({
         padding: 12,
         borderRadius: 14,
         borderWidth: 1.5,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-        backgroundColor: '#071324',
+        borderColor: '#E2E8F0',
+        backgroundColor: '#FFFFFF',
     },
     gwItemActive: {
         borderColor: '#D4AF37',
-        backgroundColor: 'rgba(212, 175, 55, 0.08)',
+        backgroundColor: '#FFFBEB',
     },
     gwItemIcon: {
         width: 38,
@@ -1587,11 +1603,11 @@ const S = StyleSheet.create({
     gwItemName: {
         fontSize: 13,
         fontWeight: '900',
-        color: '#FFFFFF',
+        color: '#0F172A',
     },
     gwItemSub: {
         fontSize: 11,
-        color: '#94A3B8',
+        color: '#64748B',
         marginTop: 1,
     },
     radioCircle: {
@@ -1649,27 +1665,27 @@ const S = StyleSheet.create({
         paddingHorizontal: 20,
     },
 
-    // ── Receipt Modal Styles (Navy & Gold VIP) ───────────────────────────────
+    // ── Receipt Modal Styles ───────────────────────────────
     receiptModalCard: {
-        backgroundColor: '#0A192F',
+        backgroundColor: '#FFFFFF',
         borderTopLeftRadius: 28,
         borderTopRightRadius: 28,
         padding: 22,
-        borderWidth: 1.5,
-        borderColor: '#D4AF37',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
         maxHeight: '92%',
     },
     receiptHeader: {
         alignItems: 'center',
         paddingBottom: 16,
         borderBottomWidth: 1,
-        borderColor: 'rgba(212, 175, 55, 0.2)',
+        borderColor: '#F1F5F9',
     },
     receiptIconCircle: {
         width: 56,
         height: 56,
         borderRadius: 28,
-        backgroundColor: 'rgba(212, 175, 55, 0.12)',
+        backgroundColor: '#FEF3C7',
         borderWidth: 1.5,
         borderColor: '#D4AF37',
         alignItems: 'center',
@@ -1679,11 +1695,11 @@ const S = StyleSheet.create({
     receiptTitle: {
         fontSize: 18,
         fontWeight: '900',
-        color: '#FFFFFF',
+        color: '#0F172A',
     },
     receiptSub: {
         fontSize: 11,
-        color: '#94A3B8',
+        color: '#64748B',
         marginTop: 1,
     },
     receiptAmount: {
@@ -1716,13 +1732,13 @@ const S = StyleSheet.create({
         letterSpacing: 0.8,
     },
     receiptDetailsBox: {
-        backgroundColor: '#071324',
+        backgroundColor: '#F8FAFC',
         borderRadius: 16,
         paddingHorizontal: 14,
         paddingVertical: 4,
         marginTop: 14,
         borderWidth: 1,
-        borderColor: 'rgba(212, 175, 55, 0.2)',
+        borderColor: '#E2E8F0',
     },
     receiptRow: {
         flexDirection: 'row',
@@ -1730,21 +1746,21 @@ const S = StyleSheet.create({
         alignItems: 'center',
         paddingVertical: 11,
         borderBottomWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.06)',
+        borderColor: '#F1F5F9',
     },
     receiptLabel: {
         fontSize: 12,
-        color: '#94A3B8',
+        color: '#64748B',
         fontWeight: '600',
     },
     receiptVal: {
         fontSize: 12.5,
-        color: '#FFFFFF',
+        color: '#0F172A',
         fontWeight: '700',
     },
     receiptValGold: {
         fontSize: 12.5,
-        color: '#D4AF37',
+        color: '#B45309',
         fontWeight: '900',
         maxWidth: W * 0.45,
     },
@@ -1752,16 +1768,16 @@ const S = StyleSheet.create({
         flexDirection: 'row',
         gap: 8,
         alignItems: 'center',
-        backgroundColor: 'rgba(212, 175, 55, 0.08)',
+        backgroundColor: '#FEF9E7',
         padding: 10,
         borderRadius: 10,
         marginTop: 12,
         borderWidth: 1,
-        borderColor: 'rgba(212, 175, 55, 0.2)',
+        borderColor: '#FDE68A',
     },
     receiptSecTxt: {
         fontSize: 11,
-        color: '#FCD34D',
+        color: '#92400E',
         flex: 1,
         lineHeight: 15,
         fontWeight: '500',
@@ -1774,14 +1790,14 @@ const S = StyleSheet.create({
         gap: 6,
         paddingVertical: 12,
         borderRadius: 12,
-        backgroundColor: 'rgba(212, 175, 55, 0.1)',
+        backgroundColor: '#F1F5F9',
         borderWidth: 1.5,
-        borderColor: '#D4AF37',
+        borderColor: '#E2E8F0',
     },
     receiptSecBtnTxt: {
         fontSize: 12.5,
         fontWeight: '900',
-        color: '#D4AF37',
+        color: '#0F172A',
     },
     receiptCloseBtn: {
         flex: 1,
@@ -1789,12 +1805,12 @@ const S = StyleSheet.create({
         justifyContent: 'center',
         paddingVertical: 12,
         borderRadius: 12,
-        backgroundColor: '#D4AF37',
+        backgroundColor: '#071324',
     },
     receiptCloseBtnTxt: {
         fontSize: 13,
         fontWeight: '900',
-        color: '#071324',
+        color: '#D4AF37',
     },
 });
 

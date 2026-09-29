@@ -1215,10 +1215,12 @@ export const PaymentGatewayService = {
         const cleanEmail = String(email || '').trim().toLowerCase();
         const cleanPhone = String(phone || '').replace(/[^0-9]/g, '');
 
-        // 1. Try serverless backend API first (bypasses browser CORS restrictions completely)
+        // ALL sync goes through the secure backend API only.
+        // No client-side direct Flutterwave calls — those bypass CORS, expose secret keys,
+        // and caused phantom ₦200 credits via loose prefix matching.
         try {
-            const baseUrl = (typeof window !== 'undefined' && window.location?.origin) 
-                ? window.location.origin 
+            const baseUrl = (typeof window !== 'undefined' && window.location?.origin)
+                ? window.location.origin
                 : 'https://abumafhal.com';
             const apiRes = await fetch(`${baseUrl}/api/sync-flutterwave-deposits`, {
                 method: 'POST',
@@ -1237,160 +1239,8 @@ export const PaymentGatewayService = {
                     };
                 }
             }
-        } catch (apiErr) {
-            console.log('[syncFlutterwaveDeposits] Serverless API call skipped:', apiErr.message);
-        }
-
-        try {
-            const flwSecret = 'FLWSECK-456331fb55a2e059f1eb8d439c53b9ae-1a07bfbf2fcvt-X';
-            const res = await fetch('https://api.flutterwave.com/v3/transactions?status=successful&limit=25', {
-                headers: { 'Authorization': `Bearer ${flwSecret}` }
-            });
-
-            if (!res.ok) return { success: false, newCreditsCount: 0 };
-            const json = await res.json();
-            const txList = json?.data || [];
-
-            const userPrefix = userStr.substring(0, 8).toUpperCase();
-
-            // Load already credited transaction IDs from Supabase database
-            const creditedTxs = new Set();
-            try {
-                if (userStr) {
-                    const { data: dbTxs } = await supabase
-                        .from('transactions')
-                        .select('reference')
-                        .eq('user_id', userStr);
-                    if (dbTxs) {
-                        dbTxs.forEach(row => {
-                            if (row.reference) {
-                                creditedTxs.add(String(row.reference).trim());
-                                const m = String(row.reference).match(/^FLW-(\d+)/);
-                                if (m) creditedTxs.add(Number(m[1]));
-                            }
-                        });
-                    }
-                }
-            } catch (_) {}
-
-            // Also check local storage cache
-            try {
-                if (AsyncStorage) {
-                    const raw = await AsyncStorage.getItem(`@abumafhal_credited_flw_${userStr}`);
-                    if (raw) {
-                        const arr = JSON.parse(raw);
-                        if (Array.isArray(arr)) arr.forEach(id => creditedTxs.add(id));
-                    }
-                }
-            } catch (_) {}
-
-            // Get user's dedicated account number if available
-            let userAccountNum = '';
-            try {
-                const { data: p } = await supabase.from('profiles').select('custom_id').eq('id', userStr).maybeSingle();
-                if (p?.custom_id) {
-                    const parsed = typeof p.custom_id === 'string' ? JSON.parse(p.custom_id) : p.custom_id;
-                    if (parsed?.account_number) userAccountNum = String(parsed.account_number).trim();
-                }
-            } catch (_) {}
-
-            const uncredited = txList.filter(t => {
-                const flwRefCode = `FLW-${t.id}`;
-                if (creditedTxs.has(t.id) || creditedTxs.has(flwRefCode) || (t.tx_ref && creditedTxs.has(String(t.tx_ref)))) {
-                    return false;
-                }
-                const txRef = String(t.tx_ref || '').toUpperCase();
-                const custEmail = String(t.customer?.email || '').trim().toLowerCase();
-                const custPhone = String(t.customer?.phone_number || '').replace(/[^0-9]/g, '');
-                const destAcc = String(
-                    t.meta?.virtualaccountnumber ||
-                    t.meta?.virtual_account_number ||
-                    t.virtual_account_number ||
-                    t.meta?.destination_account_number ||
-                    t.meta?.account_number ||
-                    t.account_number ||
-                    ''
-                ).trim();
-                const narration = String(t.narration || '');
-
-                const matchAccount = userAccountNum && userAccountNum.length >= 10 && (
-                    destAcc === userAccountNum || narration.includes(userAccountNum)
-                );
-                const matchRef = userPrefix && userPrefix.length >= 6 && txRef.includes(userPrefix);
-                const matchEmail = cleanEmail && cleanEmail.includes('@') && custEmail === cleanEmail;
-                const matchPhone = cleanPhone && cleanPhone.length >= 10 && custPhone && (custPhone === cleanPhone || custPhone.endsWith(cleanPhone.slice(-10)));
-
-                return (matchAccount || matchRef || matchEmail || matchPhone) && t.status === 'successful';
-            });
-
-            if (uncredited.length === 0) {
-                return { success: true, newCreditsCount: 0, totalNewAmount: 0 };
-            }
-
-            const totalNewAmount = uncredited.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
-            const newTxIds = uncredited.map(t => t.id);
-
-            // Persist newly credited transactions to Supabase to prevent loss on refresh
-            for (const t of uncredited) {
-                const amt = Number(t.amount || 0);
-                const refCode = `FLW-${t.id}`;
-                if (amt > 0 && userStr) {
-                    try {
-                        // Check if already recorded in transactions table
-                        const { data: ex } = await supabase
-                            .from('transactions')
-                            .select('id')
-                            .eq('reference', refCode)
-                            .maybeSingle();
-
-                        if (!ex) {
-                            const { error: insErr } = await supabase.from('transactions').insert({
-                                user_id: userStr,
-                                type: 'topup',
-                                amount: amt,
-                                status: 'completed',
-                                reference: refCode,
-                                description: `Bank Deposit of ₦${amt.toLocaleString()} via Flutterwave MFB (Ref: ${t.tx_ref || refCode})`,
-                                created_at: t.created_at || new Date().toISOString()
-                            });
-
-                            if (!insErr) {
-                                // Reconcile ledger accurately without phantom additions
-                                const { data: allTxs } = await supabase
-                                    .from('transactions')
-                                    .select('amount, type, status')
-                                    .eq('user_id', userStr);
-                                const credits = (allTxs || [])
-                                    .filter(x => (x.type === 'topup' || x.type === 'credit' || x.type === 'deposit') && x.status === 'completed')
-                                    .reduce((sum, x) => sum + (Number(x.amount) || 0), 0);
-                                const debits = (allTxs || [])
-                                    .filter(x => (x.type === 'withdrawal' || x.type === 'debit' || x.type === 'wallet_payment' || x.type === 'wallet_purchase') && x.status === 'completed')
-                                    .reduce((sum, x) => sum + (Number(x.amount) || 0), 0);
-                                const finalBal = Math.max(0, credits - debits);
-                                await supabase.from('profiles').update({ balance: finalBal }).eq('id', userStr);
-                            }
-                        }
-                    } catch (dbErr) {
-                        console.warn('[syncFlutterwaveDeposits] Fallback DB persist notice:', dbErr.message);
-                    }
-                }
-            }
-
-            // Update local storage cache
-            try {
-                if (AsyncStorage) {
-                    const updated = Array.from(new Set([...Array.from(creditedTxs), ...newTxIds]));
-                    await AsyncStorage.setItem(`@abumafhal_credited_flw_${userStr}`, JSON.stringify(updated));
-                }
-            } catch (_) {}
-
-            return {
-                success: true,
-                newCreditsCount: uncredited.length,
-                totalNewAmount,
-                newTxIds,
-                uncreditedTxs: uncredited
-            };
+            // API responded but success:false → no new credits (not an error)
+            return { success: true, newCreditsCount: 0, totalNewAmount: 0, newTxIds: [], uncreditedTxs: [] };
         } catch (err) {
             console.error('[PaymentGatewayService.syncFlutterwaveDeposits] error:', err);
             return { success: false, newCreditsCount: 0, error: err.message };
@@ -1402,6 +1252,7 @@ export const PaymentGatewayService = {
      */
     async cacheOrderLocally(userId, orderData) {
         if (!userId || !orderData) return;
+
         try {
             const key = `@abumafhal_orders_${userId}`;
             const existing = await AsyncStorage.getItem(key);
