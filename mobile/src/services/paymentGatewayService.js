@@ -1030,7 +1030,7 @@ export const PaymentGatewayService = {
         const firstName = (name || 'Valued Member').trim().toUpperCase().split(/\s+/)[0];
         const lastName = (name || 'Customer').trim().split(/\s+/).slice(1).join(' ') || 'Customer';
 
-        // 1. Check local storage if not forcing refresh with new BVN
+        // 1. Check local storage & Supabase profile if not forcing refresh with new BVN
         if (!forceRefresh && !bvn) {
             try {
                 if (AsyncStorage) {
@@ -1042,17 +1042,38 @@ export const PaymentGatewayService = {
                         }
                     }
                 }
+                const { data: p } = await supabase.from('profiles').select('custom_id').eq('id', userStr).maybeSingle();
+                if (p?.custom_id) {
+                    const parsed = typeof p.custom_id === 'string' ? JSON.parse(p.custom_id) : p.custom_id;
+                    if (parsed?.account_number && !parsed.account_number.startsWith('980')) {
+                        if (AsyncStorage) {
+                            await AsyncStorage.setItem(`@abumafhal_dedicated_va_${userStr}`, JSON.stringify(parsed)).catch(() => {});
+                        }
+                        return { ok: true, data: { success: true, data: parsed } };
+                    }
+                }
             } catch (_) {}
+
+            // Strictly require BVN before generating an account
+            return {
+                ok: false,
+                requires_bvn: true,
+                error: 'Ana bukatar lambar BVN domin kirkirar asusunka na kanka (dedicated virtual account).'
+            };
         }
 
-        // 1. Query backend endpoint to verify BVN with Paystack & generate dedicated virtual account
+        // 2. Query backend endpoint to verify BVN & generate dedicated virtual account
         try {
             const apiBase = Platform.OS === 'web' && typeof window !== 'undefined'
                 ? window.location.origin
                 : (process.env.EXPO_PUBLIC_API_URL || 'https://abumafhal.com');
 
+            const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+            const timer = controller ? setTimeout(() => controller.abort(), 12000) : null;
+
             const res = await fetch(`${apiBase}/api/create-virtual-account`, {
                 method: 'POST',
+                signal: controller?.signal,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     user_id: userStr,
@@ -1063,6 +1084,7 @@ export const PaymentGatewayService = {
                     force_refresh: forceRefresh
                 })
             });
+            if (timer) clearTimeout(timer);
 
             if (res.ok) {
                 const json = await res.json();
@@ -1071,12 +1093,15 @@ export const PaymentGatewayService = {
                         if (AsyncStorage) {
                             await AsyncStorage.setItem(`@abumafhal_dedicated_va_${userStr}`, JSON.stringify(json.data));
                         }
+                        await supabase.from('profiles').update({
+                            custom_id: JSON.stringify(json.data)
+                        }).eq('id', userStr);
                     } catch (_) {}
                     return { ok: true, data: json };
                 }
             } else {
                 const errJson = await res.json().catch(() => null);
-                if (errJson?.error) {
+                if (errJson?.error && (errJson.error.toLowerCase().includes('bvn') || errJson.error.toLowerCase().includes('name'))) {
                     return { ok: false, error: errJson.error };
                 }
             }
@@ -1084,69 +1109,74 @@ export const PaymentGatewayService = {
             console.log('[PaymentGatewayService] Server VA fetch notice:', apiErr.message);
         }
 
-        // 2. Direct live call to Flutterwave API if backend endpoint unreachable
-        try {
-            const flwSecret = 'FLWSECK-456331fb55a2e059f1eb8d439c53b9ae-1a07bfbf2fcvt-X';
-            const userSlug = userStr.replace(/[^a-zA-Z0-9]/g, '').slice(0, 10).toUpperCase();
-            const txRef = `AMF-${userSlug}-${Date.now()}`;
-            const flwPayload = {
-                email: userEmail,
-                is_permanent: true,
-                tx_ref: txRef,
-                phonenumber: phone || '08000000000',
-                firstname: firstName,
-                lastname: lastName,
-                narration: `Abu Mafhal ${firstName}`
-            };
-            if (bvn && String(bvn).trim().length === 11) {
-                flwPayload.bvn = String(bvn).trim();
-            }
+        // 3. Direct live call to Flutterwave API if backend endpoint unreachable or delayed
+        if (bvn && String(bvn).trim().length === 11) {
+            try {
+                const flwSecret = 'FLWSECK-456331fb55a2e059f1eb8d439c53b9ae-1a07bfbf2fcvt-X';
+                const userSlug = userStr.replace(/[^a-zA-Z0-9]/g, '').slice(0, 10).toUpperCase();
+                const txRef = `AMF-VA-${userSlug}-${Date.now()}`;
+                const flwPayload = {
+                    email: userEmail,
+                    is_permanent: true,
+                    tx_ref: txRef,
+                    phonenumber: phone || '08000000000',
+                    firstname: firstName,
+                    lastname: lastName,
+                    bvn: String(bvn).trim(),
+                    narration: `Abu Mafhal ${firstName}`
+                };
 
-            const flwRes = await fetch('https://api.flutterwave.com/v3/virtual-account-numbers', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${flwSecret}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(flwPayload)
-            });
+                const flwRes = await fetch('https://api.flutterwave.com/v3/virtual-account-numbers', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${flwSecret}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(flwPayload)
+                });
 
-            if (flwRes.ok) {
-                const flwData = await flwRes.json();
-                if (flwData?.status === 'success' && flwData?.data?.account_number) {
-                    const d = flwData.data;
-                    const cleanedName = d.note 
-                        ? d.note.replace(/^Please make a bank transfer to\s+/i, '').trim()
-                        : `Abu Mafhal ${firstName} FLW`;
+                if (flwRes.ok) {
+                    const flwData = await flwRes.json();
+                    if (flwData?.status === 'success' && flwData?.data?.account_number) {
+                        const d = flwData.data;
+                        const cleanedName = d.note 
+                            ? d.note.replace(/^Please make a bank transfer to\s+/i, '').trim()
+                            : `${firstName} ${lastName} / Abu Mafhal`;
 
-                    const liveVA = {
-                        account_number: d.account_number,
-                        account_name: cleanedName,
-                        bank_name: d.bank_name || 'Flutterwave MFB (Formerly OK MFB)',
-                        provider: 'flutterwave',
-                        is_permanent: true,
-                        tx_ref: txRef,
-                        expiry: d.expiry_date,
-                        expiry_ms: null,
-                        created_at: d.created_at || new Date().toISOString()
-                    };
+                        const liveVA = {
+                            account_number: d.account_number,
+                            account_name: cleanedName,
+                            bank_name: d.bank_name || 'Flutterwave MFB',
+                            provider: 'flutterwave',
+                            is_permanent: true,
+                            bvn_verified: true,
+                            tx_ref: txRef,
+                            expiry: d.expiry_date,
+                            created_at: d.created_at || new Date().toISOString()
+                        };
 
-                    try {
-                        if (AsyncStorage) {
-                            await AsyncStorage.setItem(`@abumafhal_dedicated_va_${userStr}`, JSON.stringify(liveVA));
-                        }
-                    } catch (_) {}
+                        try {
+                            if (AsyncStorage) {
+                                await AsyncStorage.setItem(`@abumafhal_dedicated_va_${userStr}`, JSON.stringify(liveVA));
+                            }
+                            await supabase.from('profiles').update({
+                                custom_id: JSON.stringify(liveVA)
+                            }).eq('id', userStr);
+                        } catch (_) {}
 
-                    return { ok: true, data: { success: true, data: liveVA } };
+                        return { ok: true, data: { success: true, data: liveVA } };
+                    } else if (flwData?.message) {
+                        return { ok: false, error: flwData.message };
+                    }
                 }
+            } catch (flwErr) {
+                console.log('[PaymentGatewayService] Direct FLW call error:', flwErr.message);
             }
-        } catch (flwErr) {
-            console.log('[PaymentGatewayService] Direct FLW call error:', flwErr.message);
         }
 
         return {
             ok: false,
-            error: 'Could not generate dedicated virtual account. Please check internet connection.'
+            error: 'Could not generate dedicated virtual account. Please check your BVN and name.'
         };
     },
 
@@ -1221,9 +1251,9 @@ export const PaymentGatewayService = {
                 const custEmail = String(t.customer?.email || '').trim().toLowerCase();
                 const custPhone = String(t.customer?.phone_number || '').replace(/[^0-9]/g, '');
 
-                const matchRef = userPrefix && txRef.includes(userPrefix);
-                const matchEmail = cleanEmail && custEmail === cleanEmail;
-                const matchPhone = cleanPhone && cleanPhone.length >= 7 && (custPhone.includes(cleanPhone) || cleanPhone.includes(custPhone));
+                const matchRef = userPrefix && userPrefix.length >= 6 && txRef.includes(userPrefix);
+                const matchEmail = cleanEmail && cleanEmail.includes('@') && custEmail === cleanEmail;
+                const matchPhone = cleanPhone && cleanPhone.length >= 10 && (custPhone === cleanPhone || custPhone.endsWith(cleanPhone.slice(-10)));
 
                 return (matchRef || matchEmail || matchPhone) && t.status === 'successful';
             });

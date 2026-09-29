@@ -125,35 +125,18 @@ export default async function handler(req, res) {
         const cleanEmail = String(email || '').trim().toLowerCase();
         const cleanPhone = String(phone || '').replace(/[^0-9]/g, '');
 
-        const FOUNDER_EMAILS = [
-            'sale.abumafhal@gmail.com',
-            'muhammadsanishaq@gmail.com',
-            'abumafhalhub@gmail.com',
-            'muhammadsanish0@gmail.com',
-            'ceo@abumafhal.com',
-            'muhammadsaniisyaku3@gmail.com'
-        ];
-
-        const isFounder = FOUNDER_EMAILS.includes(cleanEmail) || ['6D3DF1F5', '8F429903', '9F58F703', '5B5CF3AE'].includes(userSlug);
-
-        // 3. Match user transactions
+        // 3. Match only real transactions legitimately belonging to this user
         const matched = txList.filter(t => {
             if (t.status !== 'successful') return false;
             const txRef = String(t.tx_ref || '').toUpperCase();
             const custEmail = String(t.customer?.email || '').trim().toLowerCase();
             const custPhone = String(t.customer?.phone_number || '').replace(/[^0-9]/g, '');
 
-            const matchRef = userSlug && userSlug.length >= 4 && txRef.includes(userSlug);
+            const matchRef = userSlug && userSlug.length >= 6 && txRef.includes(userSlug);
             const matchEmail = cleanEmail && cleanEmail.includes('@') && custEmail === cleanEmail;
-            const matchPhone = cleanPhone && cleanPhone.length >= 9 && (custPhone.includes(cleanPhone) || cleanPhone.includes(custPhone));
+            const matchPhone = cleanPhone && cleanPhone.length >= 10 && (custPhone === cleanPhone || custPhone.endsWith(cleanPhone.slice(-10)));
 
-            // If founder is logged in, also match deposits made to the founder permanent account 9187255635
-            const matchFounder = isFounder && (
-                txRef.includes('6D3DF1F5') ||
-                FOUNDER_EMAILS.includes(custEmail)
-            );
-
-            return matchRef || matchEmail || matchPhone || matchFounder;
+            return matchRef || matchEmail || matchPhone;
         });
 
         // 4. Fetch current user profile

@@ -314,21 +314,6 @@ const Wallet = () => {
     setNotLoggedIn(false);
 
     try {
-      // 0. Auto-sync with Flutterwave deposits
-      try {
-        await fetch('/api/sync-flutterwave-deposits', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            user_id: resolvedUserId,
-            email: resolvedEmail,
-            phone: resolvedPhone
-          })
-        });
-      } catch (syncErr) {
-        console.warn('Sync deposits error:', syncErr);
-      }
-
       // 1. Fetch user balance and persistent virtual account from profiles table
       const { data: profile } = await supabase
         .from('profiles')
@@ -347,21 +332,6 @@ const Wallet = () => {
             }
           }
         } catch (_) {}
-      }
-
-      const checkEmail = (resolvedEmail || profile?.email || '').toLowerCase().trim();
-      if (FOUNDER_EMAILS.includes(checkEmail)) {
-        const permanentVA = {
-          account_number: '9187255635',
-          account_name: 'Abu Mafhal / Muhammad Sani',
-          bank_name: 'Flutterwave MFB (Formerly OK MFB)',
-          provider: 'flutterwave',
-          is_permanent: true
-        };
-        setUserVirtualAccount(permanentVA);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(`@abumafhal_va_${resolvedUserId}`, JSON.stringify(permanentVA));
-        }
       }
 
       // 2. Fetch transactions from transactions table

@@ -156,6 +156,67 @@ const TxIcon = ({ type }) => {
     );
 };
 
+const ModernInput = ({
+    icon,
+    iconColor = '#2563EB',
+    iconBg = '#EFF6FF',
+    label,
+    rightLabel,
+    rightAction,
+    value,
+    onChangeText,
+    placeholder,
+    keyboardType = 'default',
+    maxLength,
+    style,
+    inputStyle,
+    autoCapitalize = 'none',
+    helperText
+}) => {
+    const [focused, setFocused] = useState(false);
+    return (
+        <View style={[{ marginBottom: 12 }, style]}>
+            {(label || rightLabel) && (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    {label && <Text style={S.inputLabel}>{label}</Text>}
+                    {rightLabel && (
+                        rightAction ? (
+                            <TouchableOpacity onPress={rightAction} activeOpacity={0.7}>
+                                <Text style={{ fontSize: 11, color: '#0284C7', fontWeight: '800' }}>{rightLabel}</Text>
+                            </TouchableOpacity>
+                        ) : (
+                            <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '700' }}>{rightLabel}</Text>
+                        )
+                    )}
+                </View>
+            )}
+            <View style={[
+                S.modernInputBox,
+                focused && S.modernInputBoxFocused
+            ]}>
+                {icon && (
+                    <View style={[S.inputIconBadge, { backgroundColor: iconBg }]}>
+                        <Ionicons name={icon} size={18} color={iconColor} />
+                    </View>
+                )}
+                <TextInput
+                    style={[S.modernTextInput, inputStyle, Platform.OS === 'web' && { outlineStyle: 'none' }]}
+                    value={value}
+                    onChangeText={onChangeText}
+                    placeholder={placeholder}
+                    placeholderTextColor="#94A3B8"
+                    keyboardType={keyboardType}
+                    maxLength={maxLength}
+                    autoCapitalize={autoCapitalize}
+                    onFocus={() => setFocused(true)}
+                    onBlur={() => setFocused(false)}
+                />
+            </View>
+            {helperText && <Text style={{ fontSize: 11, color: '#64748B', marginTop: 4, marginLeft: 2 }}>{helperText}</Text>}
+        </View>
+    );
+};
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 const WalletPageInner = ({ user, onBack }) => {
     const { settings } = useAppSettings();
@@ -266,12 +327,14 @@ const WalletPageInner = ({ user, onBack }) => {
             if (!uid) { setNotLoggedIn(true); setLoading(false); return; }
             setNotLoggedIn(false);
 
-            // Load cache first for instant render
+            // Load cache first for instant render (skip if cached with old mockup 1600)
             try {
                 const cached = await AsyncStorage.getItem(`@amf_wallet_${uid}`);
                 if (cached) {
                     const c = JSON.parse(cached);
-                    if (c.wallet) setWallet(c.wallet);
+                    if (c.wallet && c.wallet.balance !== 1600 && c.wallet.balance !== 800) {
+                        setWallet(c.wallet);
+                    }
                     if (c.transactions?.length) setTransactions(c.transactions);
                     setLoading(false);
                 }
@@ -280,7 +343,7 @@ const WalletPageInner = ({ user, onBack }) => {
             // Parallel fetch
             const [pRes, txRes] = await Promise.allSettled([
                 supabase.from('profiles')
-                    .select('id, balance, mafhal_coins, email, full_name, phone')
+                    .select('id, balance, mafhal_coins, email, full_name, phone, custom_id')
                     .eq('id', uid).maybeSingle(),
                 supabase.from('transactions')
                     .select('*').eq('user_id', uid)
@@ -291,54 +354,30 @@ const WalletPageInner = ({ user, onBack }) => {
             const txData = txRes.status === 'fulfilled' && Array.isArray(txRes.value?.data)
                 ? txRes.value.data : [];
 
-            const dbBal   = Number(pData?.balance ?? 0);
-            const coins   = Number(pData?.mafhal_coins ?? 0);
+            // Authoritative true balance from Supabase database (no mockup inflation)
+            const dbBal = Number(pData?.balance ?? 0);
+            const coins = Number(pData?.mafhal_coins ?? 0);
 
-            // Ledger verification
-            const credits = txData
-                .filter(t => ['topup','credit','deposit','transfer_in'].includes(t.type) && ['completed','successful'].includes(t.status))
-                .reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
-            const debits = txData
-                .filter(t => ['withdrawal','debit','wallet_payment','wallet_purchase'].includes(t.type) && ['completed','successful'].includes(t.status))
-                .reduce((s, t) => s + Math.abs(Number(t.amount) || 0), 0);
-            const ledger = Math.max(0, credits - debits);
-            const finalBal = Math.max(dbBal, ledger);
-
-            const newWallet = { balance: finalBal, points: coins };
+            const newWallet = { balance: dbBal, points: coins };
             setWallet(newWallet);
             setTransactions(txData);
 
-            // Self-heal: update profile if ledger > db
-            if (finalBal > dbBal) {
-                supabase.from('profiles').update({ balance: finalBal }).eq('id', uid).then(() => {});
+            // Check if profile has permanent dedicated virtual account saved
+            if (pData?.custom_id) {
+                try {
+                    const parsed = typeof pData.custom_id === 'string' ? JSON.parse(pData.custom_id) : pData.custom_id;
+                    if (parsed?.account_number && !parsed.account_number.startsWith('980')) {
+                        setVirtualAcc(parsed);
+                        setShowBvnForm(false);
+                        AsyncStorage.setItem(`@amf_va_${uid}`, JSON.stringify(parsed)).catch(() => {});
+                    }
+                } catch (_) {}
             }
 
-            // Cache
+            // Cache clean wallet state
             AsyncStorage.setItem(`@amf_wallet_${uid}`, JSON.stringify({
                 wallet: newWallet, transactions: txData, at: Date.now()
             })).catch(() => {});
-
-            // Auto-sync Flutterwave bank deposits
-            try {
-                const sync = await PaymentGatewayService.syncFlutterwaveDeposits({
-                    userId: uid,
-                    email: user?.email || pData?.email,
-                    phone: user?.phone || pData?.phone || user?.user_metadata?.phone_number
-                });
-                if (sync?.success && sync?.totalNewAmount > 0) {
-                    const newBal = finalBal + sync.totalNewAmount;
-                    await supabase.from('profiles').update({ balance: newBal }).eq('id', uid);
-                    const ref = sync.uncreditedTxs?.[0]?.flw_ref || `FLW-${Date.now()}`;
-                    await supabase.from('transactions').insert({
-                        user_id: uid, type: 'topup', amount: sync.totalNewAmount,
-                        status: 'completed', reference: ref,
-                        description: `Bank Transfer Deposit via Flutterwave MFB`
-                    });
-                    setWallet(p => ({ ...p, balance: newBal }));
-                    setSuccessDetails({ amount: sync.totalNewAmount, reference: ref, gateway: 'Flutterwave MFB' });
-                    setShowSuccess(true);
-                }
-            } catch (_) {}
 
         } catch (e) {
             console.error('[Wallet] fetchWallet:', e);
@@ -405,49 +444,51 @@ const WalletPageInner = ({ user, onBack }) => {
     }, [fetchWallet, resolveUserId]);
 
     // ── Load virtual account ───────────────────────────────────────────────────
+    // Strictly read-only: Only loads if user ALREADY has a verified account.
+    // Never calls gateway to auto-generate without user providing BVN first!
     const loadVirtualAccount = useCallback(async () => {
-        if (!user?.id && !user?.email) return;
+        const uid = await resolveUserId();
+        if (!uid) return;
+
+        // 1. Check local device storage
         try {
-            const cacheKey = `@amf_va_${user.id}`;
+            const cacheKey = `@amf_va_${uid}`;
             const cached = await AsyncStorage.getItem(cacheKey);
             if (cached) {
                 const p = JSON.parse(cached);
                 if (p?.account_number && !p.account_number.startsWith('980')) {
-                    setVirtualAcc(p); return;
+                    setVirtualAcc(p);
+                    setShowBvnForm(false);
+                    return;
                 }
             }
         } catch (_) {}
 
+        // 2. Check Supabase profile custom_id
         setVaLoading(true); setVaError(null);
         try {
-            const email    = user?.email || `wallet_${user?.id?.substring(0, 6)}@abumafhal.com`;
-            const fullName = [user?.user_metadata?.first_name, user?.user_metadata?.last_name].filter(Boolean).join(' ')
-                || user?.user_metadata?.full_name || 'Valued Member';
-            const phone    = user?.phone || user?.user_metadata?.phone_number || '';
-
-            const res = await PaymentGatewayService.getConstantVirtualAccount({
-                userId: user?.id, email, name: fullName, phone
-            });
-
-            if (res?.ok && res?.data?.success && res?.data?.data?.account_number) {
-                const va = res.data.data;
-                setVirtualAcc(va);
-                AsyncStorage.setItem(`@amf_va_${user.id}`, JSON.stringify(va)).catch(() => {});
-            } else {
-                setVaError(res?.data?.error || res?.error || 'Could not load virtual account');
+            const { data: p } = await supabase.from('profiles').select('custom_id').eq('id', uid).maybeSingle();
+            if (p?.custom_id) {
+                const parsed = typeof p.custom_id === 'string' ? JSON.parse(p.custom_id) : p.custom_id;
+                if (parsed?.account_number && !parsed.account_number.startsWith('980')) {
+                    setVirtualAcc(parsed);
+                    setShowBvnForm(false);
+                    AsyncStorage.setItem(`@amf_va_${uid}`, JSON.stringify(parsed)).catch(() => {});
+                    return;
+                }
             }
         } catch (e) {
-            setVaError(e?.message || 'Error loading virtual account');
+            console.log('[Wallet] loadVirtualAccount check notice:', e?.message);
         } finally {
             setVaLoading(false);
         }
-    }, [user]);
+    }, [resolveUserId]);
 
     useEffect(() => {
-        if ((user?.id || user?.email) && !virtualAcc && !vaLoading) {
+        if ((user?.id || user?.email) && !virtualAcc) {
             loadVirtualAccount();
         }
-    }, [user?.id, user?.email, virtualAcc, vaLoading, loadVirtualAccount]);
+    }, [user?.id, user?.email, virtualAcc, loadVirtualAccount]);
 
     // ── Credit wallet (post-payment) ───────────────────────────────────────────
     const creditWallet = useCallback(async (amount, reference, gwName, usdAmt = null) => {
@@ -516,8 +557,11 @@ const WalletPageInner = ({ user, onBack }) => {
                 const va = res.data.data;
                 setVirtualAcc(va);
                 setShowBvnForm(false);
-                if (uid) AsyncStorage.setItem(`@amf_va_${uid}`, JSON.stringify(va)).catch(() => {});
-                Alert.alert('Account Activated! 🎉', `Your permanent dedicated account at ${va.bank_name} has been activated!\n\nAccount: ${va.account_number}\nName: ${va.account_name}`);
+                if (uid) {
+                    AsyncStorage.setItem(`@amf_va_${uid}`, JSON.stringify(va)).catch(() => {});
+                    supabase.from('profiles').update({ custom_id: JSON.stringify(va) }).eq('id', uid).catch(() => {});
+                }
+                Alert.alert('An Kafa Asusunka! 🎉', `An kafa asusunka na din-din-din a ${va.bank_name}!\n\nLambar Asusu: ${va.account_number}\nSunan Asusu: ${va.account_name}\n\nKowanne kudi da ka tura wannan asusun zai shiga wallet dinka nan take.`);
             } else {
                 const errMsg = res?.data?.error || res?.error || 'Verification failed. Please check your BVN and legal name.';
                 setVaError(errMsg);
@@ -530,6 +574,7 @@ const WalletPageInner = ({ user, onBack }) => {
             setBvnVerifying(false);
         }
     };
+    const handleVerifyBvn = handleVerifyBvnAndGenerateAccount;
 
     // ── Handle Top-Up ──────────────────────────────────────────────────────────
     const handleTopUp = async () => {
@@ -1004,8 +1049,8 @@ const WalletPageInner = ({ user, onBack }) => {
                                 </Text>
                             </View>
 
-                            <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
-                                <TouchableOpacity onPress={handleBankSync} disabled={syncing} style={[S.syncBtn, { flex: 1, opacity: syncing ? 0.6 : 1 }]}>
+                            <View style={{ marginTop: 10 }}>
+                                <TouchableOpacity onPress={handleBankSync} disabled={syncing} style={[S.syncBtn, { width: '100%', opacity: syncing ? 0.6 : 1 }]}>
                                     {syncing ? (
                                         <ActivityIndicator size="small" color="white" />
                                     ) : (
@@ -1014,10 +1059,6 @@ const WalletPageInner = ({ user, onBack }) => {
                                             <Text style={S.syncBtnTxt}>Check & Sync Deposits</Text>
                                         </>
                                     )}
-                                </TouchableOpacity>
-                                <TouchableOpacity onPress={() => setShowBvnForm(true)} style={S.reverifyBtn}>
-                                    <Ionicons name="create-outline" size={15} color="#0284C7" />
-                                    <Text style={S.reverifyBtnTxt}>Update BVN</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
@@ -1048,41 +1089,39 @@ const WalletPageInner = ({ user, onBack }) => {
                             )}
 
                             <View style={{ marginTop: 10 }}>
-                                <Text style={S.inputLabel}>Legal Full Name (As on BVN)</Text>
-                                <TextInput
-                                    style={S.textInput}
+                                <ModernInput
+                                    icon="person-outline"
+                                    iconColor="#059669"
+                                    iconBg="#ECFDF5"
+                                    label="Legal Full Name (As on BVN)"
                                     value={bvnLegalName}
                                     onChangeText={setBvnLegalName}
                                     placeholder="Legal full name"
-                                    placeholderTextColor="#94A3B8"
                                 />
-                            </View>
 
-                            <View style={{ marginTop: 10 }}>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                                    <Text style={S.inputLabel}>Bank Verification Number (BVN)</Text>
-                                    <Text style={{ fontSize: 10, color: '#0284C7', fontWeight: '700' }}>Dial *565*0# to check</Text>
-                                </View>
-                                <TextInput
-                                    style={[S.textInput, { fontSize: 16, letterSpacing: 2, fontWeight: '700' }]}
+                                <ModernInput
+                                    icon="key-outline"
+                                    iconColor="#0284C7"
+                                    iconBg="#F0F9FF"
+                                    label="Bank Verification Number (BVN)"
+                                    rightLabel="Dial *565*0#"
                                     value={bvnInput}
                                     onChangeText={(t) => setBvnInput(t.replace(/[^0-9]/g, '').slice(0, 11))}
                                     keyboardType="numeric"
                                     maxLength={11}
                                     placeholder="11-digit BVN"
-                                    placeholderTextColor="#94A3B8"
+                                    inputStyle={{ fontSize: 16, letterSpacing: 2, fontWeight: '700' }}
                                 />
-                            </View>
 
-                            <View style={{ marginTop: 10 }}>
-                                <Text style={S.inputLabel}>Registered Phone Number</Text>
-                                <TextInput
-                                    style={S.textInput}
+                                <ModernInput
+                                    icon="call-outline"
+                                    iconColor="#8B5CF6"
+                                    iconBg="#F5F3FF"
+                                    label="Registered Phone Number"
                                     value={bvnPhone}
                                     onChangeText={setBvnPhone}
                                     keyboardType="phone-pad"
                                     placeholder="Phone number"
-                                    placeholderTextColor="#94A3B8"
                                 />
                             </View>
 
@@ -1105,6 +1144,38 @@ const WalletPageInner = ({ user, onBack }) => {
                                     </>
                                 )}
                             </TouchableOpacity>
+
+                            {/* Alternative Direct Transfer (No BVN Required) */}
+                            <View style={S.directBankWrap}>
+                                <Row style={{ justifyContent: 'space-between', marginBottom: 6 }}>
+                                    <Row style={{ gap: 6 }}>
+                                        <Ionicons name="business" size={14} color="#0284C7" />
+                                        <Text style={S.directBankTitle}>Direct Bank Deposit (No BVN Required)</Text>
+                                    </Row>
+                                    <Pill label="MANUAL TRANSFER" color="#0284C7" bg="#F0F9FF" />
+                                </Row>
+                                <Text style={S.directBankSub}>Transfer to Abu Mafhal corporate account and send receipt for instant crediting:</Text>
+                                <View style={S.directBankDetailsBox}>
+                                    <View style={S.directBankRow}>
+                                        <Text style={S.directBankLabel}>Bank:</Text>
+                                        <Text style={S.directBankVal}>Moniepoint MFB</Text>
+                                    </View>
+                                    <View style={S.directBankRow}>
+                                        <Text style={S.directBankLabel}>Account No:</Text>
+                                        <Row style={{ gap: 8 }}>
+                                            <Text style={[S.directBankVal, { fontSize: 16, fontWeight: '900', letterSpacing: 1 }]}>8148810243</Text>
+                                            <TouchableOpacity onPress={() => copyText('8148810243', 'Moniepoint Account')} style={S.miniCopyBtn}>
+                                                <Ionicons name="copy-outline" size={12} color="#0284C7" />
+                                                <Text style={{ fontSize: 10, fontWeight: '800', color: '#0284C7' }}>Copy</Text>
+                                            </TouchableOpacity>
+                                        </Row>
+                                    </View>
+                                    <View style={S.directBankRow}>
+                                        <Text style={S.directBankLabel}>Account Name:</Text>
+                                        <Text style={S.directBankVal}>Abu Mafhal Marketplace</Text>
+                                    </View>
+                                </View>
+                            </View>
 
                             {virtualAcc?.account_number && (
                                 <TouchableOpacity onPress={() => setShowBvnForm(false)} style={{ marginTop: 10, alignItems: 'center', padding: 6 }}>
@@ -1376,19 +1447,33 @@ const WalletPageInner = ({ user, onBack }) => {
                             <View style={{ marginTop: 14 }}>
                                 {gateway === 'nowpayments' ? (
                                     <>
-                                        <Text style={S.inputLabel}>Amount (USD) — Converted at ₦{USD_RATE}/$</Text>
-                                        <TextInput
-                                            style={S.amtInput}
+                                        <ModernInput
+                                            icon="logo-usd"
+                                            iconColor="#2563EB"
+                                            iconBg="#EFF6FF"
+                                            label={`Amount (USD) — ₦${USD_RATE.toLocaleString()}/$`}
                                             value={amountUsd}
                                             onChangeText={setAmountUsd}
                                             keyboardType="numeric"
                                             placeholder="0.00"
-                                            placeholderTextColor="#94A3B8"
+                                            inputStyle={{ fontSize: 20, fontWeight: '900', color: '#1E293B' }}
                                         />
                                         {amountUsd && !isNaN(parseFloat(amountUsd)) && (
-                                            <Text style={S.convertHint}>= {fmt(Math.round(parseFloat(amountUsd) * USD_RATE))} to wallet</Text>
+                                            <Text style={S.convertHint}>= {fmt(Math.round(parseFloat(amountUsd) * USD_RATE))} will credit to wallet</Text>
                                         )}
-                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                                            {[5, 10, 20, 50, 100, 250].map(v => (
+                                                <TouchableOpacity
+                                                    key={v}
+                                                    onPress={() => setAmountUsd(String(v))}
+                                                    style={[S.quickBtn, parseFloat(amountUsd) === v && S.quickBtnActive]}
+                                                    activeOpacity={0.7}
+                                                >
+                                                    <Text style={[S.quickBtnTxt, parseFloat(amountUsd) === v && S.quickBtnTxtActive]}>${v}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
                                             {['USDT (TRC20)', 'Bitcoin (BTC)', 'Ethereum (ETH)', 'Solana (SOL)', 'BNB'].map((c, i) => (
                                                 <View key={i} style={S.coinTag}>
                                                     <Ionicons name="logo-bitcoin" size={11} color="#2563EB" />
@@ -1399,15 +1484,29 @@ const WalletPageInner = ({ user, onBack }) => {
                                     </>
                                 ) : (
                                     <>
-                                        <Text style={S.inputLabel}>Amount (NGN)</Text>
-                                        <TextInput
-                                            style={S.amtInput}
+                                        <ModernInput
+                                            icon="cash-outline"
+                                            iconColor="#10B981"
+                                            iconBg="#ECFDF5"
+                                            label="Amount to Top Up (NGN)"
                                             value={amountNgn}
                                             onChangeText={setAmountNgn}
                                             keyboardType="numeric"
                                             placeholder="0.00"
-                                            placeholderTextColor="#94A3B8"
+                                            inputStyle={{ fontSize: 20, fontWeight: '900', color: '#1E293B' }}
                                         />
+                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10, marginTop: -4 }}>
+                                            {[1000, 2000, 5000, 10000, 20000, 50000].map(v => (
+                                                <TouchableOpacity
+                                                    key={v}
+                                                    onPress={() => setAmountNgn(String(v))}
+                                                    style={[S.quickBtn, cleanNum(amountNgn) === v && S.quickBtnActive]}
+                                                    activeOpacity={0.7}
+                                                >
+                                                    <Text style={[S.quickBtnTxt, cleanNum(amountNgn) === v && S.quickBtnTxtActive]}>+₦{v.toLocaleString()}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
                                     </>
                                 )}
                             </View>
@@ -1477,8 +1576,8 @@ const WalletPageInner = ({ user, onBack }) => {
                                             </Text>
                                         </View>
 
-                                        <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
-                                            <TouchableOpacity onPress={handleBankSync} disabled={syncing} style={[S.syncBtn, { flex: 1, opacity: syncing ? 0.6 : 1 }]}>
+                                        <View style={{ marginTop: 10 }}>
+                                            <TouchableOpacity onPress={handleBankSync} disabled={syncing} style={[S.syncBtn, { width: '100%', opacity: syncing ? 0.6 : 1 }]}>
                                                 {syncing ? (
                                                     <ActivityIndicator size="small" color="white" />
                                                 ) : (
@@ -1487,10 +1586,6 @@ const WalletPageInner = ({ user, onBack }) => {
                                                         <Text style={S.syncBtnTxt}>Check & Sync Deposits</Text>
                                                     </>
                                                 )}
-                                            </TouchableOpacity>
-                                            <TouchableOpacity onPress={() => setShowBvnForm(true)} style={S.reverifyBtn}>
-                                                <Ionicons name="create-outline" size={15} color="#0284C7" />
-                                                <Text style={S.reverifyBtnTxt}>Update BVN</Text>
                                             </TouchableOpacity>
                                         </View>
                                     </View>
@@ -1522,41 +1617,39 @@ const WalletPageInner = ({ user, onBack }) => {
                                         )}
 
                                         <View style={{ marginTop: 10 }}>
-                                            <Text style={S.inputLabel}>Legal Full Name (As on BVN)</Text>
-                                            <TextInput
-                                                style={S.textInput}
+                                            <ModernInput
+                                                icon="person-outline"
+                                                iconColor="#059669"
+                                                iconBg="#ECFDF5"
+                                                label="Legal Full Name (As on BVN)"
                                                 value={bvnLegalName}
                                                 onChangeText={setBvnLegalName}
                                                 placeholder="Legal full name"
-                                                placeholderTextColor="#94A3B8"
                                             />
-                                        </View>
 
-                                        <View style={{ marginTop: 10 }}>
-                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                                                <Text style={S.inputLabel}>Bank Verification Number (BVN)</Text>
-                                                <Text style={{ fontSize: 10, color: '#0284C7', fontWeight: '700' }}>Dial *565*0# to check</Text>
-                                            </View>
-                                            <TextInput
-                                                style={[S.textInput, { fontSize: 16, letterSpacing: 2, fontWeight: '700' }]}
+                                            <ModernInput
+                                                icon="key-outline"
+                                                iconColor="#0284C7"
+                                                iconBg="#F0F9FF"
+                                                label="Bank Verification Number (BVN)"
+                                                rightLabel="Dial *565*0#"
                                                 value={bvnInput}
                                                 onChangeText={t => setBvnInput(t.replace(/[^0-9]/g, '').slice(0, 11))}
                                                 keyboardType="numeric"
                                                 maxLength={11}
                                                 placeholder="11-digit BVN"
-                                                placeholderTextColor="#94A3B8"
+                                                inputStyle={{ fontSize: 16, letterSpacing: 2, fontWeight: '700' }}
                                             />
-                                        </View>
 
-                                        <View style={{ marginTop: 10 }}>
-                                            <Text style={S.inputLabel}>Registered Phone Number</Text>
-                                            <TextInput
-                                                style={S.textInput}
+                                            <ModernInput
+                                                icon="call-outline"
+                                                iconColor="#8B5CF6"
+                                                iconBg="#F5F3FF"
+                                                label="Registered Phone Number"
                                                 value={bvnPhone}
                                                 onChangeText={setBvnPhone}
                                                 keyboardType="phone-pad"
                                                 placeholder="Phone number"
-                                                placeholderTextColor="#94A3B8"
                                             />
                                         </View>
 
@@ -1682,42 +1775,61 @@ const WalletPageInner = ({ user, onBack }) => {
                 <View style={S.modalBg}>
                     <View style={S.modalSheet}>
                         <Row style={{ justifyContent: 'space-between', marginBottom: 18 }}>
-                            <Text style={S.modalTitle}>Send Money</Text>
+                            <Text style={S.modalTitle}>Send Money 💸</Text>
                             <TouchableOpacity onPress={() => setShowTransfer(false)} style={S.closeBtn}>
                                 <Ionicons name="close" size={20} color="#0F172A" />
                             </TouchableOpacity>
                         </Row>
 
-                        <Text style={S.inputLabel}>Recipient (username / phone / email)</Text>
-                        <TextInput
-                            style={S.textInput}
+                        <ModernInput
+                            icon="person-outline"
+                            iconColor="#2563EB"
+                            iconBg="#EFF6FF"
+                            label="Recipient"
                             value={recipient}
                             onChangeText={setRecipient}
                             placeholder="Username, phone or email"
-                            placeholderTextColor="#94A3B8"
                             autoCapitalize="none"
                         />
 
-                        <Text style={[S.inputLabel, { marginTop: 12 }]}>Amount (NGN)</Text>
-                        <TextInput
-                            style={S.textInput}
+                        <ModernInput
+                            icon="cash-outline"
+                            iconColor="#10B981"
+                            iconBg="#ECFDF5"
+                            label="Amount (NGN)"
                             value={transferAmt}
                             onChangeText={setTransferAmt}
                             keyboardType="numeric"
                             placeholder="0.00"
-                            placeholderTextColor="#94A3B8"
+                            inputStyle={{ fontSize: 16, fontWeight: '800' }}
                         />
 
-                        <Text style={[S.inputLabel, { marginTop: 12 }]}>Note (optional)</Text>
-                        <TextInput
-                            style={S.textInput}
+                        {/* Quick Presets for Transfer */}
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12, marginTop: -4 }}>
+                            {['500', '1000', '2000', '5000', '10000'].map((preset) => (
+                                <TouchableOpacity
+                                    key={preset}
+                                    onPress={() => setTransferAmt(preset)}
+                                    style={[S.quickBtn, transferAmt === preset && S.quickBtnActive]}
+                                >
+                                    <Text style={[S.quickBtnTxt, transferAmt === preset && S.quickBtnTxtActive]}>
+                                        ₦{Number(preset).toLocaleString()}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        <ModernInput
+                            icon="chatbox-ellipses-outline"
+                            iconColor="#64748B"
+                            iconBg="#F1F5F9"
+                            label="Note (optional)"
                             value={transferNote}
                             onChangeText={setTransferNote}
-                            placeholder="What's this for?"
-                            placeholderTextColor="#94A3B8"
+                            placeholder="What is this for?"
                         />
 
-                        <View style={[S.infoBox, { marginTop: 14 }]}>
+                        <View style={[S.infoBox, { marginTop: 4, marginBottom: 10 }]}>
                             <Ionicons name="information-circle" size={16} color="#3B82F6" />
                             <Text style={{ fontSize: 12, color: '#1D4ED8', flex: 1 }}>
                                 Available: {fmt(wallet.balance)} • Min transfer: ₦100
@@ -1727,7 +1839,7 @@ const WalletPageInner = ({ user, onBack }) => {
                         <TouchableOpacity
                             onPress={handleP2P}
                             disabled={transferPending}
-                            style={[S.primaryBtn, { marginTop: 16, opacity: transferPending ? 0.7 : 1 }]}
+                            style={[S.primaryBtn, { marginTop: 6, opacity: transferPending ? 0.7 : 1 }]}
                         >
                             {transferPending
                                 ? <ActivityIndicator color="white" />
@@ -1742,7 +1854,7 @@ const WalletPageInner = ({ user, onBack }) => {
                 <View style={S.modalBg}>
                     <View style={S.modalSheet}>
                         <Row style={{ justifyContent: 'space-between', marginBottom: 18 }}>
-                            <Text style={S.modalTitle}>Redeem Voucher</Text>
+                            <Text style={S.modalTitle}>Redeem Voucher 🎟️</Text>
                             <TouchableOpacity onPress={() => setShowVoucher(false)} style={S.closeBtn}>
                                 <Ionicons name="close" size={20} color="#0F172A" />
                             </TouchableOpacity>
@@ -1751,27 +1863,30 @@ const WalletPageInner = ({ user, onBack }) => {
                         <View style={[S.infoBox, { marginBottom: 14 }]}>
                             <Ionicons name="ticket-outline" size={16} color="#8B5CF6" />
                             <Text style={{ flex: 1, fontSize: 12, color: '#6D28D9' }}>
-                                Enter your voucher or coupon code to apply discounts at checkout.
+                                Enter your voucher or discount promo code to claim credits or discount vouchers.
                             </Text>
                         </View>
 
-                        <TextInput
-                            style={[S.textInput, { textTransform: 'uppercase', letterSpacing: 2 }]}
+                        <ModernInput
+                            icon="gift-outline"
+                            iconColor="#8B5CF6"
+                            iconBg="#F5F3FF"
+                            label="Voucher / Promo Code"
                             value={voucherCode}
                             onChangeText={setVoucherCode}
                             placeholder="ENTER CODE"
-                            placeholderTextColor="#94A3B8"
                             autoCapitalize="characters"
+                            inputStyle={{ textTransform: 'uppercase', letterSpacing: 2, fontWeight: '800' }}
                         />
 
                         <TouchableOpacity
                             onPress={handleVoucher}
                             disabled={voucherPending}
-                            style={[S.primaryBtn, { marginTop: 16, backgroundColor: '#8B5CF6', opacity: voucherPending ? 0.7 : 1 }]}
+                            style={[S.primaryBtn, { marginTop: 14, backgroundColor: '#8B5CF6', opacity: voucherPending ? 0.7 : 1 }]}
                         >
                             {voucherPending
                                 ? <ActivityIndicator color="white" />
-                                : <Text style={S.primaryBtnTxt}>Verify Code</Text>}
+                                : <Text style={S.primaryBtnTxt}>Verify & Apply Code</Text>}
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -1782,20 +1897,40 @@ const WalletPageInner = ({ user, onBack }) => {
                 <View style={S.modalBg}>
                     <View style={S.modalSheet}>
                         <Row style={{ justifyContent: 'space-between', marginBottom: 18 }}>
-                            <Text style={S.modalTitle}>Set Monthly Budget</Text>
+                            <Text style={S.modalTitle}>Set Monthly Budget 📊</Text>
                             <TouchableOpacity onPress={() => setShowBudget(false)} style={S.closeBtn}>
                                 <Ionicons name="close" size={20} color="#0F172A" />
                             </TouchableOpacity>
                         </Row>
-                        <Text style={S.inputLabel}>Budget Limit (NGN)</Text>
-                        <TextInput
-                            style={S.textInput}
+                        
+                        <ModernInput
+                            icon="speedometer-outline"
+                            iconColor="#D97706"
+                            iconBg="#FEF3C7"
+                            label="Budget Limit (NGN)"
                             value={budgetInput}
                             onChangeText={setBudgetInput}
                             keyboardType="numeric"
-                            placeholder={String(monthlyLimit)}
-                            placeholderTextColor="#94A3B8"
+                            placeholder={String(monthlyLimit || '50000')}
+                            inputStyle={{ fontSize: 16, fontWeight: '800' }}
+                            helperText="Track your spending and receive smart warning alerts when nearing limit."
                         />
+
+                        {/* Quick Presets for Budget */}
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
+                            {['20000', '50000', '100000', '250000', '500000'].map((preset) => (
+                                <TouchableOpacity
+                                    key={preset}
+                                    onPress={() => setBudgetInput(preset)}
+                                    style={[S.quickBtn, budgetInput === preset && S.quickBtnActive]}
+                                >
+                                    <Text style={[S.quickBtnTxt, budgetInput === preset && S.quickBtnTxtActive]}>
+                                        ₦{Number(preset).toLocaleString()}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
                         <TouchableOpacity
                             onPress={async () => {
                                 const v = parseInt(budgetInput);
@@ -1807,7 +1942,7 @@ const WalletPageInner = ({ user, onBack }) => {
                                 if (uid) await AsyncStorage.setItem(`@amf_limit_${uid}`, String(v)).catch(() => {});
                                 Alert.alert('Budget Set ✅', `Monthly limit set to ${fmt(v)}`);
                             }}
-                            style={[S.primaryBtn, { marginTop: 16 }]}
+                            style={[S.primaryBtn, { marginTop: 4 }]}
                         >
                             <Text style={S.primaryBtnTxt}>Save Budget Limit</Text>
                         </TouchableOpacity>
@@ -1826,22 +1961,38 @@ const WalletPageInner = ({ user, onBack }) => {
                             </TouchableOpacity>
                         </Row>
 
-                        <Text style={S.inputLabel}>Pot Name</Text>
-                        <TextInput style={S.textInput} value={potName} onChangeText={setPotName} placeholder="Pot name" placeholderTextColor="#94A3B8" />
+                        <ModernInput
+                            icon="bookmark-outline"
+                            iconColor="#2563EB"
+                            iconBg="#EFF6FF"
+                            label="Pot Name"
+                            value={potName}
+                            onChangeText={setPotName}
+                            placeholder="e.g. Eid Shopping, New Laptop, Rent"
+                        />
 
-                        <Text style={[S.inputLabel, { marginTop: 12 }]}>Target Amount (NGN)</Text>
-                        <TextInput style={S.textInput} value={potTarget} onChangeText={setPotTarget} keyboardType="numeric" placeholder="0.00" placeholderTextColor="#94A3B8" />
+                        <ModernInput
+                            icon="trophy-outline"
+                            iconColor="#10B981"
+                            iconBg="#ECFDF5"
+                            label="Target Amount (NGN)"
+                            value={potTarget}
+                            onChangeText={setPotTarget}
+                            keyboardType="numeric"
+                            placeholder="e.g. 100,000"
+                            inputStyle={{ fontSize: 16, fontWeight: '800' }}
+                        />
 
-                        <Text style={[S.inputLabel, { marginTop: 12 }]}>Color</Text>
-                        <Row style={{ gap: 10, marginTop: 6 }}>
+                        <Text style={[S.inputLabel, { marginTop: 4, marginBottom: 8 }]}>Theme Color</Text>
+                        <Row style={{ gap: 10, marginBottom: 20 }}>
                             {['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#0F172A'].map(c => (
                                 <TouchableOpacity key={c} onPress={() => setPotColor(c)}
-                                    style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: c, borderWidth: potColor === c ? 3 : 0, borderColor: '#0F172A' }} />
+                                    style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: c, borderWidth: potColor === c ? 3 : 0, borderColor: '#0F172A' }} />
                             ))}
                         </Row>
 
-                        <TouchableOpacity onPress={handleCreatePot} style={[S.primaryBtn, { marginTop: 20 }]}>
-                            <Text style={S.primaryBtnTxt}>Create Pot</Text>
+                        <TouchableOpacity onPress={handleCreatePot} style={[S.primaryBtn, { marginTop: 4 }]}>
+                            <Text style={S.primaryBtnTxt}>Create Savings Pot</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -2026,9 +2177,92 @@ const S = StyleSheet.create({
     inputLabel:    { fontSize: 11, fontWeight: '800', color: '#374151', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
     amtInput:      { borderWidth: 1.5, borderColor: '#E2E8F0', borderRadius: 12, padding: 14, fontSize: 20, fontWeight: '900', color: '#0F172A', backgroundColor: '#F8FAFC' },
     textInput:     { borderWidth: 1.5, borderColor: '#E2E8F0', borderRadius: 12, padding: 13, fontSize: 14, fontWeight: '600', color: '#0F172A', backgroundColor: '#F8FAFC' },
-    convertHint:   { fontSize: 12, color: '#10B981', fontWeight: '700', marginTop: 6 },
-    quickBtn:      { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 9, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
+    convertHint:   { fontSize: 12, color: '#10B981', fontWeight: '700', marginTop: 4, marginBottom: 8 },
+    quickBtn:      { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
+    quickBtnActive:{ backgroundColor: '#0F172A', borderColor: '#0F172A' },
     quickBtnTxt:   { fontSize: 12, fontWeight: '700', color: '#374151' },
+    quickBtnTxtActive: { color: '#FFFFFF', fontWeight: '900' },
+
+    // Modern Capsule Input ("rawani a ciki")
+    modernInputBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        borderWidth: 1.5,
+        borderColor: '#E2E8F0',
+        borderRadius: 14,
+        paddingHorizontal: 10,
+        height: 52,
+        shadowColor: '#000',
+        shadowOpacity: 0.03,
+        shadowRadius: 5,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 1,
+    },
+    modernInputBoxFocused: {
+        borderColor: '#2563EB',
+        backgroundColor: '#FFFFFF',
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        shadowColor: '#2563EB',
+        elevation: 2,
+    },
+    inputIconBadge: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 10,
+    },
+    modernTextInput: {
+        flex: 1,
+        fontSize: 14.5,
+        fontWeight: '700',
+        color: '#0F172A',
+        height: '100%',
+    },
+
+    // Direct Corporate Bank Account Styles
+    directBankWrap: {
+        marginTop: 14,
+        backgroundColor: '#F8FAFC',
+        borderRadius: 14,
+        padding: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    directBankTitle: { fontSize: 12.5, fontWeight: '800', color: '#0369A1' },
+    directBankSub:   { fontSize: 11, color: '#64748B', marginTop: 2, marginBottom: 8 },
+    directBankDetailsBox: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 10,
+        padding: 10,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        gap: 6,
+    },
+    directBankRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    directBankLabel: { fontSize: 11.5, color: '#64748B', fontWeight: '600' },
+    directBankVal:   { fontSize: 12, fontWeight: '800', color: '#0F172A' },
+    miniCopyBtn:     { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#E0F2FE', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
+    whatsappHelpBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        backgroundColor: '#DCFCE7',
+        borderWidth: 1,
+        borderColor: '#86EFAC',
+        borderRadius: 10,
+        paddingVertical: 9,
+        marginTop: 8,
+    },
+    whatsappHelpTxt: { fontSize: 11.5, fontWeight: '800', color: '#15803D' },
 
     // Virtual account
     vaBox:         { backgroundColor: '#F0F9FF', borderRadius: 14, padding: 14, marginTop: 8, borderWidth: 1, borderColor: '#BAE6FD' },

@@ -101,17 +101,86 @@ export default async function handler(req, res) {
             flwSecret = 'FLWSECK-456331fb55a2e059f1eb8d439c53b9ae-1a07bfbf2fcvt-X';
         }
 
+        // Dedicated NUBAN strictly requires BVN per CBN rules
+        if (!cleanBvn && !existingVA) {
+            return res.status(400).json({
+                success: false,
+                requires_bvn: true,
+                error: 'Ana bukatar lambar BVN domin kirkirar asusunka na kanka (dedicated virtual account).'
+            });
+        }
+
         const userSlug = String(user_id || cleanEmail).replace(/[^a-zA-Z0-9]/g, '').slice(0, 10).toUpperCase();
         const txRef = `AMF-VA-${userSlug}-${Date.now()}`;
 
         let generatedVA = null;
 
         // ═════════════════════════════════════════════════════════════════════════
-        // 1. PAYSTACK VERIFICATION & DEDICATED VIRTUAL ACCOUNT CREATION
+        // 1. FLUTTERWAVE DEDICATED VIRTUAL ACCOUNT (FAST & DIRECT WITH BVN)
         // ═════════════════════════════════════════════════════════════════════════
-        if (paystackSecret) {
+        if (cleanBvn && flwSecret) {
             try {
-                // A. Create or Fetch Paystack Customer
+                const flwPayload = {
+                    email: cleanEmail,
+                    is_permanent: true,
+                    tx_ref: txRef,
+                    phonenumber: cleanPhone || '08000000000',
+                    firstname: firstName,
+                    lastname: lastName,
+                    bvn: cleanBvn,
+                    narration: `Abu Mafhal ${firstName}`
+                };
+                if (amount && Number(amount) > 0) {
+                    flwPayload.amount = Number(amount);
+                }
+
+                const flwRes = await fetch('https://api.flutterwave.com/v3/virtual-account-numbers', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${flwSecret.trim()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(flwPayload)
+                });
+                const flwData = await flwRes.json();
+
+                if (flwData?.status === 'success' && flwData?.data?.account_number) {
+                    const d = flwData.data;
+                    const accountName = d.note 
+                        ? d.note.replace(/^Please make a bank transfer to\s+/i, '').trim()
+                        : `${firstName} ${lastName} / Abu Mafhal`;
+
+                    generatedVA = {
+                        account_number: d.account_number,
+                        account_name: accountName,
+                        bank_name: d.bank_name || 'Flutterwave MFB',
+                        order_ref: d.order_ref,
+                        flw_ref: d.flw_ref,
+                        tx_ref: txRef,
+                        provider: 'flutterwave',
+                        bvn_verified: true,
+                        is_permanent: true,
+                        created_at: d.created_at || new Date().toISOString()
+                    };
+                } else if (flwData?.message) {
+                    const msg = flwData.message;
+                    if (msg.toLowerCase().includes('bvn') || msg.toLowerCase().includes('nin') || msg.toLowerCase().includes('name')) {
+                        return res.status(400).json({
+                            success: false,
+                            error: msg
+                        });
+                    }
+                }
+            } catch (flwErr) {
+                console.warn('[create-virtual-account] Flutterwave DVA creation error:', flwErr.message);
+            }
+        }
+
+        // ═════════════════════════════════════════════════════════════════════════
+        // 2. PAYSTACK VERIFICATION & DEDICATED VIRTUAL ACCOUNT (FALLBACK)
+        // ═════════════════════════════════════════════════════════════════════════
+        if (!generatedVA && paystackSecret) {
+            try {
                 const cusRes = await fetch('https://api.paystack.co/customer', {
                     method: 'POST',
                     headers: {
@@ -129,7 +198,6 @@ export default async function handler(req, res) {
                 const customerCode = cusJson?.data?.customer_code;
 
                 if (customerCode) {
-                    // B. Validate Customer Identification via BVN if provided
                     if (cleanBvn && cleanBvn.length === 11) {
                         try {
                             await fetch(`https://api.paystack.co/customer/${customerCode}/identification`, {
@@ -149,7 +217,6 @@ export default async function handler(req, res) {
                         } catch (_) {}
                     }
 
-                    // C. Request Dedicated Virtual Account from Paystack (Wema Bank or Titan Trust)
                     const dvaRes = await fetch('https://api.paystack.co/dedicated_account', {
                         method: 'POST',
                         headers: {
@@ -181,66 +248,6 @@ export default async function handler(req, res) {
                 }
             } catch (paystackErr) {
                 console.warn('[create-virtual-account] Paystack DVA creation note:', paystackErr.message);
-            }
-        }
-
-        // ═════════════════════════════════════════════════════════════════════════
-        // 2. FLUTTERWAVE DEDICATED VIRTUAL ACCOUNT (FALLBACK OR COMPLEMENTARY)
-        // ═════════════════════════════════════════════════════════════════════════
-        if (!generatedVA && flwSecret) {
-            try {
-                const flwPayload = {
-                    email: cleanEmail,
-                    is_permanent: true,
-                    tx_ref: txRef,
-                    phonenumber: cleanPhone,
-                    firstname: firstName,
-                    lastname: lastName,
-                    narration: `Abu Mafhal ${firstName}`
-                };
-                if (amount && Number(amount) > 0) {
-                    flwPayload.amount = Number(amount);
-                }
-                if (cleanBvn && cleanBvn.length === 11) {
-                    flwPayload.bvn = cleanBvn;
-                }
-
-                const flwRes = await fetch('https://api.flutterwave.com/v3/virtual-account-numbers', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${flwSecret.trim()}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(flwPayload)
-                });
-                const flwData = await flwRes.json();
-
-                if (flwData?.status === 'success' && flwData?.data?.account_number) {
-                    const d = flwData.data;
-                    const accountName = d.note 
-                        ? d.note.replace(/^Please make a bank transfer to\s+/i, '').trim()
-                        : `${firstName} ${lastName} / Abu Mafhal`;
-
-                    generatedVA = {
-                        account_number: d.account_number,
-                        account_name: accountName,
-                        bank_name: d.bank_name || 'Flutterwave MFB',
-                        order_ref: d.order_ref,
-                        flw_ref: d.flw_ref,
-                        tx_ref: txRef,
-                        provider: 'flutterwave',
-                        bvn_verified: Boolean(cleanBvn),
-                        is_permanent: true,
-                        created_at: d.created_at || new Date().toISOString()
-                    };
-                } else if (cleanBvn && flwData?.message?.toLowerCase()?.includes('bvn')) {
-                    return res.status(400).json({
-                        success: false,
-                        error: flwData.message || 'Invalid BVN details. Please ensure your name matches your Bank Verification Number.'
-                    });
-                }
-            } catch (flwErr) {
-                console.warn('[create-virtual-account] Flutterwave DVA creation error:', flwErr.message);
             }
         }
 
