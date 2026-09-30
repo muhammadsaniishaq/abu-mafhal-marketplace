@@ -152,6 +152,12 @@ export const WalletPage = ({ user, onBack }) => {
     const [showSuccess, setShowSuccess] = useState(false);
     const [successDetails, setSuccessDetails] = useState(null);
 
+    // Manual Reference Verification Modal state
+    const [showManualVerifyModal, setShowManualVerifyModal] = useState(false);
+    const [manualRefInput, setManualRefInput] = useState('');
+    const [manualVerifying, setManualVerifying] = useState(false);
+    const [manualVerifyError, setManualVerifyError] = useState('');
+
     // Resolve User ID securely
     const resolveUserId = useCallback(async () => {
         if (user?.id) return user.id;
@@ -344,7 +350,7 @@ export const WalletPage = ({ user, onBack }) => {
                 setSuccessDetails({
                     amount: sync.totalNewAmount,
                     reference: sync.uncreditedTxs?.[0]?.flw_ref || `FLW-${sync.newTxIds[0]}`,
-                    gateway: 'Flutterwave MFB'
+                    gateway: 'Flutterwave MFB / Bank Transfer'
                 });
                 setShowSuccess(true);
                 await fetchWallet();
@@ -352,13 +358,55 @@ export const WalletPage = ({ user, onBack }) => {
                 await fetchWallet();
                 Alert.alert(
                     'Deposit Check Complete',
-                    'No new incoming transfer detected. If you just sent money, please allow 30–60 seconds for interbank settlement.'
+                    'No new incoming transfer detected. If you just sent money, please allow 1–2 minutes for interbank settlement, or tap "Verify Ref" if you have a Session ID.'
                 );
             }
         } catch (e) {
             Alert.alert('Sync Error', 'Could not check bank deposits. Please check your connection.');
         } finally {
             setSyncing(false);
+        }
+    };
+
+    // ── Manual Reference / Session ID Verification (1-Click Instant Verify) ─────
+    const handleManualVerify = async () => {
+        const cleanRef = manualRefInput.trim();
+        if (!cleanRef) {
+            setManualVerifyError('Please enter a valid Transaction Reference or Session ID.');
+            return;
+        }
+        setManualVerifying(true);
+        setManualVerifyError('');
+        try {
+            const uid = await resolveUserId();
+            const res = await PaymentGatewayService.syncFlutterwaveDeposits({
+                userId: uid,
+                email: user?.email,
+                phone: user?.phone || user?.user_metadata?.phone_number,
+                reference: cleanRef
+            });
+
+            if (res?.success && res?.totalNewAmount > 0) {
+                setShowManualVerifyModal(false);
+                setManualRefInput('');
+                setSuccessDetails({
+                    amount: res.totalNewAmount,
+                    reference: cleanRef,
+                    gateway: 'Flutterwave / Bank Transfer'
+                });
+                setShowSuccess(true);
+                await fetchWallet();
+            } else if (res?.message?.includes('already credited')) {
+                setManualVerifyError('This transaction has already been credited to your wallet.');
+                await fetchWallet();
+            } else {
+                setManualVerifyError('Transaction not found yet. Interbank settlement can take 1–3 minutes. Please ensure the reference is correct and retry shortly.');
+                await fetchWallet();
+            }
+        } catch (err) {
+            setManualVerifyError(err.message || 'Verification failed. Please check your network connection.');
+        } finally {
+            setManualVerifying(false);
         }
     };
 
@@ -515,7 +563,7 @@ export const WalletPage = ({ user, onBack }) => {
                             style={S.topUpPrimaryBtn}
                             activeOpacity={0.85}
                         >
-                            <Ionicons name="add-circle" size={18} color="#071324" />
+                            <Ionicons name="add-circle" size={17} color="#071324" />
                             <Text style={S.topUpPrimaryBtnTxt}>Add Money</Text>
                         </TouchableOpacity>
 
@@ -529,10 +577,19 @@ export const WalletPage = ({ user, onBack }) => {
                                 <ActivityIndicator size="small" color="#D4AF37" />
                             ) : (
                                 <>
-                                    <Ionicons name="refresh" size={16} color="#D4AF37" />
+                                    <Ionicons name="refresh" size={15} color="#D4AF37" />
                                     <Text style={S.syncFrostedBtnTxt}>Sync Deposit</Text>
                                 </>
                             )}
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            onPress={() => { setManualVerifyError(''); setShowManualVerifyModal(true); }}
+                            style={S.verifyRefBtn}
+                            activeOpacity={0.85}
+                        >
+                            <Ionicons name="search" size={15} color="#D4AF37" />
+                            <Text style={S.verifyRefBtnTxt}>Verify Ref</Text>
                         </TouchableOpacity>
                     </View>
                 </LinearGradient>
@@ -548,7 +605,8 @@ export const WalletPage = ({ user, onBack }) => {
                     </View>
 
                     {isValidVirtualAccount(virtualAcc?.account_number) ? (
-                        /* LUXURY ATM CARD VIEW IN NAVY & GOLD */
+                        <>
+                        {/* LUXURY ATM CARD VIEW IN NAVY & GOLD */}
                         <LinearGradient
                             colors={['#081426', '#0E223D', '#163156']}
                             start={{ x: 0, y: 0 }}
@@ -561,7 +619,7 @@ export const WalletPage = ({ user, onBack }) => {
                                     <Ionicons name="wifi" size={16} color="#D4AF37" style={{ transform: [{ rotate: '90deg' }] }} />
                                 </View>
                                 <View style={{ alignItems: 'flex-end' }}>
-                                    <Text style={S.atmBankName}>{virtualAcc.bank_name || 'Flutterwave MFB'}</Text>
+                                    <Text style={S.atmBankName}>{virtualAcc.bank_name ? `${virtualAcc.bank_name} / Moniepoint` : 'Flutterwave MFB / Moniepoint'}</Text>
                                     <View style={S.atmVerifiedBadge}>
                                         <Ionicons name="checkmark-circle" size={11} color="#D4AF37" />
                                         <Text style={S.atmVerifiedTxt}>0% FEE · INSTANT AUTO-CREDIT</Text>
@@ -596,6 +654,25 @@ export const WalletPage = ({ user, onBack }) => {
                                 </View>
                             </View>
                         </LinearGradient>
+
+                        {/* Modern Step-by-Step Transfer Guide */}
+                        <View style={S.bankTipBox}>
+                            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+                                <View style={S.bankTipIconWrap}>
+                                    <Ionicons name="bulb-outline" size={16} color="#D4AF37" />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={S.bankTipTitle}>How to Deposit via Bank App:</Text>
+                                    <Text style={S.bankTipTxt}>
+                                        • Bank: <Text style={{ fontWeight: '800', color: '#071324' }}>Flutterwave MFB</Text> (or <Text style={{ fontWeight: '800', color: '#071324' }}>Moniepoint MFB</Text>){'\n'}
+                                        • Account: <Text style={{ fontWeight: '800', color: '#071324' }}>{virtualAcc.account_number}</Text>{'\n'}
+                                        • Name: <Text style={{ fontWeight: '800', color: '#071324' }}>{virtualAcc.account_name || 'Abu Mafhal'}</Text>{'\n'}
+                                        • Transfer from any bank (OPay, Kuda, PalmPay, GTB, etc.). Zero fee & instant credit!
+                                    </Text>
+                                </View>
+                            </View>
+                        </View>
+                        </>
                     ) : (
                         /* ONE-TIME BVN ACTIVATION CARD */
                         <View style={S.bvnCard}>
@@ -720,11 +797,11 @@ export const WalletPage = ({ user, onBack }) => {
                                             </Text>
                                         </View>
                                         <View style={{ alignItems: 'flex-end' }}>
-                                            <Text style={[S.txAmount, { color: isCredit ? '#D4AF37' : '#F1F5F9' }]}>
+                                            <Text style={[S.txAmount, { color: isCredit ? '#10B981' : '#EF4444' }]}>
                                                 {isCredit ? '+' : '-'}{fmt(tx.amount)}
                                             </Text>
-                                            <View style={[S.statusPill, { backgroundColor: tx.status === 'completed' ? 'rgba(212, 175, 55, 0.15)' : 'rgba(245, 158, 11, 0.15)' }]}>
-                                                <Text style={[S.statusTxt, { color: tx.status === 'completed' ? '#D4AF37' : '#F59E0B' }]}>
+                                            <View style={[S.statusPill, { backgroundColor: tx.status === 'completed' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)' }]}>
+                                                <Text style={[S.statusTxt, { color: tx.status === 'completed' ? '#059669' : '#D97706' }]}>
                                                     {tx.status || 'completed'}
                                                 </Text>
                                             </View>
@@ -976,6 +1053,76 @@ export const WalletPage = ({ user, onBack }) => {
                         </TouchableOpacity>
                     </View>
                 </View>
+            </Modal>
+
+            {/* ─── Manual Verify by Reference Modal (1-Click Instant Verify) ─ */}
+            <Modal
+                visible={showManualVerifyModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowManualVerifyModal(false)}
+            >
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={S.modalOverlay}
+                >
+                    <View style={S.modalCard}>
+                        <View style={S.modalTopRow}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(212, 175, 55, 0.15)', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Ionicons name="search" size={18} color="#D4AF37" />
+                                </View>
+                                <View>
+                                    <Text style={S.modalTitle}>Verify Transfer</Text>
+                                    <Text style={{ fontSize: 11, color: '#64748B' }}>Instant verification via bank ref</Text>
+                                </View>
+                            </View>
+                            <TouchableOpacity
+                                onPress={() => setShowManualVerifyModal(false)}
+                                style={S.modalClose}
+                            >
+                                <Ionicons name="close" size={20} color="#64748B" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <Text style={[S.inputHeader, { marginTop: 14 }]}>Transaction Reference / Session ID</Text>
+                        <TextInput
+                            value={manualRefInput}
+                            onChangeText={(t) => { setManualRefInput(t); setManualVerifyError(''); }}
+                            placeholder="e.g. 090405260930010240 or AMF-VA..."
+                            placeholderTextColor="#94A3B8"
+                            style={S.modernInput}
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                        />
+
+                        {manualVerifyError ? (
+                            <View style={[S.errorBox, { marginTop: 10 }]}>
+                                <Ionicons name="alert-circle" size={16} color="#EF4444" />
+                                <Text style={S.errorTxt}>{manualVerifyError}</Text>
+                            </View>
+                        ) : null}
+
+                        <View style={{ marginTop: 12, padding: 12, borderRadius: 12, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0' }}>
+                            <Text style={{ fontSize: 11.5, color: '#475569', lineHeight: 17 }}>
+                                💡 <Text style={{ fontWeight: '700' }}>Where to find your reference:</Text> Check your bank debit alert or transfer receipt for the <Text style={{ fontWeight: '700' }}>Session ID</Text> or <Text style={{ fontWeight: '700' }}>Reference</Text>.
+                            </Text>
+                        </View>
+
+                        <TouchableOpacity
+                            onPress={handleManualVerify}
+                            disabled={manualVerifying}
+                            style={[S.modalPayBtn, { marginTop: 16 }, manualVerifying && { opacity: 0.7 }]}
+                            activeOpacity={0.85}
+                        >
+                            {manualVerifying ? (
+                                <ActivityIndicator color="#071324" size="small" />
+                            ) : (
+                                <Text style={S.modalPayBtnTxt}>Verify & Credit Wallet</Text>
+                            )}
+                        </TouchableOpacity>
+                    </View>
+                </KeyboardAvoidingView>
             </Modal>
 
             {/* ─── External Checkout WebView (Mobile Native) ───────────────── */}
@@ -1811,6 +1958,56 @@ const S = StyleSheet.create({
         fontSize: 13,
         fontWeight: '900',
         color: '#D4AF37',
+    },
+    verifyRefBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        paddingVertical: 12,
+        paddingHorizontal: 12,
+        borderRadius: 14,
+        backgroundColor: 'rgba(212, 175, 55, 0.12)',
+        borderWidth: 1,
+        borderColor: 'rgba(212, 175, 55, 0.35)',
+    },
+    verifyRefBtnTxt: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#D4AF37',
+    },
+    bankTipBox: {
+        marginTop: 10,
+        backgroundColor: '#FFFFFF',
+        padding: 12,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.04,
+        shadowRadius: 4,
+        elevation: 1,
+    },
+    bankTipIconWrap: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: 'rgba(212, 175, 55, 0.15)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 1,
+    },
+    bankTipTitle: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#071324',
+        marginBottom: 3,
+    },
+    bankTipTxt: {
+        fontSize: 11.5,
+        color: '#475569',
+        lineHeight: 17,
     },
 });
 

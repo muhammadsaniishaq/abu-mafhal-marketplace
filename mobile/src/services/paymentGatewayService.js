@@ -1208,16 +1208,13 @@ export const PaymentGatewayService = {
      * Sync Flutterwave Virtual Account Deposits
      * Automatically queries live Flutterwave transactions to detect incoming bank transfers
      */
-    async syncFlutterwaveDeposits({ userId, email, phone }) {
+    async syncFlutterwaveDeposits({ userId, email, phone, reference, tx_ref, transaction_id }) {
         if (!userId && !email) return { success: false, newCreditsCount: 0 };
 
         const userStr = String(userId || '');
         const cleanEmail = String(email || '').trim().toLowerCase();
         const cleanPhone = String(phone || '').replace(/[^0-9]/g, '');
 
-        // ALL sync goes through the secure backend API only.
-        // No client-side direct Flutterwave calls — those bypass CORS, expose secret keys,
-        // and caused phantom ₦200 credits via loose prefix matching.
         try {
             const baseUrl = (typeof window !== 'undefined' && window.location?.origin)
                 ? window.location.origin
@@ -1225,7 +1222,14 @@ export const PaymentGatewayService = {
             const apiRes = await fetch(`${baseUrl}/api/sync-flutterwave-deposits`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: userStr, email: cleanEmail, phone: cleanPhone })
+                body: JSON.stringify({
+                    user_id: userStr,
+                    email: cleanEmail,
+                    phone: cleanPhone,
+                    reference: reference || tx_ref,
+                    tx_ref: tx_ref || reference,
+                    transaction_id: transaction_id || undefined
+                })
             });
             if (apiRes.ok) {
                 const apiJson = await apiRes.json();
@@ -1233,13 +1237,14 @@ export const PaymentGatewayService = {
                     return {
                         success: true,
                         newCreditsCount: apiJson.new_credits_count || 0,
-                        totalNewAmount: apiJson.total_credited || 0,
+                        totalNewAmount: apiJson.total_credited || apiJson.credited_amount || 0,
+                        currentBalance: apiJson.current_balance,
                         newTxIds: (apiJson.newly_credited || []).map(t => t.flw_id),
-                        uncreditedTxs: apiJson.newly_credited || []
+                        uncreditedTxs: apiJson.newly_credited || [],
+                        message: apiJson.message || ''
                     };
                 }
             }
-            // API responded but success:false → no new credits (not an error)
             return { success: true, newCreditsCount: 0, totalNewAmount: 0, newTxIds: [], uncreditedTxs: [] };
         } catch (err) {
             console.error('[PaymentGatewayService.syncFlutterwaveDeposits] error:', err);

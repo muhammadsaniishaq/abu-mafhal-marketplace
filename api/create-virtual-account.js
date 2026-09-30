@@ -89,7 +89,7 @@ export default async function handler(req, res) {
             return res.status(400).json({
                 success: false,
                 requires_bvn: true,
-                error: 'Ana bukatar ingantacciyar lambar BVN mai lamba 11 domin samar da asusun kanka (dedicated NUBAN).'
+                error: 'A valid 11-digit BVN is required to generate your dedicated permanent bank account.'
             });
         }
 
@@ -323,8 +323,8 @@ export default async function handler(req, res) {
         return res.status(400).json({
             success: false,
             error: cleanBvn
-                ? 'Ba a samu damar samar da asusun kanka ba ta Flutterwave ko Paystack. Da fatan a tabbatar da BVN ɗinka da sunanka su yi daidai.'
-                : 'Ana bukata a sanya BVN mai inganci kafin samar da asusun kanka.'
+                ? 'Could not generate a dedicated account via payment gateways. Please ensure your BVN and full name match your bank records exactly.'
+                : 'A valid 11-digit BVN is required before generating your dedicated account.'
         });
 
     } catch (err) {
