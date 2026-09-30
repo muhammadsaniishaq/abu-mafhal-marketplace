@@ -150,6 +150,7 @@ export default async function handler(req, res) {
                                 success: true,
                                 verified: true,
                                 credited_amount: verifiedAmt,
+                                total_credited: verifiedAmt,
                                 new_balance: newBal,
                                 reference: verifiedRef,
                                 message: `Successfully verified and credited ₦${verifiedAmt.toLocaleString()}`
@@ -160,6 +161,7 @@ export default async function handler(req, res) {
                                 verified: true,
                                 already_credited: true,
                                 credited_amount: 0,
+                                total_credited: 0,
                                 current_balance: currentBalance,
                                 message: 'Transaction already credited to wallet'
                             });
@@ -205,23 +207,43 @@ export default async function handler(req, res) {
                                         success: true,
                                         verified: true,
                                         credited_amount: pAmt,
+                                        total_credited: pAmt,
                                         new_balance: newBal,
                                         reference: pRef,
                                         message: `Successfully verified and credited ₦${pAmt.toLocaleString()}`
+                                    });
+                                } else if (pExisting) {
+                                    return res.status(200).json({
+                                        success: true,
+                                        verified: true,
+                                        already_credited: true,
+                                        credited_amount: 0,
+                                        total_credited: 0,
+                                        current_balance: currentBalance,
+                                        message: 'Transaction already credited to wallet'
                                     });
                                 }
                             }
                         }
                     } catch (_) {}
                 }
+
+                // If specific reference was provided and failed verification, DO NOT fall through to bulk sync!
+                return res.status(200).json({
+                    success: false,
+                    error: 'Transaction reference not found or could not be verified yet. Please ensure the reference is correct and retry in a few moments.'
+                });
             } catch (vErr) {
                 console.warn('[sync-flutterwave-deposits] Direct verify note:', vErr.message);
+                return res.status(200).json({
+                    success: false,
+                    error: 'Verification service temporarily unreachable. Please retry shortly.'
+                });
             }
         }
 
-        // 4. Fetch recent transactions from Flutterwave with a 30-DAY DATE RANGE LOOKBACK
-        // Without from/to parameters, Flutterwave limits to today's date only!
-        const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        // 4. Fetch recent transactions from Flutterwave with a 14-day lookback
+        const startDate = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
         const endDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
         let txList = [];
@@ -236,7 +258,6 @@ export default async function handler(req, res) {
             }
         } catch (fetchErr) {
             console.warn('[sync-flutterwave-deposits] Date range fetch timeout/error, trying fallback:', fetchErr.message);
-            // Quick fallback without date param
             try {
                 const flwRes = await fetchWithTimeout('https://api.flutterwave.com/v3/transactions?status=successful&limit=50', {
                     headers: { 'Authorization': `Bearer ${flwSecret.trim()}` }
@@ -248,15 +269,19 @@ export default async function handler(req, res) {
             } catch (_) {}
         }
 
-        // Unique user tokens
-        const userSlug = String(activeUserId || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase();
-        const userPrefix10 = String(activeUserId || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 10).toUpperCase();
+        // User virtual account token
+        let userVaTxRef = null;
+        if (userProfile?.custom_id) {
+            try {
+                const parsed = typeof userProfile.custom_id === 'string' ? JSON.parse(userProfile.custom_id) : userProfile.custom_id;
+                if (parsed?.tx_ref) userVaTxRef = String(parsed.tx_ref).trim();
+            } catch (_) {}
+        }
 
-        // 5. Match transactions strictly belonging to this user
+        // 5. Match transactions strictly belonging to this user's dedicated virtual account
+        // ONLY match transactions that were transferred to the user's active dedicated NUBAN account
         const matched = txList.filter(t => {
             if (t.status !== 'successful') return false;
-            const txRef = String(t.tx_ref || '').toUpperCase();
-            const custEmail = String(t.customer?.email || '').trim().toLowerCase();
             const destAcc = String(
                 t.meta?.virtualaccountnumber ||
                 t.meta?.virtual_account_number ||
@@ -267,27 +292,18 @@ export default async function handler(req, res) {
                 ''
             ).trim();
             const narration = String(t.narration || '');
+            const txRef = String(t.tx_ref || '').trim();
 
-            // Priority 1: Match by dedicated account number
+            // Strict Condition 1: Direct match to user's dedicated account number
             if (userDedicatedAccount && userDedicatedAccount.length >= 10) {
                 if (destAcc === userDedicatedAccount || narration.includes(userDedicatedAccount)) {
                     return true;
                 }
             }
 
-            // Priority 2: Match by exact tx_ref containing user slug (AMF-VA-<userSlug>-...)
-            if (userPrefix10 && userPrefix10.length >= 8 && txRef.includes(userPrefix10)) {
+            // Strict Condition 2: Match user's dedicated account registration tx_ref
+            if (userVaTxRef && userVaTxRef.length >= 12 && txRef === userVaTxRef) {
                 return true;
-            }
-            if (userSlug && userSlug.length >= 6 && txRef.includes(userSlug)) {
-                return true;
-            }
-
-            // Priority 3: Match by registered email (only if customer email is not generic)
-            if (cleanEmail && cleanEmail.includes('@') && !cleanEmail.includes('abumafhal.com')) {
-                if (custEmail === cleanEmail) {
-                    return true;
-                }
             }
 
             return false;
@@ -342,11 +358,12 @@ export default async function handler(req, res) {
             .eq('user_id', activeUserId);
 
         const totalLedgerCredits = (allUserTxs || [])
-            .filter(t => (t.type === 'topup' || t.type === 'credit' || t.type === 'deposit') && t.status === 'completed')
+            .filter(t => (t.type === 'topup' || t.type === 'credit' || t.type === 'deposit') && (t.status === 'completed' || t.status === 'successful'))
             .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
+        // Deduct ONLY real wallet-funded purchases/withdrawals, NOT external card/gateway order payments
         const totalLedgerDebits = (allUserTxs || [])
-            .filter(t => (t.type === 'withdrawal' || t.type === 'debit' || t.type === 'wallet_payment' || t.type === 'wallet_purchase' || t.type === 'order_payment' || t.type === 'pss_down_payment') && t.status === 'completed')
+            .filter(t => (t.type === 'withdrawal' || t.type === 'debit' || t.type === 'wallet_payment' || t.type === 'wallet_purchase') && (t.status === 'completed' || t.status === 'successful'))
             .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
         const verifiedLedgerBalance = Math.max(0, totalLedgerCredits - totalLedgerDebits);

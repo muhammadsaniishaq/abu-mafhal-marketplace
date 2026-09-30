@@ -123,12 +123,6 @@ export const Wallet = () => {
   const [syncStatusMsg, setSyncStatusMsg] = useState('');
   const [filterType, setFilterType] = useState('all'); // 'all' | 'credit' | 'debit'
 
-  // Manual Verify by Reference State
-  const [showManualVerifyModal, setShowManualVerifyModal] = useState(false);
-  const [manualRefInput, setManualRefInput] = useState('');
-  const [manualVerifying, setManualVerifying] = useState(false);
-  const [manualVerifyError, setManualVerifyError] = useState('');
-
   // Resolve user ID with fallbacks
   const resolveUid = useCallback(async () => {
     if (activeUserId) return activeUserId;
@@ -289,7 +283,7 @@ export const Wallet = () => {
         setSyncStatusMsg(`🎉 ₦${json.total_credited.toLocaleString()} credited to your wallet successfully!`);
         await fetchWalletData(true);
       } else {
-        setSyncStatusMsg('No new incoming transfer detected. If you just sent money, please allow 1–2 minutes for interbank settlement, or use "Verify Ref" if you have a Session ID.');
+        setSyncStatusMsg('No new incoming transfer detected. If you just sent money, please allow 1–2 minutes for interbank settlement before syncing again.');
         await fetchWalletData(true);
         setTimeout(() => setSyncStatusMsg(''), 7000);
       }
@@ -298,54 +292,6 @@ export const Wallet = () => {
       setTimeout(() => setSyncStatusMsg(''), 5000);
     } finally {
       setRefreshing(false);
-    }
-  };
-
-  // Manual Reference / Session ID Verification (Instant 1-Click)
-  const handleManualVerify = async (e) => {
-    if (e) e.preventDefault();
-    const cleanRef = manualRefInput.trim();
-    if (!cleanRef) {
-      setManualVerifyError('Please enter a valid Transaction Reference or Session ID.');
-      return;
-    }
-    setManualVerifying(true);
-    setManualVerifyError('');
-    try {
-      const uid = await resolveUid();
-      const res = await fetch('/api/sync-flutterwave-deposits', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: uid,
-          email: currentUser?.email,
-          phone: currentUser?.phone,
-          reference: cleanRef
-        })
-      });
-      const json = await res.json();
-      if (json?.success && (json.total_credited > 0 || json.credited_amount > 0)) {
-        const amt = json.total_credited || json.credited_amount;
-        setShowManualVerifyModal(false);
-        setManualRefInput('');
-        setCelebrationData({
-          amount: amt,
-          reference: cleanRef,
-          gateway: 'Flutterwave / Bank Transfer'
-        });
-        setSyncStatusMsg(`🎉 ₦${amt.toLocaleString()} verified and credited to your wallet!`);
-        await fetchWalletData(true);
-      } else if (json?.already_credited || json?.message?.includes('already credited')) {
-        setManualVerifyError('This transaction has already been credited to your wallet.');
-        await fetchWalletData(true);
-      } else {
-        setManualVerifyError('Transaction not found yet. Interbank settlement can take 1–3 minutes. Please ensure the reference is correct and retry shortly.');
-        await fetchWalletData(true);
-      }
-    } catch (err) {
-      setManualVerifyError('Network error. Please check your connection and retry.');
-    } finally {
-      setManualVerifying(false);
     }
   };
 
@@ -551,10 +497,10 @@ export const Wallet = () => {
               </div>
             </div>
 
-            <div className="relative z-10 pt-2 grid grid-cols-3 gap-2.5">
+            <div className="relative z-10 pt-2 grid grid-cols-2 gap-3">
               <button
                 onClick={() => setShowTopUpModal(true)}
-                className="flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl bg-gradient-to-r from-[#D4AF37] via-[#F59E0B] to-[#D4AF37] hover:brightness-110 text-[#071324] font-black text-xs shadow-lg shadow-[#D4AF37]/25 transition-all active:scale-95 cursor-pointer"
+                className="flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl bg-gradient-to-r from-[#D4AF37] via-[#F59E0B] to-[#D4AF37] hover:brightness-110 text-[#071324] font-black text-sm shadow-lg shadow-[#D4AF37]/25 transition-all active:scale-95 cursor-pointer"
               >
                 <PlusCircle className="w-4 h-4 text-[#071324]" />
                 <span>Add Money</span>
@@ -563,18 +509,10 @@ export const Wallet = () => {
               <button
                 onClick={handleBankSync}
                 disabled={refreshing}
-                className="flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl bg-[#0A192F]/80 hover:bg-[#122A4E] text-[#D4AF37] font-bold text-xs border border-[#D4AF37]/40 backdrop-blur-sm transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+                className="flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl bg-[#0A192F]/80 hover:bg-[#122A4E] text-[#D4AF37] font-bold text-sm border border-[#D4AF37]/40 backdrop-blur-sm transition-all active:scale-95 cursor-pointer disabled:opacity-50"
               >
                 <RefreshCw className={`w-3.5 h-3.5 text-[#D4AF37] ${refreshing ? 'animate-spin' : ''}`} />
                 <span>Sync Deposit</span>
-              </button>
-
-              <button
-                onClick={() => { setManualVerifyError(''); setShowManualVerifyModal(true); }}
-                className="flex items-center justify-center gap-1.5 py-3 px-3 rounded-xl bg-[#0A192F]/60 hover:bg-[#122A4E] text-slate-200 font-bold text-xs border border-slate-700 backdrop-blur-sm transition-all active:scale-95 cursor-pointer"
-              >
-                <Search className="w-3.5 h-3.5 text-[#D4AF37]" />
-                <span>Verify Ref</span>
               </button>
             </div>
           </div>
@@ -612,7 +550,7 @@ export const Wallet = () => {
                       </div>
                       <div className="text-right">
                         <p className="text-xs font-black tracking-wide text-[#D4AF37] uppercase">
-                          {virtualAcc.bank_name ? `${virtualAcc.bank_name} / Moniepoint` : 'Flutterwave MFB / Moniepoint'}
+                          {virtualAcc.bank_name || 'Flutterwave MFB'}
                         </p>
                         <p className="text-[9px] font-bold text-slate-300">0% FEE · INSTANT AUTO-CREDIT</p>
                       </div>
@@ -644,20 +582,15 @@ export const Wallet = () => {
                     </div>
                   </div>
 
-                  {/* Modern Bank Transfer Guide Box */}
-                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-relaxed">
-                    <p className="font-bold text-[#071324] mb-1 flex items-center gap-1.5">
-                      <HelpCircle className="w-3.5 h-3.5 text-amber-600" />
-                      How to Transfer from your Bank App:
-                    </p>
-                    <p className="text-[11px] text-slate-500">
-                      In your bank app (OPay, Kuda, PalmPay, GTB, Zenith, etc.), select <strong className="text-slate-800">Flutterwave MFB</strong> (or <strong className="text-slate-800">Moniepoint MFB</strong>). Enter your 10-digit number above. Your wallet credits automatically in seconds with zero fee!
+                  {/* Modern Minimalist Transfer Guide */}
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center gap-2.5">
+                    <div className="w-6 h-6 rounded-full bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+                      <Zap className="w-3.5 h-3.5 text-amber-600" />
+                    </div>
+                    <p className="text-[11.5px] text-slate-600 font-medium">
+                      Transfer to this account from any Nigerian bank (OPay, PalmPay, Kuda, GTBank, etc.). Instant credit with 0% fee.
                     </p>
                   </div>
-
-                  <p className="text-[11px] text-slate-500 leading-relaxed">
-                    💡 Transfer from any Nigerian bank (OPay, Kuda, PalmPay, GTBank, Zenith, Access). Your wallet credits automatically in 30–60 seconds.
-                  </p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -1111,73 +1044,6 @@ export const Wallet = () => {
               >
                 Done
               </button>
-            </div>
-          </div>
-        )}
-
-        {/* ── Manual Verify by Reference Modal ── */}
-        {showManualVerifyModal && (
-          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 relative text-slate-900">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center">
-                    <Search className="w-4 h-4 text-amber-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-black text-slate-900">Verify Transfer</h3>
-                    <p className="text-xs text-slate-500">Instant verification via bank reference</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowManualVerifyModal(false)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-slate-700"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <form onSubmit={handleManualVerify} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                    Transaction Reference / Session ID
-                  </label>
-                  <input
-                    type="text"
-                    value={manualRefInput}
-                    onChange={(e) => { setManualRefInput(e.target.value); setManualVerifyError(''); }}
-                    placeholder="e.g. 090405260930010240 or AMF-VA..."
-                    className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm font-mono"
-                    required
-                  />
-                </div>
-
-                {manualVerifyError && (
-                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                    <span>{manualVerifyError}</span>
-                  </div>
-                )}
-
-                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-relaxed">
-                  💡 <strong>Tip:</strong> You can find your <strong>Session ID</strong> or <strong>Reference</strong> in your bank transfer receipt or debit alert.
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={manualVerifying}
-                  className="w-full py-3.5 rounded-xl bg-[#071324] hover:bg-[#0A192F] text-[#D4AF37] font-black text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
-                >
-                  {manualVerifying ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin text-[#D4AF37]" />
-                      <span>Verifying with Gateway...</span>
-                    </>
-                  ) : (
-                    <span>Verify & Credit Wallet</span>
-                  )}
-                </button>
-              </form>
             </div>
           </div>
         )}
