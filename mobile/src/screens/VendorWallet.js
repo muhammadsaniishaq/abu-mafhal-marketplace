@@ -173,14 +173,6 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
     const [bvnPhone, setBvnPhone] = useState('');
     const [bvnVerifying, setBvnVerifying] = useState(false);
 
-    // Top-Up / Fund Store Modal State
-    const [showTopUpModal, setShowTopUpModal] = useState(false);
-    const [topUpGateway, setTopUpGateway] = useState('paystack');
-    const [topUpAmountNgn, setTopUpAmountNgn] = useState('');
-    const [topUpAmountUsd, setTopUpAmountUsd] = useState('');
-    const [topUpPending, setTopUpPending] = useState(false);
-    const [activeRef, setActiveRef] = useState('');
-
     // Animations
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideAnim = useRef(new Animated.Value(15)).current;
@@ -803,139 +795,6 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
     };
 
     // -------------------------------------------------------------
-    // 5C. VENDOR TREASURY TOP-UP / STORE FUNDING
-    // -------------------------------------------------------------
-    const handleExecuteTopUp = async () => {
-        if (topUpGateway === 'bank_transfer') {
-            if (virtualAcc?.account_number && !virtualAcc.account_number.startsWith('980')) {
-                const details = `Bank: ${virtualAcc.bank_name}\nAccount: ${virtualAcc.account_number}\nName: ${virtualAcc.account_name}`;
-                try {
-                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                        navigator.clipboard.writeText(virtualAcc.account_number);
-                    }
-                } catch (_) {}
-                Alert.alert(
-                    'Dedicated Bank Details Copied! 📋',
-                    `${details}\n\nTransfer from any Nigerian banking app. Your vendor balance will credit automatically within seconds!`
-                );
-                setShowTopUpModal(false);
-            } else {
-                setShowTopUpModal(false);
-                setShowBvnForm(true);
-            }
-            return;
-        }
-
-        let numAmount = 0;
-        if (topUpGateway === 'nowpayments') {
-            const usd = parseFloat(String(topUpAmountUsd || '').replace(/[^0-9.]/g, ''));
-            if (isNaN(usd) || usd < 2) {
-                Alert.alert('Minimum Amount', 'Minimum top-up for crypto is $2.00 USD.');
-                return;
-            }
-            numAmount = Math.round(usd * USD_RATE);
-        } else {
-            numAmount = parseFloat(String(topUpAmountNgn || '').replace(/[^0-9.]/g, ''));
-            if (isNaN(numAmount) || numAmount < 100) {
-                Alert.alert('Minimum Amount', 'Minimum top-up is ₦100.');
-                return;
-            }
-        }
-
-        setTopUpPending(true);
-        try {
-            const fallbackEmail = user?.email || `vendor_${user?.id?.substring(0, 6)}@abumafhal.com`;
-            const ref = `VND-TOP-${Date.now()}`;
-            setActiveRef(ref);
-
-            let res;
-            if (topUpGateway === 'nowpayments') {
-                res = await PaymentGatewayService.initiateNowPayments({
-                    amount: parseFloat(topUpAmountUsd),
-                    currency: 'usd',
-                    email: fallbackEmail,
-                    reference: ref,
-                    metadata: { action: 'vendor_topup', vendor_id: user?.id, credited_ngn: numAmount }
-                });
-            } else if (topUpGateway === 'flutterwave') {
-                res = await PaymentGatewayService.initiateFlutterwave({
-                    amount: numAmount,
-                    email: fallbackEmail,
-                    reference: ref,
-                    name: user?.user_metadata?.first_name || 'Vendor Merchant',
-                    callback_url: Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.href : 'https://standard.paystack.co/close',
-                    metadata: { action: 'vendor_topup', vendor_id: user?.id }
-                });
-            } else {
-                res = await PaymentGatewayService.initiatePaystack({
-                    amount: numAmount,
-                    email: fallbackEmail,
-                    reference: ref,
-                    callback_url: Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.href : 'https://standard.paystack.co/close'
-                });
-            }
-
-            if (res?.type === 'inline_web' && typeof res?.openInline === 'function') {
-                setTopUpPending(false);
-                setShowTopUpModal(false);
-                res.openInline(
-                    async () => {
-                        await finalizeTopUpSuccess(numAmount, ref, 'Paystack');
-                    },
-                    () => {
-                        Alert.alert('Top Up Cancelled', 'Payment window was closed.');
-                    }
-                );
-                return;
-            }
-
-            if (res?.url) {
-                setTopUpPending(false);
-                setShowTopUpModal(false);
-                if (Platform.OS === 'web' && typeof window !== 'undefined') {
-                    window.location.href = res.url;
-                } else {
-                    navigation.navigate('PaymentWebView', {
-                        url: res.url,
-                        reference: ref,
-                        onSuccess: () => finalizeTopUpSuccess(numAmount, ref, topUpGateway)
-                    });
-                }
-                return;
-            }
-
-            throw new Error(res?.error || 'Unable to open gateway checkout');
-        } catch (err) {
-            Alert.alert('Top Up Failed', err.message || 'Payment initiation error.');
-        } finally {
-            setTopUpPending(false);
-        }
-    };
-
-    const finalizeTopUpSuccess = async (amt, ref, gw) => {
-        try {
-            const newBal = localWallet.balance + amt;
-            await supabase.from('profiles').update({ balance: newBal }).eq('id', user.id);
-            await supabase.from('transactions').insert([
-                {
-                    user_id: user.id,
-                    type: 'topup',
-                    amount: amt,
-                    status: 'completed',
-                    reference: ref,
-                    description: `Vendor Treasury Recharge via ${gw} (Ref: ${ref})`
-                }
-            ]);
-            setLocalWallet(prev => ({ ...prev, balance: newBal }));
-            Alert.alert('Funding Successful! 🎉', `₦${amt.toLocaleString()} has been added to your available vendor balance.`);
-            fetchAllWalletData();
-        } catch (e) {
-            console.log('Error crediting vendor balance:', e);
-            fetchAllWalletData();
-        }
-    };
-
-    // -------------------------------------------------------------
     // 6. STATEMENT GENERATION (PDF & SHARING)
     // -------------------------------------------------------------
     const handleExportFinancialStatement = async () => {
@@ -1086,14 +945,14 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
 
     return (
         <ScrollView
-            style={{ flex: 1, backgroundColor: '#070D1B' }}
+            style={{ flex: 1, backgroundColor: '#F8FAFC' }}
             contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
             refreshControl={
                 <RefreshControl
                     refreshing={refreshing}
                     onRefresh={onRefresh}
-                    tintColor="#D9A73A"
-                    colors={['#D9A73A']}
+                    tintColor="#059669"
+                    colors={['#059669']}
                 />
             }
         >
@@ -1105,10 +964,10 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                         <Text style={localStyles.greetingSmall}>Vendor Treasury</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
                             <Text style={localStyles.merchantName}>
-                                {user?.user_metadata?.first_name || 'Verified Merchant'}
+                                {user?.user_metadata?.first_name || user?.user_metadata?.business_name || 'Verified Merchant'}
                             </Text>
                             <View style={localStyles.verifiedTag}>
-                                <Ionicons name="shield-checkmark" size={13} color="#D9A73A" />
+                                <Ionicons name="shield-checkmark" size={13} color="#059669" />
                                 <Text style={localStyles.verifiedTagText}>PRO SETTLEMENT</Text>
                             </View>
                         </View>
@@ -1119,13 +978,13 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                         onPress={onRefresh}
                         activeOpacity={0.8}
                     >
-                        <Ionicons name="sync-outline" size={18} color="#D9A73A" />
+                        <Ionicons name="sync-outline" size={18} color="#0F172A" />
                     </TouchableOpacity>
                 </View>
 
                 {/* 2. ULTRA-MODERN FINANCIAL MASTER CARD */}
                 <LinearGradient
-                    colors={['#0E1A2E', '#162847', '#0A1222']}
+                    colors={['#FFFFFF', '#F8FAFC']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={localStyles.masterCard}
@@ -1143,7 +1002,7 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                                     <Ionicons
                                         name={isBalanceHidden ? "eye-off" : "eye"}
                                         size={16}
-                                        color="#94A3B8"
+                                        color="#64748B"
                                     />
                                 </TouchableOpacity>
                             </View>
@@ -1153,7 +1012,7 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                         </View>
 
                         <View style={localStyles.chipBadge}>
-                            <Ionicons name="wallet-outline" size={24} color="#D9A73A" />
+                            <Ionicons name="wallet-outline" size={24} color="#059669" />
                         </View>
                     </View>
 
@@ -1165,10 +1024,10 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                             activeOpacity={0.8}
                         >
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                <Ionicons name="lock-closed" size={12} color="#F59E0B" />
+                                <Ionicons name="lock-closed" size={12} color="#D97706" />
                                 <Text style={localStyles.cardSubMetricLabel}>In Escrow</Text>
                             </View>
-                            <Text style={[localStyles.cardSubMetricVal, { color: '#FCD34D' }]}>
+                            <Text style={[localStyles.cardSubMetricVal, { color: '#D97706' }]}>
                                 {isBalanceHidden ? '••••' : `₦${localWallet.pending_balance.toLocaleString()}`}
                             </Text>
                         </TouchableOpacity>
@@ -1177,10 +1036,10 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
 
                         <View style={localStyles.cardSubMetricBox}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                <Ionicons name="trending-up" size={12} color="#10B981" />
+                                <Ionicons name="trending-up" size={12} color="#059669" />
                                 <Text style={localStyles.cardSubMetricLabel}>Delivered Sales</Text>
                             </View>
-                            <Text style={[localStyles.cardSubMetricVal, { color: '#6EE7B7' }]}>
+                            <Text style={[localStyles.cardSubMetricVal, { color: '#059669' }]}>
                                 {isBalanceHidden ? '••••' : `₦${localWallet.total_sales.toLocaleString()}`}
                             </Text>
                         </View>
@@ -1189,61 +1048,52 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
 
                         <View style={localStyles.cardSubMetricBox}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                <Ionicons name="checkmark-done" size={12} color="#38BDF8" />
+                                <Ionicons name="checkmark-done" size={12} color="#0284C7" />
                                 <Text style={localStyles.cardSubMetricLabel}>Withdrawn</Text>
                             </View>
-                            <Text style={[localStyles.cardSubMetricVal, { color: '#BAE6FD' }]}>
+                            <Text style={[localStyles.cardSubMetricVal, { color: '#0284C7' }]}>
                                 {isBalanceHidden ? '••••' : `₦${localWallet.total_withdrawn.toLocaleString()}`}
                             </Text>
                         </View>
                     </View>
                 </LinearGradient>
 
-                {/* 3. QUICK ACTION BUTTONS */}
+                {/* 3. QUICK ACTION BUTTONS (NO TOP UP FOR VENDORS) */}
                 <View style={localStyles.quickActionsRow}>
                     <TouchableOpacity
-                        style={[localStyles.quickActionBtn, { backgroundColor: '#10B981' }]}
-                        onPress={() => setShowTopUpModal(true)}
-                        activeOpacity={0.85}
-                    >
-                        <Ionicons name="add-circle" size={20} color="#FFFFFF" />
-                        <Text style={[localStyles.quickActionText, { color: '#FFFFFF' }]}>Top Up</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[localStyles.quickActionBtn, { backgroundColor: '#D9A73A' }]}
+                        style={[localStyles.quickActionBtn, { backgroundColor: '#059669' }]}
                         onPress={() => setShowWithdrawModal(true)}
                         activeOpacity={0.85}
                     >
-                        <Ionicons name="arrow-up" size={20} color="#070D1B" />
-                        <Text style={[localStyles.quickActionText, { color: '#070D1B' }]}>Withdraw</Text>
+                        <Ionicons name="arrow-up-circle" size={20} color="#FFFFFF" />
+                        <Text style={[localStyles.quickActionText, { color: '#FFFFFF' }]}>Withdraw</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={[localStyles.quickActionBtn, { backgroundColor: 'rgba(255, 255, 255, 0.08)' }]}
+                        style={[localStyles.quickActionBtn, { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0' }]}
                         onPress={() => setShowTransferModal(true)}
                         activeOpacity={0.85}
                     >
-                        <Ionicons name="swap-horizontal" size={20} color="#38BDF8" />
-                        <Text style={[localStyles.quickActionText, { color: '#FFFFFF' }]}>Shop Transfer</Text>
+                        <Ionicons name="swap-horizontal" size={20} color="#0284C7" />
+                        <Text style={[localStyles.quickActionText, { color: '#0F172A' }]}>Shop Transfer</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={[localStyles.quickActionBtn, { backgroundColor: 'rgba(255, 255, 255, 0.08)' }]}
+                        style={[localStyles.quickActionBtn, { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0' }]}
                         onPress={() => setShowAddBankModal(true)}
                         activeOpacity={0.85}
                     >
-                        <Ionicons name="card-outline" size={20} color="#34D399" />
-                        <Text style={[localStyles.quickActionText, { color: '#FFFFFF' }]}>Bank Details</Text>
+                        <Ionicons name="card-outline" size={20} color="#059669" />
+                        <Text style={[localStyles.quickActionText, { color: '#0F172A' }]}>Bank Details</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={[localStyles.quickActionBtn, { backgroundColor: 'rgba(255, 255, 255, 0.08)' }]}
+                        style={[localStyles.quickActionBtn, { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0' }]}
                         onPress={handleExportFinancialStatement}
                         activeOpacity={0.85}
                     >
-                        <Ionicons name="document-text-outline" size={20} color="#D9A73A" />
-                        <Text style={[localStyles.quickActionText, { color: '#FFFFFF' }]}>Statement</Text>
+                        <Ionicons name="document-text-outline" size={20} color="#D97706" />
+                        <Text style={[localStyles.quickActionText, { color: '#0F172A' }]}>Statement</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -1268,7 +1118,7 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                                     <Ionicons
                                         name={tab.icon}
                                         size={14}
-                                        color={isAct ? '#070D1B' : '#94A3B8'}
+                                        color={isAct ? '#FFFFFF' : '#64748B'}
                                     />
                                     <Text style={[localStyles.segmentPillText, isAct && localStyles.segmentPillTextActive]}>
                                         {tab.label}
@@ -1282,269 +1132,62 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                 {/* 5. TAB CONTENT: OVERVIEW */}
                 {activeTab === 'overview' && (
                     <View style={{ marginTop: 16 }}>
-                        {/* DEDICATED VIRTUAL ACCOUNT CARD (PAYSTACK VERIFIED) */}
-                        <LinearGradient
-                            colors={['#0F1D33', '#162C4E', '#0B1526']}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={localStyles.dvaContainer}
-                        >
-                            <View style={localStyles.dvaHeaderRow}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                    <View style={localStyles.dvaBankIconCircle}>
-                                        <Ionicons name="business" size={16} color="#D9A73A" />
+                        {/* PAYOUT BANK ACCOUNT DETAILS */}
+                        <View style={localStyles.payoutBankCard}>
+                            <View style={localStyles.payoutBankHeader}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                                    <View style={localStyles.payoutBankIconWrap}>
+                                        <Ionicons name="business" size={20} color="#059669" />
                                     </View>
-                                    <View>
-                                        <Text style={localStyles.dvaBankTitle}>
-                                            {virtualAcc?.bank_name || 'Dedicated Business Account'}
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={localStyles.payoutBankTitle}>
+                                            {bankName ? bankName : 'Primary Payout Bank'}
                                         </Text>
-                                        <Text style={localStyles.dvaBankSubtitle}>
-                                            Permanent Paystack / Wema NUBAN
+                                        <Text style={localStyles.payoutBankSubtitle}>
+                                            {accountNo ? `Account: ${accountNo}` : 'No payout bank linked yet'}
                                         </Text>
                                     </View>
                                 </View>
-                                <View style={localStyles.dvaBadge}>
-                                    <Ionicons name="shield-checkmark" size={11} color="#10B981" />
-                                    <Text style={localStyles.dvaBadgeText}>PAYSTACK VERIFIED</Text>
+                                <View style={localStyles.payoutBankBadge}>
+                                    <Ionicons name="shield-checkmark" size={12} color="#059669" />
+                                    <Text style={localStyles.payoutBankBadgeText}>VERIFIED</Text>
                                 </View>
                             </View>
 
-                            {vaLoading ? (
-                                <View style={{ paddingVertical: 20, alignItems: 'center' }}>
-                                    <ActivityIndicator size="small" color="#D9A73A" />
-                                    <Text style={{ color: '#94A3B8', fontSize: 12, marginTop: 8 }}>
-                                        Connecting to Paystack banking network...
-                                    </Text>
-                                </View>
-                            ) : virtualAcc?.account_number && !virtualAcc.account_number.startsWith('980') ? (
-                                <View style={localStyles.dvaActiveBody}>
-                                    <View style={localStyles.dvaNumberRow}>
-                                        <View>
-                                            <Text style={localStyles.dvaMetaLabel}>ACCOUNT NUMBER</Text>
-                                            <Text style={localStyles.dvaAccNumberText} selectable={true}>
-                                                {virtualAcc.account_number}
+                            {accountNo ? (
+                                <View style={localStyles.payoutBankDetailsBox}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={localStyles.payoutBankMetaLabel}>ACCOUNT HOLDER</Text>
+                                            <Text style={localStyles.payoutBankMetaVal} numberOfLines={1}>
+                                                {accountName || user?.user_metadata?.first_name || 'Merchant'}
                                             </Text>
                                         </View>
                                         <TouchableOpacity
-                                            style={localStyles.dvaCopyBtn}
-                                            onPress={() => {
-                                                try {
-                                                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                                                        navigator.clipboard.writeText(virtualAcc.account_number);
-                                                    }
-                                                } catch (_) {}
-                                                Alert.alert('Account Copied! 📋', `${virtualAcc.account_number} (${virtualAcc.bank_name}) has been copied to your clipboard.`);
-                                            }}
-                                            activeOpacity={0.8}
+                                            style={localStyles.payoutBankActionBtn}
+                                            onPress={() => setShowWithdrawModal(true)}
+                                            activeOpacity={0.85}
                                         >
-                                            <Ionicons name="copy-outline" size={15} color="#070D1B" />
-                                            <Text style={localStyles.dvaCopyBtnText}>Copy</Text>
+                                            <Ionicons name="arrow-up" size={14} color="#FFFFFF" />
+                                            <Text style={localStyles.payoutBankActionBtnText}>Withdraw</Text>
                                         </TouchableOpacity>
-                                    </View>
-
-                                    <View style={localStyles.dvaMetaRow}>
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={localStyles.dvaMetaLabel}>ACCOUNT HOLDER</Text>
-                                            <Text style={localStyles.dvaMetaVal} numberOfLines={1}>
-                                                {virtualAcc.account_name || user?.user_metadata?.first_name || 'Vendor Merchant'}
-                                            </Text>
-                                        </View>
-                                        <View style={{ alignItems: 'flex-end' }}>
-                                            <Text style={localStyles.dvaMetaLabel}>SETTLEMENT SPEED</Text>
-                                            <Text style={[localStyles.dvaMetaVal, { color: '#10B981' }]}>Instant (30s)</Text>
-                                        </View>
-                                    </View>
-
-                                    <View style={localStyles.dvaFooterNote}>
-                                        <Ionicons name="flash" size={13} color="#D9A73A" />
-                                        <Text style={localStyles.dvaFooterNoteText}>
-                                            0% Deposit Fee · Auto-credits to Available Payout Balance instantly from any bank app.
-                                        </Text>
                                     </View>
                                 </View>
                             ) : (
-                                <View style={localStyles.dvaInactiveBody}>
-                                    <Text style={localStyles.dvaInactiveDesc}>
-                                        Generate a permanent Paystack-verified Nigerian bank account in your business name for instant auto-credited deposits and zero payment fees.
+                                <View style={localStyles.payoutBankEmptyBox}>
+                                    <Text style={localStyles.payoutBankEmptyText}>
+                                        Add your Nigerian bank account to withdraw sales revenue directly.
                                     </Text>
                                     <TouchableOpacity
-                                        style={localStyles.dvaActivateBtn}
-                                        onPress={() => setShowBvnForm(!showBvnForm)}
+                                        style={localStyles.payoutBankAddBtn}
+                                        onPress={() => setShowAddBankModal(true)}
                                         activeOpacity={0.85}
                                     >
-                                        <Ionicons name="key-outline" size={16} color="#070D1B" />
-                                        <Text style={localStyles.dvaActivateBtnText}>
-                                            {showBvnForm ? 'Hide BVN Form' : 'Verify BVN & Activate NUBAN'}
-                                        </Text>
+                                        <Ionicons name="add" size={16} color="#FFFFFF" />
+                                        <Text style={localStyles.payoutBankAddBtnText}>Add Payout Account</Text>
                                     </TouchableOpacity>
                                 </View>
                             )}
-
-                            {/* BVN VERIFICATION EXPANDED CARD */}
-                            {showBvnForm && (
-                                <View style={localStyles.bvnFormWrap}>
-                                    <View style={localStyles.bvnHeaderRow}>
-                                        <Ionicons name="shield-checkmark" size={16} color="#D9A73A" />
-                                        <Text style={localStyles.bvnFormTitle}>Paystack BVN Verification</Text>
-                                    </View>
-                                    <Text style={localStyles.bvnFormSub}>
-                                        In compliance with CBN regulations, verify your 11-digit BVN once to issue your dedicated virtual account. Your BVN cannot be used to debit your account.
-                                    </Text>
-
-                                    <View style={localStyles.bvnTipRow}>
-                                        <Ionicons name="call-outline" size={13} color="#38BDF8" />
-                                        <Text style={localStyles.bvnTipText}>Dial *565*0# on your registered phone to check your BVN.</Text>
-                                    </View>
-
-                                    <Text style={localStyles.bvnInputLabel}>11-Digit BVN Number</Text>
-                                    <TextInput
-                                        style={localStyles.bvnInput}
-                                        placeholder="11-digit BVN"
-                                        placeholderTextColor="#64748B"
-                                        keyboardType="numeric"
-                                        maxLength={11}
-                                        value={bvnInput}
-                                        onChangeText={setBvnInput}
-                                    />
-
-                                    <Text style={localStyles.bvnInputLabel}>Full Legal / Business Name (as on BVN)</Text>
-                                    <TextInput
-                                        style={localStyles.bvnInput}
-                                        placeholder="Legal full name"
-                                        placeholderTextColor="#64748B"
-                                        value={bvnLegalName}
-                                        onChangeText={setBvnLegalName}
-                                    />
-
-                                    <Text style={localStyles.bvnInputLabel}>Registered Phone Number</Text>
-                                    <TextInput
-                                        style={localStyles.bvnInput}
-                                        placeholder="Phone number"
-                                        placeholderTextColor="#64748B"
-                                        keyboardType="phone-pad"
-                                        value={bvnPhone}
-                                        onChangeText={setBvnPhone}
-                                    />
-
-                                    {vaError ? (
-                                        <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 4, marginBottom: 8 }}>
-                                            {vaError}
-                                        </Text>
-                                    ) : null}
-
-                                    <View style={localStyles.bvnSecureBadge}>
-                                        <Ionicons name="lock-closed" size={13} color="#10B981" />
-                                        <Text style={localStyles.bvnSecureBadgeText}>
-                                            Bank-Grade 256-Bit SSL Encryption · Direct Paystack API Verification
-                                        </Text>
-                                    </View>
-
-                                    <TouchableOpacity
-                                        style={[
-                                            localStyles.bvnVerifyBtn,
-                                            (bvnVerifying || bvnInput.trim().length !== 11) && { opacity: 0.5 }
-                                        ]}
-                                        onPress={handleVerifyBvnAndGenerateAccount}
-                                        disabled={bvnVerifying || bvnInput.trim().length !== 11}
-                                        activeOpacity={0.85}
-                                    >
-                                        {bvnVerifying ? (
-                                            <ActivityIndicator size="small" color="#070D1B" />
-                                        ) : (
-                                            <Text style={localStyles.bvnVerifyBtnText}>
-                                                Verify with Paystack & Issue Account
-                                            </Text>
-                                        )}
-                                    </TouchableOpacity>
-                                </View>
-                            )}
-                        </LinearGradient>
-
-                        {/* OFFICIAL PAYMENT & TOP-UP GATEWAYS SHOWCASE */}
-                        <View style={{ marginTop: 16, marginBottom: 8 }}>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                    <Ionicons name="card" size={18} color="#D9A73A" />
-                                    <Text style={{ fontSize: 16, fontWeight: '800', color: '#FFFFFF' }}>Supported Gateways</Text>
-                                </View>
-                                <View style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(59, 130, 246, 0.3)' }}>
-                                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#60A5FA' }}>4 CHANNELS</Text>
-                                </View>
-                            </View>
-
-                            <View style={{ gap: 10 }}>
-                                {GATEWAYS.map(gw => (
-                                    <TouchableOpacity
-                                        key={gw.id}
-                                        onPress={() => {
-                                            if (gw.id === 'bank_transfer') {
-                                                if (!virtualAcc?.account_number) {
-                                                    setShowBvnForm(true);
-                                                } else {
-                                                    try {
-                                                        if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                                                            navigator.clipboard.writeText(virtualAcc.account_number);
-                                                        }
-                                                    } catch (_) {}
-                                                    Alert.alert('Account Copied! 📋', `${virtualAcc.account_number} (${virtualAcc.bank_name}) has been copied to your clipboard.`);
-                                                }
-                                            } else {
-                                                setTopUpGateway(gw.id);
-                                                setShowTopUpModal(true);
-                                            }
-                                        }}
-                                        style={{
-                                            backgroundColor: '#0F1D33',
-                                            borderRadius: 14,
-                                            padding: 12,
-                                            borderWidth: 1,
-                                            borderColor: 'rgba(255, 255, 255, 0.08)',
-                                            flexDirection: 'row',
-                                            alignItems: 'center',
-                                            justifyContent: 'space-between'
-                                        }}
-                                        activeOpacity={0.8}
-                                    >
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
-                                            <View style={{
-                                                width: 44,
-                                                height: 44,
-                                                borderRadius: 10,
-                                                backgroundColor: '#FFFFFF',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                padding: 5
-                                            }}>
-                                                <Image
-                                                    source={gw.logo}
-                                                    style={{ width: '100%', height: '100%' }}
-                                                    resizeMode="contain"
-                                                />
-                                            </View>
-                                            <View style={{ flex: 1 }}>
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>{gw.name}</Text>
-                                                    <View style={{ backgroundColor: gw.badgeBg, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, borderWidth: 1, borderColor: gw.badgeBorder }}>
-                                                        <Text style={{ fontSize: 9, fontWeight: '800', color: gw.badgeColor }}>{gw.badge}</Text>
-                                                    </View>
-                                                </View>
-                                                <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }} numberOfLines={1}>{gw.subtitle}</Text>
-                                                <View style={{ flexDirection: 'row', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
-                                                    {gw.channels.slice(0, 3).map((ch, idx) => (
-                                                        <View key={idx} style={{ backgroundColor: 'rgba(255, 255, 255, 0.06)', paddingHorizontal: 5, paddingVertical: 1.5, borderRadius: 4 }}>
-                                                            <Text style={{ fontSize: 9, color: '#CBD5E1', fontWeight: '600' }}>{ch}</Text>
-                                                        </View>
-                                                    ))}
-                                                </View>
-                                            </View>
-                                        </View>
-                                        <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
-                                            <Ionicons name="chevron-forward" size={16} color="#64748B" />
-                                            <Text style={{ fontSize: 9, color: '#10B981', fontWeight: '700', marginTop: 4 }}>⚡ Instant</Text>
-                                        </View>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
                         </View>
 
                         {/* PENDING ESCROW NOTICE BANNER */}
@@ -1764,14 +1407,14 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                                 onPress={() => setShowAddBankModal(true)}
                                 activeOpacity={0.8}
                             >
-                                <Ionicons name="add" size={16} color="#070D1B" />
+                                <Ionicons name="add" size={16} color="#FFFFFF" />
                                 <Text style={localStyles.addBankTopBtnText}>Add Bank</Text>
                             </TouchableOpacity>
                         </View>
 
                         {savedBanks.length === 0 ? (
                             <View style={localStyles.emptyBox}>
-                                <Ionicons name="card-outline" size={38} color="#D9A73A" />
+                                <Ionicons name="card-outline" size={38} color="#059669" />
                                 <Text style={localStyles.emptyTitle}>No saved bank account</Text>
                                 <Text style={localStyles.emptySub}>Add your Nigerian bank account to enjoy automated daily and instant withdrawals.</Text>
                                 <TouchableOpacity
@@ -1827,7 +1470,7 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                 {activeTab === 'insights' && (
                     <View style={{ marginTop: 16 }}>
                         <LinearGradient
-                            colors={['#1E293B', '#0F172A']}
+                            colors={['#FFFFFF', '#F8FAFC']}
                             style={localStyles.insightBannerCard}
                         >
                             <Text style={localStyles.insightHeader}>Performance Summary</Text>
@@ -1840,15 +1483,15 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                                 </View>
                                 <View style={localStyles.insightItem}>
                                     <Text style={localStyles.insightLabel}>Active Escrow</Text>
-                                    <Text style={[localStyles.insightVal, { color: '#F59E0B' }]}>₦{localWallet.pending_balance.toLocaleString()}</Text>
+                                    <Text style={[localStyles.insightVal, { color: '#D97706' }]}>₦{localWallet.pending_balance.toLocaleString()}</Text>
                                 </View>
                                 <View style={localStyles.insightItem}>
                                     <Text style={localStyles.insightLabel}>Total Withdrawn</Text>
-                                    <Text style={[localStyles.insightVal, { color: '#38BDF8' }]}>₦{localWallet.total_withdrawn.toLocaleString()}</Text>
+                                    <Text style={[localStyles.insightVal, { color: '#0284C7' }]}>₦{localWallet.total_withdrawn.toLocaleString()}</Text>
                                 </View>
                                 <View style={localStyles.insightItem}>
                                     <Text style={localStyles.insightLabel}>Total Orders</Text>
-                                    <Text style={[localStyles.insightVal, { color: '#10B981' }]}>{localWallet.total_orders_count}</Text>
+                                    <Text style={[localStyles.insightVal, { color: '#059669' }]}>{localWallet.total_orders_count}</Text>
                                 </View>
                             </View>
 
@@ -1857,7 +1500,7 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                                 onPress={handleExportFinancialStatement}
                                 activeOpacity={0.85}
                             >
-                                <Ionicons name="document-attach-outline" size={18} color="#070D1B" />
+                                <Ionicons name="document-attach-outline" size={18} color="#FFFFFF" />
                                 <Text style={localStyles.exportFullStatementText}>Export Official PDF Statement</Text>
                             </TouchableOpacity>
                         </LinearGradient>
@@ -1865,144 +1508,7 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                 )}
             </Animated.View>
 
-            {/* ============================================================== */}
-            {/* TOP UP / FUND STORE MODAL */}
-            {/* ============================================================== */}
-            <Modal visible={showTopUpModal} animationType="slide" transparent={true}>
-                <View style={localStyles.modalOverlay}>
-                    <View style={[localStyles.modalSheet, { maxHeight: '90%' }]}>
-                        <View style={localStyles.modalDragHandle} />
 
-                        <View style={localStyles.modalTopHeader}>
-                            <View>
-                                <Text style={localStyles.modalSheetTitle}>Fund Vendor Treasury</Text>
-                                <Text style={{ color: '#94A3B8', fontSize: 12, marginTop: 2 }}>
-                                    Instant balance top-up for ads, logistics, and store operations
-                                </Text>
-                            </View>
-                            <TouchableOpacity
-                                onPress={() => setShowTopUpModal(false)}
-                                style={localStyles.modalCloseCircle}
-                            >
-                                <Ionicons name="close" size={18} color="#94A3B8" />
-                            </TouchableOpacity>
-                        </View>
-
-                        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
-                            {/* GATEWAY SELECTOR WITH OFFICIAL LOGOS */}
-                            <Text style={localStyles.inputLabel}>Select Payment Gateway</Text>
-                            <View style={{ gap: 10, marginBottom: 16 }}>
-                                {GATEWAYS.map(gw => {
-                                    const isSel = topUpGateway === gw.id;
-                                    return (
-                                        <TouchableOpacity
-                                            key={gw.id}
-                                            style={[
-                                                localStyles.gwCard,
-                                                isSel && { borderColor: gw.color, backgroundColor: 'rgba(217, 167, 58, 0.06)' }
-                                            ]}
-                                            onPress={() => setTopUpGateway(gw.id)}
-                                            activeOpacity={0.8}
-                                        >
-                                            <View style={localStyles.gwLogoWrap}>
-                                                <Image source={gw.logo} style={localStyles.gwLogo} resizeMode="contain" />
-                                            </View>
-                                            <View style={{ flex: 1, marginLeft: 12 }}>
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                                    <Text style={localStyles.gwName}>{gw.name}</Text>
-                                                    <View style={[localStyles.gwBadge, { backgroundColor: gw.badgeBg, borderColor: gw.badgeBorder }]}>
-                                                        <Text style={[localStyles.gwBadgeText, { color: gw.badgeColor }]}>{gw.badge}</Text>
-                                                    </View>
-                                                </View>
-                                                <Text style={localStyles.gwSub} numberOfLines={1}>{gw.subtitle}</Text>
-                                                <Text style={{ color: '#10B981', fontSize: 11, fontWeight: '700', marginTop: 2 }}>
-                                                    ⚡ {gw.speed}
-                                                </Text>
-                                            </View>
-                                            <View style={[localStyles.gwRadio, isSel && { borderColor: gw.color }]}>
-                                                {isSel && <View style={[localStyles.gwRadioInner, { backgroundColor: gw.color }]} />}
-                                            </View>
-                                        </TouchableOpacity>
-                                    );
-                                })}
-                            </View>
-
-                            {/* AMOUNT INPUT (IF NOT DEDICATED BANK TRANSFER) */}
-                            {topUpGateway !== 'bank_transfer' ? (
-                                <View style={{ marginBottom: 16 }}>
-                                    {topUpGateway === 'nowpayments' ? (
-                                        <>
-                                            <Text style={localStyles.inputLabel}>Amount (USD $)</Text>
-                                            <TextInput
-                                                style={localStyles.textInputField}
-                                                placeholder="0.00"
-                                                placeholderTextColor="#64748B"
-                                                keyboardType="numeric"
-                                                value={topUpAmountUsd}
-                                                onChangeText={(val) => {
-                                                    setTopUpAmountUsd(val);
-                                                    const u = parseFloat(val) || 0;
-                                                    setTopUpAmountNgn(String(Math.round(u * USD_RATE)));
-                                                }}
-                                            />
-                                            {parseFloat(topUpAmountUsd) > 0 && (
-                                                <Text style={{ color: '#94A3B8', fontSize: 12, marginTop: 4 }}>
-                                                    ≈ ₦{(parseFloat(topUpAmountUsd) * USD_RATE).toLocaleString()} NGN (@ ₦{USD_RATE}/$)
-                                                </Text>
-                                            )}
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Text style={localStyles.inputLabel}>Deposit Amount (₦)</Text>
-                                            <TextInput
-                                                style={localStyles.textInputField}
-                                                placeholder="0.00"
-                                                placeholderTextColor="#64748B"
-                                                keyboardType="numeric"
-                                                value={topUpAmountNgn}
-                                                onChangeText={setTopUpAmountNgn}
-                                            />
-                                        </>
-                                    )}
-                                </View>
-                            ) : (
-                                <View style={localStyles.dvaInfoBox}>
-                                    <Ionicons name="information-circle" size={20} color="#10B981" />
-                                    <Text style={{ color: '#E2E8F0', fontSize: 13, flex: 1, lineHeight: 18 }}>
-                                        {virtualAcc?.account_number
-                                            ? `Transfer any amount from your Nigerian bank app to your dedicated ${virtualAcc.bank_name} account (${virtualAcc.account_number}). Funds credit automatically with 0% fee.`
-                                            : `Generate your Paystack-verified dedicated bank account to get permanent personal bank details for 0% fee instant deposits.`
-                                        }
-                                    </Text>
-                                </View>
-                            )}
-
-                            {/* SUBMIT BUTTON */}
-                            <TouchableOpacity
-                                style={[
-                                    localStyles.submitPayoutBtn,
-                                    { backgroundColor: '#10B981' },
-                                    topUpPending && { opacity: 0.6 }
-                                ]}
-                                onPress={handleExecuteTopUp}
-                                disabled={topUpPending}
-                                activeOpacity={0.85}
-                            >
-                                {topUpPending ? (
-                                    <ActivityIndicator color="#FFFFFF" />
-                                ) : (
-                                    <Text style={[localStyles.submitPayoutBtnText, { color: '#FFFFFF' }]}>
-                                        {topUpGateway === 'bank_transfer'
-                                            ? (virtualAcc?.account_number ? 'Copy Dedicated Bank Details 📋' : 'Activate Dedicated Account 🚀')
-                                            : `Proceed with ${GATEWAYS.find(g => g.id === topUpGateway)?.name || 'Gateway'}`
-                                        }
-                                    </Text>
-                                )}
-                            </TouchableOpacity>
-                        </ScrollView>
-                    </View>
-                </View>
-            </Modal>
 
             {/* ============================================================== */}
             {/* WITHDRAWAL MODAL */}
@@ -2075,7 +1581,7 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                                                         setAccountName(sb.account_name);
                                                     }}
                                                 >
-                                                    <Ionicons name="business" size={14} color={isSelected ? "#070D1B" : "#D9A73A"} />
+                                                    <Ionicons name="business" size={14} color={isSelected ? "#FFFFFF" : "#059669"} />
                                                     <Text style={[localStyles.savedBankPillText, isSelected && localStyles.savedBankPillTextActive]}>
                                                         {sb.bank_name} ({sb.account_number.slice(-4)})
                                                     </Text>
@@ -2091,17 +1597,17 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                                 onPress={() => setShowBankDropdown(true)}
                                 activeOpacity={0.8}
                             >
-                                <Text style={{ color: bankName ? '#FFFFFF' : '#64748B', fontWeight: '600', fontSize: 14 }}>
+                                <Text style={{ color: bankName ? '#0F172A' : '#64748B', fontWeight: '700', fontSize: 14 }}>
                                     {bankName || 'Select bank...'}
                                 </Text>
-                                <Ionicons name="chevron-down" size={16} color="#94A3B8" />
+                                <Ionicons name="chevron-down" size={16} color="#64748B" />
                             </TouchableOpacity>
 
                             <Text style={localStyles.inputLabel}>10-Digit Account Number</Text>
                             <TextInput
                                 style={localStyles.textInputField}
                                 placeholder="10-digit account number"
-                                placeholderTextColor="#64748B"
+                                placeholderTextColor="#94A3B8"
                                 keyboardType="numeric"
                                 maxLength={10}
                                 value={accountNo}
@@ -2111,12 +1617,12 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                             <Text style={localStyles.inputLabel}>Account Holder Name</Text>
                             <View style={[localStyles.textInputField, { flexDirection: 'row', alignItems: 'center' }]}>
                                 {resolvingAccount ? (
-                                    <ActivityIndicator size="small" color="#D9A73A" style={{ marginRight: 8 }} />
+                                    <ActivityIndicator size="small" color="#059669" style={{ marginRight: 8 }} />
                                 ) : null}
                                 <TextInput
-                                    style={{ flex: 1, color: '#FFFFFF', fontWeight: '700' }}
+                                    style={{ flex: 1, color: '#0F172A', fontWeight: '700' }}
                                     placeholder={accountNo.length === 10 ? "Verifying with NIBSS..." : "Enter 10 digits"}
-                                    placeholderTextColor="#64748B"
+                                    placeholderTextColor="#94A3B8"
                                     value={accountName}
                                     editable={false}
                                 />
@@ -2151,7 +1657,7 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                                 activeOpacity={0.85}
                             >
                                 {submittingWithdrawal ? (
-                                    <ActivityIndicator color="#070D1B" />
+                                    <ActivityIndicator color="#FFFFFF" />
                                 ) : (
                                     <Text style={localStyles.submitPayoutBtnText}>
                                         Confirm Withdrawal (₦{numpadAmount.toLocaleString()})
@@ -2180,11 +1686,11 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                         </View>
 
                         <View style={localStyles.bankSearchBox}>
-                            <Ionicons name="search" size={16} color="#94A3B8" style={{ marginRight: 8 }} />
+                            <Ionicons name="search" size={16} color="#64748B" style={{ marginRight: 8 }} />
                             <TextInput
-                                style={{ flex: 1, color: '#FFFFFF', fontSize: 14 }}
+                                style={{ flex: 1, color: '#0F172A', fontSize: 14 }}
                                 placeholder="Search bank name..."
-                                placeholderTextColor="#64748B"
+                                placeholderTextColor="#94A3B8"
                                 value={searchBankQuery}
                                 onChangeText={handleSearchBank}
                                 autoCapitalize="none"
@@ -2206,7 +1712,7 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                                     activeOpacity={0.7}
                                 >
                                     <View style={localStyles.bankChoiceIcon}>
-                                        <Ionicons name="business" size={14} color="#D9A73A" />
+                                        <Ionicons name="business" size={14} color="#059669" />
                                     </View>
                                     <Text style={localStyles.bankChoiceName}>{b.name}</Text>
                                     <Ionicons name="chevron-forward" size={14} color="#64748B" />
@@ -2231,7 +1737,7 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                                 onPress={() => setShowAddBankModal(false)}
                                 style={localStyles.modalCloseCircle}
                             >
-                                <Ionicons name="close" size={18} color="#94A3B8" />
+                                <Ionicons name="close" size={18} color="#64748B" />
                             </TouchableOpacity>
                         </View>
 
@@ -2240,17 +1746,17 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                             style={localStyles.selectBankField}
                             onPress={() => setShowBankDropdown(true)}
                         >
-                            <Text style={{ color: bankName ? '#FFFFFF' : '#64748B', fontWeight: '600' }}>
+                            <Text style={{ color: bankName ? '#0F172A' : '#64748B', fontWeight: '700' }}>
                                 {bankName || 'Select your bank...'}
                             </Text>
-                            <Ionicons name="chevron-down" size={16} color="#94A3B8" />
+                            <Ionicons name="chevron-down" size={16} color="#64748B" />
                         </TouchableOpacity>
 
                         <Text style={localStyles.inputLabel}>Account Number</Text>
                         <TextInput
                             style={localStyles.textInputField}
                             placeholder="10-digit account number"
-                            placeholderTextColor="#64748B"
+                            placeholderTextColor="#94A3B8"
                             keyboardType="numeric"
                             maxLength={10}
                             value={accountNo}
@@ -2259,11 +1765,11 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
 
                         <Text style={localStyles.inputLabel}>Account Name (Auto-fetched)</Text>
                         <View style={[localStyles.textInputField, { flexDirection: 'row', alignItems: 'center' }]}>
-                            {resolvingAccount && <ActivityIndicator size="small" color="#D9A73A" style={{ marginRight: 8 }} />}
+                            {resolvingAccount && <ActivityIndicator size="small" color="#059669" style={{ marginRight: 8 }} />}
                             <TextInput
-                                style={{ flex: 1, color: '#FFFFFF', fontWeight: '700' }}
+                                style={{ flex: 1, color: '#0F172A', fontWeight: '700' }}
                                 placeholder={accountNo.length === 10 ? "Verifying..." : "Enter 10 digits"}
-                                placeholderTextColor="#64748B"
+                                placeholderTextColor="#94A3B8"
                                 value={accountName}
                                 editable={false}
                             />
@@ -2295,17 +1801,17 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                                 onPress={() => setShowTransferModal(false)}
                                 style={localStyles.modalCloseCircle}
                             >
-                                <Ionicons name="close" size={18} color="#94A3B8" />
+                                <Ionicons name="close" size={18} color="#64748B" />
                             </TouchableOpacity>
                         </View>
 
-                        <Text style={{ color: '#94A3B8', fontSize: 13, lineHeight: 18, marginBottom: 14 }}>
+                        <Text style={{ color: '#64748B', fontSize: 13, lineHeight: 18, marginBottom: 14 }}>
                             Instantly transfer your vendor store earnings to your customer wallet to purchase products or services on Abu Mafhal Marketplace.
                         </Text>
 
                         <View style={localStyles.modalBalPill}>
-                            <Text style={{ color: '#94A3B8', fontSize: 13 }}>Available Balance:</Text>
-                            <Text style={{ color: '#10B981', fontSize: 15, fontWeight: '900' }}>
+                            <Text style={{ color: '#64748B', fontSize: 13, fontWeight: '600' }}>Available Balance:</Text>
+                            <Text style={{ color: '#059669', fontSize: 15, fontWeight: '900' }}>
                                 ₦{localWallet.balance.toLocaleString()}
                             </Text>
                         </View>
@@ -2314,7 +1820,7 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                         <TextInput
                             style={localStyles.textInputField}
                             placeholder="0.00"
-                            placeholderTextColor="#64748B"
+                            placeholderTextColor="#94A3B8"
                             keyboardType="numeric"
                             value={transferAmount}
                             onChangeText={setTransferAmount}
@@ -2327,7 +1833,7 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                             activeOpacity={0.85}
                         >
                             {submittingTransfer ? (
-                                <ActivityIndicator color="#070D1B" />
+                                <ActivityIndicator color="#FFFFFF" />
                             ) : (
                                 <Text style={localStyles.submitPayoutBtnText}>Execute Instant Transfer</Text>
                             )}
@@ -2345,19 +1851,19 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                         <View style={localStyles.modalDragHandle} />
 
                         <View style={{ alignItems: 'center', marginVertical: 12 }}>
-                            <View style={[localStyles.receiptIconCircle, selectedReceipt?.isCredit ? { backgroundColor: 'rgba(16, 185, 129, 0.15)' } : { backgroundColor: 'rgba(239, 68, 68, 0.15)' }]}>
+                            <View style={[localStyles.receiptIconCircle, selectedReceipt?.isCredit ? { backgroundColor: 'rgba(5, 150, 105, 0.12)' } : { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}>
                                 <Ionicons
                                     name={selectedReceipt?.isCredit ? "checkmark-circle" : "arrow-up-circle"}
                                     size={36}
-                                    color={selectedReceipt?.isCredit ? "#10B981" : "#EF4444"}
+                                    color={selectedReceipt?.isCredit ? "#059669" : "#DC2626"}
                                 />
                             </View>
                             <Text style={localStyles.receiptHeaderTitle}>Official Payment Receipt</Text>
                             <Text style={localStyles.receiptAmount}>
                                 ₦{selectedReceipt?.amount?.toLocaleString()}
                             </Text>
-                            <View style={[localStyles.statusChip, { marginTop: 6, backgroundColor: 'rgba(217, 167, 58, 0.15)' }]}>
-                                <Text style={[localStyles.statusChipText, { color: '#D9A73A' }]}>
+                            <View style={[localStyles.statusChip, { marginTop: 6, backgroundColor: 'rgba(5, 150, 105, 0.1)', borderColor: 'rgba(5, 150, 105, 0.2)' }]}>
+                                <Text style={[localStyles.statusChipText, { color: '#059669' }]}>
                                     {selectedReceipt?.status?.toUpperCase()}
                                 </Text>
                             </View>
@@ -2386,26 +1892,26 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
                             </View>
                             <View style={[localStyles.receiptRow, { borderBottomWidth: 0 }]}>
                                 <Text style={localStyles.receiptLabel}>Processor</Text>
-                                <Text style={[localStyles.receiptValue, { color: '#D9A73A' }]}>Abu Mafhal Financial Switch</Text>
+                                <Text style={[localStyles.receiptValue, { color: '#059669' }]}>Abu Mafhal Financial Switch</Text>
                             </View>
                         </View>
 
                         <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
                             <TouchableOpacity
-                                style={[localStyles.receiptActionBtn, { backgroundColor: '#D9A73A' }]}
+                                style={[localStyles.receiptActionBtn, { backgroundColor: '#059669' }]}
                                 onPress={() => handleShareReceipt(selectedReceipt)}
                                 activeOpacity={0.8}
                             >
-                                <Ionicons name="share-social-outline" size={18} color="#070D1B" />
-                                <Text style={[localStyles.receiptActionBtnText, { color: '#070D1B' }]}>Share Receipt</Text>
+                                <Ionicons name="share-social-outline" size={18} color="#FFFFFF" />
+                                <Text style={[localStyles.receiptActionBtnText, { color: '#FFFFFF' }]}>Share Receipt</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity
-                                style={[localStyles.receiptActionBtn, { backgroundColor: 'rgba(255, 255, 255, 0.08)' }]}
+                                style={[localStyles.receiptActionBtn, { backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' }]}
                                 onPress={() => setShowReceiptModal(false)}
                                 activeOpacity={0.8}
                             >
-                                <Text style={[localStyles.receiptActionBtnText, { color: '#FFFFFF' }]}>Close</Text>
+                                <Text style={[localStyles.receiptActionBtnText, { color: '#0F172A' }]}>Close</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -2426,29 +1932,29 @@ const localStyles = StyleSheet.create({
     greetingSmall: {
         fontSize: 12,
         fontWeight: '700',
-        color: '#D9A73A',
+        color: '#059669',
         textTransform: 'uppercase',
         letterSpacing: 0.8
     },
     merchantName: {
         fontSize: 20,
         fontWeight: '900',
-        color: '#FFFFFF',
+        color: '#0F172A',
         letterSpacing: -0.3
     },
     verifiedTag: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 3,
-        backgroundColor: 'rgba(217, 167, 58, 0.15)',
-        paddingHorizontal: 7,
-        paddingVertical: 2,
+        backgroundColor: 'rgba(5, 150, 105, 0.1)',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
         borderRadius: 6,
         borderWidth: 1,
-        borderColor: 'rgba(217, 167, 58, 0.3)'
+        borderColor: 'rgba(5, 150, 105, 0.25)'
     },
     verifiedTagText: {
-        color: '#D9A73A',
+        color: '#059669',
         fontSize: 10,
         fontWeight: '800'
     },
@@ -2456,24 +1962,30 @@ const localStyles = StyleSheet.create({
         width: 38,
         height: 38,
         borderRadius: 12,
-        backgroundColor: 'rgba(255, 255, 255, 0.06)',
+        backgroundColor: '#FFFFFF',
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)'
+        borderColor: '#E2E8F0',
+        shadowColor: '#64748B',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+        elevation: 1
     },
     masterCard: {
         borderRadius: 24,
         padding: 22,
-        borderWidth: 1.5,
-        borderColor: 'rgba(217, 167, 58, 0.35)',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        backgroundColor: '#FFFFFF',
         position: 'relative',
         overflow: 'hidden',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.3,
-        shadowRadius: 18,
-        elevation: 8,
+        shadowColor: '#64748B',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.08,
+        shadowRadius: 16,
+        elevation: 4,
         marginBottom: 20
     },
     cardDecoGlow: {
@@ -2483,19 +1995,19 @@ const localStyles = StyleSheet.create({
         width: 180,
         height: 180,
         borderRadius: 90,
-        backgroundColor: 'rgba(217, 167, 58, 0.08)'
+        backgroundColor: 'rgba(5, 150, 105, 0.04)'
     },
     masterCardLabel: {
         fontSize: 12,
         fontWeight: '700',
-        color: '#94A3B8',
+        color: '#64748B',
         textTransform: 'uppercase',
         letterSpacing: 0.5
     },
     masterCardValue: {
         fontSize: 34,
         fontWeight: '900',
-        color: '#FFFFFF',
+        color: '#0F172A',
         letterSpacing: -1,
         marginTop: 2
     },
@@ -2503,18 +2015,18 @@ const localStyles = StyleSheet.create({
         width: 48,
         height: 48,
         borderRadius: 16,
-        backgroundColor: 'rgba(217, 167, 58, 0.12)',
+        backgroundColor: 'rgba(5, 150, 105, 0.1)',
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: 'rgba(217, 167, 58, 0.25)'
+        borderColor: 'rgba(5, 150, 105, 0.2)'
     },
     cardSubMetricsRow: {
         flexDirection: 'row',
         marginTop: 20,
         paddingTop: 16,
         borderTopWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.08)',
+        borderColor: '#F1F5F9',
         justifyContent: 'space-between'
     },
     cardSubMetricBox: {
@@ -2522,7 +2034,7 @@ const localStyles = StyleSheet.create({
     },
     cardSubMetricLabel: {
         fontSize: 11,
-        color: '#94A3B8',
+        color: '#64748B',
         fontWeight: '600'
     },
     cardSubMetricVal: {
@@ -2533,7 +2045,7 @@ const localStyles = StyleSheet.create({
     metricDivider: {
         width: 1,
         height: 24,
-        backgroundColor: 'rgba(255, 255, 255, 0.08)',
+        backgroundColor: '#E2E8F0',
         marginHorizontal: 8,
         alignSelf: 'center'
     },
@@ -2566,30 +2078,150 @@ const localStyles = StyleSheet.create({
         paddingHorizontal: 14,
         paddingVertical: 8,
         borderRadius: 20,
-        backgroundColor: 'rgba(255, 255, 255, 0.06)',
+        backgroundColor: '#FFFFFF',
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.08)'
+        borderColor: '#E2E8F0'
     },
     segmentPillActive: {
-        backgroundColor: '#D9A73A',
-        borderColor: '#D9A73A'
+        backgroundColor: '#0F172A',
+        borderColor: '#0F172A'
     },
     segmentPillText: {
         fontSize: 12,
         fontWeight: '700',
-        color: '#94A3B8'
+        color: '#64748B'
     },
     segmentPillTextActive: {
-        color: '#070D1B',
+        color: '#FFFFFF',
         fontWeight: '900'
+    },
+    payoutBankCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        padding: 18,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        shadowColor: '#64748B',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 2
+    },
+    payoutBankHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingBottom: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9'
+    },
+    payoutBankIconWrap: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        backgroundColor: 'rgba(5, 150, 105, 0.1)',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    payoutBankTitle: {
+        color: '#0F172A',
+        fontSize: 15,
+        fontWeight: '800'
+    },
+    payoutBankSubtitle: {
+        color: '#64748B',
+        fontSize: 12,
+        marginTop: 1
+    },
+    payoutBankBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: 'rgba(5, 150, 105, 0.1)',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: 'rgba(5, 150, 105, 0.2)'
+    },
+    payoutBankBadgeText: {
+        color: '#059669',
+        fontSize: 10,
+        fontWeight: '900',
+        letterSpacing: 0.5
+    },
+    payoutBankDetailsBox: {
+        backgroundColor: '#F8FAFC',
+        borderRadius: 14,
+        padding: 14,
+        marginTop: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    payoutBankMetaLabel: {
+        color: '#64748B',
+        fontSize: 10,
+        fontWeight: '800',
+        letterSpacing: 0.5
+    },
+    payoutBankMetaVal: {
+        color: '#0F172A',
+        fontSize: 14,
+        fontWeight: '700',
+        marginTop: 2
+    },
+    payoutBankActionBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#059669',
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 10
+    },
+    payoutBankActionBtnText: {
+        color: '#FFFFFF',
+        fontSize: 12,
+        fontWeight: '800'
+    },
+    payoutBankEmptyBox: {
+        backgroundColor: '#F8FAFC',
+        borderRadius: 14,
+        padding: 16,
+        marginTop: 12,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
+    },
+    payoutBankEmptyText: {
+        color: '#64748B',
+        fontSize: 12,
+        textAlign: 'center',
+        lineHeight: 18,
+        marginBottom: 10
+    },
+    payoutBankAddBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: '#059669',
+        paddingHorizontal: 16,
+        paddingVertical: 9,
+        borderRadius: 10
+    },
+    payoutBankAddBtnText: {
+        color: '#FFFFFF',
+        fontSize: 12,
+        fontWeight: '800'
     },
     escrowNoticeBanner: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
-        backgroundColor: 'rgba(245, 158, 11, 0.12)',
+        backgroundColor: 'rgba(217, 119, 6, 0.08)',
         borderWidth: 1,
-        borderColor: 'rgba(245, 158, 11, 0.3)',
+        borderColor: 'rgba(217, 119, 6, 0.25)',
         borderRadius: 16,
         padding: 14,
         marginBottom: 16
@@ -2598,17 +2230,17 @@ const localStyles = StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: 10,
-        backgroundColor: 'rgba(245, 158, 11, 0.2)',
+        backgroundColor: 'rgba(217, 119, 6, 0.15)',
         alignItems: 'center',
         justifyContent: 'center'
     },
     escrowNoticeTitle: {
-        color: '#FCD34D',
+        color: '#B45309',
         fontSize: 13,
         fontWeight: '800'
     },
     escrowNoticeSub: {
-        color: '#CBD5E1',
+        color: '#78350F',
         fontSize: 11,
         marginTop: 2,
         lineHeight: 15
@@ -2622,23 +2254,28 @@ const localStyles = StyleSheet.create({
     sectionTitle: {
         fontSize: 16,
         fontWeight: '800',
-        color: '#FFFFFF',
+        color: '#0F172A',
         letterSpacing: -0.3
     },
     viewAllText: {
         fontSize: 12,
-        color: '#D9A73A',
+        color: '#059669',
         fontWeight: '700'
     },
     transactionCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#0E1A2E',
+        backgroundColor: '#FFFFFF',
         padding: 14,
         borderRadius: 16,
         marginBottom: 8,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.05)'
+        borderColor: '#E2E8F0',
+        shadowColor: '#64748B',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.03,
+        shadowRadius: 4,
+        elevation: 1
     },
     txIconCircle: {
         width: 40,
@@ -2648,15 +2285,15 @@ const localStyles = StyleSheet.create({
         justifyContent: 'center'
     },
     txCreditBg: {
-        backgroundColor: 'rgba(16, 185, 129, 0.15)'
+        backgroundColor: 'rgba(5, 150, 105, 0.12)'
     },
     txDebitBg: {
-        backgroundColor: 'rgba(239, 68, 68, 0.15)'
+        backgroundColor: 'rgba(239, 68, 68, 0.12)'
     },
     txDesc: {
         fontSize: 13,
         fontWeight: '700',
-        color: '#FFFFFF'
+        color: '#0F172A'
     },
     txDate: {
         fontSize: 11,
@@ -2675,31 +2312,31 @@ const localStyles = StyleSheet.create({
         borderWidth: 1
     },
     statusChipSuccess: {
-        backgroundColor: 'rgba(16, 185, 129, 0.12)',
-        borderColor: 'rgba(16, 185, 129, 0.25)'
+        backgroundColor: 'rgba(5, 150, 105, 0.1)',
+        borderColor: 'rgba(5, 150, 105, 0.25)'
     },
     statusChipWarning: {
-        backgroundColor: 'rgba(245, 158, 11, 0.12)',
-        borderColor: 'rgba(245, 158, 11, 0.25)'
+        backgroundColor: 'rgba(217, 119, 6, 0.1)',
+        borderColor: 'rgba(217, 119, 6, 0.25)'
     },
     statusChipText: {
         fontSize: 9,
         fontWeight: '800',
         textTransform: 'uppercase',
-        color: '#D9A73A'
+        color: '#059669'
     },
     emptyBox: {
         alignItems: 'center',
         justifyContent: 'center',
         padding: 30,
-        backgroundColor: '#0E1A2E',
+        backgroundColor: '#FFFFFF',
         borderRadius: 20,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.05)',
+        borderColor: '#E2E8F0',
         marginVertical: 10
     },
     emptyTitle: {
-        color: '#FFFFFF',
+        color: '#0F172A',
         fontSize: 14,
         fontWeight: '800',
         marginTop: 10
@@ -2713,49 +2350,54 @@ const localStyles = StyleSheet.create({
         maxWidth: 260
     },
     escrowExplainerCard: {
-        backgroundColor: 'rgba(217, 167, 58, 0.08)',
+        backgroundColor: 'rgba(217, 119, 6, 0.06)',
         borderWidth: 1,
-        borderColor: 'rgba(217, 167, 58, 0.25)',
+        borderColor: 'rgba(217, 119, 6, 0.2)',
         borderRadius: 16,
         padding: 16,
         marginBottom: 14
     },
     escrowExplainerTitle: {
-        color: '#D9A73A',
+        color: '#B45309',
         fontSize: 13,
         fontWeight: '800'
     },
     escrowExplainerText: {
-        color: '#CBD5E1',
+        color: '#475569',
         fontSize: 12,
         lineHeight: 18
     },
     escrowItemCard: {
-        backgroundColor: '#0E1A2E',
+        backgroundColor: '#FFFFFF',
         padding: 16,
         borderRadius: 16,
         marginBottom: 10,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.06)'
+        borderColor: '#E2E8F0',
+        shadowColor: '#64748B',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.03,
+        shadowRadius: 4,
+        elevation: 1
     },
     escrowItemProd: {
-        color: '#FFFFFF',
+        color: '#0F172A',
         fontSize: 14,
         fontWeight: '800'
     },
     escrowItemCust: {
-        color: '#94A3B8',
+        color: '#64748B',
         fontSize: 12,
         marginTop: 3
     },
     escrowItemTracking: {
-        color: '#D9A73A',
+        color: '#D97706',
         fontSize: 11,
         fontWeight: '600',
         marginTop: 2
     },
     escrowItemAmt: {
-        color: '#FCD34D',
+        color: '#0F172A',
         fontSize: 16,
         fontWeight: '900'
     },
@@ -2766,118 +2408,125 @@ const localStyles = StyleSheet.create({
         marginTop: 12,
         paddingTop: 10,
         borderTopWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.05)'
+        borderColor: '#F1F5F9'
     },
     escrowCardFooterText: {
-        color: '#94A3B8',
+        color: '#64748B',
         fontSize: 11
     },
     searchBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#0E1A2E',
+        backgroundColor: '#FFFFFF',
         borderRadius: 12,
         paddingHorizontal: 12,
         paddingVertical: 10,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.08)',
+        borderColor: '#E2E8F0',
         marginBottom: 12
     },
     searchBarInput: {
         flex: 1,
-        color: '#FFFFFF',
+        color: '#0F172A',
         fontSize: 13
     },
     filterChip: {
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 16,
-        backgroundColor: 'rgba(255, 255, 255, 0.06)',
+        backgroundColor: '#FFFFFF',
         marginRight: 8,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.08)'
+        borderColor: '#E2E8F0'
     },
     filterChipActive: {
-        backgroundColor: '#D9A73A',
-        borderColor: '#D9A73A'
+        backgroundColor: '#0F172A',
+        borderColor: '#0F172A'
     },
     filterChipText: {
         fontSize: 11,
         fontWeight: '700',
-        color: '#94A3B8'
+        color: '#64748B'
     },
     filterChipTextActive: {
-        color: '#070D1B',
+        color: '#FFFFFF',
         fontWeight: '900'
     },
     addBankTopBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
-        backgroundColor: '#D9A73A',
+        backgroundColor: '#059669',
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 10
     },
     addBankTopBtnText: {
-        color: '#070D1B',
+        color: '#FFFFFF',
         fontSize: 12,
         fontWeight: '800'
     },
     bankAccountCard: {
-        backgroundColor: '#0E1A2E',
+        backgroundColor: '#FFFFFF',
         padding: 16,
         borderRadius: 16,
         marginBottom: 10,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.08)'
+        borderColor: '#E2E8F0',
+        shadowColor: '#64748B',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.03,
+        shadowRadius: 4,
+        elevation: 1
     },
     bankIconBox: {
         width: 44,
         height: 44,
         borderRadius: 14,
-        backgroundColor: 'rgba(217, 167, 58, 0.12)',
+        backgroundColor: 'rgba(5, 150, 105, 0.1)',
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: 'rgba(217, 167, 58, 0.25)'
+        borderColor: 'rgba(5, 150, 105, 0.2)'
     },
     bankAccName: {
-        color: '#FFFFFF',
+        color: '#0F172A',
         fontSize: 14,
         fontWeight: '800'
     },
     primaryBadge: {
-        backgroundColor: '#D9A73A',
+        backgroundColor: '#059669',
         paddingHorizontal: 6,
         paddingVertical: 1,
         borderRadius: 4
     },
     primaryBadgeText: {
-        color: '#070D1B',
+        color: '#FFFFFF',
         fontSize: 8,
         fontWeight: '900'
     },
     bankAccNo: {
-        color: '#94A3B8',
+        color: '#64748B',
         fontSize: 13,
         fontWeight: '700',
         letterSpacing: 1,
         marginTop: 2
     },
     bankAccHolder: {
-        color: '#CBD5E1',
+        color: '#334155',
         fontSize: 11,
         marginTop: 1
     },
     makeDefaultBtn: {
-        backgroundColor: 'rgba(255, 255, 255, 0.06)',
+        backgroundColor: '#F1F5F9',
         paddingHorizontal: 8,
         paddingVertical: 4,
-        borderRadius: 6
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
     },
     makeDefaultText: {
-        color: '#D9A73A',
+        color: '#0F172A',
         fontSize: 10,
         fontWeight: '700'
     },
@@ -2885,15 +2534,21 @@ const localStyles = StyleSheet.create({
         padding: 20,
         borderRadius: 20,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.08)'
+        borderColor: '#E2E8F0',
+        backgroundColor: '#FFFFFF',
+        shadowColor: '#64748B',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.06,
+        shadowRadius: 12,
+        elevation: 3
     },
     insightHeader: {
-        color: '#FFFFFF',
+        color: '#0F172A',
         fontSize: 18,
         fontWeight: '900'
     },
     insightSub: {
-        color: '#94A3B8',
+        color: '#64748B',
         fontSize: 12,
         marginTop: 4,
         lineHeight: 17
@@ -2907,20 +2562,20 @@ const localStyles = StyleSheet.create({
     },
     insightItem: {
         width: '48%',
-        backgroundColor: 'rgba(255, 255, 255, 0.04)',
+        backgroundColor: '#F8FAFC',
         padding: 14,
         borderRadius: 14,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.05)'
+        borderColor: '#E2E8F0'
     },
     insightLabel: {
-        color: '#94A3B8',
+        color: '#64748B',
         fontSize: 11,
         fontWeight: '700',
         textTransform: 'uppercase'
     },
     insightVal: {
-        color: '#FFFFFF',
+        color: '#0F172A',
         fontSize: 16,
         fontWeight: '900',
         marginTop: 4
@@ -2930,33 +2585,38 @@ const localStyles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         gap: 8,
-        backgroundColor: '#D9A73A',
+        backgroundColor: '#0F172A',
         paddingVertical: 14,
         borderRadius: 14
     },
     exportFullStatementText: {
-        color: '#070D1B',
+        color: '#FFFFFF',
         fontSize: 13,
         fontWeight: '900'
     },
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.75)',
+        backgroundColor: 'rgba(15, 23, 42, 0.6)',
         justifyContent: 'flex-end'
     },
     modalSheet: {
-        backgroundColor: '#0E1A2E',
+        backgroundColor: '#FFFFFF',
         borderTopLeftRadius: 28,
         borderTopRightRadius: 28,
         padding: 20,
         maxHeight: '90%',
         borderWidth: 1,
-        borderColor: 'rgba(217, 167, 58, 0.25)'
+        borderColor: '#E2E8F0',
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 16,
+        elevation: 8
     },
     modalDragHandle: {
         width: 36,
         height: 4,
-        backgroundColor: '#334155',
+        backgroundColor: '#CBD5E1',
         borderRadius: 2,
         alignSelf: 'center',
         marginBottom: 14
@@ -2970,13 +2630,13 @@ const localStyles = StyleSheet.create({
     modalSheetTitle: {
         fontSize: 18,
         fontWeight: '900',
-        color: '#FFFFFF'
+        color: '#0F172A'
     },
     modalCloseCircle: {
         width: 32,
         height: 32,
         borderRadius: 16,
-        backgroundColor: 'rgba(255, 255, 255, 0.06)',
+        backgroundColor: '#F1F5F9',
         alignItems: 'center',
         justifyContent: 'center'
     },
@@ -2984,13 +2644,15 @@ const localStyles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.04)',
+        backgroundColor: '#F8FAFC',
         padding: 12,
         borderRadius: 12,
-        marginBottom: 14
+        marginBottom: 14,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
     },
     amountTitle: {
-        color: '#94A3B8',
+        color: '#64748B',
         fontSize: 11,
         fontWeight: '700',
         textTransform: 'uppercase',
@@ -2999,7 +2661,7 @@ const localStyles = StyleSheet.create({
     largeAmountText: {
         fontSize: 34,
         fontWeight: '900',
-        color: '#FFFFFF',
+        color: '#0F172A',
         marginTop: 4
     },
     overBalWarning: {
@@ -3018,18 +2680,18 @@ const localStyles = StyleSheet.create({
         flex: 1,
         alignItems: 'center',
         paddingVertical: 8,
-        backgroundColor: 'rgba(255, 255, 255, 0.04)',
+        backgroundColor: '#F1F5F9',
         borderRadius: 10,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.08)'
+        borderColor: '#E2E8F0'
     },
     presetChipText: {
-        color: '#FFFFFF',
+        color: '#0F172A',
         fontSize: 11,
         fontWeight: '700'
     },
     inputLabel: {
-        color: '#CBD5E1',
+        color: '#475569',
         fontSize: 12,
         fontWeight: '700',
         marginBottom: 6,
@@ -3039,89 +2701,96 @@ const localStyles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        backgroundColor: '#F1F5F9',
         paddingHorizontal: 12,
         paddingVertical: 7,
         borderRadius: 14,
         marginRight: 8,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.08)'
+        borderColor: '#E2E8F0'
     },
     savedBankPillActive: {
-        backgroundColor: '#D9A73A',
-        borderColor: '#D9A73A'
+        backgroundColor: '#059669',
+        borderColor: '#059669'
     },
     savedBankPillText: {
-        color: '#CBD5E1',
+        color: '#64748B',
         fontSize: 11,
         fontWeight: '700'
     },
     savedBankPillTextActive: {
-        color: '#070D1B',
+        color: '#FFFFFF',
         fontWeight: '900'
     },
     selectBankField: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.04)',
+        backgroundColor: '#F8FAFC',
         borderRadius: 12,
         paddingHorizontal: 14,
         paddingVertical: 12,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.08)'
+        borderColor: '#E2E8F0'
     },
     textInputField: {
-        backgroundColor: 'rgba(255, 255, 255, 0.04)',
+        backgroundColor: '#F8FAFC',
         borderRadius: 12,
         paddingHorizontal: 14,
         paddingVertical: 12,
-        color: '#FFFFFF',
+        color: '#0F172A',
         fontSize: 14,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.08)'
+        borderColor: '#E2E8F0'
     },
     submitPayoutBtn: {
-        backgroundColor: '#D9A73A',
+        backgroundColor: '#059669',
         borderRadius: 14,
         paddingVertical: 16,
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: 22
+        marginTop: 22,
+        shadowColor: '#059669',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 3
     },
     submitPayoutBtnText: {
-        color: '#070D1B',
+        color: '#FFFFFF',
         fontSize: 14,
         fontWeight: '900'
     },
     bankSearchBox: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        backgroundColor: '#F1F5F9',
         borderRadius: 12,
         paddingHorizontal: 12,
         paddingVertical: 10,
-        marginBottom: 12
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0'
     },
     bankChoiceRow: {
         flexDirection: 'row',
         alignItems: 'center',
         paddingVertical: 12,
         borderBottomWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.04)'
+        borderColor: '#F1F5F9'
     },
     bankChoiceIcon: {
         width: 30,
         height: 30,
         borderRadius: 8,
-        backgroundColor: 'rgba(217, 167, 58, 0.1)',
+        backgroundColor: 'rgba(5, 150, 105, 0.1)',
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 12
     },
     bankChoiceName: {
         flex: 1,
-        color: '#FFFFFF',
+        color: '#0F172A',
         fontSize: 13,
         fontWeight: '600'
     },
@@ -3136,36 +2805,36 @@ const localStyles = StyleSheet.create({
     receiptHeaderTitle: {
         fontSize: 16,
         fontWeight: '900',
-        color: '#FFFFFF'
+        color: '#0F172A'
     },
     receiptAmount: {
         fontSize: 28,
         fontWeight: '900',
-        color: '#FFFFFF',
+        color: '#0F172A',
         marginTop: 2
     },
     receiptDetailsBox: {
-        backgroundColor: 'rgba(255, 255, 255, 0.04)',
+        backgroundColor: '#F8FAFC',
         borderRadius: 16,
         padding: 14,
         marginVertical: 14,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.05)'
+        borderColor: '#E2E8F0'
     },
     receiptRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         paddingVertical: 8,
         borderBottomWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.04)'
+        borderColor: '#F1F5F9'
     },
     receiptLabel: {
-        color: '#94A3B8',
+        color: '#64748B',
         fontSize: 12,
         fontWeight: '600'
     },
     receiptValue: {
-        color: '#FFFFFF',
+        color: '#0F172A',
         fontSize: 12,
         fontWeight: '800'
     },
@@ -3183,12 +2852,12 @@ const localStyles = StyleSheet.create({
         fontWeight: '800'
     },
     calcSummaryBox: {
-        backgroundColor: 'rgba(255, 255, 255, 0.04)',
+        backgroundColor: '#F8FAFC',
         borderRadius: 14,
         padding: 12,
         marginTop: 14,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.06)',
+        borderColor: '#E2E8F0',
         gap: 6
     },
     calcSummaryRow: {
@@ -3197,29 +2866,29 @@ const localStyles = StyleSheet.create({
         alignItems: 'center'
     },
     calcSummaryLabel: {
-        color: '#94A3B8',
+        color: '#64748B',
         fontSize: 12,
         fontWeight: '600'
     },
     calcSummaryValFree: {
-        color: '#10B981',
+        color: '#059669',
         fontSize: 12,
         fontWeight: '800'
     },
     calcSummaryValNet: {
-        color: '#FFFFFF',
+        color: '#0F172A',
         fontSize: 13,
         fontWeight: '900'
     },
     calcSummaryValRem: {
-        color: '#D9A73A',
+        color: '#D97706',
         fontSize: 12,
         fontWeight: '700'
     },
     maxBalBtn: {
-        backgroundColor: 'rgba(217, 167, 58, 0.15)',
+        backgroundColor: 'rgba(5, 150, 105, 0.1)',
         borderWidth: 1,
-        borderColor: '#D9A73A',
+        borderColor: '#059669',
         borderRadius: 12,
         paddingHorizontal: 12,
         paddingVertical: 12,
@@ -3227,307 +2896,8 @@ const localStyles = StyleSheet.create({
         alignItems: 'center'
     },
     maxBalBtnText: {
-        color: '#D9A73A',
+        color: '#059669',
         fontSize: 12,
         fontWeight: '800'
-    },
-    gwCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.03)',
-        borderRadius: 14,
-        padding: 12,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.08)'
-    },
-    gwLogoWrap: {
-        width: 44,
-        height: 44,
-        borderRadius: 10,
-        backgroundColor: '#FFFFFF',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 4
-    },
-    gwLogo: {
-        width: 36,
-        height: 36
-    },
-    gwName: {
-        color: '#FFFFFF',
-        fontSize: 14,
-        fontWeight: '800'
-    },
-    gwBadge: {
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 6,
-        borderWidth: 1
-    },
-    gwBadgeText: {
-        fontSize: 9,
-        fontWeight: '900',
-        letterSpacing: 0.4
-    },
-    gwSub: {
-        color: '#94A3B8',
-        fontSize: 11,
-        marginTop: 2
-    },
-    gwRadio: {
-        width: 18,
-        height: 18,
-        borderRadius: 9,
-        borderWidth: 2,
-        borderColor: '#64748B',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginLeft: 8
-    },
-    gwRadioInner: {
-        width: 8,
-        height: 8,
-        borderRadius: 4
-    },
-    dvaInfoBox: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        backgroundColor: 'rgba(16, 185, 129, 0.08)',
-        borderWidth: 1,
-        borderColor: 'rgba(16, 185, 129, 0.25)',
-        borderRadius: 12,
-        padding: 12,
-        marginBottom: 16
-    },
-    dvaContainer: {
-        borderRadius: 20,
-        padding: 18,
-        marginBottom: 16,
-        borderWidth: 1,
-        borderColor: 'rgba(217, 167, 58, 0.3)',
-        overflow: 'hidden'
-    },
-    dvaHeaderRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingBottom: 14,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255, 255, 255, 0.08)'
-    },
-    dvaBankIconCircle: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: 'rgba(217, 167, 58, 0.15)',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: 'rgba(217, 167, 58, 0.3)'
-    },
-    dvaBankTitle: {
-        color: '#FFFFFF',
-        fontSize: 14,
-        fontWeight: '800'
-    },
-    dvaBankSubtitle: {
-        color: '#94A3B8',
-        fontSize: 11,
-        marginTop: 1
-    },
-    dvaBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        backgroundColor: 'rgba(16, 185, 129, 0.12)',
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 6,
-        borderWidth: 1,
-        borderColor: 'rgba(16, 185, 129, 0.3)'
-    },
-    dvaBadgeText: {
-        color: '#10B981',
-        fontSize: 10,
-        fontWeight: '900',
-        letterSpacing: 0.5
-    },
-    dvaActiveBody: {
-        marginTop: 14
-    },
-    dvaNumberRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.35)',
-        padding: 12,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: 'rgba(217, 167, 58, 0.25)'
-    },
-    dvaAccNumberText: {
-        color: '#FCD34D',
-        fontSize: 22,
-        fontWeight: '900',
-        letterSpacing: 2,
-        fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-        marginTop: 2
-    },
-    dvaCopyBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        backgroundColor: '#D9A73A',
-        paddingHorizontal: 12,
-        paddingVertical: 7,
-        borderRadius: 10
-    },
-    dvaCopyBtnText: {
-        color: '#070D1B',
-        fontSize: 12,
-        fontWeight: '900'
-    },
-    dvaMetaRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginTop: 12,
-        paddingHorizontal: 4
-    },
-    dvaMetaLabel: {
-        color: '#64748B',
-        fontSize: 10,
-        fontWeight: '800',
-        letterSpacing: 0.5
-    },
-    dvaMetaVal: {
-        color: '#FFFFFF',
-        fontSize: 13,
-        fontWeight: '700',
-        marginTop: 2
-    },
-    dvaFooterNote: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        marginTop: 12,
-        backgroundColor: 'rgba(255, 255, 255, 0.04)',
-        padding: 8,
-        borderRadius: 8
-    },
-    dvaFooterNoteText: {
-        color: '#94A3B8',
-        fontSize: 11,
-        flex: 1,
-        lineHeight: 15
-    },
-    dvaInactiveBody: {
-        marginTop: 12
-    },
-    dvaInactiveDesc: {
-        color: '#94A3B8',
-        fontSize: 12,
-        lineHeight: 18,
-        marginBottom: 12
-    },
-    dvaActivateBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        backgroundColor: '#D9A73A',
-        paddingVertical: 11,
-        borderRadius: 12
-    },
-    dvaActivateBtnText: {
-        color: '#070D1B',
-        fontSize: 13,
-        fontWeight: '900'
-    },
-    bvnFormWrap: {
-        marginTop: 16,
-        paddingTop: 16,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(255, 255, 255, 0.1)'
-    },
-    bvnHeaderRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        marginBottom: 6
-    },
-    bvnFormTitle: {
-        color: '#FFFFFF',
-        fontSize: 14,
-        fontWeight: '900'
-    },
-    bvnFormSub: {
-        color: '#94A3B8',
-        fontSize: 12,
-        lineHeight: 17,
-        marginBottom: 10
-    },
-    bvnTipRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        backgroundColor: 'rgba(56, 189, 248, 0.1)',
-        padding: 8,
-        borderRadius: 8,
-        marginBottom: 12,
-        borderWidth: 1,
-        borderColor: 'rgba(56, 189, 248, 0.2)'
-    },
-    bvnTipText: {
-        color: '#38BDF8',
-        fontSize: 11,
-        fontWeight: '700'
-    },
-    bvnInputLabel: {
-        color: '#CBD5E1',
-        fontSize: 11,
-        fontWeight: '700',
-        marginBottom: 4,
-        marginTop: 8
-    },
-    bvnInput: {
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        borderRadius: 10,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        color: '#FFFFFF',
-        fontSize: 14,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)'
-    },
-    bvnSecureBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        backgroundColor: 'rgba(16, 185, 129, 0.08)',
-        padding: 8,
-        borderRadius: 8,
-        marginTop: 12,
-        marginBottom: 12,
-        borderWidth: 1,
-        borderColor: 'rgba(16, 185, 129, 0.2)'
-    },
-    bvnSecureBadgeText: {
-        color: '#10B981',
-        fontSize: 10,
-        fontWeight: '700',
-        flex: 1
-    },
-    bvnVerifyBtn: {
-        backgroundColor: '#D9A73A',
-        paddingVertical: 12,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center'
-    },
-    bvnVerifyBtnText: {
-        color: '#070D1B',
-        fontSize: 13,
-        fontWeight: '900'
     }
 });

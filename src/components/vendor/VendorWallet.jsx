@@ -91,13 +91,7 @@ const VendorWallet = () => {
   const [bvnVerifying, setBvnVerifying] = useState(false);
   const [copiedVa, setCopiedVa] = useState(false);
 
-  // Top Up Modal State
-  const [showTopUpModal, setShowTopUpModal] = useState(false);
-  const [topUpGateway, setTopUpGateway] = useState('paystack');
-  const [topUpAmount, setTopUpAmount] = useState('');
-  const [topUpAmountUsd, setTopUpAmountUsd] = useState('');
-  const [topUpLoading, setTopUpLoading] = useState(false);
-  const [topUpError, setTopUpError] = useState('');
+  // Top Up has been removed for vendor wallet
 
   // Withdrawal Modal State
   const [showPayoutModal, setShowPayoutModal] = useState(false);
@@ -241,71 +235,7 @@ const VendorWallet = () => {
     }
   };
 
-  const handleTopUpSubmit = async (e) => {
-    e.preventDefault();
-    const vendorId = currentUser?.id || currentUser?.uid;
-    const amt = parseFloat(topUpAmount);
-    if (topUpGateway === 'bank_transfer') {
-      if (!virtualAccount?.account_number) {
-        setShowTopUpModal(false);
-        setShowBvnModal(true);
-      }
-      return;
-    }
-    if (isNaN(amt) || amt <= 0) {
-      setTopUpError('Please enter a valid deposit amount');
-      return;
-    }
-    setTopUpLoading(true);
-    setTopUpError('');
-    try {
-      const email = currentUser?.email || `vendor_${String(vendorId).substring(0, 6)}@abumafhal.com`;
-      const ref = `VND-TOP-${Date.now()}`;
-      if (topUpGateway === 'paystack') {
-        const res = await fetch('/api/initiate-paystack', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            amount: amt,
-            email,
-            reference: ref,
-            callback_url: window.location.href
-          })
-        });
-        const data = await res.json();
-        if (data?.success && data?.authorization_url) {
-          window.location.href = data.authorization_url;
-          return;
-        } else {
-          setTopUpError(data?.error || 'Could not initiate Paystack payment');
-        }
-      } else if (topUpGateway === 'flutterwave') {
-        const res = await fetch('/api/initiate-flutterwave', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            amount: amt,
-            email,
-            reference: ref,
-            tx_ref: ref,
-            name: currentUser?.name || 'Vendor Merchant',
-            callback_url: window.location.href
-          })
-        });
-        const data = await res.json();
-        if (data?.success && (data?.checkout_url || data?.payment_link)) {
-          window.location.href = data.checkout_url || data.payment_link;
-          return;
-        } else {
-          setTopUpError(data?.error || 'Could not initiate Flutterwave payment');
-        }
-      }
-    } catch (err) {
-      setTopUpError(err.message || 'Payment initiation failed');
-    } finally {
-      setTopUpLoading(false);
-    }
-  };
+  // handleTopUpSubmit removed
 
   const fetchWalletData = async () => {
     try {
@@ -568,7 +498,7 @@ const VendorWallet = () => {
       rejected: 'bg-rose-500/10 text-rose-400 border-rose-500/30',
       failed: 'bg-rose-500/10 text-rose-400 border-rose-500/30'
     };
-    return colors[status] || 'bg-slate-700 text-slate-300 border-slate-600';
+    return colors[status] || 'bg-slate-700 text-slate-600 border-slate-600';
   };
 
   const parsedAmount = parseFloat(payoutAmount) || 0;
@@ -584,12 +514,12 @@ const VendorWallet = () => {
   }
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto text-slate-100">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto text-slate-800 bg-slate-50 min-h-screen">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div>
           <span className="text-xs uppercase font-extrabold tracking-wider text-amber-400">Vendor Treasury</span>
-          <h1 className="text-2xl sm:text-3xl font-black text-white flex items-center gap-3">
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 flex items-center gap-3">
             Payout Wallet
             <span className="text-xs bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2.5 py-0.5 rounded-full font-bold">
               ✓ Verified Merchant
@@ -598,16 +528,7 @@ const VendorWallet = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => {
-              setTopUpError('');
-              setShowTopUpModal(true);
-            }}
-            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-amber-500/40 font-bold px-4 py-2.5 rounded-xl transition transform active:scale-95"
-          >
-            <span>💳</span>
-            Add Funds
-          </button>
+          
           <button
             onClick={() => {
               setPayoutSuccessData(null);
@@ -624,10 +545,10 @@ const VendorWallet = () => {
       {/* Modern Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {/* Available Balance Card */}
-        <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border border-amber-500/30 rounded-2xl p-5 shadow-xl">
+        <div className="relative overflow-hidden bg-white border border-slate-200 shadow-sm rounded-2xl p-5 shadow-xl">
           <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl"></div>
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Available Payout</p>
-          <p className="text-3xl font-black text-white">₦{wallet.balance?.toLocaleString()}</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Available Payout</p>
+          <p className="text-3xl font-black text-slate-900">₦{wallet.balance?.toLocaleString()}</p>
           <div className="mt-3 flex items-center justify-between text-xs">
             <span className="text-emerald-400 font-semibold flex items-center gap-1">● Ready to transfer</span>
             <button
@@ -646,26 +567,26 @@ const VendorWallet = () => {
         <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border border-amber-500/20 rounded-2xl p-5 shadow-xl">
           <p className="text-xs font-bold uppercase tracking-wider text-amber-400 mb-1">In Escrow (Unfulfilled)</p>
           <p className="text-3xl font-black text-amber-300">₦{wallet.pendingPayouts?.toLocaleString()}</p>
-          <p className="text-xs text-slate-400 mt-3">Releases on order delivery</p>
+          <p className="text-xs text-slate-500 mt-3">Releases on order delivery</p>
         </div>
 
         {/* Delivered Sales */}
         <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border border-emerald-500/20 rounded-2xl p-5 shadow-xl">
           <p className="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-1">Total Sales Realized</p>
           <p className="text-3xl font-black text-emerald-300">₦{wallet.totalEarnings?.toLocaleString()}</p>
-          <p className="text-xs text-slate-400 mt-3">Gross delivered revenue</p>
+          <p className="text-xs text-slate-500 mt-3">Gross delivered revenue</p>
         </div>
 
         {/* Total Withdrawn */}
         <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border border-sky-500/20 rounded-2xl p-5 shadow-xl">
           <p className="text-xs font-bold uppercase tracking-wider text-sky-400 mb-1">Total Withdrawn</p>
           <p className="text-3xl font-black text-sky-300">₦{wallet.totalPayouts?.toLocaleString()}</p>
-          <p className="text-xs text-slate-400 mt-3">Paid to bank accounts</p>
+          <p className="text-xs text-slate-500 mt-3">Paid to bank accounts</p>
         </div>
       </div>
 
       {/* Modern Navigation Tabs */}
-      <div className="flex border-b border-slate-800 gap-2 mb-6 overflow-x-auto pb-1">
+      <div className="flex border-b border-slate-200 gap-2 mb-6 overflow-x-auto pb-1">
         {[
           { id: 'overview', label: 'Overview & Graph', icon: '📊' },
           { id: 'escrow', label: `Escrow Orders (${escrowList.length})`, icon: '🔒' },
@@ -678,7 +599,7 @@ const VendorWallet = () => {
             className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 whitespace-nowrap transition-all ${
               activeTab === tab.id
                 ? 'bg-amber-500 text-slate-950 shadow-md'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                : 'text-slate-500 hover:text-white hover:bg-slate-50'
             }`}
           >
             <span>{tab.icon}</span>
@@ -698,13 +619,13 @@ const VendorWallet = () => {
                   🏦
                 </div>
                 <div>
-                  <h3 className="text-lg font-black text-white flex items-center gap-2">
+                  <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
                     {virtualAccount?.bank_name || 'Dedicated Business Account'}
                     <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 px-2 py-0.5 rounded-full font-black uppercase">
                       Paystack Verified
                     </span>
                   </h3>
-                  <p className="text-xs text-slate-400">Permanent Personal NUBAN · Auto-credits to Available Payout</p>
+                  <p className="text-xs text-slate-500">Permanent Personal NUBAN · Auto-credits to Available Payout</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -715,15 +636,15 @@ const VendorWallet = () => {
             </div>
 
             {vaLoading ? (
-              <div className="py-8 text-center text-slate-400 text-sm">
+              <div className="py-8 text-center text-slate-500 text-sm">
                 <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
                 Connecting to Paystack banking network...
               </div>
             ) : virtualAccount?.account_number && !virtualAccount.account_number.startsWith('980') ? (
-              <div className="bg-slate-900/90 rounded-2xl border border-slate-800 p-5 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+              <div className="bg-white/90 rounded-2xl border border-slate-200 p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
                   <div>
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Account Number</span>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Account Number</span>
                     <div className="text-2xl sm:text-3xl font-mono font-black text-amber-400 tracking-wider">
                       {virtualAccount.account_number}
                     </div>
@@ -747,15 +668,15 @@ const VendorWallet = () => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                   <div>
-                    <span className="text-slate-400 block font-semibold">Account Holder:</span>
+                    <span className="text-slate-500 block font-semibold">Account Holder:</span>
                     <span className="text-white font-bold">{virtualAccount.account_name || currentUser?.name || 'Verified Merchant'}</span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block font-semibold">Bank Name:</span>
+                    <span className="text-slate-500 block font-semibold">Bank Name:</span>
                     <span className="text-white font-bold">{virtualAccount.bank_name || 'Wema Bank (Paystack)'}</span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block font-semibold">Settlement Speed:</span>
+                    <span className="text-slate-500 block font-semibold">Settlement Speed:</span>
                     <span className="text-emerald-400 font-bold">Instant (30–60 Seconds)</span>
                   </div>
                 </div>
@@ -766,10 +687,10 @@ const VendorWallet = () => {
                 </div>
               </div>
             ) : (
-              <div className="bg-slate-900/60 rounded-2xl border border-slate-800 p-5 text-center sm:text-left sm:flex items-center justify-between gap-4">
+              <div className="bg-white rounded-2xl border border-slate-200 p-5 text-center sm:text-left sm:flex items-center justify-between gap-4">
                 <div>
                   <h4 className="text-white font-bold text-sm mb-1">Activate Your Dedicated NUBAN Account</h4>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-500">
                     Verify your 11-digit BVN once to receive a permanent Paystack/Wema Bank account for 0% fee instant deposits.
                   </p>
                 </div>
@@ -784,11 +705,11 @@ const VendorWallet = () => {
           </div>
 
           {/* SUPPORTED GATEWAYS SHOWCASE */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xl">
             <div className="flex justify-between items-center mb-4">
               <div className="flex items-center gap-2">
                 <span className="text-lg">💳</span>
-                <h3 className="text-base font-black text-white">Supported Payment & Top-Up Gateways</h3>
+                <h3 className="text-base font-black text-slate-900">Supported Payment & Top-Up Gateways</h3>
               </div>
               <span className="text-xs font-bold text-sky-400 bg-sky-500/10 px-2.5 py-1 rounded-full border border-sky-500/20">
                 4 CHANNELS
@@ -813,7 +734,7 @@ const VendorWallet = () => {
                       setShowTopUpModal(true);
                     }
                   }}
-                  className="cursor-pointer bg-slate-800/60 hover:bg-slate-800 border border-slate-700/80 hover:border-amber-500/40 rounded-xl p-3.5 flex items-center justify-between gap-3 transition group"
+                  className="cursor-pointer bg-slate-50 hover:bg-slate-100 border border-slate-200/80 hover:border-amber-500/40 rounded-xl p-3.5 flex items-center justify-between gap-3 transition group"
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-white p-1 flex items-center justify-center shrink-0">
@@ -821,15 +742,15 @@ const VendorWallet = () => {
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-white group-hover:text-amber-400 transition">{gw.name}</span>
+                        <span className="text-sm font-bold text-slate-900 group-hover:text-amber-400 transition">{gw.name}</span>
                         <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded border ${gw.badgeColor}`}>
                           {gw.badge}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-400 line-clamp-1">{gw.subtitle}</p>
+                      <p className="text-xs text-slate-500 line-clamp-1">{gw.subtitle}</p>
                       <div className="flex gap-1.5 mt-1.5 flex-wrap">
                         {gw.channels.slice(0, 3).map((ch, idx) => (
-                          <span key={idx} className="text-[10px] bg-slate-900/80 text-slate-300 px-1.5 py-0.5 rounded font-medium">
+                          <span key={idx} className="text-[10px] bg-white text-slate-600 px-1.5 py-0.5 rounded font-medium">
                             {ch}
                           </span>
                         ))}
@@ -842,9 +763,9 @@ const VendorWallet = () => {
             </div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xl">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-black text-white">Earnings Trend (Recent Days)</h2>
+              <h2 className="text-lg font-black text-slate-900">Earnings Trend (Recent Days)</h2>
               <span className="text-xs text-amber-400 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
                 Live Data
               </span>
@@ -871,9 +792,9 @@ const VendorWallet = () => {
 
       {/* TAB 2: ESCROW ORDERS */}
       {activeTab === 'escrow' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
-          <h2 className="text-lg font-black text-white mb-2">Locked Escrow Orders</h2>
-          <p className="text-xs text-slate-400 mb-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xl">
+          <h2 className="text-lg font-black text-slate-900 mb-2">Locked Escrow Orders</h2>
+          <p className="text-xs text-slate-500 mb-4">
             Buyer funds are safely held in escrow. Once delivery is marked as "Delivered", the funds automatically release to your Available Balance.
           </p>
 
@@ -886,7 +807,7 @@ const VendorWallet = () => {
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead>
-                  <tr className="border-b border-slate-800 text-slate-400 text-xs uppercase font-extrabold">
+                  <tr className="border-b border-slate-200 text-slate-500 text-xs uppercase font-extrabold">
                     <th className="py-3 px-4">Tracking</th>
                     <th className="py-3 px-4">Product</th>
                     <th className="py-3 px-4">Customer</th>
@@ -896,10 +817,10 @@ const VendorWallet = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
                   {escrowList.map((item, idx) => (
-                    <tr key={idx} className="hover:bg-slate-800/30">
+                    <tr key={idx} className="hover:bg-slate-100/30">
                       <td className="py-3 px-4 font-mono text-xs text-amber-400">{item.tracking}</td>
                       <td className="py-3 px-4 font-semibold text-white">{item.product}</td>
-                      <td className="py-3 px-4 text-slate-300">{item.customer}</td>
+                      <td className="py-3 px-4 text-slate-600">{item.customer}</td>
                       <td className="py-3 px-4">
                         <span className="text-xs px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30 uppercase font-bold">
                           {item.status}
@@ -919,9 +840,9 @@ const VendorWallet = () => {
 
       {/* TAB 3: PAYOUTS */}
       {activeTab === 'payouts' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xl">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-black text-white">Withdrawal History</h2>
+            <h2 className="text-lg font-black text-slate-900">Withdrawal History</h2>
             <button
               onClick={() => {
                 setPayoutSuccessData(null);
@@ -942,7 +863,7 @@ const VendorWallet = () => {
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead>
-                  <tr className="border-b border-slate-800 text-slate-400 text-xs uppercase font-extrabold">
+                  <tr className="border-b border-slate-200 text-slate-500 text-xs uppercase font-extrabold">
                     <th className="py-3 px-4">Date</th>
                     <th className="py-3 px-4">Amount</th>
                     <th className="py-3 px-4">Destination</th>
@@ -952,16 +873,16 @@ const VendorWallet = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
                   {payouts.map((p, idx) => (
-                    <tr key={idx} className="hover:bg-slate-800/30">
-                      <td className="py-3 px-4 text-slate-300">{new Date(p.created_at || p.createdAt).toLocaleDateString()}</td>
-                      <td className="py-3 px-4 font-black text-white">₦{Number(p.amount || 0).toLocaleString()}</td>
-                      <td className="py-3 px-4 text-slate-300">{p.bank_name || 'Bank Transfer'} ({p.account_number ? p.account_number.slice(-4) : '••••'})</td>
+                    <tr key={idx} className="hover:bg-slate-100/30">
+                      <td className="py-3 px-4 text-slate-600">{new Date(p.created_at || p.createdAt).toLocaleDateString()}</td>
+                      <td className="py-3 px-4 font-black text-slate-900">₦{Number(p.amount || 0).toLocaleString()}</td>
+                      <td className="py-3 px-4 text-slate-600">{p.bank_name || 'Bank Transfer'} ({p.account_number ? p.account_number.slice(-4) : '••••'})</td>
                       <td className="py-3 px-4">
                         <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${getStatusColor(p.status)}`}>
                           {p.status?.toUpperCase()}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-right font-mono text-xs text-slate-400">{p.reference || `PAY-${idx}`}</td>
+                      <td className="py-3 px-4 text-right font-mono text-xs text-slate-500">{p.reference || `PAY-${idx}`}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -973,8 +894,8 @@ const VendorWallet = () => {
 
       {/* TAB 4: LEDGER */}
       {activeTab === 'ledger' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
-          <h2 className="text-lg font-black text-white mb-4">Complete Financial Ledger</h2>
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xl">
+          <h2 className="text-lg font-black text-slate-900 mb-4">Complete Financial Ledger</h2>
           {transactions.length === 0 ? (
             <div className="text-center py-12 text-slate-500">
               <span className="text-4xl">📊</span>
@@ -983,12 +904,12 @@ const VendorWallet = () => {
           ) : (
             <div className="space-y-3">
               {transactions.map(t => (
-                <div key={t.id} className="flex items-center justify-between p-3.5 bg-slate-800/40 border border-slate-800 rounded-xl hover:bg-slate-800/70 transition">
+                <div key={t.id} className="flex items-center justify-between p-3.5 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100/70 transition">
                   <div className="flex items-center gap-3">
                     <span className="text-2xl">{getTransactionIcon(t.type)}</span>
                     <div>
-                      <p className="font-bold text-white text-sm capitalize">{t.description || t.type}</p>
-                      <p className="text-xs text-slate-400">Ref: {t.reference} • {new Date(t.created_at).toLocaleString()}</p>
+                      <p className="font-bold text-slate-900 text-sm capitalize">{t.description || t.type}</p>
+                      <p className="text-xs text-slate-500">Ref: {t.reference} • {new Date(t.created_at).toLocaleString()}</p>
                     </div>
                   </div>
                   <div className="text-right">
@@ -1010,8 +931,8 @@ const VendorWallet = () => {
       {/* ULTRA-MODERN WITHDRAWAL MODAL */}
       {/* ============================================================== */}
       {showPayoutModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-amber-500/40 rounded-3xl max-w-lg w-full p-6 shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-amber-500/40 rounded-3xl max-w-lg w-full p-6 shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             {/* Top decorative glow */}
             <div className="absolute top-0 right-0 w-40 h-40 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
@@ -1020,26 +941,26 @@ const VendorWallet = () => {
                 <div className="w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4 border border-emerald-500/40">
                   ✓
                 </div>
-                <h3 className="text-2xl font-black text-white">Withdrawal Initiated!</h3>
-                <p className="text-sm text-slate-300 mt-2 max-w-sm mx-auto">
+                <h3 className="text-2xl font-black text-slate-900">Withdrawal Initiated!</h3>
+                <p className="text-sm text-slate-600 mt-2 max-w-sm mx-auto">
                   ₦{payoutSuccessData.amount?.toLocaleString()} has been queued for payout to {payoutSuccessData.bankName}.
                 </p>
 
-                <div className="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-4 my-6 text-left text-xs space-y-2">
+                <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-4 my-6 text-left text-xs space-y-2">
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Reference:</span>
+                    <span className="text-slate-500">Reference:</span>
                     <span className="font-mono text-amber-400 font-bold">{payoutSuccessData.reference}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Recipient Account:</span>
+                    <span className="text-slate-500">Recipient Account:</span>
                     <span className="text-white font-bold">{payoutSuccessData.accountNumber}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Account Name:</span>
+                    <span className="text-slate-500">Account Name:</span>
                     <span className="text-white font-bold">{payoutSuccessData.accountName}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Status:</span>
+                    <span className="text-slate-500">Status:</span>
                     <span className="text-emerald-400 font-bold">AUTOMATED QUEUE</span>
                   </div>
                 </div>
@@ -1055,21 +976,21 @@ const VendorWallet = () => {
               <div>
                 <div className="flex justify-between items-center mb-5">
                   <div>
-                    <h2 className="text-xl font-black text-white">Withdraw to Bank</h2>
-                    <p className="text-xs text-slate-400">Instant deposit to your verified Nigerian account</p>
+                    <h2 className="text-xl font-black text-slate-900">Withdraw to Bank</h2>
+                    <p className="text-xs text-slate-500">Instant deposit to your verified Nigerian account</p>
                   </div>
                   <button
                     onClick={() => setShowPayoutModal(false)}
-                    className="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center font-bold"
+                    className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:text-white flex items-center justify-center font-bold"
                   >
                     ✕
                   </button>
                 </div>
 
                 {/* Available Balance Banner */}
-                <div className="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-4 mb-5 flex justify-between items-center">
+                <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-4 mb-5 flex justify-between items-center">
                   <div>
-                    <span className="text-xs text-slate-400 block font-semibold">Available for Payout</span>
+                    <span className="text-xs text-slate-500 block font-semibold">Available for Payout</span>
                     <span className="text-xl font-black text-emerald-400">₦{wallet.balance?.toLocaleString()}</span>
                   </div>
                   <span className="text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-full font-bold">
@@ -1081,11 +1002,11 @@ const VendorWallet = () => {
                   {/* Amount Input */}
                   <div>
                     <div className="flex justify-between items-center mb-1.5">
-                      <label className="text-xs font-bold text-slate-300">Amount to Withdraw (₦)</label>
-                      <span className="text-xs text-slate-400">Min: ₦1,000</span>
+                      <label className="text-xs font-bold text-slate-600">Amount to Withdraw (₦)</label>
+                      <span className="text-xs text-slate-500">Min: ₦1,000</span>
                     </div>
                     <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-lg">₦</span>
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-lg">₦</span>
                       <input
                         type="number"
                         value={payoutAmount}
@@ -1094,8 +1015,8 @@ const VendorWallet = () => {
                         min="1000"
                         max={wallet.balance}
                         required
-                        className={`w-full bg-slate-800/80 border rounded-xl py-3 pl-9 pr-4 text-white font-extrabold text-lg focus:outline-none ${
-                          isOverBalance ? 'border-rose-500 focus:border-rose-500' : 'border-slate-700 focus:border-amber-400'
+                        className={`w-full bg-slate-50 border rounded-xl py-3 pl-9 pr-4 text-white font-extrabold text-lg focus:outline-none ${
+                          isOverBalance ? 'border-rose-500 focus:border-rose-500' : 'border-slate-200 focus:border-amber-400'
                         }`}
                       />
                     </div>
@@ -1118,7 +1039,7 @@ const VendorWallet = () => {
                   {/* Saved Bank Selector (if any) */}
                   {savedBanks.length > 0 && (
                     <div>
-                      <label className="text-xs font-bold text-slate-300 mb-1.5 block">Saved Payout Accounts</label>
+                      <label className="text-xs font-bold text-slate-600 mb-1.5 block">Saved Payout Accounts</label>
                       <div className="flex gap-2 overflow-x-auto pb-1">
                         {savedBanks.map(b => (
                           <button
@@ -1136,11 +1057,11 @@ const VendorWallet = () => {
                             className={`px-3 py-2 rounded-xl text-xs font-bold border text-left whitespace-nowrap transition ${
                               bankDetails.accountNumber === b.account_number
                                 ? 'bg-amber-500/20 border-amber-500 text-white'
-                                : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:border-slate-600'
+                                : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-600'
                             }`}
                           >
                             <div>{b.bank_name}</div>
-                            <div className="text-[10px] text-slate-400 font-mono">•••• {b.account_number.slice(-4)}</div>
+                            <div className="text-[10px] text-slate-500 font-mono">•••• {b.account_number.slice(-4)}</div>
                           </button>
                         ))}
                       </div>
@@ -1149,12 +1070,12 @@ const VendorWallet = () => {
 
                   {/* Bank Name Selector */}
                   <div>
-                    <label className="text-xs font-bold text-slate-300 mb-1.5 block">Destination Bank</label>
+                    <label className="text-xs font-bold text-slate-600 mb-1.5 block">Destination Bank</label>
                     <select
                       value={bankDetails.bankName}
                       onChange={(e) => setBankDetails({ ...bankDetails, bankName: e.target.value })}
                       required
-                      className="w-full bg-slate-800/80 border border-slate-700 focus:border-amber-400 rounded-xl py-2.5 px-3 text-white text-sm font-semibold focus:outline-none"
+                      className="w-full bg-slate-50 border border-slate-200 focus:border-amber-400 rounded-xl py-2.5 px-3 text-white text-sm font-semibold focus:outline-none"
                     >
                       <option value="">Select Nigerian Bank...</option>
                       {POPULAR_NIGERIAN_BANKS.map(b => (
@@ -1165,7 +1086,7 @@ const VendorWallet = () => {
 
                   {/* Account Number */}
                   <div>
-                    <label className="text-xs font-bold text-slate-300 mb-1.5 block">10-Digit NUBAN Account Number</label>
+                    <label className="text-xs font-bold text-slate-600 mb-1.5 block">10-Digit NUBAN Account Number</label>
                     <input
                       type="text"
                       maxLength={10}
@@ -1173,20 +1094,20 @@ const VendorWallet = () => {
                       onChange={(e) => setBankDetails({ ...bankDetails, accountNumber: e.target.value.replace(/\D/g, '') })}
                       placeholder="10-digit account number"
                       required
-                      className="w-full bg-slate-800/80 border border-slate-700 focus:border-amber-400 rounded-xl py-2.5 px-3 text-white text-sm font-bold font-mono tracking-wider focus:outline-none"
+                      className="w-full bg-slate-50 border border-slate-200 focus:border-amber-400 rounded-xl py-2.5 px-3 text-white text-sm font-bold font-mono tracking-wider focus:outline-none"
                     />
                   </div>
 
                   {/* Verified Account Name */}
                   <div>
-                    <label className="text-xs font-bold text-slate-300 mb-1.5 block">Account Holder Name</label>
+                    <label className="text-xs font-bold text-slate-600 mb-1.5 block">Account Holder Name</label>
                     <div className="relative">
                       <input
                         type="text"
                         value={bankDetails.accountName}
                         readOnly
                         placeholder={bankDetails.accountNumber.length === 10 ? "Verifying with NIBSS..." : "Enter 10-digit account number first"}
-                        className="w-full bg-slate-800/40 border border-slate-700 rounded-xl py-2.5 px-3 text-emerald-400 text-sm font-black focus:outline-none"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-emerald-400 text-sm font-black focus:outline-none"
                       />
                       {resolvingAccount && (
                         <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-amber-400 animate-pulse font-bold">
@@ -1198,18 +1119,18 @@ const VendorWallet = () => {
 
                   {/* Fee & Remaining Breakdown */}
                   {parsedAmount > 0 && !isOverBalance && (
-                    <div className="bg-slate-800/40 rounded-xl p-3 border border-slate-800 text-xs space-y-1.5">
-                      <div className="flex justify-between text-slate-400">
+                    <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 text-xs space-y-1.5">
+                      <div className="flex justify-between text-slate-500">
                         <span>Transfer Processing Fee:</span>
                         <span className="text-emerald-400 font-bold">₦0 (Free Instant Payout)</span>
                       </div>
-                      <div className="flex justify-between text-slate-400">
+                      <div className="flex justify-between text-slate-500">
                         <span>Net Credited to Bank:</span>
                         <span className="text-white font-black">₦{parsedAmount.toLocaleString()}</span>
                       </div>
-                      <div className="flex justify-between text-slate-400">
+                      <div className="flex justify-between text-slate-500">
                         <span>Remaining Wallet Balance:</span>
-                        <span className="text-slate-300 font-bold">₦{remainingBalance.toLocaleString()}</span>
+                        <span className="text-slate-600 font-bold">₦{remainingBalance.toLocaleString()}</span>
                       </div>
                     </div>
                   )}
@@ -1223,7 +1144,7 @@ const VendorWallet = () => {
                       onChange={(e) => setSaveBankToProfile(e.target.checked)}
                       className="rounded accent-amber-500 w-4 h-4"
                     />
-                    <label htmlFor="saveBank" className="text-xs text-slate-400 font-semibold cursor-pointer">
+                    <label htmlFor="saveBank" className="text-xs text-slate-500 font-semibold cursor-pointer">
                       Save this bank account for quick 1-tap future withdrawals
                     </label>
                   </div>
@@ -1245,19 +1166,19 @@ const VendorWallet = () => {
 
       {/* BVN VERIFICATION MODAL */}
       {showBvnModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 max-w-md w-full shadow-2xl relative">
             <button
               onClick={() => setShowBvnModal(false)}
-              className="absolute top-5 right-5 text-slate-400 hover:text-white text-lg"
+              className="absolute top-5 right-5 text-slate-500 hover:text-white text-lg"
             >
               ✕
             </button>
             <div className="flex items-center gap-3 mb-4">
               <span className="text-2xl">🛡️</span>
               <div>
-                <h3 className="text-lg font-black text-white">Paystack BVN Verification</h3>
-                <p className="text-xs text-slate-400">Generate your permanent personal NUBAN account</p>
+                <h3 className="text-lg font-black text-slate-900">Paystack BVN Verification</h3>
+                <p className="text-xs text-slate-500">Generate your permanent personal NUBAN account</p>
               </div>
             </div>
 
@@ -1269,20 +1190,20 @@ const VendorWallet = () => {
 
             <form onSubmit={handleVerifyBvn} className="space-y-4">
               <div>
-                <label className="text-xs font-bold text-slate-300 mb-1 block">Full Legal Name (as on BVN)</label>
+                <label className="text-xs font-bold text-slate-600 mb-1 block">Full Legal Name (as on BVN)</label>
                 <input
                   type="text"
                   value={bvnLegalName}
                   onChange={(e) => setBvnLegalName(e.target.value)}
                   placeholder="Legal full name"
                   required
-                  className="w-full bg-slate-800 border border-slate-700 focus:border-amber-400 rounded-xl py-2.5 px-3 text-white text-sm focus:outline-none"
+                  className="w-full bg-slate-100 border border-slate-200 focus:border-amber-400 rounded-xl py-2.5 px-3 text-white text-sm focus:outline-none"
                 />
               </div>
 
               <div>
                 <div className="flex justify-between items-center mb-1">
-                  <label className="text-xs font-bold text-slate-300">11-Digit BVN Number</label>
+                  <label className="text-xs font-bold text-slate-600">11-Digit BVN Number</label>
                   <span className="text-[10px] text-sky-400 font-bold">Dial *565*0# to check</span>
                 </div>
                 <input
@@ -1292,22 +1213,22 @@ const VendorWallet = () => {
                   onChange={(e) => setBvnInput(e.target.value.replace(/\D/g, ''))}
                   placeholder="11-digit BVN"
                   required
-                  className="w-full bg-slate-800 border border-slate-700 focus:border-amber-400 rounded-xl py-2.5 px-3 text-white text-sm font-mono tracking-wider focus:outline-none"
+                  className="w-full bg-slate-100 border border-slate-200 focus:border-amber-400 rounded-xl py-2.5 px-3 text-white text-sm font-mono tracking-wider focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-300 mb-1 block">Registered Phone Number</label>
+                <label className="text-xs font-bold text-slate-600 mb-1 block">Registered Phone Number</label>
                 <input
                   type="tel"
                   value={bvnPhone}
                   onChange={(e) => setBvnPhone(e.target.value)}
                   placeholder="Phone number"
-                  className="w-full bg-slate-800 border border-slate-700 focus:border-amber-400 rounded-xl py-2.5 px-3 text-white text-sm focus:outline-none"
+                  className="w-full bg-slate-100 border border-slate-200 focus:border-amber-400 rounded-xl py-2.5 px-3 text-white text-sm focus:outline-none"
                 />
               </div>
 
-              <div className="bg-slate-800/60 p-3 rounded-xl border border-slate-700 text-[11px] text-slate-400 flex items-center gap-2">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-[11px] text-slate-500 flex items-center gap-2">
                 <span>🔒</span>
                 <span>Bank-grade 256-bit SSL encryption · Direct Paystack API verification.</span>
               </div>
@@ -1324,104 +1245,7 @@ const VendorWallet = () => {
         </div>
       )}
 
-      {/* TOP-UP MODAL */}
-      {showTopUpModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl relative">
-            <button
-              onClick={() => setShowTopUpModal(false)}
-              className="absolute top-5 right-5 text-slate-400 hover:text-white text-lg"
-            >
-              ✕
-            </button>
-            <div className="flex items-center gap-3 mb-4">
-              <span className="text-2xl">💳</span>
-              <div>
-                <h3 className="text-lg font-black text-white">Add Funds / Top-Up</h3>
-                <p className="text-xs text-slate-400">Choose a gateway to deposit funds to your balance</p>
-              </div>
-            </div>
-
-            {topUpError && (
-              <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-400">
-                {topUpError}
-              </div>
-            )}
-
-            <form onSubmit={handleTopUpSubmit} className="space-y-4">
-              {/* Gateway selector */}
-              <div>
-                <label className="text-xs font-bold text-slate-300 mb-2 block">Select Payment Channel</label>
-                <div className="space-y-2">
-                  {GATEWAYS.map(gw => (
-                    <div
-                      key={gw.id}
-                      onClick={() => setTopUpGateway(gw.id)}
-                      className={`cursor-pointer rounded-xl p-3 border flex items-center justify-between transition ${
-                        topUpGateway === gw.id 
-                          ? 'border-amber-400 bg-amber-500/10' 
-                          : 'border-slate-800 bg-slate-800/40 hover:bg-slate-800'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-white p-1 flex items-center justify-center shrink-0">
-                          <img src={gw.logo} alt={gw.name} className="w-full h-full object-contain" />
-                        </div>
-                        <div>
-                          <div className="text-xs font-bold text-white">{gw.name}</div>
-                          <div className="text-[10px] text-slate-400">{gw.speed}</div>
-                        </div>
-                      </div>
-                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                        topUpGateway === gw.id ? 'border-amber-400 bg-amber-400' : 'border-slate-600'
-                      }`}>
-                        {topUpGateway === gw.id && <div className="w-1.5 h-1.5 rounded-full bg-slate-950" />}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {topUpGateway !== 'bank_transfer' ? (
-                <div>
-                  <label className="text-xs font-bold text-slate-300 mb-1.5 block">Deposit Amount (₦)</label>
-                  <input
-                    type="number"
-                    value={topUpAmount}
-                    onChange={(e) => setTopUpAmount(e.target.value)}
-                    placeholder="0.00"
-                    required
-                    min="100"
-                    className="w-full bg-slate-800 border border-slate-700 focus:border-amber-400 rounded-xl py-3 px-4 text-white font-extrabold text-lg focus:outline-none"
-                  />
-                </div>
-              ) : (
-                <div className="bg-slate-800/80 p-4 rounded-2xl border border-slate-700 text-xs text-slate-300 space-y-2">
-                  <p className="font-bold text-amber-400">Dedicated Bank Transfer Instructions:</p>
-                  <p>
-                    {virtualAccount?.account_number
-                      ? `Transfer any amount from your Nigerian banking app to ${virtualAccount.bank_name} (${virtualAccount.account_number}). Funds credit automatically with 0% fee.`
-                      : 'Please verify your BVN to activate your permanent dedicated bank account.'}
-                  </p>
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={topUpLoading}
-                className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-slate-950 font-black py-3.5 rounded-xl shadow-lg shadow-amber-500/20 disabled:opacity-50 transition transform active:scale-98"
-              >
-                {topUpLoading 
-                  ? 'Initiating...' 
-                  : topUpGateway === 'bank_transfer' 
-                    ? (virtualAccount?.account_number ? 'Copy Dedicated Account Details 📋' : 'Activate Dedicated Account 🚀')
-                    : 'Proceed to Secure Checkout'}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
+      </div>
   );
 };
 
