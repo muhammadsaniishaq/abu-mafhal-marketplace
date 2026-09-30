@@ -77,7 +77,7 @@ const OPERATING_HUBS = [
 const NIGERIAN_BANKS = [
   { name: 'OPay (Paycom)', code: '999992', type: 'Fintech / MFB', popular: true },
   { name: 'PalmPay', code: '999991', type: 'Fintech / MFB', popular: true },
-  { name: 'Moniepoint Microfinance Bank', code: '50515', type: 'Fintech / MFB', popular: true },
+  { name: 'Flutterwave MFB', code: '090107', type: 'Fintech / MFB', popular: true },
   { name: 'Kuda Bank', code: '50211', type: 'Digital Bank', popular: true },
   { name: 'Guaranty Trust Bank (GTBank)', code: '058', type: 'Commercial Bank', popular: true },
   { name: 'Access Bank', code: '044', type: 'Commercial Bank', popular: true },

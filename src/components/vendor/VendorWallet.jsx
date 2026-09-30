@@ -6,7 +6,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 const POPULAR_NIGERIAN_BANKS = [
   { name: 'OPay Digital Services', code: '999992' },
   { name: 'Palmpay', code: '999991' },
-  { name: 'Moniepoint MFB', code: '50515' },
+  { name: 'Flutterwave MFB', code: '090107' },
   { name: 'Kuda Microfinance Bank', code: '50211' },
   { name: 'Access Bank', code: '044' },
   { name: 'Guaranty Trust Bank (GTBank)', code: '058' },

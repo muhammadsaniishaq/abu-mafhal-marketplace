@@ -155,7 +155,7 @@ const EXPERIENCE_OPTIONS = ['Under 1 Year', '1 - 3 Years', '3 - 5 Years', '5+ Ye
 const NIGERIAN_BANKS = [
     { name: 'OPay (Paycom)', code: '999992', type: 'Fintech / MFB', popular: true, logo: 'flash' },
     { name: 'PalmPay', code: '999991', type: 'Fintech / MFB', popular: true, logo: 'wallet' },
-    { name: 'Moniepoint Microfinance Bank', code: '50515', type: 'Fintech / MFB', popular: true, logo: 'cash' },
+    { name: 'Flutterwave MFB', code: '090107', type: 'Fintech / MFB', popular: true, logo: 'cash' },
     { name: 'Kuda Bank', code: '50211', type: 'Digital Bank', popular: true, logo: 'phone-portrait' },
     { name: 'Guaranty Trust Bank (GTBank)', code: '058', type: 'Commercial Bank', popular: true, logo: 'business' },
     { name: 'Access Bank', code: '044', type: 'Commercial Bank', popular: true, logo: 'business' },

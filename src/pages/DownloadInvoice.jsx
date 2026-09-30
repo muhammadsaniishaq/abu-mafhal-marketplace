@@ -173,7 +173,7 @@ const DownloadInvoice = () => {
                             </div>
                         </div>
                     </div>
-                    <div className="bg-[#0E1A2E] text-white p-4 text-center"><div className="flex justify-between items-center max-w-2xl mx-auto text-[8px] font-bold uppercase tracking-[0.2em] text-gray-400"><span>Bank: Moniepoint MFB</span><span>Acc: 8145853539</span><span>Abu Mafhal Ltd</span></div></div>
+                    <div className="bg-[#0E1A2E] text-white p-4 text-center"><div className="flex justify-between items-center max-w-2xl mx-auto text-[8px] font-bold uppercase tracking-[0.2em] text-gray-400"><span>Bank: Flutterwave / Wema Bank</span><span>Acc: 8145853539</span><span>Abu Mafhal Ltd</span></div></div>
                 </div>
             </div>
         </div>

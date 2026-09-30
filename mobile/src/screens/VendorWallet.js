@@ -86,7 +86,7 @@ const GATEWAYS = [
 const POPULAR_NIGERIAN_BANKS = [
     { name: 'OPay Digital Services', code: '999992' },
     { name: 'Palmpay', code: '999991' },
-    { name: 'Moniepoint MFB', code: '50515' },
+    { name: 'Flutterwave MFB', code: '090107' },
     { name: 'Kuda Microfinance Bank', code: '50211' },
     { name: 'Access Bank', code: '044' },
     { name: 'Guaranty Trust Bank (GTBank)', code: '058' },
@@ -184,6 +184,49 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
     // Animations
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideAnim = useRef(new Animated.Value(15)).current;
+
+    // Dedicated Virtual Account & Paystack BVN Verification
+    const loadVirtualAccount = useCallback(async () => {
+        if (!user?.id) return;
+        try {
+            const cacheKey = `@abumafhal_dedicated_va_${user.id}`;
+            const cached = await AsyncStorage.getItem(cacheKey);
+            if (cached) {
+                const p = JSON.parse(cached);
+                if (p?.account_number && !p.account_number.startsWith('980')) {
+                    setVirtualAcc(p);
+                    return;
+                }
+            }
+        } catch (_) {}
+
+        setVaLoading(true);
+        setVaError(null);
+        try {
+            const email = user?.email || `vendor_${user?.id?.substring(0, 6)}@abumafhal.com`;
+            const fullName = user?.user_metadata?.first_name 
+                ? `${user.user_metadata.first_name} ${user.user_metadata.last_name || ''}`.trim()
+                : user?.user_metadata?.full_name || user?.user_metadata?.business_name || 'Verified Merchant';
+            const phone = user?.phone || user?.user_metadata?.phone_number || '';
+
+            const res = await PaymentGatewayService.getPermanentVirtualAccount({
+                userId: user.id,
+                email,
+                name: fullName,
+                phone
+            });
+
+            if (res?.ok && res?.data?.success && res?.data?.data?.account_number) {
+                const va = res.data.data;
+                setVirtualAcc(va);
+                AsyncStorage.setItem(`@abumafhal_dedicated_va_${user.id}`, JSON.stringify(va)).catch(() => {});
+            }
+        } catch (e) {
+            console.log('Error loading virtual account:', e);
+        } finally {
+            setVaLoading(false);
+        }
+    }, [user]);
 
     useEffect(() => {
         Animated.parallel([
@@ -709,47 +752,6 @@ export const VendorWallet = ({ user, wallet, fetchDashboardData }) => {
     // -------------------------------------------------------------
     // 5B. DEDICATED VIRTUAL ACCOUNT & PAYSTACK BVN VERIFICATION
     // -------------------------------------------------------------
-    const loadVirtualAccount = useCallback(async () => {
-        if (!user?.id) return;
-        try {
-            const cacheKey = `@abumafhal_dedicated_va_${user.id}`;
-            const cached = await AsyncStorage.getItem(cacheKey);
-            if (cached) {
-                const p = JSON.parse(cached);
-                if (p?.account_number && !p.account_number.startsWith('980')) {
-                    setVirtualAcc(p);
-                    return;
-                }
-            }
-        } catch (_) {}
-
-        setVaLoading(true);
-        setVaError(null);
-        try {
-            const email = user?.email || `vendor_${user?.id?.substring(0, 6)}@abumafhal.com`;
-            const fullName = user?.user_metadata?.first_name 
-                ? `${user.user_metadata.first_name} ${user.user_metadata.last_name || ''}`.trim()
-                : user?.user_metadata?.full_name || user?.user_metadata?.business_name || 'Verified Merchant';
-            const phone = user?.phone || user?.user_metadata?.phone_number || '';
-
-            const res = await PaymentGatewayService.getPermanentVirtualAccount({
-                userId: user.id,
-                email,
-                name: fullName,
-                phone
-            });
-
-            if (res?.ok && res?.data?.success && res?.data?.data?.account_number) {
-                const va = res.data.data;
-                setVirtualAcc(va);
-                AsyncStorage.setItem(`@abumafhal_dedicated_va_${user.id}`, JSON.stringify(va)).catch(() => {});
-            }
-        } catch (e) {
-            console.log('Error loading virtual account:', e);
-        } finally {
-            setVaLoading(false);
-        }
-    }, [user]);
 
     const handleVerifyBvnAndGenerateAccount = async () => {
         const cleanBvn = String(bvnInput || '').trim().replace(/[^0-9]/g, '');
