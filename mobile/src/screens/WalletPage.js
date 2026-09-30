@@ -7,7 +7,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     View, Text, TouchableOpacity, ScrollView, TextInput,
     ActivityIndicator, Alert, RefreshControl, StyleSheet,
-    Modal, Platform, Dimensions, StatusBar
+    Modal, Platform, Dimensions, StatusBar, KeyboardAvoidingView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
