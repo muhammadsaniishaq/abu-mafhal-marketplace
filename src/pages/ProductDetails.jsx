@@ -124,19 +124,22 @@ const ProductDetails = () => {
           } catch (_) {}
         }
 
+        const isVer = data.role === 'admin' || (data.is_verified !== undefined ? !!data.is_verified : (vAddr.is_verified !== undefined ? !!vAddr.is_verified : !!data.vendor_approved));
+        const storeTagline = vAddr.tagline || data.tagline || (isVer ? 'Verified Merchant on Abu Mafhal' : 'Registered Merchant');
+
         setVendor({
           id: data.id,
-          name: data.business_name || data.full_name || 'Verified Merchant',
-          business_name: data.business_name || data.full_name || 'Verified Merchant',
+          name: data.business_name || data.full_name || (isVer ? 'Verified Merchant' : 'Marketplace Merchant'),
+          business_name: data.business_name || data.full_name || (isVer ? 'Verified Merchant' : 'Marketplace Merchant'),
           role: data.role || 'vendor',
           isOfficial: data.role === 'admin',
-          is_verified: true,
+          is_verified: isVer,
           rating: 4.9,
           reviews: '120+',
           phone: data.phone || data.phone_number || '08145853539',
           whatsapp: vAddr.whatsapp || data.phone || data.phone_number || '08145853539',
           avatar: data.avatar_url || null,
-          tagline: vAddr.tagline || 'Verified Marketplace Merchant'
+          tagline: storeTagline
         });
       } else {
         setVendor(officialStore);
@@ -441,10 +444,12 @@ const ProductDetails = () => {
                     </div>
                     <div>
                       <div className="flex items-center gap-1.5">
-                        <h4 className="font-extrabold text-slate-900 text-sm">{vendor?.name || 'Verified Merchant'}</h4>
-                        <CheckCircle2 className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                        <h4 className="font-extrabold text-slate-900 text-sm">{vendor?.name || 'Merchant'}</h4>
+                        {vendor?.is_verified && (
+                          <CheckCircle2 className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                        )}
                       </div>
-                      <p className="text-slate-400 text-xs font-medium">{vendor?.tagline || 'Verified Marketplace Merchant'}</p>
+                      <p className="text-slate-400 text-xs font-medium">{vendor?.tagline || (vendor?.is_verified ? 'Verified Merchant' : 'Marketplace Merchant')}</p>
                     </div>
                   </div>
                   {vendor?.id && vendor?.id !== 'official' && (

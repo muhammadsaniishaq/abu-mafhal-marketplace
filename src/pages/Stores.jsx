@@ -256,12 +256,14 @@ const Stores = () => {
         const year = vp.created_at ? new Date(vp.created_at).getFullYear().toString() : '2024';
         const vAddr = parseAddr(vp.address);
         const isRec = vp.is_recommended !== undefined ? !!vp.is_recommended : (vAddr.is_recommended || false);
+        const isVer = vp.is_verified !== undefined ? !!vp.is_verified : (vAddr.is_verified !== undefined ? !!vAddr.is_verified : !!vp.vendor_approved);
+        const storeTagline = vAddr.tagline || vp.tagline || (isVer ? 'Verified Merchant on Abu Mafhal' : 'Registered Merchant');
 
         return {
           id: vp.id,
-          name: vp.business_name || vp.full_name || vp.username || 'Verified Merchant',
-          tagline: vAddr.tagline || 'Verified Merchant on Abu Mafhal',
-          category: vp.business_category || vAddr.category || (vp.role === 'vendor' ? 'Verified Seller' : 'Registered Merchant'),
+          name: vp.business_name || vp.full_name || vp.username || 'Merchant',
+          tagline: storeTagline,
+          category: vp.business_category || vAddr.category || (isVer ? 'Verified Seller' : 'Registered Merchant'),
           rating: 4.9,
           reviews: '120+',
           baseFollowers: 165,
@@ -269,7 +271,7 @@ const Stores = () => {
           productsCount: storeProds.length,
           avatar: vp.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(vp.business_name || vp.full_name || 'Vendor')}&background=0A192F&color=38BDF8`,
           banner: vp.cover_image || vAddr.cover_image || 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=1200&q=80',
-          verified: true,
+          verified: isVer,
           isOfficial: false,
           is_recommended: isRec,
           isRecommended: isRec,
@@ -319,6 +321,7 @@ const Stores = () => {
       (store.tagline && store.tagline.toLowerCase().includes(searchQuery.toLowerCase()));
     if (!matchesSearch) return false;
 
+    if (activeTab === 'verified') return !!store.verified;
     if (activeTab === 'recommended') return !!(store.is_recommended || store.isRecommended);
     if (activeTab === 'top_rated') return Number(store.rating) >= 4.9;
     if (activeTab === 'official') return store.isOfficial;
@@ -440,7 +443,7 @@ const Stores = () => {
                 </span>
               </div>
               <span className="text-[11px] text-sky-600 font-bold hidden sm:inline">
-                {stores.length} Verified Brands
+                {stores.filter(s => s.verified).length} Verified • {stores.length} Stores Total
               </span>
             </div>
 
@@ -495,7 +498,8 @@ const Stores = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-4">
           <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
             {[
-              { id: 'popular', label: 'All Verified Stores' },
+              { id: 'popular', label: 'All Stores' },
+              { id: 'verified', label: '🛡️ Verified Stores' },
               { id: 'recommended', label: '⭐ Recommended Vendors' },
               { id: 'official', label: 'Official Flagship Mall' },
               { id: 'top_rated', label: 'Top Rated Sellers' },
@@ -603,9 +607,13 @@ const Stores = () => {
                           <span className="bg-gradient-to-r from-amber-500 to-yellow-500 text-white text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md shadow-md flex items-center gap-1">
                             ⭐ RECOMMENDED
                           </span>
-                        ) : (
+                        ) : store.verified ? (
                           <span className="bg-emerald-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-md shadow-md flex items-center gap-1">
                             <CheckCircle className="w-2.5 h-2.5" /> VERIFIED
+                          </span>
+                        ) : (
+                          <span className="bg-slate-700/80 backdrop-blur-sm text-white text-[9px] font-bold px-2 py-0.5 rounded-md shadow-md flex items-center gap-1">
+                            MERCHANT
                           </span>
                         )}
                       </div>

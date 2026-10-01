@@ -533,6 +533,7 @@ export const StoreService = {
             }
 
             // 5. Update or Insert into dedicated `stores` table
+            try {
                 const storeRecord = {
                     name: storeName,
                     about: about,

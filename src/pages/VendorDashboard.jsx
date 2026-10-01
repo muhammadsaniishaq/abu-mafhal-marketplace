@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../config/supabase';
 import { 
   Menu, X, Search, Bell, ShoppingCart, Store, CheckCircle, ExternalLink,
   LayoutDashboard, Package, ShoppingBag, Users, BarChart3, Settings,
@@ -13,6 +14,44 @@ const VendorDashboard = () => {
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState('All Categories');
+  const [vendorInfo, setVendorInfo] = useState({
+    name: 'My Store',
+    tagline: '',
+    is_verified: false,
+    avatar: ''
+  });
+
+  useEffect(() => {
+    if (!currentUser?.id && !currentUser?.uid) return;
+    const uid = currentUser.id || currentUser.uid;
+    const fetchVendor = async () => {
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('id, business_name, full_name, avatar_url, is_verified, vendor_approved, address, tagline, role')
+          .eq('id', uid)
+          .maybeSingle();
+
+        if (data) {
+          let parsedAddr = {};
+          if (data.address && typeof data.address === 'string' && data.address.startsWith('{')) {
+            try { parsedAddr = JSON.parse(data.address); } catch (_) {}
+          }
+          const isVer = data.role === 'admin' || (data.is_verified !== undefined ? !!data.is_verified : (parsedAddr.is_verified !== undefined ? !!parsedAddr.is_verified : !!data.vendor_approved));
+          const tagline = data.tagline || parsedAddr.tagline || (isVer ? 'Verified Merchant' : 'Registered Seller');
+          setVendorInfo({
+            name: data.business_name || data.full_name || 'My Store',
+            tagline: tagline,
+            is_verified: isVer,
+            avatar: data.avatar_url || parsedAddr.avatar_url || ''
+          });
+        }
+      } catch (e) {
+        console.error('Error fetching vendor info:', e);
+      }
+    };
+    fetchVendor();
+  }, [currentUser]);
 
   const navItems = [
     { label: 'Dashboard', path: '/vendor/analytics', icon: LayoutDashboard },
