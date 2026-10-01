@@ -245,12 +245,14 @@ const CheckoutPage = () => {
 
       if (orderError) throw orderError;
 
-      // 2. Insert into order_items table
+      // 2. Insert into order_items table (include vendor_id so vendors can find their orders)
       const itemsToInsert = cartItems.map(item => ({
         order_id: orderData.id,
-        product_id: item.id,
+        product_id: item.id || item.productId || item.product_id,
+        vendor_id: item.vendorId || item.vendor_id || null,
         quantity: item.quantity || 1,
-        price: parsePrice(item.price)
+        price: parsePrice(item.price),
+        variant: item.selectedVariation || item.selected_variation || item.variant || null,
       }));
 
       const { error: itemsError } = await supabase

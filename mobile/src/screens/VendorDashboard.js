@@ -366,10 +366,14 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
 
             const productIds = prodList.map(p => p.id);
             let oiQuery = supabase.from('order_items').select(`
-                id, quantity, price, created_at,
+                id, quantity, price, variant, created_at,
                 order:orders (
-                    id, status, payment_status, total_amount, shipping_address, contact_phone, created_at, tracking_number,
-                    customer:profiles ( full_name, phone )
+                    id, status, payment_status, payment_method, total_amount, subtotal,
+                    shipping_fee, discount_amount, tax_amount,
+                    shipping_address, shipping_details, contact_phone,
+                    notes, tracking_number, driver_id, installment_plan,
+                    created_at, updated_at,
+                    customer:profiles ( id, full_name, phone, email, avatar_url )
                 ),
                 product:products ( id, name, images, vendor_id )
             `);
@@ -411,17 +415,38 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
                         id: ord.id || item.id,
                         orderItemId: item.id,
                         customerName: cust.full_name || 'Marketplace Buyer',
+                        customerEmail: cust.email || '',
+                        customerId: cust.id || ord.user_id || '',
                         phone: ord.contact_phone || cust.phone || '',
                         address: ord.shipping_address || 'Shipping address on file',
+                        shippingDetails: ord.shipping_details || {},
                         trackingNumber: ord.tracking_number || `ORD-${(ord.id || '').slice(0, 8).toUpperCase()}`,
                         item: prod.name || 'Store Product',
                         image: prodImage,
                         quantity: qty,
                         price: unitPrice,
                         amount: itemEarnings,
+                        variant: item.variant || null,
                         status: status,
                         date: dateFormatted,
-                        raw_date: rawDate
+                        raw_date: rawDate,
+                        // Payment details
+                        paymentMethod: ord.payment_method || 'paystack',
+                        paymentStatus: ord.payment_status || 'unpaid',
+                        isPOD: (ord.payment_method || '').toLowerCase() === 'pod',
+                        installmentPlan: ord.installment_plan || null,
+                        isInstallment: !!(ord.installment_plan && ord.installment_plan.total_installments),
+                        // Financial breakdown
+                        totalAmount: Number(ord.total_amount) || itemEarnings,
+                        subtotal: Number(ord.subtotal) || 0,
+                        shippingFee: Number(ord.shipping_fee) || 0,
+                        discount: Number(ord.discount_amount) || 0,
+                        tax: Number(ord.tax_amount) || 0,
+                        // Delivery method
+                        driverId: ord.driver_id || null,
+                        deliveredByAbumafhal: !!ord.driver_id,
+                        notes: ord.notes || '',
+                        updatedAt: ord.updated_at,
                     };
                 });
 
@@ -467,18 +492,31 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
     // ─────────────────────────────────────────────────────────────
     // ORDER STATUS UPDATER (100% DIRECT & FAST)
     // ─────────────────────────────────────────────────────────────
-    const handleUpdateOrderStatus = async (orderId, newStatus) => {
+    const handleUpdateOrderStatus = async (orderId, newStatus, trackingNumber = null, notes = null) => {
         try {
             const statusLower = newStatus.toLowerCase();
+            const now = new Date().toISOString();
+            const payload = { status: statusLower, updated_at: now };
+            if (trackingNumber) payload.tracking_number = trackingNumber;
+            if (statusLower === 'shipped') payload.current_location = notes || 'In Transit';
+
             const { error } = await supabase
                 .from('orders')
-                .update({
-                    status: statusLower,
-                    updated_at: new Date().toISOString()
-                })
+                .update(payload)
                 .eq('id', orderId);
 
             if (error) throw error;
+
+            // Log status change for tracking timeline
+            await supabase.from('order_status_logs').insert({
+                order_id: orderId,
+                status: statusLower,
+                title: newStatus,
+                description: notes || `Order status updated to ${newStatus}`,
+                changed_by: user?.id || user?.uid || null,
+                created_at: now,
+            });
+
             await fetchDashboardData();
         } catch (err) {
             console.error('Failed to update order status:', err);

@@ -261,84 +261,53 @@ const Checkout = () => {
           .eq('id', appliedCoupon.id);
       }
 
-      // Create vendor orders, send emails and notifications
-      const vendorOrders = {};
-      cartItems.forEach(item => {
-        const vendorId = item.vendorId || item.vendor_id;
-        if (!vendorOrders[vendorId]) {
-          vendorOrders[vendorId] = [];
+      // Insert order_items into the real table (vendor_id is set so vendors can see their orders)
+      const orderItemsToInsert = cartItems.map(item => ({
+        order_id: orderId,
+        product_id: item.id || item.productId,
+        vendor_id: item.vendorId || item.vendor_id || null,
+        quantity: item.quantity || 1,
+        price: Number(item.price) || 0,
+        variant: item.selectedVariation || item.selected_variation || item.variant || null,
+        created_at: new Date().toISOString(),
+      }));
+      const { error: oisErr } = await supabase.from('order_items').insert(orderItemsToInsert);
+      if (oisErr) console.error('order_items insert error:', oisErr);
+
+      // Loyalty points
+      try {
+        const loyaltyAccount = await getLoyaltyAccount(currentUser.uid);
+        if (loyaltyAccount) {
+          const pointsEarned = calculatePurchasePoints(total, loyaltyAccount.tier);
+          await awardPoints(currentUser.uid, pointsEarned, `Purchase - Order #${orderId.substring(0, 8)}`, { orderId, amount: total });
         }
-        vendorOrders[vendorId].push(item);
+      } catch (error) {
+        console.error('Error awarding loyalty points:', error);
+      }
+
+      // Group by vendor and send notifications
+      const vendorGroups = {};
+      cartItems.forEach(item => {
+        const vid = item.vendorId || item.vendor_id;
+        if (!vid) return;
+        if (!vendorGroups[vid]) vendorGroups[vid] = [];
+        vendorGroups[vid].push(item);
       });
-
-      for (const [vendorId, items] of Object.entries(vendorOrders)) {
-        // Create vendor order
-        await supabase.from('vendor_orders').insert({
-          vendor_id: vendorId,
-          order_id: orderId,
-          items: items.map(item => ({
-            product_id: item.id,
-            product_name: item.name,
-            price: item.price,
-            quantity: item.quantity,
-            selected_variation: item.selectedVariation || item.selected_variation
-          })),
-          total: items.reduce((sum, item) => sum + (item.price * item.quantity), 0),
-          status: 'pending',
-          created_at: new Date().toISOString()
-        });
-        await markCartAsRecovered(currentUser.uid);
-
+      for (const [vendorId, items] of Object.entries(vendorGroups)) {
         try {
-  const loyaltyAccount = await getLoyaltyAccount(currentUser.uid);
-  if (loyaltyAccount) {
-    const pointsEarned = calculatePurchasePoints(total, loyaltyAccount.tier);
-    await awardPoints(
-      currentUser.uid,
-      pointsEarned,
-      `Purchase - Order #${orderId.substring(0, 8)}`,
-      { orderId: orderId, amount: total }
-    );
-  }
-} catch (error) {
-  console.error('Error awarding loyalty points:', error);
-}
-
-
-        // Send email and notification to vendor
-        try {
-          const { data: vendorData, error: vendorError } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', vendorId)
-            .single();
-            
-          if (!vendorError && vendorData) {
-            
-            // Send email
+          const { data: vendorData } = await supabase.from('profiles').select('id, full_name, email').eq('id', vendorId).single();
+          if (vendorData) {
             await triggerVendorNewOrderEmail(
-              {
-                id: orderId,
-                customerName: shippingInfo.fullName,
-                total: items.reduce((sum, item) => sum + (item.price * item.quantity), 0),
-                items
-              },
-              vendorData.email,
-              vendorData.name
+              { id: orderId, customerName: shippingInfo.fullName, total: items.reduce((s, i) => s + i.price * i.quantity, 0), items },
+              vendorData.email, vendorData.full_name || vendorData.name
             );
-            
-            // Send notification
-            await triggerVendorOrderNotification(vendorId, {
-              id: orderId,
-              total: items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
-            });
-            
-            console.log(`Vendor email and notification sent to ${vendorData.email}`);
+            await triggerVendorOrderNotification(vendorId, { id: orderId, total: items.reduce((s, i) => s + i.price * i.quantity, 0) });
           }
-        } catch (vendorError) {
-          console.error('Error sending vendor communications:', vendorError);
+        } catch (vendorErr) {
+          console.error('Error sending vendor notification:', vendorErr);
         }
       }
+      await markCartAsRecovered(currentUser.uid);
 
       clearCart();
       navigate(`/buyer/orders?success=true&orderId=${orderId}`);

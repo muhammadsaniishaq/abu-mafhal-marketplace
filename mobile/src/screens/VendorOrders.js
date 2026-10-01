@@ -1,17 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
-    View,
-    Text,
-    TouchableOpacity,
-    ScrollView,
-    FlatList,
-    RefreshControl,
-    Image,
-    Linking,
-    Alert,
-    TextInput,
-    StyleSheet,
-    Platform
+    View, Text, TouchableOpacity, FlatList, RefreshControl, Image,
+    Linking, Alert, TextInput, StyleSheet, Platform, Modal,
+    ScrollView, Animated, Dimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
@@ -19,44 +10,486 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { supabase } from '../lib/supabase';
 
-const STATUS_CONFIG = {
-    pending: {
-        color: '#D97706',
-        bg: '#FEF3C7',
-        border: '#FDE68A',
-        label: 'Pending',
-        icon: 'time-outline'
-    },
-    processing: {
-        color: '#2563EB',
-        bg: '#EFF6FF',
-        border: '#BFDBFE',
-        label: 'Processing',
-        icon: 'sync-outline'
-    },
-    shipped: {
-        color: '#7C3AED',
-        bg: '#F5F3FF',
-        border: '#DDD6FE',
-        label: 'Shipped',
-        icon: 'car-outline'
-    },
-    delivered: {
-        color: '#059669',
-        bg: '#ECFDF5',
-        border: '#A7F3D0',
-        label: 'Delivered',
-        icon: 'checkmark-circle-outline'
-    },
-    cancelled: {
-        color: '#DC2626',
-        bg: '#FEF2F2',
-        border: '#FECACA',
-        label: 'Cancelled',
-        icon: 'close-circle-outline'
-    }
+const { width: SCREEN_W } = Dimensions.get('window');
+const NAVY = '#070D1B';
+const GOLD = '#D9A73A';
+
+// ─── Status config ─────────────────────────────────────────────────────────
+const STATUS_CFG = {
+    pending:         { color: '#D97706', bg: '#FEF3C7', border: '#FDE68A', label: 'Pending',         icon: 'time-outline',             emoji: '⏳' },
+    processing:      { color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE', label: 'Processing',      icon: 'sync-outline',             emoji: '⚙️' },
+    shipped:         { color: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE', label: 'Shipped',         icon: 'car-outline',              emoji: '🚚' },
+    out_for_delivery:{ color: '#0284C7', bg: '#E0F2FE', border: '#BAE6FD', label: 'Out for Delivery',icon: 'bicycle-outline',          emoji: '🛵' },
+    delivered:       { color: '#059669', bg: '#ECFDF5', border: '#A7F3D0', label: 'Delivered',       icon: 'checkmark-circle-outline', emoji: '✅' },
+    cancelled:       { color: '#DC2626', bg: '#FEF2F2', border: '#FECACA', label: 'Cancelled',       icon: 'close-circle-outline',     emoji: '❌' },
 };
 
+const PAYMENT_CFG = {
+    paystack:    { label: 'Paystack',      icon: 'card-outline',      color: '#0BA4DB' },
+    flutterwave: { label: 'Flutterwave',   icon: 'flash-outline',     color: '#F5A623' },
+    wallet:      { label: 'Wallet',        icon: 'wallet-outline',    color: '#7C3AED' },
+    pod:         { label: 'Pay on Delivery', icon: 'cash-outline',    color: '#059669' },
+    crypto:      { label: 'Crypto',        icon: 'logo-bitcoin',      color: '#F59E0B' },
+    transfer:    { label: 'Bank Transfer', icon: 'swap-horizontal-outline', color: '#2563EB' },
+};
+
+const CARRIERS = ['GIG Logistics', 'DHL', 'UPS', 'FedEx', 'NIPOST', 'Kwik Delivery', 'Aramex', 'Sendbox'];
+const FILTERS  = ['All', 'Pending', 'Processing', 'Shipped', 'Out_for_delivery', 'Delivered', 'Cancelled'];
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+const fmt = (n) => `₦${Number(n || 0).toLocaleString('en-NG')}`;
+const shortId = (id) => (id ? id.toString().substring(0, 8).toUpperCase() : '—');
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+const fmtDateTime = (d) => d ? new Date(d).toLocaleString('en-NG', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+
+const parseAddress = (addr) => {
+    if (!addr) return 'Address on file';
+    if (typeof addr === 'string') return addr;
+    const { address, city, state, zipCode } = addr;
+    return [address, city, state, zipCode].filter(Boolean).join(', ');
+};
+
+// ─── Sub-components ──────────────────────────────────────────────────────────
+const StatusBadge = ({ status, small }) => {
+    const cfg = STATUS_CFG[status] || STATUS_CFG.pending;
+    return (
+        <View style={[badge.wrap, { backgroundColor: cfg.bg, borderColor: cfg.border }, small && { paddingHorizontal: 7, paddingVertical: 3 }]}>
+            <Ionicons name={cfg.icon} size={small ? 11 : 13} color={cfg.color} style={{ marginRight: 4 }} />
+            <Text style={[badge.text, { color: cfg.color }, small && { fontSize: 10 }]}>{cfg.label.toUpperCase()}</Text>
+        </View>
+    );
+};
+const badge = StyleSheet.create({
+    wrap: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1 },
+    text: { fontSize: 11, fontWeight: '800', letterSpacing: 0.4 },
+});
+
+const InfoRow = ({ icon, label, value, valueColor }) => (
+    <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 }}>
+        <Ionicons name={icon} size={14} color='#94A3B8' style={{ marginTop: 2, width: 20 }} />
+        <Text style={{ fontSize: 12, color: '#94A3B8', width: 90 }}>{label}</Text>
+        <Text style={[{ fontSize: 12.5, fontWeight: '600', color: valueColor || '#1E293B', flex: 1 }]} numberOfLines={3}>{value || '—'}</Text>
+    </View>
+);
+
+const SectionCard = ({ title, icon, children, color = '#0F172A', accentColor }) => (
+    <View style={det.section}>
+        <View style={[det.sectionHeader, accentColor && { borderLeftColor: accentColor, borderLeftWidth: 3, paddingLeft: 10 }]}>
+            <Ionicons name={icon} size={16} color={accentColor || color} />
+            <Text style={[det.sectionTitle, { color }]}>{title}</Text>
+        </View>
+        {children}
+    </View>
+);
+const det = StyleSheet.create({
+    section: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
+    sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+    sectionTitle: { fontSize: 13.5, fontWeight: '800', color: '#0F172A' },
+});
+
+// ─── ORDER DETAIL MODAL ───────────────────────────────────────────────────────
+const OrderDetailModal = ({ item, visible, onClose, onUpdateStatus, updatingId, vendor }) => {
+    const [trackingNum, setTrackingNum] = useState(item?.trackingNumber || '');
+    const [carrier, setCarrier] = useState('');
+    const [statusNote, setStatusNote] = useState('');
+    const [showCarrierPicker, setShowCarrierPicker] = useState(false);
+
+    React.useEffect(() => {
+        if (item) {
+            setTrackingNum(item.trackingNumber || '');
+            setStatusNote('');
+            setCarrier('');
+        }
+    }, [item]);
+
+    if (!item) return null;
+
+    const statusKey = (item.status || 'pending').toLowerCase().replace(/ /g, '_');
+    const statusCfg = STATUS_CFG[statusKey] || STATUS_CFG.pending;
+    const isUpdating = updatingId === item.id;
+    const isPOD = item.isPOD || item.paymentMethod === 'pod';
+    const isInstallment = item.isInstallment;
+    const plan = item.installmentPlan || {};
+    const deliveredByAbumafhal = item.deliveredByAbumafhal || !!item.driverId;
+    const paymentCfg = PAYMENT_CFG[item.paymentMethod] || PAYMENT_CFG.paystack;
+
+    const getNextActions = () => {
+        const map = {
+            pending:    [{ to: 'Processing', label: 'Accept & Process', icon: 'checkmark-done', color: '#2563EB' }, { to: 'Cancelled', label: 'Reject Order', icon: 'close-circle', color: '#DC2626' }],
+            processing: [{ to: 'Shipped', label: 'Mark as Shipped 🚚', icon: 'car', color: '#7C3AED' }, { to: 'Cancelled', label: 'Cancel Order', icon: 'close-circle', color: '#DC2626' }],
+            shipped:    [{ to: 'Delivered', label: 'Confirm Delivered ✅', icon: 'checkmark-circle', color: '#059669' }],
+            out_for_delivery: [{ to: 'Delivered', label: 'Confirm Delivered ✅', icon: 'checkmark-circle', color: '#059669' }],
+            delivered:  [],
+            cancelled:  [],
+        };
+        return map[statusKey] || [];
+    };
+
+    const handleCall = () => {
+        if (!item.phone) return Alert.alert('No Phone', 'No phone number on file.');
+        Linking.openURL(`tel:${item.phone.replace(/\D/g, '')}`);
+    };
+
+    const handleWhatsApp = () => {
+        if (!item.phone) return Alert.alert('No WhatsApp', 'No phone number on file.');
+        let phone = item.phone.replace(/\D/g, '');
+        if (phone.startsWith('0')) phone = '234' + phone.slice(1);
+        if (!phone.startsWith('234')) phone = '234' + phone;
+        const msg = encodeURIComponent(
+            `Hello ${item.customerName || 'Customer'}! 👋\n\nThis is regarding your Abu Mafhal Marketplace order #${shortId(item.id)}.\n\nCurrent Status: ${statusCfg.label}\n\nPlease feel free to reply with any questions.`
+        );
+        Linking.openURL(`https://wa.me/${phone}?text=${msg}`).catch(() => Alert.alert('Error', 'Cannot open WhatsApp.'));
+    };
+
+    const confirmUpdate = (to) => {
+        Alert.alert(
+            `Update to "${to}"?`,
+            `This will change Order #${shortId(item.id)} status to ${to}. ${trackingNum ? `\nTracking: ${trackingNum}` : ''}${isPOD && to === 'Delivered' ? '\n\n⚠️ PAY ON DELIVERY: Ensure you have collected ₦' + fmt(item.amount) + ' cash before confirming delivery.' : ''}`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                { text: `Confirm → ${to}`, style: 'default', onPress: () => onUpdateStatus(item.id, to, trackingNum, statusNote) },
+            ]
+        );
+    };
+
+    const installmentPct = plan.total_installments > 0 ? Math.round((plan.paid_installments / plan.total_installments) * 100) : 0;
+
+    return (
+        <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+            <View style={mod.container}>
+                {/* Modal Header */}
+                <View style={mod.header}>
+                    <View style={{ flex: 1 }}>
+                        <Text style={mod.orderId}>Order #{shortId(item.id)}</Text>
+                        <Text style={mod.orderDate}>{fmtDateTime(item.raw_date)}</Text>
+                    </View>
+                    <StatusBadge status={statusKey} />
+                    <TouchableOpacity onPress={onClose} style={mod.closeBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                        <Ionicons name="close" size={22} color="#334155" />
+                    </TouchableOpacity>
+                </View>
+
+                <ScrollView style={{ flex: 1 }} contentContainerStyle={mod.content} showsVerticalScrollIndicator={false}>
+
+                    {/* ─── Special Banners ─────────────────────────────────── */}
+                    {isPOD && (
+                        <View style={[mod.banner, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}>
+                            <Ionicons name="cash" size={20} color="#059669" />
+                            <View style={{ flex: 1 }}>
+                                <Text style={[mod.bannerTitle, { color: '#065F46' }]}>💵 Pay on Delivery Order</Text>
+                                <Text style={[mod.bannerDesc, { color: '#047857' }]}>
+                                    Customer will pay {fmt(item.amount)} in CASH upon delivery. Collect payment before handing over the package!
+                                </Text>
+                            </View>
+                        </View>
+                    )}
+
+                    {isInstallment && (
+                        <View style={[mod.banner, { backgroundColor: '#F0FDF4', borderColor: '#86EFAC' }]}>
+                            <Ionicons name="layers-outline" size={20} color="#16A34A" />
+                            <View style={{ flex: 1 }}>
+                                <Text style={[mod.bannerTitle, { color: '#15803D' }]}>💳 Pay Small Small — Installment Plan</Text>
+                                <Text style={[mod.bannerDesc, { color: '#166534' }]}>
+                                    {plan.paid_installments || 0} of {plan.total_installments} installments paid ({installmentPct}%)
+                                </Text>
+                                {/* Installment Progress */}
+                                <View style={mod.progressBar}>
+                                    <View style={[mod.progressFill, { width: `${installmentPct}%`, backgroundColor: '#16A34A' }]} />
+                                </View>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
+                                    <Text style={{ fontSize: 11, color: '#166534', fontWeight: '700' }}>
+                                        Paid: {fmt(plan.paid_amount || 0)}
+                                    </Text>
+                                    <Text style={{ fontSize: 11, color: '#9CA3AF', fontWeight: '600' }}>
+                                        Remaining: {fmt((plan.total_amount || 0) - (plan.paid_amount || 0))}
+                                    </Text>
+                                </View>
+                            </View>
+                        </View>
+                    )}
+
+                    {/* ─── Delivery Method Banner ───────────────────────── */}
+                    <View style={[mod.banner, deliveredByAbumafhal
+                        ? { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }
+                        : { backgroundColor: '#FFF7ED', borderColor: '#FED7AA' }]}>
+                        <Ionicons
+                            name={deliveredByAbumafhal ? 'bicycle' : 'storefront-outline'}
+                            size={20}
+                            color={deliveredByAbumafhal ? '#2563EB' : '#EA580C'}
+                        />
+                        <View style={{ flex: 1 }}>
+                            <Text style={[mod.bannerTitle, { color: deliveredByAbumafhal ? '#1D4ED8' : '#9A3412' }]}>
+                                {deliveredByAbumafhal ? '🛵 Delivered by Abu Mafhal' : '📦 Self-Delivered by You (Vendor)'}
+                            </Text>
+                            <Text style={[mod.bannerDesc, { color: deliveredByAbumafhal ? '#3B82F6' : '#C2410C' }]}>
+                                {deliveredByAbumafhal
+                                    ? 'Our logistics team will handle pickup & delivery. Prepare the package for our driver.'
+                                    : 'You are responsible for packaging and shipping this order to the customer.'}
+                            </Text>
+                        </View>
+                    </View>
+
+                    {/* ─── Product Info ──────────────────────────────────── */}
+                    <SectionCard title="Product Details" icon="cube-outline" accentColor="#6366F1">
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                            <View style={det2.imgBox}>
+                                {item.image && item.image !== 'https://placehold.co/80' ? (
+                                    <Image source={{ uri: item.image }} style={det2.img} resizeMode="cover" />
+                                ) : (
+                                    <Ionicons name="cube-outline" size={30} color="#CBD5E1" />
+                                )}
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={det2.productName}>{item.item || 'Product'}</Text>
+                                {item.variant && (
+                                    <View style={det2.variantBadge}>
+                                        <Text style={det2.variantText}>Variant: {item.variant}</Text>
+                                    </View>
+                                )}
+                                <View style={{ flexDirection: 'row', gap: 10, marginTop: 6, alignItems: 'center' }}>
+                                    <View style={det2.qtyBox}>
+                                        <Text style={det2.qtyText}>Qty: {item.quantity}</Text>
+                                    </View>
+                                    <Text style={{ fontSize: 12.5, color: '#64748B' }}>{fmt(item.price)} each</Text>
+                                </View>
+                            </View>
+                            <View style={{ alignItems: 'flex-end' }}>
+                                <Text style={{ fontSize: 10, color: '#94A3B8', fontWeight: '600' }}>Your Earnings</Text>
+                                <Text style={{ fontSize: 20, fontWeight: '900', color: '#10B981' }}>{fmt(item.amount)}</Text>
+                            </View>
+                        </View>
+                    </SectionCard>
+
+                    {/* ─── Financial Breakdown ──────────────────────────── */}
+                    <SectionCard title="Financial Breakdown" icon="receipt-outline" accentColor="#10B981">
+                        {[
+                            ['Subtotal', item.subtotal],
+                            ['Shipping Fee', item.shippingFee],
+                            ...(item.discount > 0 ? [['Discount', -item.discount]] : []),
+                            ...(item.tax > 0 ? [['Tax', item.tax]] : []),
+                        ].map(([label, val]) => (
+                            <View key={label} style={fin.row}>
+                                <Text style={fin.label}>{label}</Text>
+                                <Text style={[fin.val, val < 0 && { color: '#DC2626' }]}>{val < 0 ? `-${fmt(Math.abs(val))}` : fmt(val)}</Text>
+                            </View>
+                        ))}
+                        <View style={fin.totalRow}>
+                            <Text style={fin.totalLabel}>Order Total</Text>
+                            <Text style={fin.totalVal}>{fmt(item.totalAmount || item.amount)}</Text>
+                        </View>
+                        {/* Payment method */}
+                        <View style={[fin.row, { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderColor: '#F1F5F9' }]}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Ionicons name={paymentCfg.icon} size={14} color={paymentCfg.color} />
+                                <Text style={[fin.label, { color: paymentCfg.color }]}>{paymentCfg.label}</Text>
+                            </View>
+                            <View style={[fin.payStatus, item.paymentStatus === 'paid' ? { backgroundColor: '#DCFCE7' } : { backgroundColor: '#FEF3C7' }]}>
+                                <Text style={{ fontSize: 10.5, fontWeight: '800', color: item.paymentStatus === 'paid' ? '#16A34A' : '#D97706' }}>
+                                    {(item.paymentStatus || 'UNPAID').toUpperCase()}
+                                </Text>
+                            </View>
+                        </View>
+                    </SectionCard>
+
+                    {/* ─── Installment Detail (if BNPL) ──────────────────── */}
+                    {isInstallment && plan.schedule && plan.schedule.length > 0 && (
+                        <SectionCard title="Installment Schedule" icon="layers-outline" accentColor="#16A34A">
+                            {plan.schedule.map((inst, i) => (
+                                <View key={i} style={[inst_s.row, inst.paid && inst_s.rowPaid]}>
+                                    <View style={[inst_s.dot, { backgroundColor: inst.paid ? '#16A34A' : '#E2E8F0' }]} />
+                                    <Text style={inst_s.label}>Installment {i + 1}</Text>
+                                    <Text style={inst_s.date}>{fmtDate(inst.due_date)}</Text>
+                                    <Text style={[inst_s.amount, { color: inst.paid ? '#16A34A' : '#64748B' }]}>{fmt(inst.amount)}</Text>
+                                    {inst.paid && <Ionicons name="checkmark-circle" size={14} color="#16A34A" style={{ marginLeft: 4 }} />}
+                                </View>
+                            ))}
+                        </SectionCard>
+                    )}
+
+                    {/* ─── Customer Details ──────────────────────────────── */}
+                    <SectionCard title="Customer & Shipping" icon="person-outline" accentColor="#3B82F6">
+                        <InfoRow icon="person-outline" label="Name" value={item.customerName} />
+                        {item.phone ? <InfoRow icon="call-outline" label="Phone" value={item.phone} valueColor="#2563EB" /> : null}
+                        {item.customerEmail ? <InfoRow icon="mail-outline" label="Email" value={item.customerEmail} valueColor="#2563EB" /> : null}
+                        <InfoRow icon="location-outline" label="Address" value={parseAddress(item.address)} />
+                        {item.notes ? <InfoRow icon="document-text-outline" label="Note" value={item.notes} valueColor="#D97706" /> : null}
+
+                        {/* Call / WhatsApp buttons */}
+                        {item.phone && (
+                            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                                <TouchableOpacity onPress={handleCall} style={act.callBtn} activeOpacity={0.8}>
+                                    <Ionicons name="call" size={14} color="#2563EB" />
+                                    <Text style={act.callText}>Call</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={handleWhatsApp} style={act.waBtn} activeOpacity={0.8}>
+                                    <Ionicons name="logo-whatsapp" size={14} color="#16A34A" />
+                                    <Text style={act.waText}>WhatsApp</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </SectionCard>
+
+                    {/* ─── Tracking ──────────────────────────────────────── */}
+                    <SectionCard title="Tracking & Logistics" icon="map-outline" accentColor="#7C3AED">
+                        <InfoRow icon="barcode-outline" label="Tracking #" value={item.trackingNumber} valueColor="#7C3AED" />
+                        <InfoRow icon="time-outline" label="Ordered" value={fmtDateTime(item.raw_date)} />
+                        {item.updatedAt && <InfoRow icon="refresh-outline" label="Updated" value={fmtDateTime(item.updatedAt)} />}
+
+                        {/* Tracking number input for next update */}
+                        {getNextActions().length > 0 && (
+                            <View style={{ marginTop: 8 }}>
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', marginBottom: 6 }}>Update Tracking Number</Text>
+                                <TextInput
+                                    value={trackingNum}
+                                    onChangeText={setTrackingNum}
+                                    placeholder="e.g. GIG-1234567890"
+                                    placeholderTextColor="#CBD5E1"
+                                    style={act.input}
+                                />
+                                {/* Carrier */}
+                                <TouchableOpacity onPress={() => setShowCarrierPicker(!showCarrierPicker)} style={[act.input, { marginTop: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+                                    <Text style={{ fontSize: 13, color: carrier ? '#0F172A' : '#CBD5E1', fontWeight: '600' }}>{carrier || 'Select Carrier'}</Text>
+                                    <Ionicons name={showCarrierPicker ? 'chevron-up' : 'chevron-down'} size={15} color="#94A3B8" />
+                                </TouchableOpacity>
+                                {showCarrierPicker && (
+                                    <View style={act.pickerList}>
+                                        {CARRIERS.map((c) => (
+                                            <TouchableOpacity key={c} onPress={() => { setCarrier(c); setShowCarrierPicker(false); }} style={act.pickerItem}>
+                                                <Text style={[act.pickerText, carrier === c && { color: '#7C3AED', fontWeight: '800' }]}>{c}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                )}
+                                <TextInput
+                                    value={statusNote}
+                                    onChangeText={setStatusNote}
+                                    placeholder="Update note (e.g. Package dispatched...)"
+                                    placeholderTextColor="#CBD5E1"
+                                    style={[act.input, { marginTop: 6 }]}
+                                    multiline
+                                    numberOfLines={2}
+                                />
+                            </View>
+                        )}
+                    </SectionCard>
+
+                    {/* ─── POD Special Warning ──────────────────────────── */}
+                    {isPOD && statusKey === 'shipped' && (
+                        <View style={[mod.banner, { backgroundColor: '#FFFBEB', borderColor: '#FCD34D', borderWidth: 1.5 }]}>
+                            <Ionicons name="warning" size={22} color="#D97706" />
+                            <View style={{ flex: 1 }}>
+                                <Text style={[mod.bannerTitle, { color: '#92400E' }]}>⚠️ Cash Collection Required!</Text>
+                                <Text style={[mod.bannerDesc, { color: '#78350F' }]}>
+                                    This is a Pay on Delivery order. Collect exactly {fmt(item.amount)} cash from the customer before marking as Delivered. Do NOT mark delivered without collecting payment.
+                                </Text>
+                            </View>
+                        </View>
+                    )}
+
+                    {/* ─── Status Action Buttons ────────────────────────── */}
+                    {getNextActions().length > 0 && (
+                        <View style={act.actionsSection}>
+                            <Text style={act.actionsTitle}>Update Order Status</Text>
+                            {getNextActions().map((action) => (
+                                <TouchableOpacity
+                                    key={action.to}
+                                    onPress={() => confirmUpdate(action.to)}
+                                    disabled={isUpdating}
+                                    style={[act.actionBtn, { backgroundColor: action.color }, isUpdating && { opacity: 0.5 }]}
+                                    activeOpacity={0.85}
+                                >
+                                    <Ionicons name={action.icon} size={18} color="#FFFFFF" />
+                                    <Text style={act.actionBtnText}>{action.label}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    )}
+
+                    {/* Delivered / Cancelled notice */}
+                    {statusKey === 'delivered' && (
+                        <View style={[mod.finalNotice, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}>
+                            <Ionicons name="checkmark-circle" size={28} color="#10B981" />
+                            <View>
+                                <Text style={[mod.finalTitle, { color: '#065F46' }]}>Order Delivered 🎉</Text>
+                                <Text style={[mod.finalDesc, { color: '#047857' }]}>
+                                    {isPOD ? 'Cash collected & order delivered. Earnings will be credited to your balance.' : 'Earnings credited to your available balance.'}
+                                </Text>
+                            </View>
+                        </View>
+                    )}
+                    {statusKey === 'cancelled' && (
+                        <View style={[mod.finalNotice, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
+                            <Ionicons name="close-circle" size={28} color="#DC2626" />
+                            <View><Text style={[mod.finalTitle, { color: '#991B1B' }]}>Order Cancelled</Text></View>
+                        </View>
+                    )}
+
+                    <View style={{ height: 40 }} />
+                </ScrollView>
+            </View>
+        </Modal>
+    );
+};
+
+// Styles for detail modal
+const mod = StyleSheet.create({
+    container: { flex: 1, backgroundColor: '#F8FAFC' },
+    header: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 18, paddingTop: 18, paddingBottom: 14, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderColor: '#F1F5F9' },
+    orderId: { fontSize: 17, fontWeight: '900', color: '#0F172A' },
+    orderDate: { fontSize: 11, color: '#94A3B8', marginTop: 2 },
+    closeBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', marginLeft: 6 },
+    content: { padding: 14 },
+    banner: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 14, borderRadius: 14, borderWidth: 1, marginBottom: 12 },
+    bannerTitle: { fontSize: 13, fontWeight: '800', marginBottom: 3 },
+    bannerDesc: { fontSize: 12, lineHeight: 17, fontWeight: '500' },
+    progressBar: { height: 6, backgroundColor: '#DCFCE7', borderRadius: 10, marginTop: 8, overflow: 'hidden' },
+    progressFill: { height: '100%', borderRadius: 10 },
+    finalNotice: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 16, borderWidth: 1, marginBottom: 12 },
+    finalTitle: { fontSize: 14, fontWeight: '800' },
+    finalDesc: { fontSize: 12, marginTop: 2, lineHeight: 16 },
+});
+const det2 = StyleSheet.create({
+    imgBox: { width: 70, height: 70, borderRadius: 14, backgroundColor: '#F1F5F9', overflow: 'hidden', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
+    img: { width: '100%', height: '100%' },
+    productName: { fontSize: 14, fontWeight: '800', color: '#0F172A', lineHeight: 19 },
+    variantBadge: { backgroundColor: '#F5F3FF', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginTop: 4, alignSelf: 'flex-start' },
+    variantText: { fontSize: 11, color: '#7C3AED', fontWeight: '700' },
+    qtyBox: { backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+    qtyText: { fontSize: 11.5, fontWeight: '700', color: '#475569' },
+});
+const fin = StyleSheet.create({
+    row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 7 },
+    label: { fontSize: 12.5, color: '#64748B', fontWeight: '600' },
+    val: { fontSize: 12.5, color: '#0F172A', fontWeight: '700' },
+    totalRow: { flexDirection: 'row', justifyContent: 'space-between', paddingTop: 10, borderTopWidth: 1, borderColor: '#F1F5F9', marginTop: 4 },
+    totalLabel: { fontSize: 14, fontWeight: '800', color: '#0F172A' },
+    totalVal: { fontSize: 16, fontWeight: '900', color: '#10B981' },
+    payStatus: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+});
+const inst_s = StyleSheet.create({
+    row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderColor: '#F8FAFC' },
+    rowPaid: { opacity: 0.75 },
+    dot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
+    label: { fontSize: 12, fontWeight: '700', color: '#334155', flex: 1 },
+    date: { fontSize: 11, color: '#94A3B8', width: 80 },
+    amount: { fontSize: 12.5, fontWeight: '800', width: 70, textAlign: 'right' },
+});
+const act = StyleSheet.create({
+    actionsSection: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0' },
+    actionsTitle: { fontSize: 13.5, fontWeight: '800', color: '#0F172A', marginBottom: 12 },
+    actionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 14, marginBottom: 8 },
+    actionBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
+    input: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: '#0F172A', fontWeight: '600' },
+    pickerList: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, overflow: 'hidden', marginTop: 4 },
+    pickerItem: { paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderColor: '#F8FAFC' },
+    pickerText: { fontSize: 13, color: '#334155', fontWeight: '600' },
+    callBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 9, backgroundColor: '#EFF6FF', borderRadius: 10, borderWidth: 1, borderColor: '#BFDBFE' },
+    callText: { fontSize: 12.5, fontWeight: '800', color: '#2563EB' },
+    waBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 9, backgroundColor: '#DCFCE7', borderRadius: 10, borderWidth: 1, borderColor: '#BBF7D0' },
+    waText: { fontSize: 12.5, fontWeight: '800', color: '#16A34A' },
+});
+
+// ─── MAIN VendorOrders COMPONENT ─────────────────────────────────────────────
 export const VendorOrders = ({
     orders = [],
     vendor,
@@ -65,921 +498,369 @@ export const VendorOrders = ({
     refreshing = false,
     setRefreshing,
     fetchDashboardData,
-    handleUpdateOrderStatus
+    handleUpdateOrderStatus,
 }) => {
     const [search, setSearch] = useState('');
     const [updatingId, setUpdatingId] = useState(null);
+    const [selectedOrder, setSelectedOrder] = useState(null);
+    const [detailVisible, setDetailVisible] = useState(false);
 
-    // Direct status updater as robust fallback
-    const executeStatusUpdate = async (orderId, newStatus) => {
-        const confirmMsg = `Update Order #${orderId?.toString().slice(0, 8).toUpperCase()} to "${newStatus}"?`;
-
-        const proceed = async () => {
-            setUpdatingId(orderId);
-            try {
-                if (handleUpdateOrderStatus) {
-                    await handleUpdateOrderStatus(orderId, newStatus);
-                } else {
-                    const statusLower = newStatus.toLowerCase();
-                    const { error } = await supabase
-                        .from('orders')
-                        .update({
-                            status: statusLower,
-                            updated_at: new Date().toISOString()
-                        })
-                        .eq('id', orderId);
-
-                    if (error) throw error;
-                    if (fetchDashboardData) await fetchDashboardData();
-                }
-
-                if (Platform.OS === 'web') alert(`Order updated to ${newStatus}`);
-                else Alert.alert('Success', `Order marked as ${newStatus}`);
-            } catch (err) {
-                console.error('Order update error:', err);
-                if (Platform.OS === 'web') alert('Failed to update: ' + err.message);
-                else Alert.alert('Error', err.message || 'Could not update order status.');
-            } finally {
-                setUpdatingId(null);
-            }
-        };
-
-        if (Platform.OS === 'web') {
-            if (window.confirm && window.confirm(confirmMsg)) {
-                proceed();
-            } else if (!window.confirm) {
-                proceed();
-            }
-        } else {
-            Alert.alert('Update Order Status', confirmMsg, [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Confirm', onPress: proceed }
-            ]);
-        }
+    const openDetail = (item) => {
+        setSelectedOrder(item);
+        setDetailVisible(true);
     };
 
-    const copyTracking = (tracking) => {
-        if (!tracking) return;
-        Clipboard.setStringAsync(tracking);
-        if (Platform.OS === 'web') alert(`Copied tracking number: ${tracking}`);
-        else Alert.alert('Copied', `Tracking #${tracking} copied to clipboard.`);
-    };
-
-    const handleCallCustomer = (phone) => {
-        if (!phone) return Alert.alert('No Phone', 'Customer did not provide a phone number.');
-        const cleanPhone = phone.replace(/[^\d+]/g, '');
-        Linking.openURL(`tel:${cleanPhone}`).catch(() => {
-            Alert.alert('Error', 'Unable to initiate call.');
-        });
-    };
-
-    const handleWhatsAppCustomer = (phone, customerName, orderId) => {
-        if (!phone) return Alert.alert('No WhatsApp', 'Customer did not provide a phone number.');
-        let cleanPhone = phone.replace(/[^\d]/g, '');
-        if (cleanPhone.startsWith('0')) cleanPhone = '234' + cleanPhone.slice(1);
-        if (!cleanPhone.startsWith('234')) cleanPhone = '234' + cleanPhone;
-
-        const text = encodeURIComponent(
-            `Hello ${customerName || 'Customer'}, this is regarding your Abu Mafhal Marketplace Order #${orderId?.toString().slice(0, 8).toUpperCase()}.`
-        );
-        Linking.openURL(`https://wa.me/${cleanPhone}?text=${text}`).catch(() => {
-            Alert.alert('Error', 'Unable to open WhatsApp.');
-        });
-    };
-
-    const handlePrintPackingSlip = async (item) => {
+    // Status update handler (calls parent or does it directly)
+    const executeUpdate = useCallback(async (orderId, newStatus, trackingNumber = '', notes = '') => {
+        setUpdatingId(orderId);
         try {
-            const storeName = vendor?.business_name || vendor?.name || 'Abu Mafhal Verified Store';
-            const storePhone = vendor?.phone || vendor?.whatsapp || 'N/A';
-            const tracking = item.trackingNumber || `ORD-${(item.id || '').slice(0, 8).toUpperCase()}`;
-
-            const html = `
-                <html>
-                    <head>
-                        <style>
-                            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 24px; color: #0F172A; }
-                            .header { border-bottom: 2px solid #0F172A; padding-bottom: 14px; margin-bottom: 20px; }
-                            .title { font-size: 20px; font-weight: 900; margin: 0; color: #0F172A; }
-                            .sub { font-size: 12px; color: #64748B; margin-top: 4px; }
-                            .grid { display: flex; justify-content: space-between; margin-bottom: 20px; }
-                            .box { flex: 1; border: 1px solid #E2E8F0; padding: 12px; border-radius: 8px; background: #F8FAFC; margin-right: 10px; }
-                            .box:last-child { margin-right: 0; }
-                            .label { font-size: 10px; text-transform: uppercase; color: #64748B; font-weight: 700; }
-                            .val { font-size: 13px; font-weight: 700; margin-top: 4px; color: #0F172A; }
-                            table { width: 100%; border-collapse: collapse; margin-top: 14px; }
-                            th, td { border: 1px solid #E2E8F0; padding: 10px; text-align: left; font-size: 12px; }
-                            th { background: #0F172A; color: white; font-weight: 800; }
-                            .total-row { font-size: 14px; font-weight: 900; background: #F1F5F9; }
-                            .footer { margin-top: 30px; font-size: 11px; color: #94A3B8; text-align: center; border-top: 1px solid #E2E8F0; padding-top: 12px; }
-                        </style>
-                    </head>
-                    <body>
-                        <div class="header">
-                            <h1 class="title">${storeName} - Dispatch Packing Slip</h1>
-                            <div class="sub">Order & Shipping Slip • Generated: ${new Date().toLocaleString()}</div>
-                        </div>
-
-                        <div class="grid">
-                            <div class="box">
-                                <div class="label">Order & Tracking</div>
-                                <div class="val">#${(item.id || '').slice(0, 8).toUpperCase()}</div>
-                                <div style="font-size: 11px; color: #2563EB; margin-top: 2px;">Tracking: ${tracking}</div>
-                                <div style="font-size: 11px; color: #64748B; margin-top: 2px;">Date: ${item.date || 'Recent'}</div>
-                            </div>
-
-                            <div class="box">
-                                <div class="label">Customer Destination</div>
-                                <div class="val">${item.customerName || 'Verified Buyer'}</div>
-                                <div style="font-size: 11px; color: #475569; margin-top: 2px;">Phone: ${item.phone || 'N/A'}</div>
-                                <div style="font-size: 11px; color: #64748B; margin-top: 2px;">${item.address || 'Address on file'}</div>
-                            </div>
-                        </div>
-
-                        <table>
-                            <tr>
-                                <th>Item Description</th>
-                                <th style="width: 70px; text-align: center;">Qty</th>
-                                <th style="width: 100px; text-align: right;">Unit Price (₦)</th>
-                                <th style="width: 120px; text-align: right;">Amount (₦)</th>
-                            </tr>
-                            <tr>
-                                <td><strong>${item.item || 'Product'}</strong></td>
-                                <td style="text-align: center;">${item.quantity || 1}</td>
-                                <td style="text-align: right;">₦${Number(item.price || item.amount || 0).toLocaleString()}</td>
-                                <td style="text-align: right;">₦${Number(item.amount || 0).toLocaleString()}</td>
-                            </tr>
-                            <tr class="total-row">
-                                <td colspan="3" style="text-align: right;">Total Store Payout:</td>
-                                <td style="text-align: right; color: #16A34A;">₦${Number(item.amount || 0).toLocaleString()}</td>
-                            </tr>
-                        </table>
-
-                        <div class="footer">
-                            Official Abu Mafhal Marketplace Merchant Packing Slip • Delivered with Buyer Protection
-                        </div>
-                    </body>
-                </html>
-            `;
-            const { uri } = await Print.printToFileAsync({ html });
-            await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
+            if (handleUpdateOrderStatus) {
+                await handleUpdateOrderStatus(orderId, newStatus, trackingNumber, notes);
+            } else {
+                const now = new Date().toISOString();
+                const payload = { status: newStatus.toLowerCase(), updated_at: now };
+                if (trackingNumber) payload.tracking_number = trackingNumber;
+                const { error } = await supabase.from('orders').update(payload).eq('id', orderId);
+                if (error) throw error;
+                await supabase.from('order_status_logs').insert({
+                    order_id: orderId, status: newStatus.toLowerCase(), title: newStatus,
+                    description: notes || `Status updated to ${newStatus}`, created_at: now,
+                });
+                if (fetchDashboardData) await fetchDashboardData();
+            }
+            // Update modal if open on this order
+            if (selectedOrder?.id === orderId) {
+                setSelectedOrder((prev) => prev ? { ...prev, status: newStatus.toLowerCase(), trackingNumber: trackingNumber || prev.trackingNumber } : prev);
+            }
+            Alert.alert('✅ Updated', `Order marked as ${newStatus}`);
         } catch (err) {
-            console.error('Print slip error:', err);
-            Alert.alert('Error', 'Could not generate packing slip.');
+            console.error('Order update error:', err);
+            Alert.alert('Error', err.message || 'Could not update order status.');
+        } finally {
+            setUpdatingId(null);
         }
-    };
-
-    const handleExportAllOrdersPdf = async () => {
-        if (!orders || orders.length === 0) return Alert.alert('Notice', 'No orders to export.');
-        try {
-            const storeName = vendor?.business_name || vendor?.name || 'Abu Mafhal Verified Store';
-            const html = `
-                <html>
-                    <head>
-                        <style>
-                            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 20px; color: #0F172A; }
-                            table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 11px; }
-                            th, td { border: 1px solid #E2E8F0; padding: 8px; text-align: left; }
-                            th { background: #0F172A; color: white; font-weight: 800; }
-                            .delivered { color: #16A34A; font-weight: bold; }
-                            .pending { color: #D97706; font-weight: bold; }
-                        </style>
-                    </head>
-                    <body>
-                        <h2>${storeName} - All Orders Summary</h2>
-                        <p style="font-size: 12px; color: #64748B;">Generated: ${new Date().toLocaleString()} • Total Orders: ${orders.length}</p>
-                        <table>
-                            <tr><th>Order ID</th><th>Date</th><th>Customer</th><th>Item</th><th>Qty</th><th>Earnings (₦)</th><th>Status</th></tr>
-                            ${orders.map(o => `
-                                <tr>
-                                    <td>#${(o.id || '').slice(0, 8).toUpperCase()}</td>
-                                    <td>${o.date || 'Recent'}</td>
-                                    <td>${o.customerName || 'Buyer'}</td>
-                                    <td>${o.item || 'Product'}</td>
-                                    <td>${o.quantity || 1}</td>
-                                    <td>₦${Number(o.amount || 0).toLocaleString()}</td>
-                                    <td class="${(o.status || '').toLowerCase()}">${(o.status || 'PENDING').toUpperCase()}</td>
-                                </tr>
-                            `).join('')}
-                        </table>
-                    </body>
-                </html>
-            `;
-            const { uri } = await Print.printToFileAsync({ html });
-            await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
-        } catch (err) {
-            console.error('Export all orders error:', err);
-            Alert.alert('Error', 'Could not export orders report.');
-        }
-    };
+    }, [handleUpdateOrderStatus, fetchDashboardData, selectedOrder]);
 
     // Filter & search
-    const filteredOrders = orders.filter(o => {
-        const matchesFilter =
-            orderFilter === 'All' ||
-            (o.status || '').toLowerCase() === orderFilter.toLowerCase();
-
-        if (!matchesFilter) return false;
-
+    const filteredOrders = orders.filter((o) => {
+        const fKey = (o.status || '').toLowerCase().replace(/ /g, '_');
+        const filterKey = orderFilter.toLowerCase().replace(/ /g, '_');
+        const matchFilter = filterKey === 'all' || fKey === filterKey;
+        if (!matchFilter) return false;
         if (!search.trim()) return true;
         const q = search.toLowerCase();
         return (
             (o.item || '').toLowerCase().includes(q) ||
             (o.customerName || '').toLowerCase().includes(q) ||
-            (o.id || '').toLowerCase().includes(q) ||
+            shortId(o.id).toLowerCase().includes(q) ||
             (o.trackingNumber || '').toLowerCase().includes(q) ||
             (o.phone || '').includes(q)
         );
     });
 
+    // Stats
     const counts = {
-        all: orders.length,
-        pending: orders.filter(o => (o.status || '').toLowerCase() === 'pending').length,
-        processing: orders.filter(o => (o.status || '').toLowerCase() === 'processing').length,
-        shipped: orders.filter(o => (o.status || '').toLowerCase() === 'shipped').length,
-        delivered: orders.filter(o => (o.status || '').toLowerCase() === 'delivered').length,
-        cancelled: orders.filter(o => (o.status || '').toLowerCase() === 'cancelled').length,
+        All: orders.length,
+        Pending: orders.filter((o) => o.status === 'pending').length,
+        Processing: orders.filter((o) => o.status === 'processing').length,
+        Shipped: orders.filter((o) => o.status === 'shipped').length,
+        Out_for_delivery: orders.filter((o) => o.status === 'out_for_delivery').length,
+        Delivered: orders.filter((o) => o.status === 'delivered').length,
+        Cancelled: orders.filter((o) => o.status === 'cancelled').length,
     };
+    const pendingRevenue = orders.filter((o) => !['delivered', 'cancelled', 'refunded'].includes(o.status)).reduce((s, o) => s + (o.amount || 0), 0);
+    const deliveredRevenue = orders.filter((o) => o.status === 'delivered').reduce((s, o) => s + (o.amount || 0), 0);
+    const podPending = orders.filter((o) => o.isPOD && o.status !== 'delivered' && o.status !== 'cancelled');
 
-    const FILTER_TABS = [
-        { id: 'All', label: 'All', count: counts.all },
-        { id: 'Pending', label: 'Pending', count: counts.pending },
-        { id: 'Processing', label: 'Processing', count: counts.processing },
-        { id: 'Shipped', label: 'Shipped', count: counts.shipped },
-        { id: 'Delivered', label: 'Delivered', count: counts.delivered },
-        { id: 'Cancelled', label: 'Cancelled', count: counts.cancelled },
-    ];
+    const FILTER_TABS = FILTERS.filter((f) => f === 'All' || counts[f] > 0 || f === 'All');
 
     return (
-        <View style={styles.container}>
-            {/* Search Bar & PDF Export */}
-            <View style={styles.topToolbar}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, gap: 8 }}>
-                    <View style={[styles.searchBar, { flex: 1, marginHorizontal: 0 }]}>
-                        <Ionicons name="search" size={17} color="#94A3B8" />
-                        <TextInput
-                            placeholder="Search orders, customers, tracking..."
-                            placeholderTextColor="#94A3B8"
-                            value={search}
-                            onChangeText={setSearch}
-                            style={styles.searchInput}
-                            returnKeyType="search"
-                        />
-                        {search.length > 0 && (
-                            <TouchableOpacity onPress={() => setSearch('')}>
-                                <Ionicons name="close-circle" size={17} color="#CBD5E1" />
-                            </TouchableOpacity>
-                        )}
+        <View style={s.container}>
+            {/* ─── TOP STATS BAR ───────────────────────────────────────── */}
+            <View style={s.statsBar}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 14, gap: 10 }}>
+                    <View style={[s.statCard, { backgroundColor: '#0F172A' }]}>
+                        <Text style={[s.statVal, { color: '#FFFFFF' }]}>{counts.All}</Text>
+                        <Text style={[s.statLabel, { color: '#94A3B8' }]}>Total</Text>
                     </View>
-
-                    <TouchableOpacity
-                        onPress={handleExportAllOrdersPdf}
-                        style={styles.exportPdfBtn}
-                        activeOpacity={0.8}
-                    >
-                        <Ionicons name="download-outline" size={15} color="#0F172A" />
-                        <Text style={styles.exportPdfBtnText}>PDF</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Filter Scroll */}
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.filterScroll}
-                >
-                    {FILTER_TABS.map(tab => {
-                        const isActive = orderFilter === tab.id;
-                        return (
-                            <TouchableOpacity
-                                key={tab.id}
-                                style={[styles.filterChip, isActive && styles.filterChipActive]}
-                                onPress={() => setOrderFilter?.(tab.id)}
-                                activeOpacity={0.75}
-                            >
-                                <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
-                                    {tab.label}
-                                </Text>
-                                {tab.count > 0 && (
-                                    <View style={[styles.chipCountBox, isActive && styles.chipCountBoxActive]}>
-                                        <Text style={[styles.chipCountText, isActive && styles.chipCountTextActive]}>
-                                            {tab.count}
-                                        </Text>
-                                    </View>
-                                )}
-                            </TouchableOpacity>
-                        );
-                    })}
+                    <View style={[s.statCard, { backgroundColor: '#FEF3C7' }]}>
+                        <Text style={[s.statVal, { color: '#D97706' }]}>{counts.Pending}</Text>
+                        <Text style={[s.statLabel, { color: '#92400E' }]}>Pending ⏳</Text>
+                    </View>
+                    <View style={[s.statCard, { backgroundColor: '#ECFDF5' }]}>
+                        <Text style={[s.statVal, { color: '#059669' }]}>{fmt(deliveredRevenue)}</Text>
+                        <Text style={[s.statLabel, { color: '#065F46' }]}>Earned ✅</Text>
+                    </View>
+                    <View style={[s.statCard, { backgroundColor: '#F0FDF4' }]}>
+                        <Text style={[s.statVal, { color: '#16A34A' }]}>{fmt(pendingRevenue)}</Text>
+                        <Text style={[s.statLabel, { color: '#166534' }]}>In Escrow 🔒</Text>
+                    </View>
+                    {podPending.length > 0 && (
+                        <View style={[s.statCard, { backgroundColor: '#DCFCE7' }]}>
+                            <Text style={[s.statVal, { color: '#16A34A' }]}>{podPending.length}</Text>
+                            <Text style={[s.statLabel, { color: '#166534' }]}>POD 💵</Text>
+                        </View>
+                    )}
                 </ScrollView>
             </View>
 
-            {/* Orders FlatList */}
+            {/* ─── SEARCH + EXPORT ─────────────────────────────────────── */}
+            <View style={s.toolbar}>
+                <View style={s.searchBox}>
+                    <Ionicons name="search" size={16} color="#94A3B8" />
+                    <TextInput
+                        placeholder="Search orders, customers..."
+                        placeholderTextColor="#94A3B8"
+                        value={search}
+                        onChangeText={setSearch}
+                        style={s.searchInput}
+                    />
+                    {search.length > 0 && (
+                        <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                            <Ionicons name="close-circle" size={16} color="#CBD5E1" />
+                        </TouchableOpacity>
+                    )}
+                </View>
+            </View>
+
+            {/* ─── FILTER TABS ─────────────────────────────────────────── */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterScroll}>
+                {FILTER_TABS.map((f) => {
+                    const isActive = orderFilter === f;
+                    const count = counts[f] || 0;
+                    const cfg = STATUS_CFG[f.toLowerCase().replace(/ /g, '_')];
+                    return (
+                        <TouchableOpacity key={f} onPress={() => setOrderFilter?.(f)} style={[s.chip, isActive && s.chipActive, isActive && cfg && { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
+                            <Text style={[s.chipText, isActive && s.chipTextActive, isActive && cfg && { color: cfg.color }]}>
+                                {f === 'Out_for_delivery' ? 'Out for Delivery' : f}
+                            </Text>
+                            {count > 0 && (
+                                <View style={[s.chipBadge, isActive && cfg && { backgroundColor: cfg.color }]}>
+                                    <Text style={[s.chipBadgeText, isActive && { color: '#FFFFFF' }]}>{count}</Text>
+                                </View>
+                            )}
+                        </TouchableOpacity>
+                    );
+                })}
+            </ScrollView>
+
+            {/* ─── ORDERS LIST ─────────────────────────────────────────── */}
             <FlatList
                 data={filteredOrders}
-                keyExtractor={(item, index) => `${item.id}-${index}`}
-                contentContainerStyle={styles.listContent}
+                keyExtractor={(item, i) => `${item.id}-${i}`}
+                contentContainerStyle={s.listContent}
                 showsVerticalScrollIndicator={false}
                 refreshControl={
                     <RefreshControl
                         refreshing={refreshing}
-                        onRefresh={() => {
-                            setRefreshing?.(true);
-                            fetchDashboardData?.();
-                        }}
-                        colors={['#0F172A']}
-                        tintColor="#0F172A"
+                        onRefresh={() => { setRefreshing?.(true); fetchDashboardData?.(); }}
+                        colors={[NAVY]} tintColor={NAVY}
                     />
                 }
                 renderItem={({ item }) => {
-                    const statusKey = (item.status || 'pending').toLowerCase();
-                    const statusCfg = STATUS_CONFIG[statusKey] || STATUS_CONFIG.pending;
+                    const statusKey = (item.status || 'pending').toLowerCase().replace(/ /g, '_');
+                    const cfg = STATUS_CFG[statusKey] || STATUS_CFG.pending;
                     const isUpdating = updatingId === item.id;
-                    const tracking = item.trackingNumber || `TRK-${(item.id || '').slice(0, 8).toUpperCase()}`;
+                    const isPOD = item.isPOD || item.paymentMethod === 'pod';
+                    const isInstallment = item.isInstallment;
+                    const deliveredByAbumafhal = item.deliveredByAbumafhal || !!item.driverId;
 
                     return (
-                        <View style={styles.card}>
-                            {/* Card Header: Order ID & Status */}
-                            <View style={styles.cardHeader}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                                    <View style={styles.orderIconBox}>
-                                        <Ionicons name="receipt-outline" size={18} color="#0F172A" />
+                        <TouchableOpacity onPress={() => openDetail(item)} activeOpacity={0.9} style={s.card}>
+                            {/* Card Header */}
+                            <View style={s.cardRow}>
+                                <View style={s.orderIconBox}>
+                                    <Ionicons name="receipt-outline" size={18} color={NAVY} />
+                                </View>
+                                <View style={{ flex: 1, marginLeft: 10 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Text style={s.orderId}>#{shortId(item.id)}</Text>
+                                        {isPOD && <View style={s.podTag}><Text style={s.podTagText}>💵 POD</Text></View>}
+                                        {isInstallment && <View style={s.installTag}><Text style={s.installTagText}>📅 Installment</Text></View>}
                                     </View>
-                                    <View style={{ flex: 1 }}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                            <Text style={styles.orderIdText}>
-                                                Order #{item.id?.toString().slice(0, 8).toUpperCase()}
-                                            </Text>
-                                            <TouchableOpacity
-                                                onPress={() => copyTracking(tracking)}
-                                                style={styles.copyBtn}
-                                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                            >
-                                                <Ionicons name="copy-outline" size={13} color="#64748B" />
-                                            </TouchableOpacity>
-                                        </View>
-                                        <Text style={styles.orderDateText}>{item.date || 'Recent Order'}</Text>
+                                    <Text style={s.orderDate}>{item.date}</Text>
+                                </View>
+                                <StatusBadge status={statusKey} small />
+                            </View>
+
+                            <View style={s.divider} />
+
+                            {/* Product Row */}
+                            <View style={s.productRow}>
+                                <View style={s.thumbBox}>
+                                    {item.image && item.image !== 'https://placehold.co/80' ? (
+                                        <Image source={{ uri: item.image }} style={s.thumb} resizeMode="cover" />
+                                    ) : (
+                                        <Ionicons name="cube-outline" size={22} color="#CBD5E1" />
+                                    )}
+                                </View>
+                                <View style={{ flex: 1, marginLeft: 10 }}>
+                                    <Text style={s.productName} numberOfLines={2}>{item.item}</Text>
+                                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 4, alignItems: 'center' }}>
+                                        <View style={s.qtyBadge}><Text style={s.qtyText}>×{item.quantity}</Text></View>
+                                        {item.variant && <View style={s.varTag}><Text style={s.varText}>{item.variant}</Text></View>}
+                                        <Text style={s.unitPrice}>{fmt(item.price)}</Text>
                                     </View>
                                 </View>
-
-                                {/* Action Buttons: Status & Packing Slip */}
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                    <TouchableOpacity
-                                        style={styles.printSlipBtn}
-                                        onPress={() => handlePrintPackingSlip(item)}
-                                        activeOpacity={0.75}
-                                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                                    >
-                                        <Ionicons name="print-outline" size={13} color="#334155" />
-                                        <Text style={styles.printSlipBtnText}>Slip</Text>
-                                    </TouchableOpacity>
-
-                                    {/* Status Pill */}
-                                    <View
-                                        style={[
-                                            styles.statusBadge,
-                                            {
-                                                backgroundColor: statusCfg.bg,
-                                                borderColor: statusCfg.border
-                                            }
-                                        ]}
-                                    >
-                                        <Ionicons name={statusCfg.icon} size={12} color={statusCfg.color} style={{ marginRight: 4 }} />
-                                        <Text style={[styles.statusBadgeText, { color: statusCfg.color }]}>
-                                            {statusCfg.label.toUpperCase()}
-                                        </Text>
-                                    </View>
+                                <View style={{ alignItems: 'flex-end' }}>
+                                    <Text style={s.earningsLabel}>Earnings</Text>
+                                    <Text style={s.earningsVal}>{fmt(item.amount)}</Text>
                                 </View>
                             </View>
 
-                            <View style={styles.cardDivider} />
-
-                            {/* Product Info Row */}
-                            <View style={styles.productRow}>
-                                <View style={styles.productThumbBox}>
-                                    <Image
-                                        source={{ uri: item.image || 'https://placehold.co/80' }}
-                                        style={styles.productThumb}
-                                        resizeMode="cover"
-                                    />
-                                </View>
-
-                                <View style={{ flex: 1, marginLeft: 12 }}>
-                                    <Text style={styles.productName} numberOfLines={2}>
-                                        {item.item || 'Order Product'}
-                                    </Text>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                                        <View style={styles.qtyBadge}>
-                                            <Text style={styles.qtyBadgeText}>Qty: {item.quantity || 1}</Text>
-                                        </View>
-                                        <Text style={styles.unitPriceText}>
-                                            ₦{(item.price || item.amount || 0).toLocaleString()}
-                                        </Text>
-                                    </View>
-                                </View>
-
-                                {/* Net Vendor Earnings */}
-                                <View style={styles.earningsBox}>
-                                    <Text style={styles.earningsLabel}>Store Earnings</Text>
-                                    <Text style={styles.earningsValue}>
-                                        ₦{(item.amount || 0).toLocaleString()}
+                            {/* Customer Row */}
+                            <View style={s.customerBar}>
+                                <Ionicons name="person-circle-outline" size={14} color="#94A3B8" />
+                                <Text style={s.customerName} numberOfLines={1}>{item.customerName}</Text>
+                                {/* Delivery by badge */}
+                                <View style={[s.deliveryTag, deliveredByAbumafhal ? { backgroundColor: '#EFF6FF' } : { backgroundColor: '#FFF7ED' }]}>
+                                    <Ionicons name={deliveredByAbumafhal ? 'bicycle' : 'storefront-outline'} size={10} color={deliveredByAbumafhal ? '#2563EB' : '#EA580C'} />
+                                    <Text style={[s.deliveryTagText, { color: deliveredByAbumafhal ? '#2563EB' : '#EA580C' }]}>
+                                        {deliveredByAbumafhal ? 'Abu Mafhal' : 'By Vendor'}
                                     </Text>
                                 </View>
                             </View>
 
-                            {/* Customer & Address Details */}
-                            <View style={styles.customerBox}>
-                                <View style={styles.customerRow}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                                        <Ionicons name="person-outline" size={14} color="#64748B" />
-                                        <Text style={styles.customerNameText} numberOfLines={1}>
-                                            {item.customerName || 'Verified Marketplace Buyer'}
-                                        </Text>
-                                    </View>
-
-                                    {/* Action Call & WhatsApp Buttons */}
-                                    {item.phone ? (
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                            <TouchableOpacity
-                                                onPress={() => handleCallCustomer(item.phone)}
-                                                style={styles.contactBtn}
-                                            >
-                                                <Ionicons name="call" size={12} color="#2563EB" />
-                                                <Text style={styles.contactBtnText}>Call</Text>
-                                            </TouchableOpacity>
-
-                                            <TouchableOpacity
-                                                onPress={() => handleWhatsAppCustomer(item.phone, item.customerName, item.id)}
-                                                style={[styles.contactBtn, { backgroundColor: '#DCFCE7', borderColor: '#BBF7D0' }]}
-                                            >
-                                                <Ionicons name="logo-whatsapp" size={13} color="#16A34A" />
-                                                <Text style={[styles.contactBtnText, { color: '#16A34A' }]}>Chat</Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                    ) : null}
+                            {/* Quick Actions (in-card, for urgent statuses) */}
+                            {['pending', 'processing', 'shipped'].includes(statusKey) && (
+                                <View style={s.quickActions}>
+                                    {statusKey === 'pending' && (
+                                        <TouchableOpacity
+                                            onPress={() => { Alert.alert('Accept Order?', `Accept order #${shortId(item.id)} and start processing?`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Accept', onPress: () => executeUpdate(item.id, 'Processing') }]); }}
+                                            disabled={isUpdating}
+                                            style={[s.quickBtn, { backgroundColor: '#2563EB' }]}
+                                        >
+                                            <Ionicons name="checkmark-done" size={13} color="#FFF" />
+                                            <Text style={s.quickBtnText}>Accept</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                    {statusKey === 'processing' && (
+                                        <TouchableOpacity
+                                            onPress={() => openDetail(item)}
+                                            style={[s.quickBtn, { backgroundColor: '#7C3AED' }]}
+                                        >
+                                            <Ionicons name="car" size={13} color="#FFF" />
+                                            <Text style={s.quickBtnText}>Ship</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                    {statusKey === 'shipped' && (
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                const msg = isPOD ? `⚠️ PAY ON DELIVERY! Ensure you collect ${fmt(item.amount)} CASH first.\n\nConfirm delivery of order #${shortId(item.id)}?` : `Confirm delivery of order #${shortId(item.id)}?`;
+                                                Alert.alert('Confirm Delivered?', msg, [{ text: 'Cancel', style: 'cancel' }, { text: 'Delivered ✅', onPress: () => executeUpdate(item.id, 'Delivered') }]);
+                                            }}
+                                            disabled={isUpdating}
+                                            style={[s.quickBtn, { backgroundColor: '#059669', flex: 1 }]}
+                                        >
+                                            <Ionicons name="checkmark-circle" size={13} color="#FFF" />
+                                            <Text style={s.quickBtnText}>{isPOD ? '💵 Collect & Deliver' : 'Mark Delivered'}</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                    <TouchableOpacity onPress={() => openDetail(item)} style={[s.quickBtn, { backgroundColor: '#F1F5F9', flex: statusKey !== 'shipped' ? 1 : undefined }]}>
+                                        <Ionicons name="eye-outline" size={13} color="#334155" />
+                                        <Text style={[s.quickBtnText, { color: '#334155' }]}>Details</Text>
+                                    </TouchableOpacity>
                                 </View>
+                            )}
 
-                                {item.address ? (
-                                    <View style={styles.addressRow}>
-                                        <Ionicons name="location-outline" size={14} color="#94A3B8" />
-                                        <Text style={styles.addressText} numberOfLines={2}>
-                                            {item.address}
-                                        </Text>
-                                    </View>
-                                ) : null}
-                            </View>
-
-                            {/* ACTION BUTTONS (Fast order handling) */}
-                            <View style={styles.actionsRow}>
-                                {statusKey === 'pending' && (
-                                    <>
-                                        <TouchableOpacity
-                                            style={[styles.actionBtn, styles.actionBtnBlue]}
-                                            onPress={() => executeStatusUpdate(item.id, 'Processing')}
-                                            disabled={isUpdating}
-                                        >
-                                            <Ionicons name="checkmark-done" size={14} color="#FFFFFF" />
-                                            <Text style={styles.actionBtnTextWhite}>Accept Order</Text>
-                                        </TouchableOpacity>
-
-                                        <TouchableOpacity
-                                            style={[styles.actionBtn, styles.actionBtnPurple]}
-                                            onPress={() => executeStatusUpdate(item.id, 'Shipped')}
-                                            disabled={isUpdating}
-                                        >
-                                            <Ionicons name="car" size={14} color="#FFFFFF" />
-                                            <Text style={styles.actionBtnTextWhite}>Ship Now</Text>
-                                        </TouchableOpacity>
-                                    </>
-                                )}
-
-                                {statusKey === 'processing' && (
-                                    <TouchableOpacity
-                                        style={[styles.actionBtn, styles.actionBtnPurple, { flex: 1 }]}
-                                        onPress={() => executeStatusUpdate(item.id, 'Shipped')}
-                                        disabled={isUpdating}
-                                    >
-                                        <Ionicons name="car" size={15} color="#FFFFFF" />
-                                        <Text style={styles.actionBtnTextWhite}>Mark as Dispatched / Shipped</Text>
-                                    </TouchableOpacity>
-                                )}
-
-                                {statusKey === 'shipped' && (
-                                    <TouchableOpacity
-                                        style={[styles.actionBtn, styles.actionBtnGreen, { flex: 1 }]}
-                                        onPress={() => executeStatusUpdate(item.id, 'Delivered')}
-                                        disabled={isUpdating}
-                                    >
-                                        <Ionicons name="checkmark-circle" size={15} color="#FFFFFF" />
-                                        <Text style={styles.actionBtnTextWhite}>Confirm Order Delivered</Text>
-                                    </TouchableOpacity>
-                                )}
-
-                                {statusKey === 'delivered' && (
-                                    <View style={styles.deliveredNotice}>
-                                        <Ionicons name="checkmark-circle" size={16} color="#10B981" />
-                                        <Text style={styles.deliveredNoticeText}>
-                                            Delivered & Credited to Available Balance
-                                        </Text>
-                                    </View>
-                                )}
-
-                                {statusKey === 'cancelled' && (
-                                    <View style={[styles.deliveredNotice, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
-                                        <Ionicons name="close-circle" size={16} color="#EF4444" />
-                                        <Text style={[styles.deliveredNoticeText, { color: '#DC2626' }]}>
-                                            Order Cancelled
-                                        </Text>
-                                    </View>
-                                )}
-                            </View>
-                        </View>
+                            {statusKey === 'delivered' && (
+                                <View style={s.deliveredStrip}>
+                                    <Ionicons name="checkmark-circle" size={14} color="#10B981" />
+                                    <Text style={s.deliveredStripText}>
+                                        {isPOD ? '💵 Cash collected & Delivered' : 'Delivered · Earnings Credited'}
+                                    </Text>
+                                </View>
+                            )}
+                            {statusKey === 'cancelled' && (
+                                <View style={[s.deliveredStrip, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
+                                    <Ionicons name="close-circle" size={14} color="#DC2626" />
+                                    <Text style={[s.deliveredStripText, { color: '#DC2626' }]}>Order Cancelled</Text>
+                                </View>
+                            )}
+                        </TouchableOpacity>
                     );
                 }}
                 ListEmptyComponent={
-                    <View style={styles.emptyContainer}>
-                        <View style={styles.emptyIconBox}>
-                            <Ionicons name="bag-handle-outline" size={44} color="#CBD5E1" />
-                        </View>
-                        <Text style={styles.emptyTitle}>
-                            {search ? `No orders matching "${search}"` : 'No orders in this category'}
-                        </Text>
-                        <Text style={styles.emptyDesc}>
-                            {search
-                                ? 'Try a different keyword or search query.'
-                                : 'When customers purchase items from your store, their orders will appear here in real time.'}
-                        </Text>
+                    <View style={s.emptyBox}>
+                        <View style={s.emptyIconBox}><Ionicons name="bag-handle-outline" size={48} color="#CBD5E1" /></View>
+                        <Text style={s.emptyTitle}>{search ? `No results for "${search}"` : 'No orders yet'}</Text>
+                        <Text style={s.emptyDesc}>{search ? 'Try a different search term.' : 'When buyers purchase from your store, orders will appear here.'}</Text>
                         {search.length > 0 && (
-                            <TouchableOpacity
-                                style={styles.clearSearchBtn}
-                                onPress={() => setSearch('')}
-                            >
-                                <Text style={styles.clearSearchBtnText}>Clear Search Filter</Text>
+                            <TouchableOpacity onPress={() => setSearch('')} style={s.clearBtn}>
+                                <Text style={s.clearBtnText}>Clear Search</Text>
                             </TouchableOpacity>
                         )}
                     </View>
                 }
             />
+
+            {/* ─── ORDER DETAIL MODAL ───────────────────────────────────── */}
+            {selectedOrder && (
+                <OrderDetailModal
+                    item={selectedOrder}
+                    visible={detailVisible}
+                    onClose={() => { setDetailVisible(false); setSelectedOrder(null); }}
+                    onUpdateStatus={executeUpdate}
+                    updatingId={updatingId}
+                    vendor={vendor}
+                />
+            )}
         </View>
     );
 };
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#F8FAFC'
-    },
-    topToolbar: {
-        backgroundColor: '#FFFFFF',
-        borderBottomWidth: 1,
-        borderColor: '#F1F5F9',
-        paddingTop: 12,
-        paddingBottom: 10
-    },
-    searchBar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F8FAFC',
-        marginHorizontal: 16,
-        paddingHorizontal: 12,
-        height: 42,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        gap: 8
-    },
-    searchInput: {
-        flex: 1,
-        fontSize: 13.5,
-        fontWeight: '600',
-        color: '#0F172A',
-        height: '100%'
-    },
-    filterScroll: {
-        paddingHorizontal: 16,
-        paddingTop: 10,
-        gap: 8
-    },
-    filterChip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 14,
-        paddingVertical: 7,
-        borderRadius: 20,
-        backgroundColor: '#F1F5F9',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        gap: 6
-    },
-    filterChipActive: {
-        backgroundColor: '#0F172A',
-        borderColor: '#0F172A'
-    },
-    filterChipText: {
-        fontSize: 12.5,
-        fontWeight: '700',
-        color: '#64748B'
-    },
-    filterChipTextActive: {
-        color: '#FFFFFF'
-    },
-    chipCountBox: {
-        paddingHorizontal: 6,
-        paddingVertical: 1,
-        borderRadius: 10,
-        backgroundColor: '#E2E8F0'
-    },
-    chipCountBoxActive: {
-        backgroundColor: 'rgba(255,255,255,0.2)'
-    },
-    chipCountText: {
-        fontSize: 10.5,
-        fontWeight: '800',
-        color: '#475569'
-    },
-    chipCountTextActive: {
-        color: '#FFFFFF'
-    },
-    listContent: {
-        padding: 16,
-        paddingBottom: 120
-    },
-    card: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 18,
-        padding: 16,
-        marginBottom: 14,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 8,
-        elevation: 2
-    },
-    cardHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between'
-    },
-    orderIconBox: {
-        width: 36,
-        height: 36,
-        borderRadius: 10,
-        backgroundColor: '#F1F5F9',
-        alignItems: 'center',
-        justifyContent: 'center'
-    },
-    orderIdText: {
-        fontSize: 13.5,
-        fontWeight: '800',
-        color: '#0F172A'
-    },
-    copyBtn: {
-        padding: 2
-    },
-    orderDateText: {
-        fontSize: 11,
-        color: '#94A3B8',
-        fontWeight: '500',
-        marginTop: 1
-    },
-    statusBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 9,
-        paddingVertical: 4.5,
-        borderRadius: 10,
-        borderWidth: 1
-    },
-    statusBadgeText: {
-        fontSize: 10,
-        fontWeight: '800',
-        letterSpacing: 0.5
-    },
-    cardDivider: {
-        height: 1,
-        backgroundColor: '#F1F5F9',
-        marginVertical: 12
-    },
-    productRow: {
-        flexDirection: 'row',
-        alignItems: 'center'
-    },
-    productThumbBox: {
-        width: 60,
-        height: 60,
-        borderRadius: 12,
-        overflow: 'hidden',
-        backgroundColor: '#F1F5F9',
-        borderWidth: 1,
-        borderColor: '#E2E8F0'
-    },
-    productThumb: {
-        width: '100%',
-        height: '100%'
-    },
-    productName: {
-        fontSize: 13.5,
-        fontWeight: '700',
-        color: '#0F172A',
-        lineHeight: 18
-    },
-    qtyBadge: {
-        backgroundColor: '#F1F5F9',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 6
-    },
-    qtyBadgeText: {
-        fontSize: 11,
-        fontWeight: '700',
-        color: '#475569'
-    },
-    unitPriceText: {
-        fontSize: 12,
-        color: '#64748B',
-        fontWeight: '600'
-    },
-    earningsBox: {
-        alignItems: 'flex-end',
-        paddingLeft: 8
-    },
-    earningsLabel: {
-        fontSize: 10,
-        color: '#94A3B8',
-        fontWeight: '600'
-    },
-    earningsValue: {
-        fontSize: 15,
-        fontWeight: '900',
-        color: '#10B981',
-        marginTop: 2
-    },
-    customerBox: {
-        backgroundColor: '#F8FAFC',
-        borderRadius: 12,
-        padding: 10,
-        marginTop: 12,
-        borderWidth: 1,
-        borderColor: '#F1F5F9',
-        gap: 6
-    },
-    customerRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between'
-    },
-    customerNameText: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: '#334155'
-    },
-    contactBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: 8,
-        paddingVertical: 3.5,
-        borderRadius: 6,
-        backgroundColor: '#EFF6FF',
-        borderWidth: 1,
-        borderColor: '#BFDBFE'
-    },
-    contactBtnText: {
-        fontSize: 10.5,
-        fontWeight: '800',
-        color: '#2563EB'
-    },
-    addressRow: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: 6,
-        marginTop: 2
-    },
-    addressText: {
-        fontSize: 11,
-        color: '#64748B',
-        lineHeight: 15,
-        flex: 1
-    },
-    actionsRow: {
-        flexDirection: 'row',
-        gap: 8,
-        marginTop: 12,
-        paddingTop: 10,
-        borderTopWidth: 1,
-        borderColor: '#F1F5F9'
-    },
-    actionBtn: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-        paddingVertical: 9,
-        borderRadius: 10
-    },
-    actionBtnBlue: {
-        backgroundColor: '#2563EB'
-    },
-    actionBtnPurple: {
-        backgroundColor: '#7C3AED'
-    },
-    actionBtnGreen: {
-        backgroundColor: '#059669'
-    },
-    actionBtnTextWhite: {
-        color: '#FFFFFF',
-        fontSize: 12,
-        fontWeight: '800'
-    },
-    deliveredNotice: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-        paddingVertical: 8,
-        backgroundColor: '#ECFDF5',
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: '#A7F3D0'
-    },
-    deliveredNoticeText: {
-        fontSize: 11.5,
-        fontWeight: '800',
-        color: '#059669'
-    },
-    emptyContainer: {
-        alignItems: 'center',
-        paddingVertical: 50,
-        paddingHorizontal: 20
-    },
-    emptyIconBox: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        backgroundColor: '#F1F5F9',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 14
-    },
-    emptyTitle: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: '#0F172A',
-        textAlign: 'center'
-    },
-    emptyDesc: {
-        fontSize: 12.5,
-        color: '#94A3B8',
-        textAlign: 'center',
-        marginTop: 6,
-        lineHeight: 18,
-        maxWidth: 280
-    },
-    clearSearchBtn: {
-        marginTop: 14,
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 10,
-        backgroundColor: '#0F172A'
-    },
-    clearSearchBtnText: {
-        color: '#FFFFFF',
-        fontSize: 12,
-        fontWeight: '700'
-    },
-    exportPdfBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 5,
-        backgroundColor: '#F1F5F9',
-        borderWidth: 1,
-        borderColor: '#CBD5E1',
-        paddingHorizontal: 12,
-        height: 42,
-        borderRadius: 12,
-        justifyContent: 'center'
-    },
-    exportPdfBtnText: {
-        fontSize: 12,
-        fontWeight: '800',
-        color: '#0F172A'
-    },
-    printSlipBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: 8,
-        paddingVertical: 4.5,
-        borderRadius: 8,
-        backgroundColor: '#F1F5F9',
-        borderWidth: 1,
-        borderColor: '#E2E8F0'
-    },
-    printSlipBtnText: {
-        fontSize: 11,
-        fontWeight: '700',
-        color: '#334155'
-    }
+// ─── Styles ───────────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
+    container: { flex: 1, backgroundColor: '#F8FAFC' },
+    statsBar: { backgroundColor: '#FFFFFF', paddingVertical: 12, borderBottomWidth: 1, borderColor: '#F1F5F9' },
+    statCard: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, minWidth: 90, alignItems: 'center' },
+    statVal: { fontSize: 16, fontWeight: '900', textAlign: 'center' },
+    statLabel: { fontSize: 10, fontWeight: '700', marginTop: 2, textAlign: 'center' },
+    toolbar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, backgroundColor: '#FFFFFF', gap: 8 },
+    searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', paddingHorizontal: 12, height: 42, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', gap: 8 },
+    searchInput: { flex: 1, fontSize: 13.5, fontWeight: '600', color: '#0F172A', height: '100%' },
+    filterScroll: { paddingHorizontal: 14, paddingBottom: 10, paddingTop: 2, gap: 8 },
+    chip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0', gap: 6 },
+    chipActive: { backgroundColor: NAVY, borderColor: NAVY },
+    chipText: { fontSize: 12.5, fontWeight: '700', color: '#64748B' },
+    chipTextActive: { color: '#FFFFFF' },
+    chipBadge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 10, backgroundColor: '#E2E8F0', minWidth: 18, alignItems: 'center' },
+    chipBadgeText: { fontSize: 10.5, fontWeight: '800', color: '#475569' },
+    listContent: { padding: 14, paddingBottom: 120 },
+    card: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: '#E8EFFE', shadowColor: '#0F172A', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+    cardRow: { flexDirection: 'row', alignItems: 'center' },
+    orderIconBox: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
+    orderId: { fontSize: 13.5, fontWeight: '900', color: '#0F172A' },
+    orderDate: { fontSize: 11, color: '#94A3B8', fontWeight: '500', marginTop: 2 },
+    podTag: { backgroundColor: '#DCFCE7', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
+    podTagText: { fontSize: 10, fontWeight: '800', color: '#16A34A' },
+    installTag: { backgroundColor: '#F0FDF4', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
+    installTagText: { fontSize: 10, fontWeight: '800', color: '#15803D' },
+    divider: { height: 1, backgroundColor: '#F1F5F9', marginVertical: 12 },
+    productRow: { flexDirection: 'row', alignItems: 'center' },
+    thumbBox: { width: 62, height: 62, borderRadius: 12, backgroundColor: '#F8FAFC', overflow: 'hidden', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
+    thumb: { width: '100%', height: '100%' },
+    productName: { fontSize: 13.5, fontWeight: '700', color: '#0F172A', lineHeight: 18 },
+    qtyBadge: { backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+    qtyText: { fontSize: 11, fontWeight: '700', color: '#475569' },
+    varTag: { backgroundColor: '#F5F3FF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+    varText: { fontSize: 10.5, color: '#7C3AED', fontWeight: '700' },
+    unitPrice: { fontSize: 12, color: '#64748B', fontWeight: '600' },
+    earningsLabel: { fontSize: 10, color: '#94A3B8', fontWeight: '600' },
+    earningsVal: { fontSize: 17, fontWeight: '900', color: '#10B981', marginTop: 2 },
+    customerBar: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderColor: '#F8FAFC' },
+    customerName: { fontSize: 12, fontWeight: '700', color: '#334155', flex: 1 },
+    deliveryTag: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8 },
+    deliveryTagText: { fontSize: 10, fontWeight: '800' },
+    quickActions: { flexDirection: 'row', gap: 8, marginTop: 10 },
+    quickBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 9, paddingHorizontal: 12, borderRadius: 10 },
+    quickBtnText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
+    deliveredStrip: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10, paddingVertical: 8, backgroundColor: '#ECFDF5', borderRadius: 10, borderWidth: 1, borderColor: '#A7F3D0' },
+    deliveredStripText: { fontSize: 11.5, fontWeight: '800', color: '#059669' },
+    emptyBox: { alignItems: 'center', paddingVertical: 60, paddingHorizontal: 20 },
+    emptyIconBox: { width: 90, height: 90, borderRadius: 45, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+    emptyTitle: { fontSize: 17, fontWeight: '800', color: '#0F172A', textAlign: 'center' },
+    emptyDesc: { fontSize: 12.5, color: '#94A3B8', textAlign: 'center', marginTop: 6, lineHeight: 18, maxWidth: 280 },
+    clearBtn: { marginTop: 16, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, backgroundColor: NAVY },
+    clearBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
 });
