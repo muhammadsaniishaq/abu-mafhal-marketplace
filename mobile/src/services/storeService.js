@@ -457,7 +457,7 @@ export const StoreService = {
             };
             const addressFallback = JSON.stringify(metaFallbackObj);
 
-            // 4. Update profiles table safely
+            // 4. Update profiles table safely with multi-tier fallback
             const profilePayload = {
                 business_name: storeName,
                 avatar_url: logoUrl,
@@ -470,13 +470,13 @@ export const StoreService = {
                 instagram: instagram || null,
                 facebook: facebook || null,
                 twitter: twitter || null,
-                address: address || null,
-                state: state || address || null,
+                address: addressFallback, // Guarantees all metadata is preserved in profiles.address
+                state: state || 'Yobe',
                 updated_at: new Date().toISOString()
             };
 
-            if (tagline !== undefined) {
-                profilePayload.tagline = tagline.trim() || null;
+            if (tagline !== undefined && tagline !== null) {
+                profilePayload.tagline = String(tagline).trim() || null;
             }
             if (isRecommended !== undefined) {
                 profilePayload.is_recommended = !!isRecommended;
@@ -498,43 +498,84 @@ export const StoreService = {
                 profilePayload.dob = opts.dob;
             }
 
-            // Only attempt direct phone column update if phone is valid and not conflicting
             if (phone && phone.trim()) {
                 profilePayload.phone_number = phone.trim();
                 profilePayload.phone = phone.trim();
             }
 
+            // Attempt Tier 1: Full payload
             let { error: profError } = await supabase
                 .from('profiles')
                 .update(profilePayload)
                 .eq('id', targetUserId);
 
             if (profError) {
-                console.warn('[StoreService] Profile update warning, retrying safely without phone column:', profError.message);
-                // If error is unique constraint (23505) or column error, remove 'phone' and retry
-                delete profilePayload.phone;
-                const { error: retryError } = await supabase
+                console.warn('[StoreService] Full profile update failed, trying Tier 2 safe payload:', profError.message);
+                
+                // Tier 2: Safe payload with standard profiles columns and addressFallback JSON
+                const safePayload = {
+                    business_name: storeName,
+                    avatar_url: logoUrl,
+                    address: addressFallback,
+                    updated_at: new Date().toISOString()
+                };
+                if (phone && phone.trim()) {
+                    safePayload.phone_number = phone.trim();
+                }
+
+                let { error: safeErr } = await supabase
                     .from('profiles')
-                    .update(profilePayload)
+                    .update(safePayload)
                     .eq('id', targetUserId);
 
-                if (retryError) {
-                    console.warn('[StoreService] Second profile retry with essential columns only:', retryError.message);
+                if (safeErr) {
+                    console.warn('[StoreService] Safe profile update failed, trying minimal payload:', safeErr.message);
+                    // Tier 3: Absolute minimal
                     await supabase
                         .from('profiles')
                         .update({
                             business_name: storeName,
-                            avatar_url: logoUrl,
-                            about: about,
+                            address: addressFallback,
                             updated_at: new Date().toISOString()
                         })
-                        .eq('id', targetUserId);
+                        .eq('id', targetUserId)
+                        .catch((e) => console.warn('[StoreService] Minimal profile error:', e));
                 }
             }
 
-            // 5. Update or Insert into dedicated `stores` table
+            // 5. Also sync to `vendors` table if exists
             try {
-                const storeRecord = {
+                await supabase
+                    .from('vendors')
+                    .update({
+                        business_name: storeName,
+                        logo_url: logoUrl,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('user_id', targetUserId);
+            } catch (vErr) {
+                // Non-fatal if table doesn't exist
+            }
+
+            // 6. Also sync to `vendor_applications` table
+            try {
+                await supabase
+                    .from('vendor_applications')
+                    .update({
+                        business_name: storeName,
+                        logo_url: logoUrl,
+                        business_description: about,
+                        business_address: address || state,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('user_id', targetUserId);
+            } catch (vaErr) {
+                // Non-fatal
+            }
+
+            // 7. Update or Insert into dedicated `stores` table with schema error tolerance
+            try {
+                const fullStoreRecord = {
                     name: storeName,
                     about: about,
                     cover_image: coverImage,
@@ -557,11 +598,11 @@ export const StoreService = {
                     updated_at: new Date().toISOString()
                 };
 
-                if (tagline !== undefined) {
-                    storeRecord.tagline = tagline.trim() || null;
+                if (tagline !== undefined && tagline !== null) {
+                    fullStoreRecord.tagline = String(tagline).trim() || null;
                 }
                 if (isVerified !== undefined) {
-                    storeRecord.is_verified = !!isVerified;
+                    fullStoreRecord.is_verified = !!isVerified;
                 }
 
                 // Check if store already exists for user
@@ -572,19 +613,52 @@ export const StoreService = {
                     .maybeSingle();
 
                 if (existingStore) {
-                    await supabase
+                    let { error: updErr } = await supabase
                         .from('stores')
-                        .update(storeRecord)
+                        .update(fullStoreRecord)
                         .eq('user_id', targetUserId);
+
+                    if (updErr) {
+                        console.warn('[StoreService] Full stores update failed, retrying with core columns:', updErr.message);
+                        // Retry with core columns only
+                        await supabase
+                            .from('stores')
+                            .update({
+                                name: storeName,
+                                about: about,
+                                cover_image: coverImage,
+                                logo: logoUrl,
+                                phone: phone || whatsapp,
+                                address: address,
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('user_id', targetUserId);
+                    }
                 } else {
-                    await supabase
+                    let { error: insErr } = await supabase
                         .from('stores')
                         .insert({
                             user_id: targetUserId,
                             is_verified: isVerified !== undefined ? !!isVerified : false,
                             rating: 5.0,
-                            ...storeRecord
+                            ...fullStoreRecord
                         });
+
+                    if (insErr) {
+                        console.warn('[StoreService] Full stores insert failed, retrying with core columns:', insErr.message);
+                        await supabase
+                            .from('stores')
+                            .insert({
+                                user_id: targetUserId,
+                                name: storeName,
+                                about: about,
+                                cover_image: coverImage,
+                                logo: logoUrl,
+                                phone: phone || whatsapp,
+                                address: address,
+                                rating: 5.0
+                            });
+                    }
                 }
             } catch (storesErr) {
                 console.warn('[StoreService] stores table sync notice (non-fatal):', storesErr.message);

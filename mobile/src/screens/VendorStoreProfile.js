@@ -263,12 +263,16 @@ export const VendorStoreProfile = ({ user, vendor, isAdminStore = false, onBack,
                 isRecommended: isAdminStore ? true : isRecommended
             });
 
+            setOriginalTagline(userIsAdmin ? tagline.trim() : (originalTagline || ''));
+            await loadCurrentStoreData();
+
             Alert.alert(
                 'Store Updated Successfully!',
                 'Your store identity, location, dispatch hub, bio, and contact details have been updated and are live across the marketplace.'
             );
             if (onSaved) onSaved();
         } catch (err) {
+            console.error('VendorStoreProfile save error:', err);
             Alert.alert('Save Error', err.message || 'Failed to save store profile.');
         } finally {
             setSaving(false);

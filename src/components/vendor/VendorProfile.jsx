@@ -288,6 +288,18 @@ const VendorProfile = () => {
         console.warn('stores table sync notice:', stErr.message);
       }
 
+      // Also sync to vendors table
+      try {
+        await supabase
+          .from('vendors')
+          .update({
+            business_name: profileData.businessName || profileData.name,
+            logo_url: profileData.avatar,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', targetUid);
+      } catch (_) {}
+
       // 2. Also update 'users' table
       const updatedUserRecord = {
         full_name: profileData.name,
