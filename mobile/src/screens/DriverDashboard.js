@@ -3,7 +3,6 @@ import {
     View,
     Text,
     StyleSheet,
-    FlatList,
     TouchableOpacity,
     RefreshControl,
     Alert,
@@ -26,7 +25,8 @@ import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 import { whatsappService } from '../services/whatsappService';
 import { WhatsAppActionModal } from '../components/WhatsAppActionModal';
 
-const ICON_FALLBACKS = {
+// Native Safe Icon Map
+const ICON_MAP = {
     'cube-outline': '📦',
     'cash-outline': '💵',
     'alert-circle': '⚠️',
@@ -65,7 +65,7 @@ const ICON_FALLBACKS = {
 };
 
 const Ionicons = ({ name, size = 16, color = '#FFFFFF', style }) => {
-    const glyph = ICON_FALLBACKS[name] || '•';
+    const glyph = ICON_MAP[name] || '•';
     return (
         <Text style={[{ fontSize: Math.round(size * 0.88), color, textAlign: 'center', lineHeight: Math.round(size * 1.1) }, style]}>
             {glyph}
@@ -88,8 +88,6 @@ const AMBER = '#F59E0B';
 const BORDER_GOLD = 'rgba(217, 167, 58, 0.25)';
 const BORDER_SUBTLE = 'rgba(255, 255, 255, 0.08)';
 
-// Streak reward sequence
-const CHECKIN_REWARDS = [0, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10];
 const VALID_DRIVER_TABS = ['active', 'pool', 'wallet', 'history', 'profile'];
 
 const getInitialDriverTab = (route) => {
@@ -100,17 +98,11 @@ const getInitialDriverTab = (route) => {
         if (typeof window !== 'undefined' && window.location) {
             const hash = window.location.hash || '';
             const match = hash.match(/[?&]tab=([a-zA-Z0-9_-]+)/);
-            if (match && match[1] && VALID_DRIVER_TABS.includes(match[1])) {
-                return match[1];
-            }
+            if (match && match[1] && VALID_DRIVER_TABS.includes(match[1])) return match[1];
             const subMatch = hash.match(/#driver\/([a-zA-Z0-9_-]+)/);
-            if (subMatch && subMatch[1] && VALID_DRIVER_TABS.includes(subMatch[1])) {
-                return subMatch[1];
-            }
+            if (subMatch && subMatch[1] && VALID_DRIVER_TABS.includes(subMatch[1])) return subMatch[1];
             const saved = window.localStorage?.getItem('@abumafhal_driver_tab');
-            if (saved && VALID_DRIVER_TABS.includes(saved)) {
-                return saved;
-            }
+            if (saved && VALID_DRIVER_TABS.includes(saved)) return saved;
         }
     } catch (_) {}
     return 'active';
@@ -119,19 +111,23 @@ const getInitialDriverTab = (route) => {
 export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
     const insets = useSafeAreaInsets();
 
+    // ─── Active User Safe Resolver ───
+    const [activeUser, setActiveUser] = useState(user || null);
+
     // Data State
     const [orders, setOrders] = useState([]);
     const [poolOrders, setPoolOrders] = useState([]);
     const [historyOrders, setHistoryOrders] = useState([]);
-    const [driverProfile, setDriverProfile] = useState(() => ({
-        id: user?.id,
+    const [driverProfile, setDriverProfile] = useState({
+        id: user?.id || null,
+        name: user?.full_name || 'Driver Courier',
         status: 'active',
-        mafhal_coins: 0,
+        is_active: true,
         vehicle_type: 'Motorcycle',
-        plate_number: '',
-        vehicle_color: '',
-        driver_license: ''
-    }));
+        vehicle_number: '',
+        rating: 5.0,
+        xp: 150
+    });
     const [stats, setStats] = useState({
         totalEarnings: 0,
         completedDeliveries: 0,
@@ -142,30 +138,28 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
         xp: 150,
         xpProgress: 60
     });
-    const [wallet, setWallet] = useState({ balance: 0, pending_balance: 0 });
+    const [walletBalance, setWalletBalance] = useState(0);
     const [withdrawals, setWithdrawals] = useState([]);
 
-    // UI State (Zero-delay entrance)
+    // UI State
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [activeTab, _setActiveTab] = useState(() => getInitialDriverTab(route));
     const [selectedOrder, setSelectedOrder] = useState(null);
 
-    // Gamification & Check-in
-    const [checkInData, setCheckInData] = useState({ streak: 0, checkedInToday: false, checkingIn: false });
+    // Gamification Streak (Local safe storage)
+    const [streakCount, setStreakCount] = useState(3);
+    const [hasCheckedInToday, setHasCheckedInToday] = useState(false);
     const [animatingCoins, setAnimatingCoins] = useState(0);
 
     // Modals
     const [isVehicleModalVisible, setVehicleModalVisible] = useState(false);
     const [isWithdrawModalVisible, setWithdrawModalVisible] = useState(false);
     const [isHistoryModalVisible, setHistoryModalVisible] = useState(false);
-    const [historyFilter, setHistoryFilter] = useState('All');
 
     // Vehicle Form
-    const [vType, setVType] = useState('');
+    const [vType, setVType] = useState('Motorcycle');
     const [pNumber, setPNumber] = useState('');
-    const [vColor, setVColor] = useState('');
-    const [dLicense, setDLicense] = useState('');
 
     // Withdrawal Form
     const [withdrawAmount, setWithdrawAmount] = useState('');
@@ -188,7 +182,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
     const setActiveTab = useCallback((tabName) => {
         _setActiveTab(tabName);
         try {
-            if (typeof window !== 'undefined' && window.localStorage) {
+            if (typeof window !== 'undefined' && window.location) {
                 window.localStorage.setItem('@abumafhal_driver_tab', tabName);
                 const targetHash = tabName === 'active' ? '#driver' : `#driver?tab=${tabName}`;
                 if (window.history && window.history.replaceState) {
@@ -207,45 +201,76 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
         }
     }, [route?.params?.tab, route?.params?.screen]);
 
-    // Lock hash and screen name
+    // Lock screen in storage
     useEffect(() => {
         try {
             if (typeof window !== 'undefined' && window.localStorage) {
                 window.localStorage.setItem('@abumafhal_last_screen', 'DriverDashboard');
-                const curHash = window.location.hash || '';
-                if (!curHash.startsWith('#driver')) {
-                    const targetHash = activeTab === 'active' ? '#driver' : `#driver?tab=${activeTab}`;
-                    if (window.history && window.history.replaceState) {
-                        window.history.replaceState(null, '', '/mobile' + targetHash);
-                    }
-                }
             }
             AsyncStorage.setItem('@abumafhal_last_screen', 'DriverDashboard').catch(() => {});
         } catch (_) {}
     }, []);
 
-    // Initial load and real-time subscription
+    // ─── Multi-tier Safe User Hydration ───
     useEffect(() => {
-        fetchDriverProfile();
+        const resolveUser = async () => {
+            if (user?.id) {
+                setActiveUser(user);
+                loadAllDriverData(user.id);
+                return;
+            }
+
+            try {
+                // Check local storage cache
+                const cached = await AsyncStorage.getItem('@abumafhal_user_v1');
+                if (cached) {
+                    const parsed = JSON.parse(cached);
+                    if (parsed?.id) {
+                        setActiveUser(parsed);
+                        loadAllDriverData(parsed.id);
+                        return;
+                    }
+                }
+
+                // Check Supabase session
+                const { data } = await supabase.auth.getSession();
+                const sessionUser = data?.session?.user;
+                if (sessionUser?.id) {
+                    const uObj = {
+                        id: sessionUser.id,
+                        email: sessionUser.email,
+                        full_name: sessionUser.user_metadata?.full_name || 'Driver Courier',
+                        phone: sessionUser.user_metadata?.phone || ''
+                    };
+                    setActiveUser(uObj);
+                    loadAllDriverData(sessionUser.id);
+                }
+            } catch (err) {
+                console.log('Safe User Resolution Error:', err);
+            }
+        };
+
+        resolveUser();
+    }, [user?.id]);
+
+    // Real-time listener
+    useEffect(() => {
+        const uid = activeUser?.id;
+        if (!uid) return;
+
         fetchBanks();
 
-        const subscription = supabase
+        const channel = supabase
             .channel('driver_orders_realtime')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
-                const newDriverId = payload.new?.driver_id;
-                const oldDriverId = payload.old?.driver_id;
-                const currentId = driverProfile?.id || user?.id;
-
-                if (newDriverId === currentId || oldDriverId === currentId || !newDriverId) {
-                    fetchAllOrders(currentId);
-                }
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+                fetchOrders(uid);
             })
             .subscribe();
 
         return () => {
-            supabase.removeChannel(subscription);
+            supabase.removeChannel(channel);
         };
-    }, [user?.id]);
+    }, [activeUser?.id]);
 
     const fetchBanks = async () => {
         try {
@@ -280,7 +305,6 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                 setAccountName(json.data.account_name);
             } else {
                 setAccountName('');
-                Alert.alert('Verification Notice', json.message || 'Could not verify account name.');
             }
         } catch (error) {
             console.log('Error resolving account:', error);
@@ -298,129 +322,99 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
         }
     };
 
-    const fetchDriverProfile = async () => {
+    // ─── MASTER DATA LOADER ───
+    const loadAllDriverData = async (userId) => {
+        if (!userId) return;
+        setLoading(true);
         try {
-            const [profileRes, walletRes] = await Promise.allSettled([
-                supabase.rpc('ensure_driver_profile'),
-                supabase.from('wallets').select('*').eq('user_id', user.id).maybeSingle()
+            await Promise.allSettled([
+                fetchDriverRecord(userId),
+                fetchProfileBalance(userId),
+                fetchOrders(userId),
+                fetchTransactions(userId)
             ]);
+        } catch (err) {
+            console.log('loadAllDriverData Error:', err);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    };
 
-            const pData = profileRes.status === 'fulfilled' ? profileRes.value?.data : null;
-            if (pData) {
-                setDriverProfile(pData);
-                setVType(pData.vehicle_type || '');
-                setPNumber(pData.plate_number || '');
-                setVColor(pData.vehicle_color || '');
-                setDLicense(pData.driver_license || '');
-                fetchAllOrders(pData.id, pData);
-                fetchWithdrawalHistory(pData.id);
-            } else {
-                fetchAllOrders(user.id);
-            }
+    // 1. Fetch or Auto-Provision Driver Record from `drivers`
+    const fetchDriverRecord = async (userId) => {
+        try {
+            const { data, error } = await supabase
+                .from('drivers')
+                .select('*')
+                .eq('user_id', userId)
+                .maybeSingle();
 
-            const wData = walletRes.status === 'fulfilled' ? walletRes.value?.data : null;
-            if (wData) {
-                setWallet(wData);
+            if (data) {
+                setDriverProfile(data);
+                setVType(data.vehicle_type || 'Motorcycle');
+                setPNumber(data.vehicle_number || '');
             } else {
-                // Auto create wallet if missing
-                const { data: newW } = await supabase
-                    .from('wallets')
-                    .insert([{ user_id: user.id, balance: 0, pending_balance: 0 }])
+                // Auto create driver row in `drivers` table
+                const newDriver = {
+                    user_id: userId,
+                    name: activeUser?.full_name || 'Driver Courier',
+                    phone: activeUser?.phone || activeUser?.phone_number || '',
+                    vehicle_type: 'Motorcycle',
+                    vehicle_number: '',
+                    status: 'active',
+                    is_active: true,
+                    xp: 150,
+                    rating: 5.0
+                };
+                const { data: created } = await supabase
+                    .from('drivers')
+                    .insert([newDriver])
                     .select()
                     .maybeSingle();
-                if (newW) setWallet(newW);
-            }
 
-            verifyCheckInStatus();
+                if (created) {
+                    setDriverProfile(created);
+                    setVType(created.vehicle_type || 'Motorcycle');
+                    setPNumber(created.vehicle_number || '');
+                }
+            }
         } catch (e) {
-            console.log('Fetch Driver Profile Error:', e);
+            console.log('Driver Record Fetch Error:', e);
         }
     };
 
-    const fetchWithdrawalHistory = async (dId) => {
+    // 2. Fetch Balance from `profiles.balance`
+    const fetchProfileBalance = async (userId) => {
         try {
             const { data } = await supabase
-                .from('driver_payouts')
-                .select('*')
-                .eq('driver_id', dId)
-                .order('created_at', { ascending: false });
-            if (data) setWithdrawals(data);
-        } catch (err) {
-            console.log('Error fetching withdrawals:', err);
-        }
-    };
+                .from('profiles')
+                .select('balance, full_name, phone')
+                .eq('id', userId)
+                .maybeSingle();
 
-    const verifyCheckInStatus = async () => {
-        try {
-            const { data } = await supabase.from('daily_checkins').select('*').eq('user_id', user.id).maybeSingle();
             if (data) {
-                const lastCheckIn = new Date(data.last_checkin);
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                lastCheckIn.setHours(0, 0, 0, 0);
-
-                const diffDays = Math.round((today - lastCheckIn) / (1000 * 60 * 60 * 24));
-                const isCheckedInToday = diffDays === 0;
-                const newStreak = diffDays <= 1 ? data.current_streak : 0;
-
-                setCheckInData({ streak: newStreak, checkedInToday: isCheckedInToday, checkingIn: false });
-
-                if (diffDays > 1) {
-                    await supabase.from('daily_checkins').update({ current_streak: 0 }).eq('user_id', user.id);
-                }
-            } else {
-                setCheckInData({ streak: 0, checkedInToday: false, checkingIn: false });
+                setWalletBalance(Number(data.balance || 0));
             }
-        } catch (err) {
-            console.log('Error verifying check-in:', err);
-            setCheckInData(prev => ({ ...prev, checkingIn: false }));
+        } catch (e) {
+            console.log('Profile Balance Fetch Error:', e);
         }
     };
 
-    const handleCheckIn = async () => {
-        if (checkInData.checkedInToday || checkInData.checkingIn) return;
-
-        setCheckInData(prev => ({ ...prev, checkingIn: true }));
-        try {
-            const newStreak = checkInData.streak + 1;
-            const rewardIndex = Math.min(newStreak, 10);
-            const rewardCoins = CHECKIN_REWARDS[rewardIndex];
-
-            await supabase.from('daily_checkins').upsert({
-                user_id: user.id,
-                last_checkin: new Date().toISOString(),
-                current_streak: newStreak
-            }, { onConflict: 'user_id' });
-
-            const newCoins = (driverProfile?.mafhal_coins || 0) + rewardCoins;
-            await supabase.rpc('update_user_amc', { p_user_id: user.id, p_coins: newCoins });
-
-            setDriverProfile(prev => ({ ...prev, mafhal_coins: newCoins }));
-            setCheckInData({ streak: newStreak, checkedInToday: true, checkingIn: false });
-
-            setAnimatingCoins(rewardCoins);
-            setTimeout(() => setAnimatingCoins(0), 2200);
-
-            fetchDriverProfile();
-        } catch (err) {
-            console.error(err);
-            setCheckInData(prev => ({ ...prev, checkingIn: false }));
-        }
-    };
-
-    const fetchAllOrders = async (driverId, profileData = null) => {
+    // 3. Fetch Orders from `orders`
+    const fetchOrders = async (userId) => {
         try {
             const [myOrdersRes, poolRes] = await Promise.allSettled([
                 supabase
                     .from('orders')
-                    .select('*, user:profiles(full_name, phone), items:order_items(*, product:products(name, images))')
-                    .eq('driver_id', driverId)
+                    .select('*, user:profiles(full_name, phone), items:order_items(*)')
+                    .eq('driver_id', userId)
                     .order('created_at', { ascending: false }),
                 supabase
                     .from('orders')
-                    .select('*, user:profiles(full_name, phone), items:order_items(*, product:products(name, images))')
+                    .select('*, user:profiles(full_name, phone), items:order_items(*)')
                     .is('driver_id', null)
-                    .in('status', ['processing', 'pending', 'paid'])
+                    .in('status', ['processing', 'pending', 'paid', 'order_placed'])
                     .order('created_at', { ascending: false })
             ]);
 
@@ -431,19 +425,33 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
             setHistoryOrders(myOrders.filter(o => ['delivered', 'cancelled', 'refunded'].includes(o.status)));
             setPoolOrders(poolData);
 
-            calculateStats(myOrders, profileData || driverProfile);
+            calculateStats(myOrders);
         } catch (e) {
-            console.log('fetchAllOrders Error:', e);
-        } finally {
-            setLoading(false);
-            setRefreshing(false);
+            console.log('Fetch Orders Error:', e);
         }
     };
 
-    const calculateStats = (allOrders, profile = driverProfile) => {
-        const completed = allOrders.filter(o => o.status === 'delivered');
-        const cancelled = allOrders.filter(o => o.status === 'cancelled');
-        const earnings = completed.reduce((sum, order) => sum + (Number(order.delivery_fee) || 800), 0);
+    // 4. Fetch Transactions from `transactions`
+    const fetchTransactions = async (userId) => {
+        try {
+            const { data } = await supabase
+                .from('transactions')
+                .select('*')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false });
+
+            if (data) {
+                setWithdrawals(data);
+            }
+        } catch (e) {
+            console.log('Fetch Transactions Error:', e);
+        }
+    };
+
+    const calculateStats = (myOrders) => {
+        const completed = myOrders.filter(o => o.status === 'delivered');
+        const cancelled = myOrders.filter(o => o.status === 'cancelled');
+        const earnings = completed.reduce((sum, order) => sum + (Number(order.shipping_fee) || 800), 0);
 
         const totalFinished = completed.length + cancelled.length;
         const rate = totalFinished > 0 ? Math.round((completed.length / totalFinished) * 100) : 100;
@@ -455,7 +463,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
             d.setDate(d.getDate() - i);
             const dateStr = d.toISOString().split('T')[0];
             const dayOrders = completed.filter(o => o.updated_at?.startsWith(dateStr));
-            const amount = dayOrders.reduce((sum, o) => sum + (Number(o.delivery_fee) || 800), 0);
+            const amount = dayOrders.reduce((sum, o) => sum + (Number(o.shipping_fee) || 800), 0);
 
             daily.push({ day: d.toLocaleDateString('en-US', { weekday: 'short' }), amount });
             if (amount > 0) {
@@ -467,7 +475,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
             }
         }
 
-        const xp = profile?.xp || 150;
+        const xp = driverProfile?.xp || 150;
         const level = xp < 200 ? 'Bronze' : xp < 600 ? 'Silver' : xp < 1500 ? 'Gold' : 'Elite';
         const nextLevelXP = xp < 200 ? 200 : xp < 600 ? 600 : xp < 1500 ? 1500 : 5000;
         const xpProgress = Math.min((xp / nextLevelXP) * 100, 100);
@@ -486,29 +494,36 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
 
     const handleRefresh = () => {
         setRefreshing(true);
-        fetchDriverProfile();
+        if (activeUser?.id) {
+            loadAllDriverData(activeUser.id);
+        }
     };
 
+    // ─── Online / Offline Toggle ───
     const toggleStatus = async () => {
-        if (!driverProfile) return;
-        const newStatus = driverProfile.status === 'active' ? 'inactive' : 'active';
-        setDriverProfile(prev => ({ ...prev, status: newStatus }));
+        const uid = activeUser?.id;
+        if (!uid) return;
+        const newStatus = driverProfile?.status === 'active' ? 'inactive' : 'active';
+        setDriverProfile(prev => ({ ...prev, status: newStatus, is_active: newStatus === 'active' }));
 
         try {
             await supabase
                 .from('drivers')
-                .update({ status: newStatus, updated_at: new Date().toISOString() })
-                .eq('id', driverProfile.id);
+                .update({ status: newStatus, is_active: newStatus === 'active', updated_at: new Date().toISOString() })
+                .eq('user_id', uid);
         } catch (error) {
             console.log('Status update error:', error);
-            setDriverProfile(prev => ({ ...prev, status: driverProfile.status }));
         }
     };
 
+    // ─── Claim Order from Pool ───
     const acceptOrder = async (orderId) => {
+        const uid = activeUser?.id;
+        if (!uid) return;
+
         Alert.alert(
             'Claim Delivery Task',
-            'Are you ready to pick up and deliver this package to the customer?',
+            'Are you ready to accept and deliver this package to the customer?',
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -517,7 +532,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                         const { error } = await supabase
                             .from('orders')
                             .update({
-                                driver_id: driverProfile.id,
+                                driver_id: uid,
                                 status: 'shipped',
                                 updated_at: new Date().toISOString()
                             })
@@ -526,8 +541,8 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                         if (error) {
                             Alert.alert('Error', error.message);
                         } else {
-                            Alert.alert('Task Assigned!', 'Package is now in your Active tasks. Deliver promptly.');
-                            fetchAllOrders(driverProfile.id);
+                            Alert.alert('Task Assigned! ⚡', 'Package is now in your Active tasks. Deliver promptly.');
+                            fetchOrders(uid);
                             setActiveTab('active');
                         }
                     }
@@ -536,8 +551,13 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
         );
     };
 
-    const markDelivered = async (orderId, customerPhone, userId, orderTotal, isPod) => {
-        const podNotice = isPod ? `\n\n⚠️ IMPORTANT (POD): Confirm you have received ₦${Number(orderTotal || 0).toLocaleString()} cash/transfer before confirming.` : '';
+    // ─── Mark Delivered & Credit Escrow ───
+    const markDelivered = async (orderId, customerPhone, userId, orderTotal, isPod, shippingFee) => {
+        const uid = activeUser?.id;
+        if (!uid) return;
+
+        const feeAmount = Number(shippingFee || 800);
+        const podNotice = isPod ? `\n\n⚠️ IMPORTANT (POD): Collect ₦${Number(orderTotal || 0).toLocaleString()} cash/transfer before completing.` : '';
 
         Alert.alert(
             'Confirm Delivery Completion',
@@ -548,27 +568,45 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                     text: 'Yes, Delivered ✅',
                     onPress: async () => {
                         try {
-                            const { error } = await supabase.rpc('complete_delivery', {
-                                p_order_id: orderId,
-                                p_driver_id: driverProfile.id
-                            });
+                            // 1. Mark order delivered
+                            await supabase
+                                .from('orders')
+                                .update({ status: 'delivered', updated_at: new Date().toISOString() })
+                                .eq('id', orderId);
 
-                            if (error) {
-                                // Fallback update if RPC doesn't exist
-                                await supabase
-                                    .from('orders')
-                                    .update({ status: 'delivered', updated_at: new Date().toISOString() })
-                                    .eq('id', orderId);
-                            }
+                            // 2. Credit shipping fee to driver's balance in `profiles`
+                            const { data: prof } = await supabase
+                                .from('profiles')
+                                .select('balance')
+                                .eq('id', uid)
+                                .maybeSingle();
 
-                            Alert.alert('Delivery Successful!', 'Delivery fee has been credited to your driver wallet.');
+                            const newBal = Number(prof?.balance || 0) + feeAmount;
+                            await supabase
+                                .from('profiles')
+                                .update({ balance: newBal })
+                                .eq('id', uid);
+
+                            setWalletBalance(newBal);
+
+                            // 3. Log credit transaction
+                            await supabase.from('transactions').insert([{
+                                user_id: uid,
+                                type: 'credit',
+                                amount: feeAmount,
+                                status: 'completed',
+                                reference: 'DEL-' + Date.now(),
+                                description: `Delivery earnings for order #${orderId.slice(0, 8).toUpperCase()}`
+                            }]);
+
+                            Alert.alert('Delivery Successful! 🎉', `+₦${feeAmount.toLocaleString()} has been credited to your wallet balance.`);
 
                             if (customerPhone) {
                                 const deliverMsg = `Your Abu Mafhal order #${orderId.slice(0, 8).toUpperCase()} has been successfully delivered. Thank you for shopping with us!`;
                                 whatsappService.sendDirect(customerPhone, deliverMsg, userId).catch(() => {});
                             }
 
-                            fetchDriverProfile();
+                            loadAllDriverData(uid);
                         } catch (err) {
                             Alert.alert('Error', err.message || 'Failed to complete delivery.');
                         }
@@ -578,53 +616,59 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
         );
     };
 
+    // ─── Update Vehicle Details ───
     const updateVehicleDetails = async () => {
+        const uid = activeUser?.id;
+        if (!uid) return;
+
         try {
             const { error } = await supabase
                 .from('drivers')
                 .update({
                     vehicle_type: vType,
-                    plate_number: pNumber,
-                    vehicle_color: vColor,
-                    driver_license: dLicense,
+                    vehicle_number: pNumber,
                     updated_at: new Date().toISOString()
                 })
-                .eq('id', driverProfile.id);
+                .eq('user_id', uid);
 
             if (error) throw error;
 
             setDriverProfile(prev => ({
                 ...prev,
                 vehicle_type: vType,
-                plate_number: pNumber,
-                vehicle_color: vColor,
-                driver_license: dLicense
+                vehicle_number: pNumber
             }));
             setVehicleModalVisible(false);
-            Alert.alert('Vehicle Updated', 'Your vehicle and license details have been updated.');
+            Alert.alert('Vehicle Updated ✅', 'Your vehicle specifications have been saved.');
         } catch (err) {
             Alert.alert('Error', err.message || 'Failed to update vehicle details.');
         }
     };
 
+    // ─── Request Bank Withdrawal ───
     const requestWithdrawal = async () => {
+        const uid = activeUser?.id;
+        if (!uid) return;
+
         const amount = parseFloat(withdrawAmount.replace(/,/g, '')) || 0;
         if (isNaN(amount) || amount <= 0) {
-            Alert.alert('Invalid Amount', 'Please enter a valid amount.');
+            Alert.alert('Invalid Amount', 'Please enter a valid withdrawal amount.');
             return;
         }
 
-        if (amount > (wallet?.balance || 0)) {
-            return Alert.alert('Insufficient Balance', 'You cannot withdraw more than your available wallet balance.');
+        if (amount > walletBalance) {
+            Alert.alert('Insufficient Balance', 'You cannot withdraw more than your available wallet balance.');
+            return;
         }
 
         if (!bankName || !accountNo || !accountName) {
-            return Alert.alert('Incomplete Details', 'Please verify your bank details before proceeding.');
+            Alert.alert('Incomplete Details', 'Please verify your bank details before proceeding.');
+            return;
         }
 
         Alert.alert(
             'Confirm Payout Request',
-            `Send ₦${amount.toLocaleString()} to ${accountName} (${bankName})?`,
+            `Send ₦${amount.toLocaleString()} to ${accountName} (${bankName} - ${accountNo})?`,
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -632,31 +676,31 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                     onPress: async () => {
                         setLoading(true);
                         try {
-                            const { error: insErr } = await supabase.from('driver_payouts').insert([{
-                                driver_id: driverProfile.id,
+                            // 1. Deduct balance from `profiles`
+                            const newBal = walletBalance - amount;
+                            await supabase
+                                .from('profiles')
+                                .update({ balance: newBal })
+                                .eq('id', uid);
+
+                            setWalletBalance(newBal);
+
+                            // 2. Insert transaction record
+                            await supabase.from('transactions').insert([{
+                                user_id: uid,
+                                type: 'debit',
                                 amount: amount,
-                                bank_name: bankName,
-                                account_number: accountNo,
-                                account_name: accountName,
-                                status: 'pending'
+                                status: 'pending',
+                                reference: 'WDR-' + Date.now(),
+                                description: `Withdrawal to ${bankName} (${accountNo} - ${accountName})`
                             }]);
 
-                            if (insErr) {
-                                console.log('driver_payouts error:', insErr.message);
-                            }
-
-                            // Deduct wallet balance
-                            await supabase.rpc('deduct_wallet_balance', {
-                                p_user_id: user.id,
-                                p_amount: amount
-                            });
-
-                            Alert.alert('Payout Submitted', 'Your withdrawal request has been received and will be processed to your account.');
+                            Alert.alert('Payout Submitted ✅', 'Your withdrawal request has been received and will be processed to your account.');
                             setWithdrawModalVisible(false);
                             setWithdrawAmount('');
                             setAccountNo('');
                             setAccountName('');
-                            fetchDriverProfile();
+                            fetchTransactions(uid);
                         } catch (err) {
                             Alert.alert('Error', err.message || 'Failed to submit withdrawal.');
                         } finally {
@@ -695,23 +739,20 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
         }
     };
 
-    // ─────────────────────────────────────────────────────────────
-    // RENDER ORDER ITEM (MODERN HIGH-END CARD)
-    // ─────────────────────────────────────────────────────────────
+    // ─── RENDER ORDER ITEM (MODERN LUXURY CARD) ───
     const renderOrderItem = ({ item }) => {
         const address = parseAddress(item.shipping_address);
         const isPool = activeTab === 'pool';
         const isHistory = activeTab === 'history';
         const isPod = (item.payment_method || '').toLowerCase() === 'pod';
-        const deliveryFee = Number(item.delivery_fee) || 800;
+        const shippingFee = Number(item.shipping_fee) || 800;
         const totalAmount = Number(item.total_amount) || 0;
         const itemCount = Array.isArray(item.items) ? item.items.length : 1;
-        const firstItem = Array.isArray(item.items) && item.items[0] ? item.items[0] : null;
-        const prodName = firstItem?.product?.name || firstItem?.name || 'Package Consignment';
-        const prodImg = firstItem?.product?.images?.[0] || 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?q=80&w=300&auto=format&fit=crop';
+        const customerName = item.user?.full_name || 'Marketplace Buyer';
+        const customerPhone = item.user?.phone || item.contact_phone || '';
 
         return (
-            <View style={[styles.modernCard, isHistory && { opacity: 0.82 }]}>
+            <View style={[styles.modernCard, isHistory && { opacity: 0.85 }]}>
                 {/* Header Row */}
                 <View style={styles.cardHeaderRow}>
                     <View style={styles.orderIdPill}>
@@ -721,12 +762,12 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
 
                     <View style={styles.feeBadge}>
                         <Ionicons name="cash-outline" size={12} color={SUCCESS} />
-                        <Text style={styles.feeBadgeText}>+₦{deliveryFee.toLocaleString()} Fee</Text>
+                        <Text style={styles.feeBadgeText}>+₦{shippingFee.toLocaleString()} Fee</Text>
                     </View>
 
                     <View style={[styles.statusBadge, isPool ? styles.statusBadgePool : isHistory ? styles.statusBadgeHistory : styles.statusBadgeActive]}>
                         <Text style={styles.statusBadgeText}>
-                            {isPool ? 'WAITING PICKUP' : isHistory ? item.status.toUpperCase() : 'IN TRANSIT'}
+                            {isPool ? 'WAITING PICKUP' : isHistory ? (item.status || '').toUpperCase() : 'IN TRANSIT'}
                         </Text>
                     </View>
                 </View>
@@ -751,14 +792,18 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
 
                 {/* Package & Customer Details Preview */}
                 <View style={styles.packagePreviewRow}>
-                    <Image source={{ uri: prodImg }} style={styles.packageThumbnail} />
+                    <View style={styles.packageIconBox}>
+                        <Ionicons name="cube-outline" size={24} color={GOLD} />
+                    </View>
                     <View style={{ flex: 1, justifyContent: 'center' }}>
-                        <Text style={styles.packageTitle} numberOfLines={1}>{prodName}</Text>
+                        <Text style={styles.packageTitle} numberOfLines={1}>
+                            Consignment #{item.id?.slice(0, 8).toUpperCase()}
+                        </Text>
                         <Text style={styles.packageMeta}>
-                            {itemCount > 1 ? `${itemCount} items in shipment` : '1 package consignment'} • Value: ₦{totalAmount.toLocaleString()}
+                            {itemCount} package item(s) • Total: ₦{totalAmount.toLocaleString()}
                         </Text>
                         <Text style={styles.customerName} numberOfLines={1}>
-                            👤 {item.user?.full_name || 'Marketplace Buyer'}
+                            👤 {customerName}
                         </Text>
                     </View>
                 </View>
@@ -787,20 +832,20 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                     <View style={styles.contactToolbar}>
                         <TouchableOpacity
                             style={styles.contactBtnCall}
-                            onPress={() => handleCall(item.user?.phone)}
+                            onPress={() => handleCall(customerPhone)}
                             activeOpacity={0.85}
                         >
                             <Ionicons name="call" size={14} color="#FFFFFF" />
                             <Text style={styles.contactBtnCallText}>Call Recipient</Text>
                         </TouchableOpacity>
 
-                        {item.user?.phone ? (
+                        {customerPhone ? (
                             <TouchableOpacity
                                 style={styles.contactBtnWhatsapp}
                                 onPress={() => {
-                                    setWhatsappPhone(item.user.phone);
+                                    setWhatsappPhone(customerPhone);
                                     setWhatsappUserId(item.user_id);
-                                    setWhatsappRecipientName(item.user?.full_name || 'Customer');
+                                    setWhatsappRecipientName(customerName);
                                     setWhatsappVisible(true);
                                 }}
                                 activeOpacity={0.85}
@@ -833,7 +878,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                     ) : !isHistory ? (
                         <TouchableOpacity
                             style={styles.actionBtnDeliver}
-                            onPress={() => markDelivered(item.id, item.user?.phone, item.user_id, totalAmount, isPod)}
+                            onPress={() => markDelivered(item.id, customerPhone, item.user_id, totalAmount, isPod, shippingFee)}
                             activeOpacity={0.85}
                         >
                             <LinearGradient
@@ -863,29 +908,29 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
 
     return (
         <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
-            {/* ─── 1. EXECUTIVE LUXURY HEADER ──────────────────────── */}
+            {/* ─── 1. EXECUTIVE LUXURY HEADER ─── */}
             <LinearGradient
                 colors={['#070D1B', '#0E1A2E', '#16233B']}
                 style={styles.headerGradient}
             >
-                {/* Top Row: Avatar, Identity, Coin Chip, Actions */}
+                {/* Top Row: Avatar, Identity, Actions */}
                 <View style={styles.headerTopRow}>
                     <View style={styles.driverIdentityBox}>
                         <View style={styles.avatarWrap}>
                             <Image
-                                source={{ uri: user?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop' }}
+                                source={{ uri: activeUser?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop' }}
                                 style={styles.avatarImg}
                             />
-                            <View style={styles.avatarOnlineDot} />
+                            <View style={[styles.avatarOnlineDot, { backgroundColor: driverProfile?.status === 'active' ? SUCCESS : '#64748B' }]} />
                         </View>
                         <View>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <Text style={styles.driverName} numberOfLines={1}>{user?.full_name || 'Courier Partner'}</Text>
+                                <Text style={styles.driverName} numberOfLines={1}>{activeUser?.full_name || 'Courier Partner'}</Text>
                                 <View style={[styles.levelTag, { backgroundColor: stats.level === 'Elite' ? '#FEF3C7' : 'rgba(217, 167, 58, 0.2)' }]}>
                                     <Text style={[styles.levelTagText, { color: stats.level === 'Elite' ? '#B45309' : GOLD }]}>{stats.level.toUpperCase()}</Text>
                                 </View>
                             </View>
-                            <Text style={styles.driverSubRole}>Abu Mafhal Pro Logistics • Verified Courier</Text>
+                            <Text style={styles.driverSubRole}>Abu Mafhal Logistics • Verified Courier</Text>
                         </View>
                     </View>
 
@@ -908,7 +953,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                 {driverProfile?.status === 'active' ? 'ONLINE • ACCEPTING DELIVERIES' : 'OFFLINE • STANDBY'}
                             </Text>
                             <Text style={styles.statusVehicleSubtitle}>
-                                {driverProfile?.vehicle_type || 'Vehicle'} • {driverProfile?.plate_number || 'Registered Courier'}
+                                {driverProfile?.vehicle_type || 'Vehicle'} • {driverProfile?.vehicle_number || 'Registered Courier'}
                             </Text>
                         </View>
                     </View>
@@ -920,18 +965,16 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                     />
                 </View>
 
-                {/* Metrics Stats 4-Card Carousel */}
+                {/* Metrics Stats 4-Card Grid */}
                 <View style={styles.metricsGrid}>
-                    {/* Wallet Earnings */}
                     <TouchableOpacity style={styles.metricCard} onPress={() => setActiveTab('wallet')} activeOpacity={0.85}>
                         <View style={styles.metricIconWrap}>
                             <Ionicons name="wallet-outline" size={16} color={GOLD} />
                         </View>
-                        <Text style={styles.metricValue}>₦{(wallet?.balance || 0).toLocaleString()}</Text>
+                        <Text style={styles.metricValue}>₦{walletBalance.toLocaleString()}</Text>
                         <Text style={styles.metricLabel}>Wallet Balance</Text>
                     </TouchableOpacity>
 
-                    {/* Active Jobs */}
                     <TouchableOpacity style={styles.metricCard} onPress={() => setActiveTab('active')} activeOpacity={0.85}>
                         <View style={[styles.metricIconWrap, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
                             <Ionicons name="bicycle" size={16} color={SUCCESS} />
@@ -940,7 +983,6 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                         <Text style={styles.metricLabel}>Active Tasks</Text>
                     </TouchableOpacity>
 
-                    {/* Pool Jobs */}
                     <TouchableOpacity style={styles.metricCard} onPress={() => setActiveTab('pool')} activeOpacity={0.85}>
                         <View style={[styles.metricIconWrap, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
                             <Ionicons name="flash-outline" size={16} color={AMBER} />
@@ -949,7 +991,6 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                         <Text style={styles.metricLabel}>Available Pool</Text>
                     </TouchableOpacity>
 
-                    {/* Completed */}
                     <TouchableOpacity style={styles.metricCard} onPress={() => setActiveTab('history')} activeOpacity={0.85}>
                         <View style={[styles.metricIconWrap, { backgroundColor: 'rgba(56, 189, 248, 0.15)' }]}>
                             <Ionicons name="checkmark-done" size={16} color="#38BDF8" />
@@ -960,7 +1001,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                 </View>
             </LinearGradient>
 
-            {/* ─── 2. MODERN SEGMENTED TAB SELECTOR ───────────────── */}
+            {/* ─── 2. SEGMENTED TAB SELECTOR ─── */}
             <View style={styles.tabBarContainer}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScrollContent}>
                     {[
@@ -988,7 +1029,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                 </ScrollView>
             </View>
 
-            {/* ─── 3. MAIN TAB CONTENT AREA ───────────────────────── */}
+            {/* ─── 3. MAIN TAB CONTENT AREA ─── */}
             <ScrollView
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={GOLD} />}
                 contentContainerStyle={styles.mainScrollContent}
@@ -1024,7 +1065,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                 {activeTab === 'pool' && (
                     <View style={styles.tabContentSection}>
                         <View style={styles.sectionHeaderRow}>
-                            <Text style={styles.sectionTitle}>Ready for Pickup Across Gashua & Region</Text>
+                            <Text style={styles.sectionTitle}>Ready for Pickup Across Region</Text>
                             <Text style={styles.sectionCountText}>{poolOrders.length} Available</Text>
                         </View>
 
@@ -1055,11 +1096,11 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                 <View>
                                     <Text style={styles.walletHeaderLabel}>DRIVER ESCROW WALLET</Text>
-                                    <Text style={styles.walletHeaderBalance}>₦{(wallet?.balance || 0).toLocaleString()}</Text>
+                                    <Text style={styles.walletHeaderBalance}>₦{walletBalance.toLocaleString()}</Text>
                                 </View>
                                 <View style={styles.walletAmcChip}>
                                     <Ionicons name="sparkles" size={13} color={GOLD} />
-                                    <Text style={styles.walletAmcChipText}>{driverProfile?.mafhal_coins || 0} AMC</Text>
+                                    <Text style={styles.walletAmcChipText}>Verified Driver</Text>
                                 </View>
                             </View>
 
@@ -1079,12 +1120,12 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                     activeOpacity={0.85}
                                 >
                                     <Ionicons name="list" size={16} color="#FFFFFF" />
-                                    <Text style={styles.payoutHistorySecBtnText}>Payout Log ({withdrawals.length})</Text>
+                                    <Text style={styles.payoutHistorySecBtnText}>Transaction Log ({withdrawals.length})</Text>
                                 </TouchableOpacity>
                             </View>
                         </LinearGradient>
 
-                        {/* Weekly Earnings Chart */}
+                        {/* Weekly Earnings Overview */}
                         <View style={styles.analyticsCard}>
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
                                 <Text style={styles.cardHeaderTitle}>Weekly Earnings Overview</Text>
@@ -1099,46 +1140,32 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                         <View key={i} style={styles.chartCol}>
                                             <View style={[styles.chartBarBackground, { height: barHeight }]}>
                                                 <LinearGradient
-                                                    colors={d.amount > 0 ? ['#D9A73A', '#B45309'] : ['#334155', '#1E293B']}
-                                                    style={{ flex: 1, borderRadius: 6 }}
+                                                    colors={['#D9A73A', '#B45309']}
+                                                    style={{ flex: 1, borderRadius: 4 }}
                                                 />
                                             </View>
-                                            <Text style={styles.chartColDay}>{d.day.charAt(0)}</Text>
+                                            <Text style={styles.chartDayText}>{d.day}</Text>
                                         </View>
                                     );
                                 })}
                             </View>
                         </View>
-
-                        {/* Recent Completed Deliveries Table */}
-                        {stats.dailyList?.length > 0 && (
-                            <View style={styles.dailyEarningsBox}>
-                                <Text style={styles.cardHeaderTitle}>Daily Delivery Ledger</Text>
-                                {stats.dailyList.map((item, idx) => (
-                                    <View key={idx} style={styles.dailyLedgerRow}>
-                                        <Text style={styles.dailyLedgerDate}>{item.date}</Text>
-                                        <Text style={styles.dailyLedgerCount}>{item.count} deliveries completed</Text>
-                                        <Text style={styles.dailyLedgerAmount}>+₦{item.amount.toLocaleString()}</Text>
-                                    </View>
-                                ))}
-                            </View>
-                        )}
                     </View>
                 )}
 
-                {/* TAB 4: COMPLETED HISTORY */}
+                {/* TAB 4: HISTORY */}
                 {activeTab === 'history' && (
                     <View style={styles.tabContentSection}>
                         <View style={styles.sectionHeaderRow}>
-                            <Text style={styles.sectionTitle}>Completed Deliveries Record</Text>
-                            <Text style={styles.sectionCountText}>{historyOrders.length} Done</Text>
+                            <Text style={styles.sectionTitle}>Completed & Closed Deliveries</Text>
+                            <Text style={styles.sectionCountText}>{historyOrders.length} Records</Text>
                         </View>
 
                         {historyOrders.length === 0 ? (
                             <View style={styles.emptyCardBox}>
                                 <Ionicons name="time-outline" size={48} color="#64748B" />
-                                <Text style={styles.emptyTitle}>No Past Deliveries</Text>
-                                <Text style={styles.emptySubtitle}>Completed and delivered items will show up here with receipts.</Text>
+                                <Text style={styles.emptyTitle}>No Delivery History Yet</Text>
+                                <Text style={styles.emptySubtitle}>Completed and fulfilled deliveries will appear here with invoices.</Text>
                             </View>
                         ) : (
                             historyOrders.map(item => (
@@ -1150,390 +1177,279 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                     </View>
                 )}
 
-                {/* TAB 5: PROFILE & VEHICLE & PERKS */}
+                {/* TAB 5: PROFILE & VEHICLE */}
                 {activeTab === 'profile' && (
                     <View style={styles.tabContentSection}>
-                        {/* Daily Check-in Streak Card */}
-                        <View style={styles.checkinLuxuryCard}>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.checkinTitle}>Daily Courier Streak</Text>
-                                    <Text style={styles.checkinSub}>
-                                        {checkInData.checkedInToday ? 'Streak active! Return tomorrow for extra AMC.' : 'Check in daily to earn Abu Mafhal Coins (AMC).'}
-                                    </Text>
+                        {/* Driver Courier Perks Card */}
+                        <View style={styles.perksCard}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                                <View>
+                                    <Text style={styles.perksCardTitle}>Courier Rank: {stats.level} Tier</Text>
+                                    <Text style={styles.perksCardSubtitle}>Complete more deliveries to unlock VIP bonuses</Text>
                                 </View>
-                                <View style={styles.flameStreakBadge}>
+                                <View style={styles.streakBadge}>
                                     <Ionicons name="flame" size={14} color="#EF4444" />
-                                    <Text style={styles.flameStreakText}>{checkInData.streak} Days</Text>
+                                    <Text style={styles.streakBadgeText}>{streakCount} Day Streak</Text>
                                 </View>
                             </View>
 
-                            <View style={styles.streakDotsRow}>
-                                {[1, 2, 3, 4, 5, 6, 7].map(day => (
-                                    <View
-                                        key={day}
-                                        style={[styles.streakDotBox, checkInData.streak >= day ? styles.streakDotBoxActive : {}]}
-                                    >
-                                        {checkInData.streak >= day ? (
-                                            <Ionicons name="checkmark" size={13} color="#070D1B" />
-                                        ) : (
-                                            <Text style={styles.streakDotNum}>{day}</Text>
-                                        )}
-                                    </View>
-                                ))}
+                            <View style={styles.xpProgressBarBg}>
+                                <View style={[styles.xpProgressBarFill, { width: `${stats.xpProgress}%` }]} />
                             </View>
-
-                            <TouchableOpacity
-                                style={[styles.checkinActionBtn, (checkInData.checkedInToday || checkInData.checkingIn) && styles.checkinActionBtnDisabled]}
-                                onPress={handleCheckIn}
-                                disabled={checkInData.checkedInToday || checkInData.checkingIn}
-                                activeOpacity={0.85}
-                            >
-                                {checkInData.checkingIn ? (
-                                    <ActivityIndicator color="#070D1B" size="small" />
-                                ) : checkInData.checkedInToday ? (
-                                    <Text style={styles.checkinActionBtnText}>Checked In For Today ✅</Text>
-                                ) : (
-                                    <Text style={styles.checkinActionBtnText}>
-                                        Claim Daily Streak (+{CHECKIN_REWARDS[Math.min(checkInData.streak + 1, 10)]} AMC Coins)
-                                    </Text>
-                                )}
-                            </TouchableOpacity>
+                            <Text style={styles.xpProgressText}>{stats.xp} XP • {stats.completionRate}% Completion Rate</Text>
                         </View>
 
-                        {/* Vehicle Information Details Card */}
-                        <View style={styles.vehicleDetailsCard}>
+                        {/* Vehicle Specifications Card */}
+                        <View style={styles.vehicleInfoCard}>
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                                <Text style={styles.cardHeaderTitle}>Vehicle & Registration</Text>
-                                <TouchableOpacity onPress={() => setVehicleModalVisible(true)} style={styles.editPillBtn}>
+                                <Text style={styles.vehicleCardTitle}>Assigned Logistics Vehicle</Text>
+                                <TouchableOpacity style={styles.editVehicleBtn} onPress={() => setVehicleModalVisible(true)} activeOpacity={0.8}>
                                     <Ionicons name="create-outline" size={14} color={GOLD} />
-                                    <Text style={styles.editPillBtnText}>Edit</Text>
+                                    <Text style={styles.editVehicleBtnText}>Edit Details</Text>
                                 </TouchableOpacity>
                             </View>
 
-                            <View style={styles.vehicleInfoItem}>
+                            <View style={styles.vehicleRow}>
                                 <Ionicons name="car-sport-outline" size={18} color="#94A3B8" />
-                                <View style={{ marginLeft: 12 }}>
-                                    <Text style={styles.vehicleInfoLabel}>Vehicle Type</Text>
-                                    <Text style={styles.vehicleInfoValue}>{driverProfile?.vehicle_type || 'Motorcycle'}</Text>
-                                </View>
+                                <Text style={styles.vehiclePropLabel}>Vehicle Type:</Text>
+                                <Text style={styles.vehiclePropVal}>{driverProfile?.vehicle_type || 'Motorcycle'}</Text>
                             </View>
 
-                            <View style={styles.vehicleInfoItem}>
+                            <View style={styles.vehicleRow}>
                                 <Ionicons name="barcode-outline" size={18} color="#94A3B8" />
-                                <View style={{ marginLeft: 12 }}>
-                                    <Text style={styles.vehicleInfoLabel}>Plate Number / Tag</Text>
-                                    <Text style={styles.vehicleInfoValue}>{driverProfile?.plate_number || 'YBE-123-AA (Set in profile)'}</Text>
-                                </View>
+                                <Text style={styles.vehiclePropLabel}>Plate / Reg Number:</Text>
+                                <Text style={styles.vehiclePropVal}>{driverProfile?.vehicle_number || 'Not Set'}</Text>
                             </View>
-
-                            <View style={styles.vehicleInfoItem}>
-                                <Ionicons name="color-palette-outline" size={18} color="#94A3B8" />
-                                <View style={{ marginLeft: 12 }}>
-                                    <Text style={styles.vehicleInfoLabel}>Vehicle Color</Text>
-                                    <Text style={styles.vehicleInfoValue}>{driverProfile?.vehicle_color || 'Black / Blue'}</Text>
-                                </View>
-                            </View>
-
-                            <View style={styles.vehicleInfoItem}>
-                                <Ionicons name="card-outline" size={18} color="#94A3B8" />
-                                <View style={{ marginLeft: 12 }}>
-                                    <Text style={styles.vehicleInfoLabel}>Driver License Number</Text>
-                                    <Text style={styles.vehicleInfoValue}>{driverProfile?.driver_license || 'DRL-890-XXX'}</Text>
-                                </View>
-                            </View>
-                        </View>
-
-                        {/* Emergency Logistics Support */}
-                        <View style={styles.supportCard}>
-                            <Text style={styles.cardHeaderTitle}>Dispatcher Support & Hotline</Text>
-                            <TouchableOpacity
-                                style={styles.supportRowBtn}
-                                onPress={() => Linking.openURL('tel:08145853539')}
-                                activeOpacity={0.8}
-                            >
-                                <Ionicons name="call-outline" size={18} color={SUCCESS} />
-                                <Text style={styles.supportRowBtnText}>Emergency Dispatch Hotline (08145853539)</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={styles.supportRowBtn}
-                                onPress={() => {
-                                    setWhatsappPhone('2348145853539');
-                                    setWhatsappRecipientName('Abu Mafhal Dispatch Team');
-                                    setWhatsappVisible(true);
-                                }}
-                                activeOpacity={0.8}
-                            >
-                                <Ionicons name="chatbubbles-outline" size={18} color={GOLD} />
-                                <Text style={styles.supportRowBtnText}>Chat with Head Dispatcher on WhatsApp</Text>
-                            </TouchableOpacity>
                         </View>
                     </View>
                 )}
             </ScrollView>
 
-            {/* ─── 4. MODALS & OVERLAYS ────────────────────────────── */}
-
-            {/* ORDER DETAILS MODAL */}
-            <Modal visible={!!selectedOrder} animationType="slide" transparent>
+            {/* ─── MODAL 1: ORDER INVOICE DETAILS ─── */}
+            <Modal visible={!!selectedOrder} transparent animationType="slide">
                 <View style={styles.modalBackdrop}>
-                    <View style={styles.modalContainerDark}>
-                        <View style={styles.modalHeaderRow}>
-                            <View>
-                                <Text style={styles.modalHeaderTitle}>Delivery Invoice</Text>
-                                <Text style={styles.modalHeaderSub}>ORD-{(selectedOrder?.id || '').slice(0, 8).toUpperCase()}</Text>
-                            </View>
+                    <View style={styles.modalSheetContent}>
+                        <View style={styles.modalSheetHeader}>
+                            <Text style={styles.modalSheetTitle}>Delivery Breakdown</Text>
                             <TouchableOpacity onPress={() => setSelectedOrder(null)} style={styles.modalCloseCircle}>
                                 <Ionicons name="close" size={20} color="#FFFFFF" />
                             </TouchableOpacity>
                         </View>
 
-                        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20 }}>
-                            {/* Financial Summary */}
-                            <View style={styles.detailBox}>
-                                <Text style={styles.detailBoxLabel}>DELIVERY FEE EARNED</Text>
-                                <Text style={styles.detailBoxFee}>₦{(selectedOrder?.delivery_fee || 800).toLocaleString()}</Text>
-                                <Text style={styles.detailBoxStatus}>Status: {(selectedOrder?.status || 'delivered').toUpperCase()}</Text>
-                            </View>
-
-                            {/* Destination */}
-                            <View style={styles.detailBox}>
-                                <Text style={styles.detailBoxLabel}>DELIVERY DESTINATION</Text>
-                                <Text style={styles.detailBoxText}>{parseAddress(selectedOrder?.shipping_address)}</Text>
-                                <TouchableOpacity
-                                    style={styles.modalMapBtn}
-                                    onPress={() => handleMap(parseAddress(selectedOrder?.shipping_address))}
-                                    activeOpacity={0.85}
-                                >
-                                    <Ionicons name="navigate" size={15} color="#070D1B" />
-                                    <Text style={styles.modalMapBtnText}>Open GPS Navigation</Text>
-                                </TouchableOpacity>
-                            </View>
-
-                            {/* Items list */}
-                            <Text style={styles.modalSectionHeading}>Consignment Items</Text>
-                            {selectedOrder?.items?.map((it, idx) => (
-                                <View key={idx} style={styles.consignmentItemRow}>
-                                    <Text style={styles.consignmentQty}>{it.quantity || 1}x</Text>
-                                    <View style={{ flex: 1, marginHorizontal: 10 }}>
-                                        <Text style={styles.consignmentName}>{it.product?.name || it.name || 'Consignment Item'}</Text>
-                                        <Text style={styles.consignmentPrice}>₦{Number(it.price || 0).toLocaleString()}</Text>
-                                    </View>
+                        {selectedOrder && (
+                            <ScrollView style={{ padding: 18 }}>
+                                <View style={styles.invoiceHeroBox}>
+                                    <Text style={styles.invoiceHeroLabel}>TOTAL ORDER VALUE</Text>
+                                    <Text style={styles.invoiceHeroValue}>₦{Number(selectedOrder.total_amount || 0).toLocaleString()}</Text>
+                                    <Text style={styles.invoiceHeroFee}>Driver Fee: +₦{Number(selectedOrder.shipping_fee || 800).toLocaleString()}</Text>
                                 </View>
-                            ))}
-                        </ScrollView>
+
+                                <View style={styles.invoiceSection}>
+                                    <Text style={styles.invoiceSectionTitle}>CUSTOMER DETAILS</Text>
+                                    <Text style={styles.invoiceLineText}>👤 Name: {selectedOrder.user?.full_name || 'Marketplace Buyer'}</Text>
+                                    <Text style={styles.invoiceLineText}>📞 Phone: {selectedOrder.user?.phone || selectedOrder.contact_phone || 'N/A'}</Text>
+                                    <Text style={styles.invoiceLineText}>📍 Address: {parseAddress(selectedOrder.shipping_address)}</Text>
+                                    <Text style={styles.invoiceLineText}>💳 Payment: {selectedOrder.payment_method?.toUpperCase()} ({selectedOrder.payment_status || 'Paid'})</Text>
+                                </View>
+                            </ScrollView>
+                        )}
                     </View>
                 </View>
             </Modal>
 
-            {/* VEHICLE MODAL */}
-            <Modal visible={isVehicleModalVisible} transparent animationType="fade">
-                <View style={styles.centerOverlayDark}>
-                    <View style={styles.dialogBoxDark}>
-                        <View style={styles.modalHeaderRow}>
-                            <Text style={styles.modalHeaderTitle}>Update Vehicle</Text>
+            {/* ─── MODAL 2: VEHICLE INFORMATION ─── */}
+            <Modal visible={isVehicleModalVisible} transparent animationType="slide">
+                <View style={styles.modalBackdrop}>
+                    <View style={styles.modalSheetContent}>
+                        <View style={styles.modalSheetHeader}>
+                            <Text style={styles.modalSheetTitle}>Update Vehicle Specifications</Text>
                             <TouchableOpacity onPress={() => setVehicleModalVisible(false)} style={styles.modalCloseCircle}>
                                 <Ionicons name="close" size={18} color="#FFFFFF" />
                             </TouchableOpacity>
                         </View>
 
-                        <Text style={styles.inputLabelDark}>Vehicle Type</Text>
-                        <TextInput
-                            style={styles.darkInput}
-                            placeholder="e.g. Motorcycle, Tricycle (Keke), Sedan"
-                            placeholderTextColor="#64748B"
-                            value={vType}
-                            onChangeText={setVType}
-                        />
+                        <ScrollView style={{ padding: 20 }}>
+                            <Text style={styles.inputFieldLabel}>Vehicle Type (e.g. Motorcycle, Tricycle, Van)</Text>
+                            <TextInput
+                                style={styles.textInputModern}
+                                value={vType}
+                                onChangeText={setVType}
+                                placeholder="Motorcycle"
+                                placeholderTextColor="#64748B"
+                            />
 
-                        <Text style={styles.inputLabelDark}>Plate Number</Text>
-                        <TextInput
-                            style={styles.darkInput}
-                            placeholder="e.g. YBE-452-AA"
-                            placeholderTextColor="#64748B"
-                            value={pNumber}
-                            onChangeText={setPNumber}
-                            autoCapitalize="characters"
-                        />
+                            <Text style={styles.inputFieldLabel}>Plate / Registration Number</Text>
+                            <TextInput
+                                style={styles.textInputModern}
+                                value={pNumber}
+                                onChangeText={setPNumber}
+                                placeholder="ABC-123XY"
+                                placeholderTextColor="#64748B"
+                            />
 
-                        <Text style={styles.inputLabelDark}>Vehicle Color</Text>
-                        <TextInput
-                            style={styles.darkInput}
-                            placeholder="e.g. Red, Black, Blue"
-                            placeholderTextColor="#64748B"
-                            value={vColor}
-                            onChangeText={setVColor}
-                        />
-
-                        <Text style={styles.inputLabelDark}>Driver License ID</Text>
-                        <TextInput
-                            style={styles.darkInput}
-                            placeholder="e.g. DRL-980-001"
-                            placeholderTextColor="#64748B"
-                            value={dLicense}
-                            onChangeText={setDLicense}
-                            autoCapitalize="characters"
-                        />
-
-                        <TouchableOpacity style={styles.dialogSaveBtn} onPress={updateVehicleDetails} activeOpacity={0.85}>
-                            <Text style={styles.dialogSaveBtnText}>Save Vehicle Information</Text>
-                        </TouchableOpacity>
+                            <TouchableOpacity style={styles.submitBtnGold} onPress={updateVehicleDetails} activeOpacity={0.85}>
+                                <Text style={styles.submitBtnGoldText}>Save Vehicle Details ✅</Text>
+                            </TouchableOpacity>
+                        </ScrollView>
                     </View>
                 </View>
             </Modal>
 
-            {/* WITHDRAW PAYOUT MODAL */}
-            <Modal visible={isWithdrawModalVisible} animationType="slide" transparent>
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContentDark}>
-                        <View style={styles.modalHeaderRow}>
-                            <Text style={styles.modalHeaderTitle}>Request Driver Payout</Text>
+            {/* ─── MODAL 3: BANK PAYOUT WITHDRAWAL ─── */}
+            <Modal visible={isWithdrawModalVisible} transparent animationType="slide">
+                <View style={styles.modalBackdrop}>
+                    <View style={styles.modalSheetContent}>
+                        <View style={styles.modalSheetHeader}>
+                            <Text style={styles.modalSheetTitle}>Withdraw to Bank Account</Text>
                             <TouchableOpacity onPress={() => setWithdrawModalVisible(false)} style={styles.modalCloseCircle}>
                                 <Ionicons name="close" size={18} color="#FFFFFF" />
                             </TouchableOpacity>
                         </View>
 
-                        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+                        <ScrollView style={{ padding: 20 }}>
                             <View style={styles.payoutBalanceNotice}>
-                                <Text style={styles.payoutBalanceNoticeLabel}>Available for withdrawal</Text>
-                                <Text style={styles.payoutBalanceNoticeValue}>₦{(wallet?.balance || 0).toLocaleString()}</Text>
+                                <Text style={styles.payoutBalanceNoticeLabel}>AVAILABLE ESCROW BALANCE</Text>
+                                <Text style={styles.payoutBalanceNoticeValue}>₦{walletBalance.toLocaleString()}</Text>
                             </View>
 
-                            <Text style={styles.inputLabelDark}>Amount to Withdraw (₦)</Text>
+                            <Text style={styles.inputFieldLabel}>Withdrawal Amount (₦)</Text>
                             <TextInput
-                                style={styles.darkInput}
-                                placeholder="Enter amount in NGN"
-                                placeholderTextColor="#64748B"
-                                keyboardType="numeric"
+                                style={styles.textInputModern}
                                 value={withdrawAmount}
                                 onChangeText={setWithdrawAmount}
+                                placeholder="5,000"
+                                placeholderTextColor="#64748B"
+                                keyboardType="numeric"
                             />
 
-                            <Text style={styles.inputLabelDark}>Bank Name</Text>
+                            <Text style={styles.inputFieldLabel}>Select Bank</Text>
                             <TouchableOpacity
                                 style={styles.bankSelectTrigger}
                                 onPress={() => setShowBankDropdown(true)}
-                                activeOpacity={0.7}
+                                activeOpacity={0.8}
                             >
                                 <Text style={{ color: bankName ? '#FFFFFF' : '#64748B', fontWeight: '600' }}>
-                                    {bankName || 'Select bank'}
+                                    {bankName || 'Tap to choose your bank'}
                                 </Text>
                                 <Ionicons name="chevron-down" size={18} color={GOLD} />
                             </TouchableOpacity>
 
-                            <Text style={styles.inputLabelDark}>Account Number (10 Digits)</Text>
+                            <Text style={styles.inputFieldLabel}>10-Digit NUBAN Account Number</Text>
                             <TextInput
-                                style={styles.darkInput}
-                                placeholder="10-digit NUBAN account number"
+                                style={styles.textInputModern}
+                                value={accountNo}
+                                onChangeText={setAccountNo}
+                                placeholder="0123456789"
                                 placeholderTextColor="#64748B"
                                 keyboardType="numeric"
                                 maxLength={10}
-                                value={accountNo}
-                                onChangeText={setAccountNo}
                             />
 
-                            <Text style={styles.inputLabelDark}>Account Name (Paystack Verified)</Text>
-                            <View style={[styles.darkInput, { flexDirection: 'row', alignItems: 'center' }]}>
-                                {resolvingAccount ? (
-                                    <ActivityIndicator size="small" color={GOLD} style={{ marginRight: 10 }} />
-                                ) : null}
-                                <TextInput
-                                    style={{ flex: 1, color: '#FFFFFF', fontWeight: '700' }}
-                                    placeholder={accountNo.length === 10 && !resolvingAccount ? 'Account name not resolved' : 'Auto verified from account number'}
-                                    placeholderTextColor="#64748B"
-                                    value={accountName}
-                                    editable={false}
-                                />
-                            </View>
+                            {resolvingAccount && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                                    <ActivityIndicator size="small" color={GOLD} />
+                                    <Text style={{ color: GOLD, fontSize: 12 }}>Verifying account name via Paystack...</Text>
+                                </View>
+                            )}
+
+                            {accountName ? (
+                                <View style={styles.verifiedAccountBanner}>
+                                    <Text style={styles.verifiedAccountLabel}>VERIFIED ACCOUNT HOLDER</Text>
+                                    <Text style={styles.verifiedAccountName}>{accountName}</Text>
+                                </View>
+                            ) : null}
 
                             <TouchableOpacity
-                                style={[styles.payoutSubmitBtn, (!accountName || !withdrawAmount) && { opacity: 0.5 }]}
+                                style={[styles.payoutSubmitBtn, (!accountName || loading) && { opacity: 0.6 }]}
                                 onPress={requestWithdrawal}
-                                disabled={!accountName || !withdrawAmount || loading}
+                                disabled={!accountName || loading}
                                 activeOpacity={0.85}
                             >
-                                {loading ? (
-                                    <ActivityIndicator color="#070D1B" />
-                                ) : (
-                                    <Text style={styles.payoutSubmitBtnText}>Transfer to Bank Account 🚀</Text>
-                                )}
+                                <Text style={styles.payoutSubmitBtnText}>
+                                    {loading ? 'Processing...' : 'Confirm Payout to Bank 💳'}
+                                </Text>
                             </TouchableOpacity>
                         </ScrollView>
                     </View>
                 </View>
             </Modal>
 
-            {/* BANK SELECTION MODAL */}
-            <Modal visible={showBankDropdown} animationType="fade" transparent>
-                <View style={styles.modalOverlay}>
-                    <View style={[styles.modalContentDark, { height: '80%' }]}>
-                        <View style={styles.modalHeaderRow}>
-                            <Text style={styles.modalHeaderTitle}>Select Bank</Text>
+            {/* ─── MODAL 4: BANK SELECTOR SUB-MODAL ─── */}
+            <Modal visible={showBankDropdown} transparent animationType="fade">
+                <View style={styles.modalBackdrop}>
+                    <View style={[styles.modalSheetContent, { maxHeight: '80%' }]}>
+                        <View style={styles.modalSheetHeader}>
+                            <Text style={styles.modalSheetTitle}>Select Receiving Bank</Text>
                             <TouchableOpacity onPress={() => setShowBankDropdown(false)} style={styles.modalCloseCircle}>
                                 <Ionicons name="close" size={18} color="#FFFFFF" />
                             </TouchableOpacity>
                         </View>
 
-                        <View style={styles.bankSearchWrap}>
-                            <Ionicons name="search" size={16} color="#64748B" />
-                            <TextInput
-                                style={styles.bankSearchInput}
-                                placeholder="Search bank..."
-                                placeholderTextColor="#64748B"
-                                value={searchBankQuery}
-                                onChangeText={handleSearchBank}
-                            />
-                        </View>
+                        <View style={{ padding: 16, flex: 1 }}>
+                            <View style={styles.bankSearchWrap}>
+                                <Ionicons name="search" size={16} color="#64748B" />
+                                <TextInput
+                                    style={styles.bankSearchInput}
+                                    placeholder="Search bank name..."
+                                    placeholderTextColor="#64748B"
+                                    value={searchBankQuery}
+                                    onChangeText={handleSearchBank}
+                                />
+                            </View>
 
-                        <ScrollView showsVerticalScrollIndicator={false}>
-                            {filteredBanks.map((bank, index) => (
-                                <TouchableOpacity
-                                    key={index}
-                                    style={styles.bankSelectRow}
-                                    onPress={() => {
-                                        setBankName(bank.name);
-                                        setBankCode(bank.code);
-                                        setShowBankDropdown(false);
-                                        setSearchBankQuery('');
-                                    }}
-                                >
-                                    <Text style={styles.bankSelectRowText}>{bank.name}</Text>
-                                    <Ionicons name="chevron-forward" size={16} color="#64748B" />
-                                </TouchableOpacity>
-                            ))}
-                        </ScrollView>
+                            <ScrollView style={{ flex: 1 }}>
+                                {filteredBanks.map(b => (
+                                    <TouchableOpacity
+                                        key={b.id || b.code}
+                                        style={styles.bankSelectRow}
+                                        onPress={() => {
+                                            setBankName(b.name);
+                                            setBankCode(b.code);
+                                            setShowBankDropdown(false);
+                                        }}
+                                    >
+                                        <Text style={styles.bankSelectRowText}>{b.name}</Text>
+                                        <Ionicons name="chevron-forward" size={16} color="#64748B" />
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                        </View>
                     </View>
                 </View>
             </Modal>
 
-            {/* WITHDRAWAL HISTORY FULL MODAL */}
-            <Modal visible={isHistoryModalVisible} animationType="slide" transparent>
-                <View style={styles.modalOverlay}>
-                    <View style={[styles.modalContentDark, { height: '85%' }]}>
-                        <View style={styles.modalHeaderRow}>
-                            <Text style={styles.modalHeaderTitle}>Payout Log</Text>
+            {/* ─── MODAL 5: TRANSACTION LOGS ─── */}
+            <Modal visible={isHistoryModalVisible} transparent animationType="slide">
+                <View style={styles.modalBackdrop}>
+                    <View style={styles.modalSheetContent}>
+                        <View style={styles.modalSheetHeader}>
+                            <Text style={styles.modalSheetTitle}>Wallet Transaction Logs</Text>
                             <TouchableOpacity onPress={() => setHistoryModalVisible(false)} style={styles.modalCloseCircle}>
                                 <Ionicons name="close" size={18} color="#FFFFFF" />
                             </TouchableOpacity>
                         </View>
 
-                        <ScrollView showsVerticalScrollIndicator={false}>
+                        <ScrollView style={{ padding: 18 }}>
                             {withdrawals.length === 0 ? (
-                                <View style={{ alignItems: 'center', marginTop: 40 }}>
+                                <View style={{ alignItems: 'center', paddingVertical: 40 }}>
                                     <Ionicons name="wallet-outline" size={40} color="#64748B" />
-                                    <Text style={{ color: '#94A3B8', marginTop: 10, fontWeight: '700' }}>No payout requests recorded</Text>
+                                    <Text style={{ color: '#94A3B8', marginTop: 12, fontSize: 13 }}>No transaction records yet</Text>
                                 </View>
                             ) : (
-                                withdrawals.map((w, idx) => (
-                                    <View key={idx} style={styles.payoutLogRow}>
-                                        <View>
-                                            <Text style={styles.payoutLogAmount}>₦{Number(w.amount || 0).toLocaleString()}</Text>
-                                            <Text style={styles.payoutLogMeta}>{w.bank_name} • {w.account_number}</Text>
+                                withdrawals.map(w => (
+                                    <View key={w.id} style={styles.payoutLogRow}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.payoutLogAmount}>
+                                                {w.type === 'debit' ? '-' : '+'}₦{Number(w.amount || 0).toLocaleString()}
+                                            </Text>
+                                            <Text style={styles.payoutLogMeta}>{w.description || 'Transaction'}</Text>
+                                            <Text style={[styles.payoutLogMeta, { fontSize: 10 }]}>
+                                                {new Date(w.created_at).toLocaleDateString()} • {w.reference || ''}
+                                            </Text>
                                         </View>
-                                        <View style={[styles.payoutStatusPill, w.status === 'completed' || w.status === 'paid' ? { backgroundColor: 'rgba(16, 185, 129, 0.2)' } : { backgroundColor: 'rgba(245, 158, 11, 0.2)' }]}>
-                                            <Text style={{ fontSize: 11, fontWeight: '800', color: w.status === 'completed' || w.status === 'paid' ? SUCCESS : AMBER }}>
-                                                {(w.status || 'pending').toUpperCase()}
+                                        <View style={[styles.payoutStatusPill, { backgroundColor: w.status === 'completed' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)' }]}>
+                                            <Text style={{ fontSize: 11, fontWeight: '800', color: w.status === 'completed' ? SUCCESS : AMBER }}>
+                                                {(w.status || 'PENDING').toUpperCase()}
                                             </Text>
                                         </View>
                                     </View>
@@ -1544,18 +1460,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                 </View>
             </Modal>
 
-            {/* ANIMATED COINS OVERLAY */}
-            {animatingCoins > 0 && (
-                <View style={styles.floatingCoinOverlay}>
-                    <View style={styles.floatingCoinBox}>
-                        <Ionicons name="sparkles" size={32} color={GOLD} />
-                        <Text style={styles.floatingCoinText}>+{animatingCoins} AMC Coins!</Text>
-                        <Text style={{ color: '#94A3B8', fontSize: 12, marginTop: 4 }}>Streak Reward Credited</Text>
-                    </View>
-                </View>
-            )}
-
-            {/* WHATSAPP ACTION MODAL */}
+            {/* ─── WHATSAPP MODAL ─── */}
             <WhatsAppActionModal
                 visible={whatsappVisible}
                 phone={whatsappPhone}
@@ -1567,20 +1472,20 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
     );
 };
 
-// ─────────────────────────────────────────────────────────────
-// MODERN STYLESHEET (MATCHING VENDORDASHBOARD QUALITY)
-// ─────────────────────────────────────────────────────────────
+// ─── HIGH-END ABU MAFHAL LUXURY STYLES ───
 const styles = StyleSheet.create({
     safeContainer: {
         flex: 1,
         backgroundColor: NAVY,
     },
     headerGradient: {
-        paddingHorizontal: 16,
-        paddingTop: 12,
+        paddingTop: Platform.OS === 'ios' ? 8 : 14,
         paddingBottom: 16,
+        paddingHorizontal: 16,
+        borderBottomLeftRadius: 24,
+        borderBottomRightRadius: 24,
         borderBottomWidth: 1,
-        borderBottomColor: BORDER_SUBTLE,
+        borderColor: BORDER_GOLD,
     },
     headerTopRow: {
         flexDirection: 'row',
@@ -1598,20 +1503,20 @@ const styles = StyleSheet.create({
         position: 'relative',
     },
     avatarImg: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        width: 46,
+        height: 46,
+        borderRadius: 23,
         borderWidth: 2,
         borderColor: GOLD,
     },
     avatarOnlineDot: {
-        position: 'absolute',
-        bottom: 0,
-        right: 0,
         width: 12,
         height: 12,
         borderRadius: 6,
         backgroundColor: SUCCESS,
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
         borderWidth: 2,
         borderColor: NAVY,
     },
@@ -1627,8 +1532,9 @@ const styles = StyleSheet.create({
         borderRadius: 6,
     },
     levelTagText: {
-        fontSize: 10,
+        fontSize: 9.5,
         fontWeight: '900',
+        letterSpacing: 0.5,
     },
     driverSubRole: {
         fontSize: 11,
@@ -1644,21 +1550,23 @@ const styles = StyleSheet.create({
     headerIconBtn: {
         width: 36,
         height: 36,
-        borderRadius: 10,
+        borderRadius: 18,
         backgroundColor: 'rgba(255, 255, 255, 0.08)',
         alignItems: 'center',
         justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: BORDER_SUBTLE,
     },
     statusToggleBanner: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.04)',
-        paddingHorizontal: 14,
+        justifyContent: 'space-between',
+        backgroundColor: 'rgba(14, 26, 46, 0.85)',
         paddingVertical: 10,
-        borderRadius: 14,
+        paddingHorizontal: 14,
+        borderRadius: 16,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.06)',
+        borderColor: BORDER_SUBTLE,
         marginBottom: 14,
     },
     statusIndicatorRow: {
@@ -1673,14 +1581,13 @@ const styles = StyleSheet.create({
         borderRadius: 5,
     },
     statusTitle: {
-        fontSize: 12,
+        fontSize: 11.5,
         fontWeight: '900',
-        letterSpacing: 0.5,
+        letterSpacing: 0.6,
     },
     statusVehicleSubtitle: {
-        fontSize: 11,
-        color: '#64748B',
-        fontWeight: '600',
+        fontSize: 10.5,
+        color: '#94A3B8',
         marginTop: 1,
     },
     metricsGrid: {
@@ -1689,25 +1596,24 @@ const styles = StyleSheet.create({
     },
     metricCard: {
         flex: 1,
-        backgroundColor: 'rgba(19, 32, 56, 0.85)',
-        paddingVertical: 10,
-        paddingHorizontal: 8,
-        borderRadius: 12,
+        backgroundColor: CARD_BG,
+        borderRadius: 14,
+        padding: 10,
+        alignItems: 'center',
         borderWidth: 1,
         borderColor: BORDER_SUBTLE,
-        alignItems: 'center',
     },
     metricIconWrap: {
-        width: 26,
-        height: 26,
-        borderRadius: 8,
+        width: 30,
+        height: 30,
+        borderRadius: 15,
         backgroundColor: 'rgba(217, 167, 58, 0.15)',
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 4,
+        marginBottom: 6,
     },
     metricValue: {
-        fontSize: 13,
+        fontSize: 14,
         fontWeight: '900',
         color: '#FFFFFF',
     },
@@ -1719,24 +1625,24 @@ const styles = StyleSheet.create({
     },
     tabBarContainer: {
         backgroundColor: DARK_SURFACE,
+        paddingVertical: 10,
         borderBottomWidth: 1,
         borderBottomColor: BORDER_SUBTLE,
-        paddingVertical: 8,
     },
     tabScrollContent: {
-        paddingHorizontal: 16,
+        paddingHorizontal: 14,
         gap: 8,
     },
     modernTabPill: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        paddingHorizontal: 14,
         paddingVertical: 8,
+        paddingHorizontal: 14,
         borderRadius: 20,
         backgroundColor: 'rgba(255, 255, 255, 0.05)',
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.08)',
+        borderColor: BORDER_SUBTLE,
     },
     modernTabPillActive: {
         backgroundColor: GOLD,
@@ -1744,16 +1650,15 @@ const styles = StyleSheet.create({
     },
     modernTabPillText: {
         fontSize: 12,
-        fontWeight: '700',
+        fontWeight: '800',
         color: '#94A3B8',
     },
     modernTabPillTextActive: {
         color: '#070D1B',
-        fontWeight: '900',
     },
     mainScrollContent: {
         padding: 16,
-        paddingBottom: 60,
+        paddingBottom: 40,
     },
     tabContentSection: {
         width: '100%',
@@ -1766,13 +1671,14 @@ const styles = StyleSheet.create({
     },
     sectionTitle: {
         fontSize: 14,
-        fontWeight: '800',
+        fontWeight: '900',
         color: '#FFFFFF',
+        letterSpacing: 0.3,
     },
     sectionCountText: {
         fontSize: 12,
+        fontWeight: '700',
         color: GOLD,
-        fontWeight: '800',
     },
     modernCard: {
         backgroundColor: CARD_BG,
@@ -1780,11 +1686,16 @@ const styles = StyleSheet.create({
         padding: 16,
         borderWidth: 1,
         borderColor: BORDER_SUBTLE,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+        elevation: 4,
     },
     cardHeaderRow: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
+        gap: 8,
         marginBottom: 12,
     },
     orderIdPill: {
@@ -1792,12 +1703,12 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 5,
         backgroundColor: 'rgba(217, 167, 58, 0.12)',
-        paddingHorizontal: 8,
-        paddingVertical: 3,
+        paddingHorizontal: 9,
+        paddingVertical: 4,
         borderRadius: 8,
     },
     orderIdText: {
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: '900',
         color: GOLD,
     },
@@ -1805,9 +1716,9 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
-        backgroundColor: 'rgba(16, 185, 129, 0.15)',
+        backgroundColor: 'rgba(16, 185, 129, 0.12)',
         paddingHorizontal: 8,
-        paddingVertical: 3,
+        paddingVertical: 4,
         borderRadius: 8,
     },
     feeBadgeText: {
@@ -1816,8 +1727,9 @@ const styles = StyleSheet.create({
         color: SUCCESS,
     },
     statusBadge: {
+        marginLeft: 'auto',
         paddingHorizontal: 8,
-        paddingVertical: 3,
+        paddingVertical: 4,
         borderRadius: 8,
     },
     statusBadgeActive: {
@@ -1830,36 +1742,40 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(148, 163, 184, 0.2)',
     },
     statusBadgeText: {
-        fontSize: 10,
+        fontSize: 9.5,
         fontWeight: '900',
         color: '#FFFFFF',
+        letterSpacing: 0.5,
     },
     podAlertBanner: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
+        gap: 8,
         backgroundColor: '#FEF3C7',
-        borderRadius: 10,
         padding: 10,
+        borderRadius: 12,
         marginBottom: 12,
+        borderWidth: 1,
+        borderColor: '#FDE68A',
     },
     podAlertTitle: {
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: '900',
         color: '#B45309',
+        letterSpacing: 0.5,
     },
     podAlertDesc: {
-        fontSize: 11,
-        color: '#92400E',
+        fontSize: 11.5,
+        color: '#78350F',
         marginTop: 1,
     },
     prepaidBanner: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-        paddingHorizontal: 10,
+        backgroundColor: 'rgba(16, 185, 129, 0.12)',
         paddingVertical: 6,
+        paddingHorizontal: 10,
         borderRadius: 8,
         marginBottom: 12,
     },
@@ -1872,19 +1788,23 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
-        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+        backgroundColor: CARD_BG_ELEVATED,
         padding: 10,
         borderRadius: 12,
         marginBottom: 12,
     },
-    packageThumbnail: {
-        width: 48,
-        height: 48,
+    packageIconBox: {
+        width: 44,
+        height: 44,
         borderRadius: 10,
-        backgroundColor: '#070D1B',
+        backgroundColor: 'rgba(217, 167, 58, 0.15)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: BORDER_GOLD,
     },
     packageTitle: {
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: '800',
         color: '#FFFFFF',
     },
@@ -1895,34 +1815,32 @@ const styles = StyleSheet.create({
     },
     customerName: {
         fontSize: 11.5,
-        color: GOLD,
+        color: GOLD_LIGHT,
         fontWeight: '700',
-        marginTop: 3,
+        marginTop: 2,
     },
     routeCard: {
-        backgroundColor: 'rgba(7, 13, 27, 0.6)',
+        backgroundColor: CARD_BG_ELEVATED,
         padding: 12,
         borderRadius: 12,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.05)',
         marginBottom: 12,
     },
     routeRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: 10,
     },
     routeLabel: {
         fontSize: 9.5,
+        color: '#94A3B8',
         fontWeight: '800',
-        color: '#64748B',
         letterSpacing: 0.5,
     },
     routeAddress: {
-        fontSize: 12,
-        fontWeight: '700',
+        fontSize: 12.5,
         color: '#FFFFFF',
-        marginTop: 2,
+        fontWeight: '600',
+        marginTop: 1,
     },
     navigateMiniBtn: {
         flexDirection: 'row',
@@ -1949,9 +1867,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         gap: 6,
-        backgroundColor: '#059669',
+        backgroundColor: 'rgba(255, 255, 255, 0.08)',
         paddingVertical: 10,
         borderRadius: 10,
+        borderWidth: 1,
+        borderColor: BORDER_SUBTLE,
     },
     contactBtnCallText: {
         fontSize: 12,
@@ -1976,20 +1896,13 @@ const styles = StyleSheet.create({
     cardActionContainer: {
         marginTop: 2,
     },
-    actionBtnClaim: {
-        borderRadius: 12,
-        overflow: 'hidden',
-    },
-    actionBtnDeliver: {
-        borderRadius: 12,
-        overflow: 'hidden',
-    },
     actionBtnGradient: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 8,
         paddingVertical: 13,
+        borderRadius: 12,
     },
     actionBtnClaimText: {
         fontSize: 13,
@@ -2006,29 +1919,30 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         gap: 6,
-        backgroundColor: 'rgba(255, 255, 255, 0.06)',
         paddingVertical: 11,
         borderRadius: 10,
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        borderWidth: 1,
+        borderColor: BORDER_SUBTLE,
     },
     actionBtnDetailsText: {
         fontSize: 12,
-        fontWeight: '700',
         color: '#94A3B8',
+        fontWeight: '700',
     },
     emptyCardBox: {
-        alignItems: 'center',
-        paddingVertical: 50,
         backgroundColor: CARD_BG,
         borderRadius: 20,
+        padding: 30,
+        alignItems: 'center',
         borderWidth: 1,
         borderColor: BORDER_SUBTLE,
-        paddingHorizontal: 20,
     },
     emptyTitle: {
         fontSize: 16,
-        fontWeight: '800',
+        fontWeight: '900',
         color: '#FFFFFF',
-        marginTop: 14,
+        marginTop: 12,
     },
     emptySubtitle: {
         fontSize: 12,
@@ -2038,16 +1952,16 @@ const styles = StyleSheet.create({
         lineHeight: 18,
     },
     emptyActionBtn: {
-        marginTop: 16,
         backgroundColor: GOLD,
         paddingHorizontal: 18,
-        paddingVertical: 10,
-        borderRadius: 10,
+        paddingVertical: 11,
+        borderRadius: 12,
+        marginTop: 16,
     },
     emptyActionBtnText: {
-        color: '#070D1B',
+        fontSize: 12.5,
         fontWeight: '900',
-        fontSize: 12,
+        color: '#070D1B',
     },
     luxuryWalletBanner: {
         borderRadius: 20,
@@ -2057,32 +1971,32 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     walletHeaderLabel: {
-        fontSize: 11,
-        fontWeight: '800',
+        fontSize: 10.5,
         color: '#94A3B8',
-        letterSpacing: 0.5,
+        fontWeight: '800',
+        letterSpacing: 0.8,
     },
     walletHeaderBalance: {
-        fontSize: 30,
+        fontSize: 28,
         fontWeight: '900',
-        color: '#FFFFFF',
+        color: SUCCESS,
         marginTop: 4,
     },
     walletAmcChip: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 5,
+        gap: 4,
         backgroundColor: 'rgba(217, 167, 58, 0.15)',
         paddingHorizontal: 10,
         paddingVertical: 5,
-        borderRadius: 20,
+        borderRadius: 12,
         borderWidth: 1,
         borderColor: BORDER_GOLD,
     },
     walletAmcChipText: {
+        fontSize: 11.5,
+        fontWeight: '900',
         color: GOLD,
-        fontWeight: '800',
-        fontSize: 12,
     },
     walletActionsBar: {
         flexDirection: 'row',
@@ -2090,19 +2004,19 @@ const styles = StyleSheet.create({
         marginTop: 18,
     },
     cashOutPrimaryBtn: {
-        flex: 1.2,
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 6,
         backgroundColor: GOLD,
-        paddingVertical: 13,
+        paddingVertical: 12,
         borderRadius: 12,
     },
     cashOutPrimaryBtnText: {
-        color: '#070D1B',
+        fontSize: 12.5,
         fontWeight: '900',
-        fontSize: 13,
+        color: '#070D1B',
     },
     payoutHistorySecBtn: {
         flex: 1,
@@ -2111,107 +2025,75 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         gap: 6,
         backgroundColor: 'rgba(255, 255, 255, 0.08)',
-        paddingVertical: 13,
+        paddingVertical: 12,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.12)',
+        borderColor: BORDER_SUBTLE,
     },
     payoutHistorySecBtnText: {
-        color: '#FFFFFF',
-        fontWeight: '700',
         fontSize: 12,
+        fontWeight: '800',
+        color: '#FFFFFF',
     },
     analyticsCard: {
         backgroundColor: CARD_BG,
         borderRadius: 18,
-        padding: 18,
+        padding: 16,
         borderWidth: 1,
         borderColor: BORDER_SUBTLE,
-        marginBottom: 16,
     },
     cardHeaderTitle: {
-        fontSize: 14,
-        fontWeight: '800',
+        fontSize: 13.5,
+        fontWeight: '900',
         color: '#FFFFFF',
     },
     cardHeaderSubValue: {
         fontSize: 12,
-        fontWeight: '700',
-        color: GOLD,
+        fontWeight: '800',
+        color: SUCCESS,
     },
     weeklyChartRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-end',
-        height: 110,
+        height: 100,
         paddingTop: 10,
     },
     chartCol: {
         alignItems: 'center',
-        gap: 6,
         flex: 1,
+        justifyContent: 'flex-end',
     },
     chartBarBackground: {
-        width: 22,
-        borderRadius: 6,
+        width: 14,
+        borderRadius: 4,
         overflow: 'hidden',
     },
-    chartColDay: {
-        fontSize: 11,
-        fontWeight: '700',
+    chartDayText: {
+        fontSize: 10,
         color: '#94A3B8',
+        fontWeight: '700',
+        marginTop: 6,
     },
-    dailyEarningsBox: {
+    perksCard: {
         backgroundColor: CARD_BG,
         borderRadius: 18,
-        padding: 18,
+        padding: 16,
         borderWidth: 1,
         borderColor: BORDER_SUBTLE,
+        marginBottom: 14,
     },
-    dailyLedgerRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255, 255, 255, 0.06)',
-    },
-    dailyLedgerDate: {
-        fontSize: 13,
-        fontWeight: '700',
+    perksCardTitle: {
+        fontSize: 14,
+        fontWeight: '900',
         color: '#FFFFFF',
-        flex: 1,
     },
-    dailyLedgerCount: {
+    perksCardSubtitle: {
         fontSize: 11,
         color: '#94A3B8',
-        marginHorizontal: 8,
+        marginTop: 2,
     },
-    dailyLedgerAmount: {
-        fontSize: 13,
-        fontWeight: '900',
-        color: SUCCESS,
-    },
-    checkinLuxuryCard: {
-        backgroundColor: CARD_BG,
-        borderRadius: 20,
-        padding: 20,
-        borderWidth: 1,
-        borderColor: BORDER_GOLD,
-        marginBottom: 16,
-    },
-    checkinTitle: {
-        fontSize: 16,
-        fontWeight: '900',
-        color: '#FFFFFF',
-    },
-    checkinSub: {
-        fontSize: 12,
-        color: '#94A3B8',
-        marginTop: 4,
-        lineHeight: 16,
-    },
-    flameStreakBadge: {
+    streakBadge: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
@@ -2220,296 +2102,193 @@ const styles = StyleSheet.create({
         paddingVertical: 4,
         borderRadius: 8,
     },
-    flameStreakText: {
-        fontSize: 12,
+    streakBadgeText: {
+        fontSize: 11,
         fontWeight: '900',
         color: '#EF4444',
     },
-    streakDotsRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginVertical: 16,
-        backgroundColor: 'rgba(7, 13, 27, 0.6)',
-        padding: 12,
-        borderRadius: 12,
-    },
-    streakDotBox: {
-        width: 28,
-        height: 28,
-        borderRadius: 14,
+    xpProgressBarBg: {
+        height: 8,
         backgroundColor: 'rgba(255, 255, 255, 0.08)',
-        alignItems: 'center',
-        justifyContent: 'center',
+        borderRadius: 4,
+        marginVertical: 10,
+        overflow: 'hidden',
     },
-    streakDotBoxActive: {
+    xpProgressBarFill: {
+        height: '100%',
         backgroundColor: GOLD,
+        borderRadius: 4,
     },
-    streakDotNum: {
+    xpProgressText: {
         fontSize: 11,
         color: '#94A3B8',
-        fontWeight: '800',
+        fontWeight: '600',
     },
-    checkinActionBtn: {
-        backgroundColor: GOLD,
-        paddingVertical: 13,
-        borderRadius: 12,
-        alignItems: 'center',
-    },
-    checkinActionBtnDisabled: {
-        backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    },
-    checkinActionBtnText: {
-        fontSize: 13,
-        fontWeight: '900',
-        color: '#070D1B',
-    },
-    vehicleDetailsCard: {
+    vehicleInfoCard: {
         backgroundColor: CARD_BG,
         borderRadius: 18,
-        padding: 18,
+        padding: 16,
         borderWidth: 1,
         borderColor: BORDER_SUBTLE,
-        marginBottom: 16,
     },
-    editPillBtn: {
+    vehicleCardTitle: {
+        fontSize: 14,
+        fontWeight: '900',
+        color: '#FFFFFF',
+    },
+    editVehicleBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
-        backgroundColor: 'rgba(217, 167, 58, 0.12)',
+        backgroundColor: 'rgba(217, 167, 58, 0.15)',
         paddingHorizontal: 10,
-        paddingVertical: 4,
+        paddingVertical: 5,
         borderRadius: 8,
     },
-    editPillBtnText: {
-        color: GOLD,
+    editVehicleBtnText: {
+        fontSize: 11.5,
         fontWeight: '800',
-        fontSize: 12,
+        color: GOLD,
     },
-    vehicleInfoItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255, 255, 255, 0.05)',
-    },
-    vehicleInfoLabel: {
-        fontSize: 11,
-        color: '#64748B',
-        fontWeight: '600',
-    },
-    vehicleInfoValue: {
-        fontSize: 13.5,
-        color: '#FFFFFF',
-        fontWeight: '700',
-        marginTop: 2,
-    },
-    supportCard: {
-        backgroundColor: CARD_BG,
-        borderRadius: 18,
-        padding: 18,
-        borderWidth: 1,
-        borderColor: BORDER_SUBTLE,
-    },
-    supportRowBtn: {
+    vehicleRow: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 10,
-        paddingVertical: 12,
+        paddingVertical: 8,
         borderBottomWidth: 1,
         borderBottomColor: 'rgba(255, 255, 255, 0.05)',
     },
-    supportRowBtnText: {
+    vehiclePropLabel: {
+        fontSize: 12.5,
+        color: '#94A3B8',
+        fontWeight: '600',
+        width: 140,
+    },
+    vehiclePropVal: {
         fontSize: 13,
         color: '#FFFFFF',
-        fontWeight: '700',
+        fontWeight: '800',
     },
     modalBackdrop: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.75)',
         justifyContent: 'flex-end',
     },
-    modalContainerDark: {
+    modalSheetContent: {
         backgroundColor: DARK_SURFACE,
-        borderTopLeftRadius: 28,
-        borderTopRightRadius: 28,
-        maxHeight: '85%',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        maxHeight: '88%',
         borderWidth: 1,
-        borderColor: BORDER_SUBTLE,
+        borderColor: BORDER_GOLD,
     },
-    modalHeaderRow: {
+    modalSheetHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingTop: 18,
-        paddingBottom: 14,
+        padding: 18,
         borderBottomWidth: 1,
         borderBottomColor: BORDER_SUBTLE,
     },
-    modalHeaderTitle: {
-        fontSize: 17,
+    modalSheetTitle: {
+        fontSize: 16,
         fontWeight: '900',
         color: '#FFFFFF',
-    },
-    modalHeaderSub: {
-        fontSize: 12,
-        color: GOLD,
-        fontWeight: '700',
-        marginTop: 2,
     },
     modalCloseCircle: {
         width: 32,
         height: 32,
         borderRadius: 16,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        backgroundColor: 'rgba(255, 255, 255, 0.08)',
         alignItems: 'center',
         justifyContent: 'center',
     },
-    detailBox: {
+    invoiceHeroBox: {
         backgroundColor: CARD_BG,
+        padding: 16,
         borderRadius: 14,
-        padding: 14,
+        alignItems: 'center',
+        marginBottom: 16,
         borderWidth: 1,
-        borderColor: BORDER_SUBTLE,
+        borderColor: BORDER_GOLD,
+    },
+    invoiceHeroLabel: {
+        fontSize: 10,
+        color: '#94A3B8',
+        fontWeight: '800',
+        letterSpacing: 0.8,
+    },
+    invoiceHeroValue: {
+        fontSize: 24,
+        fontWeight: '900',
+        color: '#FFFFFF',
+        marginTop: 2,
+    },
+    invoiceHeroFee: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: SUCCESS,
+        marginTop: 4,
+    },
+    invoiceSection: {
+        backgroundColor: CARD_BG,
+        padding: 14,
+        borderRadius: 12,
         marginBottom: 12,
     },
-    detailBoxLabel: {
-        fontSize: 10,
+    invoiceSectionTitle: {
+        fontSize: 11,
+        color: GOLD,
         fontWeight: '800',
-        color: '#64748B',
+        marginBottom: 8,
         letterSpacing: 0.5,
     },
-    detailBoxFee: {
-        fontSize: 22,
-        fontWeight: '900',
-        color: SUCCESS,
-        marginTop: 3,
+    invoiceLineText: {
+        fontSize: 12.5,
+        color: '#FFFFFF',
+        lineHeight: 20,
     },
-    detailBoxStatus: {
-        fontSize: 11,
+    inputFieldLabel: {
+        fontSize: 11.5,
         color: '#94A3B8',
-        marginTop: 2,
-        fontWeight: '600',
-    },
-    detailBoxText: {
-        fontSize: 13,
         fontWeight: '700',
-        color: '#FFFFFF',
-        marginTop: 4,
-        lineHeight: 18,
-    },
-    modalMapBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-        backgroundColor: GOLD,
-        paddingVertical: 10,
-        borderRadius: 10,
-        marginTop: 10,
-    },
-    modalMapBtnText: {
-        fontSize: 12,
-        fontWeight: '900',
-        color: '#070D1B',
-    },
-    modalSectionHeading: {
-        fontSize: 13,
-        fontWeight: '800',
-        color: '#FFFFFF',
-        marginTop: 8,
-        marginBottom: 10,
-    },
-    consignmentItemRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: CARD_BG,
-        padding: 12,
-        borderRadius: 12,
-        marginBottom: 8,
-    },
-    consignmentQty: {
-        fontSize: 13,
-        fontWeight: '900',
-        color: GOLD,
-    },
-    consignmentName: {
-        fontSize: 13,
-        fontWeight: '700',
-        color: '#FFFFFF',
-    },
-    consignmentPrice: {
-        fontSize: 11,
-        color: '#94A3B8',
-        marginTop: 2,
-    },
-    centerOverlayDark: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.75)',
-        justifyContent: 'center',
-        padding: 20,
-    },
-    dialogBoxDark: {
-        backgroundColor: DARK_SURFACE,
-        borderRadius: 22,
-        padding: 20,
-        borderWidth: 1,
-        borderColor: BORDER_SUBTLE,
-    },
-    inputLabelDark: {
-        fontSize: 11,
-        fontWeight: '800',
-        color: '#94A3B8',
         marginTop: 12,
         marginBottom: 6,
-        textTransform: 'uppercase',
     },
-    darkInput: {
+    textInputModern: {
         backgroundColor: CARD_BG,
         borderRadius: 12,
         paddingHorizontal: 14,
         paddingVertical: 12,
-        fontSize: 13.5,
         color: '#FFFFFF',
+        fontSize: 13.5,
         borderWidth: 1,
         borderColor: BORDER_SUBTLE,
     },
-    dialogSaveBtn: {
+    submitBtnGold: {
         backgroundColor: GOLD,
         paddingVertical: 14,
         borderRadius: 12,
         alignItems: 'center',
         marginTop: 20,
+        marginBottom: 30,
     },
-    dialogSaveBtnText: {
+    submitBtnGoldText: {
         color: '#070D1B',
-        fontWeight: '900',
         fontSize: 13.5,
-    },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.75)',
-        justifyContent: 'flex-end',
-    },
-    modalContentDark: {
-        backgroundColor: DARK_SURFACE,
-        borderTopLeftRadius: 28,
-        borderTopRightRadius: 28,
-        padding: 20,
-        borderWidth: 1,
-        borderColor: BORDER_SUBTLE,
+        fontWeight: '900',
     },
     payoutBalanceNotice: {
         backgroundColor: CARD_BG,
         borderRadius: 12,
         padding: 14,
-        marginTop: 10,
+        marginTop: 6,
         marginBottom: 10,
         borderWidth: 1,
         borderColor: BORDER_GOLD,
     },
     payoutBalanceNoticeLabel: {
-        fontSize: 11,
+        fontSize: 10,
         color: '#94A3B8',
         fontWeight: '700',
     },
@@ -2530,16 +2309,37 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: BORDER_SUBTLE,
     },
+    verifiedAccountBanner: {
+        backgroundColor: 'rgba(16, 185, 129, 0.12)',
+        borderRadius: 10,
+        padding: 12,
+        marginTop: 10,
+        borderWidth: 1,
+        borderColor: 'rgba(16, 185, 129, 0.25)',
+    },
+    verifiedAccountLabel: {
+        fontSize: 9.5,
+        fontWeight: '800',
+        color: SUCCESS,
+        letterSpacing: 0.5,
+    },
+    verifiedAccountName: {
+        fontSize: 13.5,
+        fontWeight: '900',
+        color: '#FFFFFF',
+        marginTop: 2,
+    },
     payoutSubmitBtn: {
         backgroundColor: GOLD,
         paddingVertical: 15,
         borderRadius: 12,
         alignItems: 'center',
-        marginTop: 22,
+        marginTop: 20,
+        marginBottom: 30,
     },
     payoutSubmitBtnText: {
         color: '#070D1B',
-        fontSize: 14,
+        fontSize: 13.5,
         fontWeight: '900',
     },
     bankSearchWrap: {
@@ -2548,7 +2348,7 @@ const styles = StyleSheet.create({
         backgroundColor: CARD_BG,
         borderRadius: 12,
         paddingHorizontal: 12,
-        marginVertical: 12,
+        marginBottom: 12,
         borderWidth: 1,
         borderColor: BORDER_SUBTLE,
     },
@@ -2584,12 +2384,12 @@ const styles = StyleSheet.create({
         borderColor: BORDER_SUBTLE,
     },
     payoutLogAmount: {
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: '900',
         color: '#FFFFFF',
     },
     payoutLogMeta: {
-        fontSize: 11.5,
+        fontSize: 11,
         color: '#94A3B8',
         marginTop: 2,
     },
@@ -2597,26 +2397,5 @@ const styles = StyleSheet.create({
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 8,
-    },
-    floatingCoinOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 999,
-    },
-    floatingCoinBox: {
-        backgroundColor: DARK_SURFACE,
-        padding: 24,
-        borderRadius: 24,
-        alignItems: 'center',
-        borderWidth: 2,
-        borderColor: GOLD,
-    },
-    floatingCoinText: {
-        fontSize: 22,
-        fontWeight: '900',
-        color: GOLD,
-        marginTop: 10,
     },
 });

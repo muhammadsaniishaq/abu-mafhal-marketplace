@@ -477,6 +477,14 @@ const ProfilePageInner = ({
             screen: 'TrackOrder'
         },
         {
+            icon: 'bicycle-outline',
+            iconColor: '#7C3AED',
+            iconBg: 'rgba(124, 58, 237, 0.12)',
+            label: 'Driver Courier Portal',
+            subtitle: 'Delivery tasks, earnings & routes',
+            screen: 'DriverDashboard'
+        },
+        {
             icon: 'chatbubbles-outline',
             iconColor: '#14B8A6',
             iconBg: 'rgba(20, 184, 166, 0.12)',
@@ -1176,7 +1184,20 @@ const ProfilePageInner = ({
                                 }}
                             >
                                 <Ionicons name="ticket" size={14} color="#FFFFFF" />
-                                <Text style={{ fontSize: 11, fontWeight: '900', color: '#FFFFFF' }}>🎟️ Manage Coupons</Text>
+                                <Text style={{ fontSize: 11, fontWeight: '900', color: '#FFFFFF' }}>🎟️ Coupons</Text>
+                                <Ionicons name="arrow-forward" size={12} color="#FFFFFF" style={{ marginLeft: 'auto' }} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={() => onNavigate && onNavigate('DriverDashboard')}
+                                activeOpacity={0.82}
+                                style={{
+                                    flex: 2, flexDirection: 'row', alignItems: 'center', gap: 6,
+                                    backgroundColor: '#7C3AED',
+                                    borderRadius: 10, paddingVertical: 9, paddingHorizontal: 10,
+                                }}
+                            >
+                                <Ionicons name="bicycle" size={14} color="#FFFFFF" />
+                                <Text style={{ fontSize: 11, fontWeight: '900', color: '#FFFFFF' }}>🚚 Driver Portal</Text>
                                 <Ionicons name="arrow-forward" size={12} color="#FFFFFF" style={{ marginLeft: 'auto' }} />
                             </TouchableOpacity>
                         </View>
