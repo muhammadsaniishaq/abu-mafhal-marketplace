@@ -26,14 +26,6 @@ import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 import { whatsappService } from '../services/whatsappService';
 import { WhatsAppActionModal } from '../components/WhatsAppActionModal';
 
-let ExpoIonicons = null;
-try {
-    const vectorIcons = require('@expo/vector-icons');
-    if (vectorIcons && vectorIcons.Ionicons) {
-        ExpoIonicons = vectorIcons.Ionicons;
-    }
-} catch (_) {}
-
 const ICON_FALLBACKS = {
     'cube-outline': '📦',
     'cash-outline': '💵',
@@ -73,11 +65,6 @@ const ICON_FALLBACKS = {
 };
 
 const Ionicons = ({ name, size = 16, color = '#FFFFFF', style }) => {
-    if (ExpoIonicons) {
-        try {
-            return <ExpoIonicons name={name} size={size} color={color} style={style} />;
-        } catch (_) {}
-    }
     const glyph = ICON_FALLBACKS[name] || '•';
     return (
         <Text style={[{ fontSize: Math.round(size * 0.88), color, textAlign: 'center', lineHeight: Math.round(size * 1.1) }, style]}>

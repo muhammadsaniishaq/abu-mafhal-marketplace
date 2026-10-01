@@ -3,7 +3,22 @@ import {
     View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView,
     TextInput, ActivityIndicator, Alert, Linking, KeyboardAvoidingView, Platform
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+const WA_ICONS = {
+    'close': '✕',
+    'paper-plane': '✈️',
+    'file-tray-outline': '📁',
+    'logo-whatsapp': '💬',
+    'call': '📞'
+};
+
+const Ionicons = ({ name, size = 16, color = '#FFFFFF', style }) => {
+    const glyph = WA_ICONS[name] || '•';
+    return (
+        <Text style={[{ fontSize: Math.round(size * 0.9), color, textAlign: 'center', lineHeight: Math.round(size * 1.1) }, style]}>
+            {glyph}
+        </Text>
+    );
+};
 import { supabase } from '../lib/supabase';
 import { whatsappService } from '../services/whatsappService';
 
