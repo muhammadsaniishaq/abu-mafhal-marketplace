@@ -10,8 +10,9 @@ if (!fs.existsSync(targetPath)) {
 
 let html = fs.readFileSync(targetPath, 'utf8');
 
-// 1. Replace viewport meta
-const antiZoomViewport = '<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, shrink-to-fit=no, viewport-fit=cover" />\n    <meta name="HandheldFriendly" content="true" />\n    <meta name="MobileOptimized" content="width" />';
+// 1. Replace viewport meta & inject anti-cache meta tags
+const antiCacheMeta = '\n    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />\n    <meta http-equiv="Pragma" content="no-cache" />\n    <meta http-equiv="Expires" content="0" />';
+const antiZoomViewport = '<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, shrink-to-fit=no, viewport-fit=cover" />\n    <meta name="HandheldFriendly" content="true" />\n    <meta name="MobileOptimized" content="width" />' + antiCacheMeta;
 if (html.includes('<meta name="viewport"')) {
   html = html.replace(/<meta\s+name="viewport"[^>]*>/i, antiZoomViewport);
 } else {

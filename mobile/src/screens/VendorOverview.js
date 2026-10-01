@@ -30,7 +30,7 @@ export const VendorOverview = ({
     const hours = new Date().getHours();
     const greeting = hours < 12 ? 'Good Morning' : hours < 18 ? 'Good Afternoon' : 'Good Evening';
 
-    const isUserAdmin = vendor?.role === 'admin' || vendor?.is_admin;
+    const isUserAdmin = vendor?.role === 'admin' || vendor?.is_admin || false;
     const isVendorVerified = isUserAdmin || !!(vendor?.is_verified || vendor?.isVerified);
 
     const earnings = Number(stats.earnings || 0);
