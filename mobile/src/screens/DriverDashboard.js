@@ -21,6 +21,11 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
+import { whatsappService } from '../services/whatsappService';
+import { WhatsAppActionModal } from '../components/WhatsAppActionModal';
+
 let ExpoIonicons = null;
 try {
     const vectorIcons = require('@expo/vector-icons');
@@ -80,10 +85,6 @@ const Ionicons = ({ name, size = 16, color = '#FFFFFF', style }) => {
         </Text>
     );
 };
-import { LinearGradient } from 'expo-linear-gradient';
-import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
-import { whatsappService } from '../services/whatsappService';
-import { WhatsAppActionModal } from '../components/WhatsAppActionModal';
 
 const { width } = Dimensions.get('window');
 
