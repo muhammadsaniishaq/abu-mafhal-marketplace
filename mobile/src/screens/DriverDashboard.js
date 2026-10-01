@@ -21,7 +21,65 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+let ExpoIonicons = null;
+try {
+    const vectorIcons = require('@expo/vector-icons');
+    if (vectorIcons && vectorIcons.Ionicons) {
+        ExpoIonicons = vectorIcons.Ionicons;
+    }
+} catch (_) {}
+
+const ICON_FALLBACKS = {
+    'cube-outline': '📦',
+    'cash-outline': '💵',
+    'alert-circle': '⚠️',
+    'checkmark-circle': '✅',
+    'location-outline': '📍',
+    'navigate': '🧭',
+    'call': '📞',
+    'call-outline': '📞',
+    'logo-whatsapp': '💬',
+    'flash': '⚡',
+    'flash-outline': '⚡',
+    'checkmark-done': '✔️',
+    'document-text-outline': '📄',
+    'reload': '🔄',
+    'power': '⏻',
+    'wallet-outline': '💳',
+    'bicycle': '🚲',
+    'bicycle-outline': '🚲',
+    'sparkles': '✨',
+    'sparkles-outline': '✨',
+    'arrow-up-circle-outline': '⬆️',
+    'list': '📋',
+    'time-outline': '⏱️',
+    'flame': '🔥',
+    'checkmark': '✓',
+    'create-outline': '✏️',
+    'car-sport-outline': '🚗',
+    'barcode-outline': '🏷️',
+    'color-palette-outline': '🎨',
+    'card-outline': '💳',
+    'chatbubbles-outline': '💬',
+    'close': '✕',
+    'chevron-down': '▼',
+    'search': '🔍',
+    'chevron-forward': '›'
+};
+
+const Ionicons = ({ name, size = 16, color = '#FFFFFF', style }) => {
+    if (ExpoIonicons) {
+        try {
+            return <ExpoIonicons name={name} size={size} color={color} style={style} />;
+        } catch (_) {}
+    }
+    const glyph = ICON_FALLBACKS[name] || '•';
+    return (
+        <Text style={[{ fontSize: Math.round(size * 0.88), color, textAlign: 'center', lineHeight: Math.round(size * 1.1) }, style]}>
+            {glyph}
+        </Text>
+    );
+};
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 import { whatsappService } from '../services/whatsappService';
