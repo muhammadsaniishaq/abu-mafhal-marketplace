@@ -111,6 +111,8 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
     const [wallet, setWallet] = useState({ balance: 0, pending_balance: 0, total_sales: 0 });
     const [stats, setStats] = useState({ earnings: 0, orders: 0, products: 0, followers: 0 });
 
+    const isUserAdmin = user?.role === 'admin' || user?.user_metadata?.role === 'admin' || vendor?.role === 'admin' || vendor?.is_admin || false;
+
     const setActiveTab = useCallback((tabName) => {
         const cleanTab = tabName === 'store profile' ? 'store_profile' : tabName;
         _setActiveTab(cleanTab);
@@ -242,11 +244,11 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
             }
 
             // 0. Strict Access & Privilege Control
-            const isUserAdmin = user?.role === 'admin' || user?.user_metadata?.role === 'admin';
-            let isAuthorized = isUserAdmin;
+            const isAdminRole = user?.role === 'admin' || user?.user_metadata?.role === 'admin' || isUserAdmin;
+            let isAuthorized = isAdminRole;
             let currentApp = null;
 
-            if (!isUserAdmin) {
+            if (!isAdminRole) {
                 // Fetch the latest vendor application for this user
                 const { data: appRow } = await supabase
                     .from('vendor_applications')
@@ -309,18 +311,18 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
                 .eq('user_id', activeId)
                 .maybeSingle();
 
-            const isVendorVerified = isUserAdmin || (storeRow?.is_verified !== undefined ? !!storeRow.is_verified : (resolved?.is_verified !== undefined ? !!resolved.is_verified : !!currentApp?.is_verified));
+            const isVendorVerified = isAdminRole || (storeRow?.is_verified !== undefined ? !!storeRow.is_verified : (resolved?.is_verified !== undefined ? !!resolved.is_verified : !!currentApp?.is_verified));
 
             const mergedVendor = {
                 ...resolved,
                 ...(storeRow || {}),
                 business_name: storeRow?.name || resolved?.name || resolved?.business_name || currentApp?.business_name || 'My Store',
-                tagline: storeRow?.tagline || resolved?.tagline || (isUserAdmin ? 'Official Flagship Mall • 100% Genuine Guaranteed' : ''),
+                tagline: storeRow?.tagline || resolved?.tagline || (isAdminRole ? 'Official Flagship Mall • 100% Genuine Guaranteed' : ''),
                 logo_url: storeRow?.logo || resolved?.logo || resolved?.avatar,
                 delivery_type: storeRow?.custom_shipping_enabled ? 'self' : 'marketplace',
                 is_locked: false,
-                role: isUserAdmin ? 'admin' : 'vendor',
-                is_admin: isUserAdmin,
+                role: isAdminRole ? 'admin' : 'vendor',
+                is_admin: isAdminRole,
                 is_verified: isVendorVerified,
                 isVerified: isVendorVerified,
                 status: 'approved'
