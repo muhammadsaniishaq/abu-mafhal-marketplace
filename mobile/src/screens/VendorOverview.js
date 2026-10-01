@@ -30,6 +30,9 @@ export const VendorOverview = ({
     const hours = new Date().getHours();
     const greeting = hours < 12 ? 'Good Morning' : hours < 18 ? 'Good Afternoon' : 'Good Evening';
 
+    const isUserAdmin = vendor?.role === 'admin' || vendor?.is_admin;
+    const isVendorVerified = isUserAdmin || !!(vendor?.is_verified || vendor?.isVerified);
+
     const earnings = Number(stats.earnings || 0);
     const totalOrders = stats.orders || orders.length || 0;
     const totalProducts = stats.products || products.length || 0;
@@ -87,10 +90,17 @@ export const VendorOverview = ({
             >
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                     <View style={{ flex: 1, paddingRight: 8 }}>
-                        <Text style={styles.greetingSub}>{greeting}, Admin • Verified Merchant</Text>
+                        <Text style={styles.greetingSub}>
+                            {greeting} • {isUserAdmin ? 'Admin Flagship' : (isVendorVerified ? 'Verified Merchant' : 'Marketplace Merchant')}
+                        </Text>
                         <Text style={styles.storeTitle} numberOfLines={1}>
                             {vendor?.business_name || vendor?.name || 'Your Storefront'}
                         </Text>
+                        {vendor?.tagline ? (
+                            <Text style={{ fontSize: 11, color: GOLD_LIGHT, fontWeight: '700', marginTop: 2 }} numberOfLines={1}>
+                                {vendor.tagline}
+                            </Text>
+                        ) : null}
                     </View>
                     <View style={styles.activePill}>
                         <View style={styles.activeDot} />
@@ -101,9 +111,19 @@ export const VendorOverview = ({
                 <View style={styles.bannerDivider} />
 
                 <View style={styles.bannerBottomRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Ionicons name="shield-checkmark" size={16} color={GOLD} />
-                        <Text style={styles.verifiedStoreText}>👑 Admin • Verified Official Merchant</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, paddingRight: 8 }}>
+                        <Ionicons 
+                            name={isVendorVerified ? "shield-checkmark" : "shield-outline"} 
+                            size={16} 
+                            color={isVendorVerified ? GOLD : "#94A3B8"} 
+                        />
+                        <Text style={[styles.verifiedStoreText, !isVendorVerified && { color: '#94A3B8' }]} numberOfLines={1}>
+                            {isUserAdmin 
+                                ? '👑 Admin • Official Flagship Store' 
+                                : isVendorVerified 
+                                    ? '🛡️ Verified Merchant Store' 
+                                    : '⏳ Store Pending Admin Verification'}
+                        </Text>
                     </View>
 
                     <TouchableOpacity

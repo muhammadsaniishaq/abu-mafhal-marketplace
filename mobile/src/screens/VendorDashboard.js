@@ -309,16 +309,20 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
                 .eq('user_id', activeId)
                 .maybeSingle();
 
+            const isVendorVerified = isUserAdmin || (storeRow?.is_verified !== undefined ? !!storeRow.is_verified : (resolved?.is_verified !== undefined ? !!resolved.is_verified : !!currentApp?.is_verified));
+
             const mergedVendor = {
                 ...resolved,
                 ...(storeRow || {}),
                 business_name: storeRow?.name || resolved?.name || resolved?.business_name || currentApp?.business_name || 'My Store',
+                tagline: storeRow?.tagline || resolved?.tagline || (isUserAdmin ? 'Official Flagship Mall • 100% Genuine Guaranteed' : ''),
                 logo_url: storeRow?.logo || resolved?.logo || resolved?.avatar,
                 delivery_type: storeRow?.custom_shipping_enabled ? 'self' : 'marketplace',
                 is_locked: false,
                 role: isUserAdmin ? 'admin' : 'vendor',
                 is_admin: isUserAdmin,
-                is_verified: true,
+                is_verified: isVendorVerified,
+                isVerified: isVendorVerified,
                 status: 'approved'
             };
             setVendor(mergedVendor);
@@ -672,11 +676,21 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
                             <Text style={styles.storeBrandTitle} numberOfLines={1}>
                                 {vendor?.business_name || 'My Store'}
                             </Text>
-                            <Ionicons name="shield-checkmark" size={15} color={GOLD} />
+                            {vendor?.is_verified ? (
+                                <Ionicons name="shield-checkmark" size={15} color={GOLD} />
+                            ) : (
+                                <Ionicons name="shield-outline" size={14} color="#94A3B8" />
+                            )}
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 }}>
-                            <View style={styles.onlineDot} />
-                            <Text style={styles.storeStatusSub}>👑 Admin • Verified Merchant</Text>
+                            <View style={[styles.onlineDot, !vendor?.is_verified && { backgroundColor: '#F59E0B' }]} />
+                            <Text style={styles.storeStatusSub}>
+                                {isUserAdmin 
+                                    ? '👑 Admin • Official Flagship' 
+                                    : vendor?.is_verified 
+                                        ? '🛡️ Verified Merchant' 
+                                        : '⏳ Unverified (Pending Admin KYC)'}
+                            </Text>
                         </View>
                     </View>
                 </TouchableOpacity>
@@ -927,6 +941,7 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
                             <VendorStoreProfile
                                 user={user}
                                 vendor={vendor}
+                                isAdminStore={isUserAdmin}
                                 onBack={() => setActiveTab('overview')}
                                 onSaved={() => {
                                     fetchDashboardData();

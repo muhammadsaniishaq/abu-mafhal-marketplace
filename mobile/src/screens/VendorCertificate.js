@@ -87,6 +87,41 @@ export const VendorCertificate = ({ user, vendorData, onBack }) => {
         ? { uri: settings.cert_logo_url }
         : (settings?.logo_url ? { uri: settings.logo_url } : require('../../assets/logo.jpg'));
 
+    const isVendorVerified = user?.role === 'admin' || user?.user_metadata?.role === 'admin' || vendorData?.role === 'admin' || vendorData?.is_admin || !!vendorData?.is_verified || !!vendorData?.isVerified;
+
+    if (!isVendorVerified) {
+        return (
+            <View style={{ flex: 1, backgroundColor: '#0F172A' }}>
+                <SafeAreaView style={{ flex: 1, paddingTop: Platform.OS === 'android' ? 40 : 0 }}>
+                    <View style={{ padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <TouchableOpacity onPress={onBack} style={localStyles.iconButton}>
+                            <Ionicons name="close" size={24} color="white" />
+                        </TouchableOpacity>
+                        <Text style={{ color: 'white', fontWeight: '700', fontSize: 16, letterSpacing: 1 }}>OFFICIAL CERTIFICATE</Text>
+                        <View style={{ width: 40 }} />
+                    </View>
+
+                    <View style={localStyles.lockedContainer}>
+                        <View style={localStyles.lockedIconBox}>
+                            <Ionicons name="shield-outline" size={44} color="#D97706" />
+                        </View>
+                        <Text style={localStyles.lockedTitle}>Verification Required</Text>
+                        <Text style={localStyles.lockedSub}>
+                            Official certificates of vendorship are reserved exclusively for merchants authenticated and approved by Abu Mafhal Marketplace Administration.
+                        </Text>
+                        <View style={localStyles.lockedPill}>
+                            <Ionicons name="time-outline" size={14} color="#B45309" />
+                            <Text style={localStyles.lockedPillText}>Status: Pending Admin KYC Review</Text>
+                        </View>
+                        <TouchableOpacity style={localStyles.lockedActionBtn} onPress={onBack} activeOpacity={0.85}>
+                            <Text style={localStyles.lockedActionBtnText}>Return to Dashboard</Text>
+                        </TouchableOpacity>
+                    </View>
+                </SafeAreaView>
+            </View>
+        );
+    }
+
     return (
         <View style={{ flex: 1, backgroundColor: '#0F172A' }}>
             <SafeAreaView style={{ flex: 1, paddingTop: Platform.OS === 'android' ? 40 : 0 }}>
@@ -150,6 +185,10 @@ export const VendorCertificate = ({ user, vendorData, onBack }) => {
 
                                         {/* CURSIVE NAME */}
                                         <Text style={localStyles.businessName}>{businessName}</Text>
+
+                                        {vendorData?.tagline ? (
+                                            <Text style={localStyles.certTagline}>"{vendorData.tagline}"</Text>
+                                        ) : null}
 
                                         <Text style={localStyles.bodyText}>
                                             Has successfully completed all identity verification protocols required by Abu Mafhal Marketplace. The holder is hereby recognized as a fully Verified Vendor with all associated privileges and trusted status.
@@ -388,5 +427,73 @@ const localStyles = StyleSheet.create({
     dateLabel: { fontSize: 8, color: '#64748B', fontWeight: '800', textTransform: 'uppercase' },
 
     idBox: { position: 'absolute', bottom: 8, width: '100%', alignItems: 'center' },
-    certId: { fontSize: 8, color: '#94A3B8', letterSpacing: 1 }
+    certId: { fontSize: 8, color: '#94A3B8', letterSpacing: 1 },
+    certTagline: {
+        fontSize: 11,
+        color: '#B45309',
+        fontStyle: 'italic',
+        fontWeight: '600',
+        textAlign: 'center',
+        marginTop: 2,
+        marginBottom: 8,
+    },
+    lockedContainer: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 32,
+    },
+    lockedIconBox: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: 'rgba(217, 119, 6, 0.12)',
+        borderWidth: 1,
+        borderColor: 'rgba(217, 119, 6, 0.3)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 20,
+    },
+    lockedTitle: {
+        fontSize: 20,
+        fontWeight: '800',
+        color: '#FFFFFF',
+        marginBottom: 10,
+        textAlign: 'center',
+    },
+    lockedSub: {
+        fontSize: 13,
+        color: '#94A3B8',
+        textAlign: 'center',
+        lineHeight: 20,
+        marginBottom: 20,
+    },
+    lockedPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: '#FFFBEB',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#FDE68A',
+        marginBottom: 28,
+    },
+    lockedPillText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#92400E',
+    },
+    lockedActionBtn: {
+        backgroundColor: '#D9A73A',
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        borderRadius: 12,
+    },
+    lockedActionBtnText: {
+        fontSize: 13.5,
+        fontWeight: '800',
+        color: '#0F172A',
+    }
 });

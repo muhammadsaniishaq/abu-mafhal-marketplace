@@ -199,8 +199,11 @@ export const StoreService = {
                 facebook: adminStoreRecord.facebook || adminAddrMeta?.facebook || adminLocal?.facebook || 'Abu Mafhal Marketplace',
                 twitter: adminStoreRecord.twitter || adminAddrMeta?.twitter || adminLocal?.twitter || '@abumafhal',
                 is_recommended: true, // Official store is always recommended
+                isRecommended: true,
                 is_verified: true,
+                isVerified: true,
                 is_official: true,
+                isOfficial: true,
                 rating: 5.0,
                 reviews: '1.2k+',
                 followersCount: officialFollowersCount,
@@ -219,8 +222,20 @@ export const StoreService = {
                 const localMeta = localCache[vp.id] || {};
                 const addrMeta = parseSafeJson(vp.address);
 
-                const storeName = storeRec.name || vp.business_name || vp.full_name || vp.username || 'Verified Merchant Store';
-                const tagline = storeRec.tagline || addrMeta?.tagline || localMeta?.tagline || 'Verified Merchant on Abu Mafhal';
+                const isVerified = (vp.role === 'admin' || storeRec.is_official)
+                    ? true
+                    : (vp.is_verified !== undefined
+                        ? !!vp.is_verified
+                        : (storeRec.is_verified !== undefined
+                            ? !!storeRec.is_verified
+                            : (addrMeta?.is_verified !== undefined
+                                ? !!addrMeta.is_verified
+                                : (localMeta?.is_verified !== undefined
+                                    ? !!localMeta.is_verified
+                                    : !!vp.vendor_approved))));
+
+                const storeName = storeRec.name || vp.business_name || vp.full_name || vp.username || 'Merchant Store';
+                const tagline = vp.tagline || storeRec.tagline || addrMeta?.tagline || localMeta?.tagline || (isVerified ? 'Verified Merchant on Abu Mafhal' : 'Abu Mafhal Merchant');
                 const aboutBio = storeRec.about || vp.about || addrMeta?.about || localMeta?.about ||
                     `Welcome to ${storeName}. We specialize in high quality items with swift customer service and reliable dispatch across Nigeria.`;
 
@@ -246,6 +261,8 @@ export const StoreService = {
                         role: vp.role || 'vendor',
                         isOfficial: false,
                         is_official: false,
+                        is_verified: isVerified,
+                        isVerified: isVerified,
                         avatar: storeLogo,
                         logo: storeLogo,
                         phone: storePhone,
@@ -279,7 +296,7 @@ export const StoreService = {
                     phone: storePhone,
                     whatsapp: storeWhatsapp,
                     email: storeRec.email || vp.email || addrMeta?.email || '',
-                    category: storeRec.category || vp.business_category || addrMeta?.category || localMeta?.category || 'Verified Merchant',
+                    category: storeRec.category || vp.business_category || addrMeta?.category || localMeta?.category || 'General Merchant',
                     address: storeRec.address || vp.address || vp.state || addrMeta?.address || 'Nigeria',
                     state: storeRec.state || addrMeta?.state || vp.state || localMeta?.state || 'Yobe',
                     lga: storeRec.lga || addrMeta?.lga || localMeta?.lga || 'Bade',
@@ -291,8 +308,11 @@ export const StoreService = {
                     facebook: storeRec.facebook || vp.facebook || addrMeta?.facebook || localMeta?.facebook || '',
                     twitter: storeRec.twitter || vp.twitter || addrMeta?.twitter || localMeta?.twitter || '',
                     is_recommended: !!isRec,
-                    is_verified: true,
+                    isRecommended: !!isRec,
+                    is_verified: isVerified,
+                    isVerified: isVerified,
                     is_official: false,
+                    isOfficial: false,
                     rating: 4.9,
                     reviews: `${Math.max(12, vProds.length * 4)}+`,
                     followersCount: vendorFollowersCount,
@@ -347,8 +367,13 @@ export const StoreService = {
                 instagram,
                 facebook,
                 twitter,
-                isRecommended
+                isRecommended,
+                isVerified
             } = opts;
+
+            if (isVerified === undefined && opts.is_verified !== undefined) {
+                isVerified = !!opts.is_verified;
+            }
 
             // Normalize names
             storeName = storeName || opts.business_name || '';
@@ -381,8 +406,9 @@ export const StoreService = {
             // 2. Update local cache immediately for instant offline/optimistic display
             const localCache = await StoreService.getLocalMetadataCache();
             localCache[targetUserId] = {
+                ...(localCache[targetUserId] || {}),
                 storeName,
-                tagline,
+                tagline: tagline !== undefined ? tagline : (localCache[targetUserId]?.tagline || ''),
                 about,
                 cover_image: coverImage,
                 logo: logoUrl,
@@ -400,7 +426,8 @@ export const StoreService = {
                 instagram,
                 facebook,
                 twitter,
-                is_recommended: isRecommended
+                is_recommended: isRecommended !== undefined ? isRecommended : localCache[targetUserId]?.is_recommended,
+                is_verified: isVerified !== undefined ? isVerified : localCache[targetUserId]?.is_verified
             };
             await StoreService.saveLocalMetadataCache(localCache);
 
@@ -411,7 +438,7 @@ export const StoreService = {
                 lga: lga || 'Bade',
                 latitude: latitude || null,
                 longitude: longitude || null,
-                tagline: tagline || '',
+                tagline: tagline !== undefined ? tagline : (localCache[targetUserId]?.tagline || ''),
                 about: about || '',
                 cover_image: coverImage || '',
                 logo: logoUrl || '',
@@ -425,7 +452,8 @@ export const StoreService = {
                 facebook: facebook || '',
                 twitter: twitter || '',
                 business_name: storeName || '',
-                is_recommended: !!isRecommended
+                is_recommended: isRecommended !== undefined ? !!isRecommended : !!localCache[targetUserId]?.is_recommended,
+                is_verified: isVerified !== undefined ? !!isVerified : !!localCache[targetUserId]?.is_verified
             };
             const addressFallback = JSON.stringify(metaFallbackObj);
 
@@ -436,18 +464,26 @@ export const StoreService = {
                 business_category: category,
                 about: about,
                 cover_image: coverImage,
-                tagline: tagline || null,
                 whatsapp: whatsapp || null,
                 working_hours: workingHours || null,
                 policy: policy || null,
                 instagram: instagram || null,
                 facebook: facebook || null,
                 twitter: twitter || null,
-                is_recommended: !!isRecommended,
                 address: address || null,
                 state: state || address || null,
                 updated_at: new Date().toISOString()
             };
+
+            if (tagline !== undefined) {
+                profilePayload.tagline = tagline.trim() || null;
+            }
+            if (isRecommended !== undefined) {
+                profilePayload.is_recommended = !!isRecommended;
+            }
+            if (isVerified !== undefined) {
+                profilePayload.is_verified = !!isVerified;
+            }
 
             if (opts.fullName || opts.full_name) {
                 profilePayload.full_name = (opts.fullName || opts.full_name).trim();
@@ -497,7 +533,6 @@ export const StoreService = {
             }
 
             // 5. Update or Insert into dedicated `stores` table
-            try {
                 const storeRecord = {
                     name: storeName,
                     about: about,
@@ -512,15 +547,21 @@ export const StoreService = {
                     lga: lga,
                     latitude: latitude ? Number(latitude) : null,
                     longitude: longitude ? Number(longitude) : null,
-                    tagline: tagline || null,
                     working_hours: workingHours || null,
                     policy: policy || null,
                     instagram: instagram || null,
                     facebook: facebook || null,
                     twitter: twitter || null,
-                    is_recommended: !!isRecommended,
+                    is_recommended: isRecommended !== undefined ? !!isRecommended : !!localCache[targetUserId]?.is_recommended,
                     updated_at: new Date().toISOString()
                 };
+
+                if (tagline !== undefined) {
+                    storeRecord.tagline = tagline.trim() || null;
+                }
+                if (isVerified !== undefined) {
+                    storeRecord.is_verified = !!isVerified;
+                }
 
                 // Check if store already exists for user
                 const { data: existingStore } = await supabase
@@ -539,7 +580,7 @@ export const StoreService = {
                         .from('stores')
                         .insert({
                             user_id: targetUserId,
-                            is_verified: true,
+                            is_verified: isVerified !== undefined ? !!isVerified : false,
                             rating: 5.0,
                             ...storeRecord
                         });
@@ -599,6 +640,54 @@ export const StoreService = {
             return { success: true, isRecommended };
         } catch (err) {
             console.error('StoreService.toggleRecommendedVendor Error:', err);
+            throw err;
+        }
+    },
+
+    /**
+     * Admin toggle to verify or unverify a vendor store
+     */
+    toggleVerifiedVendor: async (userId, isVerified) => {
+        try {
+            const localCache = await StoreService.getLocalMetadataCache();
+            if (!localCache[userId]) localCache[userId] = {};
+            localCache[userId].is_verified = isVerified;
+            await StoreService.saveLocalMetadataCache(localCache);
+
+            // Fetch current profile to preserve address
+            const { data: prof } = await supabase.from('profiles').select('address').eq('id', userId).single();
+            const currentMeta = parseSafeJson(prof?.address) || {};
+            currentMeta.is_verified = isVerified;
+
+            const updatePayload = {
+                address: JSON.stringify(currentMeta),
+                is_verified: isVerified
+            };
+
+            const { error } = await supabase
+                .from('profiles')
+                .update(updatePayload)
+                .eq('id', userId);
+
+            if (error) {
+                // Retry without native is_verified column if column not present yet
+                await supabase
+                    .from('profiles')
+                    .update({ address: JSON.stringify(currentMeta) })
+                    .eq('id', userId);
+            }
+
+            // Also update stores table if available
+            try {
+                await supabase
+                    .from('stores')
+                    .update({ is_verified: isVerified })
+                    .eq('user_id', userId);
+            } catch (_) {}
+
+            return { success: true, isVerified };
+        } catch (err) {
+            console.error('StoreService.toggleVerifiedVendor Error:', err);
             throw err;
         }
     }

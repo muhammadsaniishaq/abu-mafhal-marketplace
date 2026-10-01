@@ -3,7 +3,8 @@ import { supabase } from '../../config/supabase';
 import { 
   Store, Search, CheckCircle, XCircle, Shield, 
   Phone, Mail, MapPin, RefreshCw, Eye, AlertTriangle,
-  UserCheck, UserX, Building2, Star, Edit, Save, Camera, X
+  UserCheck, UserX, Building2, Star, Edit, Save, Camera, X,
+  ShieldCheck, ShieldAlert, Tag, Award
 } from 'lucide-react';
 
 const AdminVendors = () => {
@@ -18,7 +19,7 @@ const AdminVendors = () => {
   const [toast, setToast] = useState({ type: '', text: '' });
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Edit Store form state
+  // Edit Store form state (Admin Managed)
   const [editForm, setEditForm] = useState({
     business_name: '',
     category: '',
@@ -27,6 +28,8 @@ const AdminVendors = () => {
     avatar_url: '',
     phone: '',
     address: '',
+    tagline: '',
+    is_verified: false,
     is_recommended: false
   });
 
@@ -113,11 +116,70 @@ const AdminVendors = () => {
     }
   };
 
+  const handleToggleVerify = async (vendor, e) => {
+    if (e) e.stopPropagation();
+    let parsedAddr = {};
+    if (vendor.address && vendor.address.startsWith('{')) {
+      try { parsedAddr = JSON.parse(vendor.address); } catch (_) {}
+    }
+    const currentVerified = vendor.is_verified !== undefined 
+      ? !!vendor.is_verified 
+      : (parsedAddr.is_verified !== undefined ? !!parsedAddr.is_verified : !!vendor.vendor_approved);
+    const nextVerified = !currentVerified;
+
+    const confirmMsg = nextVerified 
+      ? `Verify vendor "${vendor.business_name || vendor.full_name}"? This assigns the official verified badge.`
+      : `Revoke verified status from vendor "${vendor.business_name || vendor.full_name}"?`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      parsedAddr.is_verified = nextVerified;
+      const addrPayload = JSON.stringify(parsedAddr);
+
+      const updates = {
+        is_verified: nextVerified,
+        vendor_approved: nextVerified,
+        address: addrPayload,
+        updated_at: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', vendor.id);
+
+      if (error) throw error;
+
+      // Sync to stores table if it exists
+      await supabase
+        .from('stores')
+        .update({ is_verified: nextVerified, updated_at: new Date().toISOString() })
+        .eq('user_id', vendor.id)
+        .catch(() => {});
+
+      setVendors(prev => prev.map(v => v.id === vendor.id ? { ...v, ...updates } : v));
+      if (selectedVendor?.id === vendor.id) {
+        setSelectedVendor(prev => ({ ...prev, ...updates }));
+      }
+      showToast('success', nextVerified 
+        ? `Vendor "${vendor.business_name || vendor.full_name}" is now officially VERIFIED!` 
+        : `Removed verification status from "${vendor.business_name || vendor.full_name}".`);
+    } catch (err) {
+      showToast('error', 'Failed to toggle verification: ' + err.message);
+    }
+  };
+
   const openEditModal = (vendor) => {
     let parsedAddr = {};
     if (vendor.address && vendor.address.startsWith('{')) {
       try { parsedAddr = JSON.parse(vendor.address); } catch (_) {}
     }
+
+    const isVerified = vendor.is_verified !== undefined 
+      ? !!vendor.is_verified 
+      : (parsedAddr.is_verified !== undefined ? !!parsedAddr.is_verified : !!vendor.vendor_approved);
+    const vendorTagline = vendor.tagline || parsedAddr.tagline || '';
 
     setEditForm({
       business_name: vendor.business_name || vendor.full_name || '',
@@ -127,6 +189,8 @@ const AdminVendors = () => {
       avatar_url: vendor.avatar_url || '',
       phone: vendor.phone || vendor.phone_number || '',
       address: parsedAddr.address || vendor.address || vendor.state || '',
+      tagline: vendorTagline,
+      is_verified: isVerified,
       is_recommended: vendor.is_recommended !== undefined ? !!vendor.is_recommended : (parsedAddr.is_recommended || false)
     });
     setEditModalVendor(vendor);
@@ -144,6 +208,8 @@ const AdminVendors = () => {
         cover_image: editForm.cover_image,
         category: editForm.category,
         business_name: editForm.business_name,
+        tagline: editForm.tagline,
+        is_verified: editForm.is_verified,
         is_recommended: editForm.is_recommended
       });
 
@@ -155,6 +221,9 @@ const AdminVendors = () => {
         avatar_url: editForm.avatar_url,
         phone: editForm.phone,
         address: addrPayload,
+        tagline: editForm.tagline,
+        is_verified: editForm.is_verified,
+        vendor_approved: editForm.is_verified,
         is_recommended: editForm.is_recommended,
         updated_at: new Date().toISOString()
       };
@@ -166,7 +235,28 @@ const AdminVendors = () => {
 
       if (error) throw error;
 
+      // Also sync to stores table
+      await supabase
+        .from('stores')
+        .update({
+          name: editForm.business_name,
+          category: editForm.category,
+          about: editForm.about,
+          cover_image: editForm.cover_image,
+          logo: editForm.avatar_url,
+          phone: editForm.phone,
+          tagline: editForm.tagline,
+          is_verified: editForm.is_verified,
+          is_recommended: editForm.is_recommended,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', editModalVendor.id)
+        .catch(() => {});
+
       setVendors(prev => prev.map(v => v.id === editModalVendor.id ? { ...v, ...updates } : v));
+      if (selectedVendor?.id === editModalVendor.id) {
+        setSelectedVendor(prev => ({ ...prev, ...updates }));
+      }
       showToast('success', `Updated store profile for "${editForm.business_name}"!`);
       setEditModalVendor(null);
     } catch (err) {
@@ -176,18 +266,35 @@ const AdminVendors = () => {
     }
   };
 
+  const getIsVerified = (v) => {
+    let p = {};
+    if (v.address && v.address.startsWith('{')) {
+      try { p = JSON.parse(v.address); } catch (_) {}
+    }
+    return v.is_verified !== undefined ? !!v.is_verified : (p.is_verified !== undefined ? !!p.is_verified : !!v.vendor_approved);
+  };
+
   const filteredVendors = vendors.filter(vendor => {
     const term = searchTerm.toLowerCase();
+    let parsedAddr = {};
+    if (vendor.address && vendor.address.startsWith('{')) {
+      try { parsedAddr = JSON.parse(vendor.address); } catch (_) {}
+    }
+    const isVerified = getIsVerified(vendor);
+
     const matchesSearch = 
       (vendor.business_name || '').toLowerCase().includes(term) ||
       (vendor.full_name || '').toLowerCase().includes(term) ||
       (vendor.email || '').toLowerCase().includes(term) ||
       (vendor.phone || '').toLowerCase().includes(term) ||
-      (vendor.state || '').toLowerCase().includes(term);
+      (vendor.state || '').toLowerCase().includes(term) ||
+      (vendor.tagline || parsedAddr.tagline || '').toLowerCase().includes(term);
 
     const isSuspended = vendor.suspended === true;
     if (filter === 'active') return matchesSearch && !isSuspended;
     if (filter === 'suspended') return matchesSearch && isSuspended;
+    if (filter === 'verified') return matchesSearch && isVerified;
+    if (filter === 'unverified') return matchesSearch && !isVerified;
     if (filter === 'recommended') return matchesSearch && !!vendor.is_recommended;
     return matchesSearch;
   });
@@ -195,6 +302,7 @@ const AdminVendors = () => {
   const activeCount = vendors.filter(v => !v.suspended).length;
   const suspendedCount = vendors.filter(v => v.suspended).length;
   const recommendedCount = vendors.filter(v => !!v.is_recommended).length;
+  const verifiedCount = vendors.filter(v => getIsVerified(v)).length;
 
   return (
     <div className="space-y-6 animate-fadeIn max-w-7xl mx-auto pb-12">
@@ -232,11 +340,16 @@ const AdminVendors = () => {
       )}
 
       {/* ── METRICS SUMMARY ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
         <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm">
           <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">Total Merchants</p>
           <h3 className="text-2xl font-black text-slate-900">{vendors.length}</h3>
           <p className="text-[11px] text-slate-400 mt-1">Registered sellers & stores</p>
+        </div>
+        <div className="bg-white p-5 rounded-3xl border border-sky-100 shadow-sm bg-gradient-to-br from-sky-50/40 to-white">
+          <p className="text-[10px] font-black uppercase tracking-wider text-sky-700 mb-1">Verified Stores</p>
+          <h3 className="text-2xl font-black text-sky-700">{verifiedCount}</h3>
+          <p className="text-[11px] text-sky-600/80 mt-1">Admin-verified merchants</p>
         </div>
         <div className="bg-white p-5 rounded-3xl border border-amber-100 shadow-sm bg-gradient-to-br from-amber-50/40 to-white">
           <p className="text-[10px] font-black uppercase tracking-wider text-amber-700 mb-1">Recommended</p>
@@ -261,7 +374,7 @@ const AdminVendors = () => {
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Search by name, store, email, phone..."
+            placeholder="Search by name, store, tagline, email..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:ring-2 focus:ring-sky-500/20 text-slate-800 placeholder-slate-400 font-medium"
@@ -272,15 +385,31 @@ const AdminVendors = () => {
           <div className="flex p-1 bg-slate-100 rounded-2xl w-full sm:w-auto">
             <button
               onClick={() => setFilter('all')}
-              className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
                 filter === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
               }`}
             >
               All ({vendors.length})
             </button>
             <button
+              onClick={() => setFilter('verified')}
+              className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                filter === 'verified' ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              🛡️ Verified ({verifiedCount})
+            </button>
+            <button
+              onClick={() => setFilter('unverified')}
+              className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                filter === 'unverified' ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              Unverified ({vendors.length - verifiedCount})
+            </button>
+            <button
               onClick={() => setFilter('recommended')}
-              className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
                 filter === 'recommended' ? 'bg-amber-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-900'
               }`}
             >
@@ -288,7 +417,7 @@ const AdminVendors = () => {
             </button>
             <button
               onClick={() => setFilter('active')}
-              className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
                 filter === 'active' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-900'
               }`}
             >
@@ -296,7 +425,7 @@ const AdminVendors = () => {
             </button>
             <button
               onClick={() => setFilter('suspended')}
-              className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
                 filter === 'suspended' ? 'bg-white text-rose-700 shadow-sm' : 'text-slate-500 hover:text-slate-900'
               }`}
             >
@@ -329,6 +458,7 @@ const AdminVendors = () => {
                   <th className="py-4 px-5">Merchant Store / Brand</th>
                   <th className="py-4 px-4">Contact & WhatsApp</th>
                   <th className="py-4 px-4">Location</th>
+                  <th className="py-4 px-4 text-center">Verification (Admin)</th>
                   <th className="py-4 px-4 text-center">Recommendation</th>
                   <th className="py-4 px-4 text-center">Status</th>
                   <th className="py-4 px-5 text-right">Actions</th>
@@ -338,7 +468,13 @@ const AdminVendors = () => {
                 {filteredVendors.map((vendor) => {
                   const isSuspended = vendor.suspended === true;
                   const isRec = !!vendor.is_recommended;
+                  const isVerified = getIsVerified(vendor);
+                  let parsedAddr = {};
+                  if (vendor.address && vendor.address.startsWith('{')) {
+                    try { parsedAddr = JSON.parse(vendor.address); } catch (_) {}
+                  }
                   const initial = (vendor.business_name || vendor.full_name || vendor.email || 'V')[0].toUpperCase();
+                  const currentTagline = vendor.tagline || parsedAddr.tagline || '';
 
                   return (
                     <tr key={vendor.id} className="hover:bg-slate-50/70 transition-colors group">
@@ -350,12 +486,22 @@ const AdminVendors = () => {
                             ) : initial}
                           </div>
                           <div className="min-w-0">
-                            <p className="font-black text-slate-900 group-hover:text-sky-600 transition-colors truncate">
-                              {vendor.business_name || vendor.full_name || 'Registered Store'}
-                            </p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-black text-slate-900 group-hover:text-sky-600 transition-colors truncate">
+                                {vendor.business_name || vendor.full_name || 'Registered Store'}
+                              </p>
+                              {isVerified && (
+                                <ShieldCheck className="w-4 h-4 text-sky-600 shrink-0" title="Admin Verified Merchant Badge" />
+                              )}
+                            </div>
                             <p className="text-[11px] text-slate-400 truncate">
                               {vendor.business_category || 'Merchant'} • {vendor.email}
                             </p>
+                            {currentTagline && (
+                              <p className="text-[10px] text-sky-700 font-semibold italic truncate mt-0.5 max-w-[220px]">
+                                🏷️ "{currentTagline}"
+                              </p>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -367,6 +513,22 @@ const AdminVendors = () => {
 
                       <td className="py-4 px-4 font-semibold text-slate-600">
                         {vendor.state || vendor.address || 'Nigeria'}
+                      </td>
+
+                      {/* Admin Verification Toggle */}
+                      <td className="py-4 px-4 text-center">
+                        <button
+                          onClick={(e) => handleToggleVerify(vendor, e)}
+                          title={isVerified ? "Click to revoke verification" : "Click to verify vendor"}
+                          className={`px-3 py-1.5 rounded-xl font-black text-[10px] tracking-wider uppercase transition-all shadow-sm flex items-center gap-1.5 mx-auto ${
+                            isVerified 
+                              ? 'bg-emerald-600 text-white shadow-emerald-600/20 hover:bg-emerald-700' 
+                              : 'bg-slate-100 text-slate-500 hover:bg-sky-50 hover:text-sky-700 border border-slate-200'
+                          }`}
+                        >
+                          <ShieldCheck className={`w-3.5 h-3.5 ${isVerified ? 'text-white' : 'text-slate-400'}`} />
+                          <span>{isVerified ? 'Verified' : 'Verify'}</span>
+                        </button>
                       </td>
 
                       {/* Recommend Toggle */}
@@ -553,6 +715,49 @@ const AdminVendors = () => {
                 />
               </div>
 
+              {/* ── ADMIN EXCLUSIVE VERIFICATION & TAGLINE SECTION ── */}
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-sky-50/80 to-blue-50/40 border border-sky-200/80 space-y-3">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-sky-700" />
+                  <span className="font-black text-sky-950 uppercase tracking-wider text-[11px]">
+                    Admin Exclusive Verification & Tagline
+                  </span>
+                </div>
+                
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">
+                    Store Slogan / Tagline (Admin Controlled)
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.tagline}
+                    onChange={e => setEditForm({ ...editForm, tagline: e.target.value })}
+                    placeholder="e.g. Certified Electronics Retailer • 1-Year Warranty"
+                    className="w-full bg-white border border-sky-200 rounded-xl p-2.5 text-xs font-semibold text-slate-900 focus:ring-2 focus:ring-sky-500/20"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Official slogan displayed on store cards, header badges, and verified product listings.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-sky-100 mt-2">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className={`w-4 h-4 ${editForm.is_verified ? 'text-emerald-600' : 'text-slate-400'}`} />
+                    <div>
+                      <span className="font-black text-slate-900 block text-xs">Verify Vendor Store</span>
+                      <span className="text-[10px] text-slate-500 block">Grants official verified badge across all marketplace storefronts</span>
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    id="verifiedToggle"
+                    checked={editForm.is_verified}
+                    onChange={e => setEditForm({ ...editForm, is_verified: e.target.checked })}
+                    className="w-5 h-5 text-emerald-600 rounded-lg focus:ring-emerald-500 cursor-pointer"
+                  />
+                </div>
+              </div>
+
               {/* Recommend Checkbox */}
               <div className="flex items-center gap-2 pt-2">
                 <input
@@ -599,9 +804,14 @@ const AdminVendors = () => {
                   {(selectedVendor.business_name || selectedVendor.full_name || 'V')[0].toUpperCase()}
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-slate-900 leading-tight">
-                    {selectedVendor.business_name || selectedVendor.full_name}
-                  </h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-black text-slate-900 leading-tight">
+                      {selectedVendor.business_name || selectedVendor.full_name}
+                    </h3>
+                    {getIsVerified(selectedVendor) && (
+                      <ShieldCheck className="w-4 h-4 text-sky-600" title="Verified Vendor" />
+                    )}
+                  </div>
                   <p className="text-xs text-slate-400 font-mono">ID: {selectedVendor.id?.slice(0, 12)}</p>
                 </div>
               </div>
@@ -614,7 +824,7 @@ const AdminVendors = () => {
             </div>
 
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs">
+              <div className="grid grid-cols-3 gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs">
                 <div>
                   <span className="text-slate-400 font-bold uppercase tracking-wider block mb-1">Status</span>
                   <span className={`inline-flex items-center gap-1 font-bold ${
@@ -624,11 +834,27 @@ const AdminVendors = () => {
                   </span>
                 </div>
                 <div>
+                  <span className="text-slate-400 font-bold uppercase tracking-wider block mb-1">Verification</span>
+                  <span className={`font-bold inline-flex items-center gap-1 ${
+                    getIsVerified(selectedVendor) ? 'text-emerald-700' : 'text-slate-500'
+                  }`}>
+                    {getIsVerified(selectedVendor) ? '🛡️ Verified' : 'Unverified'}
+                  </span>
+                </div>
+                <div>
                   <span className="text-slate-400 font-bold uppercase tracking-wider block mb-1">Recommended</span>
                   <span className="font-bold text-amber-600">
                     {selectedVendor.is_recommended ? '⭐ Yes' : 'No'}
                   </span>
                 </div>
+              </div>
+
+              {/* Tagline Banner in Details Modal */}
+              <div className="p-3 bg-sky-50 rounded-2xl border border-sky-100 text-xs">
+                <span className="text-sky-900 font-bold block mb-0.5">Official Store Tagline:</span>
+                <p className="text-sky-800 italic font-medium">
+                  {selectedVendor.tagline || (selectedVendor.address && selectedVendor.address.startsWith('{') && JSON.parse(selectedVendor.address).tagline) || 'No official tagline assigned.'}
+                </p>
               </div>
 
               <div className="space-y-2.5 text-xs">

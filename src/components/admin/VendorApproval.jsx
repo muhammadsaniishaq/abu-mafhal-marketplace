@@ -45,17 +45,30 @@ const VendorApproval = () => {
 
       if (appError) throw appError;
 
-      // 2. Update user profile role to vendor
+      // 2. Update user profile role to vendor and grant verified badge
       const { error: userError } = await supabase
         .from('profiles')
         .update({
           role: 'vendor',
           vendor_approved: true,
+          is_verified: true,
+          tagline: 'Verified Merchant on Abu Mafhal',
           approved_at: new Date().toISOString()
         })
         .eq('id', userId);
 
       if (userError) throw userError;
+
+      // Sync to stores table as well
+      await supabase
+        .from('stores')
+        .update({
+          is_verified: true,
+          tagline: 'Verified Merchant on Abu Mafhal',
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId)
+        .catch(() => {});
 
       alert('Vendor application approved successfully!');
       fetchApplications();

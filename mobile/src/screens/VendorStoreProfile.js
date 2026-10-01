@@ -53,6 +53,9 @@ export const VendorStoreProfile = ({ user, vendor, isAdminStore = false, onBack,
     // Comprehensive Store Form State
     const [storeName, setStoreName] = useState('');
     const [tagline, setTagline] = useState('');
+    const [originalTagline, setOriginalTagline] = useState('');
+    const [isVerified, setIsVerified] = useState(false);
+    const [userIsAdmin, setUserIsAdmin] = useState(isAdminStore);
     const [category, setCategory] = useState('General Merchant');
     const [about, setAbout] = useState('');
     const [coverImage, setCoverImage] = useState('');
@@ -116,10 +119,18 @@ export const VendorStoreProfile = ({ user, vendor, isAdminStore = false, onBack,
                 try { parsedAddr = JSON.parse(profile.address); } catch (_) {}
             }
 
-            const initialName = storeRow?.name || profile?.business_name || local.storeName || profile?.full_name || (isAdminStore ? 'Abu Mafhal Official Store' : '');
+            const adminCheck = isAdminStore || profile?.role === 'admin' || user?.role === 'admin' || user?.email === 'abumafhal@gmail.com' || user?.email === 'admin@abumafhal.com';
+            setUserIsAdmin(adminCheck);
+
+            const resolvedVerified = adminCheck || (storeRow?.is_verified !== undefined ? !!storeRow.is_verified : (profile?.is_verified !== undefined ? !!profile.is_verified : (profile?.vendor_approved !== undefined ? !!profile.vendor_approved : (parsedAddr?.is_verified || false))));
+            setIsVerified(resolvedVerified);
+
+            const initialName = storeRow?.name || profile?.business_name || local.storeName || profile?.full_name || (adminCheck ? 'Abu Mafhal Official Store' : '');
             setStoreName(initialName);
 
-            setTagline(storeRow?.tagline || parsedAddr?.tagline || local.tagline || (isAdminStore ? 'Official Flagship Mall • 100% Genuine Guaranteed' : 'Verified Merchant Store'));
+            const initialTagline = storeRow?.tagline || parsedAddr?.tagline || local.tagline || (adminCheck ? 'Official Flagship Mall • 100% Genuine Guaranteed' : '');
+            setTagline(initialTagline);
+            setOriginalTagline(initialTagline);
             setAbout(storeRow?.about || profile?.about || parsedAddr?.about || local.about || (isAdminStore ? 'The official verified flagship store of Abu Mafhal Marketplace. Genuine brand warranty, authentic products, and 100% buyer protection nationwide.' : ''));
             setCoverImage(storeRow?.cover_image || profile?.cover_image || parsedAddr?.cover_image || local.cover_image || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=1200&auto=format&fit=crop');
             setLogoUrl(storeRow?.logo || profile?.avatar_url || local.logo || '');
@@ -230,7 +241,8 @@ export const VendorStoreProfile = ({ user, vendor, isAdminStore = false, onBack,
             await StoreService.updateStoreProfile({
                 userId: targetUserId,
                 storeName: storeName.trim(),
-                tagline: tagline.trim(),
+                tagline: userIsAdmin ? tagline.trim() : (originalTagline || ''),
+                isVerified: userIsAdmin ? isVerified : undefined,
                 about: about.trim(),
                 coverImage: coverImage.trim(),
                 logoUrl: logoUrl.trim(),
@@ -358,7 +370,13 @@ export const VendorStoreProfile = ({ user, vendor, isAdminStore = false, onBack,
                                 <Text style={s.heroStoreName} numberOfLines={1}>
                                     {storeName || 'Enter Store Name'}
                                 </Text>
-                                <Ionicons name="checkmark-circle" size={17} color="#10B981" />
+                                {isVerified ? (
+                                    <Ionicons name="checkmark-circle" size={17} color="#10B981" />
+                                ) : (
+                                    <View style={s.unverifiedMiniBadge}>
+                                        <Text style={s.unverifiedMiniBadgeText}>UNVERIFIED</Text>
+                                    </View>
+                                )}
                             </View>
                             <Text style={s.heroTagline} numberOfLines={1}>
                                 {tagline || 'Add a catchy slogan or tagline for buyers'}
@@ -407,6 +425,34 @@ export const VendorStoreProfile = ({ user, vendor, isAdminStore = false, onBack,
                                 <Text style={s.tabTitle}>Store Identity & Visuals</Text>
                             </View>
 
+                            {/* Store Verification Trust Banner */}
+                            <View style={[s.verificationCard, isVerified ? s.verificationCardVerified : s.verificationCardPending]}>
+                                <View style={[s.verificationIconBox, isVerified ? s.verificationIconBoxVerified : s.verificationIconBoxPending]}>
+                                    <Ionicons
+                                        name={isVerified ? "shield-checkmark" : "shield-outline"}
+                                        size={22}
+                                        color={isVerified ? "#059669" : "#D97706"}
+                                    />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                        <Text style={[s.verificationStatusTitle, isVerified ? s.verificationTitleVerified : s.verificationTitlePending]}>
+                                            {isVerified ? 'Officially Verified Merchant' : 'Unverified Merchant Store'}
+                                        </Text>
+                                        <View style={[s.verificationPill, isVerified ? s.verificationPillVerified : s.verificationPillPending]}>
+                                            <Text style={[s.verificationPillText, isVerified ? s.verificationPillTextVerified : s.verificationPillTextPending]}>
+                                                {isVerified ? 'VERIFIED' : 'PENDING ADMIN KYC'}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                    <Text style={s.verificationStatusSub}>
+                                        {isVerified
+                                            ? 'Verified by Abu Mafhal Marketplace Administration with an official buyer trust mark.'
+                                            : 'Gaskiyar amincewar shago (verification) na karkashin ikon Admin ne kadai bayan tantance takardun kasuwanci.'}
+                                    </Text>
+                                </View>
+                            </View>
+
                             {/* Store Name */}
                             <View style={s.inputGroup}>
                                 <Text style={s.label}>Store / Business Name *</Text>
@@ -422,19 +468,34 @@ export const VendorStoreProfile = ({ user, vendor, isAdminStore = false, onBack,
                                 </View>
                             </View>
 
-                            {/* Tagline / Slogan */}
+                            {/* Tagline / Slogan (Admin Controlled) */}
                             <View style={s.inputGroup}>
-                                <Text style={s.label}>Tagline / Catchphrase</Text>
-                                <View style={s.inputWrapper}>
-                                    <Ionicons name="sparkles-outline" size={16} color="#94A3B8" style={s.inputIcon} />
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                                    <Text style={s.label}>Tagline / Official Slogan</Text>
+                                    <View style={[s.adminControlBadge, userIsAdmin ? s.adminControlBadgeActive : s.adminControlBadgeLocked]}>
+                                        <Ionicons name={userIsAdmin ? "key-outline" : "lock-closed"} size={11} color={userIsAdmin ? GOLD : "#64748B"} />
+                                        <Text style={[s.adminControlBadgeText, userIsAdmin ? s.adminControlBadgeTextActive : s.adminControlBadgeTextLocked]}>
+                                            {userIsAdmin ? 'ADMIN EDITABLE' : 'ADMIN CONTROLLED'}
+                                        </Text>
+                                    </View>
+                                </View>
+
+                                <View style={[s.inputWrapper, !userIsAdmin && s.inputWrapperDisabled]}>
+                                    <Ionicons name={userIsAdmin ? "sparkles-outline" : "lock-closed-outline"} size={16} color="#94A3B8" style={s.inputIcon} />
                                     <TextInput
-                                        style={s.input}
+                                        style={[s.input, !userIsAdmin && s.inputDisabled]}
                                         value={tagline}
                                         onChangeText={setTagline}
-                                        placeholder="e.g. Premium Gadgets, Genuine Warranty & 24h Delivery"
+                                        editable={userIsAdmin}
+                                        placeholder={userIsAdmin ? "e.g. Premium Gadgets, Genuine Warranty & 24h Delivery" : "Babu taken shago da Admin ya saita ba tukuna"}
                                         placeholderTextColor="#94A3B8"
                                     />
                                 </View>
+                                {!userIsAdmin && (
+                                    <Text style={s.fieldLockNotice}>
+                                        🔒 Slogan / Tagline na vendor na karkashin ikon Admin ne kadai. Tuntubi Admin din kasuwa don sanya ko canza taken shagonku.
+                                    </Text>
+                                )}
                             </View>
 
                             {/* Business Category */}
@@ -829,7 +890,13 @@ export const VendorStoreProfile = ({ user, vendor, isAdminStore = false, onBack,
                                         <View style={{ flex: 1, paddingTop: 4 }}>
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                                                 <Text style={s.previewName} numberOfLines={1}>{storeName || 'Your Store Name'}</Text>
-                                                <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+                                                {isVerified ? (
+                                                    <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+                                                ) : (
+                                                    <View style={s.unverifiedMiniBadge}>
+                                                        <Text style={s.unverifiedMiniBadgeText}>UNVERIFIED</Text>
+                                                    </View>
+                                                )}
                                             </View>
                                             <Text style={s.previewCategoryTag}>{category || 'General Merchant'}</Text>
                                         </View>
@@ -1681,5 +1748,124 @@ const s = StyleSheet.create({
     modalItemTextSelected: {
         fontWeight: '800',
         color: NAVY
+    },
+    unverifiedMiniBadge: {
+        backgroundColor: '#F1F5F9',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: '#CBD5E1'
+    },
+    unverifiedMiniBadgeText: {
+        fontSize: 9,
+        fontWeight: '800',
+        color: '#64748B'
+    },
+    verificationCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        padding: 12,
+        borderRadius: 14,
+        borderWidth: 1,
+        marginBottom: 16
+    },
+    verificationCardVerified: {
+        backgroundColor: '#ECFDF5',
+        borderColor: '#A7F3D0'
+    },
+    verificationCardPending: {
+        backgroundColor: '#FFFBEB',
+        borderColor: '#FDE68A'
+    },
+    verificationIconBox: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    verificationIconBoxVerified: {
+        backgroundColor: '#D1FAE5'
+    },
+    verificationIconBoxPending: {
+        backgroundColor: '#FEF3C7'
+    },
+    verificationStatusTitle: {
+        fontSize: 13,
+        fontWeight: '800'
+    },
+    verificationTitleVerified: {
+        color: '#065F46'
+    },
+    verificationTitlePending: {
+        color: '#92400E'
+    },
+    verificationPill: {
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6
+    },
+    verificationPillVerified: {
+        backgroundColor: '#059669'
+    },
+    verificationPillPending: {
+        backgroundColor: '#D97706'
+    },
+    verificationPillText: {
+        fontSize: 8.5,
+        fontWeight: '900',
+        color: '#FFFFFF'
+    },
+    verificationPillTextVerified: {
+        color: '#FFFFFF'
+    },
+    verificationPillTextPending: {
+        color: '#FFFFFF'
+    },
+    verificationStatusSub: {
+        fontSize: 11,
+        color: '#64748B',
+        marginTop: 3,
+        lineHeight: 15
+    },
+    adminControlBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 7,
+        paddingVertical: 3,
+        borderRadius: 6
+    },
+    adminControlBadgeActive: {
+        backgroundColor: '#FEF3C7'
+    },
+    adminControlBadgeLocked: {
+        backgroundColor: '#F1F5F9'
+    },
+    adminControlBadgeText: {
+        fontSize: 9,
+        fontWeight: '800'
+    },
+    adminControlBadgeTextActive: {
+        color: '#92400E'
+    },
+    adminControlBadgeTextLocked: {
+        color: '#64748B'
+    },
+    inputWrapperDisabled: {
+        backgroundColor: '#F8FAFC',
+        borderColor: '#E2E8F0'
+    },
+    inputDisabled: {
+        color: '#64748B'
+    },
+    fieldLockNotice: {
+        fontSize: 11,
+        color: '#B45309',
+        fontStyle: 'italic',
+        marginTop: 5,
+        lineHeight: 15
     }
 });

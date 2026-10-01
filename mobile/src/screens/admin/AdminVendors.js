@@ -33,6 +33,7 @@ export const AdminVendors = () => {
     const [editModalVisible, setEditModalVisible] = useState(false);
     const [editingStore, setEditingStore] = useState(null);
     const [editStoreName, setEditStoreName] = useState('');
+    const [editTagline, setEditTagline] = useState('');
     const [editAbout, setEditAbout] = useState('');
     const [editCoverImage, setEditCoverImage] = useState('');
     const [editLogoUrl, setEditLogoUrl] = useState('');
@@ -40,6 +41,7 @@ export const AdminVendors = () => {
     const [editCategory, setEditCategory] = useState('');
     const [editAddress, setEditAddress] = useState('');
     const [editIsRecommended, setEditIsRecommended] = useState(false);
+    const [editIsVerified, setEditIsVerified] = useState(false);
     const [savingStore, setSavingStore] = useState(false);
     const [uploadingImage, setUploadingImage] = useState(false);
 
@@ -85,11 +87,20 @@ export const AdminVendors = () => {
 
                     const isOfficial = p.role === 'admin';
                     const isRec = p.is_recommended !== undefined ? !!p.is_recommended : (addrMeta?.is_recommended || local.is_recommended || isOfficial);
+                    const isVerified = isOfficial
+                        ? true
+                        : (p.is_verified !== undefined
+                            ? !!p.is_verified
+                            : (addrMeta?.is_verified !== undefined
+                                ? !!addrMeta.is_verified
+                                : (local.is_verified !== undefined ? !!local.is_verified : !!p.vendor_approved)));
+                    const tagline = p.tagline || addrMeta?.tagline || local.tagline || (isOfficial ? 'Abu Mafhal Official Store' : (isVerified ? 'Verified Merchant on Abu Mafhal' : 'Merchant on Abu Mafhal'));
 
                     storesList.push({
                         id: p.id,
                         user_id: p.id,
                         business_name: p.business_name || (isOfficial ? 'Abu Mafhal Official Store' : (p.full_name || 'Merchant Store')),
+                        tagline: tagline,
                         business_category: p.business_category || addrMeta?.category || (isOfficial ? 'Official Mall & Flagship Store' : 'General Merchant'),
                         business_address: addrMeta?.address || p.address || p.state || 'Nigeria',
                         phone: p.phone || p.phone_number || '08145853539',
@@ -97,6 +108,7 @@ export const AdminVendors = () => {
                         cover_image: p.cover_image || addrMeta?.cover_image || local.cover_image || '',
                         logo_url: p.avatar_url || local.logo || null,
                         is_recommended: !!isRec,
+                        is_verified: isVerified,
                         is_official: isOfficial,
                         status: p.suspended ? 'rejected' : 'approved',
                         created_at: p.created_at,
@@ -117,7 +129,9 @@ export const AdminVendors = () => {
                     storesList.push({
                         ...app,
                         user_id: app.user_id || app.id,
+                        tagline: app.tagline || 'Merchant on Abu Mafhal',
                         is_recommended: false,
+                        is_verified: false,
                         is_official: false
                     });
                 }
@@ -147,9 +161,29 @@ export const AdminVendors = () => {
         }
     };
 
+    const handleToggleVerified = async (item) => {
+        try {
+            const nextState = !item.is_verified;
+            await StoreService.toggleVerifiedVendor(item.user_id || item.id, nextState);
+            setApplications(prev => prev.map(a => (a.id === item.id ? { ...a, is_verified: nextState } : a)));
+            if (selectedApp?.id === item.id) {
+                setSelectedApp(prev => ({ ...prev, is_verified: nextState }));
+            }
+            Alert.alert(
+                'Vendor Verification',
+                nextState
+                    ? `Verified "${item.business_name}"! Store badge and verified checkmarks are now live.`
+                    : `Revoked verification badge for "${item.business_name}".`
+            );
+        } catch (err) {
+            Alert.alert('Error', 'Failed to update verification: ' + err.message);
+        }
+    };
+
     const openEditStoreModal = (app) => {
         setEditingStore(app);
         setEditStoreName(app.business_name || '');
+        setEditTagline(app.tagline || '');
         setEditAbout(app.about || '');
         setEditCoverImage(app.cover_image || '');
         setEditLogoUrl(app.logo_url || app.profiles?.avatar_url || '');
@@ -157,6 +191,7 @@ export const AdminVendors = () => {
         setEditCategory(app.business_category || 'General Merchant');
         setEditAddress(app.business_address || '');
         setEditIsRecommended(!!app.is_recommended);
+        setEditIsVerified(!!app.is_verified);
         setEditModalVisible(true);
     };
 
@@ -204,16 +239,18 @@ export const AdminVendors = () => {
             await StoreService.updateStoreProfile({
                 userId: editingStore.user_id || editingStore.id,
                 storeName: editStoreName.trim(),
+                tagline: editTagline.trim(),
                 about: editAbout.trim(),
                 coverImage: editCoverImage.trim(),
                 logoUrl: editLogoUrl.trim(),
                 phone: editPhone.trim(),
                 category: editCategory.trim(),
                 address: editAddress.trim(),
-                isRecommended: editIsRecommended
+                isRecommended: editIsRecommended,
+                isVerified: editIsVerified
             });
 
-            Alert.alert('Success', 'Store profile and branding updated successfully!');
+            Alert.alert('Success', 'Store profile, verification badge and branding updated successfully!');
             setEditModalVisible(false);
             fetchApplications();
         } catch (err) {
@@ -243,7 +280,10 @@ export const AdminVendors = () => {
                             .update({
                                 role: 'vendor',
                                 business_name: app.business_name || 'Vendor Store',
-                                suspended: false
+                                suspended: false,
+                                is_verified: true,
+                                vendor_approved: true,
+                                tagline: app.tagline || 'Verified Merchant on Abu Mafhal'
                             })
                             .eq('id', app.user_id);
 
@@ -259,12 +299,21 @@ export const AdminVendors = () => {
                                 business_name: app.business_name || 'Vendor Store',
                                 vendor_status: 'active',
                                 is_locked: false,
-                                is_active: true
+                                is_active: true,
+                                is_verified: true
                             }, { onConflict: 'user_id' });
 
                         if (vendorError) {
                             console.log('Vendor Table Update Note:', vendorError);
                         }
+
+                        // Sync Store Profile cache & stores table
+                        await StoreService.updateStoreProfile({
+                            userId: app.user_id,
+                            storeName: app.business_name || 'Vendor Store',
+                            tagline: app.tagline || 'Verified Merchant on Abu Mafhal',
+                            isVerified: true
+                        }).catch(() => {});
 
                         // 4. Update USERS table role to 'vendor' if present
                         await supabase
@@ -353,12 +402,17 @@ export const AdminVendors = () => {
     const filteredApplications = applications.filter(app => {
         const matchesStatus = statusFilter === 'all' 
             ? true 
-            : (statusFilter === 'recommended' ? !!app.is_recommended : app.status === statusFilter);
+            : (statusFilter === 'recommended' 
+                ? !!app.is_recommended 
+                : (statusFilter === 'verified'
+                    ? !!app.is_verified
+                    : app.status === statusFilter));
         const name = (app.business_name || app.profiles?.full_name || '').toLowerCase();
+        const tagline = (app.tagline || '').toLowerCase();
         const email = (app.profiles?.email || '').toLowerCase();
         const phone = (app.phone || app.profiles?.phone || '').toLowerCase();
         const q = searchQuery.toLowerCase();
-        const matchesSearch = !q || name.includes(q) || email.includes(q) || phone.includes(q);
+        const matchesSearch = !q || name.includes(q) || tagline.includes(q) || email.includes(q) || phone.includes(q);
         return matchesStatus && matchesSearch;
     });
 
@@ -433,6 +487,17 @@ export const AdminVendors = () => {
                                 <Text style={{ color: GOLD, fontSize: 9.5, fontWeight: '900' }}>OFFICIAL MALL</Text>
                             </View>
                         )}
+                        {selectedApp.is_verified ? (
+                            <View style={{ backgroundColor: '#10B981', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                                <Ionicons name="shield-checkmark" size={10} color="#FFFFFF" />
+                                <Text style={{ color: '#FFFFFF', fontSize: 9.5, fontWeight: '900' }}>VERIFIED</Text>
+                            </View>
+                        ) : (
+                            <View style={{ backgroundColor: '#64748B', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                                <Ionicons name="shield-outline" size={10} color="#FFFFFF" />
+                                <Text style={{ color: '#FFFFFF', fontSize: 9.5, fontWeight: '900' }}>UNVERIFIED</Text>
+                            </View>
+                        )}
                         {selectedApp.is_recommended && (
                             <View style={{ backgroundColor: GOLD, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
                                 <Text style={{ color: '#FFFFFF', fontSize: 9.5, fontWeight: '900' }}>⭐ RECOMMENDED</Text>
@@ -450,9 +515,37 @@ export const AdminVendors = () => {
                         />
                     </View>
                     <Text style={{ fontSize: 18, fontWeight: '900', color: NAVY }}>{selectedApp.business_name}</Text>
-                    <Text style={{ color: GOLD, fontSize: 12, fontWeight: '700', marginTop: 2 }}>{selectedApp.business_category}</Text>
-                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, alignItems: 'center' }}>
+                    {selectedApp.tagline ? (
+                        <Text style={{ fontSize: 12, color: GOLD, fontWeight: '800', marginTop: 2, textAlign: 'center' }}>
+                            "{selectedApp.tagline}"
+                        </Text>
+                    ) : null}
+                    <Text style={{ color: '#64748B', fontSize: 12, fontWeight: '600', marginTop: 2 }}>{selectedApp.business_category}</Text>
+
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
                         <StatusBadge status={selectedApp.status} />
+
+                        {/* Direct Toggle Verification Button */}
+                        <TouchableOpacity
+                            onPress={() => handleToggleVerified(selectedApp)}
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 4,
+                                paddingHorizontal: 10,
+                                paddingVertical: 4,
+                                borderRadius: 10,
+                                backgroundColor: selectedApp.is_verified ? '#DCFCE7' : '#F1F5F9',
+                                borderWidth: 1,
+                                borderColor: selectedApp.is_verified ? '#10B981' : '#CBD5E1'
+                            }}
+                        >
+                            <Ionicons name={selectedApp.is_verified ? "shield-checkmark" : "shield-outline"} size={12} color={selectedApp.is_verified ? "#16A34A" : "#64748B"} />
+                            <Text style={{ fontSize: 10, fontWeight: '800', color: selectedApp.is_verified ? "#16A34A" : "#64748B" }}>
+                                {selectedApp.is_verified ? "VERIFIED" : "UNVERIFIED (TAP TO VERIFY)"}
+                            </Text>
+                        </TouchableOpacity>
+
                         <TouchableOpacity
                             onPress={() => handleToggleRecommended(selectedApp)}
                             style={{
@@ -475,6 +568,13 @@ export const AdminVendors = () => {
                     </View>
                 </View>
             </View>
+
+            {/* Slogan / Tagline Section */}
+            <Section title="Store Slogan & Tagline (Admin Controlled)">
+                <Text style={{ fontSize: 13, color: '#334155', fontWeight: '700' }}>
+                    {selectedApp.tagline || 'No tagline assigned by administrator yet. Click "Edit Store" to set one.'}
+                </Text>
+            </Section>
 
             {/* About Store Section */}
             <Section title="About This Store (Customer Bio)">
@@ -558,16 +658,32 @@ export const AdminVendors = () => {
                     style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: '#F8FAFC', borderWidth: 1.5, borderColor: item.is_recommended ? GOLD : '#CBD5E1' }}
                 />
                 <View style={{ flex: 1, marginLeft: 12 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <Text style={{ fontWeight: '800', color: NAVY, fontSize: 14 }} numberOfLines={1}>
                             {item.business_name}
                         </Text>
+                        {item.is_verified ? (
+                            <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#10B981', flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                                <Ionicons name="shield-checkmark" size={9} color="#16A34A" />
+                                <Text style={{ fontSize: 9, fontWeight: '800', color: '#16A34A' }}>VERIFIED</Text>
+                            </View>
+                        ) : (
+                            <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#CBD5E1', flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                                <Ionicons name="shield-outline" size={9} color="#64748B" />
+                                <Text style={{ fontSize: 9, fontWeight: '800', color: '#64748B' }}>UNVERIFIED</Text>
+                            </View>
+                        )}
                         {item.is_recommended && (
                             <View style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: GOLD }}>
                                 <Text style={{ fontSize: 9, fontWeight: '800', color: GOLD }}>⭐ RECOMMENDED</Text>
                             </View>
                         )}
                     </View>
+                    {item.tagline ? (
+                        <Text style={{ fontSize: 11, color: GOLD, fontWeight: '700', marginTop: 1 }} numberOfLines={1}>
+                            "{item.tagline}"
+                        </Text>
+                    ) : null}
                     <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>{item.business_category}</Text>
                     <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>
                         Phone: {item.phone || 'None'} • {item.is_official ? 'Official Store' : 'Vendor'}
@@ -577,7 +693,28 @@ export const AdminVendors = () => {
             </TouchableOpacity>
 
             {/* Quick Action Dock */}
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+            <View style={{ flexDirection: 'row', gap: 6, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                <TouchableOpacity
+                    onPress={() => handleToggleVerified(item)}
+                    style={{
+                        flex: 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 3,
+                        paddingVertical: 7,
+                        borderRadius: 10,
+                        backgroundColor: item.is_verified ? '#DCFCE7' : '#F8FAFC',
+                        borderWidth: 1,
+                        borderColor: item.is_verified ? '#10B981' : '#E2E8F0'
+                    }}
+                >
+                    <Ionicons name={item.is_verified ? "shield-checkmark" : "shield-outline"} size={13} color={item.is_verified ? "#16A34A" : "#64748B"} />
+                    <Text style={{ fontSize: 10.5, fontWeight: '800', color: item.is_verified ? "#16A34A" : '#475569' }}>
+                        {item.is_verified ? "Verified" : "Verify"}
+                    </Text>
+                </TouchableOpacity>
+
                 <TouchableOpacity
                     onPress={() => handleToggleRecommended(item)}
                     style={{
@@ -585,7 +722,7 @@ export const AdminVendors = () => {
                         flexDirection: 'row',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: 4,
+                        gap: 3,
                         paddingVertical: 7,
                         borderRadius: 10,
                         backgroundColor: item.is_recommended ? '#FEF3C7' : '#F8FAFC',
@@ -594,8 +731,8 @@ export const AdminVendors = () => {
                     }}
                 >
                     <Ionicons name={item.is_recommended ? "star" : "star-outline"} size={13} color={item.is_recommended ? GOLD : "#64748B"} />
-                    <Text style={{ fontSize: 11, fontWeight: '800', color: item.is_recommended ? GOLD : '#475569' }}>
-                        {item.is_recommended ? "Recommended" : "Recommend"}
+                    <Text style={{ fontSize: 10.5, fontWeight: '800', color: item.is_recommended ? GOLD : '#475569' }}>
+                        {item.is_recommended ? "Featured" : "Feature"}
                     </Text>
                 </TouchableOpacity>
 
@@ -606,7 +743,7 @@ export const AdminVendors = () => {
                         flexDirection: 'row',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: 4,
+                        gap: 3,
                         paddingVertical: 7,
                         borderRadius: 10,
                         backgroundColor: NAVY,
@@ -615,8 +752,8 @@ export const AdminVendors = () => {
                     }}
                 >
                     <Ionicons name="create-outline" size={13} color={GOLD} />
-                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFFFFF' }}>
-                        Edit Profile
+                    <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#FFFFFF' }}>
+                        Edit / Tagline
                     </Text>
                 </TouchableOpacity>
             </View>
@@ -667,7 +804,7 @@ export const AdminVendors = () => {
 
                         {/* Status & Recommendation Filter Pills */}
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginTop: 12 }}>
-                            {['all', 'recommended', 'approved', 'pending', 'rejected'].map(st => {
+                            {['all', 'verified', 'recommended', 'approved', 'pending', 'rejected'].map(st => {
                                 const active = statusFilter === st;
                                 return (
                                     <TouchableOpacity
@@ -675,7 +812,7 @@ export const AdminVendors = () => {
                                         onPress={() => setStatusFilter(st)}
                                         style={{
                                             paddingHorizontal: 12,
-                                            paddingVertical: 6,
+                                             paddingVertical: 6,
                                             borderRadius: 10,
                                             backgroundColor: active ? NAVY : '#F1F5F9',
                                             borderWidth: 1,
@@ -688,7 +825,7 @@ export const AdminVendors = () => {
                                             color: active ? GOLD : '#64748B',
                                             textTransform: 'capitalize'
                                         }}>
-                                            {st === 'recommended' ? '⭐ Recommended' : (st === 'all' ? 'All Stores' : st)}
+                                            {st === 'verified' ? '🛡️ Verified' : (st === 'recommended' ? '⭐ Recommended' : (st === 'all' ? 'All Stores' : st))}
                                         </Text>
                                     </TouchableOpacity>
                                 );
@@ -746,6 +883,14 @@ export const AdminVendors = () => {
                                 value={editStoreName}
                                 onChangeText={setEditStoreName}
                                 placeholder="Store name..."
+                            />
+
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: NAVY, marginBottom: 4 }}>Store Slogan / Tagline (Admin Controlled)</Text>
+                            <TextInput
+                                style={{ borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 10, marginBottom: 12, fontSize: 13, backgroundColor: '#F8FAFC' }}
+                                value={editTagline}
+                                onChangeText={setEditTagline}
+                                placeholder="e.g. Official Dealer in Tech & Electronics..."
                             />
 
                             <Text style={{ fontSize: 12, fontWeight: '700', color: NAVY, marginBottom: 4 }}>Category</Text>
@@ -813,6 +958,35 @@ export const AdminVendors = () => {
                                 onChangeText={setEditAddress}
                                 placeholder="Physical location..."
                             />
+
+                            {/* Verified Merchant Toggle (Admin Badge) */}
+                            <TouchableOpacity
+                                onPress={() => setEditIsVerified(!editIsVerified)}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    padding: 12,
+                                    backgroundColor: editIsVerified ? '#DCFCE7' : '#F8FAFC',
+                                    borderRadius: 12,
+                                    borderWidth: 1,
+                                    borderColor: editIsVerified ? '#10B981' : '#E2E8F0',
+                                    marginBottom: 12
+                                }}
+                            >
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 }}>
+                                    <Ionicons name={editIsVerified ? "shield-checkmark" : "shield-outline"} size={20} color={editIsVerified ? "#16A34A" : "#64748B"} />
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY }}>Verified Merchant Badge</Text>
+                                        <Text style={{ fontSize: 11, color: '#64748B' }}>Grant official green verified checkmark across listings</Text>
+                                    </View>
+                                </View>
+                                <Ionicons
+                                    name={editIsVerified ? "checkbox" : "square-outline"}
+                                    size={22}
+                                    color={editIsVerified ? "#16A34A" : "#94A3B8"}
+                                />
+                            </TouchableOpacity>
 
                             {/* Recommended Toggle */}
                             <TouchableOpacity

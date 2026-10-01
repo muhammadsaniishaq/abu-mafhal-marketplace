@@ -94,9 +94,11 @@ export const VendorDrawer = ({
         }, 120);
     };
 
-    const isUserAdmin = user?.role === 'admin' || user?.user_metadata?.role === 'admin' || vendor?.role === 'admin' || vendor?.is_admin || true;
+    const isUserAdmin = user?.role === 'admin' || user?.user_metadata?.role === 'admin' || vendor?.role === 'admin' || vendor?.is_admin || false;
+    const isVendorVerified = isUserAdmin || !!(vendor?.is_verified || vendor?.isVerified);
     const storeName = vendor?.business_name || vendor?.name || user?.user_metadata?.business_name || 'My Store';
-    const storeCategory = isUserAdmin ? '👑 Admin • Verified Merchant' : (vendor?.category || 'Verified Merchant');
+    const storeTagline = vendor?.tagline;
+    const storeCategory = isUserAdmin ? '👑 Admin • Official Flagship' : (isVendorVerified ? (vendor?.category ? `${vendor.category} • Verified` : '🛡️ Verified Merchant') : (vendor?.category || 'Marketplace Merchant'));
     const logoUrl = vendor?.logo_url || vendor?.logo;
     const balance = Number(wallet?.balance || 0);
     const ordersCount = stats?.orders || 0;
@@ -206,11 +208,11 @@ export const VendorDrawer = ({
         {
             id: 'certificate',
             title: 'Official Certificate',
-            desc: 'Verified merchant credential',
+            desc: isVendorVerified ? 'Verified merchant credential' : 'Pending admin authentication',
             icon: 'ribbon-outline',
             activeIcon: 'ribbon',
             color: '#F59E0B',
-            badge: 'Verified'
+            badge: isVendorVerified ? 'Verified' : 'Pending KYC'
         },
         {
             id: 'public_store',
@@ -275,9 +277,11 @@ export const VendorDrawer = ({
                                     size={58}
                                     border={GOLD}
                                 />
-                                <View style={styles.verifiedBadge}>
-                                    <Ionicons name="checkmark-circle" size={17} color={GOLD} />
-                                </View>
+                                {isVendorVerified && (
+                                    <View style={styles.verifiedBadge}>
+                                        <Ionicons name="checkmark-circle" size={17} color={GOLD} />
+                                    </View>
+                                )}
                             </View>
 
                             <View style={{ flex: 1, marginLeft: 14 }}>
@@ -285,17 +289,33 @@ export const VendorDrawer = ({
                                     <Text style={styles.storeNameText} numberOfLines={1}>
                                         {storeName}
                                     </Text>
-                                    <Ionicons name="shield-checkmark" size={16} color={GOLD} />
+                                    {isVendorVerified ? (
+                                        <Ionicons name="shield-checkmark" size={16} color={GOLD} />
+                                    ) : (
+                                        <Ionicons name="shield-outline" size={15} color="#64748B" />
+                                    )}
                                 </View>
+
+                                {storeTagline ? (
+                                    <Text style={{ fontSize: 11, color: GOLD_LIGHT, fontWeight: '700', marginTop: 1 }} numberOfLines={1}>
+                                        {storeTagline}
+                                    </Text>
+                                ) : null}
 
                                 <Text style={styles.storeCategoryText} numberOfLines={1}>
                                     {storeCategory}
                                 </Text>
 
-                                <View style={styles.statusPill}>
-                                    <View style={styles.statusDot} />
-                                    <Text style={styles.statusText}>
-                                        {isUserAdmin ? 'ADMIN & VERIFIED MERCHANT' : (vendor?.is_locked ? 'Suspended / Locked' : 'LIVE MERCHANT STORE')}
+                                <View style={[styles.statusPill, !isVendorVerified && { backgroundColor: 'rgba(245, 158, 11, 0.15)', borderColor: 'rgba(245, 158, 11, 0.3)' }]}>
+                                    <View style={[styles.statusDot, !isVendorVerified && { backgroundColor: '#F59E0B' }]} />
+                                    <Text style={[styles.statusText, !isVendorVerified && { color: '#FCD34D' }]}>
+                                        {isUserAdmin 
+                                            ? 'ADMIN & OFFICIAL FLAGSHIP' 
+                                            : vendor?.is_locked 
+                                                ? 'Suspended / Locked' 
+                                                : isVendorVerified 
+                                                    ? 'VERIFIED MERCHANT STORE' 
+                                                    : 'PENDING ADMIN KYC'}
                                     </Text>
                                 </View>
                             </View>

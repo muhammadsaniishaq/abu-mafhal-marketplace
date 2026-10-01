@@ -906,12 +906,19 @@ export const ProductDetails = ({ route, navigation, addToCart, user }) => {
                                     <Text numberOfLines={1} style={s.sellerName}>
                                         {vendor?.name || 'ABU MAFHAL'}
                                     </Text>
-                                    <Ionicons name="checkmark-circle" size={15} color={BRAND.sky} />
+                                    {(vendor?.is_verified || vendor?.isVerified || vendor?.isOfficial) && (
+                                        <Ionicons name="checkmark-circle" size={15} color={BRAND.sky} />
+                                    )}
                                 </View>
+                                {vendor?.tagline ? (
+                                    <Text numberOfLines={1} style={s.sellerTagline}>
+                                        {vendor.tagline}
+                                    </Text>
+                                ) : null}
                                 <View style={s.sellerBadgesRow}>
-                                    <View style={s.sellerVerifiedBadge}>
-                                        <Text style={s.sellerVerifiedTxt}>
-                                            {vendor?.isOfficial ? 'Official Store' : 'Verified Merchant'}
+                                    <View style={[s.sellerVerifiedBadge, !(vendor?.is_verified || vendor?.isVerified || vendor?.isOfficial) && s.sellerUnverifiedBadge]}>
+                                        <Text style={[s.sellerVerifiedTxt, !(vendor?.is_verified || vendor?.isVerified || vendor?.isOfficial) && s.sellerUnverifiedTxt]}>
+                                            {vendor?.isOfficial ? 'Official Store' : (vendor?.is_verified || vendor?.isVerified) ? 'Verified Merchant' : 'Merchant'}
                                         </Text>
                                     </View>
                                     <Text style={s.sellerRatingBadge}>⭐ 4.9</Text>
@@ -1851,6 +1858,19 @@ const s = StyleSheet.create({
         fontSize: 10.5,
         color: '#059669',
         fontWeight: '700',
+    },
+    sellerUnverifiedBadge: {
+        backgroundColor: '#F1F5F9',
+    },
+    sellerUnverifiedTxt: {
+        color: '#64748B',
+    },
+    sellerTagline: {
+        fontSize: 11,
+        color: '#D9A73A',
+        fontWeight: '700',
+        marginTop: 1,
+        marginBottom: 2,
     },
     sellerRatingBadge: {
         fontSize: 11,

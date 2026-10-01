@@ -173,11 +173,21 @@ export const resolveVendorOrStore = async (targetId, forceRefresh = false) => {
             ''
         ).trim();
 
+        const isVerified = (profile?.role === 'admin' || store?.is_official)
+            ? true
+            : (profile?.is_verified !== undefined
+                ? !!profile.is_verified
+                : (store?.is_verified !== undefined
+                    ? !!store.is_verified
+                    : (addrMeta?.is_verified !== undefined
+                        ? !!addrMeta.is_verified
+                        : !!profile?.vendor_approved)));
+
         const resolvedTagline = (
+            profile?.tagline ||
             store?.tagline ||
             addrMeta?.tagline ||
-            store?.about ||
-            'Verified Marketplace Merchant'
+            (isVerified ? 'Verified Marketplace Merchant' : 'Marketplace Merchant')
         ).trim();
 
         const resolved = {
@@ -188,7 +198,8 @@ export const resolveVendorOrStore = async (targetId, forceRefresh = false) => {
             role: profile?.role || (store?.is_official ? 'admin' : 'vendor'),
             isOfficial: !!store?.is_official || profile?.role === 'admin',
             is_official: !!store?.is_official || profile?.role === 'admin',
-            is_verified: true,
+            is_verified: isVerified,
+            isVerified: isVerified,
             rating: store?.rating ? Number(store.rating) : 4.9,
             reviews: '24+',
             phone: resolvedPhone,

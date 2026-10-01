@@ -534,7 +534,7 @@ export const StoresPage = ({
                                                 )}
                                             </View>
 
-                                            {st.isVerified && (
+                                            {(st.is_verified || st.isVerified || st.is_official || st.isOfficial) && (
                                                 <View style={s.storyVerifiedBadge}>
                                                     <Ionicons name="checkmark-sharp" size={8} color="#FFFFFF" />
                                                 </View>
@@ -649,7 +649,7 @@ export const StoresPage = ({
                                                         <Ionicons name="storefront" size={20} color={BRAND.navy} />
                                                     </View>
                                                 )}
-                                                {recStore.isVerified && (
+                                                {(recStore.is_verified || recStore.isVerified || recStore.is_official || recStore.isOfficial) && (
                                                     <View style={s.spotlightVerifiedBadge}>
                                                         <Ionicons name="checkmark-sharp" size={9} color="#FFFFFF" />
                                                     </View>
@@ -765,12 +765,12 @@ export const StoresPage = ({
                                                             <Ionicons name="star" size={10} color="#FFFFFF" />
                                                             <Text style={s.badgeRecommendedTxt}>RECOMMENDED</Text>
                                                         </View>
-                                                    ) : (
+                                                    ) : (store.is_verified || store.isVerified) ? (
                                                         <View style={s.badgeVerified}>
                                                             <Ionicons name="checkmark-circle" size={10} color="#10B981" />
                                                             <Text style={s.badgeVerifiedTxt}>VERIFIED</Text>
                                                         </View>
-                                                    )}
+                                                    ) : null}
                                                 </View>
 
                                                 {/* Right: Quick Follow Toggle or Own Store Badge */}
@@ -804,15 +804,15 @@ export const StoresPage = ({
                                                         style={s.cardAvatarWrap}
                                                     >
                                                         {store.logo ? (
-                                                            <Image source={{ uri: store.logo }} style={s.cardAvatar} />
+                                                             <Image source={{ uri: store.logo }} style={s.cardAvatar} />
                                                         ) : (store.is_official || store.isOfficial) ? (
-                                                            <Image source={AM_LOGO} style={s.cardAvatar} resizeMode="contain" />
+                                                             <Image source={AM_LOGO} style={s.cardAvatar} resizeMode="contain" />
                                                         ) : (
-                                                            <View style={[s.cardAvatar, { backgroundColor: '#E0F2FE', alignItems: 'center', justifyContent: 'center' }]}>
-                                                                <Ionicons name="storefront" size={24} color={BRAND.sky} />
-                                                            </View>
+                                                             <View style={[s.cardAvatar, { backgroundColor: '#E0F2FE', alignItems: 'center', justifyContent: 'center' }]}>
+                                                                 <Ionicons name="storefront" size={24} color={BRAND.sky} />
+                                                             </View>
                                                         )}
-                                                        {store.isVerified && (
+                                                        {(store.is_verified || store.isVerified || store.is_official || store.isOfficial) && (
                                                             <View style={s.cardVerifiedIcon}>
                                                                 <Ionicons name="checkmark-sharp" size={10} color="#FFFFFF" />
                                                             </View>
@@ -828,11 +828,19 @@ export const StoresPage = ({
                                                             <Text numberOfLines={1} style={s.cardStoreName}>
                                                                 {store.name}
                                                             </Text>
-                                                            <Ionicons name="checkmark-circle" size={14} color={BRAND.sky} />
+                                                            {(store.is_verified || store.isVerified || store.is_official || store.isOfficial) && (
+                                                                <Ionicons name="checkmark-circle" size={14} color={BRAND.sky} />
+                                                            )}
                                                         </View>
 
+                                                        {store.tagline ? (
+                                                            <Text numberOfLines={1} style={s.cardTaglineTxt}>
+                                                                {store.tagline}
+                                                            </Text>
+                                                        ) : null}
+
                                                         <Text numberOfLines={1} style={s.cardCategoryTxt}>
-                                                            {store.category || 'Verified Marketplace Store'}
+                                                            {store.category || (store.is_verified || store.isVerified ? 'Verified Marketplace Store' : 'Marketplace Merchant')}
                                                         </Text>
                                                     </TouchableOpacity>
                                                 </View>
@@ -950,7 +958,7 @@ export const StoresPage = ({
                                                             <Ionicons name="storefront" size={18} color={BRAND.navy} />
                                                         </View>
                                                     )}
-                                                    {store.isVerified && (
+                                                    {(store.is_verified || store.isVerified || store.is_official || store.isOfficial) && (
                                                         <View style={s.gridVerifiedBadge}>
                                                             <Ionicons name="checkmark-sharp" size={8} color="#FFFFFF" />
                                                         </View>
@@ -1191,7 +1199,7 @@ export const StoresPage = ({
                                                 <Ionicons name="storefront" size={32} color="white" />
                                             </View>
                                         )}
-                                        {selectedStore.isVerified && (
+                                        {(selectedStore.is_verified || selectedStore.isVerified || selectedStore.is_official || selectedStore.isOfficial) && (
                                             <View style={s.verifiedIconBadgeLarge}>
                                                 <Ionicons name="checkmark-sharp" size={13} color="white" />
                                             </View>
@@ -2134,6 +2142,12 @@ const s = StyleSheet.create({
         fontSize: 11,
         color: '#64748B',
         fontWeight: '600',
+        marginTop: 1
+    },
+    cardTaglineTxt: {
+        fontSize: 10.5,
+        color: '#D9A73A',
+        fontWeight: '700',
         marginTop: 1
     },
     cardStatsStrip: {

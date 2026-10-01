@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../config/supabase';
+import { CheckCircle, ShieldCheck, Lock, AlertCircle } from 'lucide-react';
 
 const VendorProfile = () => {
   const { currentUser } = useAuth();
@@ -22,6 +23,9 @@ const VendorProfile = () => {
     businessWebsite: '',
     taxId: '',
     businessLicense: '',
+    tagline: '',
+    is_verified: false,
+    is_recommended: false,
     socialMedia: {
       facebook: '',
       instagram: '',
@@ -86,6 +90,14 @@ const VendorProfile = () => {
         try { parsedAddr = JSON.parse(profile.address); } catch (_) {}
       }
 
+      const isVerified = profile?.is_verified !== undefined 
+        ? !!profile?.is_verified 
+        : (parsedAddr.is_verified !== undefined ? !!parsedAddr.is_verified : !!profile?.vendor_approved);
+      const isRecommended = profile?.is_recommended !== undefined 
+        ? !!profile?.is_recommended 
+        : (parsedAddr.is_recommended !== undefined ? !!parsedAddr.is_recommended : false);
+      const tagline = profile?.tagline || parsedAddr.tagline || '';
+
       setProfileData({
         ...profileData,
         name: profile?.full_name || userData?.full_name || userData?.name || '',
@@ -102,6 +114,9 @@ const VendorProfile = () => {
         businessWebsite: profile?.business_website || '',
         taxId: userData?.tax_id || '',
         businessLicense: userData?.business_license || '',
+        tagline: tagline,
+        is_verified: isVerified,
+        is_recommended: isRecommended,
         socialMedia: userData?.social_media || profileData.socialMedia,
         bankDetails: userData?.bank_details || profileData.bankDetails,
         shippingInfo: userData?.shipping_info || profileData.shippingInfo,
@@ -202,12 +217,16 @@ const VendorProfile = () => {
       }
 
       // 1. Update master 'profiles' table for instant live Store display
+      // Crucial: preserve admin-exclusive tagline, is_verified, and is_recommended
       const addrPayload = JSON.stringify({
         address: profileData.businessAddress,
         about: profileData.businessDescription,
         cover_image: bannerUrl,
         category: profileData.businessCategory || 'General Merchant',
-        business_name: profileData.businessName
+        business_name: profileData.businessName,
+        tagline: profileData.tagline || '',
+        is_verified: !!profileData.is_verified,
+        is_recommended: !!profileData.is_recommended
       });
 
       const profileUpdates = {
@@ -427,6 +446,45 @@ const VendorProfile = () => {
         {activeTab === 'business' && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 space-y-4">
             <h3 className="text-xl font-semibold mb-4">Store & Business Information</h3>
+
+            {/* Admin Verification & Tagline Status (Admin Controlled Only) */}
+            <div className="bg-gradient-to-r from-slate-50 via-sky-50/50 to-blue-50/40 p-4 sm:p-5 rounded-2xl border border-sky-100/90 mb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-500">
+                      Store Verification Status:
+                    </span>
+                    {profileData.is_verified ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-sm">
+                        <CheckCircle className="w-3.5 h-3.5 fill-emerald-600 text-white" />
+                        Verified Merchant
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-amber-100 text-amber-800 border border-amber-300 shadow-sm">
+                        <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                        Unverified (Pending Admin KYC)
+                      </span>
+                    )}
+                  </div>
+
+                  <div>
+                    <span className="text-xs text-slate-500 font-bold">Official Store Tagline / Slogan: </span>
+                    <span className="text-xs font-semibold text-slate-900 italic">
+                      {profileData.tagline ? `"${profileData.tagline}"` : 'Pending admin assignment'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="text-[11px] text-slate-500 bg-white/90 p-3 rounded-xl border border-slate-200 shadow-sm max-w-sm flex items-start gap-2.5 shrink-0">
+                  <Lock className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Admin Controlled:</strong> Slogan / Tagline da Shaidar Shago (Verified Badge) ana bayar da su ne kuma ana tantance su ta hannun Admin kawai don tabbatar da ingancin shago.
+                  </span>
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-bold mb-2">Store / Business Name *</label>
