@@ -45,39 +45,39 @@ const TABS = [
 ];
 
 export const VendorStoreProfile = ({ user, vendor, isAdminStore = false, onBack, onSaved }) => {
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [uploadingImage, setUploadingImage] = useState(false);
     const [activeTab, setActiveTab] = useState('branding');
 
-    // Comprehensive Store Form State
-    const [storeName, setStoreName] = useState('');
-    const [tagline, setTagline] = useState('');
-    const [originalTagline, setOriginalTagline] = useState('');
-    const [isVerified, setIsVerified] = useState(false);
+    // Fast instant initialization from props (Zero waiting!)
+    const [storeName, setStoreName] = useState(() => vendor?.business_name || vendor?.name || '');
+    const [tagline, setTagline] = useState(() => vendor?.tagline || '');
+    const [originalTagline, setOriginalTagline] = useState(() => vendor?.tagline || '');
+    const [isVerified, setIsVerified] = useState(() => !!vendor?.is_verified);
     const [userIsAdmin, setUserIsAdmin] = useState(isAdminStore);
-    const [category, setCategory] = useState('General Merchant');
-    const [about, setAbout] = useState('');
-    const [coverImage, setCoverImage] = useState('');
-    const [logoUrl, setLogoUrl] = useState('');
-    const [phone, setPhone] = useState('');
-    const [whatsapp, setWhatsapp] = useState('');
-    const [email, setEmail] = useState('');
-    const [address, setAddress] = useState('');
-    const [state, setState] = useState('Yobe');
-    const [lga, setLga] = useState('Bade');
-    const [latitude, setLatitude] = useState(12.8628);
-    const [longitude, setLongitude] = useState(10.9694);
+    const [category, setCategory] = useState(() => vendor?.category || 'General Merchant');
+    const [about, setAbout] = useState(() => vendor?.about || '');
+    const [coverImage, setCoverImage] = useState(() => vendor?.cover_image || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=1200&auto=format&fit=crop');
+    const [logoUrl, setLogoUrl] = useState(() => vendor?.logo || vendor?.avatar || '');
+    const [phone, setPhone] = useState(() => vendor?.phone || '');
+    const [whatsapp, setWhatsapp] = useState(() => vendor?.whatsapp || vendor?.phone || '');
+    const [email, setEmail] = useState(() => vendor?.email || '');
+    const [address, setAddress] = useState(() => vendor?.address || '');
+    const [state, setState] = useState(() => vendor?.state || 'Yobe');
+    const [lga, setLga] = useState(() => vendor?.lga || 'Bade');
+    const [latitude, setLatitude] = useState(() => vendor?.latitude || 12.8628);
+    const [longitude, setLongitude] = useState(() => vendor?.longitude || 10.9694);
     const [stateModalVisible, setStateModalVisible] = useState(false);
     const [lgaModalVisible, setLgaModalVisible] = useState(false);
     const [stateSearch, setStateSearch] = useState('');
     const [lgaSearch, setLgaSearch] = useState('');
-    const [workingHours, setWorkingHours] = useState('Mon - Sat: 8:00 AM - 8:00 PM');
-    const [policy, setPolicy] = useState('7 Days Nationwide Return Policy • 100% Genuine Guaranteed');
-    const [instagram, setInstagram] = useState('');
-    const [facebook, setFacebook] = useState('');
-    const [twitter, setTwitter] = useState('');
-    const [isRecommended, setIsRecommended] = useState(false);
+    const [workingHours, setWorkingHours] = useState(() => vendor?.working_hours || 'Mon - Sat: 8:00 AM - 8:00 PM');
+    const [policy, setPolicy] = useState(() => vendor?.policy || '7 Days Nationwide Return Policy • 100% Genuine Guaranteed');
+    const [instagram, setInstagram] = useState(() => vendor?.instagram || '');
+    const [facebook, setFacebook] = useState(() => vendor?.facebook || '');
+    const [twitter, setTwitter] = useState(() => vendor?.twitter || '');
+    const [isRecommended, setIsRecommended] = useState(() => !!vendor?.is_recommended);
 
     const resolveVendorCoords = (selectedState, selectedLga) => {
         const lgaKey = String(selectedLga || '').toLowerCase().trim();
@@ -94,7 +94,6 @@ export const VendorStoreProfile = ({ user, vendor, isAdminStore = false, onBack,
 
     const loadCurrentStoreData = async () => {
         try {
-            setLoading(true);
             let targetId = user?.id;
             if (!targetId) {
                 const { data: authData } = await supabase.auth.getUser();
@@ -278,15 +277,6 @@ export const VendorStoreProfile = ({ user, vendor, isAdminStore = false, onBack,
             setSaving(false);
         }
     };
-
-    if (loading) {
-        return (
-            <View style={s.centerBox}>
-                <ActivityIndicator size="large" color={GOLD} />
-                <Text style={s.loadingText}>Loading store studio...</Text>
-            </View>
-        );
-    }
 
     return (
         <KeyboardAvoidingView

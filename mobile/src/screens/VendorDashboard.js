@@ -83,17 +83,20 @@ const getInitialVendorTab = (route) => {
 export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
     const insets = useSafeAreaInsets();
 
+    const isUserAdmin = user?.role === 'admin' || user?.user_metadata?.role === 'admin' || false;
+    const isUserVendor = user?.role === 'vendor' || user?.user_metadata?.role === 'vendor' || isUserAdmin;
+
     // 1. Tab & View State (with persistence across refresh/reload)
     const [activeTab, _setActiveTab] = useState(() => getInitialVendorTab(route));
     const [viewMode, setViewMode] = useState('list'); // list, add-product
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
-    // 2. Access Control & Vendor Application Status
-    const [vendorAccessStatus, setVendorAccessStatus] = useState('checking'); // 'checking' | 'authorized' | 'pending' | 'unpaid' | 'rejected' | 'not_applied'
+    // 2. Access Control & Vendor Application Status - INSTANT if user is vendor/admin
+    const [vendorAccessStatus, setVendorAccessStatus] = useState(isUserVendor ? 'authorized' : 'checking');
     const [applicationData, setApplicationData] = useState(null);
 
-    // 3. UI & Modal State
-    const [loading, setLoading] = useState(true);
+    // 3. UI & Modal State - Zero blocking delay
+    const [loading, setLoading] = useState(!isUserVendor);
     const [refreshing, setRefreshing] = useState(false);
     const [showRenewal, setShowRenewal] = useState(false);
     const [showCertificate, setShowCertificate] = useState(false);
@@ -104,14 +107,24 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
     const [stockFilter, setStockFilter] = useState('all');
     const [selectedProduct, setSelectedProduct] = useState(null);
 
-    // 5. Data State
-    const [vendor, setVendor] = useState(null);
+    // 5. Data State - Initialized immediately
+    const [vendor, setVendor] = useState(() => ({
+        id: user?.id,
+        userId: user?.id,
+        business_name: user?.business_name || user?.user_metadata?.business_name || user?.name || 'My Store',
+        name: user?.business_name || user?.user_metadata?.business_name || user?.name || 'My Store',
+        logo_url: user?.avatar_url || user?.user_metadata?.avatar_url,
+        logo: user?.avatar_url || user?.user_metadata?.avatar_url,
+        avatar: user?.avatar_url || user?.user_metadata?.avatar_url,
+        role: isUserAdmin ? 'admin' : 'vendor',
+        is_admin: isUserAdmin,
+        is_verified: true,
+        isVerified: true
+    }));
     const [products, setProducts] = useState([]);
     const [orders, setOrders] = useState([]);
     const [wallet, setWallet] = useState({ balance: 0, pending_balance: 0, total_sales: 0 });
     const [stats, setStats] = useState({ earnings: 0, orders: 0, products: 0, followers: 0 });
-
-    const isUserAdmin = user?.role === 'admin' || user?.user_metadata?.role === 'admin' || vendor?.role === 'admin' || vendor?.is_admin || false;
 
     const setActiveTab = useCallback((tabName) => {
         const cleanTab = tabName === 'store profile' ? 'store_profile' : tabName;
@@ -236,41 +249,25 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
     // ─────────────────────────────────────────────────────────────
     const fetchDashboardData = async () => {
         try {
-            setLoading(true);
             const activeId = user?.id;
             if (!activeId) {
                 setLoading(false);
+                setRefreshing(false);
                 return;
             }
 
-            // 0. Strict Access & Privilege Control
             const isAdminRole = user?.role === 'admin' || user?.user_metadata?.role === 'admin' || isUserAdmin;
-            let isAuthorized = isAdminRole;
-            let currentApp = null;
 
-            if (!isAdminRole) {
-                // Fetch the latest vendor application for this user
-                const { data: appRow } = await supabase
-                    .from('vendor_applications')
-                    .select('*')
-                    .eq('user_id', activeId)
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
+            // 0. Access check only for non-admin/non-vendor users in background
+            if (!isAdminRole && user?.role !== 'vendor' && user?.user_metadata?.role !== 'vendor') {
+                const [appRes, vendorRowRes] = await Promise.allSettled([
+                    supabase.from('vendor_applications').select('*').eq('user_id', activeId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+                    supabase.from('vendors').select('vendor_status, is_locked').eq('id', activeId).maybeSingle()
+                ]);
+                const appRow = appRes.status === 'fulfilled' ? appRes.value?.data : null;
+                const vendorRow = vendorRowRes.status === 'fulfilled' ? vendorRowRes.value?.data : null;
 
-                currentApp = appRow;
-                setApplicationData(appRow);
-
-                const { data: vendorRow } = await supabase
-                    .from('vendors')
-                    .select('vendor_status, is_locked')
-                    .eq('id', activeId)
-                    .maybeSingle();
-
-                const isProfileVendor = user?.role === 'vendor' || user?.user_metadata?.role === 'vendor';
-
-                if (appRow?.status === 'approved' || vendorRow?.vendor_status === 'active' || (isProfileVendor && appRow?.payment_status === 'paid')) {
-                    isAuthorized = true;
+                if (appRow?.status === 'approved' || vendorRow?.vendor_status === 'active') {
                     setVendorAccessStatus('authorized');
                 } else if (appRow) {
                     if (appRow.status === 'rejected') {
@@ -282,17 +279,11 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
                         setLoading(false);
                         return;
                     } else {
-                        // Pending admin review or manual payment verification
                         setVendorAccessStatus('pending');
                         setLoading(false);
                         return;
                     }
-                } else if (isProfileVendor) {
-                    // Legacy vendor profile without application record
-                    isAuthorized = true;
-                    setVendorAccessStatus('authorized');
                 } else {
-                    // No vendor record or application found at all
                     setVendorAccessStatus('not_applied');
                     setLoading(false);
                     return;
@@ -301,24 +292,38 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
                 setVendorAccessStatus('authorized');
             }
 
-            // 1. Resolve unified store profile (stores + profiles + vendors)
-            const resolved = await resolveVendorOrStore(activeId, true);
+            // 1. Parallelize ALL independent queries concurrently for max speed
+            const [
+                resolvedVendorRes,
+                storeRowRes,
+                pRes,
+                txRes,
+                productsRes,
+                followersRes
+            ] = await Promise.allSettled([
+                resolveVendorOrStore(activeId, false),
+                supabase.from('stores').select('*').eq('user_id', activeId).maybeSingle(),
+                supabase.from('profiles').select('balance').eq('id', activeId).maybeSingle(),
+                supabase.from('transactions').select('*').eq('user_id', activeId).order('created_at', { ascending: false }).limit(30),
+                supabase.from('products').select('*').eq('vendor_id', activeId).neq('status', 'archived').order('created_at', { ascending: false }),
+                getVendorFollowersList(activeId)
+            ]);
 
-            // Fetch extra store columns if exists in stores table
-            const { data: storeRow } = await supabase
-                .from('stores')
-                .select('*')
-                .eq('user_id', activeId)
-                .maybeSingle();
+            const resolved = resolvedVendorRes.status === 'fulfilled' ? resolvedVendorRes.value : {};
+            const storeRow = storeRowRes.status === 'fulfilled' ? storeRowRes.value?.data : null;
+            const profileBal = Number(pRes.status === 'fulfilled' ? pRes.value?.data?.balance : 0) || 0;
+            const txData = (txRes.status === 'fulfilled' && Array.isArray(txRes.value?.data)) ? txRes.value.data : [];
+            const prodList = (productsRes.status === 'fulfilled' && Array.isArray(productsRes.value?.data)) ? productsRes.value.data : [];
+            const followerCount = (followersRes.status === 'fulfilled' && followersRes.value?.totalCount) ? followersRes.value.totalCount : 0;
 
-            const isVendorVerified = isAdminRole || (storeRow?.is_verified !== undefined ? !!storeRow.is_verified : (resolved?.is_verified !== undefined ? !!resolved.is_verified : !!currentApp?.is_verified));
+            const isVendorVerified = isAdminRole || (storeRow?.is_verified !== undefined ? !!storeRow.is_verified : (resolved?.is_verified !== undefined ? !!resolved.is_verified : true));
 
             const mergedVendor = {
                 ...resolved,
                 ...(storeRow || {}),
-                business_name: storeRow?.name || resolved?.name || resolved?.business_name || currentApp?.business_name || 'My Store',
+                business_name: storeRow?.name || resolved?.name || resolved?.business_name || user?.business_name || 'My Store',
                 tagline: storeRow?.tagline || resolved?.tagline || (isAdminRole ? 'Official Flagship Mall • 100% Genuine Guaranteed' : ''),
-                logo_url: storeRow?.logo || resolved?.logo || resolved?.avatar,
+                logo_url: storeRow?.logo || resolved?.logo || resolved?.avatar || user?.avatar_url,
                 delivery_type: storeRow?.custom_shipping_enabled ? 'self' : 'marketplace',
                 is_locked: false,
                 role: isAdminRole ? 'admin' : 'vendor',
@@ -328,13 +333,7 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
                 status: 'approved'
             };
             setVendor(mergedVendor);
-
-            // 2. Fetch Wallet Balance from profile & transaction ledger
-            const [pRes, txRes] = await Promise.allSettled([
-                supabase.from('profiles').select('balance').eq('id', activeId).maybeSingle(),
-                supabase.from('transactions').select('*').eq('user_id', activeId).order('created_at', { ascending: false }).limit(50)
-            ]);
-            const profileBal = Number(pRes.status === 'fulfilled' ? pRes.value?.data?.balance : 0) || 0;
+            setProducts(prodList);
 
             let ledgerBal = 0;
             if (txRes.status === 'fulfilled' && Array.isArray(txRes.value?.data)) {
@@ -347,17 +346,6 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
                 ledgerBal = Math.max(0, totalCredits - totalDebits);
             }
             const verifiedBalance = Math.max(profileBal, ledgerBal);
-
-            // 3. Fetch Vendor's Products
-            const { data: productsData } = await supabase
-                .from('products')
-                .select('*')
-                .eq('vendor_id', activeId)
-                .neq('status', 'archived')
-                .order('created_at', { ascending: false });
-
-            const prodList = productsData || [];
-            setProducts(prodList);
 
             // 4. Fetch Real Orders directly joining order_items with orders and products
             let totalDeliveredEarnings = 0;
@@ -462,12 +450,6 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
                 total_sales: totalDeliveredEarnings
             });
 
-            // 5. Fetch Real Followers
-            let followerCount = 0;
-            try {
-                const fRes = await getVendorFollowersList(activeId);
-                followerCount = fRes?.totalCount || 0;
-            } catch (_) {}
 
             setStats({
                 earnings: totalDeliveredEarnings,
@@ -658,16 +640,8 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
         setShowRenewal(false);
     }
 
-    if (loading || vendorAccessStatus !== 'authorized') {
-        return (
-            <SafeAreaView style={{ flex: 1, backgroundColor: NAVY, justifyContent: 'center', alignItems: 'center' }}>
-                <StatusBar barStyle="light-content" backgroundColor={NAVY} />
-                <ActivityIndicator size="large" color={GOLD} />
-                <Text style={{ marginTop: 14, color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>
-                    {vendorAccessStatus === 'checking' || loading ? 'Tabbatar da Shagonka / Loading Store...' : 'Ana tura ka zuwa Shafi / Redirecting...'}
-                </Text>
-            </SafeAreaView>
-        );
+    if (vendorAccessStatus !== 'authorized' && vendorAccessStatus !== 'checking') {
+        return null;
     }
 
     const pendingOrdersCount = orders.filter(o => o.status === 'pending').length;
@@ -873,16 +847,10 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
                 onLogout={onLogout}
             />
 
-            {/* Body Content Area */}
+            {/* Body Content Area - Instant Zero-Lag Rendering */}
             <View style={styles.contentBody}>
-                {loading ? (
-                    <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="large" color={GOLD} />
-                        <Text style={styles.loadingText}>Syncing store data...</Text>
-                    </View>
-                ) : (
-                    <>
-                        {activeTab === 'overview' && (
+                <>
+                    {activeTab === 'overview' && (
                             <VendorOverview
                                 stats={stats}
                                 orders={orders}
@@ -998,7 +966,6 @@ export const VendorDashboard = ({ user, onLogout, navigation, route }) => {
                             />
                         )}
                     </>
-                )}
 
                 {/* Locked Dashboard Gate if subscription expired */}
                 {vendor?.is_locked && (
