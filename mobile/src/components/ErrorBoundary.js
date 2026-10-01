@@ -1,6 +1,17 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+const ErrorIcon = ({ name, size = 16, color = '#FFFFFF' }) => {
+    const glyphs = {
+        warning: '⚠️',
+        reload: '🔄',
+        home: '🏠'
+    };
+    return (
+        <Text style={{ fontSize: Math.round(size * 0.9), color, textAlign: 'center', lineHeight: Math.round(size * 1.1) }}>
+            {glyphs[name] || '•'}
+        </Text>
+    );
+};
 
 export class ErrorBoundary extends React.Component {
     constructor(props) {
@@ -57,7 +68,7 @@ export class ErrorBoundary extends React.Component {
                 <View style={s.container}>
                     <View style={s.card}>
                         <View style={s.iconWrap}>
-                            <Ionicons name="warning" size={36} color="#D9A73A" />
+                            <ErrorIcon name="warning" size={36} color="#D9A73A" />
                         </View>
                         <Text style={s.title}>Abu Mafhal Marketplace</Text>
                         <Text style={s.subTitle}>Wani kuskure ya faru / Something went wrong</Text>
@@ -68,12 +79,12 @@ export class ErrorBoundary extends React.Component {
 
                         <View style={s.btnRow}>
                             <TouchableOpacity style={s.primaryBtn} onPress={this.handleReload} activeOpacity={0.85}>
-                                <Ionicons name="reload" size={16} color="#0E1A2E" />
+                                <ErrorIcon name="reload" size={16} color="#0E1A2E" />
                                 <Text style={s.primaryBtnTxt}>Sake Gwadawa (Reload)</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={s.secondaryBtn} onPress={this.handleGoHome} activeOpacity={0.85}>
-                                <Ionicons name="home" size={16} color="#FFFFFF" />
+                                <ErrorIcon name="home" size={16} color="#FFFFFF" />
                                 <Text style={s.secondaryBtnTxt}>Koma Babban Shafi</Text>
                             </TouchableOpacity>
                         </View>
