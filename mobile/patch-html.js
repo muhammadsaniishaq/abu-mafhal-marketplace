@@ -19,23 +19,130 @@ if (html.includes('<meta name="viewport"')) {
   html = html.replace('<head>', '<head>\n    ' + antiZoomViewport);
 }
 
-// 2. Inject anti-zoom CSS & JS if not already present
+// 2. Comprehensive Expo & React Native Vector Icons font mapping
+// react-native-vector-icons uses internal names like 'ionicons', 'material-community', 'material', 'anticon', 'feather'
+const fontDefinitions = [
+  {
+    families: ['Ionicons', 'ionicons'],
+    local: '/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.6148e7019854f3bde85b633cb88f3c25.ttf',
+    cdn: 'https://cdnjs.cloudflare.com/ajax/libs/ionicons/5.5.2/fonts/ionicons.ttf?v=5.5.2'
+  },
+  {
+    families: ['MaterialCommunityIcons', 'material-community', 'Material Community Icons'],
+    local: '/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.b62641afc9ab487008e996a5c5865e56.ttf',
+    cdn: 'https://cdn.jsdelivr.net/npm/@mdi/font@6.9.96/fonts/materialdesignicons-webfont.ttf'
+  },
+  {
+    families: ['MaterialIcons', 'material', 'Material Icons'],
+    local: '/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialIcons.4e85bc9ebe07e0340c9c4fc2f6c38908.ttf',
+    cdn: 'https://cdnjs.cloudflare.com/ajax/libs/material-design-icons/3.0.1/iconfont/MaterialIcons-Regular.ttf'
+  },
+  {
+    families: ['Feather', 'feather'],
+    local: '/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Feather.a76d309774d33d9856f650bed4292a23.ttf',
+    cdn: 'https://cdnjs.cloudflare.com/ajax/libs/feather-icons/4.28.0/feather.ttf'
+  },
+  {
+    families: ['FontAwesome', 'fontawesome'],
+    local: '/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome.b06871f281fee6b241d60582ae9369b9.ttf',
+    cdn: 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/fonts/fontawesome-webfont.ttf'
+  },
+  {
+    families: ['FontAwesome5Free-Solid', 'FontAwesome5_Solid', 'FontAwesome5Solid'],
+    local: '/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome5_Solid.605ed7926cf39a2ad5ec2d1f9d391d3d.ttf',
+    cdn: 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/webfonts/fa-solid-900.ttf'
+  },
+  {
+    families: ['FontAwesome5Free-Regular', 'FontAwesome5_Regular', 'FontAwesome5Regular'],
+    local: '/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome5_Regular.1f77739ca9ff2188b539c36f30ffa2be.ttf',
+    cdn: 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/webfonts/fa-regular-400.ttf'
+  },
+  {
+    families: ['FontAwesome5Brands-Regular', 'FontAwesome5_Brands', 'FontAwesome5Free-Brand'],
+    local: '/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome5_Brands.3b89dd103490708d19a95adcae52210e.ttf',
+    cdn: 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/webfonts/fa-brands-400.ttf'
+  },
+  {
+    families: ['FontAwesome6Free-Solid', 'FontAwesome6_Solid', 'FontAwesome6Solid'],
+    local: '/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome6_Solid.adec7d6f310bc577f05e8fe06a5daccf.ttf',
+    cdn: ''
+  },
+  {
+    families: ['FontAwesome6Free-Regular', 'FontAwesome6_Regular', 'FontAwesome6Regular'],
+    local: '/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome6_Regular.370dd5af19f8364907b6e2c41f45dbbf.ttf',
+    cdn: ''
+  },
+  {
+    families: ['FontAwesome6Brands-Regular', 'FontAwesome6_Brands', 'FontAwesome6Free-Brand'],
+    local: '/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome6_Brands.56c8d80832e37783f12c05db7c8849e2.ttf',
+    cdn: ''
+  },
+  {
+    families: ['AntDesign', 'anticon'],
+    local: '/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/AntDesign.3a2ba31570920eeb9b1d217cabe58315.ttf',
+    cdn: 'https://cdnjs.cloudflare.com/ajax/libs/ant-design-icons/4.2.1/fonts/anticon.ttf'
+  },
+  {
+    families: ['Entypo', 'entypo'],
+    local: '/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Entypo.31b5ffea3daddc69dd01a1f3d6cf63c5.ttf',
+    cdn: 'https://cdnjs.cloudflare.com/ajax/libs/entypo/2.2.1/font/entypo.ttf'
+  },
+  {
+    families: ['EvilIcons', 'evilicons'],
+    local: '/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/EvilIcons.140c53a7643ea949007aa9a282153849.ttf',
+    cdn: 'https://cdnjs.cloudflare.com/ajax/libs/evil-icons/1.9.0/evil-icons.ttf'
+  },
+  {
+    families: ['Octicons', 'octicons'],
+    local: '/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Octicons.f7c53c47a66934504fcbc7cc164895a7.ttf',
+    cdn: ''
+  },
+  {
+    families: ['SimpleLineIcons', 'simple-line-icons'],
+    local: '/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/SimpleLineIcons.d2285965fe34b05465047401b8595dd0.ttf',
+    cdn: ''
+  },
+  {
+    families: ['Zocial', 'zocial'],
+    local: '/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Zocial.1681f34aaca71b8dfb70756bca331eb2.ttf',
+    cdn: ''
+  },
+  {
+    families: ['Fontisto', 'fontisto'],
+    local: '/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Fontisto.b49ae8ab2dbccb02c4d11caaacf09eab.ttf',
+    cdn: ''
+  },
+  {
+    families: ['Foundation', 'foundation'],
+    local: '/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Foundation.e20945d7c929279ef7a6f1db184a4470.ttf',
+    cdn: ''
+  }
+];
+
+let fontFaceRules = '';
+for (const font of fontDefinitions) {
+  for (const family of font.families) {
+    const urls = [
+      `url('${font.local}') format('truetype')`,
+      `url('/mobile${font.local}') format('truetype')`
+    ];
+    if (font.cdn) {
+      urls.push(`url('${font.cdn}') format('truetype')`);
+    }
+    fontFaceRules += `    @font-face { font-family: '${family}'; src: ${urls.join(', ')}; font-display: block; }\n`;
+  }
+}
+
+const fontFaceStyleBlock = `
+    <!-- COMPLETE EXPO & REACT-NATIVE-VECTOR-ICONS WEB FIX -->
+    <style id="expo-vector-icons-complete">
+${fontFaceRules}    </style>
+`;
+
+// 3. Anti-zoom styles and script
 const antiZoomPayload = `
     <!-- STRICT ZERO ZOOM LOCKDOWN FOR MOBILE -->
     <style id="anti-zoom-style">
-      @font-face { font-family: 'AntDesign'; src: url('https://cdnjs.cloudflare.com/ajax/libs/ant-design-icons/4.2.1/fonts/anticon.ttf') format('truetype'); }
-      @font-face { font-family: 'Entypo'; src: url('https://cdnjs.cloudflare.com/ajax/libs/entypo/2.2.1/font/entypo.ttf') format('truetype'); }
-      @font-face { font-family: 'EvilIcons'; src: url('https://cdnjs.cloudflare.com/ajax/libs/evil-icons/1.9.0/evil-icons.ttf') format('truetype'); }
-      @font-face { font-family: 'Feather'; src: url('https://cdnjs.cloudflare.com/ajax/libs/feather-icons/4.28.0/feather.ttf') format('truetype'); }
-      @font-face { font-family: 'FontAwesome'; src: url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/fonts/fontawesome-webfont.ttf') format('truetype'); }
-      @font-face { font-family: 'FontAwesome5_Brands'; src: url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/webfonts/fa-brands-400.ttf') format('truetype'); }
-      @font-face { font-family: 'FontAwesome5_Regular'; src: url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/webfonts/fa-regular-400.ttf') format('truetype'); }
-      @font-face { font-family: 'FontAwesome5_Solid'; src: url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/webfonts/fa-solid-900.ttf') format('truetype'); }
-      @font-face { font-family: 'Ionicons'; src: url('https://cdnjs.cloudflare.com/ajax/libs/ionicons/5.5.2/fonts/ionicons.ttf?v=5.5.2') format('truetype'); }
-      @font-face { font-family: 'ionicons'; src: url('https://cdnjs.cloudflare.com/ajax/libs/ionicons/5.5.2/fonts/ionicons.ttf?v=5.5.2') format('truetype'); }
-      @font-face { font-family: 'MaterialCommunityIcons'; src: url('https://cdn.jsdelivr.net/npm/@mdi/font@6.9.96/fonts/materialdesignicons-webfont.ttf') format('truetype'); }
-      @font-face { font-family: 'MaterialIcons'; src: url('https://cdnjs.cloudflare.com/ajax/libs/material-design-icons/3.0.1/iconfont/MaterialIcons-Regular.ttf') format('truetype'); }
-      @font-face { font-family: 'Material Icons'; src: url('https://cdnjs.cloudflare.com/ajax/libs/material-design-icons/3.0.1/iconfont/MaterialIcons-Regular.ttf') format('truetype'); }
       html, body, #root {
         touch-action: pan-x pan-y !important;
         -webkit-text-size-adjust: 100% !important;
@@ -128,53 +235,23 @@ const antiZoomPayload = `
     </script>
 `;
 
-if (!html.includes('anti-zoom-style')) {
-  html = html.replace('</head>', antiZoomPayload + '\n  </head>');
-}
+// Clean up any previously injected styles
+html = html.replace(/<style id="expo-bundled-fonts">[\s\S]*?<\/style>/g, '');
+html = html.replace(/<style id="expo-vector-icons">[\s\S]*?<\/style>/g, '');
+html = html.replace(/<style id="expo-vector-icons-complete">[\s\S]*?<\/style>/g, '');
+html = html.replace(/<style id="anti-zoom-style">[\s\S]*?<\/style>/g, '');
+html = html.replace(/<script id="anti-zoom-script">[\s\S]*?<\/script>/g, '');
 
-fs.writeFileSync(targetPath, html, 'utf8');
-console.log('patch-html.js: successfully injected zero-zoom protection into mobile dist/index.html');
+// Inject complete font-face rules right after <head>
+html = html.replace('<head>', '<head>\n' + fontFaceStyleBlock);
 
-// 3. Fix: replace the bundled JS script defer → no defer, and inject local font preloads
-let html2 = fs.readFileSync(targetPath, 'utf8');
+// Inject anti-zoom payload before </head>
+html = html.replace('</head>', antiZoomPayload + '\n  </head>');
 
-// Remove defer from the main bundle script so fonts load before paint
-html2 = html2.replace(/<script src="\/_expo\/static\/js\/web\/[^"]+\.js" defer><\/script>/, (match) => {
+// Remove defer from bundle script tag so fonts and app render smoothly
+html = html.replace(/<script src="\/_expo\/static\/js\/web\/[^"]+\.js" defer><\/script>/, (match) => {
   return match.replace(' defer', '');
 });
 
-// Build local @font-face rules using exact hashed bundled font files
-const localFontFaces = `
-  <!-- EXPO SDK 54 BUNDLED FONT PRELOADS -->
-  <style id="expo-bundled-fonts">
-    @font-face { font-family: 'AntDesign'; src: url('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/AntDesign.3a2ba31570920eeb9b1d217cabe58315.ttf') format('truetype'); font-display: block; }
-    @font-face { font-family: 'Entypo'; src: url('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Entypo.31b5ffea3daddc69dd01a1f3d6cf63c5.ttf') format('truetype'); font-display: block; }
-    @font-face { font-family: 'EvilIcons'; src: url('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/EvilIcons.140c53a7643ea949007aa9a282153849.ttf') format('truetype'); font-display: block; }
-    @font-face { font-family: 'Feather'; src: url('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Feather.a76d309774d33d9856f650bed4292a23.ttf') format('truetype'); font-display: block; }
-    @font-face { font-family: 'FontAwesome'; src: url('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome.b06871f281fee6b241d60582ae9369b9.ttf') format('truetype'); font-display: block; }
-    @font-face { font-family: 'FontAwesome5_Brands'; src: url('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome5_Brands.3b89dd103490708d19a95adcae52210e.ttf') format('truetype'); font-display: block; }
-    @font-face { font-family: 'FontAwesome5_Regular'; src: url('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome5_Regular.1f77739ca9ff2188b539c36f30ffa2be.ttf') format('truetype'); font-display: block; }
-    @font-face { font-family: 'FontAwesome5_Solid'; src: url('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome5_Solid.605ed7926cf39a2ad5ec2d1f9d391d3d.ttf') format('truetype'); font-display: block; }
-    @font-face { font-family: 'FontAwesome6_Brands'; src: url('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome6_Brands.56c8d80832e37783f12c05db7c8849e2.ttf') format('truetype'); font-display: block; }
-    @font-face { font-family: 'FontAwesome6_Regular'; src: url('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome6_Regular.370dd5af19f8364907b6e2c41f45dbbf.ttf') format('truetype'); font-display: block; }
-    @font-face { font-family: 'FontAwesome6_Solid'; src: url('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome6_Solid.adec7d6f310bc577f05e8fe06a5daccf.ttf') format('truetype'); font-display: block; }
-    @font-face { font-family: 'Fontisto'; src: url('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Fontisto.b49ae8ab2dbccb02c4d11caaacf09eab.ttf') format('truetype'); font-display: block; }
-    @font-face { font-family: 'Foundation'; src: url('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Foundation.e20945d7c929279ef7a6f1db184a4470.ttf') format('truetype'); font-display: block; }
-    @font-face { font-family: 'Ionicons'; src: url('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.6148e7019854f3bde85b633cb88f3c25.ttf') format('truetype'); font-display: block; }
-    @font-face { font-family: 'MaterialCommunityIcons'; src: url('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.b62641afc9ab487008e996a5c5865e56.ttf') format('truetype'); font-display: block; }
-    @font-face { font-family: 'MaterialIcons'; src: url('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialIcons.4e85bc9ebe07e0340c9c4fc2f6c38908.ttf') format('truetype'); font-display: block; }
-    @font-face { font-family: 'Material Icons'; src: url('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialIcons.4e85bc9ebe07e0340c9c4fc2f6c38908.ttf') format('truetype'); font-display: block; }
-    @font-face { font-family: 'Octicons'; src: url('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Octicons.f7c53c47a66934504fcbc7cc164895a7.ttf') format('truetype'); font-display: block; }
-    @font-face { font-family: 'SimpleLineIcons'; src: url('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/SimpleLineIcons.d2285965fe34b05465047401b8595dd0.ttf') format('truetype'); font-display: block; }
-    @font-face { font-family: 'Zocial'; src: url('/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Zocial.1681f34aaca71b8dfb70756bca331eb2.ttf') format('truetype'); font-display: block; }
-  </style>
-`;
-
-// Remove old CDN font injection if present
-html2 = html2.replace(/<style id="expo-vector-icons">[\s\S]*?<\/style>/g, '');
-// Remove anti-zoom style block font-face declarations but keep anti-zoom CSS
-// Inject our local fonts right after <head>
-html2 = html2.replace('<head>', '<head>\n' + localFontFaces);
-
-fs.writeFileSync(targetPath, html2, 'utf8');
-console.log('patch-html.js: injected local bundled font-faces and removed script defer.');
+fs.writeFileSync(targetPath, html, 'utf8');
+console.log('patch-html.js: successfully injected complete vector icon fonts & anti-zoom rules into mobile dist/index.html');
