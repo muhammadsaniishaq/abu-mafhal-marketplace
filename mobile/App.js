@@ -220,6 +220,14 @@ export default function App() {
                 const style = document.createElement('style');
                 style.id = styleId;
                 style.innerHTML = `
+                    @font-face {
+                        font-family: 'Ionicons';
+                        src: url('https://cdnjs.cloudflare.com/ajax/libs/ionicons/5.5.2/fonts/ionicons.ttf') format('truetype');
+                    }
+                    @font-face {
+                        font-family: 'Material Icons';
+                        src: url('https://cdnjs.cloudflare.com/ajax/libs/material-design-icons/3.0.1/iconfont/MaterialIcons-Regular.ttf') format('truetype');
+                    }
                     html, body, #root, #root * {
                         touch-action: pan-x pan-y !important;
                         -webkit-text-size-adjust: 100% !important;
