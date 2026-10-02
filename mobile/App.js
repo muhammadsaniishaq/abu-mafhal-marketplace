@@ -193,14 +193,14 @@ const getStoredCartSync = () => {
 
 export default function App() {
     const [fontsLoaded] = useFonts({
-        ...Ionicons.font,
-        ...MaterialIcons.font,
-        ...FontAwesome.font,
-        ...Feather.font,
-        ...MaterialCommunityIcons.font,
-        ...Entypo.font,
-        ...AntDesign.font,
-        ...FontAwesome5.font
+        ...(Ionicons.font || {}),
+        ...(MaterialIcons.font || {}),
+        ...(FontAwesome.font || {}),
+        ...(Feather.font || {}),
+        ...(MaterialCommunityIcons.font || {}),
+        ...(Entypo.font || {}),
+        ...(AntDesign.font || {}),
+        ...(FontAwesome5.font || {})
     });
 
     const [user, setUser] = useState(getStoredUserSync);
