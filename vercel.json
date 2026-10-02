@@ -271,23 +271,27 @@
             "destination": "/api/$1"
         },
         {
-            "source": "/assets/node_modules/(.*)",
-            "destination": "/mobile/assets/node_modules/$1"
-        },
-        {
-            "source": "/assets/assets/(.*)",
-            "destination": "/mobile/assets/assets/$1"
+            "source": "/assets/(.*)",
+            "destination": "/assets/$1"
         },
         {
             "source": "/_expo/(.*)",
+            "destination": "/_expo/$1"
+        },
+        {
+            "source": "/mobile/assets/(.*)",
+            "destination": "/mobile/assets/$1"
+        },
+        {
+            "source": "/mobile/_expo/(.*)",
             "destination": "/mobile/_expo/$1"
         },
         {
-            "source": "/mobile/(.*)",
+            "source": "/mobile",
             "destination": "/mobile/index.html"
         },
         {
-            "source": "/mobile",
+            "source": "/mobile/(.*)",
             "destination": "/mobile/index.html"
         },
         {
