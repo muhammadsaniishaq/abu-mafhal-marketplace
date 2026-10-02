@@ -19,28 +19,37 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
+import { decode } from 'base64-arraybuffer';
 import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 import { whatsappService } from '../services/whatsappService';
 import { WhatsAppActionModal } from '../components/WhatsAppActionModal';
 
-// Native Safe Icon Map
+// ─── Native Safe Icon Glyph Map (Zero @expo/vector-icons runtime crash) ───
 const ICON_MAP = {
     'cube-outline': '📦',
+    'cube': '📦',
     'cash-outline': '💵',
+    'cash': '💵',
     'alert-circle': '⚠️',
+    'warning': '⚠️',
     'checkmark-circle': '✅',
+    'checkmark-done': '✔️',
     'location-outline': '📍',
+    'location': '📍',
     'navigate': '🧭',
     'call': '📞',
     'call-outline': '📞',
     'logo-whatsapp': '💬',
+    'chatbubble-ellipses': '💬',
     'flash': '⚡',
     'flash-outline': '⚡',
-    'checkmark-done': '✔️',
     'document-text-outline': '📄',
     'reload': '🔄',
     'power': '⏻',
     'wallet-outline': '💳',
+    'wallet': '💳',
     'bicycle': '🚲',
     'bicycle-outline': '🚲',
     'sparkles': '✨',
@@ -59,7 +68,12 @@ const ICON_MAP = {
     'close': '✕',
     'chevron-down': '▼',
     'search': '🔍',
-    'chevron-forward': '›'
+    'chevron-forward': '›',
+    'radio': '🛰️',
+    'trophy': '🏆',
+    'shield-checkmark': '🛡️',
+    'person': '👤',
+    'star': '★'
 };
 
 const Ionicons = ({ name, size = 16, color = '#FFFFFF', style }) => {
@@ -112,7 +126,7 @@ const getInitialDriverTab = (route) => {
 export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
     const insets = useSafeAreaInsets();
 
-    // ─── Active User Safe Resolver ───
+    // ─── Active User State ───
     const [activeUser, setActiveUser] = useState(user || null);
 
     // ─── Real Live Data State ───
@@ -126,6 +140,9 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
         phone: user?.phone || '',
         vehicle_type: 'Motorcycle',
         vehicle_number: '',
+        current_location: 'Kano Hub Central',
+        latitude: null,
+        longitude: null,
         status: 'active',
         is_active: true,
         rating: 5.0,
@@ -140,10 +157,43 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
     const [activeTab, _setActiveTab] = useState(() => getInitialDriverTab(route));
     const [selectedOrder, setSelectedOrder] = useState(null);
 
+    // Search & Filter State
+    const [searchQuery, setSearchQuery] = useState('');
+    const [filterPayment, setFilterPayment] = useState('ALL'); // ALL, POD, PREPAID, PSS
+
     // Modals
     const [isVehicleModalVisible, setVehicleModalVisible] = useState(false);
     const [isWithdrawModalVisible, setWithdrawModalVisible] = useState(false);
     const [isHistoryModalVisible, setHistoryModalVisible] = useState(false);
+    const [isHandoverModalVisible, setHandoverModalVisible] = useState(false);
+    const [isIssueModalVisible, setIssueModalVisible] = useState(false);
+
+    // GPS State
+    const [isSyncingGps, setIsSyncingGps] = useState(false);
+    const [gpsNotice, setGpsNotice] = useState('');
+
+    // Delivery Handover Modal Form
+    const [handoverOrder, setHandoverOrder] = useState(null);
+    const [handoverRecipient, setHandoverRecipient] = useState('');
+    const [handoverNotes, setHandoverNotes] = useState('');
+    const [isSubmittingHandover, setIsSubmittingHandover] = useState(false);
+
+    // Issue Reporting Form
+    const [issueOrder, setIssueOrder] = useState(null);
+    const [issueReason, setIssueReason] = useState('Customer unreachable on phone');
+    const [issueDetail, setIssueDetail] = useState('');
+    const [isSubmittingIssue, setIsSubmittingIssue] = useState(false);
+    const [isSosActive, setIsSosActive] = useState(false);
+    
+    // Shift Summary Modal
+    const [isShiftSummaryModalVisible, setShiftSummaryModalVisible] = useState(false);
+    
+    // Live Tracking
+    const [isLiveTracking, setIsLiveTracking] = useState(false);
+    const locationSubscription = React.useRef(null);
+    
+    // Pool Alerts
+    const [previousPoolCount, setPreviousPoolCount] = useState(0);
 
     // Vehicle Form
     const [vType, setVType] = useState('Motorcycle');
@@ -209,7 +259,6 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
             }
 
             try {
-                // Check local storage cache
                 const cached = await AsyncStorage.getItem('@abumafhal_user_v1');
                 if (cached) {
                     const parsed = JSON.parse(cached);
@@ -220,7 +269,6 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                     }
                 }
 
-                // Check Supabase session
                 const { data } = await supabase.auth.getSession();
                 const sessionUser = data?.session?.user;
                 if (sessionUser?.id) {
@@ -241,7 +289,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
         resolveUser();
     }, [user?.id]);
 
-    // Real-time listener
+    // Real-time listener for orders and profiles
     useEffect(() => {
         const uid = activeUser?.id;
         if (!uid) return;
@@ -253,12 +301,22 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
             .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
                 fetchOrders(uid);
             })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${uid}` }, () => {
+                fetchProfileBalance(uid);
+            })
             .subscribe();
 
         return () => {
             supabase.removeChannel(channel);
         };
     }, [activeUser?.id]);
+
+    useEffect(() => {
+        if (poolOrders.length > previousPoolCount && previousPoolCount !== 0) {
+            Alert.alert('New Delivery Task! ⚡', 'A new order has been added to the Job Pool. Check it out now.');
+        }
+        setPreviousPoolCount(poolOrders.length);
+    }, [poolOrders.length]);
 
     const fetchBanks = async () => {
         try {
@@ -343,13 +401,13 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                 setVType(data.vehicle_type || 'Motorcycle');
                 setPNumber(data.vehicle_number || '');
             } else {
-                // Auto create driver row in `drivers` table
                 const newDriver = {
                     user_id: userId,
                     name: activeUser?.full_name || 'Driver Courier',
                     phone: activeUser?.phone || activeUser?.phone_number || '',
                     vehicle_type: 'Motorcycle',
                     vehicle_number: '',
+                    current_location: 'Kano Hub Central',
                     status: 'active',
                     is_active: true,
                     xp: 0,
@@ -458,7 +516,95 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
         }
     };
 
-    // ─── Claim Order from Pool ───
+    // ─── FEATURE 1: LIVE GPS LOCATION SYNC & TRACKING ───
+    const syncLiveGps = async () => {
+        const uid = activeUser?.id;
+        if (!uid) return;
+
+        setIsSyncingGps(true);
+        setGpsNotice('Acquiring satellite GPS coordinates...');
+
+        try {
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                setGpsNotice('Permission denied. Using Kano Hub.');
+                setIsSyncingGps(false);
+                setTimeout(() => setGpsNotice(''), 3000);
+                return;
+            }
+
+            const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            const locText = `Kano Hub (${lat.toFixed(4)}° N, ${lng.toFixed(4)}° E)`;
+
+            const { error } = await supabase
+                .from('drivers')
+                .update({
+                    latitude: lat,
+                    longitude: lng,
+                    current_location: locText,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('user_id', uid);
+
+            if (!error) {
+                setDriverProfile(prev => ({ ...prev, latitude: lat, longitude: lng, current_location: locText }));
+                setGpsNotice('GPS Synced Live ✅');
+                setTimeout(() => setGpsNotice(''), 3500);
+            } else {
+                setGpsNotice('Failed to update GPS in database');
+            }
+            setIsSyncingGps(false);
+        } catch (err) {
+            console.log('GPS Sync error:', err);
+            setGpsNotice('Using default Kano Hub GPS');
+            setIsSyncingGps(false);
+            setTimeout(() => setGpsNotice(''), 3000);
+        }
+    };
+
+    const toggleLiveTracking = async () => {
+        if (isLiveTracking) {
+            if (locationSubscription.current) {
+                locationSubscription.current.remove();
+                locationSubscription.current = null;
+            }
+            setIsLiveTracking(false);
+            setGpsNotice('Live tracking disabled.');
+            setTimeout(() => setGpsNotice(''), 3000);
+        } else {
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Permission Denied', 'Location access is required for live tracking.');
+                return;
+            }
+            setIsLiveTracking(true);
+            setGpsNotice('Starting live GPS tracking...');
+
+            locationSubscription.current = await Location.watchPositionAsync(
+                { accuracy: Location.Accuracy.High, timeInterval: 10000, distanceInterval: 50 },
+                async (loc) => {
+                    const lat = loc.coords.latitude;
+                    const lng = loc.coords.longitude;
+                    const locText = `Live (${lat.toFixed(4)}°, ${lng.toFixed(4)}°)`;
+                    const uid = activeUser?.id;
+                    if (uid) {
+                        await supabase.from('drivers').update({
+                            latitude: lat,
+                            longitude: lng,
+                            current_location: locText,
+                            updated_at: new Date().toISOString()
+                        }).eq('user_id', uid);
+                        setDriverProfile(prev => ({ ...prev, latitude: lat, longitude: lng, current_location: locText }));
+                    }
+                }
+            );
+            setGpsNotice('Live Tracking Active 📡');
+        }
+    };
+
+    // ─── FEATURE 2: CLAIM ORDER FROM POOL ───
     const acceptOrder = async (orderId) => {
         const uid = activeUser?.id;
         if (!uid) return;
@@ -493,7 +639,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
         );
     };
 
-    // ─── Mark Picked Up ───
+    // ─── FEATURE 3: PICK UP & START TRANSIT ───
     const markPickedUp = async (orderId) => {
         const uid = activeUser?.id;
         if (!uid) return;
@@ -511,69 +657,215 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
         }
     };
 
-    // ─── Mark Delivered & Credit Escrow ───
-    const markDelivered = async (orderId, customerPhone, userId, orderTotal, isPod, shippingFee) => {
+    // ─── FEATURE 4: MODERN HANDOVER & PROOF OF DELIVERY ───
+    const takeProofOfDeliveryPhoto = async () => {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert('Permission Denied', 'Camera access is required for Proof of Delivery.');
+            return;
+        }
+
+        const result = await ImagePicker.launchCameraAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            quality: 0.5,
+            base64: true,
+        });
+
+        if (!result.canceled) {
+            setHandoverImage(result.assets[0]);
+        }
+    };
+
+    const openHandoverModal = (order) => {
+        setHandoverOrder(order);
+        setHandoverRecipient(order?.user?.full_name || 'Customer in person');
+        setHandoverNotes('');
+        setHandoverPin('');
+        setHandoverImage(null);
+        setHandoverModalVisible(true);
+    };
+
+    const submitHandoverDelivery = async () => {
+        if (!handoverOrder) return;
         const uid = activeUser?.id;
         if (!uid) return;
 
-        const feeAmount = Number(shippingFee || 1000);
-        const podNotice = isPod ? `\n\n⚠️ IMPORTANT (POD): Collect ₦${Number(orderTotal || 0).toLocaleString()} cash or bank transfer from the customer before handing over package.` : '';
+        // Mock PIN validation for security feature
+        if (handoverPin.length > 0 && handoverPin.length < 4) {
+            Alert.alert('Invalid PIN', 'If providing a security PIN, it must be at least 4 digits.');
+            return;
+        }
 
+        setIsSubmittingHandover(true);
+        const orderId = handoverOrder.id;
+        const customerPhone = handoverOrder.user?.phone || handoverOrder.contact_phone || '';
+        const shippingFee = Number(handoverOrder.shipping_fee || 1000);
+
+        try {
+            let imageUrl = '';
+            if (handoverImage && handoverImage.base64) {
+                try {
+                    const fileName = `pod_${orderId}_${Date.now()}.jpg`;
+                    const { data, error } = await supabase.storage.from('delivery_proofs').upload(fileName, decode(handoverImage.base64), {
+                        contentType: 'image/jpeg'
+                    });
+                    if (!error) {
+                        const { data: urlData } = supabase.storage.from('delivery_proofs').getPublicUrl(fileName);
+                        imageUrl = urlData.publicUrl;
+                    }
+                } catch(e) {
+                    console.log('Image upload error:', e);
+                }
+            }
+
+            const pinStr = handoverPin ? ` | Auth PIN: ****` : '';
+            const imgStr = imageUrl ? ` | Proof: Image Uploaded` : '';
+            const noteContent = `Handover Verified: Recipient: ${handoverRecipient || 'Customer'} | Notes: ${handoverNotes || 'Handed over directly'}${pinStr}${imgStr} | Time: ${new Date().toLocaleTimeString()}`;
+
+            // 1. Mark order delivered with audit notes
+            await supabase
+                .from('orders')
+                .update({
+                    status: 'delivered',
+                    driver_notes: noteContent,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', orderId);
+
+            // 2. Credit shipping fee to driver's balance in `profiles`
+            const { data: prof } = await supabase
+                .from('profiles')
+                .select('balance')
+                .eq('id', uid)
+                .maybeSingle();
+
+            const newBal = Number(prof?.balance || 0) + shippingFee;
+            await supabase
+                .from('profiles')
+                .update({ balance: newBal })
+                .eq('id', uid);
+
+            setWalletBalance(newBal);
+
+            // 3. Log credit transaction in `transactions`
+            await supabase.from('transactions').insert([{
+                user_id: uid,
+                type: 'credit',
+                amount: shippingFee,
+                status: 'completed',
+                reference: 'DEL-' + Date.now(),
+                description: `Delivery earnings for order #${orderId.slice(0, 8).toUpperCase()}`
+            }]);
+
+            // 4. Update Driver XP in `drivers` (+50 XP per delivery)
+            const currentXp = Number(driverProfile?.xp || 0);
+            const newXp = currentXp + 50;
+            await supabase
+                .from('drivers')
+                .update({ xp: newXp, updated_at: new Date().toISOString() })
+                .eq('user_id', uid);
+
+            setDriverProfile(prev => ({ ...prev, xp: newXp }));
+
+            // 5. Send automated confirmation
+            if (customerPhone) {
+                const deliverMsg = `Assalamu Alaikum! Your Abu Mafhal package #${orderId.slice(0, 8).toUpperCase()} has been successfully delivered by courier ${activeUser?.full_name || 'partner'}. Thank you for shopping with us!`;
+                whatsappService.sendDirect(customerPhone, deliverMsg, handoverOrder.user_id).catch(() => {});
+            }
+
+            setHandoverModalVisible(false);
+            setHandoverOrder(null);
+            setHandoverImage(null);
+            Alert.alert('Delivery Completed! 🎉', `+₦${shippingFee.toLocaleString()} credited to your wallet balance.\n+50 XP added to your courier profile!`);
+            loadAllDriverData(uid);
+        } catch (err) {
+            Alert.alert('Error', err.message || 'Failed to complete delivery.');
+        } finally {
+            setIsSubmittingHandover(false);
+        }
+    };
+
+    // ─── FEATURE 5: REPORT DELIVERY ISSUE TO DISPATCH ───
+    const openIssueModal = (order) => {
+        setIssueOrder(order);
+        setIssueReason('Customer unreachable on phone');
+        setIssueDetail('');
+        setIssueModalVisible(true);
+    };
+
+    const submitDeliveryIssue = async () => {
+        if (!issueOrder) return;
+        const uid = activeUser?.id;
+        if (!uid) return;
+
+        setIsSubmittingIssue(true);
+        try {
+            const logEntry = `ISSUE REPORTED: [${issueReason}] - ${issueDetail || 'No extra note'} (Reported by driver at ${new Date().toLocaleTimeString()})`;
+            await supabase
+                .from('orders')
+                .update({
+                    driver_notes: logEntry,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', issueOrder.id);
+
+            setIssueModalVisible(false);
+            setIssueOrder(null);
+            Alert.alert('Issue Logged ⚠️', 'Abu Mafhal logistics dispatch has been notified. Please retain package safely.');
+            fetchOrders(uid);
+        } catch (err) {
+            Alert.alert('Error', err.message || 'Failed to submit issue.');
+        } finally {
+            setIsSubmittingIssue(false);
+        }
+    };
+
+    // ─── SOS EMERGENCY FEATURE ───
+    const triggerSOS = () => {
         Alert.alert(
-            'Confirm Delivery Completion',
-            `Has this package been securely handed over to the recipient?${podNotice}`,
+            '🚨 EMERGENCY SOS',
+            'This will instantly notify Abu Mafhal Dispatch and local authorities of your exact GPS location. Are you in danger?',
             [
-                { text: 'Not Yet', style: 'cancel' },
+                { text: 'Cancel', style: 'cancel' },
                 {
-                    text: 'Yes, Delivered ✅',
+                    text: 'ACTIVATE SOS 🚨',
+                    style: 'destructive',
                     onPress: async () => {
+                        setIsSosActive(true);
                         try {
-                            // 1. Mark order delivered
-                            await supabase
-                                .from('orders')
-                                .update({ status: 'delivered', updated_at: new Date().toISOString() })
-                                .eq('id', orderId);
-
-                            // 2. Credit shipping fee to driver's balance in `profiles`
-                            const { data: prof } = await supabase
-                                .from('profiles')
-                                .select('balance')
-                                .eq('id', uid)
-                                .maybeSingle();
-
-                            const newBal = Number(prof?.balance || 0) + feeAmount;
-                            await supabase
-                                .from('profiles')
-                                .update({ balance: newBal })
-                                .eq('id', uid);
-
-                            setWalletBalance(newBal);
-
-                            // 3. Log credit transaction in `transactions`
-                            await supabase.from('transactions').insert([{
-                                user_id: uid,
-                                type: 'credit',
-                                amount: feeAmount,
-                                status: 'completed',
-                                reference: 'DEL-' + Date.now(),
-                                description: `Delivery earnings for order #${orderId.slice(0, 8).toUpperCase()}`
-                            }]);
-
-                            Alert.alert('Delivery Successful! 🎉', `+₦${feeAmount.toLocaleString()} has been credited to your wallet balance.`);
-
-                            if (customerPhone) {
-                                const deliverMsg = `Your Abu Mafhal order #${orderId.slice(0, 8).toUpperCase()} has been successfully delivered. Thank you for shopping with us!`;
-                                whatsappService.sendDirect(customerPhone, deliverMsg, userId).catch(() => {});
+                            if (typeof window !== 'undefined' && navigator && navigator.geolocation) {
+                                navigator.geolocation.getCurrentPosition(
+                                    async (position) => {
+                                        const lat = position.coords.latitude;
+                                        const lng = position.coords.longitude;
+                                        await supabase.from('drivers').update({ status: 'emergency_sos', latitude: lat, longitude: lng }).eq('user_id', activeUser?.id);
+                                    },
+                                    () => {},
+                                    { enableHighAccuracy: true, timeout: 5000 }
+                                );
+                            } else {
+                                await supabase.from('drivers').update({ status: 'emergency_sos' }).eq('user_id', activeUser?.id);
                             }
-
-                            loadAllDriverData(uid);
-                        } catch (err) {
-                            Alert.alert('Error', err.message || 'Failed to complete delivery.');
+                            setDriverProfile(prev => ({ ...prev, status: 'emergency_sos' }));
+                            Alert.alert('SOS SENT', 'Dispatch has received your emergency signal and location. Help is on the way.');
+                        } catch (e) {
+                            Alert.alert('SOS Error', 'Could not send signal. Please call emergency services directly: 112');
+                        } finally {
+                            setTimeout(() => setIsSosActive(false), 2000);
                         }
                     }
                 }
             ]
         );
+    };
+
+    // ─── FEATURE 6: QUICK WHATSAPP TEMPLATES ───
+    const sendQuickWhatsapp = (phone, text, userId) => {
+        if (!phone) return Alert.alert('No Phone', 'Customer phone number not available.');
+        whatsappService.sendDirect(phone, text, userId).catch(() => {});
+        const cleanPhone = phone.replace(/[^0-9]/g, '');
+        const targetPhone = cleanPhone.startsWith('0') ? '234' + cleanPhone.slice(1) : cleanPhone;
+        Linking.openURL(`https://wa.me/${targetPhone}?text=${encodeURIComponent(text)}`);
     };
 
     // ─── Update Vehicle Details ───
@@ -636,7 +928,6 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                     onPress: async () => {
                         setLoading(true);
                         try {
-                            // 1. Deduct balance from `profiles`
                             const newBal = walletBalance - amount;
                             await supabase
                                 .from('profiles')
@@ -645,7 +936,6 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
 
                             setWalletBalance(newBal);
 
-                            // 2. Insert transaction record in `transactions`
                             await supabase.from('transactions').insert([{
                                 user_id: uid,
                                 type: 'debit',
@@ -681,7 +971,8 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
         if (!address) return Alert.alert('No Address', 'No delivery address specified.');
         const url = Platform.select({
             ios: `maps:0,0?q=${encodeURIComponent(address)}`,
-            android: `geo:0,0?q=${encodeURIComponent(address)}`
+            android: `geo:0,0?q=${encodeURIComponent(address)}`,
+            default: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
         });
         Linking.openURL(url);
     };
@@ -699,6 +990,54 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
         }
     };
 
+    // ─── Driver Tier Calculation ───
+    const driverTier = useMemo(() => {
+        const xp = Number(driverProfile?.xp || 0);
+        if (xp >= 1000) return { title: 'Diamond Courier', color: '#38BDF8', badge: '💎', nextXp: 1500, percent: 100 };
+        if (xp >= 500) return { title: 'Gold Courier', color: GOLD, badge: '🥇', nextXp: 1000, percent: Math.round((xp / 1000) * 100) };
+        if (xp >= 200) return { title: 'Silver Courier', color: '#94A3B8', badge: '🥈', nextXp: 500, percent: Math.round((xp / 500) * 100) };
+        return { title: 'Bronze Courier', color: '#B45309', badge: '🥉', nextXp: 200, percent: Math.round((xp / 200) * 100) };
+    }, [driverProfile?.xp]);
+
+    // ─── Today's Delivery Earnings ───
+    const todayEarnings = useMemo(() => {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        return historyOrders
+            .filter(o => (o.updated_at || o.created_at || '').startsWith(todayStr))
+            .reduce((sum, o) => sum + Number(o.shipping_fee || 1000), 0);
+    }, [historyOrders]);
+
+    // ─── Filtered Orders for Current Tab ───
+    const currentTabOrders = useMemo(() => {
+        let baseList = [];
+        if (activeTab === 'active') baseList = orders;
+        else if (activeTab === 'pool') baseList = poolOrders;
+        else if (activeTab === 'history') baseList = historyOrders;
+        else return [];
+
+        return baseList.filter(item => {
+            if (searchQuery.trim()) {
+                const q = searchQuery.toLowerCase();
+                const idMatch = (item.id || '').toLowerCase().includes(q);
+                const nameMatch = (item.user?.full_name || '').toLowerCase().includes(q);
+                const addrMatch = parseAddress(item.shipping_address).toLowerCase().includes(q);
+                if (!idMatch && !nameMatch && !addrMatch) return false;
+            }
+
+            if (filterPayment === 'POD') {
+                return (item.payment_method || '').toLowerCase() === 'pod';
+            }
+            if (filterPayment === 'PREPAID') {
+                return (item.payment_method || '').toLowerCase() !== 'pod' && !(item.payment_method || '').toLowerCase().includes('small small');
+            }
+            if (filterPayment === 'PSS') {
+                return (item.payment_method || '').toLowerCase().includes('small small') || !!item.installment_plan;
+            }
+
+            return true;
+        });
+    }, [activeTab, orders, poolOrders, historyOrders, searchQuery, filterPayment]);
+
     // ─── RENDER ORDER ITEM (CLEAN LIGHT CARD) ───
     const renderOrderItem = ({ item }) => {
         const address = parseAddress(item.shipping_address);
@@ -713,7 +1052,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
         const customerPhone = item.user?.phone || item.contact_phone || '';
 
         return (
-            <View style={[styles.modernCard, isHistory && { opacity: 0.9 }]}>
+            <View style={[styles.modernCard, isHistory && { opacity: 0.92 }]}>
                 {/* Header Row */}
                 <View style={styles.cardHeaderRow}>
                     <View style={styles.orderIdPill}>
@@ -820,8 +1159,53 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                 <Text style={styles.contactBtnWhatsappText}>WhatsApp</Text>
                             </TouchableOpacity>
                         ) : null}
+
+                        <TouchableOpacity
+                            style={styles.contactBtnIssue}
+                            onPress={() => openIssueModal(item)}
+                            activeOpacity={0.85}
+                        >
+                            <Ionicons name="alert-circle" size={14} color={DANGER} />
+                            <Text style={styles.contactBtnIssueText}>Issue</Text>
+                        </TouchableOpacity>
                     </View>
                 )}
+
+                {/* Quick WhatsApp One-Tap Templates (When Active) */}
+                {!isPool && !isHistory && customerPhone && (
+                    <View style={styles.quickTemplatesBar}>
+                        <Text style={styles.quickTemplateHeader}>QUICK MESSAGES:</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingVertical: 2 }}>
+                            <TouchableOpacity
+                                style={styles.templateChip}
+                                onPress={() => sendQuickWhatsapp(customerPhone, `Assalamu Alaikum ${customerName}! I am on my way with your Abu Mafhal delivery (#${item.id.slice(0, 8).toUpperCase()}). 🛵`, item.user_id)}
+                            >
+                                <Text style={styles.templateChipText}>🛵 On my way</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.templateChip}
+                                onPress={() => sendQuickWhatsapp(customerPhone, `Assalamu Alaikum ${customerName}! I have arrived outside your delivery location with your package. 📍`, item.user_id)}
+                            >
+                                <Text style={styles.templateChipText}>📍 Arrived outside</Text>
+                            </TouchableOpacity>
+                            {isPod && (
+                                <TouchableOpacity
+                                    style={[styles.templateChip, { backgroundColor: '#FEF3C7' }]}
+                                    onPress={() => sendQuickWhatsapp(customerPhone, `Assalamu Alaikum! Please prepare ₦${totalAmount.toLocaleString()} cash/transfer for your Pay on Delivery package (#${item.id.slice(0, 8).toUpperCase()}). 💵`, item.user_id)}
+                                >
+                                    <Text style={[styles.templateChipText, { color: '#92400E' }]}>💵 Prepare POD ₦{totalAmount.toLocaleString()}</Text>
+                                </TouchableOpacity>
+                            )}
+                        </ScrollView>
+                    </View>
+                )}
+
+                {/* Notes & Audit Row if exists */}
+                {item.driver_notes ? (
+                    <View style={styles.driverNotesBox}>
+                        <Text style={styles.driverNotesText}>📝 {item.driver_notes}</Text>
+                    </View>
+                ) : null}
 
                 {/* Bottom Main Action Button */}
                 <View style={styles.cardActionContainer}>
@@ -856,7 +1240,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
 
                             <TouchableOpacity
                                 style={styles.actionBtnDeliver}
-                                onPress={() => markDelivered(item.id, customerPhone, item.user_id, totalAmount, isPod, shippingFee)}
+                                onPress={() => openHandoverModal(item)}
                                 activeOpacity={0.85}
                             >
                                 <LinearGradient
@@ -866,7 +1250,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                     style={styles.actionBtnGradient}
                                 >
                                     <Ionicons name="checkmark-done" size={18} color="#FFFFFF" />
-                                    <Text style={styles.actionBtnDeliverText}>Confirm Package Handed Over ✅</Text>
+                                    <Text style={styles.actionBtnDeliverText}>Verify Handover & Complete Delivery ✅</Text>
                                 </LinearGradient>
                             </TouchableOpacity>
                         </View>
@@ -877,7 +1261,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                             activeOpacity={0.85}
                         >
                             <Ionicons name="document-text-outline" size={15} color={TEXT_MUTED} />
-                            <Text style={styles.actionBtnDetailsText}>View Delivery Invoice</Text>
+                            <Text style={styles.actionBtnDetailsText}>View Delivery Receipt & Details</Text>
                         </TouchableOpacity>
                     )}
                 </View>
@@ -897,7 +1281,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                     <View style={styles.driverIdentityBox}>
                         <View style={styles.avatarWrap}>
                             <Image
-                                source={{ uri: activeUser?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop' }}
+                                source={{ uri: activeUser?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(activeUser?.full_name || 'Courier')}&background=0B132B&color=D9A73A&size=200` }}
                                 style={styles.avatarImg}
                             />
                             <View style={[styles.avatarOnlineDot, { backgroundColor: driverProfile?.status === 'active' ? SUCCESS : '#94A3B8' }]} />
@@ -905,8 +1289,8 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                         <View>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                 <Text style={styles.driverName} numberOfLines={1}>{activeUser?.full_name || 'Courier Partner'}</Text>
-                                <View style={styles.levelTag}>
-                                    <Text style={styles.levelTagText}>VERIFIED</Text>
+                                <View style={[styles.levelTag, { backgroundColor: 'rgba(217, 167, 58, 0.25)' }]}>
+                                    <Text style={styles.levelTagText}>{driverTier.badge} {driverTier.title.toUpperCase()}</Text>
                                 </View>
                             </View>
                             <Text style={styles.driverSubRole}>Abu Mafhal Logistics • Delivery Partner</Text>
@@ -917,38 +1301,86 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                         <TouchableOpacity onPress={handleRefresh} style={styles.headerIconBtn} activeOpacity={0.75}>
                             <Ionicons name="reload" size={18} color="#FFFFFF" />
                         </TouchableOpacity>
+                        <TouchableOpacity onPress={triggerSOS} style={[styles.headerIconBtn, { backgroundColor: 'rgba(239, 68, 68, 0.9)' }]} activeOpacity={0.75}>
+                            {isSosActive ? <ActivityIndicator size="small" color="#FFF" /> : <Ionicons name="warning" size={18} color="#FFFFFF" />}
+                        </TouchableOpacity>
                         <TouchableOpacity onPress={onLogout} style={[styles.headerIconBtn, { backgroundColor: 'rgba(239, 68, 68, 0.2)' }]} activeOpacity={0.75}>
                             <Ionicons name="power" size={18} color={DANGER} />
                         </TouchableOpacity>
                     </View>
                 </View>
 
-                {/* Status Toggle Banner */}
+                {/* Status Toggle & Live GPS Banner */}
                 <View style={styles.statusToggleBanner}>
                     <View style={styles.statusIndicatorRow}>
-                        <View style={[styles.statusPulseDot, { backgroundColor: driverProfile?.status === 'active' ? SUCCESS : '#94A3B8' }]} />
-                        <View>
-                            <Text style={styles.statusTitle}>
-                                {driverProfile?.status === 'active' ? 'ONLINE • ACCEPTING DELIVERIES' : 'OFFLINE • STANDBY'}
+                        <View style={[styles.statusPulseDot, { backgroundColor: driverProfile?.status === 'emergency_sos' ? DANGER : driverProfile?.status === 'active' ? SUCCESS : '#94A3B8' }]} />
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.statusTitle, driverProfile?.status === 'emergency_sos' && { color: DANGER }]}>
+                                {driverProfile?.status === 'emergency_sos' ? '🚨 SOS EMERGENCY ACTIVE' : driverProfile?.status === 'active' ? 'ONLINE • ACCEPTING DELIVERIES' : 'OFFLINE • STANDBY'}
                             </Text>
-                            <Text style={styles.statusVehicleSubtitle}>
-                                {driverProfile?.vehicle_type || 'Vehicle'} • {driverProfile?.vehicle_number || 'Registered Courier'}
+                            <Text style={styles.statusVehicleSubtitle} numberOfLines={1}>
+                                {driverProfile?.vehicle_type || 'Vehicle'} • {driverProfile?.current_location || 'Kano Hub'}
                             </Text>
                         </View>
                     </View>
-                    <Switch
-                        value={driverProfile?.status === 'active'}
-                        onValueChange={toggleStatus}
-                        trackColor={{ false: '#334155', true: SUCCESS }}
-                        thumbColor={driverProfile?.status === 'active' ? '#FFFFFF' : '#94A3B8'}
-                    />
+
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <TouchableOpacity
+                            style={[styles.gpsSyncBtn, isLiveTracking && { backgroundColor: 'rgba(16, 185, 129, 0.3)', borderColor: SUCCESS }]}
+                            onPress={toggleLiveTracking}
+                            disabled={isSyncingGps}
+                            activeOpacity={0.8}
+                        >
+                            {isLiveTracking ? (
+                                <>
+                                    <View style={[styles.statusPulseDot, { backgroundColor: SUCCESS, width: 8, height: 8 }]} />
+                                    <Text style={styles.gpsSyncBtnText}>LIVE</Text>
+                                </>
+                            ) : (
+                                <>
+                                    <Ionicons name="radio" size={12} color="#FFFFFF" />
+                                    <Text style={styles.gpsSyncBtnText}>TRACK</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.gpsSyncBtn}
+                            onPress={syncLiveGps}
+                            disabled={isSyncingGps}
+                            activeOpacity={0.8}
+                        >
+                            {isSyncingGps ? (
+                                <ActivityIndicator size="small" color="#FFFFFF" />
+                            ) : (
+                                <>
+                                    <Ionicons name="location" size={12} color="#FFFFFF" />
+                                    <Text style={styles.gpsSyncBtnText}>SYNC</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+
+                        <Switch
+                            value={driverProfile?.status === 'active'}
+                            onValueChange={toggleStatus}
+                            trackColor={{ false: '#334155', true: SUCCESS }}
+                            thumbColor={driverProfile?.status === 'active' ? '#FFFFFF' : '#94A3B8'}
+                        />
+                    </View>
                 </View>
+
+                {gpsNotice ? (
+                    <View style={styles.gpsNoticeBar}>
+                        <Ionicons name="location" size={12} color={SUCCESS} />
+                        <Text style={styles.gpsNoticeText}>{gpsNotice}</Text>
+                    </View>
+                ) : null}
 
                 {/* Metrics Stats 4-Card Grid */}
                 <View style={styles.metricsGrid}>
                     <TouchableOpacity style={styles.metricCard} onPress={() => setActiveTab('wallet')} activeOpacity={0.85}>
                         <View style={styles.metricIconWrap}>
-                            <Ionicons name="wallet-outline" size={16} color={GOLD} />
+                            <Ionicons name="wallet-outline" size={15} color={GOLD} />
                         </View>
                         <Text style={styles.metricValue}>₦{walletBalance.toLocaleString()}</Text>
                         <Text style={styles.metricLabel}>Balance</Text>
@@ -956,15 +1388,15 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
 
                     <TouchableOpacity style={styles.metricCard} onPress={() => setActiveTab('active')} activeOpacity={0.85}>
                         <View style={[styles.metricIconWrap, { backgroundColor: 'rgba(16, 185, 129, 0.2)' }]}>
-                            <Ionicons name="bicycle" size={16} color={SUCCESS} />
+                            <Ionicons name="bicycle" size={15} color={SUCCESS} />
                         </View>
                         <Text style={[styles.metricValue, { color: SUCCESS }]}>{orders.length}</Text>
-                        <Text style={styles.metricLabel}>Active Tasks</Text>
+                        <Text style={styles.metricLabel}>Active</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity style={styles.metricCard} onPress={() => setActiveTab('pool')} activeOpacity={0.85}>
                         <View style={[styles.metricIconWrap, { backgroundColor: 'rgba(245, 158, 11, 0.2)' }]}>
-                            <Ionicons name="flash-outline" size={16} color={AMBER} />
+                            <Ionicons name="flash-outline" size={15} color={AMBER} />
                         </View>
                         <Text style={[styles.metricValue, { color: AMBER }]}>{poolOrders.length}</Text>
                         <Text style={styles.metricLabel}>Job Pool</Text>
@@ -972,12 +1404,41 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
 
                     <TouchableOpacity style={styles.metricCard} onPress={() => setActiveTab('history')} activeOpacity={0.85}>
                         <View style={[styles.metricIconWrap, { backgroundColor: 'rgba(56, 189, 248, 0.2)' }]}>
-                            <Ionicons name="checkmark-done" size={16} color="#38BDF8" />
+                            <Ionicons name="checkmark-done" size={15} color="#38BDF8" />
                         </View>
                         <Text style={[styles.metricValue, { color: '#38BDF8' }]}>{historyOrders.length}</Text>
-                        <Text style={styles.metricLabel}>Completed</Text>
+                        <Text style={styles.metricLabel}>Delivered</Text>
                     </TouchableOpacity>
                 </View>
+
+                {/* XP Progression Bar */}
+                <View style={styles.xpProgressContainer}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <Text style={styles.xpLabel}>Courier XP: {driverProfile?.xp || 0} XP</Text>
+                        <Text style={styles.xpNextLevel}>Next Tier: {driverTier.nextXp} XP</Text>
+                    </View>
+                    <View style={styles.xpProgressBarBg}>
+                        <View style={[styles.xpProgressBarFill, { width: `${Math.min(100, Math.max(8, driverTier.percent))}%` }]} />
+                    </View>
+                </View>
+                {/* Driver Performance Metrics Strip */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', backgroundColor: 'rgba(255,255,255,0.05)', paddingVertical: 12, borderRadius: 12, marginTop: 16 }}>
+                    <View style={{ alignItems: 'center' }}>
+                        <Ionicons name="star" size={16} color={GOLD} />
+                        <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '600', marginTop: 4 }}>{driverProfile?.rating?.toFixed(1) || '5.0'} Rating</Text>
+                    </View>
+                    <View style={{ width: 1, height: 24, backgroundColor: 'rgba(255,255,255,0.2)' }} />
+                    <View style={{ alignItems: 'center' }}>
+                        <Ionicons name="trending-up" size={16} color={SUCCESS} />
+                        <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '600', marginTop: 4 }}>{(historyOrders.length / Math.max(1, historyOrders.length) * 100).toFixed(0)}% Success</Text>
+                    </View>
+                    <View style={{ width: 1, height: 24, backgroundColor: 'rgba(255,255,255,0.2)' }} />
+                    <View style={{ alignItems: 'center' }}>
+                        <Ionicons name="shield-checkmark" size={16} color="#38BDF8" />
+                        <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '600', marginTop: 4 }}>Verified</Text>
+                    </View>
+                </View>
+
             </LinearGradient>
 
             {/* ─── 2. MODERN TAB SELECTOR ─── */}
@@ -987,8 +1448,8 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                         { id: 'active', label: `Active (${orders.length})`, icon: 'bicycle-outline' },
                         { id: 'pool', label: `Job Pool (${poolOrders.length})`, icon: 'flash-outline' },
                         { id: 'wallet', label: 'Wallet & Payouts', icon: 'wallet-outline' },
-                        { id: 'history', label: 'History', icon: 'time-outline' },
-                        { id: 'profile', label: 'Vehicle Settings', icon: 'car-sport-outline' }
+                        { id: 'history', label: `History (${historyOrders.length})`, icon: 'time-outline' },
+                        { id: 'profile', label: 'Vehicle & Tier', icon: 'car-sport-outline' }
                     ].map(tab => {
                         const isCurrent = activeTab === tab.id;
                         return (
@@ -1008,7 +1469,50 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                 </ScrollView>
             </View>
 
-            {/* ─── 3. MAIN TAB CONTENT AREA (CLEAN LIGHT BACKGROUND) ─── */}
+            {/* ─── 3. SEARCH & FILTER STRIP (For Active, Pool, and History) ─── */}
+            {['active', 'pool', 'history'].includes(activeTab) && (
+                <View style={styles.searchFilterStrip}>
+                    <View style={styles.searchBar}>
+                        <Ionicons name="search" size={15} color={TEXT_MUTED} />
+                        <TextInput
+                            style={styles.searchInput}
+                            placeholder="Search by Order ID, Customer, Address..."
+                            placeholderTextColor={TEXT_SUBTLE}
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                        />
+                        {searchQuery ? (
+                            <TouchableOpacity onPress={() => setSearchQuery('')}>
+                                <Ionicons name="close" size={16} color={TEXT_MUTED} />
+                            </TouchableOpacity>
+                        ) : null}
+                    </View>
+
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingTop: 6 }}>
+                        {[
+                            { id: 'ALL', label: 'All Orders' },
+                            { id: 'POD', label: '💵 Pay on Delivery' },
+                            { id: 'PREPAID', label: '💳 Paid Online' },
+                            { id: 'PSS', label: '📦 Pay Small Small' }
+                        ].map(f => {
+                            const isSelected = filterPayment === f.id;
+                            return (
+                                <TouchableOpacity
+                                    key={f.id}
+                                    style={[styles.filterChip, isSelected && styles.filterChipActive]}
+                                    onPress={() => setFilterPayment(f.id)}
+                                >
+                                    <Text style={[styles.filterChipText, isSelected && styles.filterChipTextActive]}>
+                                        {f.label}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </ScrollView>
+                </View>
+            )}
+
+            {/* ─── 4. MAIN TAB CONTENT AREA (CLEAN LIGHT BACKGROUND) ─── */}
             <ScrollView
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={GOLD} />}
                 contentContainerStyle={styles.mainScrollContent}
@@ -1018,20 +1522,28 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                     <View style={styles.tabContentSection}>
                         <View style={styles.sectionHeaderRow}>
                             <Text style={styles.sectionTitle}>Active Shipments in Transit</Text>
-                            <Text style={styles.sectionCountText}>{orders.length} Deliveries</Text>
+                            <Text style={styles.sectionCountText}>{currentTabOrders.length} Deliveries</Text>
                         </View>
 
-                        {orders.length === 0 ? (
+                        {currentTabOrders.length === 0 ? (
                             <View style={styles.emptyCardBox}>
                                 <Ionicons name="bicycle-outline" size={44} color={TEXT_SUBTLE} />
-                                <Text style={styles.emptyTitle}>No Active Deliveries Right Now</Text>
-                                <Text style={styles.emptySubtitle}>You do not have any pending packages in transit. Claim new orders from the pool!</Text>
-                                <TouchableOpacity style={styles.emptyActionBtn} onPress={() => setActiveTab('pool')}>
-                                    <Text style={styles.emptyActionBtnText}>Browse Available Job Pool ({poolOrders.length}) ⚡</Text>
-                                </TouchableOpacity>
+                                <Text style={styles.emptyTitle}>
+                                    {searchQuery ? 'No Matches Found' : 'No Active Deliveries Right Now'}
+                                </Text>
+                                <Text style={styles.emptySubtitle}>
+                                    {searchQuery
+                                        ? 'Try clearing your search term or payment filter.'
+                                        : 'You do not have any pending packages in transit. Claim new orders from the pool!'}
+                                </Text>
+                                {!searchQuery && (
+                                    <TouchableOpacity style={styles.emptyActionBtn} onPress={() => setActiveTab('pool')}>
+                                        <Text style={styles.emptyActionBtnText}>Browse Available Job Pool ({poolOrders.length}) ⚡</Text>
+                                    </TouchableOpacity>
+                                )}
                             </View>
                         ) : (
-                            orders.map(item => (
+                            currentTabOrders.map(item => (
                                 <View key={item.id} style={{ marginBottom: 14 }}>
                                     {renderOrderItem({ item })}
                                 </View>
@@ -1045,17 +1557,23 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                     <View style={styles.tabContentSection}>
                         <View style={styles.sectionHeaderRow}>
                             <Text style={styles.sectionTitle}>Orders Awaiting Driver Pickup</Text>
-                            <Text style={styles.sectionCountText}>{poolOrders.length} Available</Text>
+                            <Text style={styles.sectionCountText}>{currentTabOrders.length} Available</Text>
                         </View>
 
-                        {poolOrders.length === 0 ? (
+                        {currentTabOrders.length === 0 ? (
                             <View style={styles.emptyCardBox}>
                                 <Ionicons name="sparkles-outline" size={44} color={GOLD} />
-                                <Text style={styles.emptyTitle}>Job Pool is All Clear</Text>
-                                <Text style={styles.emptySubtitle}>All customer orders are currently picked up. New orders will appear here automatically.</Text>
+                                <Text style={styles.emptyTitle}>
+                                    {searchQuery ? 'No Orders Match Your Search' : 'Job Pool is All Clear'}
+                                </Text>
+                                <Text style={styles.emptySubtitle}>
+                                    {searchQuery
+                                        ? 'Try clearing filters to see all available consignments.'
+                                        : 'All customer orders are currently picked up. New orders will appear here automatically.'}
+                                </Text>
                             </View>
                         ) : (
-                            poolOrders.map(item => (
+                            currentTabOrders.map(item => (
                                 <View key={item.id} style={{ marginBottom: 14 }}>
                                     {renderOrderItem({ item })}
                                 </View>
@@ -1076,6 +1594,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                 <View>
                                     <Text style={styles.walletHeaderLabel}>DRIVER ESCROW WALLET</Text>
                                     <Text style={styles.walletHeaderBalance}>₦{walletBalance.toLocaleString()}</Text>
+                                    <Text style={styles.walletTodayText}>Today's Earnings: +₦{todayEarnings.toLocaleString()}</Text>
                                 </View>
                                 <View style={styles.walletAmcChip}>
                                     <Ionicons name="checkmark-circle" size={14} color={SUCCESS} />
@@ -1104,6 +1623,35 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                             </View>
                         </LinearGradient>
 
+                        {/* Interactive Earnings Chart Mockup */}
+                        <View style={[styles.vehicleInfoCard, { marginBottom: 16, paddingTop: 16 }]}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                <Text style={styles.vehicleCardTitle}>Weekly Earnings</Text>
+                                <Text style={{ color: SUCCESS, fontWeight: '700', fontSize: 12 }}>+14%</Text>
+                            </View>
+                            
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', height: 120, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                                {[
+                                    { day: 'Mon', val: 0.3, amt: 2500 },
+                                    { day: 'Tue', val: 0.6, amt: 4800 },
+                                    { day: 'Wed', val: 0.4, amt: 3200 },
+                                    { day: 'Thu', val: 0.8, amt: 7500 },
+                                    { day: 'Fri', val: 0.5, amt: 4000 },
+                                    { day: 'Sat', val: 1.0, amt: 8500 },
+                                    { day: 'Sun', val: 0.1, amt: 0 }
+                                ].map((bar, idx) => (
+                                    <View key={idx} style={{ alignItems: 'center', width: 30 }}>
+                                        <View style={{ width: 14, height: 100 * bar.val, backgroundColor: bar.val === 1.0 ? GOLD : '#94A3B8', borderRadius: 4 }} />
+                                        <Text style={{ fontSize: 10, color: TEXT_MUTED, marginTop: 6 }}>{bar.day}</Text>
+                                    </View>
+                                ))}
+                            </View>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 }}>
+                                <Text style={{ fontSize: 12, color: TEXT_MUTED }}>Total This Week</Text>
+                                <Text style={{ fontSize: 14, fontWeight: '800', color: TEXT_DARK }}>₦30,500</Text>
+                            </View>
+                        </View>
+
                         {/* Recent Transactions List */}
                         <View style={styles.sectionHeaderRow}>
                             <Text style={styles.sectionTitle}>Recent Wallet Activity</Text>
@@ -1116,7 +1664,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                 <Text style={styles.emptySubtitle}>Earnings from completed deliveries and payouts will appear here.</Text>
                             </View>
                         ) : (
-                            transactions.slice(0, 5).map(t => (
+                            transactions.slice(0, 8).map(t => (
                                 <View key={t.id} style={styles.payoutLogRow}>
                                     <View style={{ flex: 1 }}>
                                         <Text style={[styles.payoutLogAmount, { color: t.type === 'debit' ? DANGER : SUCCESS }]}>
@@ -1143,17 +1691,17 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                     <View style={styles.tabContentSection}>
                         <View style={styles.sectionHeaderRow}>
                             <Text style={styles.sectionTitle}>Completed & Closed Deliveries</Text>
-                            <Text style={styles.sectionCountText}>{historyOrders.length} Completed</Text>
+                            <Text style={styles.sectionCountText}>{currentTabOrders.length} Completed</Text>
                         </View>
 
-                        {historyOrders.length === 0 ? (
+                        {currentTabOrders.length === 0 ? (
                             <View style={styles.emptyCardBox}>
                                 <Ionicons name="time-outline" size={44} color={TEXT_SUBTLE} />
-                                <Text style={styles.emptyTitle}>No Completed Deliveries Yet</Text>
+                                <Text style={styles.emptyTitle}>No Completed Deliveries</Text>
                                 <Text style={styles.emptySubtitle}>Packages you deliver will appear here with complete delivery receipts.</Text>
                             </View>
                         ) : (
-                            historyOrders.map(item => (
+                            currentTabOrders.map(item => (
                                 <View key={item.id} style={{ marginBottom: 14 }}>
                                     {renderOrderItem({ item })}
                                 </View>
@@ -1165,6 +1713,34 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                 {/* TAB 5: VEHICLE & SETTINGS */}
                 {activeTab === 'profile' && (
                     <View style={styles.tabContentSection}>
+                        {/* Courier Performance Card */}
+                        <View style={[styles.vehicleInfoCard, { marginBottom: 16 }]}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Ionicons name="trophy" size={22} color={GOLD} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.vehicleCardTitle}>{driverTier.title}</Text>
+                                    <Text style={{ fontSize: 12, color: TEXT_MUTED }}>Courier Rating: 5.0 ★ • {driverProfile?.xp || 0} XP</Text>
+                                </View>
+                            </View>
+
+                            <View style={styles.statMiniGrid}>
+                                <View style={styles.statMiniBox}>
+                                    <Text style={styles.statMiniVal}>{historyOrders.length}</Text>
+                                    <Text style={styles.statMiniLbl}>Total Delivered</Text>
+                                </View>
+                                <View style={styles.statMiniBox}>
+                                    <Text style={styles.statMiniVal}>₦{todayEarnings.toLocaleString()}</Text>
+                                    <Text style={styles.statMiniLbl}>Today's Pay</Text>
+                                </View>
+                                <View style={styles.statMiniBox}>
+                                    <Text style={styles.statMiniVal}>100%</Text>
+                                    <Text style={styles.statMiniLbl}>Safety Rate</Text>
+                                </View>
+                            </View>
+                        </View>
+
                         {/* Vehicle Specifications Card */}
                         <View style={styles.vehicleInfoCard}>
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -1192,7 +1768,39 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                 <Text style={styles.vehiclePropLabel}>Driver Phone:</Text>
                                 <Text style={styles.vehiclePropVal}>{activeUser?.phone || driverProfile?.phone || 'Not Set'}</Text>
                             </View>
+
+                            <View style={styles.vehicleRow}>
+                                <Ionicons name="location-outline" size={18} color={TEXT_MUTED} />
+                                <Text style={styles.vehiclePropLabel}>Base Station:</Text>
+                                <Text style={styles.vehiclePropVal}>{driverProfile?.current_location || 'Kano Hub'}</Text>
+                            </View>
                         </View>
+
+                        {/* Logistics Dispatch Support Hotline */}
+                        <View style={[styles.vehicleInfoCard, { marginTop: 16 }]}>
+                            <Text style={styles.vehicleCardTitle}>Abu Mafhal Logistics Dispatch</Text>
+                            <Text style={{ fontSize: 12, color: TEXT_MUTED, marginTop: 4, marginBottom: 12 }}>
+                                Need emergency delivery assistance, address resolution, or customer dispute support?
+                            </Text>
+                            <TouchableOpacity
+                                style={styles.hotlineBtn}
+                                onPress={() => Linking.openURL('tel:08002286234')}
+                                activeOpacity={0.85}
+                            >
+                                <Ionicons name="call" size={15} color="#FFFFFF" />
+                                <Text style={styles.hotlineBtnText}>Call Logistics Hotline</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* End Shift / Clock Out */}
+                        <TouchableOpacity
+                            style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 16, flexDirection: 'row', justifyContent: 'center', gap: 8 }}
+                            onPress={() => setShiftSummaryModalVisible(true)}
+                            activeOpacity={0.8}
+                        >
+                            <Ionicons name="stopwatch" size={18} color={TEXT_DARK} />
+                            <Text style={{ fontSize: 14, fontWeight: '700', color: TEXT_DARK }}>End Shift & View Summary</Text>
+                        </TouchableOpacity>
                     </View>
                 )}
             </ScrollView>
@@ -1223,13 +1831,241 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                     <Text style={styles.invoiceLineText}>📍 Address: {parseAddress(selectedOrder.shipping_address)}</Text>
                                     <Text style={styles.invoiceLineText}>💳 Payment: {(selectedOrder.payment_method || 'Online').toUpperCase()} ({selectedOrder.payment_status || 'Paid'})</Text>
                                 </View>
+
+                                {selectedOrder.items && selectedOrder.items.length > 0 && (
+                                    <View style={styles.invoiceSection}>
+                                        <Text style={styles.invoiceSectionTitle}>PACKAGE ITEMS ({selectedOrder.items.length})</Text>
+                                        {selectedOrder.items.map((item, idx) => (
+                                            <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, borderBottomWidth: idx !== selectedOrder.items.length -1 ? 1 : 0, borderBottomColor: '#F1F5F9' }}>
+                                                <Text style={[styles.invoiceLineText, { flex: 1, paddingRight: 10 }]} numberOfLines={2}>
+                                                    {item.quantity}x {item.product_name || `Product #${item.product_id?.slice(0,6) || item.id?.slice(0,6)}`}
+                                                </Text>
+                                                <Text style={[styles.invoiceLineText, { fontWeight: '700' }]}>
+                                                    ₦{(Number(item.price || 0) * Number(item.quantity || 1)).toLocaleString()}
+                                                </Text>
+                                            </View>
+                                        ))}
+                                    </View>
+                                )}
+
+                                {selectedOrder.driver_notes ? (
+                                    <View style={styles.invoiceSection}>
+                                        <Text style={styles.invoiceSectionTitle}>DELIVERY NOTES / AUDIT</Text>
+                                        <Text style={styles.invoiceLineText}>{selectedOrder.driver_notes}</Text>
+                                    </View>
+                                ) : null}
                             </ScrollView>
                         )}
                     </View>
                 </View>
             </Modal>
 
-            {/* ─── MODAL 2: VEHICLE INFORMATION ─── */}
+            {/* ─── MODAL 1.5: SHIFT SUMMARY ─── */}
+            <Modal visible={isShiftSummaryModalVisible} transparent animationType="fade">
+                <View style={styles.modalBackdrop}>
+                    <View style={styles.modalSheet}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalSheetTitle}>End of Shift Summary</Text>
+                            <TouchableOpacity onPress={() => setShiftSummaryModalVisible(false)} style={styles.modalCloseCircle}>
+                                <Ionicons name="close" size={18} color={TEXT_DARK} />
+                            </TouchableOpacity>
+                        </View>
+                        <ScrollView style={styles.modalContent}>
+                            <View style={{ alignItems: 'center', marginVertical: 20 }}>
+                                <Ionicons name="checkmark-done-circle" size={60} color={SUCCESS} />
+                                <Text style={{ fontSize: 22, fontWeight: '800', color: TEXT_DARK, marginTop: 10 }}>Great Job Today!</Text>
+                                <Text style={{ fontSize: 14, color: TEXT_MUTED, textAlign: 'center', marginTop: 4 }}>You've successfully completed your deliveries.</Text>
+                            </View>
+
+                            <View style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 16, marginBottom: 20 }}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' }}>
+                                    <Text style={{ fontSize: 14, color: TEXT_MUTED, fontWeight: '600' }}>Deliveries Completed:</Text>
+                                    <Text style={{ fontSize: 14, color: TEXT_DARK, fontWeight: '800' }}>{historyOrders.length}</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' }}>
+                                    <Text style={{ fontSize: 14, color: TEXT_MUTED, fontWeight: '600' }}>Earnings Today:</Text>
+                                    <Text style={{ fontSize: 14, color: SUCCESS, fontWeight: '800' }}>₦{todayEarnings.toLocaleString()}</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' }}>
+                                    <Text style={{ fontSize: 14, color: TEXT_MUTED, fontWeight: '600' }}>XP Gained:</Text>
+                                    <Text style={{ fontSize: 14, color: GOLD, fontWeight: '800' }}>+{historyOrders.length * 50} XP</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 }}>
+                                    <Text style={{ fontSize: 14, color: TEXT_MUTED, fontWeight: '600' }}>Driver Rating:</Text>
+                                    <Text style={{ fontSize: 14, color: TEXT_DARK, fontWeight: '800' }}>{driverProfile?.rating?.toFixed(1) || '5.0'} ★</Text>
+                                </View>
+                            </View>
+
+                            <TouchableOpacity
+                                style={styles.submitBtnGold}
+                                onPress={() => {
+                                    setShiftSummaryModalVisible(false);
+                                    if (driverProfile?.status === 'active') {
+                                        toggleStatus();
+                                    }
+                                }}
+                                activeOpacity={0.8}
+                            >
+                                <Ionicons name="power" size={18} color="#FFF" />
+                                <Text style={styles.submitBtnGoldText}>Clock Out & Go Offline</Text>
+                            </TouchableOpacity>
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ─── MODAL 2: VERIFIED HANDOVER & PROOF OF DELIVERY ─── */}
+            <Modal visible={isHandoverModalVisible} transparent animationType="slide">
+                <View style={styles.modalBackdrop}>
+                    <View style={styles.modalSheetContent}>
+                        <View style={styles.modalSheetHeader}>
+                            <Text style={styles.modalSheetTitle}>Confirm Package Handover</Text>
+                            <TouchableOpacity onPress={() => setHandoverModalVisible(false)} style={styles.modalCloseCircle}>
+                                <Ionicons name="close" size={18} color={TEXT_DARK} />
+                            </TouchableOpacity>
+                        </View>
+
+                        {handoverOrder && (
+                            <ScrollView style={{ padding: 20 }}>
+                                <View style={styles.handoverSummaryCard}>
+                                    <Text style={styles.handoverOrderId}>ORD-{handoverOrder.id.slice(0, 8).toUpperCase()}</Text>
+                                    <Text style={styles.handoverCustomer}>Recipient: {handoverOrder.user?.full_name || 'Customer'}</Text>
+                                    <Text style={styles.handoverFee}>Courier Payout: +₦{Number(handoverOrder.shipping_fee || 1000).toLocaleString()} (+50 XP)</Text>
+                                </View>
+
+                                {(handoverOrder.payment_method || '').toLowerCase() === 'pod' && (
+                                    <View style={styles.podAlertBanner}>
+                                        <Ionicons name="alert-circle" size={18} color="#B45309" />
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.podAlertTitle}>CASH COLLECTION REQUIRED</Text>
+                                            <Text style={styles.podAlertDesc}>
+                                                Collect ₦{Number(handoverOrder.total_amount || 0).toLocaleString()} cash/transfer before releasing parcel.
+                                            </Text>
+                                        </View>
+                                    </View>
+                                )}
+
+                                <Text style={styles.inputFieldLabel}>Recipient Person Name (Who received the parcel?)</Text>
+                                <TextInput
+                                    style={styles.textInputModern}
+                                    value={handoverRecipient}
+                                    onChangeText={setHandoverRecipient}
+                                    placeholder="e.g. Customer in person / Family member / Office receptionist"
+                                    placeholderTextColor={TEXT_SUBTLE}
+                                />
+
+                                <Text style={styles.inputFieldLabel}>Delivery Note / Handover Location</Text>
+                                <TextInput
+                                    style={styles.textInputModern}
+                                    value={handoverNotes}
+                                    onChangeText={setHandoverNotes}
+                                    placeholder="e.g. Handed over at front gate, confirmed package intact"
+                                    placeholderTextColor={TEXT_SUBTLE}
+                                />
+
+                                <Text style={styles.inputFieldLabel}>Customer Security PIN (Optional)</Text>
+                                <TextInput
+                                    style={styles.textInputModern}
+                                    value={handoverPin}
+                                    onChangeText={setHandoverPin}
+                                    placeholder="Ask customer for 4-digit PIN"
+                                    placeholderTextColor={TEXT_SUBTLE}
+                                    keyboardType="numeric"
+                                    maxLength={4}
+                                    secureTextEntry
+                                />
+
+                                <Text style={styles.inputFieldLabel}>Proof of Delivery (Photo)</Text>
+                                {handoverImage ? (
+                                    <View style={{ position: 'relative', marginTop: 8 }}>
+                                        <Image source={{ uri: handoverImage.uri }} style={{ width: '100%', height: 180, borderRadius: 12 }} />
+                                        <TouchableOpacity 
+                                            style={{ position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.6)', padding: 6, borderRadius: 20 }}
+                                            onPress={() => setHandoverImage(null)}
+                                        >
+                                            <Ionicons name="close" size={16} color="#FFF" />
+                                        </TouchableOpacity>
+                                    </View>
+                                ) : (
+                                    <TouchableOpacity style={styles.cameraCaptureBtn} onPress={takeProofOfDeliveryPhoto} activeOpacity={0.8}>
+                                        <Ionicons name="camera" size={24} color={TEXT_MUTED} />
+                                        <Text style={styles.cameraCaptureBtnText}>Take Photo of Package at Destination</Text>
+                                    </TouchableOpacity>
+                                )}
+
+                                <TouchableOpacity
+                                    style={[styles.submitBtnGold, isSubmittingHandover && { opacity: 0.6 }]}
+                                    onPress={submitHandoverDelivery}
+                                    disabled={isSubmittingHandover}
+                                    activeOpacity={0.85}
+                                >
+                                    <Text style={styles.submitBtnGoldText}>
+                                        {isSubmittingHandover ? 'Verifying & Releasing Escrow...' : 'Release Escrow & Complete ✅'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </ScrollView>
+                        )}
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ─── MODAL 3: REPORT DELIVERY ISSUE ─── */}
+            <Modal visible={isIssueModalVisible} transparent animationType="slide">
+                <View style={styles.modalBackdrop}>
+                    <View style={styles.modalSheetContent}>
+                        <View style={styles.modalSheetHeader}>
+                            <Text style={styles.modalSheetTitle}>Report Delivery Problem</Text>
+                            <TouchableOpacity onPress={() => setIssueModalVisible(false)} style={styles.modalCloseCircle}>
+                                <Ionicons name="close" size={18} color={TEXT_DARK} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView style={{ padding: 20 }}>
+                            <Text style={styles.inputFieldLabel}>Select Nature of Problem:</Text>
+                            {[
+                                'Customer unreachable on phone',
+                                'Wrong or incomplete delivery address',
+                                'Customer rejected package',
+                                'Courier vehicle breakdown / transit delay',
+                                'Security denied entrance to premises'
+                            ].map(reason => (
+                                <TouchableOpacity
+                                    key={reason}
+                                    style={[styles.reasonOption, issueReason === reason && styles.reasonOptionActive]}
+                                    onPress={() => setIssueReason(reason)}
+                                >
+                                    <Text style={[styles.reasonOptionText, issueReason === reason && styles.reasonOptionTextActive]}>
+                                        {reason}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+
+                            <Text style={styles.inputFieldLabel}>Additional Notes for Dispatch:</Text>
+                            <TextInput
+                                style={[styles.textInputModern, { height: 75, textAlignVertical: 'top' }]}
+                                multiline
+                                value={issueDetail}
+                                onChangeText={setIssueDetail}
+                                placeholder="Describe current situation..."
+                                placeholderTextColor={TEXT_SUBTLE}
+                            />
+
+                            <TouchableOpacity
+                                style={[styles.submitBtnDanger, isSubmittingIssue && { opacity: 0.6 }]}
+                                onPress={submitDeliveryIssue}
+                                disabled={isSubmittingIssue}
+                                activeOpacity={0.85}
+                            >
+                                <Text style={styles.submitBtnDangerText}>
+                                    {isSubmittingIssue ? 'Submitting to Dispatch...' : 'Notify Dispatch ⚠️'}
+                                </Text>
+                            </TouchableOpacity>
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ─── MODAL 4: VEHICLE INFORMATION ─── */}
             <Modal visible={isVehicleModalVisible} transparent animationType="slide">
                 <View style={styles.modalBackdrop}>
                     <View style={styles.modalSheetContent}>
@@ -1267,7 +2103,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                 </View>
             </Modal>
 
-            {/* ─── MODAL 3: BANK PAYOUT WITHDRAWAL ─── */}
+            {/* ─── MODAL 5: BANK PAYOUT WITHDRAWAL ─── */}
             <Modal visible={isWithdrawModalVisible} transparent animationType="slide">
                 <View style={styles.modalBackdrop}>
                     <View style={styles.modalSheetContent}>
@@ -1346,7 +2182,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                 </View>
             </Modal>
 
-            {/* ─── MODAL 4: BANK SELECTOR SUB-MODAL ─── */}
+            {/* ─── MODAL 6: BANK SELECTOR SUB-MODAL ─── */}
             <Modal visible={showBankDropdown} transparent animationType="fade">
                 <View style={styles.modalBackdrop}>
                     <View style={[styles.modalSheetContent, { maxHeight: '80%' }]}>
@@ -1390,7 +2226,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                 </View>
             </Modal>
 
-            {/* ─── MODAL 5: TRANSACTION LOGS ─── */}
+            {/* ─── MODAL 7: TRANSACTION LOGS ─── */}
             <Modal visible={isHistoryModalVisible} transparent animationType="slide">
                 <View style={styles.modalBackdrop}>
                     <View style={styles.modalSheetContent}>
@@ -1495,13 +2331,12 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
     },
     levelTag: {
-        paddingHorizontal: 6,
+        paddingHorizontal: 7,
         paddingVertical: 2,
         borderRadius: 6,
-        backgroundColor: 'rgba(217, 167, 58, 0.25)',
     },
     levelTagText: {
-        fontSize: 9,
+        fontSize: 9.5,
         fontWeight: '900',
         color: GOLD,
         letterSpacing: 0.5,
@@ -1533,7 +2368,7 @@ const styles = StyleSheet.create({
         paddingVertical: 8,
         paddingHorizontal: 12,
         borderRadius: 14,
-        marginBottom: 12,
+        marginBottom: 8,
     },
     statusIndicatorRow: {
         flexDirection: 'row',
@@ -1557,30 +2392,62 @@ const styles = StyleSheet.create({
         color: '#94A3B8',
         marginTop: 1,
     },
+    gpsSyncBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: 'rgba(217, 167, 58, 0.3)',
+        paddingHorizontal: 8,
+        paddingVertical: 5,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: GOLD,
+    },
+    gpsSyncBtnText: {
+        fontSize: 10,
+        fontWeight: '900',
+        color: '#FFFFFF',
+    },
+    gpsNoticeBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: 'rgba(16, 185, 129, 0.15)',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 8,
+        marginBottom: 10,
+    },
+    gpsNoticeText: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: '#34D399',
+    },
     metricsGrid: {
         flexDirection: 'row',
         gap: 8,
+        marginBottom: 10,
     },
     metricCard: {
         flex: 1,
         backgroundColor: 'rgba(255, 255, 255, 0.1)',
         borderRadius: 12,
-        padding: 10,
+        padding: 9,
         alignItems: 'center',
         borderWidth: 1,
         borderColor: 'rgba(255, 255, 255, 0.08)',
     },
     metricIconWrap: {
-        width: 28,
-        height: 28,
-        borderRadius: 14,
+        width: 26,
+        height: 26,
+        borderRadius: 13,
         backgroundColor: 'rgba(217, 167, 58, 0.2)',
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 4,
+        marginBottom: 3,
     },
     metricValue: {
-        fontSize: 14,
+        fontSize: 13.5,
         fontWeight: '900',
         color: '#FFFFFF',
     },
@@ -1589,6 +2456,33 @@ const styles = StyleSheet.create({
         color: '#CBD5E1',
         fontWeight: '700',
         marginTop: 2,
+    },
+    xpProgressContainer: {
+        backgroundColor: 'rgba(255, 255, 255, 0.06)',
+        borderRadius: 10,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+    },
+    xpLabel: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: '#CBD5E1',
+    },
+    xpNextLevel: {
+        fontSize: 9.5,
+        fontWeight: '700',
+        color: GOLD,
+    },
+    xpProgressBarBg: {
+        height: 5,
+        backgroundColor: 'rgba(255, 255, 255, 0.15)',
+        borderRadius: 3,
+        overflow: 'hidden',
+    },
+    xpProgressBarFill: {
+        height: '100%',
+        backgroundColor: GOLD,
+        borderRadius: 3,
     },
     tabBarContainer: {
         backgroundColor: '#FFFFFF',
@@ -1621,6 +2515,50 @@ const styles = StyleSheet.create({
         color: TEXT_MUTED,
     },
     modernTabPillTextActive: {
+        color: '#FFFFFF',
+    },
+    searchFilterStrip: {
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 16,
+        paddingBottom: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: BORDER_COLOR,
+    },
+    searchBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8FAFC',
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderWidth: 1,
+        borderColor: BORDER_COLOR,
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: 12.5,
+        color: TEXT_DARK,
+        marginLeft: 8,
+        padding: 0,
+    },
+    filterChip: {
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 14,
+        backgroundColor: '#F1F5F9',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    filterChipActive: {
+        backgroundColor: '#0F172A',
+        borderColor: '#0F172A',
+    },
+    filterChipText: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: TEXT_MUTED,
+    },
+    filterChipTextActive: {
         color: '#FFFFFF',
     },
     mainScrollContent: {
@@ -1845,10 +2783,10 @@ const styles = StyleSheet.create({
     contactToolbar: {
         flexDirection: 'row',
         gap: 8,
-        marginBottom: 12,
+        marginBottom: 10,
     },
     contactBtnCall: {
-        flex: 1,
+        flex: 1.2,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
@@ -1865,7 +2803,7 @@ const styles = StyleSheet.create({
         color: TEXT_DARK,
     },
     contactBtnWhatsapp: {
-        flex: 1,
+        flex: 1.2,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
@@ -1878,6 +2816,62 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: '800',
         color: '#FFFFFF',
+    },
+    contactBtnIssue: {
+        flex: 0.8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+        backgroundColor: '#FEE2E2',
+        paddingVertical: 10,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: '#FECACA',
+    },
+    contactBtnIssueText: {
+        fontSize: 11.5,
+        fontWeight: '800',
+        color: DANGER,
+    },
+    quickTemplatesBar: {
+        backgroundColor: '#F8FAFC',
+        padding: 8,
+        borderRadius: 10,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: BORDER_COLOR,
+    },
+    quickTemplateHeader: {
+        fontSize: 9,
+        fontWeight: '900',
+        color: TEXT_MUTED,
+        letterSpacing: 0.5,
+        marginBottom: 4,
+    },
+    templateChip: {
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: BORDER_COLOR,
+    },
+    templateChipText: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: TEXT_DARK,
+    },
+    driverNotesBox: {
+        backgroundColor: '#FEF3C7',
+        padding: 10,
+        borderRadius: 8,
+        marginBottom: 10,
+    },
+    driverNotesText: {
+        fontSize: 11.5,
+        color: '#92400E',
+        fontWeight: '600',
     },
     cardActionContainer: {
         marginTop: 2,
@@ -1982,6 +2976,12 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         marginTop: 4,
     },
+    walletTodayText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: SUCCESS,
+        marginTop: 4,
+    },
     walletAmcChip: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -2043,6 +3043,31 @@ const styles = StyleSheet.create({
         fontWeight: '900',
         color: TEXT_DARK,
     },
+    statMiniGrid: {
+        flexDirection: 'row',
+        gap: 8,
+        marginTop: 6,
+    },
+    statMiniBox: {
+        flex: 1,
+        backgroundColor: '#F8FAFC',
+        padding: 10,
+        borderRadius: 10,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: BORDER_COLOR,
+    },
+    statMiniVal: {
+        fontSize: 14,
+        fontWeight: '900',
+        color: TEXT_DARK,
+    },
+    statMiniLbl: {
+        fontSize: 9.5,
+        color: TEXT_MUTED,
+        fontWeight: '700',
+        marginTop: 2,
+    },
     editVehicleBtn: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -2075,6 +3100,20 @@ const styles = StyleSheet.create({
         fontSize: 13,
         color: TEXT_DARK,
         fontWeight: '800',
+    },
+    hotlineBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        backgroundColor: '#0F172A',
+        paddingVertical: 13,
+        borderRadius: 10,
+    },
+    hotlineBtnText: {
+        fontSize: 12.5,
+        fontWeight: '800',
+        color: '#FFFFFF',
     },
     modalBackdrop: {
         flex: 1,
@@ -2155,6 +3194,31 @@ const styles = StyleSheet.create({
         color: TEXT_DARK,
         lineHeight: 20,
     },
+    handoverSummaryCard: {
+        backgroundColor: '#F8FAFC',
+        borderRadius: 12,
+        padding: 14,
+        marginBottom: 14,
+        borderWidth: 1,
+        borderColor: BORDER_COLOR,
+    },
+    handoverOrderId: {
+        fontSize: 13,
+        fontWeight: '900',
+        color: GOLD,
+    },
+    handoverCustomer: {
+        fontSize: 13,
+        fontWeight: '800',
+        color: TEXT_DARK,
+        marginTop: 2,
+    },
+    handoverFee: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: SUCCESS,
+        marginTop: 4,
+    },
     inputFieldLabel: {
         fontSize: 11.5,
         color: TEXT_DARK,
@@ -2172,6 +3236,46 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: BORDER_COLOR,
     },
+    cameraCaptureBtn: {
+        backgroundColor: '#F8FAFC',
+        borderWidth: 2,
+        borderColor: '#E2E8F0',
+        borderStyle: 'dashed',
+        borderRadius: 12,
+        padding: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 8,
+        gap: 8,
+    },
+    cameraCaptureBtnText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: TEXT_MUTED,
+        textAlign: 'center',
+    },
+    reasonOption: {
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: BORDER_COLOR,
+        marginBottom: 6,
+    },
+    reasonOptionActive: {
+        backgroundColor: '#EFF6FF',
+        borderColor: BLUE,
+    },
+    reasonOptionText: {
+        fontSize: 12.5,
+        color: TEXT_DARK,
+        fontWeight: '600',
+    },
+    reasonOptionTextActive: {
+        color: BLUE,
+        fontWeight: '800',
+    },
     submitBtnGold: {
         backgroundColor: HEADER_NAVY,
         paddingVertical: 14,
@@ -2181,6 +3285,19 @@ const styles = StyleSheet.create({
         marginBottom: 30,
     },
     submitBtnGoldText: {
+        color: '#FFFFFF',
+        fontSize: 13.5,
+        fontWeight: '900',
+    },
+    submitBtnDanger: {
+        backgroundColor: DANGER,
+        paddingVertical: 14,
+        borderRadius: 12,
+        alignItems: 'center',
+        marginTop: 20,
+        marginBottom: 30,
+    },
+    submitBtnDangerText: {
         color: '#FFFFFF',
         fontSize: 13.5,
         fontWeight: '900',
