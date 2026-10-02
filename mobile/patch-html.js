@@ -23,6 +23,26 @@ if (html.includes('<meta name="viewport"')) {
 const antiZoomPayload = `
     <!-- STRICT ZERO ZOOM LOCKDOWN FOR MOBILE -->
     <style id="anti-zoom-style">
+      @font-face {
+        font-family: 'Ionicons';
+        src: url('https://cdnjs.cloudflare.com/ajax/libs/ionicons/5.5.2/fonts/ionicons.ttf?v=5.5.2') format('truetype');
+      }
+      @font-face {
+        font-family: 'ionicons';
+        src: url('https://cdnjs.cloudflare.com/ajax/libs/ionicons/5.5.2/fonts/ionicons.ttf?v=5.5.2') format('truetype');
+      }
+      @font-face {
+        font-family: 'Material Icons';
+        src: url('https://cdnjs.cloudflare.com/ajax/libs/material-design-icons/3.0.1/iconfont/MaterialIcons-Regular.ttf') format('truetype');
+      }
+      @font-face {
+        font-family: 'FontAwesome';
+        src: url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/fonts/fontawesome-webfont.ttf?v=4.7.0') format('truetype');
+      }
+      @font-face {
+        font-family: 'MaterialIcons';
+        src: url('https://cdnjs.cloudflare.com/ajax/libs/material-design-icons/3.0.1/iconfont/MaterialIcons-Regular.ttf') format('truetype');
+      }
       html, body, #root {
         touch-action: pan-x pan-y !important;
         -webkit-text-size-adjust: 100% !important;
