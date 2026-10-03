@@ -26,63 +26,11 @@ import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 import { whatsappService } from '../services/whatsappService';
 import { WhatsAppActionModal } from '../components/WhatsAppActionModal';
 
-// ─── Native Safe Icon Glyph Map (Zero @expo/vector-icons runtime crash) ───
-const ICON_MAP = {
-    'cube-outline': '📦',
-    'cube': '📦',
-    'cash-outline': '💵',
-    'cash': '💵',
-    'alert-circle': '⚠️',
-    'warning': '⚠️',
-    'checkmark-circle': '✅',
-    'checkmark-done': '✔️',
-    'location-outline': '📍',
-    'location': '📍',
-    'navigate': '🧭',
-    'call': '📞',
-    'call-outline': '📞',
-    'logo-whatsapp': '💬',
-    'chatbubble-ellipses': '💬',
-    'flash': '⚡',
-    'flash-outline': '⚡',
-    'document-text-outline': '📄',
-    'reload': '🔄',
-    'power': '⏻',
-    'wallet-outline': '💳',
-    'wallet': '💳',
-    'bicycle': '🚲',
-    'bicycle-outline': '🚲',
-    'sparkles': '✨',
-    'sparkles-outline': '✨',
-    'arrow-up-circle-outline': '⬆️',
-    'list': '📋',
-    'time-outline': '⏱️',
-    'flame': '🔥',
-    'checkmark': '✓',
-    'create-outline': '✏️',
-    'car-sport-outline': '🚗',
-    'barcode-outline': '🏷️',
-    'color-palette-outline': '🎨',
-    'card-outline': '💳',
-    'chatbubbles-outline': '💬',
-    'close': '✕',
-    'chevron-down': '▼',
-    'search': '🔍',
-    'chevron-forward': '›',
-    'radio': '🛰️',
-    'trophy': '🏆',
-    'shield-checkmark': '🛡️',
-    'person': '👤',
-    'star': '★'
-};
+import { LucideIcon } from '../components/LucideIcon';
 
+// Modern Lucide-style Icon component alias for seamless drop-in
 const Ionicons = ({ name, size = 16, color = '#FFFFFF', style }) => {
-    const glyph = ICON_MAP[name] || '•';
-    return (
-        <Text style={[{ fontSize: Math.round(size * 0.88), color, textAlign: 'center', lineHeight: Math.round(size * 1.1) }, style]}>
-            {glyph}
-        </Text>
-    );
+    return <LucideIcon name={name} size={size} color={color} style={style} />;
 };
 
 const { width } = Dimensions.get('window');
@@ -1007,6 +955,11 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
             .reduce((sum, o) => sum + Number(o.shipping_fee || 1000), 0);
     }, [historyOrders]);
 
+    // ─── Total Lifetime Delivery Earnings (Real Data) ───
+    const totalDeliveredEarnings = useMemo(() => {
+        return historyOrders.reduce((sum, o) => sum + Number(o.shipping_fee || 1000), 0);
+    }, [historyOrders]);
+
     // ─── Filtered Orders for Current Tab ───
     const currentTabOrders = useMemo(() => {
         let baseList = [];
@@ -1060,15 +1013,18 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                         <Text style={styles.orderIdText}>ORD-{(item.id || '').slice(0, 8).toUpperCase()}</Text>
                     </View>
 
-                    <View style={styles.feeBadge}>
-                        <Ionicons name="cash-outline" size={12} color={SUCCESS} />
-                        <Text style={styles.feeBadgeText}>+₦{shippingFee.toLocaleString()} Delivery Fee</Text>
-                    </View>
-
                     <View style={[styles.statusBadge, isPool ? styles.statusBadgePool : isHistory ? styles.statusBadgeHistory : styles.statusBadgeActive]}>
                         <Text style={[styles.statusBadgeText, isPool ? { color: '#B45309' } : isHistory ? { color: TEXT_MUTED } : { color: '#065F46' }]}>
                             {isPool ? 'AVAILABLE' : isHistory ? (item.status || '').toUpperCase() : item.status === 'out_for_delivery' ? 'OUT FOR DELIVERY' : 'ASSIGNED'}
                         </Text>
+                    </View>
+                </View>
+
+                {/* Sub-Header Row: Delivery Fee Payout */}
+                <View style={styles.cardSubHeaderRow}>
+                    <View style={styles.feeBadge}>
+                        <Ionicons name="cash-outline" size={13} color={SUCCESS} />
+                        <Text style={styles.feeBadgeText}>+₦{shippingFee.toLocaleString()} Delivery Payout</Text>
                     </View>
                 </View>
 
@@ -1107,9 +1063,12 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                         <Text style={styles.packageMeta}>
                             {itemCount} package item(s) • Total Order Value: ₦{totalAmount.toLocaleString()}
                         </Text>
-                        <Text style={styles.customerName} numberOfLines={1}>
-                            👤 Recipient: {customerName}
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 }}>
+                            <Ionicons name="person-outline" size={12} color={TEXT_MUTED} />
+                            <Text style={styles.customerName} numberOfLines={1}>
+                                Recipient: {customerName}
+                            </Text>
+                        </View>
                     </View>
                 </View>
 
@@ -1178,22 +1137,25 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingVertical: 2 }}>
                             <TouchableOpacity
                                 style={styles.templateChip}
-                                onPress={() => sendQuickWhatsapp(customerPhone, `Assalamu Alaikum ${customerName}! I am on my way with your Abu Mafhal delivery (#${item.id.slice(0, 8).toUpperCase()}). 🛵`, item.user_id)}
+                                onPress={() => sendQuickWhatsapp(customerPhone, `Assalamu Alaikum ${customerName}! I am on my way with your Abu Mafhal delivery (#${item.id.slice(0, 8).toUpperCase()}).`, item.user_id)}
                             >
-                                <Text style={styles.templateChipText}>🛵 On my way</Text>
+                                <Ionicons name="bicycle" size={13} color={TEXT_DARK} />
+                                <Text style={styles.templateChipText}>On my way</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={styles.templateChip}
-                                onPress={() => sendQuickWhatsapp(customerPhone, `Assalamu Alaikum ${customerName}! I have arrived outside your delivery location with your package. 📍`, item.user_id)}
+                                onPress={() => sendQuickWhatsapp(customerPhone, `Assalamu Alaikum ${customerName}! I have arrived outside your delivery location with your package.`, item.user_id)}
                             >
-                                <Text style={styles.templateChipText}>📍 Arrived outside</Text>
+                                <Ionicons name="location" size={13} color={TEXT_DARK} />
+                                <Text style={styles.templateChipText}>Arrived outside</Text>
                             </TouchableOpacity>
                             {isPod && (
                                 <TouchableOpacity
                                     style={[styles.templateChip, { backgroundColor: '#FEF3C7' }]}
-                                    onPress={() => sendQuickWhatsapp(customerPhone, `Assalamu Alaikum! Please prepare ₦${totalAmount.toLocaleString()} cash/transfer for your Pay on Delivery package (#${item.id.slice(0, 8).toUpperCase()}). 💵`, item.user_id)}
+                                    onPress={() => sendQuickWhatsapp(customerPhone, `Assalamu Alaikum! Please prepare ₦${totalAmount.toLocaleString()} cash/transfer for your Pay on Delivery package (#${item.id.slice(0, 8).toUpperCase()}).`, item.user_id)}
                                 >
-                                    <Text style={[styles.templateChipText, { color: '#92400E' }]}>💵 Prepare POD ₦{totalAmount.toLocaleString()}</Text>
+                                    <Ionicons name="cash-outline" size={13} color="#92400E" />
+                                    <Text style={[styles.templateChipText, { color: '#92400E' }]}>Prepare POD ₦{totalAmount.toLocaleString()}</Text>
                                 </TouchableOpacity>
                             )}
                         </ScrollView>
@@ -1203,7 +1165,8 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                 {/* Notes & Audit Row if exists */}
                 {item.driver_notes ? (
                     <View style={styles.driverNotesBox}>
-                        <Text style={styles.driverNotesText}>📝 {item.driver_notes}</Text>
+                        <Ionicons name="document-text-outline" size={13} color={TEXT_MUTED} />
+                        <Text style={styles.driverNotesText}>{item.driver_notes}</Text>
                     </View>
                 ) : null}
 
@@ -1222,7 +1185,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                 style={styles.actionBtnGradient}
                             >
                                 <Ionicons name="flash" size={16} color="#070D1B" />
-                                <Text style={styles.actionBtnClaimText}>Accept & Claim Delivery ⚡</Text>
+                                <Text style={styles.actionBtnClaimText}>Accept & Claim Delivery</Text>
                             </LinearGradient>
                         </TouchableOpacity>
                     ) : !isHistory ? (
@@ -1233,8 +1196,8 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                     onPress={() => markPickedUp(item.id)}
                                     activeOpacity={0.85}
                                 >
-                                    <Ionicons name="bicycle" size={16} color="#0F172A" />
-                                    <Text style={styles.actionBtnPickupText}>Pick Up & Start Transit 📦</Text>
+                                    <Ionicons name="cube-outline" size={16} color="#0F172A" />
+                                    <Text style={styles.actionBtnPickupText}>Pick Up & Start Transit</Text>
                                 </TouchableOpacity>
                             )}
 
@@ -1250,7 +1213,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                     style={styles.actionBtnGradient}
                                 >
                                     <Ionicons name="checkmark-done" size={18} color="#FFFFFF" />
-                                    <Text style={styles.actionBtnDeliverText}>Verify Handover & Complete Delivery ✅</Text>
+                                    <Text style={styles.actionBtnDeliverText}>Verify Handover & Complete Delivery</Text>
                                 </LinearGradient>
                             </TouchableOpacity>
                         </View>
@@ -1286,79 +1249,44 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                             />
                             <View style={[styles.avatarOnlineDot, { backgroundColor: driverProfile?.status === 'active' ? SUCCESS : '#94A3B8' }]} />
                         </View>
-                        <View>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <Text style={styles.driverName} numberOfLines={1}>{activeUser?.full_name || 'Courier Partner'}</Text>
-                                <View style={[styles.levelTag, { backgroundColor: 'rgba(217, 167, 58, 0.25)' }]}>
+                        <View style={styles.driverNameWrap}>
+                            <Text style={styles.driverName} numberOfLines={1}>{activeUser?.full_name || 'Courier Partner'}</Text>
+                            <View style={styles.levelTagWrap}>
+                                <View style={[styles.levelTag, { backgroundColor: 'rgba(217, 167, 58, 0.2)' }]}>
                                     <Text style={styles.levelTagText}>{driverTier.badge} {driverTier.title.toUpperCase()}</Text>
                                 </View>
                             </View>
-                            <Text style={styles.driverSubRole}>Abu Mafhal Logistics • Delivery Partner</Text>
+                            <Text style={styles.driverSubRole} numberOfLines={1}>Abu Mafhal Logistics • Delivery Partner</Text>
                         </View>
                     </View>
 
                     <View style={styles.headerActionGroup}>
                         <TouchableOpacity onPress={handleRefresh} style={styles.headerIconBtn} activeOpacity={0.75}>
-                            <Ionicons name="reload" size={18} color="#FFFFFF" />
+                            <Ionicons name="reload" size={17} color="#FFFFFF" />
                         </TouchableOpacity>
                         <TouchableOpacity onPress={triggerSOS} style={[styles.headerIconBtn, { backgroundColor: 'rgba(239, 68, 68, 0.9)' }]} activeOpacity={0.75}>
-                            {isSosActive ? <ActivityIndicator size="small" color="#FFF" /> : <Ionicons name="warning" size={18} color="#FFFFFF" />}
+                            {isSosActive ? <ActivityIndicator size="small" color="#FFF" /> : <Ionicons name="warning" size={17} color="#FFFFFF" />}
                         </TouchableOpacity>
                         <TouchableOpacity onPress={onLogout} style={[styles.headerIconBtn, { backgroundColor: 'rgba(239, 68, 68, 0.2)' }]} activeOpacity={0.75}>
-                            <Ionicons name="power" size={18} color={DANGER} />
+                            <Ionicons name="power" size={17} color={DANGER} />
                         </TouchableOpacity>
                     </View>
                 </View>
 
-                {/* Status Toggle & Live GPS Banner */}
-                <View style={styles.statusToggleBanner}>
-                    <View style={styles.statusIndicatorRow}>
-                        <View style={[styles.statusPulseDot, { backgroundColor: driverProfile?.status === 'emergency_sos' ? DANGER : driverProfile?.status === 'active' ? SUCCESS : '#94A3B8' }]} />
-                        <View style={{ flex: 1 }}>
-                            <Text style={[styles.statusTitle, driverProfile?.status === 'emergency_sos' && { color: DANGER }]}>
-                                {driverProfile?.status === 'emergency_sos' ? '🚨 SOS EMERGENCY ACTIVE' : driverProfile?.status === 'active' ? 'ONLINE • ACCEPTING DELIVERIES' : 'OFFLINE • STANDBY'}
-                            </Text>
-                            <Text style={styles.statusVehicleSubtitle} numberOfLines={1}>
-                                {driverProfile?.vehicle_type || 'Vehicle'} • {driverProfile?.current_location || 'Kano Hub'}
-                            </Text>
+                {/* Two-Tier Status & GPS Control Card (Spacious, No Overlapping) */}
+                <View style={styles.statusToggleCard}>
+                    <View style={styles.statusRowMain}>
+                        <View style={styles.statusIndicatorRow}>
+                            <View style={[styles.statusPulseDot, { backgroundColor: driverProfile?.status === 'emergency_sos' ? DANGER : driverProfile?.status === 'active' ? SUCCESS : '#94A3B8' }]} />
+                            <View style={{ flex: 1, paddingRight: 8 }}>
+                                <Text style={[styles.statusTitle, driverProfile?.status === 'emergency_sos' && { color: DANGER }]} numberOfLines={1}>
+                                    {driverProfile?.status === 'emergency_sos' ? 'EMERGENCY SOS ACTIVE' : driverProfile?.status === 'active' ? 'ONLINE • ACCEPTING JOBS' : 'OFFLINE • STANDBY'}
+                                </Text>
+                                <Text style={styles.statusVehicleSubtitle} numberOfLines={1}>
+                                    {driverProfile?.vehicle_type || 'Vehicle'} • {driverProfile?.current_location || 'Kano Hub Central'}
+                                </Text>
+                            </View>
                         </View>
-                    </View>
-
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                        <TouchableOpacity
-                            style={[styles.gpsSyncBtn, isLiveTracking && { backgroundColor: 'rgba(16, 185, 129, 0.3)', borderColor: SUCCESS }]}
-                            onPress={toggleLiveTracking}
-                            disabled={isSyncingGps}
-                            activeOpacity={0.8}
-                        >
-                            {isLiveTracking ? (
-                                <>
-                                    <View style={[styles.statusPulseDot, { backgroundColor: SUCCESS, width: 8, height: 8 }]} />
-                                    <Text style={styles.gpsSyncBtnText}>LIVE</Text>
-                                </>
-                            ) : (
-                                <>
-                                    <Ionicons name="radio" size={12} color="#FFFFFF" />
-                                    <Text style={styles.gpsSyncBtnText}>TRACK</Text>
-                                </>
-                            )}
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={styles.gpsSyncBtn}
-                            onPress={syncLiveGps}
-                            disabled={isSyncingGps}
-                            activeOpacity={0.8}
-                        >
-                            {isSyncingGps ? (
-                                <ActivityIndicator size="small" color="#FFFFFF" />
-                            ) : (
-                                <>
-                                    <Ionicons name="location" size={12} color="#FFFFFF" />
-                                    <Text style={styles.gpsSyncBtnText}>SYNC</Text>
-                                </>
-                            )}
-                        </TouchableOpacity>
 
                         <Switch
                             value={driverProfile?.status === 'active'}
@@ -1366,6 +1294,43 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                             trackColor={{ false: '#334155', true: SUCCESS }}
                             thumbColor={driverProfile?.status === 'active' ? '#FFFFFF' : '#94A3B8'}
                         />
+                    </View>
+
+                    <View style={styles.statusDivider} />
+
+                    <View style={styles.statusRowControls}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                            <Ionicons name="location" size={14} color={GOLD} />
+                            <Text style={styles.statusHubLocation} numberOfLines={1}>{driverProfile?.current_location || 'Kano Hub Central'}</Text>
+                        </View>
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <TouchableOpacity
+                                style={[styles.gpsSyncBtn, isLiveTracking && { backgroundColor: 'rgba(16, 185, 129, 0.3)', borderColor: SUCCESS }]}
+                                onPress={toggleLiveTracking}
+                                disabled={isSyncingGps}
+                                activeOpacity={0.8}
+                            >
+                                <Ionicons name="radio" size={12} color="#FFFFFF" />
+                                <Text style={styles.gpsSyncBtnText}>{isLiveTracking ? 'LIVE ON' : 'TRACK'}</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={styles.gpsSyncBtn}
+                                onPress={syncLiveGps}
+                                disabled={isSyncingGps}
+                                activeOpacity={0.8}
+                            >
+                                {isSyncingGps ? (
+                                    <ActivityIndicator size="small" color="#FFFFFF" />
+                                ) : (
+                                    <>
+                                        <Ionicons name="refresh-cw" size={12} color="#FFFFFF" />
+                                        <Text style={styles.gpsSyncBtnText}>SYNC</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </View>
 
@@ -1376,38 +1341,56 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                     </View>
                 ) : null}
 
-                {/* Metrics Stats 4-Card Grid */}
+                {/* Metrics Stats 2x2 Grid (Generous Width, Zero Text Collisions) */}
                 <View style={styles.metricsGrid}>
                     <TouchableOpacity style={styles.metricCard} onPress={() => setActiveTab('wallet')} activeOpacity={0.85}>
-                        <View style={styles.metricIconWrap}>
-                            <Ionicons name="wallet-outline" size={15} color={GOLD} />
+                        <View style={styles.metricCardHeader}>
+                            <Text style={styles.metricLabel}>ESCROW BALANCE</Text>
+                            <View style={[styles.metricIconWrap, { backgroundColor: 'rgba(217, 167, 58, 0.2)' }]}>
+                                <Ionicons name="wallet-outline" size={15} color={GOLD} />
+                            </View>
                         </View>
-                        <Text style={styles.metricValue}>₦{walletBalance.toLocaleString()}</Text>
-                        <Text style={styles.metricLabel}>Balance</Text>
+                        <Text style={[styles.metricValue, { color: '#FFFFFF' }]} numberOfLines={1} adjustsFontSizeToFit>
+                            ₦{walletBalance.toLocaleString()}
+                        </Text>
+                        <Text style={styles.metricSubtext}>Today: +₦{todayEarnings.toLocaleString()}</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity style={styles.metricCard} onPress={() => setActiveTab('active')} activeOpacity={0.85}>
-                        <View style={[styles.metricIconWrap, { backgroundColor: 'rgba(16, 185, 129, 0.2)' }]}>
-                            <Ionicons name="bicycle" size={15} color={SUCCESS} />
+                        <View style={styles.metricCardHeader}>
+                            <Text style={styles.metricLabel}>ACTIVE JOBS</Text>
+                            <View style={[styles.metricIconWrap, { backgroundColor: 'rgba(16, 185, 129, 0.2)' }]}>
+                                <Ionicons name="bicycle" size={15} color={SUCCESS} />
+                            </View>
                         </View>
-                        <Text style={[styles.metricValue, { color: SUCCESS }]}>{orders.length}</Text>
-                        <Text style={styles.metricLabel}>Active</Text>
+                        <Text style={[styles.metricValue, { color: SUCCESS }]} numberOfLines={1}>
+                            {orders.length}
+                        </Text>
+                        <Text style={styles.metricSubtext}>{orders.length === 0 ? 'All delivered' : 'In transit now'}</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity style={styles.metricCard} onPress={() => setActiveTab('pool')} activeOpacity={0.85}>
-                        <View style={[styles.metricIconWrap, { backgroundColor: 'rgba(245, 158, 11, 0.2)' }]}>
-                            <Ionicons name="flash-outline" size={15} color={AMBER} />
+                        <View style={styles.metricCardHeader}>
+                            <Text style={styles.metricLabel}>JOB POOL</Text>
+                            <View style={[styles.metricIconWrap, { backgroundColor: 'rgba(245, 158, 11, 0.2)' }]}>
+                                <Ionicons name="flash-outline" size={15} color={AMBER} />
+                            </View>
                         </View>
-                        <Text style={[styles.metricValue, { color: AMBER }]}>{poolOrders.length}</Text>
-                        <Text style={styles.metricLabel}>Job Pool</Text>
+                        <Text style={[styles.metricValue, { color: AMBER }]} numberOfLines={1}>
+                            {poolOrders.length}
+                        </Text>
+                        <Text style={styles.metricSubtext}>Ready for pickup</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity style={styles.metricCard} onPress={() => setActiveTab('history')} activeOpacity={0.85}>
-                        <View style={[styles.metricIconWrap, { backgroundColor: 'rgba(56, 189, 248, 0.2)' }]}>
-                            <Ionicons name="checkmark-done" size={15} color="#38BDF8" />
+                        <View style={styles.metricCardHeader}>
+                            <Text style={styles.metricLabel}>DELIVERED</Text>
+                            <View style={[styles.metricIconWrap, { backgroundColor: 'rgba(56, 189, 248, 0.2)' }]}>
+                                <Ionicons name="checkmark-done" size={15} color="#38BDF8" />
+                            </View>
                         </View>
                         <Text style={[styles.metricValue, { color: '#38BDF8' }]}>{historyOrders.length}</Text>
-                        <Text style={styles.metricLabel}>Delivered</Text>
+                        <Text style={styles.metricSubtext}>Completed orders</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -1422,7 +1405,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                     </View>
                 </View>
                 {/* Driver Performance Metrics Strip */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', backgroundColor: 'rgba(255,255,255,0.05)', paddingVertical: 12, borderRadius: 12, marginTop: 16 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', backgroundColor: 'rgba(255,255,255,0.05)', paddingVertical: 12, borderRadius: 12, marginTop: 14 }}>
                     <View style={{ alignItems: 'center' }}>
                         <Ionicons name="star" size={16} color={GOLD} />
                         <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '600', marginTop: 4 }}>{driverProfile?.rating?.toFixed(1) || '5.0'} Rating</Text>
@@ -1490,18 +1473,19 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
 
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingTop: 6 }}>
                         {[
-                            { id: 'ALL', label: 'All Orders' },
-                            { id: 'POD', label: '💵 Pay on Delivery' },
-                            { id: 'PREPAID', label: '💳 Paid Online' },
-                            { id: 'PSS', label: '📦 Pay Small Small' }
+                            { id: 'ALL', label: 'All Orders', icon: 'cube-outline' },
+                            { id: 'POD', label: 'Pay on Delivery', icon: 'cash-outline' },
+                            { id: 'PREPAID', label: 'Paid Online', icon: 'checkmark-circle' },
+                            { id: 'PSS', label: 'Pay Small Small', icon: 'wallet' }
                         ].map(f => {
                             const isSelected = filterPayment === f.id;
                             return (
                                 <TouchableOpacity
                                     key={f.id}
-                                    style={[styles.filterChip, isSelected && styles.filterChipActive]}
+                                    style={[styles.filterChip, isSelected && styles.filterChipActive, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}
                                     onPress={() => setFilterPayment(f.id)}
                                 >
+                                    <Ionicons name={f.icon} size={13} color={isSelected ? '#0F172A' : TEXT_MUTED} />
                                     <Text style={[styles.filterChipText, isSelected && styles.filterChipTextActive]}>
                                         {f.label}
                                     </Text>
@@ -1537,8 +1521,9 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                         : 'You do not have any pending packages in transit. Claim new orders from the pool!'}
                                 </Text>
                                 {!searchQuery && (
-                                    <TouchableOpacity style={styles.emptyActionBtn} onPress={() => setActiveTab('pool')}>
-                                        <Text style={styles.emptyActionBtnText}>Browse Available Job Pool ({poolOrders.length}) ⚡</Text>
+                                    <TouchableOpacity style={[styles.emptyActionBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]} onPress={() => setActiveTab('pool')}>
+                                        <Ionicons name="flash" size={14} color="#0F172A" />
+                                        <Text style={styles.emptyActionBtnText}>Browse Available Job Pool ({poolOrders.length})</Text>
                                     </TouchableOpacity>
                                 )}
                             </View>
@@ -1623,32 +1608,43 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                             </View>
                         </LinearGradient>
 
-                        {/* Interactive Earnings Chart Mockup */}
+                        {/* Live Courier Earnings & Performance Overview (100% Real Live Data) */}
                         <View style={[styles.vehicleInfoCard, { marginBottom: 16, paddingTop: 16 }]}>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                                <Text style={styles.vehicleCardTitle}>Weekly Earnings</Text>
-                                <Text style={{ color: SUCCESS, fontWeight: '700', fontSize: 12 }}>+14%</Text>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <Ionicons name="stats-chart" size={15} color={GOLD} />
+                                    <Text style={styles.vehicleCardTitle}>Live Earnings & Delivery Summary</Text>
+                                </View>
+                                <View style={{ backgroundColor: '#ECFDF5', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                                    <Text style={{ color: SUCCESS, fontWeight: '800', fontSize: 11 }}>REAL-TIME</Text>
+                                </View>
                             </View>
-                            
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', height: 120, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
-                                {[
-                                    { day: 'Mon', val: 0.3, amt: 2500 },
-                                    { day: 'Tue', val: 0.6, amt: 4800 },
-                                    { day: 'Wed', val: 0.4, amt: 3200 },
-                                    { day: 'Thu', val: 0.8, amt: 7500 },
-                                    { day: 'Fri', val: 0.5, amt: 4000 },
-                                    { day: 'Sat', val: 1.0, amt: 8500 },
-                                    { day: 'Sun', val: 0.1, amt: 0 }
-                                ].map((bar, idx) => (
-                                    <View key={idx} style={{ alignItems: 'center', width: 30 }}>
-                                        <View style={{ width: 14, height: 100 * bar.val, backgroundColor: bar.val === 1.0 ? GOLD : '#94A3B8', borderRadius: 4 }} />
-                                        <Text style={{ fontSize: 10, color: TEXT_MUTED, marginTop: 6 }}>{bar.day}</Text>
-                                    </View>
-                                ))}
-                            </View>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 }}>
-                                <Text style={{ fontSize: 12, color: TEXT_MUTED }}>Total This Week</Text>
-                                <Text style={{ fontSize: 14, fontWeight: '800', color: TEXT_DARK }}>₦30,500</Text>
+
+                            <View style={styles.realEarningsSummaryGrid}>
+                                <View style={styles.realSummaryBox}>
+                                    <Text style={styles.realSummaryLbl}>TODAY'S PAYOUT</Text>
+                                    <Text style={[styles.realSummaryVal, { color: SUCCESS }]} numberOfLines={1}>
+                                        ₦{todayEarnings.toLocaleString()}
+                                    </Text>
+                                </View>
+                                <View style={styles.realSummaryBox}>
+                                    <Text style={styles.realSummaryLbl}>TOTAL DELIVERED</Text>
+                                    <Text style={[styles.realSummaryVal, { color: '#38BDF8' }]} numberOfLines={1}>
+                                        {historyOrders.length}
+                                    </Text>
+                                </View>
+                                <View style={styles.realSummaryBox}>
+                                    <Text style={styles.realSummaryLbl}>LIFETIME EARNINGS</Text>
+                                    <Text style={[styles.realSummaryVal, { color: GOLD }]} numberOfLines={1}>
+                                        ₦{totalDeliveredEarnings.toLocaleString()}
+                                    </Text>
+                                </View>
+                                <View style={styles.realSummaryBox}>
+                                    <Text style={styles.realSummaryLbl}>ESCROW BALANCE</Text>
+                                    <Text style={[styles.realSummaryVal, { color: TEXT_DARK }]} numberOfLines={1}>
+                                        ₦{walletBalance.toLocaleString()}
+                                    </Text>
+                                </View>
                             </View>
                         </View>
 
@@ -2325,10 +2321,19 @@ const styles = StyleSheet.create({
         borderWidth: 2,
         borderColor: HEADER_NAVY,
     },
+    driverNameWrap: {
+        flex: 1,
+        justifyContent: 'center',
+    },
     driverName: {
         fontSize: 16,
         fontWeight: '900',
         color: '#FFFFFF',
+    },
+    levelTagWrap: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 2,
     },
     levelTag: {
         paddingHorizontal: 7,
@@ -2360,15 +2365,35 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    statusToggleBanner: {
+    statusToggleCard: {
+        backgroundColor: 'rgba(255, 255, 255, 0.08)',
+        borderRadius: 14,
+        padding: 12,
+        marginBottom: 10,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.06)',
+    },
+    statusRowMain: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+    },
+    statusDivider: {
+        height: 1,
         backgroundColor: 'rgba(255, 255, 255, 0.08)',
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-        borderRadius: 14,
-        marginBottom: 8,
+        marginVertical: 10,
+    },
+    statusRowControls: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 8,
+    },
+    statusHubLocation: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#CBD5E1',
+        flexShrink: 1,
     },
     statusIndicatorRow: {
         flexDirection: 'row',
@@ -2425,37 +2450,49 @@ const styles = StyleSheet.create({
     },
     metricsGrid: {
         flexDirection: 'row',
-        gap: 8,
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        rowGap: 8,
         marginBottom: 10,
     },
     metricCard: {
-        flex: 1,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        width: '48.5%',
+        backgroundColor: 'rgba(255, 255, 255, 0.08)',
         borderRadius: 12,
-        padding: 9,
-        alignItems: 'center',
+        padding: 10,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.08)',
+        borderColor: 'rgba(255, 255, 255, 0.07)',
+    },
+    metricCardHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 4,
     },
     metricIconWrap: {
-        width: 26,
-        height: 26,
-        borderRadius: 13,
+        width: 24,
+        height: 24,
+        borderRadius: 12,
         backgroundColor: 'rgba(217, 167, 58, 0.2)',
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 3,
     },
     metricValue: {
-        fontSize: 13.5,
+        fontSize: 15,
         fontWeight: '900',
         color: '#FFFFFF',
     },
     metricLabel: {
         fontSize: 9.5,
         color: '#CBD5E1',
-        fontWeight: '700',
-        marginTop: 2,
+        fontWeight: '800',
+        letterSpacing: 0.4,
+    },
+    metricSubtext: {
+        fontSize: 10,
+        color: '#94A3B8',
+        fontWeight: '600',
+        marginTop: 3,
     },
     xpProgressContainer: {
         backgroundColor: 'rgba(255, 255, 255, 0.06)',
@@ -2599,8 +2636,13 @@ const styles = StyleSheet.create({
     cardHeaderRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
-        marginBottom: 12,
+        justifyContent: 'space-between',
+        marginBottom: 8,
+    },
+    cardSubHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 10,
     },
     orderIdPill: {
         flexDirection: 'row',
@@ -3042,6 +3084,31 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '900',
         color: TEXT_DARK,
+    },
+    realEarningsSummaryGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        rowGap: 8,
+    },
+    realSummaryBox: {
+        width: '48.5%',
+        backgroundColor: '#F8FAFC',
+        borderRadius: 10,
+        padding: 10,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    realSummaryLbl: {
+        fontSize: 9.5,
+        fontWeight: '800',
+        color: TEXT_MUTED,
+        letterSpacing: 0.4,
+        marginBottom: 4,
+    },
+    realSummaryVal: {
+        fontSize: 15,
+        fontWeight: '900',
     },
     statMiniGrid: {
         flexDirection: 'row',
