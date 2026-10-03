@@ -25,6 +25,7 @@ import { decode } from 'base64-arraybuffer';
 import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 import { whatsappService } from '../services/whatsappService';
 import { WhatsAppActionModal } from '../components/WhatsAppActionModal';
+import { DriverDrawer } from '../components/DriverDrawer';
 
 import { LucideIcon } from '../components/LucideIcon';
 
@@ -104,6 +105,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
     const [refreshing, setRefreshing] = useState(false);
     const [activeTab, _setActiveTab] = useState(() => getInitialDriverTab(route));
     const [selectedOrder, setSelectedOrder] = useState(null);
+    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
     // Search & Filter State
     const [searchQuery, setSearchQuery] = useState('');
@@ -1234,195 +1236,120 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
 
     return (
         <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
-            {/* ─── 1. EXECUTIVE LUXURY HEADER (NAVY & GOLD) ─── */}
+            {/* ─── 1. COMPACT LUXURY TOP NAVBAR (Ultra Slim, Height ~54px) ─── */}
             <LinearGradient
                 colors={[HEADER_NAVY, HEADER_NAVY_LIGHT]}
-                style={styles.headerGradient}
+                style={styles.compactHeaderGradient}
             >
-                {/* Top Row: Avatar, Identity, Actions */}
-                <View style={styles.headerTopRow}>
-                    <View style={styles.driverIdentityBox}>
-                        <View style={styles.avatarWrap}>
-                            <Image
-                                source={{ uri: activeUser?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(activeUser?.full_name || 'Courier')}&background=0B132B&color=D9A73A&size=200` }}
-                                style={styles.avatarImg}
-                            />
-                            <View style={[styles.avatarOnlineDot, { backgroundColor: driverProfile?.status === 'active' ? SUCCESS : '#94A3B8' }]} />
-                        </View>
-                        <View style={styles.driverNameWrap}>
-                            <Text style={styles.driverName} numberOfLines={1}>{activeUser?.full_name || 'Courier Partner'}</Text>
-                            <View style={styles.levelTagWrap}>
-                                <View style={[styles.levelTag, { backgroundColor: 'rgba(217, 167, 58, 0.2)' }]}>
-                                    <Text style={styles.levelTagText}>{driverTier.badge} {driverTier.title.toUpperCase()}</Text>
-                                </View>
-                            </View>
-                            <Text style={styles.driverSubRole} numberOfLines={1}>Abu Mafhal Logistics • Delivery Partner</Text>
-                        </View>
-                    </View>
+                <View style={styles.compactHeaderRow}>
+                    {/* Left: Sidebar Menu Trigger Button with Online Status Dot */}
+                    <TouchableOpacity
+                        style={styles.menuTriggerBtn}
+                        onPress={() => setIsDrawerOpen(true)}
+                        activeOpacity={0.8}
+                    >
+                        <Ionicons name="menu" size={21} color="#FFFFFF" />
+                        <View style={[styles.menuPulseDot, { backgroundColor: driverProfile?.status === 'active' ? SUCCESS : '#94A3B8' }]} />
+                    </TouchableOpacity>
 
-                    <View style={styles.headerActionGroup}>
-                        <TouchableOpacity onPress={handleRefresh} style={styles.headerIconBtn} activeOpacity={0.75}>
-                            <Ionicons name="reload" size={17} color="#FFFFFF" />
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={triggerSOS} style={[styles.headerIconBtn, { backgroundColor: 'rgba(239, 68, 68, 0.9)' }]} activeOpacity={0.75}>
-                            {isSosActive ? <ActivityIndicator size="small" color="#FFF" /> : <Ionicons name="warning" size={17} color="#FFFFFF" />}
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={onLogout} style={[styles.headerIconBtn, { backgroundColor: 'rgba(239, 68, 68, 0.2)' }]} activeOpacity={0.75}>
-                            <Ionicons name="power" size={17} color={DANGER} />
-                        </TouchableOpacity>
-                    </View>
-                </View>
-
-                {/* Two-Tier Status & GPS Control Card (Spacious, No Overlapping) */}
-                <View style={styles.statusToggleCard}>
-                    <View style={styles.statusRowMain}>
-                        <View style={styles.statusIndicatorRow}>
-                            <View style={[styles.statusPulseDot, { backgroundColor: driverProfile?.status === 'emergency_sos' ? DANGER : driverProfile?.status === 'active' ? SUCCESS : '#94A3B8' }]} />
-                            <View style={{ flex: 1, paddingRight: 8 }}>
-                                <Text style={[styles.statusTitle, driverProfile?.status === 'emergency_sos' && { color: DANGER }]} numberOfLines={1}>
-                                    {driverProfile?.status === 'emergency_sos' ? 'EMERGENCY SOS ACTIVE' : driverProfile?.status === 'active' ? 'ONLINE • ACCEPTING JOBS' : 'OFFLINE • STANDBY'}
-                                </Text>
-                                <Text style={styles.statusVehicleSubtitle} numberOfLines={1}>
-                                    {driverProfile?.vehicle_type || 'Vehicle'} • {driverProfile?.current_location || 'Kano Hub Central'}
-                                </Text>
+                    {/* Middle: Brand & Hub Station */}
+                    <TouchableOpacity
+                        style={styles.compactBrandBox}
+                        onPress={() => setIsDrawerOpen(true)}
+                        activeOpacity={0.85}
+                    >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={styles.compactBrandTitle} numberOfLines={1}>Abu Mafhal Logistics</Text>
+                            <View style={styles.compactLevelTag}>
+                                <Text style={styles.compactLevelText}>{driverTier.badge}</Text>
                             </View>
                         </View>
-
-                        <Switch
-                            value={driverProfile?.status === 'active'}
-                            onValueChange={toggleStatus}
-                            trackColor={{ false: '#334155', true: SUCCESS }}
-                            thumbColor={driverProfile?.status === 'active' ? '#FFFFFF' : '#94A3B8'}
-                        />
-                    </View>
-
-                    <View style={styles.statusDivider} />
-
-                    <View style={styles.statusRowControls}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                            <Ionicons name="location" size={14} color={GOLD} />
-                            <Text style={styles.statusHubLocation} numberOfLines={1}>{driverProfile?.current_location || 'Kano Hub Central'}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 }}>
+                            <Ionicons name="location" size={11} color={GOLD} />
+                            <Text style={styles.compactHubText} numberOfLines={1}>
+                                {driverProfile?.current_location || 'Kano Hub Central'}
+                            </Text>
                         </View>
+                    </TouchableOpacity>
 
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            <TouchableOpacity
-                                style={[styles.gpsSyncBtn, isLiveTracking && { backgroundColor: 'rgba(16, 185, 129, 0.3)', borderColor: SUCCESS }]}
-                                onPress={toggleLiveTracking}
-                                disabled={isSyncingGps}
-                                activeOpacity={0.8}
-                            >
-                                <Ionicons name="radio" size={12} color="#FFFFFF" />
-                                <Text style={styles.gpsSyncBtnText}>{isLiveTracking ? 'LIVE ON' : 'TRACK'}</Text>
-                            </TouchableOpacity>
+                    {/* Right: Quick Online Toggle Pill, Wallet Balance Badge, Refresh */}
+                    <View style={styles.compactActionGroup}>
+                        {/* Quick Online / Offline Toggle Pill */}
+                        <TouchableOpacity
+                            style={[
+                                styles.compactStatusPill,
+                                driverProfile?.status === 'active' ? styles.statusPillActive : styles.statusPillOffline
+                            ]}
+                            onPress={toggleStatus}
+                            activeOpacity={0.8}
+                        >
+                            <View style={[styles.pillDot, { backgroundColor: driverProfile?.status === 'active' ? SUCCESS : '#64748B' }]} />
+                            <Text style={[styles.compactStatusPillText, { color: driverProfile?.status === 'active' ? SUCCESS : '#CBD5E1' }]}>
+                                {driverProfile?.status === 'active' ? 'ONLINE' : 'OFFLINE'}
+                            </Text>
+                        </TouchableOpacity>
 
-                            <TouchableOpacity
-                                style={styles.gpsSyncBtn}
-                                onPress={syncLiveGps}
-                                disabled={isSyncingGps}
-                                activeOpacity={0.8}
-                            >
-                                {isSyncingGps ? (
-                                    <ActivityIndicator size="small" color="#FFFFFF" />
-                                ) : (
-                                    <>
-                                        <Ionicons name="refresh-cw" size={12} color="#FFFFFF" />
-                                        <Text style={styles.gpsSyncBtnText}>SYNC</Text>
-                                    </>
-                                )}
-                            </TouchableOpacity>
-                        </View>
+                        {/* Quick Wallet Payout Pill */}
+                        <TouchableOpacity
+                            style={styles.compactWalletPill}
+                            onPress={() => setActiveTab('wallet')}
+                            activeOpacity={0.8}
+                        >
+                            <Ionicons name="wallet" size={13} color={GOLD} />
+                            <Text style={styles.compactWalletText}>₦{walletBalance.toLocaleString()}</Text>
+                        </TouchableOpacity>
+
+                        {/* Refresh */}
+                        <TouchableOpacity
+                            onPress={handleRefresh}
+                            style={styles.compactIconBtn}
+                            activeOpacity={0.75}
+                        >
+                            <Ionicons name="refresh" size={15} color="#FFFFFF" />
+                        </TouchableOpacity>
                     </View>
                 </View>
 
                 {gpsNotice ? (
-                    <View style={styles.gpsNoticeBar}>
-                        <Ionicons name="location" size={12} color={SUCCESS} />
-                        <Text style={styles.gpsNoticeText}>{gpsNotice}</Text>
+                    <View style={styles.compactGpsNotice}>
+                        <Ionicons name="location" size={11} color={SUCCESS} />
+                        <Text style={styles.compactGpsText} numberOfLines={1}>{gpsNotice}</Text>
                     </View>
                 ) : null}
-
-                {/* Metrics Stats 2x2 Grid (Generous Width, Zero Text Collisions) */}
-                <View style={styles.metricsGrid}>
-                    <TouchableOpacity style={styles.metricCard} onPress={() => setActiveTab('wallet')} activeOpacity={0.85}>
-                        <View style={styles.metricCardHeader}>
-                            <Text style={styles.metricLabel}>ESCROW BALANCE</Text>
-                            <View style={[styles.metricIconWrap, { backgroundColor: 'rgba(217, 167, 58, 0.2)' }]}>
-                                <Ionicons name="wallet-outline" size={15} color={GOLD} />
-                            </View>
-                        </View>
-                        <Text style={[styles.metricValue, { color: '#FFFFFF' }]} numberOfLines={1} adjustsFontSizeToFit>
-                            ₦{walletBalance.toLocaleString()}
-                        </Text>
-                        <Text style={styles.metricSubtext}>Today: +₦{todayEarnings.toLocaleString()}</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.metricCard} onPress={() => setActiveTab('active')} activeOpacity={0.85}>
-                        <View style={styles.metricCardHeader}>
-                            <Text style={styles.metricLabel}>ACTIVE JOBS</Text>
-                            <View style={[styles.metricIconWrap, { backgroundColor: 'rgba(16, 185, 129, 0.2)' }]}>
-                                <Ionicons name="bicycle" size={15} color={SUCCESS} />
-                            </View>
-                        </View>
-                        <Text style={[styles.metricValue, { color: SUCCESS }]} numberOfLines={1}>
-                            {orders.length}
-                        </Text>
-                        <Text style={styles.metricSubtext}>{orders.length === 0 ? 'All delivered' : 'In transit now'}</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.metricCard} onPress={() => setActiveTab('pool')} activeOpacity={0.85}>
-                        <View style={styles.metricCardHeader}>
-                            <Text style={styles.metricLabel}>JOB POOL</Text>
-                            <View style={[styles.metricIconWrap, { backgroundColor: 'rgba(245, 158, 11, 0.2)' }]}>
-                                <Ionicons name="flash-outline" size={15} color={AMBER} />
-                            </View>
-                        </View>
-                        <Text style={[styles.metricValue, { color: AMBER }]} numberOfLines={1}>
-                            {poolOrders.length}
-                        </Text>
-                        <Text style={styles.metricSubtext}>Ready for pickup</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.metricCard} onPress={() => setActiveTab('history')} activeOpacity={0.85}>
-                        <View style={styles.metricCardHeader}>
-                            <Text style={styles.metricLabel}>DELIVERED</Text>
-                            <View style={[styles.metricIconWrap, { backgroundColor: 'rgba(56, 189, 248, 0.2)' }]}>
-                                <Ionicons name="checkmark-done" size={15} color="#38BDF8" />
-                            </View>
-                        </View>
-                        <Text style={[styles.metricValue, { color: '#38BDF8' }]}>{historyOrders.length}</Text>
-                        <Text style={styles.metricSubtext}>Completed orders</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* XP Progression Bar */}
-                <View style={styles.xpProgressContainer}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                        <Text style={styles.xpLabel}>Courier XP: {driverProfile?.xp || 0} XP</Text>
-                        <Text style={styles.xpNextLevel}>Next Tier: {driverTier.nextXp} XP</Text>
-                    </View>
-                    <View style={styles.xpProgressBarBg}>
-                        <View style={[styles.xpProgressBarFill, { width: `${Math.min(100, Math.max(8, driverTier.percent))}%` }]} />
-                    </View>
-                </View>
-                {/* Driver Performance Metrics Strip */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', backgroundColor: 'rgba(255,255,255,0.05)', paddingVertical: 12, borderRadius: 12, marginTop: 14 }}>
-                    <View style={{ alignItems: 'center' }}>
-                        <Ionicons name="star" size={16} color={GOLD} />
-                        <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '600', marginTop: 4 }}>{driverProfile?.rating?.toFixed(1) || '5.0'} Rating</Text>
-                    </View>
-                    <View style={{ width: 1, height: 24, backgroundColor: 'rgba(255,255,255,0.2)' }} />
-                    <View style={{ alignItems: 'center' }}>
-                        <Ionicons name="trending-up" size={16} color={SUCCESS} />
-                        <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '600', marginTop: 4 }}>{(historyOrders.length / Math.max(1, historyOrders.length) * 100).toFixed(0)}% Success</Text>
-                    </View>
-                    <View style={{ width: 1, height: 24, backgroundColor: 'rgba(255,255,255,0.2)' }} />
-                    <View style={{ alignItems: 'center' }}>
-                        <Ionicons name="shield-checkmark" size={16} color="#38BDF8" />
-                        <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '600', marginTop: 4 }}>Verified</Text>
-                    </View>
-                </View>
-
             </LinearGradient>
+
+            {/* ─── SIDEBAR DRAWER COMPONENT ─── */}
+            <DriverDrawer
+                visible={isDrawerOpen}
+                onClose={() => setIsDrawerOpen(false)}
+                activeTab={activeTab}
+                onSelectTab={(tabKey) => {
+                    setActiveTab(tabKey);
+                    setIsDrawerOpen(false);
+                }}
+                driverProfile={driverProfile}
+                activeUser={activeUser}
+                walletBalance={walletBalance}
+                orders={orders}
+                poolOrders={poolOrders}
+                historyOrders={historyOrders}
+                driverTier={driverTier}
+                isLiveTracking={isLiveTracking}
+                toggleLiveTracking={toggleLiveTracking}
+                isSyncingGps={isSyncingGps}
+                syncLiveGps={syncLiveGps}
+                toggleStatus={toggleStatus}
+                triggerSOS={triggerSOS}
+                onOpenVehicleModal={() => {
+                    setIsDrawerOpen(false);
+                    setVehicleModalVisible(true);
+                }}
+                onOpenShiftSummary={() => {
+                    setIsDrawerOpen(false);
+                    setShiftSummaryModalVisible(true);
+                }}
+                onLogout={onLogout}
+            />
 
             {/* ─── 2. MODERN TAB SELECTOR ─── */}
             <View style={styles.tabBarContainer}>
@@ -1501,6 +1428,61 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={GOLD} />}
                 contentContainerStyle={styles.mainScrollContent}
             >
+                {/* Metrics Stats 2x2 Grid (Natural Scroll with Page) */}
+                {['active', 'pool'].includes(activeTab) && (
+                    <View style={styles.metricsGrid}>
+                        <TouchableOpacity style={styles.metricCard} onPress={() => setActiveTab('wallet')} activeOpacity={0.85}>
+                            <View style={styles.metricCardHeader}>
+                                <Text style={styles.metricLabel}>ESCROW BALANCE</Text>
+                                <View style={[styles.metricIconWrap, { backgroundColor: 'rgba(217, 167, 58, 0.15)' }]}>
+                                    <Ionicons name="wallet" size={14} color={GOLD} />
+                                </View>
+                            </View>
+                            <Text style={[styles.metricValue, { color: TEXT_DARK }]} numberOfLines={1} adjustsFontSizeToFit>
+                                ₦{walletBalance.toLocaleString()}
+                            </Text>
+                            <Text style={styles.metricSubtext}>Today: +₦{todayEarnings.toLocaleString()}</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.metricCard} onPress={() => setActiveTab('active')} activeOpacity={0.85}>
+                            <View style={styles.metricCardHeader}>
+                                <Text style={styles.metricLabel}>ACTIVE JOBS</Text>
+                                <View style={[styles.metricIconWrap, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
+                                    <Ionicons name="bicycle" size={14} color={SUCCESS} />
+                                </View>
+                            </View>
+                            <Text style={[styles.metricValue, { color: SUCCESS }]} numberOfLines={1}>
+                                {orders.length}
+                            </Text>
+                            <Text style={styles.metricSubtext}>{orders.length === 0 ? 'All delivered' : 'In transit now'}</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.metricCard} onPress={() => setActiveTab('pool')} activeOpacity={0.85}>
+                            <View style={styles.metricCardHeader}>
+                                <Text style={styles.metricLabel}>JOB POOL</Text>
+                                <View style={[styles.metricIconWrap, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
+                                    <Ionicons name="flash" size={14} color={AMBER} />
+                                </View>
+                            </View>
+                            <Text style={[styles.metricValue, { color: AMBER }]} numberOfLines={1}>
+                                {poolOrders.length}
+                            </Text>
+                            <Text style={styles.metricSubtext}>Ready for pickup</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.metricCard} onPress={() => setActiveTab('history')} activeOpacity={0.85}>
+                            <View style={styles.metricCardHeader}>
+                                <Text style={styles.metricLabel}>DELIVERED</Text>
+                                <View style={[styles.metricIconWrap, { backgroundColor: 'rgba(56, 189, 248, 0.15)' }]}>
+                                    <Ionicons name="checkmark-done" size={14} color="#38BDF8" />
+                                </View>
+                            </View>
+                            <Text style={[styles.metricValue, { color: '#0284C7' }]}>{historyOrders.length}</Text>
+                            <Text style={styles.metricSubtext}>Completed orders</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+
                 {/* TAB 1: ACTIVE DELIVERIES */}
                 {activeTab === 'active' && (
                     <View style={styles.tabContentSection}>
@@ -2282,170 +2264,132 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: BG_LIGHT,
     },
-    headerGradient: {
-        paddingTop: Platform.OS === 'ios' ? 8 : 14,
-        paddingBottom: 16,
-        paddingHorizontal: 16,
-        borderBottomLeftRadius: 20,
-        borderBottomRightRadius: 20,
+    compactHeaderGradient: {
+        paddingTop: Platform.OS === 'ios' ? 8 : 12,
+        paddingBottom: 10,
+        paddingHorizontal: 14,
+        borderBottomLeftRadius: 16,
+        borderBottomRightRadius: 16,
     },
-    headerTopRow: {
+    compactHeaderRow: {
         flexDirection: 'row',
+        alignItems: 'center',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 14,
+        gap: 8,
     },
-    driverIdentityBox: {
-        flexDirection: 'row',
+    menuTriggerBtn: {
+        width: 38,
+        height: 38,
+        borderRadius: 12,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
         alignItems: 'center',
-        gap: 12,
-        flex: 1,
-    },
-    avatarWrap: {
+        justifyContent: 'center',
         position: 'relative',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.08)',
     },
-    avatarImg: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        borderWidth: 2,
-        borderColor: GOLD,
-    },
-    avatarOnlineDot: {
-        width: 12,
-        height: 12,
-        borderRadius: 6,
+    menuPulseDot: {
+        width: 9,
+        height: 9,
+        borderRadius: 4.5,
         position: 'absolute',
-        bottom: 0,
-        right: 0,
-        borderWidth: 2,
+        top: 6,
+        right: 6,
+        borderWidth: 1.5,
         borderColor: HEADER_NAVY,
     },
-    driverNameWrap: {
+    compactBrandBox: {
         flex: 1,
         justifyContent: 'center',
     },
-    driverName: {
-        fontSize: 16,
+    compactBrandTitle: {
+        fontSize: 14,
         fontWeight: '900',
         color: '#FFFFFF',
     },
-    levelTagWrap: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: 2,
+    compactLevelTag: {
+        backgroundColor: 'rgba(217, 167, 58, 0.2)',
+        paddingHorizontal: 5,
+        paddingVertical: 1,
+        borderRadius: 4,
     },
-    levelTag: {
-        paddingHorizontal: 7,
-        paddingVertical: 2,
-        borderRadius: 6,
+    compactLevelText: {
+        fontSize: 10,
     },
-    levelTagText: {
-        fontSize: 9.5,
-        fontWeight: '900',
-        color: GOLD,
-        letterSpacing: 0.5,
-    },
-    driverSubRole: {
-        fontSize: 11,
-        color: '#94A3B8',
-        fontWeight: '600',
-        marginTop: 1,
-    },
-    headerActionGroup: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
-    headerIconBtn: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: 'rgba(255, 255, 255, 0.12)',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    statusToggleCard: {
-        backgroundColor: 'rgba(255, 255, 255, 0.08)',
-        borderRadius: 14,
-        padding: 12,
-        marginBottom: 10,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.06)',
-    },
-    statusRowMain: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    statusDivider: {
-        height: 1,
-        backgroundColor: 'rgba(255, 255, 255, 0.08)',
-        marginVertical: 10,
-    },
-    statusRowControls: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 8,
-    },
-    statusHubLocation: {
-        fontSize: 11,
-        fontWeight: '700',
-        color: '#CBD5E1',
-        flexShrink: 1,
-    },
-    statusIndicatorRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        flex: 1,
-    },
-    statusPulseDot: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
-    },
-    statusTitle: {
-        fontSize: 11,
-        fontWeight: '900',
-        color: '#FFFFFF',
-        letterSpacing: 0.5,
-    },
-    statusVehicleSubtitle: {
+    compactHubText: {
         fontSize: 10.5,
         color: '#94A3B8',
-        marginTop: 1,
+        fontWeight: '600',
     },
-    gpsSyncBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        backgroundColor: 'rgba(217, 167, 58, 0.3)',
-        paddingHorizontal: 8,
-        paddingVertical: 5,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: GOLD,
-    },
-    gpsSyncBtnText: {
-        fontSize: 10,
-        fontWeight: '900',
-        color: '#FFFFFF',
-    },
-    gpsNoticeBar: {
+    compactActionGroup: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        backgroundColor: 'rgba(16, 185, 129, 0.15)',
-        paddingHorizontal: 10,
-        paddingVertical: 5,
-        borderRadius: 8,
-        marginBottom: 10,
     },
-    gpsNoticeText: {
+    compactStatusPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 5,
+        borderRadius: 14,
+        borderWidth: 1,
+    },
+    statusPillActive: {
+        backgroundColor: 'rgba(16, 185, 129, 0.15)',
+        borderColor: 'rgba(16, 185, 129, 0.4)',
+    },
+    statusPillOffline: {
+        backgroundColor: 'rgba(100, 116, 139, 0.15)',
+        borderColor: 'rgba(100, 116, 139, 0.3)',
+    },
+    compactStatusPillText: {
+        fontSize: 9.5,
+        fontWeight: '900',
+        letterSpacing: 0.3,
+    },
+    pillDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+    },
+    compactWalletPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: 'rgba(217, 167, 58, 0.18)',
+        paddingHorizontal: 8,
+        paddingVertical: 5,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: 'rgba(217, 167, 58, 0.35)',
+    },
+    compactWalletText: {
         fontSize: 11,
-        fontWeight: '800',
+        fontWeight: '900',
+        color: '#FFFFFF',
+    },
+    compactIconBtn: {
+        width: 32,
+        height: 32,
+        borderRadius: 10,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    compactGpsNotice: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        backgroundColor: 'rgba(16, 185, 129, 0.15)',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6,
+        marginTop: 6,
+    },
+    compactGpsText: {
+        fontSize: 10,
+        fontWeight: '700',
         color: '#34D399',
     },
     metricsGrid: {
@@ -2453,15 +2397,20 @@ const styles = StyleSheet.create({
         flexWrap: 'wrap',
         justifyContent: 'space-between',
         rowGap: 8,
-        marginBottom: 10,
+        marginBottom: 14,
     },
     metricCard: {
         width: '48.5%',
-        backgroundColor: 'rgba(255, 255, 255, 0.08)',
+        backgroundColor: '#FFFFFF',
         borderRadius: 12,
         padding: 10,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.07)',
+        borderColor: BORDER_COLOR,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.03,
+        shadowRadius: 3,
+        elevation: 1,
     },
     metricCardHeader: {
         flexDirection: 'row',
@@ -2473,24 +2422,23 @@ const styles = StyleSheet.create({
         width: 24,
         height: 24,
         borderRadius: 12,
-        backgroundColor: 'rgba(217, 167, 58, 0.2)',
         alignItems: 'center',
         justifyContent: 'center',
     },
     metricValue: {
         fontSize: 15,
         fontWeight: '900',
-        color: '#FFFFFF',
+        color: TEXT_DARK,
     },
     metricLabel: {
         fontSize: 9.5,
-        color: '#CBD5E1',
+        color: TEXT_MUTED,
         fontWeight: '800',
         letterSpacing: 0.4,
     },
     metricSubtext: {
         fontSize: 10,
-        color: '#94A3B8',
+        color: TEXT_MUTED,
         fontWeight: '600',
         marginTop: 3,
     },

@@ -100,6 +100,13 @@ const SVG_ICONS = {
       <line x1="6" y1="6" x2="18" y2="18" />
     </>
   ),
+  menu: (
+    <>
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </>
+  ),
   'chevron-right': <polyline points="9 18 15 12 9 6" />,
   'chevron-down': <polyline points="6 9 12 15 18 9" />,
   user: (
@@ -214,6 +221,9 @@ const ALIAS_MAP = {
   'shield': 'shield',
 
   // Actions & Controls
+  'menu': 'menu',
+  'menu-outline': 'menu',
+  'bars': 'menu',
   'reload': 'refresh-cw',
   'refresh': 'refresh-cw',
   'power': 'power',
@@ -308,6 +318,7 @@ export const LucideIcon = ({ name, size = 18, color = '#FFFFFF', strokeWidth = 2
       case 'radio': return 'radio';
       case 'edit': return 'edit';
       case 'bar-chart': return 'bar-chart-2';
+      case 'menu': return 'menu';
       default: return null;
     }
   })();
