@@ -166,6 +166,19 @@ const SVG_ICONS = {
       <line x1="18" y1="20" x2="18" y2="4" />
       <line x1="6" y1="20" x2="6" y2="16" />
     </>
+  ),
+  key: (
+    <>
+      <circle cx="7.5" cy="15.5" r="5.5" />
+      <path d="m21 2-9.6 9.6" />
+      <path d="m15.5 7.5 3 3L22 7l-3-3" />
+    </>
+  ),
+  'credit-card': (
+    <>
+      <rect width="20" height="14" x="2" y="5" rx="2" />
+      <line x1="2" x2="22" y1="10" y2="10" />
+    </>
   )
 };
 
@@ -191,12 +204,19 @@ const ALIAS_MAP = {
   'navigate': 'navigation',
   'navigation': 'navigation',
 
-  // Money / Wallet
+  // Key / Security Handover
+  'key': 'key',
+  'key-outline': 'key',
+  'lock': 'key',
+
+  // Money / Wallet / Cards
   'wallet-outline': 'wallet',
   'wallet': 'wallet',
   'cash-outline': 'dollar-sign',
   'cash': 'dollar-sign',
-  'card-outline': 'wallet',
+  'card-outline': 'credit-card',
+  'card': 'credit-card',
+  'credit-card': 'credit-card',
   'arrow-up-circle-outline': 'arrow-up-right',
 
   // Contact / Social
