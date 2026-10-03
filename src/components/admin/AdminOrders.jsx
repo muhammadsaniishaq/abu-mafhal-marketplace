@@ -114,7 +114,7 @@ const AdminOrders = () => {
     fetchOrders();
     fetchDrivers();
     
-    // Subscribe to realtime orders
+    // Subscribe to realtime orders and drivers
     const channel = supabase
       .channel('admin-orders-live-grid')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
@@ -125,6 +125,9 @@ const AdminOrders = () => {
           // Real-time Modal Update
           setSelectedOrder(prev => (prev?.id === payload.new.id ? { ...prev, ...payload.new } : prev));
         }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers' }, () => {
+        fetchDrivers();
       })
       .subscribe();
 
@@ -154,7 +157,7 @@ const AdminOrders = () => {
         .select(`
           *,
           user:profiles(full_name, email, phone),
-          driver:drivers(name, vehicle_type, phone, xp),
+          driver:drivers(id, name, vehicle_type, vehicle_number, phone, xp, rating, photo_url, status, is_active),
           order_items(id, quantity, price, product:products(name, images))
         `)
         .order('created_at', { ascending: false });
@@ -310,7 +313,8 @@ const AdminOrders = () => {
       const driver = drivers.find(d => d.id === driverId);
       const { error } = await supabase.from('orders').update({ 
         driver_id: driverId,
-        status: 'shipped' 
+        status: 'shipped',
+        delivery_notes: null
       }).eq('id', orderId);
       
       if (error) throw error;
@@ -324,8 +328,14 @@ const AdminOrders = () => {
         changed_by: user?.id
       });
 
+      // Update local state immediately
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, driver_id: driverId, driver, delivery_notes: null, status: 'shipped' } : o));
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder(prev => ({ ...prev, driver_id: driverId, driver, delivery_notes: null, status: 'shipped' }));
+        fetchOrderDetails(orderId);
+      }
+
       fetchOrders();
-      if (selectedOrder?.id === orderId) fetchOrderDetails(orderId);
 
       // Email Driver Notification
       if (driver?.email) {
@@ -341,6 +351,23 @@ const AdminOrders = () => {
       }
     } catch (e) {
       alert('Error assigning driver');
+    }
+  };
+
+  const handleDeclineDriverClaim = async (orderId) => {
+    try {
+      const { error } = await supabase.from('orders').update({
+        delivery_notes: null,
+        driver_notes: 'Claim request declined by admin'
+      }).eq('id', orderId);
+      if (error) throw error;
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, delivery_notes: null } : o));
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder(prev => ({ ...prev, delivery_notes: null }));
+      }
+      alert('Driver claim request has been declined.');
+    } catch (e) {
+      alert('Error declining driver request');
     }
   };
 
@@ -736,36 +763,139 @@ const AdminOrders = () => {
                 </div>
 
                 {/* Driver Fleet Assignment */}
-                <div className="bg-indigo-900 p-12 rounded-[4rem] text-white space-y-10 shadow-2xl relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-16 opacity-10">
-                        <FiTruck className="w-48 h-48" />
+                <div className="bg-indigo-950 p-8 md:p-12 rounded-[3.5rem] text-white space-y-8 shadow-2xl relative overflow-hidden border border-indigo-800/40">
+                    <div className="absolute top-0 right-0 p-16 opacity-10 pointer-events-none">
+                        <FiTruck className="w-56 h-56" />
                     </div>
-                    <div className="relative z-10 flex flex-col md:flex-row items-center gap-10">
-                        <div className="w-28 h-28 bg-white/10 rounded-[2.5rem] flex items-center justify-center border border-white/20 backdrop-blur-xl shrink-0">
-                            <FiTruck className="w-12 h-12 text-indigo-300" />
+
+                    {/* Pending Driver Delivery Claim Request Banner */}
+                    {(() => {
+                        let pendingReq = null;
+                        try {
+                            if (selectedOrder.delivery_notes && typeof selectedOrder.delivery_notes === 'string' && selectedOrder.delivery_notes.includes('driver_request')) {
+                                pendingReq = JSON.parse(selectedOrder.delivery_notes);
+                            }
+                        } catch (_) {}
+
+                        if (!pendingReq) return null;
+
+                        return (
+                            <div className="relative z-10 bg-amber-500/20 border-2 border-amber-400 p-6 md:p-8 rounded-3xl shadow-xl backdrop-blur-xl animate-in zoom-in-95">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <span className="w-3.5 h-3.5 rounded-full bg-amber-400 animate-ping shrink-0" />
+                                        <h4 className="font-black text-amber-300 uppercase tracking-widest text-xs sm:text-sm">
+                                            ⚡ Driver Delivery Claim Request
+                                        </h4>
+                                    </div>
+                                    <span className="bg-amber-400 text-amber-950 font-black text-[10px] uppercase px-3.5 py-1 rounded-full w-max shadow-md">
+                                        Action Required
+                                    </span>
+                                </div>
+                                <p className="text-white text-sm mb-3 leading-relaxed">
+                                    Courier <span className="font-black text-amber-300">{pendingReq.driver_name}</span> ({pendingReq.driver_phone || 'Phone on file'}) has requested to pick up and deliver this order.
+                                </p>
+                                <div className="flex flex-wrap items-center gap-3 text-xs text-amber-100/90 mb-6 bg-black/30 p-4 rounded-2xl border border-amber-400/20">
+                                    <span>Vehicle: <strong className="text-white">{pendingReq.vehicle_type} ({pendingReq.vehicle_model || 'Standard'} • {pendingReq.vehicle_number || 'Registered'})</strong></span>
+                                    <span>•</span>
+                                    <span>Rating: <strong className="text-amber-300">★{Number(pendingReq.rating || 5.0).toFixed(1)}</strong></span>
+                                </div>
+                                <div className="flex flex-wrap gap-4">
+                                    <button
+                                        onClick={() => handleAssignDriver(selectedOrder.id, pendingReq.driver_id || pendingReq.driver_user_id)}
+                                        className="bg-emerald-500 hover:bg-emerald-400 text-white font-black text-xs uppercase tracking-widest py-3.5 px-8 rounded-2xl transition-all shadow-xl shadow-emerald-500/20 active:scale-95 cursor-pointer"
+                                    >
+                                        Approve & Assign Courier
+                                    </button>
+                                    <button
+                                        onClick={() => handleDeclineDriverClaim(selectedOrder.id)}
+                                        className="bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-widest py-3.5 px-6 rounded-2xl transition-all border border-white/20 active:scale-95 cursor-pointer"
+                                    >
+                                        Decline Request
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })()}
+
+                    <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center gap-8">
+                        <div className="w-24 h-24 bg-white/10 rounded-[2.5rem] flex items-center justify-center border border-white/20 backdrop-blur-xl shrink-0">
+                            {selectedOrder.driver?.photo_url ? (
+                                <img src={selectedOrder.driver.photo_url} alt="" className="w-full h-full object-cover rounded-[2.5rem]" />
+                            ) : (
+                                <FiTruck className="w-10 h-10 text-indigo-300" />
+                            )}
                         </div>
                         <div className="flex-1 space-y-4">
                             {selectedOrder.driver ? (
                                 <div>
-                                    <p className="text-4xl font-black italic">{selectedOrder.driver.name}</p>
-                                    <p className="text-indigo-300 font-black uppercase tracking-[0.2em] text-[10px] mt-2">
-                                        Fleet Specialist • {selectedOrder.driver.vehicle_type} • Level {getDriverLevel(selectedOrder.driver.xp)}
+                                    <div className="flex items-center gap-3 flex-wrap">
+                                        <p className="text-3xl md:text-4xl font-black italic">{selectedOrder.driver.name}</p>
+                                        {(() => {
+                                            const isDriverOnline = (selectedOrder.driver.status === 'active' || selectedOrder.driver.status === 'available' || selectedOrder.driver.is_active);
+                                            return (
+                                                <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                                                    isDriverOnline
+                                                        ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-400/50'
+                                                        : 'bg-white/10 text-gray-300 border border-white/20'
+                                                }`}>
+                                                    <span className={`w-2 h-2 rounded-full ${isDriverOnline ? 'bg-emerald-400 animate-pulse' : 'bg-gray-400'}`} />
+                                                    {isDriverOnline ? 'Courier Online' : 'Courier Offline'}
+                                                </span>
+                                            );
+                                        })()}
+                                    </div>
+                                    <p className="text-indigo-300 font-black uppercase tracking-[0.18em] text-[10px] mt-2 flex flex-wrap items-center gap-2">
+                                        <span>Fleet Specialist</span>
+                                        <span>•</span>
+                                        <span>{selectedOrder.driver.vehicle_type || 'Motorcycle'}</span>
+                                        <span>•</span>
+                                        <span>Level {getDriverLevel(selectedOrder.driver.xp)}</span>
+                                        <span>•</span>
+                                        <span className="text-amber-300 font-bold">★ {Number(selectedOrder.driver.rating || 5.0).toFixed(1)}</span>
+                                        {selectedOrder.driver.vehicle_number && (
+                                            <>
+                                                <span>•</span>
+                                                <span className="bg-white/15 px-2 py-0.5 rounded text-[9px] font-mono tracking-normal text-white">
+                                                    Plate: {selectedOrder.driver.vehicle_number}
+                                                </span>
+                                            </>
+                                        )}
                                     </p>
                                 </div>
                             ) : (
-                                <p className="text-indigo-200/60 font-medium text-lg leading-relaxed">No logistics specialist has been assigned to this terminal yet.</p>
+                                <div>
+                                    <p className="text-indigo-200/80 font-medium text-base md:text-lg leading-relaxed">
+                                        No logistics specialist has been assigned to this delivery yet.
+                                    </p>
+                                    <p className="text-indigo-300/60 text-xs mt-1">Select an active or online courier below to assign immediate dispatch.</p>
+                                </div>
                             )}
                             
-                            <div className="pt-4">
+                            <div className="pt-2">
                                 <select 
                                     onChange={(e) => handleAssignDriver(selectedOrder.id, e.target.value)}
-                                    className="w-full md:w-auto bg-white/10 border-2 border-white/20 rounded-2xl px-8 py-5 text-sm font-black uppercase tracking-widest outline-none focus:bg-white focus:text-gray-900 transition-all cursor-pointer shadow-2xl"
+                                    className="w-full md:w-auto bg-white/10 border-2 border-white/20 rounded-2xl px-6 py-4 text-xs md:text-sm font-black uppercase tracking-wider outline-none focus:bg-white focus:text-gray-900 transition-all cursor-pointer shadow-2xl"
                                     value={selectedOrder.driver_id || ''}
                                 >
-                                    <option value="" disabled className="text-gray-900">Assign Fleet Operator...</option>
-                                    {drivers.map(d => (
-                                        <option key={d.id} value={d.id} className="text-gray-900">{d.name} ({d.vehicle_type})</option>
-                                    ))}
+                                    <option value="" disabled className="text-gray-900">
+                                        Assign Fleet Courier (Sorted by Online Status)...
+                                    </option>
+                                    {[...drivers]
+                                        .sort((a, b) => {
+                                            const aOnline = (a.status === 'active' || a.status === 'available' || a.is_active) ? 1 : 0;
+                                            const bOnline = (b.status === 'active' || b.status === 'available' || b.is_active) ? 1 : 0;
+                                            return bOnline - aOnline;
+                                        })
+                                        .map(d => {
+                                            const isOnline = (d.status === 'active' || d.status === 'available' || d.is_active);
+                                            return (
+                                                <option key={d.id} value={d.id} className="text-gray-900">
+                                                    {isOnline ? '🟢 [ONLINE]' : '⚪ [OFFLINE]'} {d.name} • {d.vehicle_type || 'Vehicle'} (★{Number(d.rating || 5.0).toFixed(1)}) {d.vehicle_number ? `• ${d.vehicle_number}` : ''}
+                                                </option>
+                                            );
+                                        })
+                                    }
                                 </select>
                             </div>
                         </div>
@@ -972,9 +1102,16 @@ const OrderCard = ({ order, bulkMode, isSelected, onSelect, onAnalyze, getDriver
                         {new Date(order.created_at).toLocaleDateString()}
                     </p>
                 </div>
-                <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${STATUS_COLORS[status] || 'bg-gray-100'}`}>
-                    {status}
-                </span>
+                <div className="flex items-center gap-2">
+                    {order.delivery_notes && typeof order.delivery_notes === 'string' && order.delivery_notes.includes('driver_request') && (
+                        <span className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-400 text-amber-950 animate-pulse shadow-md">
+                            ⚡ Claim Req
+                        </span>
+                    )}
+                    <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${STATUS_COLORS[status] || 'bg-gray-100'}`}>
+                        {status}
+                    </span>
+                </div>
             </div>
 
             <div className="flex-1 space-y-6">
@@ -1038,8 +1175,17 @@ const OrderCard = ({ order, bulkMode, isSelected, onSelect, onAnalyze, getDriver
                     {order.driver && (
                         <div className="flex items-center gap-3 text-right">
                             <div>
-                                <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">{order.driver.name}</p>
-                                <p className="text-[9px] text-gray-400 font-bold tracking-tighter uppercase whitespace-nowrap">Fleet Lvl: {getDriverLevel(order.driver.xp)}</p>
+                                <div className="flex items-center justify-end gap-1.5">
+                                    <span className={`w-2 h-2 rounded-full ${
+                                        (order.driver.status === 'active' || order.driver.status === 'available' || order.driver.is_active)
+                                            ? 'bg-emerald-500 animate-pulse'
+                                            : 'bg-gray-400'
+                                    }`} />
+                                    <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">{order.driver.name}</p>
+                                </div>
+                                <p className="text-[9px] text-gray-400 font-bold tracking-tighter uppercase whitespace-nowrap">
+                                    {order.driver.vehicle_type || 'Fleet'} • ★{Number(order.driver.rating || 5.0).toFixed(1)}
+                                </p>
                             </div>
                             <div className="p-3 bg-indigo-50 rounded-xl dark:bg-white/5">
                                 <FiTruck className="w-5 h-5 text-indigo-500" />

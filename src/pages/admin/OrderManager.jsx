@@ -53,7 +53,11 @@ export default function OrderManager() {
         try {
             const { error } = await supabase
                 .from('orders')
-                .update({ driver_id: driverId })
+                .update({ 
+                    driver_id: driverId,
+                    delivery_notes: null,
+                    status: 'shipped'
+                })
                 .eq('id', orderId);
 
             if (error) throw error;
@@ -63,13 +67,33 @@ export default function OrderManager() {
             setOrders(prev => prev.map(o => {
                 if (o.id === orderId) {
                     const driver = drivers.find(d => d.id === driverId);
-                    return { ...o, driver_id: driverId, drivers: driver };
+                    return { ...o, driver_id: driverId, drivers: driver, delivery_notes: null, status: 'shipped' };
                 }
                 return o;
             }));
         } catch (e) {
             console.error(e);
             toast.error("Failed to assign driver");
+        }
+    };
+
+    const declineDriverClaim = async (orderId) => {
+        try {
+            const { error } = await supabase
+                .from('orders')
+                .update({ 
+                    delivery_notes: null,
+                    driver_notes: 'Claim request declined by admin'
+                })
+                .eq('id', orderId);
+
+            if (error) throw error;
+
+            toast.success("Driver claim request declined");
+            setOrders(prev => prev.map(o => o.id === orderId ? { ...o, delivery_notes: null } : o));
+        } catch (e) {
+            console.error(e);
+            toast.error("Failed to decline request");
         }
     };
 
@@ -200,11 +224,61 @@ export default function OrderManager() {
                                     </div>
                                 </div>
 
+                                {/* Pending Driver Claim Request Banner */}
+                                {(() => {
+                                    let pendingReq = null;
+                                    try {
+                                        if (order.delivery_notes && typeof order.delivery_notes === 'string' && order.delivery_notes.includes('driver_request')) {
+                                            pendingReq = JSON.parse(order.delivery_notes);
+                                        }
+                                    } catch (_) {}
+
+                                    if (!pendingReq) return null;
+
+                                    return (
+                                        <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 my-2 text-xs shadow-sm">
+                                            <div className="flex items-center justify-between font-bold text-amber-900 mb-1">
+                                                <span className="flex items-center gap-1.5">
+                                                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                                                    🚴 DRIVER DELIVERY CLAIM REQUEST
+                                                </span>
+                                                <span className="bg-amber-200 text-amber-900 px-2 py-0.5 rounded text-[10px] uppercase font-black">
+                                                    Action Required
+                                                </span>
+                                            </div>
+                                            <p className="text-amber-800 mb-2 leading-relaxed">
+                                                Courier <strong>{pendingReq.driver_name}</strong> ({pendingReq.driver_phone || 'Phone on file'}) has requested to pick up and deliver this package.
+                                                <br />
+                                                <span className="text-[11px] text-amber-700">
+                                                    Vehicle: <strong>{pendingReq.vehicle_type} ({pendingReq.vehicle_model || 'Standard'} • {pendingReq.vehicle_number || 'Registered'})</strong> • Rating: <strong>★{Number(pendingReq.rating || 5.0).toFixed(1)}</strong>
+                                                </span>
+                                            </p>
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    size="sm"
+                                                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8"
+                                                    onClick={() => assignDriver(order.id, pendingReq.driver_id || pendingReq.driver_user_id)}
+                                                >
+                                                    Approve & Assign Courier
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="text-gray-700 hover:bg-gray-100 text-xs h-8"
+                                                    onClick={() => declineDriverClaim(order.id)}
+                                                >
+                                                    Decline
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+
                                 {/* Divider */}
                                 <div className="h-px bg-gray-100" />
 
                                 {/* Bottom Row: Logistics / Driver Assignment */}
-                                <div className="flex items-center justify-between">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                     <div className="flex items-center gap-2">
                                         <div className={`p-2 rounded-full ${order.drivers ? 'bg-blue-50' : 'bg-gray-50'}`}>
                                             <Truck className={`w-4 h-4 ${order.drivers ? 'text-blue-600' : 'text-gray-400'}`} />
@@ -212,7 +286,17 @@ export default function OrderManager() {
                                         <div>
                                             <p className="text-xs font-bold text-gray-700">Logistics Partner</p>
                                             {order.drivers ? (
-                                                <p className="text-sm text-blue-600 font-medium">{order.drivers.name}</p>
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`w-2 h-2 rounded-full ${
+                                                        (order.drivers.status === 'active' || order.drivers.status === 'available' || order.drivers.is_active)
+                                                            ? 'bg-emerald-500 animate-pulse'
+                                                            : 'bg-gray-400'
+                                                    }`} />
+                                                    <p className="text-sm text-blue-600 font-bold">{order.drivers.name}</p>
+                                                    <span className="text-[10px] text-gray-500">
+                                                        ({order.drivers.vehicle_type || 'Fleet'} • ★{Number(order.drivers.rating || 5.0).toFixed(1)})
+                                                    </span>
+                                                </div>
                                             ) : (
                                                 <p className="text-sm text-gray-400 italic">No driver assigned</p>
                                             )}
@@ -222,17 +306,27 @@ export default function OrderManager() {
                                     {/* Driver Select */}
                                     <div className="flex items-center gap-2">
                                         <select
-                                            className="text-sm border rounded px-2 py-1 bg-white"
+                                            className="text-xs border rounded-lg px-2.5 py-1.5 bg-white font-medium shadow-sm outline-none focus:ring-2 focus:ring-blue-500"
                                             value={order.driver_id || ""}
                                             onChange={(e) => assignDriver(order.id, e.target.value)}
                                             disabled={order.status === 'delivered' || order.status === 'cancelled'}
                                         >
-                                            <option value="">-- Assign Driver --</option>
-                                            {drivers.map(d => (
-                                                <option key={d.id} value={d.id}>
-                                                    {d.name} ({d.vehicle_type})
-                                                </option>
-                                            ))}
+                                            <option value="">-- Assign Courier (Online First) --</option>
+                                            {[...drivers]
+                                                .sort((a, b) => {
+                                                    const aOnline = (a.status === 'active' || a.status === 'available' || a.is_active) ? 1 : 0;
+                                                    const bOnline = (b.status === 'active' || b.status === 'available' || b.is_active) ? 1 : 0;
+                                                    return bOnline - aOnline;
+                                                })
+                                                .map(d => {
+                                                    const isOnline = (d.status === 'active' || d.status === 'available' || d.is_active);
+                                                    return (
+                                                        <option key={d.id} value={d.id}>
+                                                            {isOnline ? '🟢 [ONLINE]' : '⚪ [OFFLINE]'} {d.name} • {d.vehicle_type || 'Vehicle'} (★{Number(d.rating || 5.0).toFixed(1)})
+                                                        </option>
+                                                    );
+                                                })
+                                            }
                                         </select>
                                     </div>
                                 </div>

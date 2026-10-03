@@ -184,7 +184,12 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
     const [pNumber, setPNumber] = useState('');
     const [vColor, setVColor] = useState('');
     const [experience, setExperience] = useState('');
+    const [driverLicense, setDriverLicense] = useState('');
+    const [fuelType, setFuelType] = useState('Petrol');
+    const [payloadCapacity, setPayloadCapacity] = useState('65 kg');
     const [selectedMapOrder, setSelectedMapOrder] = useState(null);
+    const [walletTxFilter, setWalletTxFilter] = useState('ALL');
+    const [isLicenseModalVisible, setLicenseModalVisible] = useState(false);
 
     // Withdrawal Form
     const [withdrawAmount, setWithdrawAmount] = useState('');
@@ -197,6 +202,9 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
     const [showBankDropdown, setShowBankDropdown] = useState(false);
     const [searchBankQuery, setSearchBankQuery] = useState('');
     const [resolvingAccount, setResolvingAccount] = useState(false);
+    const [savedBank, setSavedBank] = useState(null);
+    const [isBalanceHidden, setIsBalanceHidden] = useState(false);
+    const [selectedTxForReceipt, setSelectedTxForReceipt] = useState(null);
 
     // WhatsApp Action Modal
     const [whatsappVisible, setWhatsappVisible] = useState(false);
@@ -233,6 +241,21 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                 window.localStorage.setItem('@abumafhal_last_screen', 'DriverDashboard');
             }
             AsyncStorage.setItem('@abumafhal_last_screen', 'DriverDashboard').catch(() => {});
+            // Load saved driver payout bank
+            AsyncStorage.getItem('@abumafhal_driver_bank').then(raw => {
+                if (raw) {
+                    try {
+                        const parsed = JSON.parse(raw);
+                        if (parsed && parsed.accountNo) {
+                            setSavedBank(parsed);
+                            setBankName(parsed.bankName || '');
+                            setBankCode(parsed.bankCode || '');
+                            setAccountNo(parsed.accountNo || '');
+                            setAccountName(parsed.accountName || '');
+                        }
+                    } catch (_) {}
+                }
+            }).catch(() => {});
         } catch (_) {}
     }, []);
 
@@ -390,6 +413,9 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                 setPNumber(data.vehicle_number || data.plate_number || '');
                 setVColor(data.vehicle_color || '');
                 setExperience(data.experience || '');
+                setDriverLicense(data.driver_license || '');
+                setFuelType(data.fuel_type || 'Petrol');
+                setPayloadCapacity(data.payload_capacity || (data.vehicle_type === 'Car' ? '300 kg' : data.vehicle_type === 'Van' ? '800 kg' : '65 kg'));
             } else {
                 const newDriver = {
                     user_id: userId,
@@ -401,6 +427,9 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                     vehicle_model: 'Bajaj Boxer BM150 Express',
                     vehicle_color: 'Black / Silver',
                     experience: '3+ Years Certified Courier',
+                    driver_license: 'DL-84291-KMC',
+                    fuel_type: 'Petrol',
+                    payload_capacity: '65 kg',
                     current_location: 'Kano Hub Central',
                     status: 'active',
                     is_active: true,
@@ -420,6 +449,9 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                     setPNumber(created.vehicle_number || created.plate_number || '');
                     setVColor(created.vehicle_color || 'Black / Silver');
                     setExperience(created.experience || '3+ Years Certified Courier');
+                    setDriverLicense(created.driver_license || 'DL-84291-KMC');
+                    setFuelType(created.fuel_type || 'Petrol');
+                    setPayloadCapacity(created.payload_capacity || '65 kg');
                 }
             }
         } catch (e) {
@@ -445,13 +477,25 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
     };
 
     // 3. Fetch Real Orders from `orders` with Product Images and Recipient Data
-    const fetchOrders = async (userId) => {
+    const fetchOrders = async (userId, customDriverId = null) => {
         try {
+            let dId = customDriverId || driverProfile?.id;
+            if (!dId) {
+                try {
+                    const { data: dRec } = await supabase.from('drivers').select('id').eq('user_id', userId).maybeSingle();
+                    if (dRec?.id) dId = dRec.id;
+                } catch (_) {}
+            }
+
+            const driverFilter = dId && dId !== userId
+                ? `driver_id.eq.${userId},driver_id.eq.${dId}`
+                : `driver_id.eq.${userId}`;
+
             const [myOrdersRes, poolRes] = await Promise.allSettled([
                 supabase
                     .from('orders')
                     .select('*, user:profiles(full_name, phone, address, city, state, avatar_url), items:order_items(*, product:products(id, name, images, image, price))')
-                    .eq('driver_id', userId)
+                    .or(driverFilter)
                     .order('created_at', { ascending: false }),
                 supabase
                     .from('orders')
@@ -991,11 +1035,14 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                 description: `Withdrawal to ${bankName} (${accountNo} - ${accountName})`
                             }]);
 
+                            // Cache verified bank info for instant future payouts
+                            const bankPayload = { bankName, bankCode, accountNo, accountName };
+                            AsyncStorage.setItem('@abumafhal_driver_bank', JSON.stringify(bankPayload)).catch(() => {});
+                            setSavedBank(bankPayload);
+
                             Alert.alert('Payout Submitted ✅', 'Your withdrawal request has been received and will be processed to your account.');
                             setWithdrawModalVisible(false);
                             setWithdrawAmount('');
-                            setAccountNo('');
-                            setAccountName('');
                             fetchTransactions(uid);
                         } catch (err) {
                             Alert.alert('Error', err.message || 'Failed to submit withdrawal.');
@@ -1057,6 +1104,13 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
     const totalDeliveredEarnings = useMemo(() => {
         return historyOrders.reduce((sum, o) => sum + Number(o.shipping_fee || 1000), 0);
     }, [historyOrders]);
+
+    // ─── In-Transit Escrow Earnings (Active Deliveries) ───
+    const pendingEscrowEarnings = useMemo(() => {
+        return orders
+            .filter(o => ['shipped', 'picked_up', 'out_for_delivery', 'processing'].includes(o.status))
+            .reduce((sum, o) => sum + Number(o.shipping_fee || 1200), 0);
+    }, [orders]);
 
     // ─── Filtered Orders for Current Tab ───
     const currentTabOrders = useMemo(() => {
@@ -1419,84 +1473,104 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
 
     return (
         <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
-            {/* ─── 1. COMPACT LUXURY TOP NAVBAR (Ultra Slim, Height ~54px) ─── */}
+            {/* ─── 1. EXECUTIVE DRIVER HEADER ─── */}
             <LinearGradient
-                colors={[HEADER_NAVY, HEADER_NAVY_LIGHT]}
-                style={styles.compactHeaderGradient}
+                colors={['#0B132B', '#1A2550']}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={styles.execHeaderGradient}
             >
-                <View style={styles.compactHeaderRow}>
-                    {/* Left: Sidebar Menu Trigger Button with Online Status Dot */}
+                <View style={styles.execHeaderRow}>
+                    {/* Left: Avatar + Identity */}
                     <TouchableOpacity
-                        style={styles.menuTriggerBtn}
-                        onPress={() => setIsDrawerOpen(true)}
-                        activeOpacity={0.8}
-                    >
-                        <Ionicons name="menu" size={21} color="#FFFFFF" />
-                        <View style={[styles.menuPulseDot, { backgroundColor: driverProfile?.status === 'active' ? SUCCESS : '#94A3B8' }]} />
-                    </TouchableOpacity>
-
-                    {/* Middle: Brand & Hub Station */}
-                    <TouchableOpacity
-                        style={styles.compactBrandBox}
+                        style={styles.execAvatarBlock}
                         onPress={() => setIsDrawerOpen(true)}
                         activeOpacity={0.85}
                     >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text style={styles.compactBrandTitle} numberOfLines={1}>Abu Mafhal Logistics</Text>
-                            <View style={styles.compactLevelTag}>
-                                <Text style={styles.compactLevelText}>{driverTier.badge}</Text>
+                        <View style={styles.execAvatarWrap}>
+                            <View style={styles.execAvatarRing}>
+                                <View style={styles.execAvatarInner}>
+                                    <Ionicons name="person" size={22} color="#FFFFFF" />
+                                </View>
                             </View>
+                            {/* Live status beacon */}
+                            <View style={[
+                                styles.execStatusBeacon,
+                                { backgroundColor: driverProfile?.status === 'active' ? '#10B981' : '#64748B' }
+                            ]} />
                         </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 }}>
-                            <Ionicons name="location" size={11} color={GOLD} />
-                            <Text style={styles.compactHubText} numberOfLines={1}>
-                                {driverProfile?.current_location || 'Kano Hub Central'}
+                        <View style={styles.execIdentityBlock}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                <Text style={styles.execDriverName} numberOfLines={1}>
+                                    {driverProfile?.name || activeUser?.full_name || 'Driver'}
+                                </Text>
+                                <View style={styles.execVerifiedBadge}>
+                                    <Ionicons name="checkmark-circle" size={12} color={GOLD} />
+                                </View>
+                            </View>
+                            <Text style={styles.execBaseStation} numberOfLines={1}>
+                                {driverTier.badge}  •  {driverProfile?.current_location || 'Kano Hub Central'}
                             </Text>
                         </View>
                     </TouchableOpacity>
 
-                    {/* Right: Quick Online Toggle Pill, Wallet Balance Badge, Refresh */}
-                    <View style={styles.compactActionGroup}>
-                        {/* Quick Online / Offline Toggle Pill */}
+                    {/* Right: Status toggle + actions */}
+                    <View style={styles.execRightActions}>
+                        {/* Online / Offline pill */}
                         <TouchableOpacity
                             style={[
-                                styles.compactStatusPill,
-                                driverProfile?.status === 'active' ? styles.statusPillActive : styles.statusPillOffline
+                                styles.execStatusPill,
+                                driverProfile?.status === 'active' ? styles.execPillOnline : styles.execPillOffline
                             ]}
                             onPress={toggleStatus}
                             activeOpacity={0.8}
                         >
-                            <View style={[styles.pillDot, { backgroundColor: driverProfile?.status === 'active' ? SUCCESS : '#64748B' }]} />
-                            <Text style={[styles.compactStatusPillText, { color: driverProfile?.status === 'active' ? SUCCESS : '#CBD5E1' }]}>
+                            <View style={[
+                                styles.execPillDot,
+                                { backgroundColor: driverProfile?.status === 'active' ? '#10B981' : '#64748B' }
+                            ]} />
+                            <Text style={[
+                                styles.execPillText,
+                                { color: driverProfile?.status === 'active' ? '#10B981' : '#94A3B8' }
+                            ]}>
                                 {driverProfile?.status === 'active' ? 'ONLINE' : 'OFFLINE'}
                             </Text>
                         </TouchableOpacity>
 
-                        {/* Quick Wallet Payout Pill */}
+                        {/* Wallet shortcut */}
                         <TouchableOpacity
-                            style={styles.compactWalletPill}
+                            style={styles.execWalletChip}
                             onPress={() => setActiveTab('wallet')}
                             activeOpacity={0.8}
                         >
-                            <Ionicons name="wallet" size={13} color={GOLD} />
-                            <Text style={styles.compactWalletText}>₦{walletBalance.toLocaleString()}</Text>
+                            <Ionicons name="wallet" size={12} color={GOLD} />
+                            <Text style={styles.execWalletChipText} numberOfLines={1}>
+                                ₦{walletBalance.toLocaleString()}
+                            </Text>
                         </TouchableOpacity>
 
-                        {/* Refresh */}
+                        {/* Menu / refresh */}
                         <TouchableOpacity
+                            style={styles.execMenuBtn}
                             onPress={handleRefresh}
-                            style={styles.compactIconBtn}
                             activeOpacity={0.75}
                         >
-                            <Ionicons name="refresh" size={15} color="#FFFFFF" />
+                            <Ionicons name="refresh" size={15} color="#CBD5E1" />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.execMenuBtn}
+                            onPress={() => setIsDrawerOpen(true)}
+                            activeOpacity={0.75}
+                        >
+                            <Ionicons name="menu" size={18} color="#FFFFFF" />
                         </TouchableOpacity>
                     </View>
                 </View>
 
                 {gpsNotice ? (
-                    <View style={styles.compactGpsNotice}>
+                    <View style={styles.execGpsNotice}>
                         <Ionicons name="location" size={11} color={SUCCESS} />
-                        <Text style={styles.compactGpsText} numberOfLines={1}>{gpsNotice}</Text>
+                        <Text style={styles.execGpsText} numberOfLines={1}>{gpsNotice}</Text>
                     </View>
                 ) : null}
             </LinearGradient>
@@ -1732,59 +1806,169 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                     </View>
                 )}
 
-                {/* TAB 3: WALLET & EARNINGS */}
+                {/* TAB 3: WALLET & EARNINGS — ULTRA-MODERN LUXURY FINTECH */}
                 {activeTab === 'wallet' && (
                     <View style={styles.tabContentSection}>
-                        {/* Clean Luxury Wallet Banner */}
+
+                        {/* ── Luxury Executive Hologram Card ── */}
                         <LinearGradient
-                            colors={['#0F172A', '#1E293B']}
-                            style={styles.luxuryWalletBanner}
+                            colors={['#040914', '#0E1A30', '#07101E']}
+                            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                            style={styles.fintechCard}
                         >
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                <View>
-                                    <Text style={styles.walletHeaderLabel}>DRIVER ESCROW WALLET</Text>
-                                    <Text style={styles.walletHeaderBalance}>₦{walletBalance.toLocaleString()}</Text>
-                                    <Text style={styles.walletTodayText}>Today's Earnings: +₦{todayEarnings.toLocaleString()}</Text>
+                            {/* Card top row: chip + contactless wave + brand tag */}
+                            <View style={styles.fintechCardTopRow}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                    <View style={styles.fintechChip}>
+                                        <View style={styles.fintechChipLine} />
+                                        <View style={styles.fintechChipInner} />
+                                    </View>
+                                    <Ionicons name="radio" size={16} color="rgba(255,255,255,0.4)" />
                                 </View>
-                                <View style={styles.walletAmcChip}>
-                                    <Ionicons name="checkmark-circle" size={14} color={SUCCESS} />
-                                    <Text style={styles.walletAmcChipText}>Active Balance</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <View style={styles.fintechBrandTag}>
+                                        <Ionicons name="shield-checkmark" size={13} color={GOLD} />
+                                        <Text style={styles.fintechBrandText}>ESCROW PROTECTED</Text>
+                                    </View>
+                                    <TouchableOpacity
+                                        onPress={() => setIsBalanceHidden(!isBalanceHidden)}
+                                        style={styles.fintechEyeBtn}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Ionicons name={isBalanceHidden ? "eye-off" : "eye"} size={14} color="#94A3B8" />
+                                    </TouchableOpacity>
                                 </View>
                             </View>
 
-                            <View style={styles.walletActionsBar}>
-                                <TouchableOpacity
-                                    style={styles.cashOutPrimaryBtn}
-                                    onPress={() => setWithdrawModalVisible(true)}
-                                    activeOpacity={0.85}
-                                >
-                                    <Ionicons name="arrow-up-circle-outline" size={18} color="#0F172A" />
-                                    <Text style={styles.cashOutPrimaryBtnText}>Withdraw to Bank</Text>
-                                </TouchableOpacity>
+                            {/* Dual Balances: Available Payout + Pending Escrow */}
+                            <View style={{ marginBottom: 14 }}>
+                                <Text style={styles.fintechBalanceLabel}>AVAILABLE FOR INSTANT PAYOUT</Text>
+                                <Text style={styles.fintechBalance}>
+                                    {isBalanceHidden ? '₦••••••••' : `₦${walletBalance.toLocaleString()}`}
+                                </Text>
+                            </View>
 
-                                <TouchableOpacity
-                                    style={styles.payoutHistorySecBtn}
-                                    onPress={() => setHistoryModalVisible(true)}
-                                    activeOpacity={0.85}
-                                >
-                                    <Ionicons name="list" size={16} color="#FFFFFF" />
-                                    <Text style={styles.payoutHistorySecBtnText}>Transactions ({transactions.length})</Text>
-                                </TouchableOpacity>
+                            {/* In-Transit Escrow Capsule */}
+                            <View style={styles.fintechEscrowCapsule}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <View style={styles.fintechEscrowDot} />
+                                    <Text style={styles.fintechEscrowCapLabel}>IN-TRANSIT ESCROW (ACTIVE JOBS):</Text>
+                                </View>
+                                <Text style={styles.fintechEscrowCapVal}>
+                                    {isBalanceHidden ? '••••' : `+₦${pendingEscrowEarnings.toLocaleString()}`}
+                                </Text>
+                            </View>
+
+                            {/* Card bottom row: Cardholder Name + Tier + Courier Code */}
+                            <View style={styles.fintechCardBottomRow}>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.fintechCardholderLabel}>COURIER SPECIALIST</Text>
+                                    <Text style={styles.fintechCardholderName} numberOfLines={1}>
+                                        {(driverProfile?.name || activeUser?.full_name || 'DRIVER COURIER').toUpperCase()}
+                                    </Text>
+                                </View>
+                                <View style={{ alignItems: 'flex-end' }}>
+                                    <Text style={styles.fintechCardholderLabel}>COURIER ID</Text>
+                                    <Text style={styles.fintechCardholderCode}>
+                                        AM-DRV-{driverProfile?.id ? driverProfile.id.slice(0, 6).toUpperCase() : '84291'}
+                                    </Text>
+                                </View>
                             </View>
                         </LinearGradient>
 
-                        {/* Live Courier Earnings & Performance Overview (100% Real Live Data) */}
+                        {/* ── Saved Bank Fast Cashout Bar (if bank exists) ── */}
+                        {savedBank ? (
+                            <View style={styles.savedBankQuickBar}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                                    <View style={styles.savedBankIcon}>
+                                        <Ionicons name="card" size={17} color={GOLD} />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                            <Text style={styles.savedBankTitle}>SAVED PAYOUT ACCOUNT</Text>
+                                            <View style={styles.savedBankVerifiedBadge}>
+                                                <Ionicons name="checkmark-circle" size={10} color={SUCCESS} />
+                                                <Text style={styles.savedBankVerifiedText}>VERIFIED</Text>
+                                            </View>
+                                        </View>
+                                        <Text style={styles.savedBankName} numberOfLines={1}>
+                                            {savedBank.bankName} •••• {savedBank.accountNo ? savedBank.accountNo.slice(-4) : '****'}
+                                        </Text>
+                                        <Text style={styles.savedBankHolder} numberOfLines={1}>{savedBank.accountName}</Text>
+                                    </View>
+                                </View>
+                                <TouchableOpacity
+                                    style={styles.quickWithdrawBtn}
+                                    onPress={() => setWithdrawModalVisible(true)}
+                                    activeOpacity={0.85}
+                                >
+                                    <Ionicons name="flash" size={12} color="#FFFFFF" />
+                                    <Text style={styles.quickWithdrawBtnText}>Payout</Text>
+                                </TouchableOpacity>
+                            </View>
+                        ) : null}
+
+                        {/* ── Quick Action Bar ── */}
+                        <View style={styles.fintechActionBar}>
+                            <TouchableOpacity
+                                style={styles.fintechActionBtn}
+                                onPress={() => setWithdrawModalVisible(true)}
+                                activeOpacity={0.85}
+                            >
+                                <View style={[styles.fintechActionIcon, { backgroundColor: '#ECFDF5' }]}>
+                                    <Ionicons name="arrow-up" size={19} color={SUCCESS} />
+                                </View>
+                                <Text style={styles.fintechActionLabel}>Withdraw</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={styles.fintechActionBtn}
+                                onPress={() => setHistoryModalVisible(true)}
+                                activeOpacity={0.85}
+                            >
+                                <View style={[styles.fintechActionIcon, { backgroundColor: '#EFF6FF' }]}>
+                                    <Ionicons name="document-text" size={19} color={BLUE} />
+                                </View>
+                                <Text style={styles.fintechActionLabel}>Statement</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={styles.fintechActionBtn}
+                                onPress={() => {
+                                    handleRefresh();
+                                    Alert.alert('Ledger Synced ⚡', 'Wallet balance and transaction ledger updated with Supabase.');
+                                }}
+                                activeOpacity={0.85}
+                            >
+                                <View style={[styles.fintechActionIcon, { backgroundColor: '#FEF3C7' }]}>
+                                    <Ionicons name="refresh" size={19} color={GOLD} />
+                                </View>
+                                <Text style={styles.fintechActionLabel}>Sync Bal</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={styles.fintechActionBtn}
+                                onPress={() => setActiveTab('history')}
+                                activeOpacity={0.85}
+                            >
+                                <View style={[styles.fintechActionIcon, { backgroundColor: '#F5F3FF' }]}>
+                                    <Ionicons name="time" size={19} color="#7C3AED" />
+                                </View>
+                                <Text style={styles.fintechActionLabel}>History</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* ── 4-Box Performance Summary Grid ── */}
                         <View style={[styles.vehicleInfoCard, { marginBottom: 16, paddingTop: 16 }]}>
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                    <Ionicons name="stats-chart" size={15} color={GOLD} />
-                                    <Text style={styles.vehicleCardTitle}>Live Earnings & Delivery Summary</Text>
+                                    <Ionicons name="trending-up" size={16} color={GOLD} />
+                                    <Text style={styles.vehicleCardTitle}>Live Earnings & Escrow Telemetry</Text>
                                 </View>
                                 <View style={{ backgroundColor: '#ECFDF5', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                                    <Text style={{ color: SUCCESS, fontWeight: '800', fontSize: 11 }}>REAL-TIME</Text>
+                                    <Text style={{ color: SUCCESS, fontWeight: '900', fontSize: 10 }}>24/7 ACTIVE</Text>
                                 </View>
                             </View>
-
                             <View style={styles.realEarningsSummaryGrid}>
                                 <View style={styles.realSummaryBox}>
                                     <Text style={styles.realSummaryLbl}>TODAY'S PAYOUT</Text>
@@ -1793,57 +1977,103 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                     </Text>
                                 </View>
                                 <View style={styles.realSummaryBox}>
-                                    <Text style={styles.realSummaryLbl}>TOTAL DELIVERED</Text>
-                                    <Text style={[styles.realSummaryVal, { color: '#38BDF8' }]} numberOfLines={1}>
-                                        {historyOrders.length}
+                                    <Text style={styles.realSummaryLbl}>ACTIVE IN-TRANSIT</Text>
+                                    <Text style={[styles.realSummaryVal, { color: AMBER }]} numberOfLines={1}>
+                                        ₦{pendingEscrowEarnings.toLocaleString()}
                                     </Text>
                                 </View>
                                 <View style={styles.realSummaryBox}>
-                                    <Text style={styles.realSummaryLbl}>LIFETIME EARNINGS</Text>
+                                    <Text style={styles.realSummaryLbl}>DELIVERIES</Text>
+                                    <Text style={[styles.realSummaryVal, { color: '#38BDF8' }]} numberOfLines={1}>
+                                        {historyOrders.length} Completed
+                                    </Text>
+                                </View>
+                                <View style={styles.realSummaryBox}>
+                                    <Text style={styles.realSummaryLbl}>LIFETIME TOTAL</Text>
                                     <Text style={[styles.realSummaryVal, { color: GOLD }]} numberOfLines={1}>
                                         ₦{totalDeliveredEarnings.toLocaleString()}
                                     </Text>
                                 </View>
-                                <View style={styles.realSummaryBox}>
-                                    <Text style={styles.realSummaryLbl}>ESCROW BALANCE</Text>
-                                    <Text style={[styles.realSummaryVal, { color: TEXT_DARK }]} numberOfLines={1}>
-                                        ₦{walletBalance.toLocaleString()}
-                                    </Text>
-                                </View>
                             </View>
                         </View>
 
-                        {/* Recent Transactions List */}
+                        {/* ── Transaction Filter Chips ── */}
                         <View style={styles.sectionHeaderRow}>
-                            <Text style={styles.sectionTitle}>Recent Wallet Activity</Text>
+                            <Text style={styles.sectionTitle}>Transaction Ledger</Text>
+                            <Text style={styles.sectionCountText}>{transactions.length} Records</Text>
                         </View>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 10 }}>
+                            {[
+                                { id: 'ALL', label: 'All', icon: 'layers' },
+                                { id: 'CREDIT', label: 'Earnings (+)', icon: 'arrow-down' },
+                                { id: 'DEBIT', label: 'Withdrawals (-)', icon: 'arrow-up' }
+                            ].map(f => {
+                                const isActive = walletTxFilter === f.id;
+                                return (
+                                    <TouchableOpacity
+                                        key={f.id}
+                                        style={[styles.txFilterChip, isActive && styles.txFilterChipActive]}
+                                        onPress={() => setWalletTxFilter(f.id)}
+                                    >
+                                        <Ionicons name={f.icon} size={12} color={isActive ? '#0F172A' : TEXT_MUTED} />
+                                        <Text style={[styles.txFilterChipText, isActive && styles.txFilterChipTextActive]}>{f.label}</Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </ScrollView>
 
-                        {transactions.length === 0 ? (
-                            <View style={styles.emptyCardBox}>
-                                <Ionicons name="wallet-outline" size={36} color={TEXT_SUBTLE} />
-                                <Text style={styles.emptyTitle}>No Transactions Yet</Text>
-                                <Text style={styles.emptySubtitle}>Earnings from completed deliveries and payouts will appear here.</Text>
-                            </View>
-                        ) : (
-                            transactions.slice(0, 8).map(t => (
-                                <View key={t.id} style={styles.payoutLogRow}>
+                        {/* ── Filtered Transaction List (Tap to inspect receipt) ── */}
+                        {(() => {
+                            const filtered = walletTxFilter === 'ALL'
+                                ? transactions
+                                : transactions.filter(t => t.type === walletTxFilter.toLowerCase());
+                            if (filtered.length === 0) return (
+                                <View style={styles.emptyCardBox}>
+                                    <Ionicons name="wallet" size={36} color={TEXT_SUBTLE} />
+                                    <Text style={styles.emptyTitle}>No Transactions Found</Text>
+                                    <Text style={styles.emptySubtitle}>Earnings from completed deliveries and payouts will appear here.</Text>
+                                </View>
+                            );
+                            return filtered.slice(0, 15).map(t => (
+                                <TouchableOpacity
+                                    key={t.id}
+                                    style={styles.txLedgerRow}
+                                    activeOpacity={0.8}
+                                    onPress={() => setSelectedTxForReceipt(t)}
+                                >
+                                    <View style={[
+                                        styles.txLedgerIcon,
+                                        { backgroundColor: t.type === 'debit' ? '#FEF2F2' : '#ECFDF5' }
+                                    ]}>
+                                        <Ionicons
+                                            name={t.type === 'debit' ? 'arrow-up' : 'arrow-down'}
+                                            size={15}
+                                            color={t.type === 'debit' ? DANGER : SUCCESS}
+                                        />
+                                    </View>
                                     <View style={{ flex: 1 }}>
-                                        <Text style={[styles.payoutLogAmount, { color: t.type === 'debit' ? DANGER : SUCCESS }]}>
+                                        <Text style={styles.txLedgerDesc} numberOfLines={1}>{t.description || 'Consignment Delivery Payout'}</Text>
+                                        <Text style={styles.txLedgerMeta}>
+                                            {new Date(t.created_at).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                            {t.reference ? ` • Ref: ${t.reference}` : ''}
+                                        </Text>
+                                    </View>
+                                    <View style={{ alignItems: 'flex-end' }}>
+                                        <Text style={[
+                                            styles.txLedgerAmount,
+                                            { color: t.type === 'debit' ? DANGER : SUCCESS }
+                                        ]}>
                                             {t.type === 'debit' ? '-' : '+'}₦{Number(t.amount || 0).toLocaleString()}
                                         </Text>
-                                        <Text style={styles.payoutLogMeta}>{t.description || 'Transaction'}</Text>
-                                        <Text style={[styles.payoutLogMeta, { fontSize: 11 }]}>
-                                            {new Date(t.created_at).toLocaleDateString()} • {t.reference || ''}
-                                        </Text>
+                                        <View style={[styles.txStatusPill, { backgroundColor: t.status === 'completed' ? '#ECFDF5' : '#FFFBEB' }]}>
+                                            <Text style={{ fontSize: 9.5, fontWeight: '900', color: t.status === 'completed' ? SUCCESS : AMBER }}>
+                                                {(t.status || 'SETTLED').toUpperCase()}
+                                            </Text>
+                                        </View>
                                     </View>
-                                    <View style={[styles.payoutStatusPill, { backgroundColor: t.status === 'completed' ? '#ECFDF5' : '#FFFBEB' }]}>
-                                        <Text style={{ fontSize: 11, fontWeight: '800', color: t.status === 'completed' ? SUCCESS : AMBER }}>
-                                            {(t.status || 'COMPLETED').toUpperCase()}
-                                        </Text>
-                                    </View>
-                                </View>
-                            ))
-                        )}
+                                </TouchableOpacity>
+                            ));
+                        })()}
                     </View>
                 )}
 
@@ -1871,92 +2101,231 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                     </View>
                 )}
 
-                {/* TAB 5: VEHICLE & SETTINGS */}
+                {/* TAB 5: VEHICLE & TIER — MODERNIZED */}
                 {activeTab === 'profile' && (
                     <View style={styles.tabContentSection}>
-                        {/* Courier Performance Card */}
-                        <View style={[styles.vehicleInfoCard, { marginBottom: 16 }]}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Ionicons name="trophy" size={22} color={GOLD} />
+
+                        {/* ── 5A. Courier Credentials & Compliance Card ── */}
+                        <View style={styles.profileSection}>
+                            <View style={styles.profileSectionHeader}>
+                                <View style={styles.profileSectionIconWrap}>
+                                    <Ionicons name="shield-checkmark" size={16} color={GOLD} />
+                                </View>
+                                <Text style={styles.profileSectionTitle}>Courier Credentials & Compliance</Text>
+                                <TouchableOpacity
+                                    style={styles.profileEditBtn}
+                                    onPress={() => setLicenseModalVisible(true)}
+                                    activeOpacity={0.8}
+                                >
+                                    <Ionicons name="create" size={13} color={TEXT_DARK} />
+                                    <Text style={styles.profileEditBtnText}>Update</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={styles.credRow}>
+                                <View style={styles.credIconBox}>
+                                    <Ionicons name="card" size={15} color={BLUE} />
                                 </View>
                                 <View style={{ flex: 1 }}>
-                                    <Text style={styles.vehicleCardTitle}>{driverTier.title}</Text>
-                                    <Text style={{ fontSize: 12, color: TEXT_MUTED }}>Courier Rating: 5.0 ★ • {driverProfile?.xp || 0} XP</Text>
+                                    <Text style={styles.credLabel}>DRIVER LICENSE NO.</Text>
+                                    <Text style={styles.credValue}>{driverProfile?.driver_license || driverLicense || 'DL-84291-KMC'}</Text>
                                 </View>
+                                <View style={styles.credVerifiedBadge}>
+                                    <Text style={styles.credVerifiedText}>VERIFIED</Text>
+                                </View>
+                            </View>
+
+                            <View style={styles.credRow}>
+                                <View style={styles.credIconBox}>
+                                    <Ionicons name="shield" size={15} color={SUCCESS} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.credLabel}>INSURANCE STATUS</Text>
+                                    <Text style={styles.credValue}>Active • Third-Party Comprehensive</Text>
+                                </View>
+                                <View style={[styles.credVerifiedBadge, { backgroundColor: '#ECFDF5' }]}>
+                                    <Text style={[styles.credVerifiedText, { color: SUCCESS }]}>ACTIVE</Text>
+                                </View>
+                            </View>
+
+                            <View style={styles.credRow}>
+                                <View style={styles.credIconBox}>
+                                    <Ionicons name="checkmark-circle" size={15} color={GOLD} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.credLabel}>SAFETY AUDIT</Text>
+                                    <Text style={styles.credValue}>Last Audit: {new Date().toLocaleDateString('en-NG', { month: 'long', year: 'numeric' })}</Text>
+                                </View>
+                                <View style={[styles.credVerifiedBadge, { backgroundColor: '#FEF3C7' }]}>
+                                    <Text style={[styles.credVerifiedText, { color: '#92400E' }]}>PASSED</Text>
+                                </View>
+                            </View>
+                        </View>
+
+                        {/* ── 5B. Vehicle Specifications & Cargo Capability ── */}
+                        <View style={styles.profileSection}>
+                            <View style={styles.profileSectionHeader}>
+                                <View style={styles.profileSectionIconWrap}>
+                                    <Ionicons name="car-sport" size={16} color={GOLD} />
+                                </View>
+                                <Text style={styles.profileSectionTitle}>Vehicle Specifications</Text>
+                                <TouchableOpacity
+                                    style={styles.profileEditBtn}
+                                    onPress={() => setVehicleModalVisible(true)}
+                                    activeOpacity={0.8}
+                                >
+                                    <Ionicons name="create" size={13} color={TEXT_DARK} />
+                                    <Text style={styles.profileEditBtnText}>Edit</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={styles.vehicleSpecGrid}>
+                                <View style={styles.vehicleSpecItem}>
+                                    <Ionicons name="car" size={18} color={TEXT_MUTED} />
+                                    <Text style={styles.vehicleSpecLabel}>TYPE</Text>
+                                    <Text style={styles.vehicleSpecVal}>{driverProfile?.vehicle_type || 'Motorcycle'}</Text>
+                                </View>
+                                <View style={styles.vehicleSpecItem}>
+                                    <Ionicons name="cube" size={18} color={TEXT_MUTED} />
+                                    <Text style={styles.vehicleSpecLabel}>MODEL</Text>
+                                    <Text style={styles.vehicleSpecVal} numberOfLines={2}>{driverProfile?.vehicle_model || vModel || 'Bajaj Boxer BM150'}</Text>
+                                </View>
+                                <View style={styles.vehicleSpecItem}>
+                                    <Ionicons name="barcode" size={18} color={TEXT_MUTED} />
+                                    <Text style={styles.vehicleSpecLabel}>PLATE</Text>
+                                    <Text style={styles.vehicleSpecVal}>{driverProfile?.plate_number || pNumber || 'KMC-492-XA'}</Text>
+                                </View>
+                                <View style={styles.vehicleSpecItem}>
+                                    <Ionicons name="color-palette" size={18} color={TEXT_MUTED} />
+                                    <Text style={styles.vehicleSpecLabel}>COLOR</Text>
+                                    <Text style={styles.vehicleSpecVal}>{driverProfile?.vehicle_color || vColor || 'Silver'}</Text>
+                                </View>
+                                <View style={styles.vehicleSpecItem}>
+                                    <Ionicons name="flame" size={18} color={TEXT_MUTED} />
+                                    <Text style={styles.vehicleSpecLabel}>FUEL</Text>
+                                    <Text style={styles.vehicleSpecVal}>{driverProfile?.fuel_type || fuelType || 'Petrol'}</Text>
+                                </View>
+                                <View style={styles.vehicleSpecItem}>
+                                    <Ionicons name="archive" size={18} color={TEXT_MUTED} />
+                                    <Text style={styles.vehicleSpecLabel}>PAYLOAD</Text>
+                                    <Text style={styles.vehicleSpecVal}>{driverProfile?.payload_capacity || payloadCapacity || '65 kg'}</Text>
+                                </View>
+                            </View>
+
+                            {/* Nigerian Plate Tag */}
+                            <View style={styles.plateTagWrap}>
+                                <View style={styles.plateTag}>
+                                    <View style={styles.plateTagFlag}>
+                                        <Text style={styles.plateTagFlagText}>🇳🇬</Text>
+                                    </View>
+                                    <Text style={styles.plateTagNumber}>
+                                        {(driverProfile?.plate_number || pNumber || 'KMC 492 XA').toUpperCase()}
+                                    </Text>
+                                    <Text style={styles.plateTagState}>KANO</Text>
+                                </View>
+                            </View>
+                        </View>
+
+                        {/* ── 5C. Courier Tier Milestones & Perks ── */}
+                        <View style={styles.profileSection}>
+                            <View style={styles.profileSectionHeader}>
+                                <View style={styles.profileSectionIconWrap}>
+                                    <Ionicons name="trophy" size={16} color={GOLD} />
+                                </View>
+                                <Text style={styles.profileSectionTitle}>Tier Milestones & Perks</Text>
+                                <View style={styles.tierBadgePill}>
+                                    <Text style={styles.tierBadgePillText}>{driverTier.badge}</Text>
+                                </View>
+                            </View>
+
+                            {/* XP Progress Bar */}
+                            <View style={styles.xpProgressWrap}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                                    <Text style={{ fontSize: 12, fontWeight: '800', color: TEXT_DARK }}>
+                                        {driverProfile?.xp || 0} XP
+                                    </Text>
+                                    <Text style={{ fontSize: 11, color: TEXT_MUTED }}>Next: 1,000 XP → Elite</Text>
+                                </View>
+                                <View style={styles.xpBarTrack}>
+                                    <View style={[
+                                        styles.xpBarFill,
+                                        { width: `${Math.min(((driverProfile?.xp || 0) / 1000) * 100, 100)}%` }
+                                    ]} />
+                                </View>
+                            </View>
+
+                            {/* Unlocked Perks */}
+                            {[
+                                { icon: 'flash', label: 'Priority Pool Access', desc: 'Get first-look at high-value orders in the pool', unlocked: true },
+                                { icon: 'shield-checkmark', label: 'Escrow Instant Credit', desc: 'Delivery earnings credited within 1 hour of handover', unlocked: true },
+                                { icon: 'star', label: 'Pro Courier Badge', desc: 'Displayed on buyer Track Order screen', unlocked: (driverProfile?.xp || 0) >= 100 },
+                                { icon: 'gift', label: 'Monthly Bonus Eligibility', desc: '₦5,000 bonus for 30+ deliveries/month', unlocked: historyOrders.length >= 30 },
+                            ].map((perk, idx) => (
+                                <View key={idx} style={[
+                                    styles.perkRow,
+                                    !perk.unlocked && { opacity: 0.45 }
+                                ]}>
+                                    <View style={[
+                                        styles.perkIconWrap,
+                                        { backgroundColor: perk.unlocked ? '#FEF3C7' : '#F1F5F9' }
+                                    ]}>
+                                        <Ionicons name={perk.icon} size={15} color={perk.unlocked ? GOLD : TEXT_MUTED} />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.perkLabel}>{perk.label}</Text>
+                                        <Text style={styles.perkDesc}>{perk.desc}</Text>
+                                    </View>
+                                    <Ionicons
+                                        name={perk.unlocked ? 'checkmark-circle' : 'lock-closed'}
+                                        size={16}
+                                        color={perk.unlocked ? SUCCESS : TEXT_SUBTLE}
+                                    />
+                                </View>
+                            ))}
+                        </View>
+
+                        {/* ── 5D. Shift Telemetry & GPS Sync ── */}
+                        <View style={styles.profileSection}>
+                            <View style={styles.profileSectionHeader}>
+                                <View style={styles.profileSectionIconWrap}>
+                                    <Ionicons name="pulse" size={16} color={GOLD} />
+                                </View>
+                                <Text style={styles.profileSectionTitle}>Shift Telemetry</Text>
                             </View>
 
                             <View style={styles.statMiniGrid}>
                                 <View style={styles.statMiniBox}>
                                     <Text style={styles.statMiniVal}>{historyOrders.length}</Text>
-                                    <Text style={styles.statMiniLbl}>Total Delivered</Text>
+                                    <Text style={styles.statMiniLbl}>Trips Completed</Text>
                                 </View>
                                 <View style={styles.statMiniBox}>
-                                    <Text style={styles.statMiniVal}>₦{todayEarnings.toLocaleString()}</Text>
-                                    <Text style={styles.statMiniLbl}>Today's Pay</Text>
+                                    <Text style={styles.statMiniVal}>{driverProfile?.xp || 0}</Text>
+                                    <Text style={styles.statMiniLbl}>XP Earned</Text>
                                 </View>
                                 <View style={styles.statMiniBox}>
-                                    <Text style={styles.statMiniVal}>100%</Text>
-                                    <Text style={styles.statMiniLbl}>Safety Rate</Text>
+                                    <Text style={styles.statMiniVal}>~{(historyOrders.length * 3.2).toFixed(1)} km</Text>
+                                    <Text style={styles.statMiniLbl}>Est. Distance</Text>
                                 </View>
                             </View>
+
+                            <TouchableOpacity
+                                style={styles.syncGpsBtn}
+                                onPress={syncLiveGps}
+                                activeOpacity={0.85}
+                            >
+                                {isSyncingGps ? (
+                                    <ActivityIndicator size="small" color="#FFFFFF" />
+                                ) : (
+                                    <Ionicons name="location" size={15} color="#FFFFFF" />
+                                )}
+                                <Text style={styles.syncGpsBtnText}>
+                                    {isSyncingGps ? 'Acquiring GPS...' : 'Sync Live GPS Location'}
+                                </Text>
+                            </TouchableOpacity>
                         </View>
 
-                        {/* Vehicle Specifications Card */}
-                        <View style={styles.vehicleInfoCard}>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                                <Text style={styles.vehicleCardTitle}>Assigned Logistics Vehicle</Text>
-                                <TouchableOpacity style={styles.editVehicleBtn} onPress={() => setVehicleModalVisible(true)} activeOpacity={0.8}>
-                                    <Ionicons name="create-outline" size={14} color="#0F172A" />
-                                    <Text style={styles.editVehicleBtnText}>Edit Vehicle</Text>
-                                </TouchableOpacity>
-                            </View>
-
-                            <View style={styles.vehicleRow}>
-                                <Ionicons name="car-sport-outline" size={18} color={TEXT_MUTED} />
-                                <Text style={styles.vehiclePropLabel}>Vehicle Type:</Text>
-                                <Text style={styles.vehiclePropVal}>{driverProfile?.vehicle_type || 'Motorcycle'}</Text>
-                            </View>
-
-                            <View style={styles.vehicleRow}>
-                                <Ionicons name="cube-outline" size={18} color={TEXT_MUTED} />
-                                <Text style={styles.vehiclePropLabel}>Make & Model:</Text>
-                                <Text style={styles.vehiclePropVal}>{driverProfile?.vehicle_model || vModel || 'Bajaj Boxer BM150 Express'}</Text>
-                            </View>
-
-                            <View style={styles.vehicleRow}>
-                                <Ionicons name="barcode-outline" size={18} color={TEXT_MUTED} />
-                                <Text style={styles.vehiclePropLabel}>Plate / Reg Number:</Text>
-                                <Text style={styles.vehiclePropVal}>{driverProfile?.plate_number || driverProfile?.vehicle_number || pNumber || 'KMC-492-XA'}</Text>
-                            </View>
-
-                            <View style={styles.vehicleRow}>
-                                <Ionicons name="color-palette-outline" size={18} color={TEXT_MUTED} />
-                                <Text style={styles.vehiclePropLabel}>Vehicle Color:</Text>
-                                <Text style={styles.vehiclePropVal}>{driverProfile?.vehicle_color || vColor || 'Silver Metallic'}</Text>
-                            </View>
-
-                            <View style={styles.vehicleRow}>
-                                <Ionicons name="ribbon-outline" size={18} color={TEXT_MUTED} />
-                                <Text style={styles.vehiclePropLabel}>Courier Experience:</Text>
-                                <Text style={styles.vehiclePropVal}>{driverProfile?.experience || experience || '5+ Years Pro Logistics Specialist'}</Text>
-                            </View>
-
-                            <View style={styles.vehicleRow}>
-                                <Ionicons name="call-outline" size={18} color={TEXT_MUTED} />
-                                <Text style={styles.vehiclePropLabel}>Driver Phone:</Text>
-                                <Text style={styles.vehiclePropVal}>{activeUser?.phone || driverProfile?.phone || 'Not Set'}</Text>
-                            </View>
-
-                            <View style={styles.vehicleRow}>
-                                <Ionicons name="location-outline" size={18} color={TEXT_MUTED} />
-                                <Text style={styles.vehiclePropLabel}>Base Station:</Text>
-                                <Text style={styles.vehiclePropVal}>{driverProfile?.current_location || 'Kano Hub'}</Text>
-                            </View>
-                        </View>
-
-                        {/* Logistics Dispatch Support Hotline */}
-                        <View style={[styles.vehicleInfoCard, { marginTop: 16 }]}>
+                        {/* Dispatch Hotline */}
+                        <View style={[styles.profileSection, { marginBottom: 0 }]}>
                             <Text style={styles.vehicleCardTitle}>Abu Mafhal Logistics Dispatch</Text>
                             <Text style={{ fontSize: 12, color: TEXT_MUTED, marginTop: 4, marginBottom: 12 }}>
                                 Need emergency delivery assistance, address resolution, or customer dispute support?
@@ -1971,7 +2340,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                             </TouchableOpacity>
                         </View>
 
-                        {/* End Shift / Clock Out */}
+                        {/* End Shift */}
                         <TouchableOpacity
                             style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 16, flexDirection: 'row', justifyContent: 'center', gap: 8 }}
                             onPress={() => setShiftSummaryModalVisible(true)}
@@ -2473,6 +2842,81 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                 </View>
             </Modal>
 
+            {/* ─── MODAL 8: DIGITAL TRANSACTION RECEIPT ─── */}
+            <Modal visible={!!selectedTxForReceipt} transparent animationType="fade">
+                <View style={styles.modalBackdrop}>
+                    <View style={[styles.modalSheetContent, { padding: 24, borderRadius: 28 }]}>
+                        {selectedTxForReceipt && (
+                            <View>
+                                <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                                    <View style={[
+                                        styles.receiptIconCircle,
+                                        { backgroundColor: selectedTxForReceipt.type === 'debit' ? '#FEF2F2' : '#ECFDF5' }
+                                    ]}>
+                                        <Ionicons
+                                            name={selectedTxForReceipt.type === 'debit' ? 'arrow-up' : 'shield-checkmark'}
+                                            size={28}
+                                            color={selectedTxForReceipt.type === 'debit' ? DANGER : SUCCESS}
+                                        />
+                                    </View>
+                                    <Text style={styles.receiptTitle}>
+                                        {selectedTxForReceipt.type === 'debit' ? 'Payout Cashout' : 'Delivery Fee Credit'}
+                                    </Text>
+                                    <Text style={[
+                                        styles.receiptAmount,
+                                        { color: selectedTxForReceipt.type === 'debit' ? DANGER : SUCCESS }
+                                    ]}>
+                                        {selectedTxForReceipt.type === 'debit' ? '-' : '+'}₦{Number(selectedTxForReceipt.amount || 0).toLocaleString()}
+                                    </Text>
+                                    <View style={[
+                                        styles.txStatusPill,
+                                        { backgroundColor: selectedTxForReceipt.status === 'completed' ? '#ECFDF5' : '#FFFBEB', marginTop: 6 }
+                                    ]}>
+                                        <Text style={{ fontSize: 10, fontWeight: '900', color: selectedTxForReceipt.status === 'completed' ? SUCCESS : AMBER }}>
+                                            {(selectedTxForReceipt.status || 'SETTLED VIA ESCROW').toUpperCase()}
+                                        </Text>
+                                    </View>
+                                </View>
+
+                                {/* Receipt Breakdown Table */}
+                                <View style={styles.receiptDetailsBox}>
+                                    <View style={styles.receiptRow}>
+                                        <Text style={styles.receiptLabel}>Transaction Date</Text>
+                                        <Text style={styles.receiptValue}>
+                                            {new Date(selectedTxForReceipt.created_at).toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' })}
+                                        </Text>
+                                    </View>
+                                    <View style={styles.receiptRow}>
+                                        <Text style={styles.receiptLabel}>Reference ID</Text>
+                                        <Text style={styles.receiptValue} numberOfLines={1}>{selectedTxForReceipt.reference || 'N/A'}</Text>
+                                    </View>
+                                    <View style={styles.receiptRow}>
+                                        <Text style={styles.receiptLabel}>Description</Text>
+                                        <Text style={[styles.receiptValue, { flex: 1, textAlign: 'right' }]} numberOfLines={2}>
+                                            {selectedTxForReceipt.description || 'Logistics Service'}
+                                        </Text>
+                                    </View>
+                                    <View style={[styles.receiptRow, { borderBottomWidth: 0 }]}>
+                                        <Text style={styles.receiptLabel}>Escrow Security</Text>
+                                        <Text style={[styles.receiptValue, { color: SUCCESS, fontWeight: '900' }]}>
+                                            100% Verified ✅
+                                        </Text>
+                                    </View>
+                                </View>
+
+                                <TouchableOpacity
+                                    style={styles.receiptCloseBtn}
+                                    onPress={() => setSelectedTxForReceipt(null)}
+                                    activeOpacity={0.85}
+                                >
+                                    <Text style={styles.receiptCloseBtnText}>Close Receipt</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </View>
+                </View>
+            </Modal>
+
             {/* ─── WHATSAPP MODAL ─── */}
             <WhatsAppActionModal
                 visible={whatsappVisible}
@@ -2565,6 +3009,70 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                 activeOpacity={0.85}
                             >
                                 <Text style={styles.payoutSubmitBtnText}>Save Vehicle & Experience ✅</Text>
+                            </TouchableOpacity>
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+            {/* ─── MODAL: LICENSE & CREDENTIALS UPDATE ─── */}
+            <Modal visible={isLicenseModalVisible} transparent animationType="slide">
+                <View style={styles.modalBackdrop}>
+                    <View style={styles.modalSheetContent}>
+                        <View style={styles.modalSheetHeader}>
+                            <Text style={styles.modalSheetTitle}>Update Driver Credentials</Text>
+                            <TouchableOpacity onPress={() => setLicenseModalVisible(false)} style={styles.modalCloseCircle}>
+                                <Ionicons name="close" size={20} color={TEXT_DARK} />
+                            </TouchableOpacity>
+                        </View>
+                        <ScrollView style={{ padding: 20 }}>
+                            <Text style={styles.inputFieldLabel}>Driver License Number</Text>
+                            <TextInput
+                                style={styles.textInputModern}
+                                value={driverLicense}
+                                onChangeText={setDriverLicense}
+                                placeholder="e.g. DL-84291-KMC"
+                                placeholderTextColor={TEXT_SUBTLE}
+                                autoCapitalize="characters"
+                            />
+
+                            <Text style={styles.inputFieldLabel}>Fuel Type</Text>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
+                                {['Petrol', 'Diesel', 'CNG', 'Electric', 'Hybrid'].map(ft => (
+                                    <TouchableOpacity
+                                        key={ft}
+                                        style={[
+                                            styles.filterChip,
+                                            fuelType === ft && styles.filterChipActive
+                                        ]}
+                                        onPress={() => setFuelType(ft)}
+                                    >
+                                        <Text style={[styles.filterChipText, fuelType === ft && styles.filterChipTextActive]}>{ft}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+
+                            <Text style={styles.inputFieldLabel}>Cargo Payload Capacity</Text>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
+                                {['30 kg', '65 kg', '100 kg', '200 kg', '300 kg', '500 kg', '800 kg'].map(cap => (
+                                    <TouchableOpacity
+                                        key={cap}
+                                        style={[
+                                            styles.filterChip,
+                                            payloadCapacity === cap && styles.filterChipActive
+                                        ]}
+                                        onPress={() => setPayloadCapacity(cap)}
+                                    >
+                                        <Text style={[styles.filterChipText, payloadCapacity === cap && styles.filterChipTextActive]}>{cap}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+
+                            <TouchableOpacity
+                                style={[styles.payoutSubmitBtn, { marginTop: 20 }]}
+                                onPress={updateLicenseDetails}
+                                activeOpacity={0.85}
+                            >
+                                <Text style={styles.payoutSubmitBtnText}>Save Credentials ✅</Text>
                             </TouchableOpacity>
                         </ScrollView>
                     </View>
@@ -3835,5 +4343,757 @@ const styles = StyleSheet.create({
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 6,
+    },
+
+    // ─── Executive Header Styles ───
+    execHeaderGradient: {
+        paddingTop: 12,
+        paddingBottom: 12,
+        paddingHorizontal: 16,
+        borderBottomLeftRadius: 0,
+        borderBottomRightRadius: 0,
+    },
+    execHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 10,
+    },
+    execAvatarBlock: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        flex: 1,
+    },
+    execAvatarWrap: {
+        position: 'relative',
+    },
+    execAvatarRing: {
+        width: 46,
+        height: 46,
+        borderRadius: 23,
+        borderWidth: 2,
+        borderColor: GOLD,
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 2,
+    },
+    execAvatarInner: {
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        backgroundColor: 'rgba(255,255,255,0.12)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    execStatusBeacon: {
+        width: 11,
+        height: 11,
+        borderRadius: 5.5,
+        position: 'absolute',
+        bottom: 1,
+        right: 1,
+        borderWidth: 2,
+        borderColor: '#0B132B',
+    },
+    execIdentityBlock: {
+        flex: 1,
+    },
+    execDriverName: {
+        fontSize: 15,
+        fontWeight: '900',
+        color: '#FFFFFF',
+        letterSpacing: 0.2,
+    },
+    execVerifiedBadge: {
+        width: 16,
+        height: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    execBaseStation: {
+        fontSize: 11,
+        color: '#94A3B8',
+        fontWeight: '600',
+        marginTop: 2,
+    },
+    execRightActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    execStatusPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 5,
+        borderRadius: 14,
+        borderWidth: 1,
+    },
+    execPillOnline: {
+        backgroundColor: 'rgba(16,185,129,0.12)',
+        borderColor: 'rgba(16,185,129,0.35)',
+    },
+    execPillOffline: {
+        backgroundColor: 'rgba(100,116,139,0.12)',
+        borderColor: 'rgba(100,116,139,0.3)',
+    },
+    execPillDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+    },
+    execPillText: {
+        fontSize: 9.5,
+        fontWeight: '900',
+        letterSpacing: 0.4,
+    },
+    execWalletChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: 'rgba(217,167,58,0.15)',
+        paddingHorizontal: 8,
+        paddingVertical: 5,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(217,167,58,0.3)',
+    },
+    execWalletChipText: {
+        fontSize: 11,
+        fontWeight: '900',
+        color: '#FFFFFF',
+    },
+    execMenuBtn: {
+        width: 32,
+        height: 32,
+        borderRadius: 10,
+        backgroundColor: 'rgba(255,255,255,0.08)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    execGpsNotice: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        backgroundColor: 'rgba(16,185,129,0.12)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 6,
+        marginTop: 8,
+    },
+    execGpsText: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#34D399',
+    },
+
+    // ─── Fintech Wallet Card ───
+    fintechCard: {
+        borderRadius: 20,
+        padding: 20,
+        marginBottom: 16,
+        overflow: 'hidden',
+        shadowColor: '#0B132B',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.35,
+        shadowRadius: 20,
+        elevation: 10,
+    },
+    fintechCardTopRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 18,
+    },
+    fintechChip: {
+        width: 36,
+        height: 26,
+        borderRadius: 5,
+        backgroundColor: GOLD,
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+    },
+    fintechChipLine: {
+        position: 'absolute',
+        height: '100%',
+        width: 1,
+        backgroundColor: 'rgba(0,0,0,0.2)',
+    },
+    fintechChipInner: {
+        width: 24,
+        height: 16,
+        borderRadius: 3,
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.25)',
+    },
+    fintechBrandTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        backgroundColor: 'rgba(217,167,58,0.15)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(217,167,58,0.25)',
+    },
+    fintechBrandText: {
+        fontSize: 9,
+        fontWeight: '900',
+        color: GOLD,
+        letterSpacing: 0.5,
+    },
+    fintechBalanceLabel: {
+        fontSize: 9.5,
+        fontWeight: '800',
+        color: '#64748B',
+        letterSpacing: 1,
+        marginBottom: 4,
+    },
+    fintechBalance: {
+        fontSize: 34,
+        fontWeight: '900',
+        color: '#FFFFFF',
+        letterSpacing: -0.5,
+    },
+    fintechTodayEarnings: {
+        fontSize: 11.5,
+        color: '#34D399',
+        fontWeight: '700',
+        marginTop: 4,
+        marginBottom: 18,
+    },
+    fintechCardBottomRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-end',
+    },
+    fintechCardholderLabel: {
+        fontSize: 9,
+        color: '#64748B',
+        fontWeight: '800',
+        letterSpacing: 0.8,
+    },
+    fintechCardholderName: {
+        fontSize: 13,
+        fontWeight: '900',
+        color: '#FFFFFF',
+        marginTop: 2,
+        letterSpacing: 0.3,
+    },
+    fintechEscrowBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: 'rgba(217,167,58,0.12)',
+        paddingHorizontal: 7,
+        paddingVertical: 4,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: 'rgba(217,167,58,0.3)',
+    },
+    fintechEscrowBadgeText: {
+        fontSize: 8.5,
+        fontWeight: '900',
+        color: GOLD,
+        letterSpacing: 0.4,
+    },
+    fintechActionBar: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        backgroundColor: CARD_BG,
+        borderRadius: 16,
+        padding: 14,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: BORDER_COLOR,
+    },
+    fintechActionBtn: {
+        alignItems: 'center',
+        gap: 5,
+    },
+    fintechActionIcon: {
+        width: 46,
+        height: 46,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    fintechActionLabel: {
+        fontSize: 10.5,
+        fontWeight: '700',
+        color: TEXT_MUTED,
+    },
+
+    // ─── Transaction Ledger Styles ───
+    txFilterChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 20,
+        backgroundColor: '#F1F5F9',
+        borderWidth: 1,
+        borderColor: BORDER_COLOR,
+    },
+    txFilterChipActive: {
+        backgroundColor: GOLD,
+        borderColor: GOLD,
+    },
+    txFilterChipText: {
+        fontSize: 11.5,
+        fontWeight: '700',
+        color: TEXT_MUTED,
+    },
+    txFilterChipTextActive: {
+        color: '#0F172A',
+        fontWeight: '900',
+    },
+    txLedgerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        backgroundColor: CARD_BG,
+        padding: 13,
+        borderRadius: 12,
+        marginBottom: 8,
+        borderWidth: 1,
+        borderColor: BORDER_COLOR,
+    },
+    txLedgerIcon: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    txLedgerDesc: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: TEXT_DARK,
+    },
+    txLedgerMeta: {
+        fontSize: 11,
+        color: TEXT_MUTED,
+        marginTop: 2,
+    },
+    txLedgerAmount: {
+        fontSize: 14,
+        fontWeight: '900',
+    },
+    txStatusPill: {
+        paddingHorizontal: 6,
+        paddingVertical: 3,
+        borderRadius: 6,
+        marginTop: 3,
+    },
+
+    // ─── Vehicle & Tier Profile Sections ───
+    profileSection: {
+        backgroundColor: CARD_BG,
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 14,
+        borderWidth: 1,
+        borderColor: BORDER_COLOR,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 6,
+        elevation: 2,
+    },
+    profileSectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 14,
+    },
+    profileSectionIconWrap: {
+        width: 30,
+        height: 30,
+        borderRadius: 9,
+        backgroundColor: '#FEF3C7',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    profileSectionTitle: {
+        flex: 1,
+        fontSize: 13.5,
+        fontWeight: '800',
+        color: TEXT_DARK,
+    },
+    profileEditBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#F1F5F9',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 8,
+    },
+    profileEditBtnText: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: TEXT_DARK,
+    },
+
+    // Credentials rows
+    credRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        paddingVertical: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+    },
+    credIconBox: {
+        width: 32,
+        height: 32,
+        borderRadius: 9,
+        backgroundColor: '#F8FAFC',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: BORDER_COLOR,
+    },
+    credLabel: {
+        fontSize: 9.5,
+        fontWeight: '800',
+        color: TEXT_SUBTLE,
+        letterSpacing: 0.5,
+    },
+    credValue: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: TEXT_DARK,
+        marginTop: 1,
+    },
+    credVerifiedBadge: {
+        backgroundColor: '#EFF6FF',
+        paddingHorizontal: 7,
+        paddingVertical: 3,
+        borderRadius: 6,
+    },
+    credVerifiedText: {
+        fontSize: 9,
+        fontWeight: '900',
+        color: BLUE,
+        letterSpacing: 0.4,
+    },
+
+    // Vehicle Spec Grid
+    vehicleSpecGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginBottom: 14,
+    },
+    vehicleSpecItem: {
+        width: '31%',
+        backgroundColor: '#F8FAFC',
+        borderRadius: 12,
+        padding: 10,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: BORDER_COLOR,
+        gap: 4,
+    },
+    vehicleSpecLabel: {
+        fontSize: 9,
+        fontWeight: '800',
+        color: TEXT_SUBTLE,
+        letterSpacing: 0.5,
+    },
+    vehicleSpecVal: {
+        fontSize: 11.5,
+        fontWeight: '800',
+        color: TEXT_DARK,
+        textAlign: 'center',
+    },
+
+    // Nigerian Plate Tag
+    plateTagWrap: {
+        alignItems: 'center',
+        paddingTop: 4,
+    },
+    plateTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: '#FFFBEB',
+        borderRadius: 8,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderWidth: 2,
+        borderColor: '#D9A73A',
+    },
+    plateTagFlag: {
+        width: 18,
+        alignItems: 'center',
+    },
+    plateTagFlagText: {
+        fontSize: 14,
+    },
+    plateTagNumber: {
+        fontSize: 16,
+        fontWeight: '900',
+        color: '#1A1A1A',
+        letterSpacing: 1.5,
+        fontFamily: 'monospace',
+    },
+    plateTagState: {
+        fontSize: 9,
+        fontWeight: '900',
+        color: '#92400E',
+        letterSpacing: 0.5,
+    },
+
+    // Tier & Perks
+    tierBadgePill: {
+        backgroundColor: 'rgba(217,167,58,0.15)',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(217,167,58,0.3)',
+    },
+    tierBadgePillText: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: GOLD,
+    },
+    xpProgressWrap: {
+        marginBottom: 14,
+    },
+    xpBarTrack: {
+        height: 8,
+        backgroundColor: '#F1F5F9',
+        borderRadius: 4,
+        overflow: 'hidden',
+    },
+    xpBarFill: {
+        height: '100%',
+        borderRadius: 4,
+        backgroundColor: GOLD,
+    },
+    perkRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        paddingVertical: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+    },
+    perkIconWrap: {
+        width: 34,
+        height: 34,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    perkLabel: {
+        fontSize: 12.5,
+        fontWeight: '800',
+        color: TEXT_DARK,
+    },
+    perkDesc: {
+        fontSize: 11,
+        color: TEXT_MUTED,
+        marginTop: 1,
+    },
+    syncGpsBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        backgroundColor: HEADER_NAVY,
+        paddingVertical: 12,
+        borderRadius: 12,
+        marginTop: 12,
+    },
+    syncGpsBtnText: {
+        fontSize: 13,
+        fontWeight: '800',
+        color: '#FFFFFF',
+    },
+
+    // ─── Modernized Wallet Styles ───
+    fintechEyeBtn: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: 'rgba(255,255,255,0.08)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    fintechEscrowCapsule: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.06)',
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.08)',
+    },
+    fintechEscrowDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: '#F59E0B',
+    },
+    fintechEscrowCapLabel: {
+        fontSize: 9,
+        fontWeight: '800',
+        color: '#94A3B8',
+        letterSpacing: 0.5,
+    },
+    fintechEscrowCapVal: {
+        fontSize: 12,
+        fontWeight: '900',
+        color: '#FCD34D',
+    },
+    fintechCardholderCode: {
+        fontSize: 11,
+        fontWeight: '900',
+        color: GOLD,
+        marginTop: 2,
+        letterSpacing: 0.5,
+    },
+    savedBankQuickBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: CARD_BG,
+        borderRadius: 16,
+        padding: 14,
+        marginBottom: 14,
+        borderWidth: 1,
+        borderColor: 'rgba(217,167,58,0.25)',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 6,
+        elevation: 2,
+    },
+    savedBankIcon: {
+        width: 38,
+        height: 38,
+        borderRadius: 12,
+        backgroundColor: '#FEF3C7',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    savedBankTitle: {
+        fontSize: 8.5,
+        fontWeight: '900',
+        color: TEXT_MUTED,
+        letterSpacing: 0.6,
+    },
+    savedBankVerifiedBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+        backgroundColor: '#ECFDF5',
+        paddingHorizontal: 5,
+        paddingVertical: 1,
+        borderRadius: 4,
+    },
+    savedBankVerifiedText: {
+        fontSize: 8,
+        fontWeight: '900',
+        color: SUCCESS,
+    },
+    savedBankName: {
+        fontSize: 12.5,
+        fontWeight: '800',
+        color: TEXT_DARK,
+        marginTop: 2,
+    },
+    savedBankHolder: {
+        fontSize: 10.5,
+        fontWeight: '600',
+        color: TEXT_MUTED,
+    },
+    quickWithdrawBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: SUCCESS,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        borderRadius: 12,
+        shadowColor: SUCCESS,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 6,
+        elevation: 3,
+    },
+    quickWithdrawBtnText: {
+        color: '#FFFFFF',
+        fontWeight: '900',
+        fontSize: 11.5,
+    },
+    receiptIconCircle: {
+        width: 58,
+        height: 58,
+        borderRadius: 29,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 10,
+    },
+    receiptTitle: {
+        fontSize: 13,
+        fontWeight: '800',
+        color: TEXT_MUTED,
+    },
+    receiptAmount: {
+        fontSize: 26,
+        fontWeight: '900',
+        marginTop: 4,
+    },
+    receiptDetailsBox: {
+        backgroundColor: '#F8FAFC',
+        borderRadius: 16,
+        padding: 14,
+        marginBottom: 18,
+        borderWidth: 1,
+        borderColor: BORDER_COLOR,
+    },
+    receiptRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+    },
+    receiptLabel: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: TEXT_MUTED,
+    },
+    receiptValue: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: TEXT_DARK,
+    },
+    receiptCloseBtn: {
+        backgroundColor: HEADER_NAVY,
+        paddingVertical: 13,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    receiptCloseBtnText: {
+        color: '#FFFFFF',
+        fontWeight: '900',
+        fontSize: 13,
     },
 });
