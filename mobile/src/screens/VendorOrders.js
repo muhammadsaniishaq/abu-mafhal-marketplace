@@ -273,6 +273,79 @@ const OrderDetailModal = ({ item, visible, onClose, onUpdateStatus, updatingId }
                         />
                     )}
 
+                    {/* ── Driver Delivery Claim Request ─── */}
+                    {(() => {
+                        let pendingReq = null;
+                        try {
+                            if (item.delivery_notes && typeof item.delivery_notes === 'string' && item.delivery_notes.includes('driver_request')) {
+                                pendingReq = JSON.parse(item.delivery_notes);
+                            }
+                        } catch (_) {}
+
+                        if (!pendingReq) return null;
+
+                        return (
+                            <View style={{ backgroundColor: '#FEF3C7', padding: 14, borderRadius: 14, borderWidth: 1, borderColor: '#F59E0B', marginBottom: 12 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Ionicons name="bicycle" size={18} color="#D97706" />
+                                        <Text style={{ fontSize: 13, fontWeight: '900', color: '#92400E' }}>
+                                            🚴 DRIVER DELIVERY CLAIM REQUEST
+                                        </Text>
+                                    </View>
+                                    <View style={{ backgroundColor: '#FDE68A', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                                        <Text style={{ fontSize: 9.5, fontWeight: '900', color: '#B45309' }}>ACTION REQUIRED</Text>
+                                    </View>
+                                </View>
+
+                                <Text style={{ fontSize: 12.5, color: '#78350F', marginBottom: 4 }}>
+                                    Courier <Text style={{ fontWeight: '800' }}>{pendingReq.driver_name}</Text> ({pendingReq.driver_phone || 'Phone on file'}) has requested to pick up this package from your store.
+                                </Text>
+                                <Text style={{ fontSize: 11.5, color: '#92400E', marginBottom: 12 }}>
+                                    Vehicle: <Text style={{ fontWeight: '700' }}>{pendingReq.vehicle_type} ({pendingReq.vehicle_model || 'Express'} • {pendingReq.vehicle_number || 'Registered'})</Text> • Rating: <Text style={{ fontWeight: '700' }}>{pendingReq.rating || 5.0} ★</Text>
+                                </Text>
+
+                                <View style={{ flexDirection: 'row', gap: 8 }}>
+                                    <TouchableOpacity
+                                        onPress={async () => {
+                                            try {
+                                                const { error } = await supabase.from('orders').update({
+                                                    driver_id: pendingReq.driver_id || pendingReq.driver_user_id,
+                                                    status: 'shipped',
+                                                    updated_at: new Date().toISOString()
+                                                }).eq('id', item.id);
+                                                if (error) throw error;
+                                                Alert.alert('Courier Assigned! ⚡', `${pendingReq.driver_name} is assigned to pick up and deliver this order.`);
+                                                if (onClose) onClose();
+                                            } catch (err) {
+                                                Alert.alert('Error', err.message);
+                                            }
+                                        }}
+                                        style={{ flex: 1, backgroundColor: '#10B981', paddingVertical: 10, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                                    >
+                                        <Ionicons name="checkmark-circle" size={16} color="white" />
+                                        <Text style={{ color: 'white', fontWeight: '800', fontSize: 12 }}>Approve & Assign Courier</Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        onPress={async () => {
+                                            try {
+                                                await supabase.from('orders').update({ delivery_notes: null, driver_notes: 'Claim declined by vendor' }).eq('id', item.id);
+                                                Alert.alert('Request Declined', 'Delivery claim request has been declined.');
+                                                if (onClose) onClose();
+                                            } catch (err) {
+                                                Alert.alert('Error', err.message);
+                                            }
+                                        }}
+                                        style={{ paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#CBD5E1', alignItems: 'center', justifyContent: 'center' }}
+                                    >
+                                        <Text style={{ color: '#64748B', fontWeight: '700', fontSize: 12 }}>Decline</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        );
+                    })()}
+
                     {/* ── Product ─── */}
                     <SectionCard title="Product" icon="cube-outline" accentColor="#6366F1">
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>

@@ -1181,29 +1181,113 @@ export const AdminOrders = ({ navigation, onBack }) => {
                                         </View>
                                     ) : null}
 
-                                    {/* ─ Driver Assignment ─ */}
+                                    {/* ─ Driver Assignment & Online Status ─ */}
                                     <View style={S.card}>
-                                        <Text style={S.cardTitle}>🚴 Assign Driver</Text>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                            <Text style={[S.cardTitle, { marginBottom: 0 }]}>🚴 Assign Courier & Fleet</Text>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#ECFDF5', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 12, borderWidth: 1, borderColor: '#A7F3D0' }}>
+                                                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' }} />
+                                                <Text style={{ fontSize: 10, fontWeight: '800', color: '#065F46' }}>
+                                                    {drivers.filter(d => d.status === 'active' || d.is_active).length} ONLINE NOW
+                                                </Text>
+                                            </View>
+                                        </View>
+
+                                        {/* Pending Driver Delivery Claim Request */}
+                                        {(() => {
+                                            let pendingReq = null;
+                                            try {
+                                                if (order.delivery_notes && typeof order.delivery_notes === 'string' && order.delivery_notes.includes('driver_request')) {
+                                                    pendingReq = JSON.parse(order.delivery_notes);
+                                                }
+                                            } catch (_) {}
+
+                                            if (!pendingReq) return null;
+
+                                            return (
+                                                <View style={{ backgroundColor: '#FEF3C7', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#F59E0B', marginBottom: 12 }}>
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                            <Ionicons name="flash" size={15} color="#D97706" />
+                                                            <Text style={{ fontSize: 12.5, fontWeight: '900', color: '#92400E' }}>
+                                                                DRIVER DELIVERY CLAIM REQUEST
+                                                            </Text>
+                                                        </View>
+                                                        <View style={{ backgroundColor: '#FDE68A', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                                                            <Text style={{ fontSize: 9.5, fontWeight: '900', color: '#B45309' }}>ACTION REQUIRED</Text>
+                                                        </View>
+                                                    </View>
+
+                                                    <Text style={{ fontSize: 12, color: '#78350F', marginBottom: 4 }}>
+                                                        Courier <Text style={{ fontWeight: '800' }}>{pendingReq.driver_name}</Text> ({pendingReq.driver_phone || 'Phone on file'}) requested to deliver this order.
+                                                    </Text>
+                                                    <Text style={{ fontSize: 11, color: '#92400E', marginBottom: 10 }}>
+                                                        Vehicle: <Text style={{ fontWeight: '700' }}>{pendingReq.vehicle_type} ({pendingReq.vehicle_model || 'Standard'} • {pendingReq.vehicle_number || 'Registered'})</Text> • Rating: <Text style={{ fontWeight: '700' }}>{pendingReq.rating || 5.0} ★</Text>
+                                                    </Text>
+
+                                                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                                                        <TouchableOpacity
+                                                            onPress={() => assignDriver(order.id, pendingReq.driver_id || pendingReq.driver_user_id)}
+                                                            disabled={updating}
+                                                            style={{ flex: 1, backgroundColor: '#10B981', paddingVertical: 9, borderRadius: 8, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                                                        >
+                                                            <Ionicons name="checkmark-circle" size={14} color="white" />
+                                                            <Text style={{ color: 'white', fontWeight: '800', fontSize: 11.5 }}>Approve & Assign Courier</Text>
+                                                        </TouchableOpacity>
+
+                                                        <TouchableOpacity
+                                                            onPress={async () => {
+                                                                await supabase.from('orders').update({ delivery_notes: null, driver_notes: 'Claim request declined' }).eq('id', order.id);
+                                                                setOrders(prev => prev.map(o => o.id === order.id ? { ...o, delivery_notes: null } : o));
+                                                                Alert.alert('Request Declined', 'Delivery claim request has been declined.');
+                                                            }}
+                                                            disabled={updating}
+                                                            style={{ paddingHorizontal: 12, paddingVertical: 9, borderRadius: 8, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#CBD5E1', alignItems: 'center', justifyContent: 'center' }}
+                                                        >
+                                                            <Text style={{ color: '#64748B', fontWeight: '700', fontSize: 11.5 }}>Decline</Text>
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                </View>
+                                            );
+                                        })()}
+
                                         {drivers.length === 0
-                                            ? <Text style={S.cardSub}>No drivers available.</Text>
+                                            ? <Text style={S.cardSub}>No drivers registered yet.</Text>
                                             : (
                                                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                                                     <View style={{ flexDirection: 'row', gap: 8, paddingVertical: 4 }}>
-                                                        {drivers.map(driver => {
-                                                            const isAssigned = order.driver_id === driver.id;
-                                                            return (
-                                                                <TouchableOpacity
-                                                                    key={driver.id}
-                                                                    onPress={() => assignDriver(order.id, driver.id)}
-                                                                    disabled={updating}
-                                                                    style={[S.driverChip, isAssigned && { backgroundColor: '#0E1A2E', borderColor: '#D9A73A' }]}
-                                                                >
-                                                                    <Ionicons name="bicycle" size={13} color={isAssigned ? '#D9A73A' : '#0E1A2E'} />
-                                                                    <Text style={{ color: isAssigned ? 'white' : '#0E1A2E', fontSize: 12, fontWeight: '700' }}>{driver.name}</Text>
-                                                                    <Text style={{ color: isAssigned ? 'rgba(255,255,255,0.7)' : '#94A3B8', fontSize: 10 }}>{getLevel(driver.xp)}</Text>
-                                                                </TouchableOpacity>
-                                                            );
-                                                        })}
+                                                        {[...drivers]
+                                                            .sort((a, b) => {
+                                                                const aOnline = (a.status === 'active' || a.is_active) ? 1 : 0;
+                                                                const bOnline = (b.status === 'active' || b.is_active) ? 1 : 0;
+                                                                return bOnline - aOnline;
+                                                            })
+                                                            .map(driver => {
+                                                                const isAssigned = order.driver_id === driver.id;
+                                                                const isOnline = driver.status === 'active' || driver.is_active;
+
+                                                                return (
+                                                                    <TouchableOpacity
+                                                                        key={driver.id}
+                                                                        onPress={() => assignDriver(order.id, driver.id)}
+                                                                        disabled={updating}
+                                                                        style={[
+                                                                            S.driverChip,
+                                                                            isAssigned && { backgroundColor: '#0E1A2E', borderColor: '#D9A73A' },
+                                                                            isOnline && !isAssigned && { borderColor: '#10B981', backgroundColor: '#F0FDF4' }
+                                                                        ]}
+                                                                    >
+                                                                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: isOnline ? '#10B981' : '#94A3B8' }} />
+                                                                        <Ionicons name="bicycle" size={13} color={isAssigned ? '#D9A73A' : isOnline ? '#059669' : '#0E1A2E'} />
+                                                                        <Text style={{ color: isAssigned ? 'white' : '#0E1A2E', fontSize: 12, fontWeight: '700' }}>
+                                                                            {driver.name}
+                                                                        </Text>
+                                                                        <Text style={{ color: isAssigned ? 'rgba(255,255,255,0.7)' : isOnline ? '#059669' : '#94A3B8', fontSize: 10, fontWeight: isOnline ? '800' : '500' }}>
+                                                                            {isOnline ? 'ONLINE' : 'Offline'} • {driver.vehicle_type || 'Bike'}
+                                                                        </Text>
+                                                                    </TouchableOpacity>
+                                                                );
+                                                            })}
                                                     </View>
                                                 </ScrollView>
                                             )

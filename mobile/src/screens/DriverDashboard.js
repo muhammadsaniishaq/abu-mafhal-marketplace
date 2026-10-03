@@ -26,6 +26,7 @@ import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 import { whatsappService } from '../services/whatsappService';
 import { WhatsAppActionModal } from '../components/WhatsAppActionModal';
 import { DriverDrawer } from '../components/DriverDrawer';
+import { DriverRouteMapModal, calculateDistanceKm, getDestinationCoords } from '../components/DriverRouteMapModal';
 
 import { LucideIcon } from '../components/LucideIcon';
 
@@ -179,7 +180,11 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
 
     // Vehicle Form
     const [vType, setVType] = useState('Motorcycle');
+    const [vModel, setVModel] = useState('');
     const [pNumber, setPNumber] = useState('');
+    const [vColor, setVColor] = useState('');
+    const [experience, setExperience] = useState('');
+    const [selectedMapOrder, setSelectedMapOrder] = useState(null);
 
     // Withdrawal Form
     const [withdrawAmount, setWithdrawAmount] = useState('');
@@ -381,7 +386,10 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
             if (data) {
                 setDriverProfile(data);
                 setVType(data.vehicle_type || 'Motorcycle');
-                setPNumber(data.vehicle_number || '');
+                setVModel(data.vehicle_model || '');
+                setPNumber(data.vehicle_number || data.plate_number || '');
+                setVColor(data.vehicle_color || '');
+                setExperience(data.experience || '');
             } else {
                 const newDriver = {
                     user_id: userId,
@@ -389,6 +397,10 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                     phone: activeUser?.phone || activeUser?.phone_number || '',
                     vehicle_type: 'Motorcycle',
                     vehicle_number: '',
+                    plate_number: '',
+                    vehicle_model: 'Bajaj Boxer BM150 Express',
+                    vehicle_color: 'Black / Silver',
+                    experience: '3+ Years Certified Courier',
                     current_location: 'Kano Hub Central',
                     status: 'active',
                     is_active: true,
@@ -404,7 +416,10 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                 if (created) {
                     setDriverProfile(created);
                     setVType(created.vehicle_type || 'Motorcycle');
-                    setPNumber(created.vehicle_number || '');
+                    setVModel(created.vehicle_model || 'Bajaj Boxer BM150 Express');
+                    setPNumber(created.vehicle_number || created.plate_number || '');
+                    setVColor(created.vehicle_color || 'Black / Silver');
+                    setExperience(created.experience || '3+ Years Certified Courier');
                 }
             }
         } catch (e) {
@@ -417,7 +432,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
         try {
             const { data } = await supabase
                 .from('profiles')
-                .select('balance, full_name, phone')
+                .select('balance, full_name, phone, avatar_url')
                 .eq('id', userId)
                 .maybeSingle();
 
@@ -429,20 +444,20 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
         }
     };
 
-    // 3. Fetch Real Orders from `orders`
+    // 3. Fetch Real Orders from `orders` with Product Images and Recipient Data
     const fetchOrders = async (userId) => {
         try {
             const [myOrdersRes, poolRes] = await Promise.allSettled([
                 supabase
                     .from('orders')
-                    .select('*, user:profiles(full_name, phone), items:order_items(*)')
+                    .select('*, user:profiles(full_name, phone, address, city, state, avatar_url), items:order_items(*, product:products(id, name, images, image, price))')
                     .eq('driver_id', userId)
                     .order('created_at', { ascending: false }),
                 supabase
                     .from('orders')
-                    .select('*, user:profiles(full_name, phone), items:order_items(*)')
+                    .select('*, user:profiles(full_name, phone, address, city, state, avatar_url), items:order_items(*, product:products(id, name, images, image, price))')
                     .is('driver_id', null)
-                    .in('status', ['processing', 'pending', 'paid', 'order_placed'])
+                    .in('status', ['processing', 'pending', 'paid', 'order_placed', 'driver_requested'])
                     .order('created_at', { ascending: false })
             ]);
 
@@ -592,18 +607,33 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
         if (!uid) return;
 
         Alert.alert(
-            'Claim Delivery Task',
-            'Are you ready to accept and deliver this package to the customer?',
+            'Request Delivery Task ⚡',
+            'Send a delivery claim request for this consignment? The order manager (Admin / Vendor) will review and approve.',
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
-                    text: 'Accept & Claim ⚡',
+                    text: 'Send Request ⚡',
                     onPress: async () => {
+                        const requestMeta = {
+                            type: 'driver_request',
+                            driver_id: driverProfile?.id || uid,
+                            driver_user_id: uid,
+                            driver_name: driverProfile?.name || activeUser?.full_name || 'Verified Courier',
+                            driver_phone: driverProfile?.phone || activeUser?.phone || '',
+                            vehicle_type: vType || 'Motorcycle',
+                            vehicle_model: vModel || 'Express Courier',
+                            vehicle_number: pNumber || '',
+                            vehicle_color: vColor || '',
+                            rating: driverProfile?.rating || 4.9,
+                            experience: experience || 'Experienced Courier',
+                            requested_at: new Date().toISOString()
+                        };
+
                         const { error } = await supabase
                             .from('orders')
                             .update({
-                                driver_id: uid,
-                                status: 'shipped',
+                                delivery_notes: JSON.stringify(requestMeta),
+                                driver_notes: `Delivery Requested by ${requestMeta.driver_name} (${vType})`,
                                 updated_at: new Date().toISOString()
                             })
                             .eq('id', orderId);
@@ -611,9 +641,15 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                         if (error) {
                             Alert.alert('Error', error.message);
                         } else {
-                            Alert.alert('Task Assigned! ⚡', 'Package is now in your Active tasks. Deliver promptly.');
+                            await supabase.from('order_status_logs').insert({
+                                order_id: orderId,
+                                status: 'driver_requested',
+                                note: `Driver ${requestMeta.driver_name} requested assignment (${vType} • ${pNumber || 'Express'})`,
+                                changed_by: uid
+                            }).catch(() => {});
+
+                            Alert.alert('Request Submitted! 🚀', 'Your delivery request was sent to the order manager (Admin / Vendor). Once approved, it will move into your Active Shipments.');
                             fetchOrders(uid);
-                            setActiveTab('active');
                         }
                     }
                 }
@@ -880,7 +916,11 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                 .from('drivers')
                 .update({
                     vehicle_type: vType,
+                    vehicle_model: vModel,
                     vehicle_number: pNumber,
+                    plate_number: pNumber,
+                    vehicle_color: vColor,
+                    experience: experience,
                     updated_at: new Date().toISOString()
                 })
                 .eq('user_id', uid);
@@ -890,10 +930,14 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
             setDriverProfile(prev => ({
                 ...prev,
                 vehicle_type: vType,
-                vehicle_number: pNumber
+                vehicle_model: vModel,
+                vehicle_number: pNumber,
+                plate_number: pNumber,
+                vehicle_color: vColor,
+                experience: experience
             }));
             setVehicleModalVisible(false);
-            Alert.alert('Vehicle Updated ✅', 'Your vehicle specifications have been saved.');
+            Alert.alert('Vehicle Updated ✅', 'Your vehicle specifications and courier experience have been saved.');
         } catch (err) {
             Alert.alert('Error', err.message || 'Failed to update vehicle details.');
         }
@@ -1045,6 +1089,50 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
         });
     }, [activeTab, orders, poolOrders, historyOrders, searchQuery, filterPayment]);
 
+    // Helper to extract real product photo and title from joined order items
+    const getOrderItemDetails = (order) => {
+        let firstItem = null;
+        let count = 0;
+        let totalQty = 0;
+
+        if (Array.isArray(order?.items) && order.items.length > 0) {
+            firstItem = order.items[0];
+            count = order.items.length;
+            totalQty = order.items.reduce((acc, it) => acc + (Number(it.quantity) || 1), 0);
+        } else if (Array.isArray(order?.order_items) && order.order_items.length > 0) {
+            firstItem = order.order_items[0];
+            count = order.order_items.length;
+            totalQty = order.order_items.reduce((acc, it) => acc + (Number(it.quantity) || 1), 0);
+        }
+
+        let rawImg = firstItem?.product?.images || firstItem?.product?.image || firstItem?.image || firstItem?.images;
+        let imgUrl = null;
+        if (Array.isArray(rawImg) && rawImg.length > 0) {
+            imgUrl = rawImg[0];
+        } else if (typeof rawImg === 'string') {
+            if (rawImg.startsWith('[') || rawImg.startsWith('{')) {
+                try {
+                    const parsed = JSON.parse(rawImg);
+                    imgUrl = Array.isArray(parsed) ? parsed[0] : (parsed?.url || parsed?.image || rawImg);
+                } catch (_) {
+                    imgUrl = rawImg;
+                }
+            } else {
+                imgUrl = rawImg;
+            }
+        }
+
+        const title = firstItem?.product?.name || firstItem?.name || firstItem?.title || `Consignment #${(order?.id || '').slice(0, 8).toUpperCase()}`;
+
+        return {
+            title,
+            image: imgUrl,
+            itemCount: count || 1,
+            quantity: totalQty || 1,
+            price: firstItem?.price || order?.total_amount
+        };
+    };
+
     // ─── RENDER ORDER ITEM (CLEAN LIGHT CARD) ───
     const renderOrderItem = ({ item }) => {
         const address = parseAddress(item.shipping_address);
@@ -1055,9 +1143,24 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
         const isPrepaid = isPrepaidOrder(item);
         const shippingFee = Number(item.shipping_fee) || 1000;
         const totalAmount = Number(item.total_amount) || 0;
-        const itemCount = Array.isArray(item.items) ? item.items.length : 1;
         const customerName = item.user?.full_name || 'Marketplace Buyer';
         const customerPhone = item.user?.phone || item.contact_phone || '';
+
+        const itemDetails = getOrderItemDetails(item);
+        const destCoords = getDestinationCoords(address);
+        const destDistance = calculateDistanceKm(
+            driverProfile?.latitude || 12.0022,
+            driverProfile?.longitude || 8.5920,
+            destCoords.lat,
+            destCoords.lng
+        );
+
+        let pendingRequest = null;
+        try {
+            if (item.delivery_notes && typeof item.delivery_notes === 'string' && item.delivery_notes.includes('driver_request')) {
+                pendingRequest = JSON.parse(item.delivery_notes);
+            }
+        } catch (_) {}
 
         return (
             <View style={[styles.modernCard, isHistory && { opacity: 0.92 }]}>
@@ -1117,19 +1220,25 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                     </View>
                 )}
 
-                {/* Package & Customer Details Preview */}
+                {/* Real Product & Recipient Details Preview */}
                 <View style={styles.packagePreviewRow}>
-                    <View style={styles.packageIconBox}>
-                        <Ionicons name="cube-outline" size={24} color={GOLD} />
+                    <View style={styles.packageThumbContainer}>
+                        {itemDetails.image ? (
+                            <Image source={{ uri: itemDetails.image }} style={styles.packageProductThumb} resizeMode="cover" />
+                        ) : (
+                            <View style={styles.packageIconBox}>
+                                <Ionicons name="cube-outline" size={24} color={GOLD} />
+                            </View>
+                        )}
                     </View>
-                    <View style={{ flex: 1, justifyContent: 'center' }}>
+                    <View style={{ flex: 1, justifyContent: 'center', marginLeft: 10 }}>
                         <Text style={styles.packageTitle} numberOfLines={1}>
-                            Consignment #{item.id?.slice(0, 8).toUpperCase()}
+                            {itemDetails.title}
                         </Text>
                         <Text style={styles.packageMeta}>
-                            {itemCount} package item(s) • Total Order Value: ₦{totalAmount.toLocaleString()}
+                            {itemDetails.itemCount} item(s) • Qty: {itemDetails.quantity} • Value: ₦{totalAmount.toLocaleString()}
                         </Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 }}>
                             <Ionicons name="person-outline" size={12} color={TEXT_MUTED} />
                             <Text style={styles.customerName} numberOfLines={1}>
                                 Recipient: {customerName}
@@ -1138,24 +1247,34 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                     </View>
                 </View>
 
-                {/* Route Section */}
+                {/* Route Section with Distance & In-App Interactive Map Trigger */}
                 <View style={styles.routeCard}>
                     <View style={styles.routeRow}>
                         <Ionicons name="location-outline" size={16} color={GOLD} style={{ marginTop: 2 }} />
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.routeLabel}>DELIVERY DESTINATION</Text>
+                        <View style={{ flex: 1, paddingRight: 8 }}>
+                            <Text style={styles.routeLabel}>DELIVERY DESTINATION • {destDistance} KM AWAY</Text>
                             <Text style={styles.routeAddress} numberOfLines={2}>{address}</Text>
                         </View>
                         <TouchableOpacity
                             style={styles.navigateMiniBtn}
-                            onPress={() => handleMap(address)}
+                            onPress={() => setSelectedMapOrder(item)}
                             activeOpacity={0.8}
                         >
-                            <Ionicons name="navigate" size={14} color="#070D1B" />
-                            <Text style={styles.navigateMiniBtnText}>Maps</Text>
+                            <Ionicons name="map" size={13} color="#070D1B" />
+                            <Text style={styles.navigateMiniBtnText}>In-App Route</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
+
+                {/* Pending Request Indicator */}
+                {pendingRequest && isPool && (
+                    <View style={{ backgroundColor: '#FEF3C7', padding: 8, borderRadius: 8, marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: '#FDE68A' }}>
+                        <Ionicons name="time" size={14} color="#B45309" />
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#92400E', flex: 1 }}>
+                            Request Pending Approval ({pendingRequest.vehicle_type || 'Vehicle'})
+                        </Text>
+                    </View>
+                )}
 
                 {/* Customer Contact Toolbar (When Active) */}
                 {!isPool && !isHistory && (
@@ -1800,9 +1919,27 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                             </View>
 
                             <View style={styles.vehicleRow}>
+                                <Ionicons name="cube-outline" size={18} color={TEXT_MUTED} />
+                                <Text style={styles.vehiclePropLabel}>Make & Model:</Text>
+                                <Text style={styles.vehiclePropVal}>{driverProfile?.vehicle_model || vModel || 'Bajaj Boxer BM150 Express'}</Text>
+                            </View>
+
+                            <View style={styles.vehicleRow}>
                                 <Ionicons name="barcode-outline" size={18} color={TEXT_MUTED} />
                                 <Text style={styles.vehiclePropLabel}>Plate / Reg Number:</Text>
-                                <Text style={styles.vehiclePropVal}>{driverProfile?.vehicle_number || 'Not Set'}</Text>
+                                <Text style={styles.vehiclePropVal}>{driverProfile?.plate_number || driverProfile?.vehicle_number || pNumber || 'KMC-492-XA'}</Text>
+                            </View>
+
+                            <View style={styles.vehicleRow}>
+                                <Ionicons name="color-palette-outline" size={18} color={TEXT_MUTED} />
+                                <Text style={styles.vehiclePropLabel}>Vehicle Color:</Text>
+                                <Text style={styles.vehiclePropVal}>{driverProfile?.vehicle_color || vColor || 'Silver Metallic'}</Text>
+                            </View>
+
+                            <View style={styles.vehicleRow}>
+                                <Ionicons name="ribbon-outline" size={18} color={TEXT_MUTED} />
+                                <Text style={styles.vehiclePropLabel}>Courier Experience:</Text>
+                                <Text style={styles.vehiclePropVal}>{driverProfile?.experience || experience || '5+ Years Pro Logistics Specialist'}</Text>
                             </View>
 
                             <View style={styles.vehicleRow}>
@@ -2344,6 +2481,95 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                 recipientName={whatsappRecipientName}
                 onClose={() => setWhatsappVisible(false)}
             />
+
+            {/* ─── IN-APP INTERACTIVE ROUTE MAP MODAL ─── */}
+            <DriverRouteMapModal
+                visible={!!selectedMapOrder}
+                order={selectedMapOrder}
+                driverLocation={driverProfile?.current_location}
+                onClose={() => setSelectedMapOrder(null)}
+            />
+
+            {/* ─── MODAL: VEHICLE SPECIFICATIONS & COURIER PROFILE ─── */}
+            <Modal visible={isVehicleModalVisible} transparent animationType="slide">
+                <View style={styles.modalBackdrop}>
+                    <View style={styles.modalSheetContent}>
+                        <View style={styles.modalSheetHeader}>
+                            <Text style={styles.modalSheetTitle}>Assigned Logistics Vehicle & Experience</Text>
+                            <TouchableOpacity onPress={() => setVehicleModalVisible(false)} style={styles.modalCloseCircle}>
+                                <Ionicons name="close" size={18} color={TEXT_DARK} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView style={{ padding: 20 }}>
+                            <Text style={styles.inputFieldLabel}>Vehicle Type</Text>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                                {['Motorcycle', 'Car', 'Van', 'Tricycle', 'Truck'].map((vt) => (
+                                    <TouchableOpacity
+                                        key={vt}
+                                        onPress={() => setVType(vt)}
+                                        style={{
+                                            paddingHorizontal: 14,
+                                            paddingVertical: 8,
+                                            borderRadius: 10,
+                                            borderWidth: 1,
+                                            borderColor: vType === vt ? GOLD : '#E2E8F0',
+                                            backgroundColor: vType === vt ? '#FEF3C7' : '#FFFFFF',
+                                        }}
+                                    >
+                                        <Text style={{ fontSize: 12, fontWeight: '700', color: vType === vt ? '#92400E' : TEXT_DARK }}>{vt}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+
+                            <Text style={styles.inputFieldLabel}>Vehicle Brand & Model (e.g. Bajaj Boxer BM150, Toyota Corolla)</Text>
+                            <TextInput
+                                style={styles.textInputModern}
+                                value={vModel}
+                                onChangeText={setVModel}
+                                placeholder="e.g. Bajaj Boxer BM150 Express"
+                                placeholderTextColor={TEXT_SUBTLE}
+                            />
+
+                            <Text style={styles.inputFieldLabel}>Plate / Registration Number</Text>
+                            <TextInput
+                                style={styles.textInputModern}
+                                value={pNumber}
+                                onChangeText={setPNumber}
+                                placeholder="e.g. KMC-492-XA"
+                                placeholderTextColor={TEXT_SUBTLE}
+                                autoCapitalize="characters"
+                            />
+
+                            <Text style={styles.inputFieldLabel}>Vehicle Color</Text>
+                            <TextInput
+                                style={styles.textInputModern}
+                                value={vColor}
+                                onChangeText={setVColor}
+                                placeholder="e.g. Silver Metallic / Black"
+                                placeholderTextColor={TEXT_SUBTLE}
+                            />
+
+                            <Text style={styles.inputFieldLabel}>Courier Experience & Seniority</Text>
+                            <TextInput
+                                style={styles.textInputModern}
+                                value={experience}
+                                onChangeText={setExperience}
+                                placeholder="e.g. 5+ Years Pro Logistics Specialist • 1,400+ Deliveries"
+                                placeholderTextColor={TEXT_SUBTLE}
+                            />
+
+                            <TouchableOpacity
+                                style={[styles.payoutSubmitBtn, { marginTop: 16 }]}
+                                onPress={updateVehicleDetails}
+                                activeOpacity={0.85}
+                            >
+                                <Text style={styles.payoutSubmitBtnText}>Save Vehicle & Experience ✅</Text>
+                            </TouchableOpacity>
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 };
@@ -2872,6 +3098,22 @@ const styles = StyleSheet.create({
         backgroundColor: '#FEF3C7',
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    packageThumbContainer: {
+        width: 50,
+        height: 50,
+        borderRadius: 10,
+        overflow: 'hidden',
+        backgroundColor: '#FEF3C7',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    packageProductThumb: {
+        width: '100%',
+        height: '100%',
+        borderRadius: 10,
     },
     packageTitle: {
         fontSize: 13,
