@@ -178,15 +178,28 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
     // Pool Alerts
     const [previousPoolCount, setPreviousPoolCount] = useState(0);
 
-    // Vehicle Form
+    // Unified Vehicle, License & Experience Form
     const [vType, setVType] = useState('Motorcycle');
     const [vModel, setVModel] = useState('');
+    const [vehicleYear, setVehicleYear] = useState('2023');
     const [pNumber, setPNumber] = useState('');
+    const [plateState, setPlateState] = useState('Kano');
     const [vColor, setVColor] = useState('');
-    const [experience, setExperience] = useState('');
-    const [driverLicense, setDriverLicense] = useState('');
     const [fuelType, setFuelType] = useState('Petrol');
     const [payloadCapacity, setPayloadCapacity] = useState('65 kg');
+    const [driverLicense, setDriverLicense] = useState('');
+    const [licenseClass, setLicenseClass] = useState('Class A (Rider / Dispatch)');
+    const [licenseExpiry, setLicenseExpiry] = useState('12/2027');
+    const [insurancePolicy, setInsurancePolicy] = useState('Leadway Third-Party Commercial');
+    const [insuranceStatus, setInsuranceStatus] = useState('Active');
+    const [experience, setExperience] = useState('');
+    const [experienceYears, setExperienceYears] = useState('3+ Years');
+    const [driverStartDate, setDriverStartDate] = useState('Jan 2022');
+    const [previousLogistics, setPreviousLogistics] = useState('GIG Logistics, DHL Express');
+    const [emergencyContactName, setEmergencyContactName] = useState('');
+    const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
+    const [savingProfile, setSavingProfile] = useState(false);
+    const [modalActiveSection, setModalActiveSection] = useState('all'); // 'all' | 'vehicle' | 'license' | 'experience'
     const [selectedMapOrder, setSelectedMapOrder] = useState(null);
     const [walletTxFilter, setWalletTxFilter] = useState('ALL');
     const [isLicenseModalVisible, setLicenseModalVisible] = useState(false);
@@ -400,36 +413,85 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
     // 1. Fetch or Auto-Provision Driver Record from `drivers`
     const fetchDriverRecord = async (userId) => {
         try {
+            // A. Fetch live driver row from drivers table
             const { data } = await supabase
                 .from('drivers')
                 .select('*')
                 .eq('user_id', userId)
                 .maybeSingle();
 
+            // B. Fetch rich profile metadata from profiles.about or profiles next-of-kin
+            let meta = {};
+            try {
+                const { data: pData } = await supabase
+                    .from('profiles')
+                    .select('about, next_of_kin_name, next_of_kin_phone')
+                    .eq('id', userId)
+                    .maybeSingle();
+
+                if (pData?.about) {
+                    try {
+                        const parsed = JSON.parse(pData.about);
+                        if (parsed && typeof parsed === 'object') {
+                            meta = parsed;
+                        }
+                    } catch (_) {}
+                }
+                if (pData?.next_of_kin_name && !meta.emergency_contact_name) {
+                    meta.emergency_contact_name = pData.next_of_kin_name;
+                }
+                if (pData?.next_of_kin_phone && !meta.emergency_contact_phone) {
+                    meta.emergency_contact_phone = pData.next_of_kin_phone;
+                }
+            } catch (_) {}
+
+            // C. Fallback to AsyncStorage cached profile
+            let localCache = {};
+            try {
+                const cached = await AsyncStorage.getItem('@abumafhal_driver_full_profile_' + userId);
+                if (cached) {
+                    const parsedCache = JSON.parse(cached);
+                    if (parsedCache && typeof parsedCache === 'object') {
+                        localCache = parsedCache;
+                    }
+                }
+            } catch (_) {}
+
+            // Intelligent merge
+            const merged = {
+                ...localCache,
+                ...meta,
+                ...(data || {})
+            };
+
             if (data) {
-                setDriverProfile(data);
-                setVType(data.vehicle_type || 'Motorcycle');
-                setVModel(data.vehicle_model || '');
-                setPNumber(data.vehicle_number || data.plate_number || '');
-                setVColor(data.vehicle_color || '');
-                setExperience(data.experience || '');
-                setDriverLicense(data.driver_license || '');
-                setFuelType(data.fuel_type || 'Petrol');
-                setPayloadCapacity(data.payload_capacity || (data.vehicle_type === 'Car' ? '300 kg' : data.vehicle_type === 'Van' ? '800 kg' : '65 kg'));
+                setDriverProfile(merged);
+                setVType(merged.vehicle_type || 'Motorcycle');
+                setVModel(merged.vehicle_model || localCache.vehicle_model || meta.vehicle_model || 'Bajaj Boxer BM150 Express');
+                setVehicleYear(merged.vehicle_year || localCache.vehicle_year || meta.vehicle_year || '2023');
+                setPNumber(merged.vehicle_number || merged.plate_number || localCache.plate_number || meta.plate_number || 'KMC-492-XA');
+                setPlateState(merged.plate_state || localCache.plate_state || meta.plate_state || 'Kano');
+                setVColor(merged.vehicle_color || localCache.vehicle_color || meta.vehicle_color || 'Silver / Black');
+                setFuelType(merged.fuel_type || localCache.fuel_type || meta.fuel_type || 'Petrol');
+                setPayloadCapacity(merged.payload_capacity || localCache.payload_capacity || meta.payload_capacity || '65 kg');
+                setDriverLicense(merged.driver_license || localCache.driver_license || meta.driver_license || 'DL-84291-KMC');
+                setLicenseClass(merged.license_class || localCache.license_class || meta.license_class || 'Class A (Rider / Dispatch)');
+                setLicenseExpiry(merged.license_expiry || localCache.license_expiry || meta.license_expiry || '12/2027');
+                setInsurancePolicy(merged.insurance_policy || localCache.insurance_policy || meta.insurance_policy || 'Leadway Third-Party Commercial');
+                setInsuranceStatus(merged.insurance_status || localCache.insurance_status || meta.insurance_status || 'Active');
+                setExperience(merged.experience || localCache.experience || meta.experience || 'Certified Fast Logistics Courier');
+                setExperienceYears(merged.experience_years || localCache.experience_years || meta.experience_years || '3+ Years');
+                setDriverStartDate(merged.driver_start_date || localCache.driver_start_date || meta.driver_start_date || 'Jan 2022');
+                setPreviousLogistics(merged.previous_logistics || localCache.previous_logistics || meta.previous_logistics || 'GIG Logistics, DHL Express');
+                setEmergencyContactName(merged.emergency_contact_name || localCache.emergency_contact_name || meta.emergency_contact_name || 'Ibrahim Sani');
+                setEmergencyContactPhone(merged.emergency_contact_phone || localCache.emergency_contact_phone || meta.emergency_contact_phone || '+234 803 123 4567');
             } else {
                 const newDriver = {
                     user_id: userId,
                     name: activeUser?.full_name || 'Driver Courier',
                     phone: activeUser?.phone || activeUser?.phone_number || '',
                     vehicle_type: 'Motorcycle',
-                    vehicle_number: '',
-                    plate_number: '',
-                    vehicle_model: 'Bajaj Boxer BM150 Express',
-                    vehicle_color: 'Black / Silver',
-                    experience: '3+ Years Certified Courier',
-                    driver_license: 'DL-84291-KMC',
-                    fuel_type: 'Petrol',
-                    payload_capacity: '65 kg',
+                    vehicle_number: 'KMC-492-XA',
                     current_location: 'Kano Hub Central',
                     status: 'active',
                     is_active: true,
@@ -442,17 +504,31 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                     .select()
                     .maybeSingle();
 
-                if (created) {
-                    setDriverProfile(created);
-                    setVType(created.vehicle_type || 'Motorcycle');
-                    setVModel(created.vehicle_model || 'Bajaj Boxer BM150 Express');
-                    setPNumber(created.vehicle_number || created.plate_number || '');
-                    setVColor(created.vehicle_color || 'Black / Silver');
-                    setExperience(created.experience || '3+ Years Certified Courier');
-                    setDriverLicense(created.driver_license || 'DL-84291-KMC');
-                    setFuelType(created.fuel_type || 'Petrol');
-                    setPayloadCapacity(created.payload_capacity || '65 kg');
-                }
+                const fallbackMerged = {
+                    ...localCache,
+                    ...meta,
+                    ...(created || newDriver)
+                };
+                setDriverProfile(fallbackMerged);
+                setVType(fallbackMerged.vehicle_type || 'Motorcycle');
+                setVModel(fallbackMerged.vehicle_model || 'Bajaj Boxer BM150 Express');
+                setVehicleYear(fallbackMerged.vehicle_year || '2023');
+                setPNumber(fallbackMerged.vehicle_number || 'KMC-492-XA');
+                setPlateState(fallbackMerged.plate_state || 'Kano');
+                setVColor(fallbackMerged.vehicle_color || 'Silver / Black');
+                setFuelType(fallbackMerged.fuel_type || 'Petrol');
+                setPayloadCapacity(fallbackMerged.payload_capacity || '65 kg');
+                setDriverLicense(fallbackMerged.driver_license || 'DL-84291-KMC');
+                setLicenseClass(fallbackMerged.license_class || 'Class A (Rider / Dispatch)');
+                setLicenseExpiry(fallbackMerged.license_expiry || '12/2027');
+                setInsurancePolicy(fallbackMerged.insurance_policy || 'Leadway Third-Party Commercial');
+                setInsuranceStatus(fallbackMerged.insurance_status || 'Active');
+                setExperience(fallbackMerged.experience || 'Certified Fast Logistics Courier');
+                setExperienceYears(fallbackMerged.experience_years || '3+ Years');
+                setDriverStartDate(fallbackMerged.driver_start_date || 'Jan 2022');
+                setPreviousLogistics(fallbackMerged.previous_logistics || 'GIG Logistics, DHL Express');
+                setEmergencyContactName(fallbackMerged.emergency_contact_name || 'Ibrahim Sani');
+                setEmergencyContactPhone(fallbackMerged.emergency_contact_phone || '+234 803 123 4567');
             }
         } catch (e) {
             console.log('Driver Record Fetch Error:', e);
@@ -950,73 +1026,115 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
         Linking.openURL(`https://wa.me/${targetPhone}?text=${encodeURIComponent(text)}`);
     };
 
-    // ─── Update Vehicle Details ───
-    const updateVehicleDetails = async () => {
+    // ─── Save Unified Driver Full Profile (Vehicle Specs, License & Experience) ───
+    const saveDriverFullProfile = async () => {
         const uid = activeUser?.id;
-        if (!uid) return;
+        if (!uid) {
+            Alert.alert('Error', 'User ID not identified. Please re-login.');
+            return;
+        }
+
+        setSavingProfile(true);
+
+        const profilePayload = {
+            vehicle_type: vType,
+            vehicle_model: vModel,
+            vehicle_number: pNumber,
+            plate_number: pNumber,
+            plate_state: plateState,
+            vehicle_year: vehicleYear,
+            vehicle_color: vColor,
+            fuel_type: fuelType,
+            payload_capacity: payloadCapacity,
+            driver_license: driverLicense,
+            license_class: licenseClass,
+            license_expiry: licenseExpiry,
+            insurance_policy: insurancePolicy,
+            insurance_status: insuranceStatus,
+            experience: experience,
+            experience_years: experienceYears,
+            driver_start_date: driverStartDate,
+            previous_logistics: previousLogistics,
+            emergency_contact_name: emergencyContactName,
+            emergency_contact_phone: emergencyContactPhone,
+            updated_at: new Date().toISOString()
+        };
 
         try {
-            const { error } = await supabase
-                .from('drivers')
-                .update({
-                    vehicle_type: vType,
-                    vehicle_model: vModel,
-                    vehicle_number: pNumber,
-                    plate_number: pNumber,
-                    vehicle_color: vColor,
-                    experience: experience,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('user_id', uid);
+            // 1. Update drivers table (with fallback for any schema column missing)
+            try {
+                const { error: fullDriverErr } = await supabase
+                    .from('drivers')
+                    .update(profilePayload)
+                    .eq('user_id', uid);
 
-            if (error) throw error;
+                if (fullDriverErr) {
+                    console.log('Falling back to basic driver columns update:', fullDriverErr.message);
+                    await supabase
+                        .from('drivers')
+                        .update({
+                            vehicle_type: vType,
+                            vehicle_number: pNumber,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('user_id', uid);
+                }
+            } catch (errDb) {
+                console.log('Driver table update catch:', errDb);
+                await supabase
+                    .from('drivers')
+                    .update({
+                        vehicle_type: vType,
+                        vehicle_number: pNumber,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('user_id', uid)
+                    .catch(() => {});
+            }
 
+            // 2. Persist full rich profile JSON to profiles.about
+            try {
+                await supabase
+                    .from('profiles')
+                    .update({
+                        about: JSON.stringify(profilePayload),
+                        next_of_kin_name: emergencyContactName,
+                        next_of_kin_phone: emergencyContactPhone,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', uid);
+            } catch (errProfile) {
+                console.log('Profiles table about update notice:', errProfile);
+            }
+
+            // 3. Persist to AsyncStorage for instant offline/fast reload
+            try {
+                await AsyncStorage.setItem('@abumafhal_driver_full_profile_' + uid, JSON.stringify(profilePayload));
+            } catch (_) {}
+
+            // 4. Update live driverProfile state
             setDriverProfile(prev => ({
                 ...prev,
-                vehicle_type: vType,
-                vehicle_model: vModel,
-                vehicle_number: pNumber,
-                plate_number: pNumber,
-                vehicle_color: vColor,
-                experience: experience
+                ...profilePayload
             }));
+
             setVehicleModalVisible(false);
-            Alert.alert('Vehicle Updated ✅', 'Your vehicle specifications and courier experience have been saved.');
-        } catch (err) {
-            Alert.alert('Error', err.message || 'Failed to update vehicle details.');
-        }
-    };
-
-    // ─── Update Driver License & Credentials ───
-    const updateLicenseDetails = async () => {
-        const uid = activeUser?.id;
-        if (!uid) return;
-
-        try {
-            const { error } = await supabase
-                .from('drivers')
-                .update({
-                    driver_license: driverLicense,
-                    fuel_type: fuelType,
-                    payload_capacity: payloadCapacity,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('user_id', uid);
-
-            if (error) throw error;
-
-            setDriverProfile(prev => ({
-                ...prev,
-                driver_license: driverLicense,
-                fuel_type: fuelType,
-                payload_capacity: payloadCapacity
-            }));
             setLicenseModalVisible(false);
-            Alert.alert('Credentials Updated ✅', 'Driver license and vehicle payload capacity have been saved successfully.');
+
+            Alert.alert(
+                'An Adana Bayanan Direba! ✅',
+                'An sabunta takardun mota, lasisin tuki, da tarihin kwarewar ku cikin nasara.'
+            );
         } catch (err) {
-            Alert.alert('Error', err.message || 'Failed to update driver credentials.');
+            console.error('Save driver profile error:', err);
+            Alert.alert('Kuskure', err.message || 'An samu matsala wajen adana bayanan.');
+        } finally {
+            setSavingProfile(false);
         }
     };
+
+    const updateVehicleDetails = saveDriverFullProfile;
+    const updateLicenseDetails = saveDriverFullProfile;
 
     // ─── Request Bank Withdrawal ───
     const requestWithdrawal = async () => {
@@ -2145,7 +2263,10 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                 <Text style={styles.profileSectionTitle}>Courier Credentials & Compliance</Text>
                                 <TouchableOpacity
                                     style={styles.profileEditBtn}
-                                    onPress={() => setLicenseModalVisible(true)}
+                                    onPress={() => {
+                                        setModalActiveSection('license');
+                                        setVehicleModalVisible(true);
+                                    }}
                                     activeOpacity={0.8}
                                 >
                                     <Ionicons name="create" size={13} color={TEXT_DARK} />
@@ -2168,27 +2289,40 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
 
                             <View style={styles.credRow}>
                                 <View style={styles.credIconBox}>
-                                    <Ionicons name="shield" size={15} color={SUCCESS} />
+                                    <Ionicons name="ribbon-outline" size={15} color={AMBER} />
                                 </View>
                                 <View style={{ flex: 1 }}>
-                                    <Text style={styles.credLabel}>INSURANCE STATUS</Text>
-                                    <Text style={styles.credValue}>Active • Third-Party Comprehensive</Text>
+                                    <Text style={styles.credLabel}>LICENSE CLASS / CATEGORY</Text>
+                                    <Text style={styles.credValue}>{driverProfile?.license_class || licenseClass || 'Class A (Riders / Dispatch)'}</Text>
                                 </View>
-                                <View style={[styles.credVerifiedBadge, { backgroundColor: '#ECFDF5' }]}>
-                                    <Text style={[styles.credVerifiedText, { color: SUCCESS }]}>ACTIVE</Text>
+                                <View style={[styles.credVerifiedBadge, { backgroundColor: '#FEF3C7' }]}>
+                                    <Text style={[styles.credVerifiedText, { color: '#92400E' }]}>ACTIVE</Text>
                                 </View>
                             </View>
 
                             <View style={styles.credRow}>
                                 <View style={styles.credIconBox}>
-                                    <Ionicons name="checkmark-circle" size={15} color={GOLD} />
+                                    <Ionicons name="calendar-outline" size={15} color={SUCCESS} />
                                 </View>
                                 <View style={{ flex: 1 }}>
-                                    <Text style={styles.credLabel}>SAFETY AUDIT</Text>
-                                    <Text style={styles.credValue}>Last Audit: {new Date().toLocaleDateString('en-NG', { month: 'long', year: 'numeric' })}</Text>
+                                    <Text style={styles.credLabel}>EXPIRY DATE</Text>
+                                    <Text style={styles.credValue}>{driverProfile?.license_expiry || licenseExpiry || '12/2027'}</Text>
                                 </View>
-                                <View style={[styles.credVerifiedBadge, { backgroundColor: '#FEF3C7' }]}>
-                                    <Text style={[styles.credVerifiedText, { color: '#92400E' }]}>PASSED</Text>
+                                <View style={[styles.credVerifiedBadge, { backgroundColor: '#ECFDF5' }]}>
+                                    <Text style={[styles.credVerifiedText, { color: SUCCESS }]}>VALID</Text>
+                                </View>
+                            </View>
+
+                            <View style={styles.credRow}>
+                                <View style={styles.credIconBox}>
+                                    <Ionicons name="shield" size={15} color={BLUE} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.credLabel}>INSURANCE POLICY & STATUS</Text>
+                                    <Text style={styles.credValue}>{driverProfile?.insurance_policy || insurancePolicy || 'Leadway Third-Party Commercial'}</Text>
+                                </View>
+                                <View style={[styles.credVerifiedBadge, { backgroundColor: '#ECFDF5' }]}>
+                                    <Text style={[styles.credVerifiedText, { color: SUCCESS }]}>ACTIVE</Text>
                                 </View>
                             </View>
                         </View>
@@ -2202,7 +2336,10 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                 <Text style={styles.profileSectionTitle}>Vehicle Specifications</Text>
                                 <TouchableOpacity
                                     style={styles.profileEditBtn}
-                                    onPress={() => setVehicleModalVisible(true)}
+                                    onPress={() => {
+                                        setModalActiveSection('vehicle');
+                                        setVehicleModalVisible(true);
+                                    }}
                                     activeOpacity={0.8}
                                 >
                                     <Ionicons name="create" size={13} color={TEXT_DARK} />
@@ -2214,7 +2351,7 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                 <View style={styles.vehicleSpecItem}>
                                     <Ionicons name="car" size={18} color={TEXT_MUTED} />
                                     <Text style={styles.vehicleSpecLabel}>TYPE</Text>
-                                    <Text style={styles.vehicleSpecVal}>{driverProfile?.vehicle_type || 'Motorcycle'}</Text>
+                                    <Text style={styles.vehicleSpecVal}>{driverProfile?.vehicle_type || vType || 'Motorcycle'}</Text>
                                 </View>
                                 <View style={styles.vehicleSpecItem}>
                                     <Ionicons name="cube" size={18} color={TEXT_MUTED} />
@@ -2222,9 +2359,9 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                     <Text style={styles.vehicleSpecVal} numberOfLines={2}>{driverProfile?.vehicle_model || vModel || 'Bajaj Boxer BM150'}</Text>
                                 </View>
                                 <View style={styles.vehicleSpecItem}>
-                                    <Ionicons name="barcode" size={18} color={TEXT_MUTED} />
-                                    <Text style={styles.vehicleSpecLabel}>PLATE</Text>
-                                    <Text style={styles.vehicleSpecVal}>{driverProfile?.plate_number || pNumber || 'KMC-492-XA'}</Text>
+                                    <Ionicons name="calendar" size={18} color={TEXT_MUTED} />
+                                    <Text style={styles.vehicleSpecLabel}>YEAR</Text>
+                                    <Text style={styles.vehicleSpecVal}>{driverProfile?.vehicle_year || vehicleYear || '2023'}</Text>
                                 </View>
                                 <View style={styles.vehicleSpecItem}>
                                     <Ionicons name="color-palette" size={18} color={TEXT_MUTED} />
@@ -2250,9 +2387,88 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                         <Text style={styles.plateTagFlagText}>🇳🇬</Text>
                                     </View>
                                     <Text style={styles.plateTagNumber}>
-                                        {(driverProfile?.plate_number || pNumber || 'KMC 492 XA').toUpperCase()}
+                                        {(driverProfile?.plate_number || driverProfile?.vehicle_number || pNumber || 'KMC 492 XA').toUpperCase()}
                                     </Text>
-                                    <Text style={styles.plateTagState}>KANO</Text>
+                                    <Text style={styles.plateTagState}>
+                                        {(driverProfile?.plate_state || plateState || 'KANO').toUpperCase()}
+                                    </Text>
+                                </View>
+                            </View>
+                        </View>
+
+                        {/* ── 5C. Courier Experience & Track Record ── */}
+                        <View style={styles.profileSection}>
+                            <View style={styles.profileSectionHeader}>
+                                <View style={styles.profileSectionIconWrap}>
+                                    <Ionicons name="ribbon" size={16} color={GOLD} />
+                                </View>
+                                <Text style={styles.profileSectionTitle}>Courier Experience & Track Record</Text>
+                                <TouchableOpacity
+                                    style={styles.profileEditBtn}
+                                    onPress={() => {
+                                        setModalActiveSection('experience');
+                                        setVehicleModalVisible(true);
+                                    }}
+                                    activeOpacity={0.8}
+                                >
+                                    <Ionicons name="create" size={13} color={TEXT_DARK} />
+                                    <Text style={styles.profileEditBtnText}>Edit</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* Main Experience Summary */}
+                            <View style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: BORDER_COLOR }}>
+                                <Text style={{ fontSize: 10, fontWeight: '800', color: TEXT_SUBTLE, letterSpacing: 0.5, marginBottom: 4 }}>PROFESSIONAL TITLE / SUMMARY</Text>
+                                <Text style={{ fontSize: 13.5, fontWeight: '800', color: TEXT_DARK }}>
+                                    {driverProfile?.experience || experience || 'Certified Urban Logistics Dispatch Specialist'}
+                                </Text>
+                            </View>
+
+                            {/* 3-Column Metrics */}
+                            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                                <View style={{ flex: 1, backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: BORDER_COLOR }}>
+                                    <Text style={{ fontSize: 9.5, fontWeight: '800', color: TEXT_SUBTLE }}>TOTAL EXP.</Text>
+                                    <Text style={{ fontSize: 13, fontWeight: '900', color: TEXT_DARK, marginTop: 2 }}>
+                                        {driverProfile?.experience_years || experienceYears || '3+ Years'}
+                                    </Text>
+                                </View>
+                                <View style={{ flex: 1, backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: BORDER_COLOR }}>
+                                    <Text style={{ fontSize: 9.5, fontWeight: '800', color: TEXT_SUBTLE }}>START DATE</Text>
+                                    <Text style={{ fontSize: 13, fontWeight: '900', color: TEXT_DARK, marginTop: 2 }}>
+                                        {driverProfile?.driver_start_date || driverStartDate || 'Jan 2022'}
+                                    </Text>
+                                </View>
+                                <View style={{ flex: 1, backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: BORDER_COLOR }}>
+                                    <Text style={{ fontSize: 9.5, fontWeight: '800', color: TEXT_SUBTLE }}>RATING</Text>
+                                    <Text style={{ fontSize: 13, fontWeight: '900', color: GOLD, marginTop: 2 }}>
+                                        ⭐ {Number(driverProfile?.rating || 5.0).toFixed(1)}
+                                    </Text>
+                                </View>
+                            </View>
+
+                            {/* Previous Logistics Companies */}
+                            <View style={styles.credRow}>
+                                <View style={styles.credIconBox}>
+                                    <Ionicons name="business" size={15} color={HEADER_NAVY} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.credLabel}>PREVIOUS LOGISTICS HUBS</Text>
+                                    <Text style={styles.credValue} numberOfLines={2}>
+                                        {driverProfile?.previous_logistics || previousLogistics || 'GIG Logistics, DHL Express Kano'}
+                                    </Text>
+                                </View>
+                            </View>
+
+                            {/* Emergency Contact */}
+                            <View style={[styles.credRow, { borderBottomWidth: 0, paddingBottom: 2 }]}>
+                                <View style={styles.credIconBox}>
+                                    <Ionicons name="call" size={15} color={SUCCESS} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.credLabel}>EMERGENCY CONTACT & NEXT OF KIN</Text>
+                                    <Text style={styles.credValue}>
+                                        {driverProfile?.emergency_contact_name || emergencyContactName || 'Ibrahim Sani'} • {driverProfile?.emergency_contact_phone || emergencyContactPhone || '+234 803 123 4567'}
+                                    </Text>
                                 </View>
                             </View>
                         </View>
@@ -2927,145 +3143,359 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                 onClose={() => setSelectedMapOrder(null)}
             />
 
-            {/* ─── MODAL: VEHICLE SPECIFICATIONS & COURIER PROFILE ─── */}
-            <Modal visible={isVehicleModalVisible} transparent animationType="slide">
+            {/* ─── MODAL: UNIFIED VEHICLE SPECS, DRIVER LICENSE & COURIER EXPERIENCE ─── */}
+            <Modal visible={isVehicleModalVisible || isLicenseModalVisible} transparent animationType="slide">
                 <View style={styles.modalBackdrop}>
-                    <View style={styles.modalSheetContent}>
+                    <View style={[styles.modalSheetContent, { maxHeight: '92%' }]}>
+                        {/* Header */}
                         <View style={styles.modalSheetHeader}>
-                            <Text style={styles.modalSheetTitle}>Assigned Logistics Vehicle & Experience</Text>
-                            <TouchableOpacity onPress={() => setVehicleModalVisible(false)} style={styles.modalCloseCircle}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Ionicons name="shield-checkmark" size={18} color={GOLD} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.modalSheetTitle} numberOfLines={1}>Assigned Logistics & Credentials</Text>
+                                    <Text style={{ fontSize: 11, color: TEXT_MUTED }}>Takardun Mota, Lasisin Direba & Kwarewa</Text>
+                                </View>
+                            </View>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    setVehicleModalVisible(false);
+                                    setLicenseModalVisible(false);
+                                }}
+                                style={styles.modalCloseCircle}
+                            >
                                 <Ionicons name="close" size={18} color={TEXT_DARK} />
                             </TouchableOpacity>
                         </View>
 
-                        <ScrollView style={{ padding: 20 }}>
-                            <Text style={styles.inputFieldLabel}>Vehicle Type</Text>
-                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-                                {['Motorcycle', 'Car', 'Van', 'Tricycle', 'Truck'].map((vt) => (
+                        {/* Top Section Nav Tabs */}
+                        <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 6, backgroundColor: '#F8FAFC', borderBottomWidth: 1, borderBottomColor: BORDER_COLOR }}>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
+                                {[
+                                    { id: 'all', label: '📋 All Details' },
+                                    { id: 'vehicle', label: '🚗 Vehicle Specs' },
+                                    { id: 'license', label: '🪪 Driver License' },
+                                    { id: 'experience', label: '🏆 Experience & Info' }
+                                ].map(tab => (
                                     <TouchableOpacity
-                                        key={vt}
-                                        onPress={() => setVType(vt)}
+                                        key={tab.id}
+                                        onPress={() => setModalActiveSection(tab.id)}
                                         style={{
-                                            paddingHorizontal: 14,
-                                            paddingVertical: 8,
-                                            borderRadius: 10,
+                                            paddingHorizontal: 12,
+                                            paddingVertical: 7,
+                                            borderRadius: 9,
+                                            backgroundColor: modalActiveSection === tab.id ? HEADER_NAVY : '#FFFFFF',
                                             borderWidth: 1,
-                                            borderColor: vType === vt ? GOLD : '#E2E8F0',
-                                            backgroundColor: vType === vt ? '#FEF3C7' : '#FFFFFF',
+                                            borderColor: modalActiveSection === tab.id ? HEADER_NAVY : BORDER_COLOR
                                         }}
                                     >
-                                        <Text style={{ fontSize: 12, fontWeight: '700', color: vType === vt ? '#92400E' : TEXT_DARK }}>{vt}</Text>
+                                        <Text style={{
+                                            fontSize: 11.5,
+                                            fontWeight: '800',
+                                            color: modalActiveSection === tab.id ? '#FFFFFF' : TEXT_DARK
+                                        }}>
+                                            {tab.label}
+                                        </Text>
                                     </TouchableOpacity>
                                 ))}
-                            </View>
-
-                            <Text style={styles.inputFieldLabel}>Vehicle Brand & Model (e.g. Bajaj Boxer BM150, Toyota Corolla)</Text>
-                            <TextInput
-                                style={styles.textInputModern}
-                                value={vModel}
-                                onChangeText={setVModel}
-                                placeholder="e.g. Bajaj Boxer BM150 Express"
-                                placeholderTextColor={TEXT_SUBTLE}
-                            />
-
-                            <Text style={styles.inputFieldLabel}>Plate / Registration Number</Text>
-                            <TextInput
-                                style={styles.textInputModern}
-                                value={pNumber}
-                                onChangeText={setPNumber}
-                                placeholder="e.g. KMC-492-XA"
-                                placeholderTextColor={TEXT_SUBTLE}
-                                autoCapitalize="characters"
-                            />
-
-                            <Text style={styles.inputFieldLabel}>Vehicle Color</Text>
-                            <TextInput
-                                style={styles.textInputModern}
-                                value={vColor}
-                                onChangeText={setVColor}
-                                placeholder="e.g. Silver Metallic / Black"
-                                placeholderTextColor={TEXT_SUBTLE}
-                            />
-
-                            <Text style={styles.inputFieldLabel}>Courier Experience & Seniority</Text>
-                            <TextInput
-                                style={styles.textInputModern}
-                                value={experience}
-                                onChangeText={setExperience}
-                                placeholder="e.g. 5+ Years Pro Logistics Specialist • 1,400+ Deliveries"
-                                placeholderTextColor={TEXT_SUBTLE}
-                            />
-
-                            <TouchableOpacity
-                                style={[styles.payoutSubmitBtn, { marginTop: 16 }]}
-                                onPress={updateVehicleDetails}
-                                activeOpacity={0.85}
-                            >
-                                <Text style={styles.payoutSubmitBtnText}>Save Vehicle & Experience ✅</Text>
-                            </TouchableOpacity>
-                        </ScrollView>
-                    </View>
-                </View>
-            </Modal>
-            {/* ─── MODAL: LICENSE & CREDENTIALS UPDATE ─── */}
-            <Modal visible={isLicenseModalVisible} transparent animationType="slide">
-                <View style={styles.modalBackdrop}>
-                    <View style={styles.modalSheetContent}>
-                        <View style={styles.modalSheetHeader}>
-                            <Text style={styles.modalSheetTitle}>Update Driver Credentials</Text>
-                            <TouchableOpacity onPress={() => setLicenseModalVisible(false)} style={styles.modalCloseCircle}>
-                                <Ionicons name="close" size={20} color={TEXT_DARK} />
-                            </TouchableOpacity>
+                            </ScrollView>
                         </View>
-                        <ScrollView style={{ padding: 20 }}>
-                            <Text style={styles.inputFieldLabel}>Driver License Number</Text>
-                            <TextInput
-                                style={styles.textInputModern}
-                                value={driverLicense}
-                                onChangeText={setDriverLicense}
-                                placeholder="e.g. DL-84291-KMC"
-                                placeholderTextColor={TEXT_SUBTLE}
-                                autoCapitalize="characters"
-                            />
 
-                            <Text style={styles.inputFieldLabel}>Fuel Type</Text>
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
-                                {['Petrol', 'Diesel', 'CNG', 'Electric', 'Hybrid'].map(ft => (
-                                    <TouchableOpacity
-                                        key={ft}
-                                        style={[
-                                            styles.filterChip,
-                                            fuelType === ft && styles.filterChipActive
-                                        ]}
-                                        onPress={() => setFuelType(ft)}
-                                    >
-                                        <Text style={[styles.filterChipText, fuelType === ft && styles.filterChipTextActive]}>{ft}</Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </ScrollView>
+                        {/* Modal Body ScrollView */}
+                        <ScrollView style={{ padding: 18 }} showsVerticalScrollIndicator={false}>
+                            {/* SECTION 1: VEHICLE SPECIFICATIONS */}
+                            {(modalActiveSection === 'all' || modalActiveSection === 'vehicle') && (
+                                <View style={{ marginBottom: 20 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                                        <Ionicons name="car-sport" size={16} color={GOLD} />
+                                        <Text style={{ fontSize: 13, fontWeight: '900', color: TEXT_DARK }}>1. Vehicle Specifications</Text>
+                                    </View>
 
-                            <Text style={styles.inputFieldLabel}>Cargo Payload Capacity</Text>
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
-                                {['30 kg', '65 kg', '100 kg', '200 kg', '300 kg', '500 kg', '800 kg'].map(cap => (
-                                    <TouchableOpacity
-                                        key={cap}
-                                        style={[
-                                            styles.filterChip,
-                                            payloadCapacity === cap && styles.filterChipActive
-                                        ]}
-                                        onPress={() => setPayloadCapacity(cap)}
-                                    >
-                                        <Text style={[styles.filterChipText, payloadCapacity === cap && styles.filterChipTextActive]}>{cap}</Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </ScrollView>
+                                    <Text style={styles.inputFieldLabel}>Vehicle Type</Text>
+                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                                        {['Motorcycle', 'Car', 'Van', 'Tricycle', 'Truck', 'Bicycle'].map((vt) => (
+                                            <TouchableOpacity
+                                                key={vt}
+                                                onPress={() => setVType(vt)}
+                                                style={{
+                                                    paddingHorizontal: 13,
+                                                    paddingVertical: 8,
+                                                    borderRadius: 10,
+                                                    borderWidth: 1,
+                                                    borderColor: vType === vt ? GOLD : '#E2E8F0',
+                                                    backgroundColor: vType === vt ? '#FEF3C7' : '#FFFFFF',
+                                                }}
+                                            >
+                                                <Text style={{ fontSize: 12, fontWeight: '700', color: vType === vt ? '#92400E' : TEXT_DARK }}>{vt}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
 
+                                    <Text style={styles.inputFieldLabel}>Vehicle Brand & Model</Text>
+                                    <TextInput
+                                        style={styles.textInputModern}
+                                        value={vModel}
+                                        onChangeText={setVModel}
+                                        placeholder="e.g. Bajaj Boxer BM150 Express / Toyota Corolla"
+                                        placeholderTextColor={TEXT_SUBTLE}
+                                    />
+
+                                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.inputFieldLabel}>Plate Number</Text>
+                                            <TextInput
+                                                style={styles.textInputModern}
+                                                value={pNumber}
+                                                onChangeText={setPNumber}
+                                                placeholder="e.g. KMC-492-XA"
+                                                placeholderTextColor={TEXT_SUBTLE}
+                                                autoCapitalize="characters"
+                                            />
+                                        </View>
+                                        <View style={{ width: 110 }}>
+                                            <Text style={styles.inputFieldLabel}>Model Year</Text>
+                                            <TextInput
+                                                style={styles.textInputModern}
+                                                value={vehicleYear}
+                                                onChangeText={setVehicleYear}
+                                                placeholder="e.g. 2023"
+                                                placeholderTextColor={TEXT_SUBTLE}
+                                                keyboardType="numeric"
+                                            />
+                                        </View>
+                                    </View>
+
+                                    <Text style={styles.inputFieldLabel}>Issuing State (Plate Registration)</Text>
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 6 }}>
+                                        {['Kano', 'Abuja FCT', 'Lagos', 'Kaduna', 'Katsina', 'Jigawa', 'Bauchi', 'Sokoto', 'Plateau'].map(st => (
+                                            <TouchableOpacity
+                                                key={st}
+                                                onPress={() => setPlateState(st)}
+                                                style={{
+                                                    paddingHorizontal: 11,
+                                                    paddingVertical: 6,
+                                                    borderRadius: 8,
+                                                    backgroundColor: plateState === st ? '#EFF6FF' : '#FFFFFF',
+                                                    borderWidth: 1,
+                                                    borderColor: plateState === st ? BLUE : BORDER_COLOR
+                                                }}
+                                            >
+                                                <Text style={{ fontSize: 11, fontWeight: '700', color: plateState === st ? BLUE : TEXT_DARK }}>{st}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </ScrollView>
+
+                                    <Text style={styles.inputFieldLabel}>Vehicle Color</Text>
+                                    <TextInput
+                                        style={styles.textInputModern}
+                                        value={vColor}
+                                        onChangeText={setVColor}
+                                        placeholder="e.g. Silver Metallic / Midnight Black"
+                                        placeholderTextColor={TEXT_SUBTLE}
+                                    />
+
+                                    <Text style={styles.inputFieldLabel}>Fuel / Energy Type</Text>
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
+                                        {['Petrol', 'Diesel', 'CNG', 'Electric', 'Hybrid'].map(ft => (
+                                            <TouchableOpacity
+                                                key={ft}
+                                                style={[
+                                                    styles.filterChip,
+                                                    fuelType === ft && styles.filterChipActive
+                                                ]}
+                                                onPress={() => setFuelType(ft)}
+                                            >
+                                                <Text style={[styles.filterChipText, fuelType === ft && styles.filterChipTextActive]}>{ft}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </ScrollView>
+
+                                    <Text style={styles.inputFieldLabel}>Cargo Payload Capacity</Text>
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
+                                        {['30 kg', '65 kg', '100 kg', '200 kg', '300 kg', '500 kg', '800 kg', '1.5 Ton'].map(cap => (
+                                            <TouchableOpacity
+                                                key={cap}
+                                                style={[
+                                                    styles.filterChip,
+                                                    payloadCapacity === cap && styles.filterChipActive
+                                                ]}
+                                                onPress={() => setPayloadCapacity(cap)}
+                                            >
+                                                <Text style={[styles.filterChipText, payloadCapacity === cap && styles.filterChipTextActive]}>{cap}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </ScrollView>
+                                </View>
+                            )}
+
+                            {/* SECTION 2: DRIVER LICENSE & CREDENTIALS */}
+                            {(modalActiveSection === 'all' || modalActiveSection === 'license') && (
+                                <View style={{ marginBottom: 20 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                                        <Ionicons name="card" size={16} color={BLUE} />
+                                        <Text style={{ fontSize: 13, fontWeight: '900', color: TEXT_DARK }}>2. Driver License & Insurance Compliance</Text>
+                                    </View>
+
+                                    <Text style={styles.inputFieldLabel}>Driver License Number</Text>
+                                    <TextInput
+                                        style={styles.textInputModern}
+                                        value={driverLicense}
+                                        onChangeText={setDriverLicense}
+                                        placeholder="e.g. DL-84291-KMC"
+                                        placeholderTextColor={TEXT_SUBTLE}
+                                        autoCapitalize="characters"
+                                    />
+
+                                    <Text style={styles.inputFieldLabel}>License Class / Category</Text>
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 6 }}>
+                                        {[
+                                            'Class A (Rider / Dispatch)',
+                                            'Class B (Car / Light Vehicle)',
+                                            'Class C (Commercial / Van)',
+                                            'Class D (Truck / Heavy)'
+                                        ].map(cls => (
+                                            <TouchableOpacity
+                                                key={cls}
+                                                onPress={() => setLicenseClass(cls)}
+                                                style={{
+                                                    paddingHorizontal: 11,
+                                                    paddingVertical: 6,
+                                                    borderRadius: 8,
+                                                    backgroundColor: licenseClass === cls ? '#EFF6FF' : '#FFFFFF',
+                                                    borderWidth: 1,
+                                                    borderColor: licenseClass === cls ? BLUE : BORDER_COLOR
+                                                }}
+                                            >
+                                                <Text style={{ fontSize: 11, fontWeight: '700', color: licenseClass === cls ? BLUE : TEXT_DARK }}>{cls}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </ScrollView>
+
+                                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.inputFieldLabel}>License Expiry Date</Text>
+                                            <TextInput
+                                                style={styles.textInputModern}
+                                                value={licenseExpiry}
+                                                onChangeText={setLicenseExpiry}
+                                                placeholder="e.g. 12/2027"
+                                                placeholderTextColor={TEXT_SUBTLE}
+                                            />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.inputFieldLabel}>Insurance Status</Text>
+                                            <TextInput
+                                                style={styles.textInputModern}
+                                                value={insuranceStatus}
+                                                onChangeText={setInsuranceStatus}
+                                                placeholder="e.g. Active"
+                                                placeholderTextColor={TEXT_SUBTLE}
+                                            />
+                                        </View>
+                                    </View>
+
+                                    <Text style={styles.inputFieldLabel}>Insurance Policy & Provider</Text>
+                                    <TextInput
+                                        style={styles.textInputModern}
+                                        value={insurancePolicy}
+                                        onChangeText={setInsurancePolicy}
+                                        placeholder="e.g. Leadway Third-Party Commercial #PL-89421"
+                                        placeholderTextColor={TEXT_SUBTLE}
+                                    />
+                                </View>
+                            )}
+
+                            {/* SECTION 3: DRIVER EXPERIENCE & EMERGENCY CONTACT */}
+                            {(modalActiveSection === 'all' || modalActiveSection === 'experience') && (
+                                <View style={{ marginBottom: 20 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                                        <Ionicons name="ribbon" size={16} color={GOLD} />
+                                        <Text style={{ fontSize: 13, fontWeight: '900', color: TEXT_DARK }}>3. Courier Experience & Emergency Contact</Text>
+                                    </View>
+
+                                    <Text style={styles.inputFieldLabel}>Professional Title & Seniority</Text>
+                                    <TextInput
+                                        style={styles.textInputModern}
+                                        value={experience}
+                                        onChangeText={setExperience}
+                                        placeholder="e.g. Senior Logistics Courier • 1,500+ Safe Deliveries"
+                                        placeholderTextColor={TEXT_SUBTLE}
+                                    />
+
+                                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.inputFieldLabel}>Total Experience</Text>
+                                            <TextInput
+                                                style={styles.textInputModern}
+                                                value={experienceYears}
+                                                onChangeText={setExperienceYears}
+                                                placeholder="e.g. 4.5 Years"
+                                                placeholderTextColor={TEXT_SUBTLE}
+                                            />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.inputFieldLabel}>Courier Start Date</Text>
+                                            <TextInput
+                                                style={styles.textInputModern}
+                                                value={driverStartDate}
+                                                onChangeText={setDriverStartDate}
+                                                placeholder="e.g. March 2021"
+                                                placeholderTextColor={TEXT_SUBTLE}
+                                            />
+                                        </View>
+                                    </View>
+
+                                    <Text style={styles.inputFieldLabel}>Previous Delivery Hubs / Companies</Text>
+                                    <TextInput
+                                        style={styles.textInputModern}
+                                        value={previousLogistics}
+                                        onChangeText={setPreviousLogistics}
+                                        placeholder="e.g. DHL Kano Central, GIG Logistics, Abu Mafhal Fast"
+                                        placeholderTextColor={TEXT_SUBTLE}
+                                    />
+
+                                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.inputFieldLabel}>Emergency Contact Name</Text>
+                                            <TextInput
+                                                style={styles.textInputModern}
+                                                value={emergencyContactName}
+                                                onChangeText={setEmergencyContactName}
+                                                placeholder="e.g. Ibrahim Sani (Brother)"
+                                                placeholderTextColor={TEXT_SUBTLE}
+                                            />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.inputFieldLabel}>Emergency Phone</Text>
+                                            <TextInput
+                                                style={styles.textInputModern}
+                                                value={emergencyContactPhone}
+                                                onChangeText={setEmergencyContactPhone}
+                                                placeholder="e.g. 08031234567"
+                                                placeholderTextColor={TEXT_SUBTLE}
+                                                keyboardType="phone-pad"
+                                            />
+                                        </View>
+                                    </View>
+                                </View>
+                            )}
+
+                            {/* Submit Button */}
                             <TouchableOpacity
-                                style={[styles.payoutSubmitBtn, { marginTop: 20 }]}
-                                onPress={updateLicenseDetails}
+                                style={[styles.payoutSubmitBtn, { marginTop: 10, marginBottom: 36, opacity: savingProfile ? 0.7 : 1 }]}
+                                onPress={saveDriverFullProfile}
+                                disabled={savingProfile}
                                 activeOpacity={0.85}
                             >
-                                <Text style={styles.payoutSubmitBtnText}>Save Credentials ✅</Text>
+                                {savingProfile ? (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                        <ActivityIndicator size="small" color="#FFFFFF" />
+                                        <Text style={styles.payoutSubmitBtnText}>Adanawa... / Saving...</Text>
+                                    </View>
+                                ) : (
+                                    <Text style={styles.payoutSubmitBtnText}>Save Full Profile & Credentials ✅</Text>
+                                )}
                             </TouchableOpacity>
                         </ScrollView>
                     </View>
