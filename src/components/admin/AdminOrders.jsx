@@ -139,44 +139,119 @@ const AdminOrders = () => {
   const fetchOrders = async () => {
     setLoading(true);
     setFetchError(null);
-    addLog('Checking session...');
+    addLog('Checking session and fetching orders...');
     
-    // Check if we have a Supabase session (required for RLS/Mobile parity)
+    // Check if we have a Supabase session
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
-      addLog('Warning: No Supabase session. RLS might block orders.');
-      console.warn('No active Supabase session found. Orders may be restricted by RLS.');
+      addLog('Notice: No active Supabase session, using standard access.');
     } else {
       addLog(`Authenticated as: ${session.user.email}`);
     }
 
-    addLog('Fetching orders...');
     try {
-      const { data, error } = await supabase
+      let ordersData = null;
+
+      // 1. Attempt nested query with valid schema columns (photo_url does not exist on drivers)
+      const res = await supabase
         .from('orders')
         .select(`
           *,
           user:profiles(full_name, email, phone),
-          driver:drivers(id, name, vehicle_type, vehicle_number, phone, xp, rating, photo_url, status, is_active),
+          driver:drivers(id, name, vehicle_type, vehicle_number, phone, xp, rating, status, is_active),
           order_items(id, quantity, price, product:products(name, images))
         `)
         .order('created_at', { ascending: false });
 
-      if (error) {
-        addLog(`Notice: ${error.message}`);
-        console.warn('Orders notice:', error.message);
-        setOrders([]);
-        setFetchError(null);
-        return;
+      if (!res.error && res.data) {
+        ordersData = res.data;
+      } else {
+        // 2. Resilient fallback query if nested join fails
+        addLog(`Nested query notice: ${res.error?.message}. Using resilient fallback query...`);
+        console.warn('Orders nested query notice, using direct fallback:', res.error);
+
+        const fallback = await supabase
+          .from('orders')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (fallback.error) {
+          addLog(`Error fetching orders: ${fallback.error.message}`);
+          console.error('Direct fallback also failed:', fallback.error);
+          setFetchError(fallback.error.message);
+          setOrders([]);
+          return;
+        }
+
+        ordersData = fallback.data || [];
       }
-      addLog(`Success: ${data?.length || 0} orders found`);
-      setOrders(data || []);
+
+      // 3. Enrich customer profile, driver, and shipping details
+      if (ordersData && ordersData.length > 0) {
+        const userIds = [...new Set(ordersData.map(o => o.user_id).filter(Boolean))];
+        const driverIds = [...new Set(ordersData.map(o => o.driver_id).filter(Boolean))];
+
+        let profileMap = {};
+        let driverMap = {};
+
+        if (userIds.length > 0) {
+          try {
+            const { data: profiles } = await supabase
+              .from('profiles')
+              .select('id, full_name, email, phone')
+              .in('id', userIds);
+            (profiles || []).forEach(p => { profileMap[p.id] = p; });
+          } catch (_) {}
+        }
+
+        if (driverIds.length > 0) {
+          try {
+            const { data: drvs } = await supabase
+              .from('drivers')
+              .select('id, name, vehicle_type, vehicle_number, phone, xp, rating, status, is_active')
+              .in('id', driverIds);
+            (drvs || []).forEach(d => { driverMap[d.id] = d; });
+          } catch (_) {}
+        }
+
+        ordersData = ordersData.map(o => {
+          let shipping = {};
+          if (o.shipping_details && typeof o.shipping_details === 'object') {
+            shipping = o.shipping_details;
+          } else if (typeof o.shipping_details === 'string') {
+            try { shipping = JSON.parse(o.shipping_details); } catch (_) {}
+          }
+          if (!shipping.full_name && o.shipping_address) {
+            if (typeof o.shipping_address === 'object') {
+              shipping = { ...shipping, ...o.shipping_address };
+            } else if (typeof o.shipping_address === 'string' && o.shipping_address.startsWith('{')) {
+              try { shipping = { ...shipping, ...JSON.parse(o.shipping_address) }; } catch (_) {}
+            }
+          }
+
+          const userObj = o.user || profileMap[o.user_id] || {
+            full_name: shipping.full_name || shipping.recipient_name || shipping.name || 'Valued Customer',
+            email: shipping.email || 'N/A',
+            phone: o.contact_phone || shipping.phone || 'N/A'
+          };
+
+          const driverObj = o.driver || driverMap[o.driver_id] || null;
+
+          return {
+            ...o,
+            user: userObj,
+            driver: driverObj
+          };
+        });
+      }
+
+      addLog(`Success: ${ordersData?.length || 0} orders found`);
+      setOrders(ordersData || []);
       setFetchError(null);
     } catch (error) {
       addLog(`Notice: ${error.message}`);
       console.warn('Orders error caught:', error);
-      setOrders([]);
-      setFetchError(null);
+      setFetchError(error.message);
     } finally {
       setLoading(false);
     }

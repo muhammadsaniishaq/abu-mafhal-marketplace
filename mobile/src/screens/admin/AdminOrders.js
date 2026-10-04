@@ -115,51 +115,93 @@ export const AdminOrders = ({ navigation, onBack }) => {
     const fetchOrders = async () => {
         setLoading(true);
         try {
+            let fetchedData = null;
             const { data, error } = await supabase
                 .from('orders')
                 .select('*, driver:drivers(name, vehicle_type, phone, xp), order_items(id, quantity, price, product:products(name, images))')
                 .order('created_at', { ascending: false })
                 .limit(100);
 
-            if (error) {
-                console.warn('Fetch Orders Notice:', error.message);
-                if (error.code === 'PGRST205' || (error.message?.includes('schema cache') && error.message?.includes('orders'))) {
-                    setSchemaNotice(true);
-                } else {
-                    Alert.alert('Notice', error.message || 'Failed to fetch orders');
-                }
+            if (!error && data) {
+                fetchedData = data;
             } else {
-                let enrichedOrders = data || [];
-                const userIds = [...new Set(enrichedOrders.map(o => o.user_id).filter(Boolean))];
-                let profileMap = {};
-                if (userIds.length > 0) {
-                    try {
-                        const { data: profilesData } = await supabase
-                            .from('profiles')
-                            .select('id, full_name, email, phone')
-                            .in('id', userIds);
-                        (profilesData || []).forEach(p => {
-                            profileMap[p.id] = p;
-                        });
-                    } catch (_) {}
+                console.warn('Nested query notice in mobile AdminOrders, using fallback:', error?.message);
+                const fallback = await supabase
+                    .from('orders')
+                    .select('*')
+                    .order('created_at', { ascending: false })
+                    .limit(100);
+
+                if (fallback.error) {
+                    console.warn('Fallback orders query failed:', fallback.error.message);
+                    if (fallback.error.code === 'PGRST205' || (fallback.error.message?.includes('schema cache') && fallback.error.message?.includes('orders'))) {
+                        setSchemaNotice(true);
+                    } else {
+                        Alert.alert('Notice', fallback.error.message || 'Failed to fetch orders');
+                    }
+                    setOrders([]);
+                    setLoading(false);
+                    setRefreshing(false);
+                    return;
                 }
-
-                enrichedOrders = enrichedOrders.map(o => {
-                    const p = profileMap[o.user_id];
-                    const shipping = v(o.shipping_details) || v(o.shipping_address) || {};
-                    return {
-                        ...o,
-                        user: p || {
-                            full_name: shipping.full_name || shipping.recipient_name || 'Valued Customer',
-                            email: shipping.email || 'N/A',
-                            phone: o.contact_phone || shipping.phone || 'N/A'
-                        }
-                    };
-                });
-
-                setOrders(enrichedOrders);
-                setSchemaNotice(false);
+                fetchedData = fallback.data || [];
             }
+
+            let enrichedOrders = fetchedData || [];
+            const userIds = [...new Set(enrichedOrders.map(o => o.user_id).filter(Boolean))];
+            const driverIds = [...new Set(enrichedOrders.map(o => o.driver_id).filter(Boolean))];
+
+            let profileMap = {};
+            let driverMap = {};
+
+            if (userIds.length > 0) {
+                try {
+                    const { data: profilesData } = await supabase
+                        .from('profiles')
+                        .select('id, full_name, email, phone')
+                        .in('id', userIds);
+                    (profilesData || []).forEach(p => {
+                        profileMap[p.id] = p;
+                    });
+                } catch (_) {}
+            }
+
+            if (driverIds.length > 0) {
+                try {
+                    const { data: driversData } = await supabase
+                        .from('drivers')
+                        .select('id, name, vehicle_type, phone, xp')
+                        .in('id', driverIds);
+                    (driversData || []).forEach(d => {
+                        driverMap[d.id] = d;
+                    });
+                } catch (_) {}
+            }
+
+            const parseObj = (val) => {
+                if (!val) return {};
+                if (typeof val === 'object') return val;
+                try { return JSON.parse(val); } catch { return {}; }
+            };
+
+            enrichedOrders = enrichedOrders.map(o => {
+                const p = profileMap[o.user_id];
+                const shipping = parseObj(o.shipping_details) || parseObj(o.shipping_address) || {};
+                const drv = o.driver || driverMap[o.driver_id] || null;
+
+                return {
+                    ...o,
+                    driver: drv,
+                    user: p || {
+                        full_name: shipping.full_name || shipping.recipient_name || shipping.name || 'Valued Customer',
+                        email: shipping.email || 'N/A',
+                        phone: o.contact_phone || shipping.phone || 'N/A'
+                    }
+                };
+            });
+
+            setOrders(enrichedOrders);
+            setSchemaNotice(false);
         } catch (err) {
             console.error('Fetch Orders Crash:', err);
             setSchemaNotice(true);
