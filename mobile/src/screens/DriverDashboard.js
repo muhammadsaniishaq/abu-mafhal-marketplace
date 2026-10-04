@@ -987,6 +987,37 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
         }
     };
 
+    // ─── Update Driver License & Credentials ───
+    const updateLicenseDetails = async () => {
+        const uid = activeUser?.id;
+        if (!uid) return;
+
+        try {
+            const { error } = await supabase
+                .from('drivers')
+                .update({
+                    driver_license: driverLicense,
+                    fuel_type: fuelType,
+                    payload_capacity: payloadCapacity,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('user_id', uid);
+
+            if (error) throw error;
+
+            setDriverProfile(prev => ({
+                ...prev,
+                driver_license: driverLicense,
+                fuel_type: fuelType,
+                payload_capacity: payloadCapacity
+            }));
+            setLicenseModalVisible(false);
+            Alert.alert('Credentials Updated ✅', 'Driver license and vehicle payload capacity have been saved successfully.');
+        } catch (err) {
+            Alert.alert('Error', err.message || 'Failed to update driver credentials.');
+        }
+    };
+
     // ─── Request Bank Withdrawal ───
     const requestWithdrawal = async () => {
         const uid = activeUser?.id;
@@ -2633,44 +2664,6 @@ export const DriverDashboard = ({ user, onLogout, navigation, route }) => {
                                 <Text style={styles.submitBtnDangerText}>
                                     {isSubmittingIssue ? 'Submitting to Dispatch...' : 'Notify Dispatch ⚠️'}
                                 </Text>
-                            </TouchableOpacity>
-                        </ScrollView>
-                    </View>
-                </View>
-            </Modal>
-
-            {/* ─── MODAL 4: VEHICLE INFORMATION ─── */}
-            <Modal visible={isVehicleModalVisible} transparent animationType="slide">
-                <View style={styles.modalBackdrop}>
-                    <View style={styles.modalSheetContent}>
-                        <View style={styles.modalSheetHeader}>
-                            <Text style={styles.modalSheetTitle}>Update Vehicle Information</Text>
-                            <TouchableOpacity onPress={() => setVehicleModalVisible(false)} style={styles.modalCloseCircle}>
-                                <Ionicons name="close" size={18} color={TEXT_DARK} />
-                            </TouchableOpacity>
-                        </View>
-
-                        <ScrollView style={{ padding: 20 }}>
-                            <Text style={styles.inputFieldLabel}>Vehicle Type (e.g. Motorcycle, Tricycle, Van)</Text>
-                            <TextInput
-                                style={styles.textInputModern}
-                                value={vType}
-                                onChangeText={setVType}
-                                placeholder="Motorcycle"
-                                placeholderTextColor={TEXT_SUBTLE}
-                            />
-
-                            <Text style={styles.inputFieldLabel}>Plate / Registration Number</Text>
-                            <TextInput
-                                style={styles.textInputModern}
-                                value={pNumber}
-                                onChangeText={setPNumber}
-                                placeholder="ABC-123XY"
-                                placeholderTextColor={TEXT_SUBTLE}
-                            />
-
-                            <TouchableOpacity style={styles.submitBtnGold} onPress={updateVehicleDetails} activeOpacity={0.85}>
-                                <Text style={styles.submitBtnGoldText}>Save Vehicle Details ✅</Text>
                             </TouchableOpacity>
                         </ScrollView>
                     </View>
